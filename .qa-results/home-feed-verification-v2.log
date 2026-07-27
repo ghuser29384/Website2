@@ -1,0 +1,1445 @@
+Authenticated Home Feed v2 verification failed.
+staging_sha=dd82af258209b2245ba44810aa646ea34c24563c
+base_sha=eebf509a970cb69f0586dd990987b486f7db1584
+recorded_at=2026-07-27T09:15:20Z
+
+===== /tmp/bundle-integrity.log =====
+Archive:  /tmp/home-feed-bundle.zip
+    testing: moraltrade-home-authenticated-feed-eebf509a/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/fragments/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/fragments/returning-home.append.css   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/apply-home-feed-patch.py   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/tests/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/tests/returning-homepage.spec.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/package.json   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/pareto-recommendation-wiring.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/home/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/components/home/home-page.tsx   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/live-now-a1-response.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/home-feed-snapshot.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/lib/home-feed-snapshot.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/home-feed-contract.test.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/live-now-a1/   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/api/live-now-a1/route.ts   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/payload/src/app/page.tsx   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/README.md   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/apply.sh   OK
+    testing: moraltrade-home-authenticated-feed-eebf509a/verify.sh   OK
+No errors detected in compressed data of /tmp/home-feed-bundle.zip.
+
+===== /tmp/test-baseline-exact.status =====
+1
+
+===== /tmp/apply.log =====
+Applied authenticated Home Feed patch.
+ M package.json
+ M public/moral-trade-live-now.js
+ M src/app/api/live-now-a1/route.ts
+ M src/app/page.tsx
+ M src/components/home/home-page.tsx
+ M src/components/home/returning-home.module.css
+ M src/lib/pareto-feed-runtime.ts
+ M src/pareto-recommendation-wiring.test.ts
+ M tests/returning-homepage.spec.ts
+?? src/home-feed-contract.test.ts
+?? src/lib/home-feed-snapshot.test.ts
+?? src/lib/home-feed-snapshot.ts
+?? src/lib/live-now-a1-response.ts
+
+===== /tmp/changed-paths.diff =====
+
+===== /tmp/verify-pareto-exact.log =====
+
+> moral-trade@0.1.0 verify:pareto
+> node --import tsx --test src/lib/pareto-recommendation-model.test.ts src/lib/home-feed-snapshot.test.ts src/home-feed-contract.test.ts src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && eslint src/lib/pareto-recommendation-model.ts src/lib/pareto-recommendation-model.test.ts src/lib/pareto-feed-runtime.ts src/lib/live-now-a1-response.ts src/lib/home-feed-snapshot.ts src/lib/home-feed-snapshot.test.ts src/lib/recommendation-training.ts src/app/api/live-now-a1/route.ts src/app/api/jobs/recommendation-training/route.ts src/app/recommendation-outcome-actions.ts src/app/page.tsx src/components/home/home-page.tsx src/components/core-trade/trade-agreement-stage.tsx src/components/core-trade/trade-outcome-feedback.tsx src/home-feed-contract.test.ts src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && node --check public/moral-trade-live-learning-diagnostics.js && node --check public/moral-trade-live-now.js
+
+TAP version 13
+# Subtest: Home and Feed resolve recommendations through the same authenticated A1 builder
+ok 1 - Home and Feed resolve recommendations through the same authenticated A1 builder
+  ---
+  duration_ms: 4.576688
+  ...
+# Subtest: Home limits only its visible exposure surface without changing Feed assignment
+ok 2 - Home limits only its visible exposure surface without changing Feed assignment
+  ---
+  duration_ms: 0.673053
+  ...
+# Subtest: Home and Feed preserve exact item identity and exposure receipt identity
+ok 3 - Home and Feed preserve exact item identity and exposure receipt identity
+  ---
+  duration_ms: 0.706977
+  ...
+# Subtest: the homepage source contains no fabricated match or evidence records
+ok 4 - the homepage source contains no fabricated match or evidence records
+  ---
+  duration_ms: 0.995458
+  ...
+# Subtest: two authenticated users receive different cards with their exact Feed IDs and receipts
+ok 5 - two authenticated users receive different cards with their exact Feed IDs and receipts
+  ---
+  duration_ms: 2.601361
+  ...
+# Subtest: a zero-data authenticated user receives no cards and no demo records
+ok 6 - a zero-data authenticated user receives no cards and no demo records
+  ---
+  duration_ms: 0.850445
+  ...
+# Subtest: incomplete Feed rows fail closed instead of being filled with examples
+ok 7 - incomplete Feed rows fail closed instead of being filled with examples
+  ---
+  duration_ms: 0.187452
+  ...
+# Subtest: five-percent assignment is stable and never selects a Direct candidate
+ok 8 - five-percent assignment is stable and never selects a Direct candidate
+  ---
+  duration_ms: 4.273729
+  ...
+# Subtest: Pareto gate requires every participant and safety dimension to clear
+ok 9 - Pareto gate requires every participant and safety dimension to clear
+  ---
+  duration_ms: 2.412977
+  ...
+# Subtest: implicit factor training produces finite affinities
+ok 10 - implicit factor training produces finite affinities
+  ---
+  duration_ms: 21.291477
+  ...
+# Subtest: logistic heads train and remain calibrated to probabilities
+ok 11 - logistic heads train and remain calibrated to probabilities
+  ---
+  duration_ms: 89.377188
+  ...
+# Subtest: threshold tuning preserves a minimum precision target
+ok 12 - threshold tuning preserves a minimum precision target
+  ---
+  duration_ms: 1.323353
+  ...
+# Subtest: inverse-propensity estimator distinguishes treatment and holdout outcomes
+ok 13 - inverse-propensity estimator distinguishes treatment and holdout outcomes
+  ---
+  duration_ms: 0.471394
+  ...
+# Subtest: the production live endpoint is wrapped by the shared Pareto-safe learning layer
+ok 14 - the production live endpoint is wrapped by the shared Pareto-safe learning layer
+  ---
+  duration_ms: 1.033069
+  ...
+# Subtest: the learning core implements factors, calibration, Pareto gates, and causal propensities
+ok 15 - the learning core implements factors, calibration, Pareto gates, and causal propensities
+  ---
+  duration_ms: 0.33592
+  ...
+# Subtest: the migration separates participant-visible receipts from service-only model artifacts
+ok 16 - the migration separates participant-visible receipts from service-only model artifacts
+  ---
+  duration_ms: 0.2877
+  ...
+# Subtest: completed agreements collect private own-lights and additionality feedback
+ok 17 - completed agreements collect private own-lights and additionality feedback
+  ---
+  duration_ms: 0.864201
+  ...
+# Subtest: learning status is disclosed on the static Feed shell
+ok 18 - learning status is disclosed on the static Feed shell
+  ---
+  duration_ms: 0.164569
+  ...
+# Subtest: completed agreement details and private outcome feedback remain visible in the app shell
+ok 19 - completed agreement details and private outcome feedback remain visible in the app shell
+  ---
+  duration_ms: 2.646576
+  ...
+1..19
+# tests 19
+# suites 0
+# pass 19
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 997.752634
+
+===== /tmp/verify-exact.status =====
+1
+
+===== /tmp/exact-baseline-comparison.txt =====
+baseline_status=1
+candidate_status=1
+baseline_test_count=781
+candidate_test_count=784
+baseline_fail_count=54
+candidate_fail_count=54
+unexpected_failure_count=0
+resolved_baseline_failure_count=0
+
+===== /tmp/verify-exact.log =====
+      amountCents: readonly number[],
+      deadline: string | null,
+      verified: boolean,
+    ) {
+      if (facets.actionTypes.length) {
+        const modeMatches = facets.actionTypes.some((actionType) => actionType === offer.mode);
+        if (!modeMatches) return false;
+      }
+      if (facets.causes.length) {
+        const causeScore = smartCauseMatchScore(facets.causes, offerTextFields(offer));
+        if (causeScore < 0.42 && !facets.causes.some((cause) => causeIds.includes(cause))) return false;
+      }
+      if (!matchesSmartVerificationConstraint(facets, verified)) return false;
+      if (!strictAmountMatch(facets, amountCents)) return false;
+      if (!matchesSmartDeadlineConstraint(facets, deadline)) return false;
+      if (facets.minCredit !== null && normalizeCreditSignal(offer.trust_level) * 100 < facets.minCredit) {
+        return false;
+      }
+      if (facets.location || facets.participantKinds.length) return false;
+      return true;
+    }
+    
+    function rankOffer(
+      offer: OfferRow,
+      interpretation: SmartQueryInterpretation,
+      personalPriorities: readonly string[],
+      now: Date,
+    ): RankedOffer | null {
+      const fields = offerTextFields(offer);
+      const amountCents = offerAmounts(offer);
+      const causeIds = offerCauseIds(offer);
+      const deadline = extractSmartRecordDeadline(
+        [offer.duration, offer.discount_note, offer.notes, offer.request_action, offer.offer_action],
+        now,
+      );
+      const verified = isVerifiedEvidenceText(offer.verification);
+      const evidenceQuality = evidenceTextQuality(offer.verification);
+      const semanticRelevance = smartInterpretationScore(interpretation, fields);
+    
+      if (
+        !offerMatchesHardConstraints(
+          offer,
+          interpretation.facets,
+          causeIds,
+          amountCents,
+          deadline,
+          verified,
+        )
+      ) {
+        return null;
+      }
+    
+      const hasSemanticRequirement = Boolean(
+        interpretation.residualTerms.length || interpretation.facets.causes.length,
+      );
+      if (hasSemanticRequirement && semanticRelevance < 0.16) return null;
+    
+      const score = smartDiscoveryScore({
+        semanticRelevance,
+        evidenceQuality,
+        personalMoralFit: smartPersonalPriorityScore(causeIds, personalPriorities),
+        deadlineUrgency: getSmartDeadlineUrgency(deadline, now),
+        credit: normalizeCreditSignal(offer.trust_level),
+      });
+    
+      return {
+        amountCents,
+        causeIds,
+        deadline,
+        evidenceQuality,
+        offer,
+        score,
+        semanticRelevance,
+        verified,
+      };
+    }
+    
+    function sortRankedOffers(items: RankedOffer[], sort: OfferSort) {
+      return items.sort((left, right) => {
+        if (sort === "newest") {
+          return Date.parse(right.offer.created_at) - Date.parse(left.offer.created_at) ||
+            left.offer.id.localeCompare(right.offer.id);
+        }
+        if (sort === "lowest_cost") {
+          const leftAmount = left.amountCents.length ? Math.max(...left.amountCents) : Number.POSITIVE_INFINITY;
+          const rightAmount = right.amountCents.length ? Math.max(...right.amountCents) : Number.POSITIVE_INFINITY;
+          return leftAmount - rightAmount || right.score - left.score || left.offer.id.localeCompare(right.offer.id);
+        }
+        if (sort === "most_verified") {
+          return right.evidenceQuality - left.evidenceQuality || right.score - left.score ||
+            left.offer.id.localeCompare(right.offer.id);
+        }
+        if (sort === "soonest_deadline") {
+          const leftDeadline = left.deadline ? Date.parse(left.deadline) : Number.POSITIVE_INFINITY;
+          const rightDeadline = right.deadline ? Date.parse(right.deadline) : Number.POSITIVE_INFINITY;
+          return leftDeadline - rightDeadline || right.score - left.score ||
+            left.offer.id.localeCompare(right.offer.id);
+        }
+        if (sort === "highest_credit") {
+          return normalizeCreditSignal(right.offer.trust_level) - normalizeCreditSignal(left.offer.trust_level) ||
+            right.score - left.score || left.offer.id.localeCompare(right.offer.id);
+        }
+        return right.score - left.score ||
+          Date.parse(right.offer.created_at) - Date.parse(left.offer.created_at) ||
+          left.offer.id.localeCompare(right.offer.id);
+      });
+    }
+    
+    function buildLiveHref({
+      facets,
+      mode,
+      page,
+      search,
+      sort,
+    }: {
+      facets?: SmartQueryFacets;
+      mode?: ModeFilter;
+      page?: number;
+      search?: string;
+      sort?: OfferSort;
+    }) {
+      const params = new URLSearchParams({ view: "live" });
+      if (search) {
+        params.set("search", search);
+        params.set("smart", "1");
+      }
+      if (facets) serializeSmartQueryFacets(params, facets);
+      if (mode && mode !== "all") params.set("mode", mode);
+      if (sort && sort !== (search || (facets && hasSmartQueryConstraints(facets)) ? "best_match" : "newest")) {
+        params.set("sort", sort);
+      }
+      if (page && page > 1) params.set("page", String(page));
+      return `/offers?${params.toString()}`;
+    }
+    
+    async function loadPersonalCausePriorities(viewerId: string | null) {
+      if (!viewerId || !hasSupabaseEnv()) return [] as string[];
+      const supabase = await createClient();
+      const { data, error } = await supabase
+        .from("route_recommendation_profiles")
+        .select("cause_priorities")
+        .eq("profile_id", viewerId)
+        .maybeSingle();
+      if (error) {
+        console.error("[offers] Failed to load private route priorities for local ranking", {
+          code: error.code,
+          message: error.message,
+        });
+        return [];
+      }
+      return data?.cause_priorities ?? [];
+    }
+    
+    async function listLiveOffers({
+      facets,
+      interpretation,
+      mode,
+      page,
+      personalPriorities,
+      smartSearch,
+      sort,
+    }: {
+      facets: SmartQueryFacets;
+      interpretation: SmartQueryInterpretation;
+      mode: ModeFilter;
+      page: number;
+      personalPriorities: readonly string[];
+      smartSearch: boolean;
+      sort: OfferSort;
+    }): Promise<LiveOffersResult> {
+      if (!hasSupabaseEnv()) {
+        return {
+          items: [],
+          total: 0,
+          page,
+          pageSize: OFFERS_PAGE_SIZE,
+          hasNextPage: false,
+          hasPreviousPage: page > 1,
+          error: null,
+          candidateLimitReached: false,
+        };
+      }
+    
+      const supabase = await createClient();
+      const offset = (page - 1) * OFFERS_PAGE_SIZE;
+      let query = supabase.from("offers").select("*", { count: smartSearch ? undefined : "exact" }).eq("status", "open");
+      if (mode !== "all") query = query.eq("mode", mode);
+    
+      if (smartSearch) {
+        const { data, error } = await query
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
+          .limit(SMART_OFFER_CANDIDATE_LIMIT);
+        if (error) {
+          console.error("[offers] Failed to load smart-search candidates", {
+            code: error.code,
+            message: error.message,
+            mode,
+          });
+          return {
+            items: [],
+            total: 0,
+            page,
+            pageSize: OFFERS_PAGE_SIZE,
+            hasNextPage: false,
+            hasPreviousPage: page > 1,
+            error: "The live directory could not be loaded. Please refresh or try again shortly.",
+            candidateLimitReached: false,
+          };
+        }
+    
+        const ranked = (data ?? [])
+          .map((offer) => rankOffer(offer as OfferRow, { ...interpretation, facets }, personalPriorities, new Date()))
+          .filter((entry): entry is RankedOffer => Boolean(entry));
+        const sorted = sortRankedOffers(ranked, sort);
+        return {
+          items: sorted.slice(offset, offset + OFFERS_PAGE_SIZE).map((entry) => entry.offer),
+          total: sorted.length,
+          page,
+          pageSize: OFFERS_PAGE_SIZE,
+          hasNextPage: offset + OFFERS_PAGE_SIZE < sorted.length,
+          hasPreviousPage: page > 1,
+          error: null,
+          candidateLimitReached: (data ?? []).length === SMART_OFFER_CANDIDATE_LIMIT,
+        };
+      }
+    
+      const { data, error, count } = await query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
+        .range(offset, offset + OFFERS_PAGE_SIZE - 1);
+    
+      if (error) {
+        console.error("[offers] Failed to load the live proposal directory", {
+          code: error.code,
+          message: error.message,
+          mode,
+          page,
+        });
+        return {
+          items: [],
+          total: 0,
+          page,
+          pageSize: OFFERS_PAGE_SIZE,
+          hasNextPage: false,
+          hasPreviousPage: page > 1,
+          error: "The live directory could not be loaded. Please refresh or try again shortly.",
+          candidateLimitReached: false,
+        };
+      }
+    
+      const total = count ?? (data ?? []).length;
+      return {
+        items: (data ?? []) as OfferRow[],
+        total,
+        page,
+        pageSize: OFFERS_PAGE_SIZE,
+        hasNextPage: offset + OFFERS_PAGE_SIZE < total,
+        hasPreviousPage: page > 1,
+        error: null,
+        candidateLimitReached: false,
+      };
+    }
+    
+    function formatMoneyConstraint(facets: SmartQueryFacets) {
+      if (facets.maxAmountCents !== null) {
+        const operator = facets.maxAmountInclusive ? "At most" : "Under";
+        return `${operator} $${(facets.maxAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+      }
+      if (facets.minAmountCents !== null) {
+        const operator = facets.minAmountInclusive ? "At least" : "Over";
+        return `${operator} $${(facets.minAmountCents / 100).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+      }
+      return null;
+    }
+    
+    function LiveProposalCard({ offer }: { offer: OfferRow }) {
+      const participantName = offer.owner_alias || "Participant";
+      const verified = isVerifiedEvidenceText(offer.verification);
+    
+      return (
+        <article className="mt-market-card">
+          <div className="mt-market-card-head">
+            <span className="mt-market-eyebrow">{formatMode(offer.mode)}</span>
+            <span className="mt-market-state is-live">Live proposal</span>
+          </div>
+          <h3>
+            {offer.offered_cause}
+            <span aria-hidden="true">↔</span>
+            {offer.requested_cause}
+          </h3>
+          <p className="listing-alias">By {participantName}</p>
+          <div className="tag-row" aria-label="Proposal boundaries">
+            <span className="badge">{offer.discount_note || "Bounded terms"}</span>
+            <span className={verified ? "impact-pill" : "source-pill"}>
+              {verified ? "Verification evidence named" : "Verification terms stated"}
+            </span>
+          </div>
+          <dl>
+            <div><dt>Offers</dt><dd>{offer.offer_action}</dd></div>
+            <div><dt>Requests</dt><dd>{offer.request_action}</dd></div>
+            <div>
+              <dt>Terms</dt>
+              <dd>{offer.discount_note || "Open the complete proposal for its baseline and boundaries."}</dd>
+            </div>
+            <div><dt>Evidence</dt><dd>{offer.verification}</dd></div>
+          </dl>
+          <div className="mt-market-card-foot">
+            <span>{offer.duration}</span>
+            <Link href={`/offers/${offer.id}`}>Open proposal ↗</Link>
+          </div>
+        </article>
+      );
+    }
+    
+    export default async function OffersPage({ searchParams }: OffersPageProps) {
+      const resolvedSearchParams = await searchParams;
+      const view = readParam(resolvedSearchParams, "view");
+      const legacyTab = readParam(resolvedSearchParams, "tab");
+      if (view === "templates" || legacyTab === "templates") return <TradeTemplateLibrary />;
+    
+      const page = parsePage(resolvedSearchParams.page);
+      const search = normalizeSearch(readParam(resolvedSearchParams, "search"));
+      const mode = parseMode(readParam(resolvedSearchParams, "mode"));
+      const parsedInterpretation = parseSmartQuery(search, { surface: "offers" });
+      const explicitFacets = parseSerializedSmartQueryFacets(resolvedSearchParams);
+      const facets = mergeSmartQueryFacets(parsedInterpretation.facets, explicitFacets);
+      const smartSearch = Boolean(search || hasSmartQueryConstraints(facets));
+      const sort = parseSort(readParam(resolvedSearchParams, "sort") || facets.sort || "", smartSearch);
+      const viewer = await getViewer();
+      const personalPriorities = await loadPersonalCausePriorities(viewer?.authUser.id ?? null);
+      const livePage = await listLiveOffers({
+        facets,
+        interpretation: parsedInterpretation,
+        mode,
+        page,
+        personalPriorities,
+        smartSearch,
+        sort,
+      });
+      const isAuthenticated = Boolean(viewer);
+      const formMessage = getFormMessage(resolvedSearchParams);
+      const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
+      const activeConstraintLabels = [
+        ...facets.causes.map((cause) => `Cause: ${getSmartQueryCauseLabel(cause)}`),
+        facets.verified === true ? "Verified only" : facets.verified === false ? "Unverified only" : null,
+        formatMoneyConstraint(facets),
+        facets.deadlineBefore ? `${facets.deadlineBeforeInclusive ? "By" : "Before"} ${facets.deadlineBefore}` : null,
+        facets.minCredit !== null ? `Credit ≥ ${facets.minCredit}` : null,
+      ].filter((label): label is string => Boolean(label));
+      const hasFilters = Boolean(search || mode !== "all" || activeConstraintLabels.length || sort !== "newest");
+      const pageCount = Math.max(1, Math.ceil(livePage.total / livePage.pageSize));
+    
+      return (
+        <div className="page-shell marketplace-product-shell">
+          <div className="mt-beta-strip">
+            <span>Live marketplace</span>
+            <span>Hard constraints are applied before semantic and trust-aware ranking.</span>
+            <Link href="/donate">Financial route available</Link>
+          </div>
+    
+          <header>
+            <SiteTopbar
+              brandHref="/"
+              links={getPrimaryNavLinks(isAuthenticated)}
+              {...getTopbarActions(isAuthenticated)}
+              showLogout={isAuthenticated}
+            />
+          </header>
+    
+          <main className="mt-product-main" id="main-content" tabIndex={-1}>
+            <section className="mt-explore-hero" aria-labelledby="explore-heading">
+              <div className="mt-explore-copy">
+                <p className="mt-product-kicker">Marketplace</p>
+                <h1 id="explore-heading">Find a live proposal you can evaluate quickly.</h1>
+                <p>
+                  Describe the outcome, evidence standard, budget, or deadline in ordinary language.
+                  Explicit constraints are enforced first; remaining results are ranked by semantic fit,
+                  evidence quality, your saved cause priorities, urgency, and a modest transaction-credit signal.
+                </p>
+                <div className="mt-product-actions">
+                  <Link className="button button-primary" href={createHref}>Create a proposal</Link>
+                  <Link className="button button-secondary" href="/donate">Make a financial contribution</Link>
+                </div>
+              </div>
+              <aside className="mt-explore-side">
+                <p className="mt-product-kicker">Directory rule</p>
+                <strong>Live participant records only.</strong>
+                <p>
+                  Search never substitutes examples for live demand. A result with an unknown amount,
+                  deadline, or verification state does not pass a hard constraint on that field.
+                </p>
+              </aside>
+            </section>
+    
+            {formMessage ? (
+              <div className={`status-banner ${formMessage.tone === "error" ? "status-banner-error" : "status-banner-success"}`}>
+                {formMessage.text}
+              </div>
+            ) : null}
+            {livePage.error ? <div className="status-banner status-banner-error" role="alert">{livePage.error}</div> : null}
+            {livePage.candidateLimitReached ? (
+              <div className="status-banner" role="status">
+                This semantic result set was ranked from the newest {SMART_OFFER_CANDIDATE_LIMIT.toLocaleString()} live candidates.
+                Tighten the cause, budget, or deadline to narrow a larger registry.
+              </div>
+            ) : null}
+    
+            <section className="mt-product-section is-white" aria-labelledby="directory-heading">
+              <div className="mt-product-section-head">
+                <div>
+                  <p className="mt-product-kicker">Live directory</p>
+                  <h2 id="directory-heading">Open participant proposals</h2>
+                </div>
+                <p>
+                  {livePage.total.toLocaleString()} live proposal{livePage.total === 1 ? "" : "s"} in the
+                  current result set. Open a record to review its complete terms and evidence state.
+                </p>
+              </div>
+    
+              <SmartQueryForm action="/offers" className={filterStyles.filterPanel} method="get" queryName="search" surface="offers">
+                <input name="view" type="hidden" value="live" />
+                <div className={filterStyles.filterGrid}>
+                  <label className={filterStyles.field}>
+                    <span>Search proposals</span>
+                    <input
+                      className={filterStyles.control}
+                      defaultValue={search}
+                      name="search"
+                      placeholder="e.g. verified civic work under $50 before August 1"
+                      type="search"
+                    />
+                  </label>
+                  <label className={filterStyles.field}>
+                    <span>Proposal type</span>
+                    <select className={filterStyles.control} defaultValue={mode} name="mode">
+                      {MODE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  <label className={filterStyles.field}>
+                    <span>Sort</span>
+                    <select className={filterStyles.control} defaultValue={sort} name="sort">
+                      {SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <div className={filterStyles.actions}>
+                  <button className="button button-primary" type="submit">Apply smart search</button>
+                  {hasFilters ? <Link className="button button-secondary" href={buildLiveHref({})}>Clear all</Link> : null}
+                </div>
+                <div className={filterStyles.filterMeta}>
+                  <div className={filterStyles.activeFilters} aria-live="polite">
+                    <strong>{livePage.total.toLocaleString()} matching offer(s)</strong>
+                    {search ? <span className={filterStyles.activeChip}>Query: {search}</span> : null}
+                    {mode !== "all" ? (
+                      <span className={filterStyles.activeChip}>{MODE_OPTIONS.find((option) => option.value === mode)?.label ?? mode}</span>
+                    ) : null}
+                    {activeConstraintLabels.map((label) => <span className={filterStyles.activeChip} key={label}>{label}</span>)}
+                  </div>
+                  <p className={filterStyles.rankingNote}>
+                    Hard constraints → semantic relevance (46%) → evidence quality (20%) → personal cause fit (16%) →
+                    deadline urgency (10%) → transaction credit (8%). Explicit sort choices may reorder the surviving set.
+                  </p>
+                </div>
+              </SmartQueryForm>
+    
+              <div className="mt-directory-view">
+                {livePage.items.length ? (
+                  <div className="mt-market-grid">
+                    {livePage.items.map((offer) => <LiveProposalCard key={offer.id} offer={offer} />)}
+                  </div>
+                ) : (
+                  <div className="panel empty-state">
+                    <h3>{hasFilters ? "No live proposals satisfy every hard constraint" : "No live proposals are open"}</h3>
+                    <p>
+                      Unknown budget, deadline, or verification data is not treated as a match. Remove one hard constraint
+                      or create a proposal with structured terms.
+                    </p>
+                    <div className="hero-actions">
+                      {hasFilters ? <Link className="button button-primary" href={buildLiveHref({})}>Clear filters</Link> :
+                        <Link className="button button-primary" href={createHref}>Create the first proposal</Link>}
+                      <Link className="button button-secondary" href="/donate">Fund a public good</Link>
+                    </div>
+                  </div>
+                )}
+    
+                {livePage.hasPreviousPage || livePage.hasNextPage ? (
+                  <nav className="pagination" aria-label="Live proposal pages">
+                    {livePage.hasPreviousPage ? (
+                      <Link className="button button-secondary button-mini" href={buildLiveHref({ facets, mode, page: page - 1, search, sort })}>
+                        Previous
+                      </Link>
+                    ) : null}
+                    <span>Page {page} of {pageCount}</span>
+                    {livePage.hasNextPage ? (
+                      <Link className="button button-secondary button-mini" href={buildLiveHref({ facets, mode, page: page + 1, search, sort })}>
+                        Next
+                      </Link>
+                    ) : null}
+                  </nav>
+                ) : null}
+              </div>
+            </section>
+    
+            <section className="mt-product-section" aria-labelledby="other-routes-heading">
+              <div className="mt-product-section-head">
+                <div><p className="mt-product-kicker">Other live routes</p><h2 id="other-routes-heading">Coordinate without a bilateral listing</h2></div>
+                <p>Use an offset, conditional pool, or consent-gated introduction when a public proposal is not the right structure.</p>
+              </div>
+              <div className="mt-pool-link-grid">
+                <Link className="mt-pool-link-card" href="/offsets">
+                  <div><p className="mt-market-eyebrow">Opposed donations</p><h3>Donation offsets</h3></div>
+                  <p>Redirect matched planned donations toward a destination both participants prefer.</p><span>Open offsets ↗</span>
+                </Link>
+                <Link className="mt-pool-link-card" href="/pools">
+                  <div><p className="mt-market-eyebrow">Conditional funding</p><h3>Funding pools</h3></div>
+                  <p>Review maximum exposure, threshold, deadline, recipient, and failure behavior.</p><span>Open pools ↗</span>
+                </Link>
+                <Link className="mt-pool-link-card" href="/background-networking">
+                  <div><p className="mt-market-eyebrow">Private matching</p><h3>Consent-gated introductions</h3></div>
+                  <p>Share a broad preview without publishing exact wishes or contact details.</p><span>Request matching ↗</span>
+                </Link>
+              </div>
+            </section>
+          </main>
+    
+          <SiteFooter />
+        </div>
+      );
+    }
+    
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (/home/runner/work/Website2/Website2/src/lib/public-route-smoke.test.ts:5704:10)
+    Test.runInAsyncScope (node:async_hooks:206:9)
+    Test.run (node:internal/test_runner/test:796:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:526:18)
+    Test.postRun (node:internal/test_runner/test:889:19)
+    Test.run (node:internal/test_runner/test:835:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+# Subtest: core Moral Trade email outbox copy stays generic and dashboard-directed
+ok 655 - core Moral Trade email outbox copy stays generic and dashboard-directed
+  ---
+  duration_ms: 1.461883
+  ...
+# Subtest: agreement payment checkout path records no-capture authorization stubs for controlled trades
+ok 656 - agreement payment checkout path records no-capture authorization stubs for controlled trades
+  ---
+  duration_ms: 2.148651
+  ...
+# Subtest: the deterministic fallback is stable and stays in one normalized vector space
+ok 657 - the deterministic fallback is stable and stays in one normalized vector space
+  ---
+  duration_ms: 5.501362
+  ...
+# Subtest: public embedding retrieval fails closed to local vectors without a provider key
+ok 658 - public embedding retrieval fails closed to local vectors without a provider key
+  ---
+  duration_ms: 1.133196
+  ...
+# Subtest: action taxonomy distinguishes meat, plastic, and donation actions
+ok 659 - action taxonomy distinguishes meat, plastic, and donation actions
+  ---
+  duration_ms: 2.797159
+  ...
+# Subtest: explicit difficulty feedback updates an action model without erasing willingness
+ok 660 - explicit difficulty feedback updates an action model without erasing willingness
+  ---
+  duration_ms: 0.759825
+  ...
+# Subtest: browsing contributes bounded, lower-confidence cause weights
+ok 661 - browsing contributes bounded, lower-confidence cause weights
+  ---
+  duration_ms: 0.662232
+  ...
+# Subtest: the latest save or hide state controls feed persistence
+ok 662 - the latest save or hide state controls feed persistence
+  ---
+  duration_ms: 0.478187
+  ...
+# Subtest: presentation keeps live provenance and adapts the comparison contract
+ok 663 - presentation keeps live provenance and adapts the comparison contract
+  ---
+  duration_ms: 31.279103
+  ...
+# Subtest: presentation exposes missing inputs without adding a filler route
+ok 664 - presentation exposes missing inputs without adding a filler route
+  ---
+  duration_ms: 1.003973
+  ...
+# Subtest: seller-private baseline text never becomes a route title or detail
+ok 665 - seller-private baseline text never becomes a route title or detail
+  ---
+  duration_ms: 1.091938
+  ...
+# Subtest: redirects are excluded unless the viewer confirms a planned-donation baseline
+ok 666 - redirects are excluded unless the viewer confirms a planned-donation baseline
+  ---
+  duration_ms: 17.451798
+  ...
+# Subtest: an explicit no-planned-donation answer is respected instead of being asked again
+ok 667 - an explicit no-planned-donation answer is respected instead of being asked again
+  ---
+  duration_ms: 1.504863
+  ...
+# Subtest: aggregate route composition never exceeds a budget cap
+ok 668 - aggregate route composition never exceeds a budget cap
+  ---
+  duration_ms: 17.152797
+  ...
+# Subtest: the planner never invents fallback candidates when no live source is supplied
+ok 669 - the planner never invents fallback candidates when no live source is supplied
+  ---
+  duration_ms: 0.361057
+  ...
+# Subtest: all routes require the user's no-trade baseline
+ok 670 - all routes require the user's no-trade baseline
+  ---
+  duration_ms: 0.601158
+  ...
+# Subtest: an unsure comparison answer produces no pairwise preference update
+ok 671 - an unsure comparison answer produces no pairwise preference update
+  ---
+  duration_ms: 1.311802
+  ...
+# Subtest: a neither answer treats both compared formats symmetrically
+ok 672 - a neither answer treats both compared formats symmetrically
+  ---
+  duration_ms: 1.287095
+  ...
+# Subtest: routes use named components instead of one public moral score
+ok 673 - routes use named components instead of one public moral score
+  ---
+  duration_ms: 1.757086
+  ...
+# Subtest: every recommended step retains a supplied live source id
+ok 674 - every recommended step retains a supplied live source id
+  ---
+  duration_ms: 1.089554
+  ...
+# Subtest: decrypted runtime causes can fill the deliberately empty persisted cause array
+ok 675 - decrypted runtime causes can fill the deliberately empty persisted cause array
+  ---
+  duration_ms: 0.382437
+  ...
+# Subtest: seller-written verification claims never become connected evidence
+ok 676 - seller-written verification claims never become connected evidence
+  ---
+  duration_ms: 0.469029
+  ...
+# Subtest: conservative uncertainty rejects unknown sources but accepts structured conservative ones
+ok 677 - conservative uncertainty rejects unknown sources but accepts structured conservative ones
+  ---
+  duration_ms: 0.876285
+  ...
+# Subtest: a source that exceeds the selected horizon is blocked
+ok 678 - a source that exceeds the selected horizon is blocked
+  ---
+  duration_ms: 0.450986
+  ...
+# Subtest: encrypted placeholders stay missing and pairwise calibration is capped to ten pairs
+ok 679 - encrypted placeholders stay missing and pairwise calibration is capped to ten pairs
+  ---
+  duration_ms: 0.667493
+  ...
+# Subtest: source privacy and invite-only choices fail closed
+ok 680 - source privacy and invite-only choices fail closed
+  ---
+  duration_ms: 1.047656
+  ...
+# Subtest: mixed public and participant-only offer scopes are never classified private
+ok 681 - mixed public and participant-only offer scopes are never classified private
+  ---
+  duration_ms: 0.41528
+  ...
+# Subtest: an action already present in the no-trade baseline is excluded without misreading negation
+ok 682 - an action already present in the no-trade baseline is excluded without misreading negation
+  ---
+  duration_ms: 1.234887
+  ...
+# Subtest: burden parsing combines partial fields, recurrence, additive costs, and difficulty
+ok 683 - burden parsing combines partial fields, recurrence, additive costs, and difficulty
+  ---
+  duration_ms: 15.889135
+  ...
+# Subtest: unbounded recurring obligations fail closed against user caps
+ok 684 - unbounded recurring obligations fail closed against user caps
+  ---
+  duration_ms: 0.429085
+  ...
+# Subtest: returned routes are non-dominated by feasible single-step alternatives
+ok 685 - returned routes are non-dominated by feasible single-step alternatives
+  ---
+  duration_ms: 0.641804
+  ...
+# Subtest: baseline prompts appear only when resolving the baseline can make the source feasible
+ok 686 - baseline prompts appear only when resolving the baseline can make the source feasible
+  ---
+  duration_ms: 0.465644
+  ...
+# Subtest: unknown planned-donation state and encrypted cause sentinels remain unknown
+ok 687 - unknown planned-donation state and encrypted cause sentinels remain unknown
+  ---
+  duration_ms: 0.271851
+  ...
+# Subtest: unknown durations fail the horizon cap while quarter and year boundaries remain usable
+ok 688 - unknown durations fail the horizon cap while quarter and year boundaries remain usable
+  ---
+  duration_ms: 0.744216
+  ...
+# Subtest: conservative preference rejects a source explicitly marked balanced
+ok 689 - conservative preference rejects a source explicitly marked balanced
+  ---
+  duration_ms: 0.322144
+  ...
+# Subtest: calibration stops after five answered live format comparisons
+ok 690 - calibration stops after five answered live format comparisons
+  ---
+  duration_ms: 0.659327
+  ...
+# Subtest: unsupported free-text hard constraints are not collected or treated as enforced
+ok 691 - unsupported free-text hard constraints are not collected or treated as enforced
+  ---
+  duration_ms: 0.35173
+  ...
+# Subtest: feasibility is checked before the composition pool is bounded
+ok 692 - feasibility is checked before the composition pool is bounded
+  ---
+  duration_ms: 1.331178
+  ...
+# Subtest: a globally dominant thirteenth feasible source is retained
+ok 693 - a globally dominant thirteenth feasible source is retained
+  ---
+  duration_ms: 3.845446
+  ...
+# Subtest: equal-component routes with a higher burden are dominated
+ok 694 - equal-component routes with a higher burden are dominated
+  ---
+  duration_ms: 0.593153
+  ...
+# Subtest: exposes Feed and Discover as the first marketplace navigation entries
+ok 695 - exposes Feed and Discover as the first marketplace navigation entries
+  ---
+  duration_ms: 1.889676
+  ...
+# Subtest: links to Feed and Discover from the marketplace footer group
+ok 696 - links to Feed and Discover from the marketplace footer group
+  ---
+  duration_ms: 0.240631
+  ...
+# Subtest: links to Trade controls without adding another primary navigation item
+ok 697 - links to Trade controls without adding another primary navigation item
+  ---
+  duration_ms: 3.23968
+  ...
+# Subtest: makes all ten coordination and safety controls discoverable in site search
+ok 698 - makes all ten coordination and safety controls discoverable in site search
+  ---
+  duration_ms: 0.41007
+  ...
+# Subtest: classifies only fully accepted dossiers as accepted
+ok 699 - classifies only fully accepted dossiers as accepted
+  ---
+  duration_ms: 1.143416
+  ...
+# Subtest: applies cause and review-state constraints before ranking
+ok 700 - applies cause and review-state constraints before ranking
+  ---
+  duration_ms: 75.396147
+  ...
+# Subtest: fails closed when an evidence query contains unsupported amount constraints
+ok 701 - fails closed when an evidence query contains unsupported amount constraints
+  ---
+  duration_ms: 11.138801
+  ...
+# Subtest: supports an explicit challenges-first ordering without discarding matching records
+ok 702 - supports an explicit challenges-first ordering without discarding matching records
+  ---
+  duration_ms: 19.093235
+  ...
+# Subtest: enables the ambiguity fallback in production
+ok 703 - enables the ambiguity fallback in production
+  ---
+  duration_ms: 2.62705
+  ...
+# Subtest: keeps non-production environments opt-in
+ok 704 - keeps non-production environments opt-in
+  ---
+  duration_ms: 0.222718
+  ...
+# Subtest: honors the explicit production disable override
+ok 705 - honors the explicit production disable override
+  ---
+  duration_ms: 0.196018
+  ...
+# Subtest: parses the verified civic budget and deadline example without clarification
+ok 706 - parses the verified civic budget and deadline example without clarification
+  ---
+  duration_ms: 33.11181
+  ...
+# Subtest: does not treat a broad but usable cause search as ambiguous
+ok 707 - does not treat a broad but usable cause search as ambiguous
+  ---
+  duration_ms: 8.477377
+  ...
+# Subtest: asks one material clarification for a standalone amount while preserving other facets
+ok 708 - asks one material clarification for a standalone amount while preserving other facets
+  ---
+  duration_ms: 6.07521
+  ...
+# Subtest: applies a clarification answer while preserving parsed constraints
+ok 709 - applies a clarification answer while preserving parsed constraints
+  ---
+  duration_ms: 4.833159
+  ...
+# Subtest: routes global queries to the relevant directory
+ok 710 - routes global queries to the relevant directory
+  ---
+  duration_ms: 11.219332
+  ...
+# Subtest: resolves common aliases and close typos semantically
+ok 711 - resolves common aliases and close typos semantically
+  ---
+  duration_ms: 8.092264
+  ...
+# Subtest: serializes a smart target and parses the facets back
+ok 712 - serializes a smart target and parses the facets back
+  ---
+  duration_ms: 5.324571
+  ...
+# Subtest: enforces inclusive and exclusive money constraints
+ok 713 - enforces inclusive and exclusive money constraints
+  ---
+  duration_ms: 3.580449
+  ...
+# Subtest: enforces deadline boundaries
+ok 714 - enforces deadline boundaries
+  ---
+  duration_ms: 4.450361
+  ...
+# Subtest: uses personal priorities as a bounded fit signal
+ok 715 - uses personal priorities as a bounded fit signal
+  ---
+  duration_ms: 1.491028
+  ...
+# Subtest: detects contradictory amount limits
+ok 716 - detects contradictory amount limits
+  ---
+  duration_ms: 2.172627
+  ...
+# Subtest: asks before moving unsupported wish constraints to the people directory
+ok 717 - asks before moving unsupported wish constraints to the people directory
+  ---
+  duration_ms: 3.138569
+  ...
+# Subtest: asks before applying offer-only amount constraints to people
+ok 718 - asks before applying offer-only amount constraints to people
+  ---
+  duration_ms: 2.117704
+  ...
+# Subtest: does not add a cross-directory clarification to broad Discover searches
+ok 719 - does not add a cross-directory clarification to broad Discover searches
+  ---
+  duration_ms: 3.822923
+  ...
+# Subtest: the threshold radar route preserves the supplied campaign copy
+ok 720 - the threshold radar route preserves the supplied campaign copy
+  ---
+  duration_ms: 1.346997
+  ...
+# Subtest: the threshold radar keeps the target artboard and interactive controls
+ok 721 - the threshold radar keeps the target artboard and interactive controls
+  ---
+  duration_ms: 0.456367
+  ...
+# Subtest: Trade controls exposes all ten selected interactive mechanisms
+ok 722 - Trade controls exposes all ten selected interactive mechanisms
+  ---
+  duration_ms: 1.250185
+  ...
+# Subtest: Trade controls hands preview decisions to existing live workflows
+ok 723 - Trade controls hands preview decisions to existing live workflows
+  ---
+  duration_ms: 0.283041
+  ...
+# Subtest: Trade controls is noindex, contract-backed, responsive, and discoverable
+ok 724 - Trade controls is noindex, contract-backed, responsive, and discoverable
+  ---
+  duration_ms: 0.41567
+  ...
+# Subtest: USD parsing is exact to cents
+ok 725 - USD parsing is exact to cents
+  ---
+  duration_ms: 1.215601
+  ...
+# Subtest: partner metadata is signed and tamper evident
+ok 726 - partner metadata is signed and tamper evident
+  ---
+  duration_ms: 0.841479
+  ...
+# Subtest: Every.org URL freezes amount, recipient, partner ID, and signed metadata
+ok 727 - Every.org URL freezes amount, recipient, partner ID, and signed metadata
+  ---
+  duration_ms: 1.418963
+  ...
+# Subtest: valid AMF webhook is accepted and recipient or amount drift fails closed
+ok 728 - valid AMF webhook is accepted and recipient or amount drift fails closed
+  ---
+  duration_ms: 1.263641
+  ...
+# Subtest: curated target registry includes direct AMF routing
+ok 729 - curated target registry includes direct AMF routing
+  ---
+  duration_ms: 0.246122
+  ...
+# Subtest: connector environments fail closed across the production boundary
+ok 730 - connector environments fail closed across the production boundary
+  ---
+  duration_ms: 0.676549
+  ...
+# Subtest: proposed agreements stop at bilateral confirmation
+ok 731 - proposed agreements stop at bilateral confirmation
+  ---
+  duration_ms: 1.819734
+  ...
+# Subtest: active agreements move to the commitment stage
+ok 732 - active agreements move to the commitment stage
+  ---
+  duration_ms: 0.214794
+  ...
+# Subtest: evidence states stop at evidence review
+ok 733 - evidence states stop at evidence review
+  ---
+  duration_ms: 0.210645
+  ...
+# Subtest: completed agreements fill the whole route
+ok 734 - completed agreements fill the whole route
+  ---
+  duration_ms: 0.25603
+  ...
+# Subtest: ended agreements never imply completion
+ok 735 - ended agreements never imply completion
+  ---
+  duration_ms: 0.220674
+  ...
+# Subtest: typing Animal ranks the shared animal priority categories together
+ok 736 - typing Animal ranks the shared animal priority categories together
+  ---
+  duration_ms: 18.908351
+  ...
+# Subtest: mixed search fields keep cause matches ahead of action matches
+ok 737 - mixed search fields keep cause matches ahead of action matches
+  ---
+  duration_ms: 5.495612
+  ...
+# Subtest: the shared catalog covers every standardized trade-term context
+ok 738 - the shared catalog covers every standardized trade-term context
+  ---
+  duration_ms: 0.445005
+  ...
+# Subtest: website mentions are normalized into safe links without HTML injection
+ok 739 - website mentions are normalized into safe links without HTML injection
+  ---
+  duration_ms: 11.991051
+  ...
+# Subtest: recognized sites expose only curated donation routes after a 500 ms hover
+ok 740 - recognized sites expose only curated donation routes after a 500 ms hover
+  ---
+  duration_ms: 4.899664
+  ...
+# Subtest: autocomplete and date assistance load across Next and legacy shells
+ok 741 - autocomplete and date assistance load across Next and legacy shells
+  ---
+  duration_ms: 0.604094
+  ...
+# Subtest: the composer uses standardized autocomplete contexts and terminology
+ok 742 - the composer uses standardized autocomplete contexts and terminology
+  ---
+  duration_ms: 0.395682
+  ...
+# Subtest: the commitment limit is derived from earlier terms and edited only on request
+ok 743 - the commitment limit is derived from earlier terms and edited only on request
+  ---
+  duration_ms: 0.383801
+  ...
+# Subtest: past dates are blocked in the browser and revalidated on the server
+ok 744 - past dates are blocked in the browser and revalidated on the server
+  ---
+  duration_ms: 29.316351
+  ...
+# Subtest: private drafts use the signed-in RLS client instead of a server-only secret
+ok 745 - private drafts use the signed-in RLS client instead of a server-only secret
+  ---
+  duration_ms: 0.382107
+  ...
+# Subtest: authenticated draft-event policies stay scoped to offers owned by the user
+ok 746 - authenticated draft-event policies stay scoped to offers owned by the user
+  ---
+  duration_ms: 0.205756
+  ...
+# Subtest: invitation secrets are random URL-safe values with one-way lookup hashes
+ok 747 - invitation secrets are random URL-safe values with one-way lookup hashes
+  ---
+  duration_ms: 1.682377
+  ...
+# Subtest: sender token recovery is encrypted and invitation-bound
+ok 748 - sender token recovery is encrypted and invitation-bound
+  ---
+  duration_ms: 3.143479
+  ...
+# Subtest: invitation route and lifecycle helpers recognize only bearer and open states
+ok 749 - invitation route and lifecycle helpers recognize only bearer and open states
+  ---
+  duration_ms: 0.297588
+  ...
+# Subtest: database migration enforces recipient, term, block, lease, and grant boundaries
+ok 750 - database migration enforces recipient, term, block, lease, and grant boundaries
+  ---
+  duration_ms: 0.989467
+  ...
+# Subtest: application routes use transactional RPCs and never query plaintext bearer tokens
+ok 751 - application routes use transactional RPCs and never query plaintext bearer tokens
+  ---
+  duration_ms: 0.649579
+  ...
+# Subtest: donation-backed confirmation is exact-version and transactional
+ok 752 - donation-backed confirmation is exact-version and transactional
+  ---
+  duration_ms: 0.364864
+  ...
+# Subtest: bearer routes are no-store, no-referrer, and excluded from analytics
+ok 753 - bearer routes are no-store, no-referrer, and excluded from analytics
+  ---
+  duration_ms: 0.31972
+  ...
+# Subtest: email delivery uses a lease and stable provider idempotency
+ok 754 - email delivery uses a lease and stable provider idempotency
+  ---
+  duration_ms: 0.411663
+  ...
+# Subtest: the template library exposes direct-use templates without pretending they are live offers
+ok 755 - the template library exposes direct-use templates without pretending they are live offers
+  ---
+  duration_ms: 2.56864
+  ...
+# Subtest: template handoffs open the correct real composer without an anatomy interstitial
+ok 756 - template handoffs open the correct real composer without an anatomy interstitial
+  ---
+  duration_ms: 0.269646
+  ...
+# Subtest: only approved pledge seeds prefill the pledge-only card-stack editor
+ok 757 - only approved pledge seeds prefill the pledge-only card-stack editor
+  ---
+  duration_ms: 0.44219
+  ...
+# Subtest: skill and favor templates prefill their actual private trade scaffold
+ok 758 - skill and favor templates prefill their actual private trade scaffold
+  ---
+  duration_ms: 0.472958
+  ...
+# Subtest: guided matching never contradicts the kind of thing the user wants to move
+ok 759 - guided matching never contradicts the kind of thing the user wants to move
+  ---
+  duration_ms: 0.478658
+  ...
+# Subtest: the donation redirect contract distinguishes cancellation, destinations, and residual funds
+ok 760 - the donation redirect contract distinguishes cancellation, destinations, and residual funds
+  ---
+  duration_ms: 0.305223
+  ...
+# Subtest: skips an allowlisted Moral Trade-only Preview build on website2
+ok 761 - skips an allowlisted Moral Trade-only Preview build on website2
+  ---
+  duration_ms: 56.394955
+  ...
+# Subtest: keeps the authoritative moraltrade-site Preview build
+ok 762 - keeps the authoritative moraltrade-site Preview build
+  ---
+  duration_ms: 46.783808
+  ...
+# Subtest: keeps website2 production builds
+ok 763 - keeps website2 production builds
+  ---
+  duration_ms: 51.600185
+  ...
+# Subtest: keeps website2 main-branch Preview deployments
+ok 764 - keeps website2 main-branch Preview deployments
+  ---
+  duration_ms: 40.63549
+  ...
+# Subtest: keeps unreviewed website2 Preview branches
+ok 765 - keeps unreviewed website2 Preview branches
+  ---
+  duration_ms: 40.404397
+  ...
+# Subtest: fails open when Vercel build metadata is absent
+ok 766 - fails open when Vercel build metadata is absent
+  ---
+  duration_ms: 40.247914
+  ...
+# Subtest: maps walkthrough causes to onboarding cause areas
+ok 767 - maps walkthrough causes to onboarding cause areas
+  ---
+  duration_ms: 1.333713
+  ...
+# Subtest: round-trips a private walkthrough starter profile
+ok 768 - round-trips a private walkthrough starter profile
+  ---
+  duration_ms: 6.184595
+  ...
+# Subtest: parses an already decoded cookie containing a literal percent sign
+ok 769 - parses an already decoded cookie containing a literal percent sign
+  ---
+  duration_ms: 0.336211
+  ...
+# Subtest: query values take precedence over an older cookie draft
+ok 770 - query values take precedence over an older cookie draft
+  ---
+  duration_ms: 3.380663
+  ...
+# Subtest: wish registry example previews respect cause and openness filters
+ok 771 - wish registry example previews respect cause and openness filters
+  ---
+  duration_ms: 60.169756
+  ...
+# Subtest: wish registry example previews stay unfiltered without search inputs
+ok 772 - wish registry example previews stay unfiltered without search inputs
+  ---
+  duration_ms: 3.766157
+  ...
+# Subtest: wish registry overlap markers never echo raw query tokens
+ok 773 - wish registry overlap markers never echo raw query tokens
+  ---
+  duration_ms: 0.264717
+  ...
+# Subtest: wish registry compatibility display uses broad bands instead of exact scores
+ok 774 - wish registry compatibility display uses broad bands instead of exact scores
+  ---
+  duration_ms: 0.21265
+  ...
+# Subtest: public wish registry results omit exact internal ranking scores
+ok 775 - public wish registry results omit exact internal ranking scores
+  ---
+  duration_ms: 0.467567
+  ...
+# Subtest: Complete Profile exposes truthful optional-source states
+ok 776 - Complete Profile exposes truthful optional-source states
+  ---
+  duration_ms: 1.841114
+  ...
+# Subtest: the real X path remains environment-gated and consent-bound
+ok 777 - the real X path remains environment-gated and consent-bound
+  ---
+  duration_ms: 0.487324
+  ...
+# Subtest: the X connector fails closed until every production gate is ready
+ok 778 - the X connector fails closed until every production gate is ready
+  ---
+  duration_ms: 1.473766
+  ...
+# Subtest: the authorization request uses S256 PKCE and only the declared read scopes
+ok 779 - the authorization request uses S256 PKCE and only the declared read scopes
+  ---
+  duration_ms: 0.829526
+  ...
+# Subtest: the token exchange requires the full read-only grant and a refresh token
+ok 780 - the token exchange requires the full read-only grant and a refresh token
+  ---
+  duration_ms: 5.171013
+  ...
+# Subtest: connector return paths stay same-origin
+ok 781 - connector return paths stay same-origin
+  ---
+  duration_ms: 0.31437
+  ...
+# Subtest: confidential-client revocation identifies the app and token
+ok 782 - confidential-client revocation identifies the app and token
+  ---
+  duration_ms: 0.428645
+  ...
+# Subtest: the stored connector row is consent-limited, encrypted, and expires
+ok 783 - the stored connector row is consent-limited, encrypted, and expires
+  ---
+  duration_ms: 5.637408
+  ...
+# Subtest: X profile URLs are normalized without accepting lookalike hosts
+ok 784 - X profile URLs are normalized without accepting lookalike hosts
+  ---
+  duration_ms: 0.305403
+  ...
+1..784
+# tests 784
+# suites 0
+# pass 730
+# fail 54
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 45809.477856
+
+===== /tmp/lint-exact.log =====
+
+> moral-trade@0.1.0 lint
+> eslint .
+
+
+/home/runner/work/Website2/Website2/src/app/offers/offer-plane-inline-mount.tsx
+  75:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/runner/work/Website2/Website2/src/app/offers/offer-plane-inline-mount.tsx:75:5
+  73 |     portalHost.className = styles.portalHost;
+  74 |     portalHost.dataset.offerPlaneInline = "true";
+> 75 |     setHost(portalHost);
+     |     ^^^^^^^ Avoid calling setState() directly within an effect
+  76 |
+  77 |     function placeHost() {
+  78 |       const toolbar = document.querySelector<HTMLElement>(".mt-directory-toolbar");  react-hooks/set-state-in-effect
+
+/home/runner/work/Website2/Website2/src/app/offers/offer-visual-directory-mount.tsx
+  107:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/runner/work/Website2/Website2/src/app/offers/offer-visual-directory-mount.tsx:107:7
+  105 |   useEffect(() => {
+  106 |     if (!queryState.shouldShow) {
+> 107 |       setEntries([]);
+      |       ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  108 |       setHost(null);
+  109 |       return;
+  110 |     }  react-hooks/set-state-in-effect
+
+/home/runner/work/Website2/Website2/src/components/profile/complete-profile-connections.tsx
+  111:22  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/runner/work/Website2/Website2/src/components/profile/complete-profile-connections.tsx:111:22
+  109 |
+  110 |   useEffect(() => {
+> 111 |     if (initialOpen) setOpen(true);
+      |                      ^^^^^^^ Avoid calling setState() directly within an effect
+  112 |   }, [initialOpen]);
+  113 |
+  114 |   useEffect(() => {  react-hooks/set-state-in-effect
+
+✖ 3 problems (3 errors, 0 warnings)
+
+
