@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: patch-collective-preview-seed-diagnostics-20260727
+  group: patch-collective-preview-seed-diagnostics-20260727-v2
   cancel-in-progress: false
 
 jobs:
@@ -26,26 +26,48 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
-      - name: Add failure-safe seed logging and retire patcher
+
+      - name: Add failure-safe seed logging
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+
           path = Path('.github/workflows/seed-collective-preview-review-fixtures.yml')
           text = path.read_text()
-          old = '''          node --input-type=module <<'NODE'\n'''
-          new = '''          mkdir -p "$ARTIFACT_DIR"\n          node --input-type=module <<'NODE' 2>&1 | tee "$ARTIFACT_DIR/seed.log"\n'''
-          if text.count(old) != 1:
-              raise SystemExit(f'Expected one seed command, found {text.count(old)}')
-          text = text.replace(old, new)
+          old = "          node --input-type=module <<'NODE'\n"
+          new = (
+              '          mkdir -p "$ARTIFACT_DIR"\n'
+              '          set +e\n'
+              '          node --input-type=module <<\'NODE\' 2>&1 | tee "$ARTIFACT_DIR/seed.log"\n'
+          )
+          if new not in text:
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected one seed command, found {text.count(old)}')
+              text = text.replace(old, new)
+              marker = "          NODE\n\n      - name: Configure exact branch-scoped Preview variables\n"
+              replacement = (
+                  "          NODE\n"
+                  "          seed_status=${PIPESTATUS[0]}\n"
+                  "          set -e\n"
+                  "          exit $seed_status\n\n"
+                  "      - name: Configure exact branch-scoped Preview variables\n"
+              )
+              if text.count(marker) != 1:
+                  raise SystemExit(f'Expected one seed terminator, found {text.count(marker)}')
+              text = text.replace(marker, replacement)
           text = text.replace('          if-no-files-found: error\n', '          if-no-files-found: warn\n')
           path.write_text(text)
           PY
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/seed-collective-preview-review-fixtures.yml
-          git rm .github/workflows/patch-collective-preview-seed-diagnostics.yml
           git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "Diagnostics already present."
+            exit 0
+          fi
           git commit -m "Capture collective preview fixture seed failures"
           git push origin HEAD:ops/enable-collective-preview-review-20260727
