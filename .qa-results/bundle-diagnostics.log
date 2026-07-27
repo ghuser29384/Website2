@@ -1,0 +1,28 @@
+staging_sha=bee1101912bedecf2327c3992681cca5505a6dc5
+recorded_at=2026-07-27T08:46:37Z
+
+ 4000 .qa/home-authenticated-feed-bundle/part-00
+ 4000 .qa/home-authenticated-feed-bundle/part-01
+ 4000 .qa/home-authenticated-feed-bundle/part-02
+ 4000 .qa/home-authenticated-feed-bundle/part-03
+ 4000 .qa/home-authenticated-feed-bundle/part-04
+ 4000 .qa/home-authenticated-feed-bundle/part-05
+ 4000 .qa/home-authenticated-feed-bundle/part-06
+ 4000 .qa/home-authenticated-feed-bundle/part-07
+ 3574 .qa/home-authenticated-feed-bundle/part-08
+35574 total
+
+c42a62530ce7746398e9df6a1353df540ec2bd11523dc828e41b88b756e1d627  .qa/home-authenticated-feed-bundle/part-00
+1cabea33b52158959218841f56c4fe3a8e49225c065e891b51de1254d2e45981  .qa/home-authenticated-feed-bundle/part-01
+9253d35dc8ced8c8b3629cb0b9129355b64a00cfc90594224cbe867ef4785109  .qa/home-authenticated-feed-bundle/part-02
+6b9682f61bf4b5dc61bfad1d0a9cba9da69d6c74443aefb685e3617859c1d6a7  .qa/home-authenticated-feed-bundle/part-03
+48d6c60fa267556a456a924e5fb5f1d1cfa3ea1b43a2128943288f307c31ac0e  .qa/home-authenticated-feed-bundle/part-04
+9c1d72ac072483f7902372edbaf2bfd22bf0a1c94b1893b77bc2aff574a258f6  .qa/home-authenticated-feed-bundle/part-05
+ba15f2f7c6a2ec9c525805dcf85fe55353f44df6d2bb3f3f23c6f570e0a06f35  .qa/home-authenticated-feed-bundle/part-06
+f32ce33bae687735c1ff9c783e7d5ea9ec8f9643f00ed70a12a734eefa299aa6  .qa/home-authenticated-feed-bundle/part-07
+e319b7259223b89bf51cb91fc6558496fc9d21835655b1f832d9a984ff050ede  .qa/home-authenticated-feed-bundle/part-08
+
+combined_base64_bytes=35574
+cccb3fbeb33f76aa10a6d4774c8a9cd9966d5a940bf5871c7ca512b773c875ae  /tmp/home-feed-bundle.b64
+decoded_zip_bytes=26680
+3c8c2e7e19e3d6926939bf33216b342f25143ce3608f3169777d4dfe7940e31f  /tmp/home-feed-bundle.zip
