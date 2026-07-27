@@ -1,11 +1,10 @@
 {
-  "runId": 30236580360,
+  "runId": 30236923421,
   "runAttempt": 1,
   "workflow": "Multi-threshold authenticated browser QA",
   "workflowRef": "ghuser29384/Website2/.github/workflows/multi-threshold-authenticated-browser-qa.yml@refs/heads/qa/multi-threshold-authenticated-browser-20260727",
-  "triggerCommit": "ee6177ba7af91345902a2f05db399cd29f222447",
+  "triggerCommit": "c8b38d3982f64c8acd127ccc487fc7bfefdad6d8",
   "productHead": "94d76c8bdc835a1aec7d61663d105e1f193a0b9d",
-  "status": "failure",
-  "startedAt": "2026-07-27T04:15:38.448746+00:00",
-  "completedAt": "2026-07-27T04:18:48.548599+00:00"
+  "status": "started",
+  "startedAt": "2026-07-27T04:22:51.907623+00:00"
 }
