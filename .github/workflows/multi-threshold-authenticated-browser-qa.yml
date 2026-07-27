@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 55
     env:
       EXPECTED_PRODUCT_HEAD: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
-      EXPECTED_WRAPPER_BLOB: 2ba7f05f07f4c2e0e48449361a91f39e9c373dde
+      EXPECTED_WRAPPER_BLOB: 68e2422f9de1a982b39ed609634ff7283c4fecdc
       QA_BRANCH: qa/multi-threshold-authenticated-browser-20260727
       RUN_STATUS_PATH: .github/multi-threshold-push-run-status.json
       QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
@@ -57,7 +57,7 @@ jobs:
           ref: qa/multi-threshold-authenticated-browser-20260727
           fetch-depth: 0
 
-      - name: Verify exact product boundary and reviewed wrapper
+      - name: Verify exact product boundary and repaired wrapper
         shell: bash
         run: |
           set -euxo pipefail
@@ -136,10 +136,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          nohup npm start -- --hostname 127.0.0.1 --port 3000 \
-            > "$BROWSER_QA_ARTIFACT_DIR/server.log" 2>&1 &
+          nohup npm start -- --hostname 127.0.0.1 --port 3000 > "$BROWSER_QA_ARTIFACT_DIR/server.log" 2>&1 &
           echo "APP_PID=$!" >> "$GITHUB_ENV"
-
           ready=0
           for _ in $(seq 1 120); do
             if curl --fail --silent --show-error http://127.0.0.1:3000/login >/dev/null; then
@@ -173,10 +171,7 @@ jobs:
           jq -e '.acceptance.firstAcceptedPledgeAt != null' "$audit" >/dev/null
           jq -e '.acceptance.rejectedMutation.code == "23514"' "$audit" >/dev/null
           jq -e '.cleanup.proposalId != null and (.cleanup.quoteIds | length) == 3 and .cleanup.pledgeId != null' "$audit" >/dev/null
-
-          if grep -E \
-            'Missing SUPABASE_SERVICE_ROLE_KEY|permission denied for table|Could not save MPGF pool proposal|Could not approve the complete failure-bonus schedule|Reserve status .* does not permit posted accounting entries' \
-            "$BROWSER_QA_ARTIFACT_DIR/server.log"; then
+          if grep -E 'Missing SUPABASE_SERVICE_ROLE_KEY|permission denied for table|Could not save MPGF pool proposal|Could not approve the complete failure-bonus schedule|Reserve status .* does not permit posted accounting entries' "$BROWSER_QA_ARTIFACT_DIR/server.log"; then
             echo "Detected a prohibited runtime failure in the exact browser sequence." >&2
             exit 1
           fi
