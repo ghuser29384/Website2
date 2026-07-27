@@ -1,9 +1,9 @@
 name: Multi-threshold authenticated browser QA
 
 on:
-  pull_request:
+  push:
     branches:
-      - feature/mpgf-multi-threshold-failure-bonus-editor-20260726
+      - qa/multi-threshold-authenticated-browser-20260727
     paths:
       - ".github/scripts/multi-threshold-authenticated-browser-qa.mjs"
       - ".github/workflows/multi-threshold-authenticated-browser-qa.yml"
@@ -17,14 +17,12 @@ concurrency:
 
 jobs:
   authenticated-browser-qa:
-    if: >-
-      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
-      github.head_ref == 'qa/multi-threshold-authenticated-browser-20260727'
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/qa/multi-threshold-authenticated-browser-20260727'
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
       EXPECTED_PRODUCT_HEAD: 94d76c8bdc835a1aec7d61663d105e1f193a0b9d
-      EXPECTED_SCRIPT_BLOB: e4c3e28751eee741527d761e778e71d136f50d8b
+      EXPECTED_WRAPPER_BLOB: 2ba7f05f07f4c2e0e48449361a91f39e9c373dde
       QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
       NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
@@ -45,18 +43,19 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
-          test "$GITHUB_HEAD_REF" = "qa/multi-threshold-authenticated-browser-20260727"
+          test "$GITHUB_REF" = "refs/heads/qa/multi-threshold-authenticated-browser-20260727"
           test "$QA_SUPABASE_URL" = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
           for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_TEST_PASSWORD; do
             test -n "${!name:-}"
           done
 
-      - name: Check out temporary QA branch
+      - name: Check out exact trusted QA branch
         uses: actions/checkout@v4
         with:
+          ref: qa/multi-threshold-authenticated-browser-20260727
           fetch-depth: 0
 
-      - name: Verify product boundary and apply currency-prefix-safe QA locator
+      - name: Verify exact product boundary and reviewed wrapper
         shell: bash
         run: |
           set -euxo pipefail
@@ -67,27 +66,11 @@ jobs:
             '.github/scripts/multi-threshold-authenticated-browser-qa.mjs' \
             '.github/workflows/multi-threshold-authenticated-browser-qa.yml' | sort)"
           if [[ "$changed" != "$expected" ]]; then
-            echo "Temporary QA branch contains unexpected changes:" >&2
+            echo "Trusted QA branch contains unexpected changes:" >&2
             printf '%s\n' "$changed" >&2
             exit 1
           fi
-          test "$(git hash-object .github/scripts/multi-threshold-authenticated-browser-qa.mjs)" = "$EXPECTED_SCRIPT_BLOB"
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path(".github/scripts/multi-threshold-authenticated-browser-qa.mjs")
-          source = path.read_text()
-          old = '''function spinbutton(page, name) {
-  return page.getByRole("spinbutton", { name, exact: true });
-}'''
-          new = '''function spinbutton(page, name) {
-  return page.getByRole("spinbutton", { name: new RegExp(`^${name}`) });
-}'''
-          if source.count(old) != 1:
-              raise SystemExit(f"Expected one exact spinbutton helper, found {source.count(old)}")
-          path.write_text(source.replace(old, new, 1))
-          PY
-          git diff --check
+          test "$(git hash-object .github/scripts/multi-threshold-authenticated-browser-qa.mjs)" = "$EXPECTED_WRAPPER_BLOB"
           node --check .github/scripts/multi-threshold-authenticated-browser-qa.mjs
 
       - name: Set up Node.js
@@ -104,7 +87,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p "$BROWSER_QA_ARTIFACT_DIR"
-          cp .github/scripts/multi-threshold-authenticated-browser-qa.mjs "$BROWSER_QA_ARTIFACT_DIR/executed-browser-script.mjs"
+          cp .github/scripts/multi-threshold-authenticated-browser-qa.mjs "$BROWSER_QA_ARTIFACT_DIR/executed-browser-wrapper.mjs"
           node --import tsx --test \
             src/lib/mpgf/failure-bonus-success-premium.test.ts \
             src/lib/mpgf/failure-bonus-success-premium-integration.test.ts \
@@ -154,6 +137,7 @@ jobs:
           audit="$BROWSER_QA_ARTIFACT_DIR/audit.json"
           test -s "$audit"
           jq -e '.outcome == "pass"' "$audit" >/dev/null
+          jq -e '.productHead == "94d76c8bdc835a1aec7d61663d105e1f193a0b9d"' "$audit" >/dev/null
           jq -e '.browserOperations.addedThresholdCount == 3' "$audit" >/dev/null
           jq -e '.browserOperations.peakThresholdCount == 4' "$audit" >/dev/null
           jq -e '.browserOperations.reorderRoundTrip == true' "$audit" >/dev/null
