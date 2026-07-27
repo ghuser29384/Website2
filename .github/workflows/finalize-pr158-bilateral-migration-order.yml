@@ -1,0 +1,101 @@
+name: Finalize PR 158 bilateral migration ordering
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/finalize-pr158-bilateral-migration-order.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/fix-pr158-bilateral-confirmation-20260727'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out temporary branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check out and guard exact repaired PR 158 head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git fetch origin agent/dynamic-marketplace-clearing-rounds
+          git checkout -B agent/dynamic-marketplace-clearing-rounds origin/agent/dynamic-marketplace-clearing-rounds
+          actual="$(git rev-parse HEAD)"
+          expected="48fd07a1aa48c10753757c18e9372c8df143c9b2"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "Refusing moved PR #158 head. Expected $expected, found $actual." >&2
+            exit 1
+          fi
+
+      - name: Move migration after the current repository migration frontier
+        shell: bash
+        run: |
+          set -euo pipefail
+          old="supabase/migrations/20260727042000_allow_closed_marketplace_offer_bilateral_confirmation.sql"
+          new="supabase/migrations/20260727043000_allow_closed_marketplace_offer_bilateral_confirmation.sql"
+          test -f "$old"
+          test ! -e "$new"
+          git mv "$old" "$new"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          test_path = Path("src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts")
+          source = test_path.read_text(encoding="utf-8")
+          old = "20260727042000_allow_closed_marketplace_offer_bilateral_confirmation.sql"
+          new = "20260727043000_allow_closed_marketplace_offer_bilateral_confirmation.sql"
+          if source.count(old) != 1:
+              raise SystemExit(f"Expected one old migration filename reference; found {source.count(old)}.")
+          test_path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+          if grep -R -n "20260727042000_allow_closed_marketplace_offer_bilateral_confirmation" \
+              src supabase .github/workflows/dynamic-marketplace-qa.yml; then
+            echo "Stale migration filename remains." >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Re-run focused tests, lint, build, and whitespace checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test \
+            'src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts' \
+            src/app/offers/marketplace-interest-acceptance.test.ts \
+            src/app/offers/dynamic-marketplace.test.ts \
+            src/lib/marketplace-clearing-round.test.ts \
+            src/lib/marketplace-offer-families.test.ts
+          npx eslint \
+            src/app/core-trade-actions-base.ts \
+            'src/app/deals/[agreementId]/dealroom-main-sections.tsx' \
+            'src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts' \
+            src/app/offers/dynamic-marketplace.test.ts
+          npm run build
+          git diff --check
+
+      - name: Commit and push ordered migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A \
+            supabase/migrations/20260727042000_allow_closed_marketplace_offer_bilateral_confirmation.sql \
+            supabase/migrations/20260727043000_allow_closed_marketplace_offer_bilateral_confirmation.sql \
+            'src/app/deals/[agreementId]/dealroom-bilateral-confirmation.test.ts'
+          git commit -m "Order bilateral confirmation migration after current schema"
+          git push origin HEAD:agent/dynamic-marketplace-clearing-rounds
