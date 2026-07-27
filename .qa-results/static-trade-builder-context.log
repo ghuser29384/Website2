@@ -1,0 +1,379 @@
+target=49513
+functions_before:
+34483 story
+34876 sideCard
+35168 nowPlan
+38844 field
+39060 lane
+39377 it
+39530 checkline
+39653 allocationPlanner
+42679 nowRules
+46804 tradePage
+47317 buildView
+47511 clauseBuilder
+functions_after:
+50446 exchangeBuilder
+54018 piece
+54302 matchView
+57233 dealroomView
+59258 party
+60492 termsPanel
+61499 activityPage
+62096 portfolioView
+owner=clauseBuilder@47511
+next=exchangeBuilder@50446
+===== owner function =====
+function clauseBuilder(){
+ const ing=[['$','Money'],['◷','Time'],['⇄','Behavior'],['⚗','Skill'],['♡','Donation redirect'],['↗','Threshold'],['□','Deadline'],['◈','Verification']];
+ return `<div class="compose-grid"><aside class="panel ingredients"><div class="eyebrow">Ingredients</div><p class="muted" style="font-size:9px">Drag or click to add</p>${ing.map(x=>`<div class="ingredient" draggable="true" data-ingredient="${x[1]}"><b>${x[0]}</b>${x[1]}<span>⋮⋮</span></div>`).join('')}<div class="dropzone" id="ingredientDrop">Drop to add</div><div class="panel pad"><div class="eyebrow">Payment status</div><div class="big blue">$80.00</div><small>Held in escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" style="justify-content:center;margin-top:15px"><button class="btn primary wide" data-action="publish">Publish offer</button><button class="btn" data-action="test">Test terms</button><button class="btn" data-action="save">Save draft</button><button class="btn" data-action="invite">Invite someone</button></div><div class="mono muted" style="text-align:center;font-size:9px;margin-top:9px">You’re in control. No funds move without proof.</div>
+ </main><aside class="stack"><section class="panel matchcard"><div class="between"><div class="eyebrow">Potential matches</div><a class="blue">View all</a></div><div class="score">92%</div><h3>Alex R.</h3>${status('Verified')}<p style="font-size:10px">Replaces car trips regularly and completed 3 evidence reviews.</p>${progress(92)}<div class="h">${tag('AI Safety')}${tag('Evidence review')}</div></section><section class="panel matchcard"><div class="eyebrow">Comparable completed trade</div><small class="green">Completed Jun 29, 2026</small><h3>Sam G. → Riley P.</h3><div class="between"><div class="big">$75</div><div class="serif" style="font-size:20px">Replaced 10 car trips</div></div><p style="font-size:10px">Proof: receipts · verified on time</p></section><section class="panel matchcard" style="border-color:#ec9b68"><div class="eyebrow orange">1 pending counteroffer</div><p style="font-size:11px">From Alex R. · Today, 9:18 AM</p><button class="btn small" data-action="dealroom">View →</button></section></aside></div>`;
+}
+
+===== tradePage function =====
+function tradePage(){
+ return `<section class="page">${pageHead('Build a trade that works for both sides.','Compose exact terms, test mutual ranges, and lock proof-backed commitments.','New trade')}
+ <div class="stagebar">${[['build','1 · Build'],['match','2 · Match'],['dealroom','3 · Dealroom']].map(x=>`<button class="${state.trade===x[0]?'active':''}" data-trade="${x[0]}">${x[1]}</button>`).join('')}</div>
+ ${state.trade==='build'?buildView():state.trade==='match'?matchView():dealroomView()}</section>`;
+}
+
+===== app event bindings for trade/build =====
+--- data-trade ---
+"btn small" data-action="decline">Decline</button></div></section>
+  <section class="panel pad"><div class="eyebrow">Audit log</div>${sideCard('',['Rule #1 did not run · condition not met','Rule #3 blocked · awaiting approval'],'')}</section>
+  <section class="panel pad"><div class="eyebrow">You’re in full control.</div><p style="font-size:11px">No rule runs without your approval. Pause everything at any time.</p><button class="btn" style="width:100%" data-action="pause">Pause all rules</button></section>
+ </aside></div>`;
+}
+
+/* Trade */
+function tradePage(){
+ return `<section class="page">${pageHead('Build a trade that works for both sides.','Compose exact terms, test mutual ranges, and lock proof-backed commitments.','New trade')}
+ <div class="stagebar">${[['build','1 · Build'],['match','2 · Match'],['dealroom','3 · Dealroom']].map(x=>`<button class="${state.trade===x[0]?'active':''}" data-trade="${x[0]}">${x[1]}</button>`).join('')}</div>
+ ${state.trade==='build'?buildView():state.trade==='match'?matchView():dealroomView()}</section>`;
+}
+function buildView(){
+ return `${tab([['clauses','Structured clauses'],['exchange','Two-sided exchange table']],'build','build')}${state.build==='clauses'?clauseBuilder():exchangeBuilder()}`;
+}
+function clauseBuilder(){
+ const ing=[['$','Money'],['◷','Time'],['⇄','Behavior'],['⚗','Skill'],['♡','Donation redirect'],['↗','Threshold'],['□','Deadline'],['◈','Verification']];
+ return `<div class="compose-grid"><aside class="panel ingredients"><div class="eyebrow">Ingredients</div><p class="muted" style="font-size:9px">Drag or click to add</p>${ing.map(x=>`<div class="ingredient" draggable="true" data-ingredient="${x[1]}"><b>${x[0]}</b>${x[1]}<span>⋮⋮</span></div>`).join('')}<div class="dropzone" id="ingredientDrop">Drop to add</div><div class="panel pad"><div class="eyebrow">Payment status</div><div class="big blue">$80.00</div><small>Held in escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" styl
+
+ses.push([name,`Add exact <span class="token" contenteditable="true">${name.toLowerCase()} terms</span> to this trade.`]);toast(name+' clause added.');render()}
+function exportCSV(){
+ let rows=[['Date','Type','You put forward','Other side','Money state'],['2026-07-16','Completed','12 transit passes','One tree planted','$18 charged'],['2026-07-15','Active','$100 conditional pledge','Close salary gap','$25 reserved']];
+ let csv=rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n'),u=URL.createObjectURL(new Blob([csv],{type:'text/csv'})),a=document.createElement('a');a.href=u;a.download='moral-trade-ledger.csv';a.click();URL.revokeObjectURL(u);toast('Ledger CSV exported.');
+}
+document.addEventListener('click',e=>{
+ let x=e.target.closest('[data-page]');if(x){setPage(x.dataset.page);return}
+ x=e.target.closest('[data-now]');if(x){state.now=x.dataset.now;render();return}
+ x=e.target.closest('[data-trade]');if(x){state.trade=x.dataset.trade;render();return}
+ x=e.target.closest('[data-build]');if(x){state.build=x.dataset.build;render();return}
+ x=e.target.closest('[data-activity]');if(x){state.activity=x.dataset.activity;render();return}
+ x=e.target.closest('[data-cal]');if(x){state.calendar=x.dataset.cal;render();return}
+ x=e.target.closest('[data-select]');if(x){state.selected=x.dataset.select;render();return}
+ x=e.target.closest('[data-ingredient]');if(x){addClause(x.dataset.ingredient);return}
+ x=e.target.closest('[data-remove]');if(x){state.clauses.splice(+x.dataset.remove,1);render();return}
+ x=e.target.closest('[data-action]');if(!x)return;let a=x.dataset.action;
+ if(a==='profile')openDrawer(profileDrawer()); else if(a==='command')openDrawer(commandDrawer()); else if(a==='close')closeDrawer();
+ else if(a==='dealroom'){state.page='trade';state.trade='dealroom';location.hash='trade';render()}
+ else if(a==='calendar'){state.page='activity';state.activity='calendar';location.hash='activity';render()}
+ else if(a==='select-bio'){state.threshold=Math.min(9990,state.threshold+45);toast('$45 conditionally pledged to the biosecurity salary-gap pool.');render()}
+ else if(a==='add-pledge'){state.threshold=Math.min(9990,state.threshold+10);toast('$10 conditionally pledged.');render()}
+ else if(a==='verify'){state.verified=true;toast('Verification recorded. Counterparty release is ready.');render()}
+ else if(a==='toggle-test'){state.test=!state.test;toast(`Test mode ${state.test?'enabled':'disabled'}.`);render()}
+ else if(a==='zoom-in'){state.zoom=Math.min(1.4,state.zoom+.1);render()} else if(a==='zoom-out'){state.zoom=Math.max(.7,state.zoom-.1);render()}
+ else if(a==='lock'){state.locked=true;toast('Terms locked by Alex. Mina was asked to confirm.');render()}
+ else if(['make-
+
+--- data-build ---
+()} terms</span> to this trade.`]);toast(name+' clause added.');render()}
+function exportCSV(){
+ let rows=[['Date','Type','You put forward','Other side','Money state'],['2026-07-16','Completed','12 transit passes','One tree planted','$18 charged'],['2026-07-15','Active','$100 conditional pledge','Close salary gap','$25 reserved']];
+ let csv=rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n'),u=URL.createObjectURL(new Blob([csv],{type:'text/csv'})),a=document.createElement('a');a.href=u;a.download='moral-trade-ledger.csv';a.click();URL.revokeObjectURL(u);toast('Ledger CSV exported.');
+}
+document.addEventListener('click',e=>{
+ let x=e.target.closest('[data-page]');if(x){setPage(x.dataset.page);return}
+ x=e.target.closest('[data-now]');if(x){state.now=x.dataset.now;render();return}
+ x=e.target.closest('[data-trade]');if(x){state.trade=x.dataset.trade;render();return}
+ x=e.target.closest('[data-build]');if(x){state.build=x.dataset.build;render();return}
+ x=e.target.closest('[data-activity]');if(x){state.activity=x.dataset.activity;render();return}
+ x=e.target.closest('[data-cal]');if(x){state.calendar=x.dataset.cal;render();return}
+ x=e.target.closest('[data-select]');if(x){state.selected=x.dataset.select;render();return}
+ x=e.target.closest('[data-ingredient]');if(x){addClause(x.dataset.ingredient);return}
+ x=e.target.closest('[data-remove]');if(x){state.clauses.splice(+x.dataset.remove,1);render();return}
+ x=e.target.closest('[data-action]');if(!x)return;let a=x.dataset.action;
+ if(a==='profile')openDrawer(profileDrawer()); else if(a==='command')openDrawer(commandDrawer()); else if(a==='close')closeDrawer();
+ else if(a==='dealroom'){state.page='trade';state.trade='dealroom';location.hash='trade';render()}
+ else if(a==='calendar'){state.page='activity';state.activity='calendar';location.hash='activity';render()}
+ else if(a==='select-bio'){state.threshold=Math.min(9990,state.threshold+45);toast('$45 conditionally pledged to the biosecurity salary-gap pool.');render()}
+ else if(a==='add-pledge'){state.threshold=Math.min(9990,state.threshold+10);toast('$10 conditionally pledged.');render()}
+ else if(a==='verify'){state.verified=true;toast('Verification recorded. Counterparty release is ready.');render()}
+ else if(a==='toggle-test'){state.test=!state.test;toast(`Test mode ${state.test?'enabled':'disabled'}.`);render()}
+ else if(a==='zoom-in'){state.zoom=Math.min(1.4,state.zoom+.1);render()} else if(a==='zoom-out'){state.zoom=Math.max(.7,state.zoom-.1);render()}
+ else if(a==='lock'){state.locked=true;toast('Terms locked by Alex. Mina was asked to confirm.');render()}
+ else if(['make-offer','create','publish','from-command','repeat'].includes(a)){closeDrawer();state.pag
+
+--- tradePage() ---
+tn primary" data-action="create">＋ ${label}</button></div>`;
+const tab=(items,key,attr)=>`<div class="tabs">${items.map(x=>`<button class="${state[key]===x[0]?'active':''}" data-${attr}="${x[0]}">${x[1]}</button>`).join('')}</div>`;
+const status=(text,type='good')=>`<span class="status"><i class="dot ${type}"></i>${text}</span>`;
+const tag=(text,type='')=>`<span class="tag ${type}">${text}</span>`;
+const progress=(pct,cls='')=>`<div class="progress ${cls}"><span style="width:${pct}%"></span></div>`;
+const pageHead=(title,sub,cta)=>`<div class="head"><div><h1>${title}</h1><div class="subtitle">${sub}</div></div>${actions(cta)}</div>`;
+
+function render(){
+ if(!['now','trade','activity'].includes(state.page))state.page='now';
+ $$('.topbar nav button').forEach(b=>b.classList.toggle('active',b.dataset.page===state.page));
+ $('#app').innerHTML=state.page==='now'?nowPage():state.page==='trade'?tradePage():activityPage();
+ bindDnD();
+}
+function nowPage(){
+ return `<section class="page">${pageHead('What needs you now.','Decide, allocate, and automate from one coherent workspace.','Create offer')}
+ ${tab([['focus','Focus'],['plan','Plan resources'],['rules','Standing rules']],'now','now')}
+ ${state.now==='focus'?nowFocus():state.now==='plan'?nowPlan():nowRules()}</section>`;
+}
+function nowFocus(){
+ return `<div class="focus-layout"><main>
+ <section class="panel black urgent">
+  <div><div class="eyebrow orange">Due today</div><h2>Counteroffer from Mina.</h2><p class="muted">Mina responded to your transit trade. Due by 6:00 PM today.</p></div>
+  <div class="terms"><div><span class="eyebrow">Your offer</span><strong>8 transit trips</strong></div><div><span class="eyebrow">Mina’s counter</span><strong>6 transit trips + $20</strong></div></div>
+  <div class="stack"><button class="btn primary" data-action="dealroom">Review terms →</button><button class="btn ghost">View conversation →</button></div>
+ </section>
+ <section class="panel attention" style="background:linear-gradient(90deg,rgba(184,217,44,.12),rgba(251,250,246,.9))">
+  <div class="iconbox limebg">↗</div><div class="lead"><div class="eyebrow lime">Threshold opportunity</div><h3>Your $10 could activate $9,990.</h3></div>
+  <div><div class="between"><b class="serif" style="font-size:22px">$${state.threshold.toLocaleString()} of $9,990</b><b class="blue">${(state.threshold/9990*100).toFixed(1)}%</b></div>${progress(state.threshold/9990*100)}<small class="muted">Only charged if the match activates.</small></div>
+  <button class="btn" data-action="add-pledge">Add $10 →</button>
+ </section>
+ <section class="panel attention">
+  <div class="iconbox orangebg">✓</div><div class="lead"><div class="eyebrow orange">Requires your act
+
+eight:400">Pending pledge</h3><p style="font-size:11px"><b>AI Safety Fund</b><br>Verified AI-safety pool</p><div class="big" style="text-align:right">$20</div><p class="muted" style="font-size:10px">Rule #1 · Pool is 1.6% below threshold.</p><div class="h"><button class="btn primary small" data-action="approve">Approve $20</button><button class="btn small" data-action="decline">Decline</button></div></section>
+  <section class="panel pad"><div class="eyebrow">Audit log</div>${sideCard('',['Rule #1 did not run · condition not met','Rule #3 blocked · awaiting approval'],'')}</section>
+  <section class="panel pad"><div class="eyebrow">You’re in full control.</div><p style="font-size:11px">No rule runs without your approval. Pause everything at any time.</p><button class="btn" style="width:100%" data-action="pause">Pause all rules</button></section>
+ </aside></div>`;
+}
+
+/* Trade */
+function tradePage(){
+ return `<section class="page">${pageHead('Build a trade that works for both sides.','Compose exact terms, test mutual ranges, and lock proof-backed commitments.','New trade')}
+ <div class="stagebar">${[['build','1 · Build'],['match','2 · Match'],['dealroom','3 · Dealroom']].map(x=>`<button class="${state.trade===x[0]?'active':''}" data-trade="${x[0]}">${x[1]}</button>`).join('')}</div>
+ ${state.trade==='build'?buildView():state.trade==='match'?matchView():dealroomView()}</section>`;
+}
+function buildView(){
+ return `${tab([['clauses','Structured clauses'],['exchange','Two-sided exchange table']],'build','build')}${state.build==='clauses'?clauseBuilder():exchangeBuilder()}`;
+}
+function clauseBuilder(){
+ const ing=[['$','Money'],['◷','Time'],['⇄','Behavior'],['⚗','Skill'],['♡','Donation redirect'],['↗','Threshold'],['□','Deadline'],['◈','Verification']];
+ return `<div class="compose-grid"><aside class="panel ingredients"><div class="eyebrow">Ingredients</div><p class="muted" style="font-size:9px">Drag or click to add</p>${ing.map(x=>`<div class="ingredient" draggable="true" data-ingredient="${x[1]}"><b>${x[0]}</b>${x[1]}<span>⋮⋮</span></div>`).join('')}<div class="dropzone" id="ingredientDrop">Drop to add</div><div class="panel pad"><div class="eyebrow">Payment status</div><div class="big blue">$80.00</div><small>Held in escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0
+
+--- state.trade ---
+pprove $20</button><button class="btn small" data-action="decline">Decline</button></div></section>
+  <section class="panel pad"><div class="eyebrow">Audit log</div>${sideCard('',['Rule #1 did not run · condition not met','Rule #3 blocked · awaiting approval'],'')}</section>
+  <section class="panel pad"><div class="eyebrow">You’re in full control.</div><p style="font-size:11px">No rule runs without your approval. Pause everything at any time.</p><button class="btn" style="width:100%" data-action="pause">Pause all rules</button></section>
+ </aside></div>`;
+}
+
+/* Trade */
+function tradePage(){
+ return `<section class="page">${pageHead('Build a trade that works for both sides.','Compose exact terms, test mutual ranges, and lock proof-backed commitments.','New trade')}
+ <div class="stagebar">${[['build','1 · Build'],['match','2 · Match'],['dealroom','3 · Dealroom']].map(x=>`<button class="${state.trade===x[0]?'active':''}" data-trade="${x[0]}">${x[1]}</button>`).join('')}</div>
+ ${state.trade==='build'?buildView():state.trade==='match'?matchView():dealroomView()}</section>`;
+}
+function buildView(){
+ return `${tab([['clauses','Structured clauses'],['exchange','Two-sided exchange table']],'build','build')}${state.build==='clauses'?clauseBuilder():exchangeBuilder()}`;
+}
+function clauseBuilder(){
+ const ing=[['$','Money'],['◷','Time'],['⇄','Behavior'],['⚗','Skill'],['♡','Donation redirect'],['↗','Threshold'],['□','Deadline'],['◈','Verification']];
+ return `<div class="compose-grid"><aside class="panel ingredients"><div class="eyebrow">Ingredients</div><p class="muted" style="font-size:9px">Drag or click to add</p>${ing.map(x=>`<div class="ingredient" draggable="true" data-ingredient="${x[1]}"><b>${x[0]}</b>${x[1]}<span>⋮⋮</span></div>`).join('')}<div class="dropzone" id="ingredientDrop">Drop to add</div><div class="panel pad"><div class="eyebrow">Payment status</div><div class="big blue">$80.00</div><small>Held in escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add c
+
+ection>
+  <section class="panel pad"><div class="eyebrow">Audit log</div>${sideCard('',['Rule #1 did not run · condition not met','Rule #3 blocked · awaiting approval'],'')}</section>
+  <section class="panel pad"><div class="eyebrow">You’re in full control.</div><p style="font-size:11px">No rule runs without your approval. Pause everything at any time.</p><button class="btn" style="width:100%" data-action="pause">Pause all rules</button></section>
+ </aside></div>`;
+}
+
+/* Trade */
+function tradePage(){
+ return `<section class="page">${pageHead('Build a trade that works for both sides.','Compose exact terms, test mutual ranges, and lock proof-backed commitments.','New trade')}
+ <div class="stagebar">${[['build','1 · Build'],['match','2 · Match'],['dealroom','3 · Dealroom']].map(x=>`<button class="${state.trade===x[0]?'active':''}" data-trade="${x[0]}">${x[1]}</button>`).join('')}</div>
+ ${state.trade==='build'?buildView():state.trade==='match'?matchView():dealroomView()}</section>`;
+}
+function buildView(){
+ return `${tab([['clauses','Structured clauses'],['exchange','Two-sided exchange table']],'build','build')}${state.build==='clauses'?clauseBuilder():exchangeBuilder()}`;
+}
+function clauseBuilder(){
+ const ing=[['$','Money'],['◷','Time'],['⇄','Behavior'],['⚗','Skill'],['♡','Donation redirect'],['↗','Threshold'],['□','Deadline'],['◈','Verification']];
+ return `<div class="compose-grid"><aside class="panel ingredients"><div class="eyebrow">Ingredients</div><p class="muted" style="font-size:9px">Drag or click to add</p>${ing.map(x=>`<div class="ingredient" draggable="true" data-ingredient="${x[1]}"><b>${x[0]}</b>${x[1]}<span>⋮⋮</span></div>`).join('')}<div class="dropzone" id="ingredientDrop">Drop to add</div><div class="panel pad"><div class="eyebrow">Payment status</div><div class="big blue">$80.00</div><small>Held in escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" style="justify-content:center;margin-top:15px"><button class="bt
+
+d"><div class="eyebrow">Audit log</div>${sideCard('',['Rule #1 did not run · condition not met','Rule #3 blocked · awaiting approval'],'')}</section>
+  <section class="panel pad"><div class="eyebrow">You’re in full control.</div><p style="font-size:11px">No rule runs without your approval. Pause everything at any time.</p><button class="btn" style="width:100%" data-action="pause">Pause all rules</button></section>
+ </aside></div>`;
+}
+
+/* Trade */
+function tradePage(){
+ return `<section class="page">${pageHead('Build a trade that works for both sides.','Compose exact terms, test mutual ranges, and lock proof-backed commitments.','New trade')}
+ <div class="stagebar">${[['build','1 · Build'],['match','2 · Match'],['dealroom','3 · Dealroom']].map(x=>`<button class="${state.trade===x[0]?'active':''}" data-trade="${x[0]}">${x[1]}</button>`).join('')}</div>
+ ${state.trade==='build'?buildView():state.trade==='match'?matchView():dealroomView()}</section>`;
+}
+function buildView(){
+ return `${tab([['clauses','Structured clauses'],['exchange','Two-sided exchange table']],'build','build')}${state.build==='clauses'?clauseBuilder():exchangeBuilder()}`;
+}
+function clauseBuilder(){
+ const ing=[['$','Money'],['◷','Time'],['⇄','Behavior'],['⚗','Skill'],['♡','Donation redirect'],['↗','Threshold'],['□','Deadline'],['◈','Verification']];
+ return `<div class="compose-grid"><aside class="panel ingredients"><div class="eyebrow">Ingredients</div><p class="muted" style="font-size:9px">Drag or click to add</p>${ing.map(x=>`<div class="ingredient" draggable="true" data-ingredient="${x[1]}"><b>${x[0]}</b>${x[1]}<span>⋮⋮</span></div>`).join('')}<div class="dropzone" id="ingredientDrop">Drop to add</div><div class="panel pad"><div class="eyebrow">Payment status</div><div class="big blue">$80.00</div><small>Held in escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" style="justify-content:center;margin-top:15px"><button class="btn primary wide" data-action="publi
+
+exact <span class="token" contenteditable="true">${name.toLowerCase()} terms</span> to this trade.`]);toast(name+' clause added.');render()}
+function exportCSV(){
+ let rows=[['Date','Type','You put forward','Other side','Money state'],['2026-07-16','Completed','12 transit passes','One tree planted','$18 charged'],['2026-07-15','Active','$100 conditional pledge','Close salary gap','$25 reserved']];
+ let csv=rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n'),u=URL.createObjectURL(new Blob([csv],{type:'text/csv'})),a=document.createElement('a');a.href=u;a.download='moral-trade-ledger.csv';a.click();URL.revokeObjectURL(u);toast('Ledger CSV exported.');
+}
+document.addEventListener('click',e=>{
+ let x=e.target.closest('[data-page]');if(x){setPage(x.dataset.page);return}
+ x=e.target.closest('[data-now]');if(x){state.now=x.dataset.now;render();return}
+ x=e.target.closest('[data-trade]');if(x){state.trade=x.dataset.trade;render();return}
+ x=e.target.closest('[data-build]');if(x){state.build=x.dataset.build;render();return}
+ x=e.target.closest('[data-activity]');if(x){state.activity=x.dataset.activity;render();return}
+ x=e.target.closest('[data-cal]');if(x){state.calendar=x.dataset.cal;render();return}
+ x=e.target.closest('[data-select]');if(x){state.selected=x.dataset.select;render();return}
+ x=e.target.closest('[data-ingredient]');if(x){addClause(x.dataset.ingredient);return}
+ x=e.target.closest('[data-remove]');if(x){state.clauses.splice(+x.dataset.remove,1);render();return}
+ x=e.target.closest('[data-action]');if(!x)return;let a=x.dataset.action;
+ if(a==='profile')openDrawer(profileDrawer()); else if(a==='command')openDrawer(commandDrawer()); else if(a==='close')closeDrawer();
+ else if(a==='dealroom'){state.page='trade';state.trade='dealroom';location.hash='trade';render()}
+ else if(a==='calendar'){state.page='activity';state.activity='calendar';location.hash='activity';render()}
+ else if(a==='select-bio'){state.threshold=Math.min(9990,state.threshold+45);toast('$45 conditionally pledged to the biosecurity salary-gap pool.');render()}
+ else if(a==='add-pledge'){state.threshold=Math.min(9990,state.threshold+10);toast('$10 conditionally pledged.');render()}
+ else if(a==='verify'){state.verified=true;toast('Verification recorded. Counterparty release is ready.');render()}
+ else if(a==='toggle-test'){state.test=!state.test;toast(`Test mode ${state.test?'enabled':'disabled'}.`);render()}
+ else if(a==='zoom-in'){state.zoom=Math.min(1.4,state.zoom+.1);render()} else if(a==='zoom-out'){state.zoom=Math.max(.7,state.zoom-.1);render()}
+ else if(a==='lock'){state.locked=true;toast('Terms locked by Alex. Mina was asked to confirm.');render()}
+ else if(['make-offer','create','publ
+
+r();return}
+ x=e.target.closest('[data-trade]');if(x){state.trade=x.dataset.trade;render();return}
+ x=e.target.closest('[data-build]');if(x){state.build=x.dataset.build;render();return}
+ x=e.target.closest('[data-activity]');if(x){state.activity=x.dataset.activity;render();return}
+ x=e.target.closest('[data-cal]');if(x){state.calendar=x.dataset.cal;render();return}
+ x=e.target.closest('[data-select]');if(x){state.selected=x.dataset.select;render();return}
+ x=e.target.closest('[data-ingredient]');if(x){addClause(x.dataset.ingredient);return}
+ x=e.target.closest('[data-remove]');if(x){state.clauses.splice(+x.dataset.remove,1);render();return}
+ x=e.target.closest('[data-action]');if(!x)return;let a=x.dataset.action;
+ if(a==='profile')openDrawer(profileDrawer()); else if(a==='command')openDrawer(commandDrawer()); else if(a==='close')closeDrawer();
+ else if(a==='dealroom'){state.page='trade';state.trade='dealroom';location.hash='trade';render()}
+ else if(a==='calendar'){state.page='activity';state.activity='calendar';location.hash='activity';render()}
+ else if(a==='select-bio'){state.threshold=Math.min(9990,state.threshold+45);toast('$45 conditionally pledged to the biosecurity salary-gap pool.');render()}
+ else if(a==='add-pledge'){state.threshold=Math.min(9990,state.threshold+10);toast('$10 conditionally pledged.');render()}
+ else if(a==='verify'){state.verified=true;toast('Verification recorded. Counterparty release is ready.');render()}
+ else if(a==='toggle-test'){state.test=!state.test;toast(`Test mode ${state.test?'enabled':'disabled'}.`);render()}
+ else if(a==='zoom-in'){state.zoom=Math.min(1.4,state.zoom+.1);render()} else if(a==='zoom-out'){state.zoom=Math.max(.7,state.zoom-.1);render()}
+ else if(a==='lock'){state.locked=true;toast('Terms locked by Alex. Mina was asked to confirm.');render()}
+ else if(['make-offer','create','publish','from-command','repeat'].includes(a)){closeDrawer();state.page='trade';state.trade='build';location.hash='trade';toast('Draft created with editable exact terms.');render()}
+ else if(a==='pledge')toast(`$${state.pledge} conditional pledge reserved.`)
+ else if(a==='export')exportCSV()
+ else if(a==='confirm')toast('Allocations confirmed. Conditions will be monitored.')
+ else if(a==='approve')toast('$20 approved under the standing rule.')
+ else if(a==='decline')toast('Approval declined. No funds moved.')
+ else if(a==='pause')toast('All standing rules paused.')
+ else if(a==='start-route')toast('Route started. $40 reserved and step 1 opened.')
+ else if(a==='save')toast('Saved.')
+ else if(a==='counter')toast('Counteroffer sent to Mina.')
+ else if(a==='pass')toast('Match passed. Next match loaded.')
+ else if(a==='test')toast('Terms teste
+
+='activity';render()}
+ else if(a==='select-bio'){state.threshold=Math.min(9990,state.threshold+45);toast('$45 conditionally pledged to the biosecurity salary-gap pool.');render()}
+ else if(a==='add-pledge'){state.threshold=Math.min(9990,state.threshold+10);toast('$10 conditionally pledged.');render()}
+ else if(a==='verify'){state.verified=true;toast('Verification recorded. Counterparty release is ready.');render()}
+ else if(a==='toggle-test'){state.test=!state.test;toast(`Test mode ${state.test?'enabled':'disabled'}.`);render()}
+ else if(a==='zoom-in'){state.zoom=Math.min(1.4,state.zoom+.1);render()} else if(a==='zoom-out'){state.zoom=Math.max(.7,state.zoom-.1);render()}
+ else if(a==='lock'){state.locked=true;toast('Terms locked by Alex. Mina was asked to confirm.');render()}
+ else if(['make-offer','create','publish','from-command','repeat'].includes(a)){closeDrawer();state.page='trade';state.trade='build';location.hash='trade';toast('Draft created with editable exact terms.');render()}
+ else if(a==='pledge')toast(`$${state.pledge} conditional pledge reserved.`)
+ else if(a==='export')exportCSV()
+ else if(a==='confirm')toast('Allocations confirmed. Conditions will be monitored.')
+ else if(a==='approve')toast('$20 approved under the standing rule.')
+ else if(a==='decline')toast('Approval declined. No funds moved.')
+ else if(a==='pause')toast('All standing rules paused.')
+ else if(a==='start-route')toast('Route started. $40 reserved and step 1 opened.')
+ else if(a==='save')toast('Saved.')
+ else if(a==='counter')toast('Counteroffer sent to Mina.')
+ else if(a==='pass')toast('Match passed. Next match loaded.')
+ else if(a==='test')toast('Terms tested: a mutually acceptable range exists.')
+ else if(a==='compare')toast('Compare mode enabled. Select multiple opportunities.')
+ else if(a==='invite')toast('Invitation composer opened.')
+ else if(a==='watch')toast('Opportunity added to watch list.')
+});
+document.addEventListener('input',e=>{if(e.target.id==='pledgeSlider'){state.pledge=+e.target.value;let b=$('[data-action="pledge"]');if(b)b.textContent=`Pledge $${state.pledge} conditionally`}});
+$('#overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeDrawer()});
+addEventListener('hashchange',()=>{state.page=(location.hash||'#now').slice(1);render()});
+render();
+
+</script>
+</body>
+</html>
+
+--- state.build ---
+row">You’re in full control.</div><p style="font-size:11px">No rule runs without your approval. Pause everything at any time.</p><button class="btn" style="width:100%" data-action="pause">Pause all rules</button></section>
+ </aside></div>`;
+}
+
+/* Trade */
+function tradePage(){
+ return `<section class="page">${pageHead('Build a trade that works for both sides.','Compose exact terms, test mutual ranges, and lock proof-backed commitments.','New trade')}
+ <div class="stagebar">${[['build','1 · Build'],['match','2 · Match'],['dealroom','3 · Dealroom']].map(x=>`<button class="${state.trade===x[0]?'active':''}" data-trade="${x[0]}">${x[1]}</button>`).join('')}</div>
+ ${state.trade==='build'?buildView():state.trade==='match'?matchView():dealroomView()}</section>`;
+}
+function buildView(){
+ return `${tab([['clauses','Structured clauses'],['exchange','Two-sided exchange table']],'build','build')}${state.build==='clauses'?clauseBuilder():exchangeBuilder()}`;
+}
+function clauseBuilder(){
+ const ing=[['$','Money'],['◷','Time'],['⇄','Behavior'],['⚗','Skill'],['♡','Donation redirect'],['↗','Threshold'],['□','Deadline'],['◈','Verification']];
+ return `<div class="compose-grid"><aside class="panel ingredients"><div class="eyebrow">Ingredients</div><p class="muted" style="font-size:9px">Drag or click to add</p>${ing.map(x=>`<div class="ingredient" draggable="true" data-ingredient="${x[1]}"><b>${x[0]}</b>${x[1]}<span>⋮⋮</span></div>`).join('')}<div class="dropzone" id="ingredientDrop">Drop to add</div><div class="panel pad"><div class="eyebrow">Payment status</div><div class="big blue">$80.00</div><small>Held in escrow</small></div></aside>
+ <main><div class="between" style="margin-bottom:9px"><div>${status('Draft autosaved')} · <span class="mono" style="font-size:9px">Version 3 · All changes saved</span></div><div class="h"><button class="btn small">Templates</button><button class="btn small">•••</button></div></div>
+ ${state.clauses.map((c,i)=>`<section class="clause"><div class="clause-num">${i+1}</div><div class="clause-body"><div class="clause-label">${c[0]}</div><div class="sentence">${c[1]}</div>${i===3?'<small class="muted">Receipts or a verified review report satisfies this term.</small>':''}</div><div class="clause-tool"><button class="btn ghost small" data-remove="${i}">×</button><br>⋮⋮</div></section>`).join('')}<div class="dropzone" id="clauseDrop">＋ Add clause</div>
+ <div class="h" style="justify-content:center;margin-top:15px"><button class="btn primary wide" data-action="publish">Publish offer</button><button class="btn" data-action="test">Test terms</button><button class="btn" data-action="save">Save draft</button><button class="btn" data-action="invite">Invite someo
+
+this trade.`]);toast(name+' clause added.');render()}
+function exportCSV(){
+ let rows=[['Date','Type','You put forward','Other side','Money state'],['2026-07-16','Completed','12 transit passes','One tree planted','$18 charged'],['2026-07-15','Active','$100 conditional pledge','Close salary gap','$25 reserved']];
+ let csv=rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n'),u=URL.createObjectURL(new Blob([csv],{type:'text/csv'})),a=document.createElement('a');a.href=u;a.download='moral-trade-ledger.csv';a.click();URL.revokeObjectURL(u);toast('Ledger CSV exported.');
+}
+document.addEventListener('click',e=>{
+ let x=e.target.closest('[data-page]');if(x){setPage(x.dataset.page);return}
+ x=e.target.closest('[data-now]');if(x){state.now=x.dataset.now;render();return}
+ x=e.target.closest('[data-trade]');if(x){state.trade=x.dataset.trade;render();return}
+ x=e.target.closest('[data-build]');if(x){state.build=x.dataset.build;render();return}
+ x=e.target.closest('[data-activity]');if(x){state.activity=x.dataset.activity;render();return}
+ x=e.target.closest('[data-cal]');if(x){state.calendar=x.dataset.cal;render();return}
+ x=e.target.closest('[data-select]');if(x){state.selected=x.dataset.select;render();return}
+ x=e.target.closest('[data-ingredient]');if(x){addClause(x.dataset.ingredient);return}
+ x=e.target.closest('[data-remove]');if(x){state.clauses.splice(+x.dataset.remove,1);render();return}
+ x=e.target.closest('[data-action]');if(!x)return;let a=x.dataset.action;
+ if(a==='profile')openDrawer(profileDrawer()); else if(a==='command')openDrawer(commandDrawer()); else if(a==='close')closeDrawer();
+ else if(a==='dealroom'){state.page='trade';state.trade='dealroom';location.hash='trade';render()}
+ else if(a==='calendar'){state.page='activity';state.activity='calendar';location.hash='activity';render()}
+ else if(a==='select-bio'){state.threshold=Math.min(9990,state.threshold+45);toast('$45 conditionally pledged to the biosecurity salary-gap pool.');render()}
+ else if(a==='add-pledge'){state.threshold=Math.min(9990,state.threshold+10);toast('$10 conditionally pledged.');render()}
+ else if(a==='verify'){state.verified=true;toast('Verification recorded. Counterparty release is ready.');render()}
+ else if(a==='toggle-test'){state.test=!state.test;toast(`Test mode ${state.test?'enabled':'disabled'}.`);render()}
+ else if(a==='zoom-in'){state.zoom=Math.min(1.4,state.zoom+.1);render()} else if(a==='zoom-out'){state.zoom=Math.max(.7,state.zoom-.1);render()}
+ else if(a==='lock'){state.locked=true;toast('Terms locked by Alex. Mina was asked to confirm.');render()}
+ else if(['make-offer','create','publish','from-command','repeat'].includes(a)){closeDrawer();state.page='trade';state.trade
+
