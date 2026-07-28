@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - ops/create-adapter-authenticated-qa-20260728
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/create-adapter-authenticated-qa.yml"
+      - ".github/qa/**"
   workflow_dispatch:
 
 permissions:
