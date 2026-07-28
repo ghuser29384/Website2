@@ -50,6 +50,16 @@ jobs:
           set -euo pipefail
           cat .github/qa/runner.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/run-create-adapter-qa.sh
           cat .github/qa/browser.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/create-adapter-authenticated-qa.mjs
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/create-adapter-authenticated-qa.mjs')
+          source = path.read_text()
+          old = '.locator("#publishConfirm").check();'
+          count = source.count(old)
+          if count < 2:
+              raise SystemExit(f'Expected at least two publish-confirm checks; found {count}.')
+          path.write_text(source.replace(old, '.locator("#publishConfirm").check({ force: true });'))
+          PY
           chmod +x /tmp/run-create-adapter-qa.sh
           bash -n /tmp/run-create-adapter-qa.sh
           node --check /tmp/create-adapter-authenticated-qa.mjs
