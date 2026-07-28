@@ -89,4 +89,4 @@ jobs:
             exit 1
           fi
 
-# Poll exact head 80716ea5b87b40e06ee5644d82db6580deb5fa96 after differential gate adoption.
+# Poll exact head 80716ea5b87b40e06ee5644d82db6580deb5fa96 after temporary workflow cleanup.
