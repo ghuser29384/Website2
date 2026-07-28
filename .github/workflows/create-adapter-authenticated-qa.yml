@@ -53,6 +53,27 @@ jobs:
           runner_path = Path('/tmp/run-create-adapter-qa.sh')
           runner = runner_path.read_text()
 
+          strict_old = '#!/usr/bin/env bash\nset -u -o pipefail'
+          strict_new = '#!/usr/bin/env bash\nset -euo pipefail'
+          if runner.count(strict_old) != 1:
+              raise SystemExit('The expected runner shell-options header was not found exactly once.')
+          runner = runner.replace(strict_old, strict_new)
+
+          candidate_old = '''log "materializing exact candidate worktree"
+git fetch --no-tags origin "+refs/heads/feature/moral-trade-create-interface-adapter-20260727:refs/remotes/origin/create-adapter-candidate"
+test "$(git rev-parse refs/remotes/origin/create-adapter-candidate)" = "$EXACT_CANDIDATE_SHA"
+rm -rf "$CANDIDATE"
+git worktree add --detach "$CANDIDATE" refs/remotes/origin/create-adapter-candidate
+test "$(git -C "$CANDIDATE" rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"'''
+          candidate_new = '''log "materializing exact integrated candidate worktree"
+git fetch --no-tags origin "$EXACT_CANDIDATE_SHA"
+rm -rf "$CANDIDATE"
+git worktree add --detach "$CANDIDATE" "$EXACT_CANDIDATE_SHA"
+test "$(git -C "$CANDIDATE" rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"'''
+          if runner.count(candidate_old) != 1:
+              raise SystemExit('The stale product-branch candidate block was not found exactly once.')
+          runner = runner.replace(candidate_old, candidate_new)
+
           user_columns_old = '''  email_change_token_new, email_change_token_current, reauthentication_token,
   is_sso_user, is_anonymous, created_at, updated_at'''
           user_columns_new = '''  email_change_token_new, email_change, email_change_token_current, reauthentication_token,
@@ -73,13 +94,12 @@ jobs:
           runner = runner.replace(identity_columns_old, identity_columns_new)
 
           for role in ('creator', 'contributor', 'outsider'):
-              row_old = f"'email', now(), now(), now())"
-              row_new = f"'email', now(), now(), now(), :'{{role}}_email')"
-              # Replace one row at a time to preserve each role's email binding.
+              row_old = "'email', now(), now(), now())"
               occurrence = runner.find(row_old)
               if occurrence < 0:
                   raise SystemExit(f'Missing auth.identities row for {role}.')
-              runner = runner[:occurrence] + row_new.format(role=role) + runner[occurrence + len(row_old):]
+              row_new = f"'email', now(), now(), now(), :'{role}_email')"
+              runner = runner[:occurrence] + row_new + runner[occurrence + len(row_old):]
 
           runner_path.write_text(runner)
 
