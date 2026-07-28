@@ -1,0 +1,58 @@
+name: PR 212 pool nullability repair
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-pool-nullability-repair.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-pool-nullability-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact PR 212 feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Preserve the enclosing pool invariant inside the contribution callback
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_head=fa1175ff30e1ccdcba0cb140aeccea3acabee6f6
+          target='src/app/institutions/[organizationId]/deals/[dealId]/page.tsx'
+          [[ "$(git rev-parse HEAD)" == "$expected_head" ]] || {
+            echo "PR #212 moved from the reviewed head; refusing to patch." >&2
+            exit 1
+          }
+          [[ "$(git rev-parse "HEAD:${target}")" == "fbe1ae5df3cf5101ca306b647acc86b8c49237ab" ]] || {
+            echo "Unexpected institutional deal-page blob; refusing to patch." >&2
+            exit 1
+          }
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/app/institutions/[organizationId]/deals/[dealId]/page.tsx')
+          text = path.read_text()
+          old = 'formatInstitutionalMoney(contribution.amount_cents, data.pool.currency)'
+          new = 'formatInstitutionalMoney(contribution.amount_cents, data.pool!.currency)'
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one nullable pool currency use, found {text.count(old)}')
+          path.write_text(text.replace(old, new))
+          PY
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$target"
+          git commit -m "Fix institutional pool render nullability"
+          git push origin HEAD:feat/institutional-trade-system
