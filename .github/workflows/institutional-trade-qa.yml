@@ -405,14 +405,17 @@ jobs:
           def parse(path: str) -> tuple[Counter[str], dict[str, int]]:
               failures: Counter[str] = Counter()
               summary: dict[str, int] = {}
+              summary_started = False
               for raw in Path(path).read_text(errors="replace").splitlines():
                   line = ansi.sub("", raw).replace("\ufeff", "")
-                  match = failure_line.search(line)
-                  if match:
-                      failures[match.group(1).strip()] += 1
                   summary_match = summary_line.search(line)
                   if summary_match:
+                      summary_started = True
                       summary[summary_match.group(1).lower()] = int(summary_match.group(2))
+                  if not summary_started:
+                      match = failure_line.search(line)
+                      if match:
+                          failures[match.group(1).strip()] += 1
 
               required = {"tests", "pass", "fail", "cancelled"}
               missing = sorted(required - summary.keys())
