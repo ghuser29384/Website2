@@ -1,0 +1,40 @@
+name: Inspect decoded Create QA scripts
+
+on:
+  push:
+    branches:
+      - ops/create-adapter-authenticated-qa-20260728
+    paths:
+      - ".github/workflows/inspect-create-adapter-qa-source.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decode scripts
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/create-adapter-qa-source
+          cat .github/qa/runner.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/create-adapter-qa-source/run-create-adapter-qa.sh
+          cat .github/qa/browser.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/create-adapter-qa-source/create-adapter-authenticated-qa.mjs
+          bash -n /tmp/create-adapter-qa-source/run-create-adapter-qa.sh
+          node --check /tmp/create-adapter-qa-source/create-adapter-authenticated-qa.mjs
+      - name: Upload decoded source
+        uses: actions/upload-artifact@v4
+        with:
+          name: decoded-create-adapter-qa-source-${{ github.run_id }}
+          path: /tmp/create-adapter-qa-source
+          if-no-files-found: error
+          retention-days: 7
+      - name: Report run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment 273 --body "Decoded Create QA source inspection run \`${GITHUB_RUN_ID}\` completed."
