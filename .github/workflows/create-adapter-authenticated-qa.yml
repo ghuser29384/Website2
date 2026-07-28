@@ -1,4 +1,4 @@
-name: Authenticated Create adapter production-preview QA
+name: Authenticated Create adapter isolated-QA release gate
 
 on:
   push:
@@ -15,7 +15,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: create-adapter-production-preview-authenticated-qa-20260728
+  group: create-adapter-isolated-qa-authenticated-release-gate-20260728
   cancel-in-progress: false
 
 jobs:
@@ -24,19 +24,11 @@ jobs:
     timeout-minutes: 55
     env:
       EXACT_CANDIDATE_SHA: e8288b8084b88e69a6d23ca3e966ab18178fefb8
-      PREVIEW_BASE_URL: https://moraltrade-site-24crjz8zg-ellen-s.vercel.app
-      PREVIEW_SHARE_URL: https://moraltrade-site-24crjz8zg-ellen-s.vercel.app/?_vercel_share=IEachfWLgykLNO3f9Zhnk477ewvaMtXx
-      QA_MARKER: prod-create-adapter-authqa-20260728T091057Z-2bce19
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PREVIEW_BASE_URL: https://website2-qbs5t4cyi-ellen-s.vercel.app
+      PREVIEW_SHARE_URL: https://website2-qbs5t4cyi-ellen-s.vercel.app/?_vercel_share=CfYLWP3XRnAItiHy2BWa1tQXS0fC2hJr
       QA_OUTPUT_DIR: qa-artifacts/create-adapter-authenticated
-      CREATOR_EMAIL: prod-create-adapter-authqa-20260728T091057Z-2bce19-creator@example.test
-      CREATOR_PASSWORD: QPTR3phM393jaTLNEIGR83amU7bri5NfAa1!
-      CREATOR_DISPLAY_NAME: Production Create Adapter QA Creator 20260728T091057Z
-      CONTRIBUTOR_EMAIL: prod-create-adapter-authqa-20260728T091057Z-2bce19-contributor@example.test
-      CONTRIBUTOR_PASSWORD: HLuIkM3EmRuCr0l61hggGecnDmeDX2gtAa1!
-      CONTRIBUTOR_DISPLAY_NAME: Production Create Adapter QA Contributor 20260728T091057Z
-      OUTSIDER_EMAIL: prod-create-adapter-authqa-20260728T091057Z-2bce19-outsider@example.test
-      OUTSIDER_PASSWORD: pIgQmshYfm0_fsLk5ALTTzZYNu0NRbinAa1!
-      OUTSIDER_DISPLAY_NAME: Production Create Adapter QA Outsider 20260728T091057Z
     steps:
       - name: Check out QA operator branch
         uses: actions/checkout@v4
@@ -48,14 +40,16 @@ jobs:
         with:
           node-version: 24
 
-      - name: Reconstruct browser QA and materialize exact integrated candidate
+      - name: Reconstruct QA runner and browser script
         shell: bash
         run: |
           set -euo pipefail
-          printf '::add-mask::%s\n' "$CREATOR_PASSWORD" "$CONTRIBUTOR_PASSWORD" "$OUTSIDER_PASSWORD"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          cat .github/qa/runner.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/run-create-adapter-qa.sh
           cat .github/qa/browser.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/create-adapter-authenticated-qa.mjs
           python3 - <<'PY'
           from pathlib import Path
+
           path = Path('/tmp/create-adapter-authenticated-qa.mjs')
           source = path.read_text()
 
@@ -79,45 +73,40 @@ jobs:
           source = source.replace(email_old, email_new)
           path.write_text(source)
           PY
+          chmod +x /tmp/run-create-adapter-qa.sh
+          bash -n /tmp/run-create-adapter-qa.sh
           node --check /tmp/create-adapter-authenticated-qa.mjs
-          git fetch --no-tags origin "$EXACT_CANDIDATE_SHA"
-          rm -rf /tmp/create-adapter-candidate
-          git worktree add --detach /tmp/create-adapter-candidate "$EXACT_CANDIDATE_SHA"
-          test "$(git -C /tmp/create-adapter-candidate rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"
-          cp /tmp/create-adapter-authenticated-qa.mjs /tmp/create-adapter-candidate/create-adapter-authenticated-qa.mjs
 
-      - name: Install exact-candidate dependencies and Chromium
-        working-directory: /tmp/create-adapter-candidate
-        run: |
-          npm ci
-          npx playwright install chromium --with-deps
-
-      - name: Run authenticated desktop and mobile QA
+      - name: Run authenticated QA and exact cleanup
         id: qa
         continue-on-error: true
-        working-directory: /tmp/create-adapter-candidate
-        run: node create-adapter-authenticated-qa.mjs
+        run: /tmp/run-create-adapter-qa.sh
 
       - name: Upload authenticated QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: create-adapter-production-preview-authenticated-qa-${{ github.run_id }}
+          name: create-adapter-isolated-qa-authenticated-${{ github.run_id }}
           path: |
             /tmp/create-adapter-candidate/qa-artifacts/create-adapter-authenticated
             /tmp/create-adapter-e2e-result.json
+            /tmp/create-adapter-fixture-ids.txt
+            /tmp/create-adapter-database-evidence.log
+            /tmp/create-adapter-cleanup.log
+            /tmp/create-adapter-zero-residue.json
+            /tmp/create-adapter-final-status.txt
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Report run ID and browser outcome
+      - name: Report run ID and exact release-gate outcome
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           QA_OUTCOME: ${{ steps.qa.outcome }}
         run: |
-          gh pr comment 273 --body "Authenticated production-preview Create QA run \`${GITHUB_RUN_ID}\` completed with browser outcome **${QA_OUTCOME}** against exact integrated candidate \`${EXACT_CANDIDATE_SHA}\`."
+          gh pr comment 273 --body "Authenticated isolated-QA Create release gate run \`${GITHUB_RUN_ID}\` completed with outcome **${QA_OUTCOME}** against exact integrated candidate \`${EXACT_CANDIDATE_SHA}\` and Preview \`${PREVIEW_BASE_URL}\`."
 
-      - name: Require authenticated browser gate
+      - name: Require all authenticated QA gates
         if: always()
         env:
           QA_OUTCOME: ${{ steps.qa.outcome }}
