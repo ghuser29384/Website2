@@ -78,6 +78,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   const useLegacyDraft = Boolean(templateId || structure || acceptsCommandHandoff || example);
 
   if (!useLegacyDraft) {
+    // CreateInterfaceFrame embeds /moral-trade-create/index.html as same-origin srcDoc.
     const resume = valueOf(resolvedSearchParams.resume);
     return <CreateInterfaceFrame resume={resume === "create"} />;
   }
