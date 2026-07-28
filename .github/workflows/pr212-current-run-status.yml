@@ -44,3 +44,5 @@ jobs:
           git add ops/pr212-current-run-status.json
           git commit -m "Record PR 212 current exact-head QA run"
           git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
+
+# Inspect head 45a27b46fdc1d0a0ec12056bb4bd3552a28032fc.
