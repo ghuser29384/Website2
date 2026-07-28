@@ -1,12 +1,21 @@
 {
-  "generated_at": "2026-07-27T13:26:19Z",
-  "current_head": "2e45845ed5b2c880f1c956f5a75ef578bcc591bf",
+  "generated_at": "2026-07-28T07:54:36Z",
+  "current_head": "80716ea5b87b40e06ee5644d82db6580deb5fa96",
   "target_branch": "feat/institutional-trade-system",
   "target_workflow": "institutional-trade-qa.yml",
-  "selected_run_id": "30270105060",
+  "selected_run_id": "30340060069",
   "selected_run_status": "completed",
   "selected_run_conclusion": "failure",
   "runs": [
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-28T07:52:09Z",
+      "databaseId": 30340060069,
+      "event": "push",
+      "headSha": "80716ea5b87b40e06ee5644d82db6580deb5fa96",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30340060069"
+    },
     {
       "conclusion": "failure",
       "createdAt": "2026-07-27T13:24:07Z",
@@ -99,22 +108,22 @@
     }
   ],
   "run": {
-    "id": 30270105060,
+    "id": 30340060069,
     "name": "Institutional trade QA",
-    "node_id": "WFR_kwLOR8Oun88AAAAHDD0l5A",
+    "node_id": "WFR_kwLOR8Oun88AAAAHEGiTpQ",
     "head_branch": "feat/institutional-trade-system",
-    "head_sha": "2e45845ed5b2c880f1c956f5a75ef578bcc591bf",
+    "head_sha": "80716ea5b87b40e06ee5644d82db6580deb5fa96",
     "path": ".github/workflows/institutional-trade-qa.yml",
-    "display_title": "Strengthen read-only institutional view contract test",
-    "run_number": 10,
+    "display_title": "Gate institutional full tests against exact PR base",
+    "run_number": 11,
     "event": "push",
     "status": "completed",
     "conclusion": "failure",
     "workflow_id": 321200203,
-    "check_suite_id": 82025752078,
-    "check_suite_node_id": "CS_kwDOR8Oun88AAAATGR2mDg",
-    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30270105060",
-    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30270105060",
+    "check_suite_id": 82224468110,
+    "check_suite_node_id": "CS_kwDOR8Oun88AAAATJPXQjg",
+    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30340060069",
+    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30340060069",
     "pull_requests": [
       {
         "url": "https://api.github.com/repos/ghuser29384/Website2/pulls/212",
@@ -122,7 +131,7 @@
         "number": 212,
         "head": {
           "ref": "feat/institutional-trade-system",
-          "sha": "2e45845ed5b2c880f1c956f5a75ef578bcc591bf",
+          "sha": "80716ea5b87b40e06ee5644d82db6580deb5fa96",
           "repo": {
             "id": 1204006559,
             "url": "https://api.github.com/repos/ghuser29384/Website2",
@@ -140,8 +149,8 @@
         }
       }
     ],
-    "created_at": "2026-07-27T13:24:07Z",
-    "updated_at": "2026-07-27T13:26:15Z",
+    "created_at": "2026-07-28T07:52:09Z",
+    "updated_at": "2026-07-28T07:54:10Z",
     "actor": {
       "login": "ghuser29384",
       "id": 262476329,
@@ -165,7 +174,7 @@
     },
     "run_attempt": 1,
     "referenced_workflows": [],
-    "run_started_at": "2026-07-27T13:24:07Z",
+    "run_started_at": "2026-07-28T07:52:09Z",
     "triggering_actor": {
       "login": "ghuser29384",
       "id": 262476329,
@@ -187,19 +196,19 @@
       "user_view_type": "public",
       "site_admin": false
     },
-    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30270105060/jobs",
-    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30270105060/logs",
-    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82025752078",
-    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30270105060/artifacts",
-    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30270105060/cancel",
-    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30270105060/rerun",
+    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30340060069/jobs",
+    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30340060069/logs",
+    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82224468110",
+    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30340060069/artifacts",
+    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30340060069/cancel",
+    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30340060069/rerun",
     "previous_attempt_url": null,
     "workflow_url": "https://api.github.com/repos/ghuser29384/Website2/actions/workflows/321200203",
     "head_commit": {
-      "id": "2e45845ed5b2c880f1c956f5a75ef578bcc591bf",
-      "tree_id": "6fc1a1e2910d8eda93ca058503f71ae7f0eb163c",
-      "message": "Strengthen read-only institutional view contract test",
-      "timestamp": "2026-07-27T13:24:04Z",
+      "id": "80716ea5b87b40e06ee5644d82db6580deb5fa96",
+      "tree_id": "ec538688ed44e7011a5a2b9f6bdcfa369013b8f3",
+      "message": "Gate institutional full tests against exact PR base",
+      "timestamp": "2026-07-28T07:52:05Z",
       "author": {
         "name": "ghuser29384",
         "email": "262476329+ghuser29384@users.noreply.github.com"
@@ -348,21 +357,21 @@
   },
   "jobs": [
     {
-      "id": 89990242418,
-      "run_id": 30270105060,
+      "id": 90213397713,
+      "run_id": 30340060069,
       "workflow_name": "Institutional trade QA",
       "head_branch": "feat/institutional-trade-system",
-      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30270105060",
+      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30340060069",
       "run_attempt": 1,
-      "node_id": "CR_kwDOR8Oun88AAAAU89Ygcg",
-      "head_sha": "2e45845ed5b2c880f1c956f5a75ef578bcc591bf",
-      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/89990242418",
-      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30270105060/job/89990242418",
+      "node_id": "CR_kwDOR8Oun88AAAAVASM00Q",
+      "head_sha": "80716ea5b87b40e06ee5644d82db6580deb5fa96",
+      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/90213397713",
+      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30340060069/job/90213397713",
       "status": "completed",
       "conclusion": "failure",
-      "created_at": "2026-07-27T13:24:07Z",
-      "started_at": "2026-07-27T13:24:10Z",
-      "completed_at": "2026-07-27T13:26:14Z",
+      "created_at": "2026-07-28T07:52:09Z",
+      "started_at": "2026-07-28T07:52:11Z",
+      "completed_at": "2026-07-28T07:54:09Z",
       "name": "verify",
       "steps": [
         {
@@ -370,200 +379,200 @@
           "status": "completed",
           "conclusion": "success",
           "number": 1,
-          "started_at": "2026-07-27T13:24:11Z",
-          "completed_at": "2026-07-27T13:24:12Z"
+          "started_at": "2026-07-28T07:52:12Z",
+          "completed_at": "2026-07-28T07:52:13Z"
         },
         {
           "name": "Check out exact branch commit",
           "status": "completed",
           "conclusion": "success",
           "number": 2,
-          "started_at": "2026-07-27T13:24:12Z",
-          "completed_at": "2026-07-27T13:24:14Z"
+          "started_at": "2026-07-28T07:52:13Z",
+          "completed_at": "2026-07-28T07:52:15Z"
         },
         {
           "name": "Set up Node.js",
           "status": "completed",
           "conclusion": "success",
           "number": 3,
-          "started_at": "2026-07-27T13:24:14Z",
-          "completed_at": "2026-07-27T13:24:17Z"
+          "started_at": "2026-07-28T07:52:15Z",
+          "completed_at": "2026-07-28T07:52:17Z"
         },
         {
           "name": "Install dependencies with transient-registry retry",
           "status": "completed",
           "conclusion": "success",
           "number": 4,
-          "started_at": "2026-07-27T13:24:17Z",
-          "completed_at": "2026-07-27T13:24:29Z"
+          "started_at": "2026-07-28T07:52:17Z",
+          "completed_at": "2026-07-28T07:52:32Z"
         },
         {
           "name": "Install browser and PostgreSQL tooling",
           "status": "completed",
           "conclusion": "success",
           "number": 5,
-          "started_at": "2026-07-27T13:24:29Z",
-          "completed_at": "2026-07-27T13:24:56Z"
+          "started_at": "2026-07-28T07:52:32Z",
+          "completed_at": "2026-07-28T07:52:57Z"
         },
         {
           "name": "Set up Supabase CLI",
           "status": "completed",
           "conclusion": "success",
           "number": 6,
-          "started_at": "2026-07-27T13:24:56Z",
-          "completed_at": "2026-07-27T13:24:59Z"
+          "started_at": "2026-07-28T07:52:57Z",
+          "completed_at": "2026-07-28T07:52:59Z"
         },
         {
           "name": "Validate isolated QA configuration",
           "status": "completed",
           "conclusion": "success",
           "number": 7,
-          "started_at": "2026-07-27T13:24:59Z",
-          "completed_at": "2026-07-27T13:24:59Z"
+          "started_at": "2026-07-28T07:52:59Z",
+          "completed_at": "2026-07-28T07:52:59Z"
         },
         {
           "name": "Run source-contract integrity tests before database mutation",
           "status": "completed",
           "conclusion": "success",
           "number": 8,
-          "started_at": "2026-07-27T13:24:59Z",
-          "completed_at": "2026-07-27T13:25:00Z"
+          "started_at": "2026-07-28T07:52:59Z",
+          "completed_at": "2026-07-28T07:53:00Z"
         },
         {
           "name": "Compile and apply institutional migration atomically to isolated QA",
           "status": "completed",
           "conclusion": "success",
           "number": 9,
-          "started_at": "2026-07-27T13:25:00Z",
-          "completed_at": "2026-07-27T13:25:33Z"
+          "started_at": "2026-07-28T07:53:00Z",
+          "completed_at": "2026-07-28T07:53:02Z"
         },
         {
           "name": "Generate exact QA database types",
           "status": "completed",
           "conclusion": "success",
           "number": 10,
-          "started_at": "2026-07-27T13:25:33Z",
-          "completed_at": "2026-07-27T13:25:44Z"
+          "started_at": "2026-07-28T07:53:02Z",
+          "completed_at": "2026-07-28T07:53:16Z"
         },
         {
           "name": "Run differential Supabase lint, foreign-key indexes, grants, and forced-RLS inventory",
           "status": "completed",
           "conclusion": "success",
           "number": 11,
-          "started_at": "2026-07-27T13:25:44Z",
-          "completed_at": "2026-07-27T13:25:47Z"
+          "started_at": "2026-07-28T07:53:16Z",
+          "completed_at": "2026-07-28T07:53:20Z"
         },
         {
-          "name": "Run complete test suite",
+          "name": "Run exact-base differential full-test gate",
           "status": "completed",
           "conclusion": "failure",
           "number": 12,
-          "started_at": "2026-07-27T13:25:47Z",
-          "completed_at": "2026-07-27T13:26:10Z"
+          "started_at": "2026-07-28T07:53:20Z",
+          "completed_at": "2026-07-28T07:54:06Z"
         },
         {
           "name": "Type-check generated QA schema",
           "status": "completed",
           "conclusion": "skipped",
           "number": 13,
-          "started_at": "2026-07-27T13:26:10Z",
-          "completed_at": "2026-07-27T13:26:10Z"
+          "started_at": "2026-07-28T07:54:06Z",
+          "completed_at": "2026-07-28T07:54:06Z"
         },
         {
           "name": "Run full ESLint",
           "status": "completed",
           "conclusion": "skipped",
           "number": 14,
-          "started_at": "2026-07-27T13:26:10Z",
-          "completed_at": "2026-07-27T13:26:10Z"
+          "started_at": "2026-07-28T07:54:06Z",
+          "completed_at": "2026-07-28T07:54:06Z"
         },
         {
           "name": "Build production application",
           "status": "completed",
           "conclusion": "skipped",
           "number": 15,
-          "started_at": "2026-07-27T13:26:10Z",
-          "completed_at": "2026-07-27T13:26:10Z"
+          "started_at": "2026-07-28T07:54:06Z",
+          "completed_at": "2026-07-28T07:54:06Z"
         },
         {
           "name": "Start QA-backed production server",
           "status": "completed",
           "conclusion": "skipped",
           "number": 16,
-          "started_at": "2026-07-27T13:26:10Z",
-          "completed_at": "2026-07-27T13:26:10Z"
+          "started_at": "2026-07-28T07:54:06Z",
+          "completed_at": "2026-07-28T07:54:06Z"
         },
         {
           "name": "Run authenticated five-participant browser, RPC, and database suite",
           "status": "completed",
           "conclusion": "skipped",
           "number": 17,
-          "started_at": "2026-07-27T13:26:10Z",
-          "completed_at": "2026-07-27T13:26:10Z"
+          "started_at": "2026-07-28T07:54:06Z",
+          "completed_at": "2026-07-28T07:54:06Z"
         },
         {
           "name": "Confirm no synthetic email-pattern residue",
           "status": "completed",
           "conclusion": "success",
           "number": 18,
-          "started_at": "2026-07-27T13:26:10Z",
-          "completed_at": "2026-07-27T13:26:11Z"
+          "started_at": "2026-07-28T07:54:06Z",
+          "completed_at": "2026-07-28T07:54:07Z"
         },
         {
           "name": "Stop local server",
           "status": "completed",
           "conclusion": "success",
           "number": 19,
-          "started_at": "2026-07-27T13:26:11Z",
-          "completed_at": "2026-07-27T13:26:11Z"
+          "started_at": "2026-07-28T07:54:07Z",
+          "completed_at": "2026-07-28T07:54:08Z"
         },
         {
           "name": "Upload institutional QA evidence",
           "status": "completed",
           "conclusion": "success",
           "number": 20,
-          "started_at": "2026-07-27T13:26:11Z",
-          "completed_at": "2026-07-27T13:26:12Z"
+          "started_at": "2026-07-28T07:54:08Z",
+          "completed_at": "2026-07-28T07:54:08Z"
         },
         {
           "name": "Post Set up Supabase CLI",
           "status": "completed",
           "conclusion": "success",
           "number": 38,
-          "started_at": "2026-07-27T13:26:12Z",
-          "completed_at": "2026-07-27T13:26:12Z"
+          "started_at": "2026-07-28T07:54:08Z",
+          "completed_at": "2026-07-28T07:54:08Z"
         },
         {
           "name": "Post Set up Node.js",
           "status": "completed",
           "conclusion": "skipped",
           "number": 39,
-          "started_at": "2026-07-27T13:26:12Z",
-          "completed_at": "2026-07-27T13:26:12Z"
+          "started_at": "2026-07-28T07:54:08Z",
+          "completed_at": "2026-07-28T07:54:08Z"
         },
         {
           "name": "Post Check out exact branch commit",
           "status": "completed",
           "conclusion": "success",
           "number": 40,
-          "started_at": "2026-07-27T13:26:12Z",
-          "completed_at": "2026-07-27T13:26:12Z"
+          "started_at": "2026-07-28T07:54:08Z",
+          "completed_at": "2026-07-28T07:54:08Z"
         },
         {
           "name": "Complete job",
           "status": "completed",
           "conclusion": "success",
           "number": 41,
-          "started_at": "2026-07-27T13:26:12Z",
-          "completed_at": "2026-07-27T13:26:12Z"
+          "started_at": "2026-07-28T07:54:08Z",
+          "completed_at": "2026-07-28T07:54:08Z"
         }
       ],
-      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/89990242418",
+      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/90213397713",
       "labels": [
         "ubuntu-24.04"
       ],
-      "runner_id": 1000004870,
-      "runner_name": "GitHub Actions 1000004870",
+      "runner_id": 1000004919,
+      "runner_name": "GitHub Actions 1000004919",
       "runner_group_id": 0,
       "runner_group_name": "GitHub Actions"
     }
