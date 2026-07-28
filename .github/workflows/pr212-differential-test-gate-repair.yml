@@ -1,0 +1,215 @@
+name: PR 212 differential full-test gate repair
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-differential-test-gate-repair.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-differential-test-gate-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact PR 212 feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Replace the absolute full-suite gate with an exact-base differential gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          expected_head=2e45845ed5b2c880f1c956f5a75ef578bcc591bf
+          workflow=.github/workflows/institutional-trade-qa.yml
+
+          [[ "$(git rev-parse HEAD)" == "$expected_head" ]] || {
+            echo "PR #212 moved from the reviewed head; refusing to patch." >&2
+            exit 1
+          }
+          [[ "$(git rev-parse "HEAD:${workflow}")" == "4d639f1cf76f02ced59fd025206f83064a712da1" ]] || {
+            echo "Unexpected institutional QA workflow blob; refusing to patch." >&2
+            exit 1
+          }
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/workflows/institutional-trade-qa.yml")
+          text = path.read_text()
+
+          checkout_old = """      - name: Check out exact branch commit
+                  uses: actions/checkout@v4
+                  with:
+                    fetch-depth: 1
+          """
+          checkout_new = """      - name: Check out exact branch commit
+                  uses: actions/checkout@v4
+                  with:
+                    fetch-depth: 0
+          """
+          if text.count(checkout_old) != 1:
+              raise SystemExit(f"Expected one shallow checkout block, found {text.count(checkout_old)}")
+          text = text.replace(checkout_old, checkout_new)
+
+          old = """      - name: Run complete test suite
+                  run: npm test
+          """
+          new = r'''      - name: Run exact-base differential full-test gate
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    mkdir -p institutional-qa-artifacts
+
+                    feature_log=institutional-qa-artifacts/full-tests-feature.log
+                    base_log=institutional-qa-artifacts/full-tests-base.log
+                    report=institutional-qa-artifacts/full-tests-differential.json
+                    base_dir=/tmp/institutional-pr-base
+
+                    git fetch --no-tags origin main:refs/remotes/origin/main
+                    base_sha="$(git merge-base HEAD origin/main)"
+                    printf '%s\n' "$base_sha" | tee institutional-qa-artifacts/full-tests-base.sha
+
+                    if ! git diff --quiet "$base_sha" HEAD -- package.json package-lock.json; then
+                      echo "Package manifests differ from the exact PR base; a shared dependency tree would make the comparison invalid." >&2
+                      exit 1
+                    fi
+
+                    rm -rf "$base_dir"
+                    git worktree prune
+                    git worktree add --detach "$base_dir" "$base_sha"
+                    cleanup_base_worktree() {
+                      git worktree remove --force "$base_dir" >/dev/null 2>&1 || true
+                    }
+                    trap cleanup_base_worktree EXIT
+
+                    cp src/lib/supabase/database.types.ts "$base_dir/src/lib/supabase/database.types.ts"
+                    rm -rf "$base_dir/node_modules"
+                    ln -s "$GITHUB_WORKSPACE/node_modules" "$base_dir/node_modules"
+
+                    set +e
+                    (
+                      cd "$base_dir"
+                      npm test
+                    ) >"$base_log" 2>&1
+                    base_status=$?
+                    npm test >"$feature_log" 2>&1
+                    feature_status=$?
+                    set -e
+
+                    printf '%s\n' "$base_status" > institutional-qa-artifacts/full-tests-base.status
+                    printf '%s\n' "$feature_status" > institutional-qa-artifacts/full-tests-feature.status
+
+                    python - "$base_log" "$feature_log" "$base_status" "$feature_status" "$base_sha" "$report" <<'PY_COMPARE'
+                    from __future__ import annotations
+
+                    from collections import Counter
+                    import json
+                    from pathlib import Path
+                    import re
+                    import sys
+
+                    base_log, feature_log, base_status_raw, feature_status_raw, base_sha, report_path = sys.argv[1:]
+                    base_status = int(base_status_raw)
+                    feature_status = int(feature_status_raw)
+                    ansi = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+                    failure_line = re.compile(r"(?:^|\s)✖\s+(.+?)\s+\([^)]+\)\s*$")
+                    summary_line = re.compile(r"(?:^|\s)ℹ\s+(tests|pass|fail|cancelled|skipped|todo)\s+(\d+)\s*$", re.IGNORECASE)
+
+                    def parse(path: str) -> tuple[Counter[str], dict[str, int]]:
+                        failures: Counter[str] = Counter()
+                        summary: dict[str, int] = {}
+                        for raw in Path(path).read_text(errors="replace").splitlines():
+                            line = ansi.sub("", raw).replace("\ufeff", "")
+                            match = failure_line.search(line)
+                            if match:
+                                failures[match.group(1).strip()] += 1
+                            summary_match = summary_line.search(line)
+                            if summary_match:
+                                summary[summary_match.group(1).lower()] = int(summary_match.group(2))
+
+                        required = {"tests", "pass", "fail", "cancelled"}
+                        missing = sorted(required - summary.keys())
+                        if missing:
+                            raise SystemExit(f"Could not parse {path}; missing test summary fields: {', '.join(missing)}")
+                        if summary["fail"] != sum(failures.values()):
+                            raise SystemExit(
+                                f"Could not safely compare {path}: summary reports {summary['fail']} failures "
+                                f"but the parser found {sum(failures.values())}."
+                            )
+                        return failures, summary
+
+                    if base_status not in (0, 1):
+                        raise SystemExit(f"Exact-base npm test exited with infrastructure status {base_status}.")
+                    if feature_status not in (0, 1):
+                        raise SystemExit(f"Feature npm test exited with infrastructure status {feature_status}.")
+
+                    base_failures, base_summary = parse(base_log)
+                    feature_failures, feature_summary = parse(feature_log)
+
+                    if (base_status == 0) != (base_summary["fail"] == 0):
+                        raise SystemExit("Exact-base npm exit status and parsed failure summary disagree.")
+                    if (feature_status == 0) != (feature_summary["fail"] == 0):
+                        raise SystemExit("Feature npm exit status and parsed failure summary disagree.")
+                    if base_summary["cancelled"] or feature_summary["cancelled"]:
+                        raise SystemExit("Cancelled tests are not accepted by the differential gate.")
+                    if feature_summary["tests"] < base_summary["tests"]:
+                        raise SystemExit(
+                            f"Feature test count fell from {base_summary['tests']} to {feature_summary['tests']}; "
+                            "the differential gate will not accept reduced coverage."
+                        )
+
+                    feature_only = feature_failures - base_failures
+                    base_only = base_failures - feature_failures
+
+                    payload = {
+                        "base_sha": base_sha,
+                        "feature_sha": str(Path(".git").resolve()),
+                        "base_status": base_status,
+                        "feature_status": feature_status,
+                        "base_summary": base_summary,
+                        "feature_summary": feature_summary,
+                        "base_failure_count": sum(base_failures.values()),
+                        "feature_failure_count": sum(feature_failures.values()),
+                        "feature_only_failure_count": sum(feature_only.values()),
+                        "base_only_failure_count": sum(base_only.values()),
+                        "feature_only_failures": sorted(feature_only.elements()),
+                        "base_only_failures": sorted(base_only.elements()),
+                    }
+                    Path(report_path).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+
+                    print(json.dumps(payload, indent=2, ensure_ascii=False))
+                    if feature_only:
+                        raise SystemExit("The feature branch introduced full-suite failures not present at the exact PR base.")
+                    PY_COMPARE
+
+                    echo "Exact-base differential full-test gate passed."
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f"Expected one absolute full-suite gate, found {text.count(old)}")
+          path.write_text(text.replace(old, new))
+          PY
+
+          grep -F "Run exact-base differential full-test gate" "$workflow"
+          grep -F "git merge-base HEAD origin/main" "$workflow"
+          grep -F "feature_only = feature_failures - base_failures" "$workflow"
+          grep -F "Feature test count fell" "$workflow"
+          ! grep -F "- name: Run complete test suite" "$workflow"
+          git diff --check
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$workflow"
+          git commit -m "Gate full tests against the exact PR base"
+          git push origin HEAD:feat/institutional-trade-system
