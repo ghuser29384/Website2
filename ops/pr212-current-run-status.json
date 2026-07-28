@@ -1,24 +1,33 @@
 {
-  "generated_at": "2026-07-28T08:42:01Z",
-  "head_sha": "45a27b46fdc1d0a0ec12056bb4bd3552a28032fc",
-  "run_id": "30343301676",
+  "generated_at": "2026-07-28T08:45:37Z",
+  "head_sha": "9ad919bc281a9f701d4a5adfb518055c864393b3",
+  "run_id": "30343611814",
   "runs": [
     {
       "conclusion": "",
+      "createdAt": "2026-07-28T08:44:28Z",
+      "databaseId": 30343611814,
+      "event": "push",
+      "headSha": "9ad919bc281a9f701d4a5adfb518055c864393b3",
+      "status": "in_progress",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30343611814"
+    },
+    {
+      "conclusion": "cancelled",
       "createdAt": "2026-07-28T08:40:00Z",
       "databaseId": 30343301676,
       "event": "push",
       "headSha": "45a27b46fdc1d0a0ec12056bb4bd3552a28032fc",
-      "status": "pending",
+      "status": "completed",
       "url": "https://github.com/ghuser29384/Website2/actions/runs/30343301676"
     },
     {
-      "conclusion": "",
+      "conclusion": "cancelled",
       "createdAt": "2026-07-28T08:34:29Z",
       "databaseId": 30342934865,
       "event": "push",
       "headSha": "88b0d44e99c95873247252b7a7737f74e1d35b7b",
-      "status": "in_progress",
+      "status": "completed",
       "url": "https://github.com/ghuser29384/Website2/actions/runs/30342934865"
     },
     {
@@ -131,22 +140,22 @@
     }
   ],
   "run": {
-    "id": 30343301676,
+    "id": 30343611814,
     "name": "Institutional trade QA",
-    "node_id": "WFR_kwLOR8Oun88AAAAHEJoKLA",
+    "node_id": "WFR_kwLOR8Oun88AAAAHEJ7Fpg",
     "head_branch": "feat/institutional-trade-system",
-    "head_sha": "45a27b46fdc1d0a0ec12056bb4bd3552a28032fc",
+    "head_sha": "9ad919bc281a9f701d4a5adfb518055c864393b3",
     "path": ".github/workflows/institutional-trade-qa.yml",
-    "display_title": "Differentiate generated-schema typecheck from application typecheck",
-    "run_number": 14,
+    "display_title": "Cancel obsolete institutional QA runs",
+    "run_number": 15,
     "event": "push",
-    "status": "pending",
+    "status": "in_progress",
     "conclusion": null,
     "workflow_id": 321200203,
-    "check_suite_id": 82233442572,
-    "check_suite_node_id": "CS_kwDOR8Oun88AAAATJX7BDA",
-    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343301676",
-    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30343301676",
+    "check_suite_id": 82234300105,
+    "check_suite_node_id": "CS_kwDOR8Oun88AAAATJYvWyQ",
+    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343611814",
+    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30343611814",
     "pull_requests": [
       {
         "url": "https://api.github.com/repos/ghuser29384/Website2/pulls/212",
@@ -154,7 +163,7 @@
         "number": 212,
         "head": {
           "ref": "feat/institutional-trade-system",
-          "sha": "45a27b46fdc1d0a0ec12056bb4bd3552a28032fc",
+          "sha": "9ad919bc281a9f701d4a5adfb518055c864393b3",
           "repo": {
             "id": 1204006559,
             "url": "https://api.github.com/repos/ghuser29384/Website2",
@@ -172,8 +181,8 @@
         }
       }
     ],
-    "created_at": "2026-07-28T08:40:00Z",
-    "updated_at": "2026-07-28T08:40:01Z",
+    "created_at": "2026-07-28T08:44:28Z",
+    "updated_at": "2026-07-28T08:44:54Z",
     "actor": {
       "login": "ghuser29384",
       "id": 262476329,
@@ -197,7 +206,7 @@
     },
     "run_attempt": 1,
     "referenced_workflows": [],
-    "run_started_at": "2026-07-28T08:40:00Z",
+    "run_started_at": "2026-07-28T08:44:28Z",
     "triggering_actor": {
       "login": "ghuser29384",
       "id": 262476329,
@@ -219,19 +228,19 @@
       "user_view_type": "public",
       "site_admin": false
     },
-    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343301676/jobs",
-    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343301676/logs",
-    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82233442572",
-    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343301676/artifacts",
-    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343301676/cancel",
-    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343301676/rerun",
+    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343611814/jobs",
+    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343611814/logs",
+    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82234300105",
+    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343611814/artifacts",
+    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343611814/cancel",
+    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343611814/rerun",
     "previous_attempt_url": null,
     "workflow_url": "https://api.github.com/repos/ghuser29384/Website2/actions/workflows/321200203",
     "head_commit": {
-      "id": "45a27b46fdc1d0a0ec12056bb4bd3552a28032fc",
-      "tree_id": "7e4f62b513f0fa6528d55b97091cfe363cd6212c",
-      "message": "Differentiate generated-schema typecheck from application typecheck",
-      "timestamp": "2026-07-28T08:39:44Z",
+      "id": "9ad919bc281a9f701d4a5adfb518055c864393b3",
+      "tree_id": "13d3b6c7971c79d9fdd14fdffa913bd10dd3b285",
+      "message": "Cancel obsolete institutional QA runs",
+      "timestamp": "2026-07-28T08:44:10Z",
       "author": {
         "name": "ghuser29384",
         "email": "262476329+ghuser29384@users.noreply.github.com"
@@ -378,5 +387,226 @@
       "deployments_url": "https://api.github.com/repos/ghuser29384/Website2/deployments"
     }
   },
-  "jobs": []
+  "jobs": [
+    {
+      "id": 90224645968,
+      "run_id": 30343611814,
+      "workflow_name": "Institutional trade QA",
+      "head_branch": "feat/institutional-trade-system",
+      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30343611814",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR8Oun88AAAAVAc7XUA",
+      "head_sha": "9ad919bc281a9f701d4a5adfb518055c864393b3",
+      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/90224645968",
+      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30343611814/job/90224645968",
+      "status": "in_progress",
+      "conclusion": null,
+      "created_at": "2026-07-28T08:44:45Z",
+      "started_at": "2026-07-28T08:44:53Z",
+      "completed_at": null,
+      "name": "verify",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-07-28T08:44:54Z",
+          "completed_at": "2026-07-28T08:44:55Z"
+        },
+        {
+          "name": "Check out exact branch commit",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-07-28T08:44:55Z",
+          "completed_at": "2026-07-28T08:44:58Z"
+        },
+        {
+          "name": "Set up Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-07-28T08:44:58Z",
+          "completed_at": "2026-07-28T08:45:00Z"
+        },
+        {
+          "name": "Install dependencies with transient-registry retry",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-07-28T08:45:00Z",
+          "completed_at": "2026-07-28T08:45:14Z"
+        },
+        {
+          "name": "Install browser and PostgreSQL tooling",
+          "status": "in_progress",
+          "conclusion": null,
+          "number": 5,
+          "started_at": "2026-07-28T08:45:14Z",
+          "completed_at": null
+        },
+        {
+          "name": "Set up Supabase CLI",
+          "status": "pending",
+          "conclusion": null,
+          "number": 6,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Validate isolated QA configuration",
+          "status": "pending",
+          "conclusion": null,
+          "number": 7,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Run source-contract integrity tests before database mutation",
+          "status": "pending",
+          "conclusion": null,
+          "number": 8,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Compile and apply institutional migration atomically to isolated QA",
+          "status": "pending",
+          "conclusion": null,
+          "number": 9,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Generate exact QA database types",
+          "status": "pending",
+          "conclusion": null,
+          "number": 10,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Run differential Supabase lint, foreign-key indexes, grants, and forced-RLS inventory",
+          "status": "pending",
+          "conclusion": null,
+          "number": 11,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Run exact-base differential full-test gate",
+          "status": "pending",
+          "conclusion": null,
+          "number": 12,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Run exact-base differential generated-schema typecheck",
+          "status": "pending",
+          "conclusion": null,
+          "number": 13,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Restore committed database type contract",
+          "status": "pending",
+          "conclusion": null,
+          "number": 14,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Type-check application with committed database contract",
+          "status": "pending",
+          "conclusion": null,
+          "number": 15,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Run full ESLint",
+          "status": "pending",
+          "conclusion": null,
+          "number": 16,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Build production application",
+          "status": "pending",
+          "conclusion": null,
+          "number": 17,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Start QA-backed production server",
+          "status": "pending",
+          "conclusion": null,
+          "number": 18,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Run authenticated five-participant browser, RPC, and database suite",
+          "status": "pending",
+          "conclusion": null,
+          "number": 19,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Confirm no synthetic email-pattern residue",
+          "status": "pending",
+          "conclusion": null,
+          "number": 20,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Stop local server",
+          "status": "pending",
+          "conclusion": null,
+          "number": 21,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Upload institutional QA evidence",
+          "status": "pending",
+          "conclusion": null,
+          "number": 22,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Post Set up Node.js",
+          "status": "pending",
+          "conclusion": null,
+          "number": 43,
+          "started_at": null,
+          "completed_at": null
+        },
+        {
+          "name": "Post Check out exact branch commit",
+          "status": "pending",
+          "conclusion": null,
+          "number": 44,
+          "started_at": null,
+          "completed_at": null
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/90224645968",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "runner_id": 1000004969,
+      "runner_name": "GitHub Actions 1000004969",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
 }
