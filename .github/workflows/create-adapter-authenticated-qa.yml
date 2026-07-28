@@ -1,0 +1,73 @@
+name: Authenticated Create adapter QA
+
+on:
+  push:
+    branches:
+      - ops/create-adapter-authenticated-qa-20260728
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: create-adapter-authenticated-qa-20260728
+  cancel-in-progress: false
+
+jobs:
+  authenticated-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      EXACT_CANDIDATE_SHA: f00537d1610a0564c29b88b0ebffc9323340e819
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PREVIEW_BASE_URL: https://moraltrade-site-fymvug67l-ellen-s.vercel.app
+      PREVIEW_SHARE_URL: https://moraltrade-site-fymvug67l-ellen-s.vercel.app/?_vercel_share=XePT7FVkKKhVXO3Xu14AxVPHPXqwM5KX
+      QA_OUTPUT_DIR: qa-artifacts/create-adapter-authenticated
+    steps:
+      - name: Check out QA operator branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Reconstruct QA runner and browser script
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/qa/runner.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/run-create-adapter-qa.sh
+          cat .github/qa/browser.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/create-adapter-authenticated-qa.mjs
+          chmod +x /tmp/run-create-adapter-qa.sh
+          bash -n /tmp/run-create-adapter-qa.sh
+          node --check /tmp/create-adapter-authenticated-qa.mjs
+
+      - name: Run authenticated QA and exact cleanup
+        id: qa
+        continue-on-error: true
+        run: /tmp/run-create-adapter-qa.sh
+
+      - name: Upload authenticated QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-adapter-authenticated-qa-${{ github.run_id }}
+          path: |
+            /tmp/create-adapter-candidate/qa-artifacts/create-adapter-authenticated
+            /tmp/create-adapter-e2e-result.json
+            /tmp/create-adapter-fixture-ids.txt
+            /tmp/create-adapter-database-evidence.log
+            /tmp/create-adapter-cleanup.log
+            /tmp/create-adapter-zero-residue.json
+            /tmp/create-adapter-final-status.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Require all authenticated QA gates
+        if: always()
+        env:
+          QA_OUTCOME: ${{ steps.qa.outcome }}
+        run: test "$QA_OUTCOME" = success
