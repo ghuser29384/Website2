@@ -1,9 +1,9 @@
 name: Authenticated Create adapter production-preview QA
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - ops/create-adapter-authenticated-qa-20260728
     paths:
       - ".github/workflows/create-adapter-authenticated-qa.yml"
       - ".github/qa/**"
@@ -11,6 +11,8 @@ on:
 
 permissions:
   contents: read
+  issues: write
+  pull-requests: write
 
 concurrency:
   group: create-adapter-production-preview-authenticated-qa-20260728
@@ -106,6 +108,14 @@ jobs:
             /tmp/create-adapter-e2e-result.json
           if-no-files-found: warn
           retention-days: 30
+
+      - name: Report run ID and browser outcome
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          QA_OUTCOME: ${{ steps.qa.outcome }}
+        run: |
+          gh pr comment 273 --body "Authenticated production-preview Create QA run \`${GITHUB_RUN_ID}\` completed with browser outcome **${QA_OUTCOME}** against exact integrated candidate \`${EXACT_CANDIDATE_SHA}\`."
 
       - name: Require authenticated browser gate
         if: always()
