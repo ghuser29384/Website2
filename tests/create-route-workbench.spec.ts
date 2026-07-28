@@ -51,9 +51,9 @@ test.describe("Create route workbench", () => {
     );
     await expect(page.getByRole("heading", { name: "Redirect planned gifts." })).toBeVisible();
     await expect(page.getByText("Plans stay", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Sign up to draft" })).toHaveAttribute(
+    await expect(page.getByRole("link", { name: "Review offset safeguards" })).toHaveAttribute(
       "href",
-      "/signup?returnTo=%2Foffers%2Fnew%3Fentry%3Ddraft%26mode%3Doffset",
+      "/donation-offsets",
     );
 
     await page.locator('[data-create-mode="pool"]').click();
