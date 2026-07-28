@@ -89,4 +89,4 @@ jobs:
             exit 1
           fi
 
-# Poll exact head fa1175ff30e1ccdcba0cb140aeccea3acabee6f6 after parser repair.
+# Poll exact head 45a27b46fdc1d0a0ec12056bb4bd3552a28032fc after differential typecheck workflow materialization.
