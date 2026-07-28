@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: create-adapter-isolated-qa-authenticated-release-gate-20260728
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   authenticated-qa:
