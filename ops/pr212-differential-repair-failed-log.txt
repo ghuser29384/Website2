@@ -1,0 +1,200 @@
+repair	Replace the absolute full-suite gate with an exact-base differential gate	﻿2026-07-28T07:47:28.4689377Z ##[group]Run set -euo pipefail
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4691252Z ^[[36;1mset -euo pipefail^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4692231Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4693529Z ^[[36;1mexpected_head=2e45845ed5b2c880f1c956f5a75ef578bcc591bf^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4695208Z ^[[36;1mworkflow=.github/workflows/institutional-trade-qa.yml^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4696573Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4697908Z ^[[36;1m[[ "$(git rev-parse HEAD)" == "$expected_head" ]] || {^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4699719Z ^[[36;1m  echo "PR #212 moved from the reviewed head; refusing to patch." >&2^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4701208Z ^[[36;1m  exit 1^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4702025Z ^[[36;1m}^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4703679Z ^[[36;1m[[ "$(git rev-parse "HEAD:${workflow}")" == "4d639f1cf76f02ced59fd025206f83064a712da1" ]] || {^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4705876Z ^[[36;1m  echo "Unexpected institutional QA workflow blob; refusing to patch." >&2^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4707452Z ^[[36;1m  exit 1^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4708254Z ^[[36;1m}^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4709039Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4709804Z ^[[36;1mpython - <<'PY'^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4710740Z ^[[36;1mfrom pathlib import Path^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4711725Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4712786Z ^[[36;1mpath = Path(".github/workflows/institutional-trade-qa.yml")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4714554Z ^[[36;1mtext = path.read_text()^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4715533Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4716574Z ^[[36;1mcheckout_old = """      - name: Check out exact branch commit^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4718008Z ^[[36;1m        uses: actions/checkout@v4^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4719297Z ^[[36;1m        with:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4720189Z ^[[36;1m          fetch-depth: 1^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4721161Z ^[[36;1m"""^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4722257Z ^[[36;1mcheckout_new = """      - name: Check out exact branch commit^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4723830Z ^[[36;1m        uses: actions/checkout@v4^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4724888Z ^[[36;1m        with:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4725762Z ^[[36;1m          fetch-depth: 0^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4726745Z ^[[36;1m"""^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4727583Z ^[[36;1mif text.count(checkout_old) != 1:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4729331Z ^[[36;1m    raise SystemExit(f"Expected one shallow checkout block, found {text.count(checkout_old)}")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4731315Z ^[[36;1mtext = text.replace(checkout_old, checkout_new)^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4732549Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4733581Z ^[[36;1mold = """      - name: Run complete test suite^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4734772Z ^[[36;1m        run: npm test^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4735718Z ^[[36;1m"""^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4736789Z ^[[36;1mnew = r'''      - name: Run exact-base differential full-test gate^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4738261Z ^[[36;1m        shell: bash^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4739471Z ^[[36;1m        run: |^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4740397Z ^[[36;1m          set -euo pipefail^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4741569Z ^[[36;1m          mkdir -p institutional-qa-artifacts^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4742744Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4744189Z ^[[36;1m          feature_log=institutional-qa-artifacts/full-tests-feature.log^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4746021Z ^[[36;1m          base_log=institutional-qa-artifacts/full-tests-base.log^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4747830Z ^[[36;1m          report=institutional-qa-artifacts/full-tests-differential.json^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4749617Z ^[[36;1m          base_dir=/tmp/institutional-pr-base^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4750753Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4751796Z ^[[36;1m          git fetch --no-tags origin main:refs/remotes/origin/main^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4753690Z ^[[36;1m          base_sha="$(git merge-base HEAD origin/main)"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4755443Z ^[[36;1m          printf '%s\n' "$base_sha" | tee institutional-qa-artifacts/full-tests-base.sha^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4757027Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4758747Z ^[[36;1m          if ! git diff --quiet "$base_sha" HEAD -- package.json package-lock.json; then^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4761387Z ^[[36;1m            echo "Package manifests differ from the exact PR base; a shared dependency tree would make the comparison invalid." >&2^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4763938Z ^[[36;1m            exit 1^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4764837Z ^[[36;1m          fi^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4765649Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4766409Z ^[[36;1m          rm -rf "$base_dir"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4767476Z ^[[36;1m          git worktree prune^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4768845Z ^[[36;1m          git worktree add --detach "$base_dir" "$base_sha"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4770194Z ^[[36;1m          cleanup_base_worktree() {^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4771662Z ^[[36;1m            git worktree remove --force "$base_dir" >/dev/null 2>&1 || true^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4773279Z ^[[36;1m          }^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4774263Z ^[[36;1m          trap cleanup_base_worktree EXIT^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4775384Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4776759Z ^[[36;1m          cp src/lib/supabase/database.types.ts "$base_dir/src/lib/supabase/database.types.ts"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4778592Z ^[[36;1m          rm -rf "$base_dir/node_modules"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4780056Z ^[[36;1m          ln -s "$GITHUB_WORKSPACE/node_modules" "$base_dir/node_modules"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4781473Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4782218Z ^[[36;1m          set +e^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4783203Z ^[[36;1m          (^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4784062Z ^[[36;1m            cd "$base_dir"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4785054Z ^[[36;1m            npm test^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4785987Z ^[[36;1m          ) >"$base_log" 2>&1^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4787013Z ^[[36;1m          base_status=$?^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4788224Z ^[[36;1m          npm test >"$feature_log" 2>&1^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4789358Z ^[[36;1m          feature_status=$?^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4790372Z ^[[36;1m          set -e^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4791241Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4792531Z ^[[36;1m          printf '%s\n' "$base_status" > institutional-qa-artifacts/full-tests-base.status^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4795058Z ^[[36;1m          printf '%s\n' "$feature_status" > institutional-qa-artifacts/full-tests-feature.status^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4796782Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4798290Z ^[[36;1m          python - "$base_log" "$feature_log" "$base_status" "$feature_status" "$base_sha" "$report" <<'PY_COMPARE'^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4800265Z ^[[36;1m          from __future__ import annotations^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4801383Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4802222Z ^[[36;1m          from collections import Counter^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4803518Z ^[[36;1m          import json^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4804544Z ^[[36;1m          from pathlib import Path^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4805631Z ^[[36;1m          import re^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4806546Z ^[[36;1m          import sys^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4807438Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4808901Z ^[[36;1m          base_log, feature_log, base_status_raw, feature_status_raw, base_sha, report_path = sys.argv[1:]^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4810827Z ^[[36;1m          base_status = int(base_status_raw)^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4812101Z ^[[36;1m          feature_status = int(feature_status_raw)^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4813580Z ^[[36;1m          ansi = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4815091Z ^[[36;1m          failure_line = re.compile(r"(?:^|\s)✖\s+(.+?)\s+\([^)]+\)\s*$")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4817299Z ^[[36;1m          summary_line = re.compile(r"(?:^|\s)ℹ\s+(tests|pass|fail|cancelled|skipped|todo)\s+(\d+)\s*$", re.IGNORECASE)^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4819218Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4820294Z ^[[36;1m          def parse(path: str) -> tuple[Counter[str], dict[str, int]]:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4821848Z ^[[36;1m              failures: Counter[str] = Counter()^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4823204Z ^[[36;1m              summary: dict[str, int] = {}^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4824675Z ^[[36;1m              for raw in Path(path).read_text(errors="replace").splitlines():^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4826328Z ^[[36;1m                  line = ansi.sub("", raw).replace("\ufeff", "")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4827724Z ^[[36;1m                  match = failure_line.search(line)^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4829107Z ^[[36;1m                  if match:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4830278Z ^[[36;1m                      failures[match.group(1).strip()] += 1^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4831680Z ^[[36;1m                  summary_match = summary_line.search(line)^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4832960Z ^[[36;1m                  if summary_match:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4834841Z ^[[36;1m                      summary[summary_match.group(1).lower()] = int(summary_match.group(2))^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4836417Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4837395Z ^[[36;1m              required = {"tests", "pass", "fail", "cancelled"}^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4838875Z ^[[36;1m              missing = sorted(required - summary.keys())^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4840137Z ^[[36;1m              if missing:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4841843Z ^[[36;1m                  raise SystemExit(f"Could not parse {path}; missing test summary fields: {', '.join(missing)}")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4844010Z ^[[36;1m              if summary["fail"] != sum(failures.values()):^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4845327Z ^[[36;1m                  raise SystemExit(^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4846974Z ^[[36;1m                      f"Could not safely compare {path}: summary reports {summary['fail']} failures "^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4848886Z ^[[36;1m                      f"but the parser found {sum(failures.values())}."^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4850208Z ^[[36;1m                  )^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4851184Z ^[[36;1m              return failures, summary^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4852412Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4853352Z ^[[36;1m          if base_status not in (0, 1):^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4855146Z ^[[36;1m              raise SystemExit(f"Exact-base npm test exited with infrastructure status {base_status}.")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4857044Z ^[[36;1m          if feature_status not in (0, 1):^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4858820Z ^[[36;1m              raise SystemExit(f"Feature npm test exited with infrastructure status {feature_status}.")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4860607Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4861536Z ^[[36;1m          base_failures, base_summary = parse(base_log)^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4863189Z ^[[36;1m          feature_failures, feature_summary = parse(feature_log)^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4864527Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4865477Z ^[[36;1m          if (base_status == 0) != (base_summary["fail"] == 0):^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4867390Z ^[[36;1m              raise SystemExit("Exact-base npm exit status and parsed failure summary disagree.")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4869384Z ^[[36;1m          if (feature_status == 0) != (feature_summary["fail"] == 0):^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4871330Z ^[[36;1m              raise SystemExit("Feature npm exit status and parsed failure summary disagree.")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4873616Z ^[[36;1m          if base_summary["cancelled"] or feature_summary["cancelled"]:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4875640Z ^[[36;1m              raise SystemExit("Cancelled tests are not accepted by the differential gate.")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4877534Z ^[[36;1m          if feature_summary["tests"] < base_summary["tests"]:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4878882Z ^[[36;1m              raise SystemExit(^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4880547Z ^[[36;1m                  f"Feature test count fell from {base_summary['tests']} to {feature_summary['tests']}; "^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4882597Z ^[[36;1m                  "the differential gate will not accept reduced coverage."^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4884134Z ^[[36;1m              )^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4884988Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4885937Z ^[[36;1m          feature_only = feature_failures - base_failures^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4887369Z ^[[36;1m          base_only = base_failures - feature_failures^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4888579Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4889342Z ^[[36;1m          payload = {^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4890341Z ^[[36;1m              "base_sha": base_sha,^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4891584Z ^[[36;1m              "feature_sha": str(Path(".git").resolve()),^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4892891Z ^[[36;1m              "base_status": base_status,^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4894430Z ^[[36;1m              "feature_status": feature_status,^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4895667Z ^[[36;1m              "base_summary": base_summary,^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4896910Z ^[[36;1m              "feature_summary": feature_summary,^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4898314Z ^[[36;1m              "base_failure_count": sum(base_failures.values()),^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4899918Z ^[[36;1m              "feature_failure_count": sum(feature_failures.values()),^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4901620Z ^[[36;1m              "feature_only_failure_count": sum(feature_only.values()),^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4903372Z ^[[36;1m              "base_only_failure_count": sum(base_only.values()),^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4904995Z ^[[36;1m              "feature_only_failures": sorted(feature_only.elements()),^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4906628Z ^[[36;1m              "base_only_failures": sorted(base_only.elements()),^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4907933Z ^[[36;1m          }^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4909370Z ^[[36;1m          Path(report_path).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4911106Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4912148Z ^[[36;1m          print(json.dumps(payload, indent=2, ensure_ascii=False))^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4913663Z ^[[36;1m          if feature_only:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4915519Z ^[[36;1m              raise SystemExit("The feature branch introduced full-suite failures not present at the exact PR base.")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4917538Z ^[[36;1m          PY_COMPARE^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4918578Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4919598Z ^[[36;1m          echo "Exact-base differential full-test gate passed."^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4920923Z ^[[36;1m'''^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4921752Z ^[[36;1mif text.count(old) != 1:^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4923436Z ^[[36;1m    raise SystemExit(f"Expected one absolute full-suite gate, found {text.count(old)}")^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4925238Z ^[[36;1mpath.write_text(text.replace(old, new))^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4926373Z ^[[36;1mPY^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4927116Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4928208Z ^[[36;1mgrep -F "Run exact-base differential full-test gate" "$workflow"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4929846Z ^[[36;1mgrep -F "git merge-base HEAD origin/main" "$workflow"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4931524Z ^[[36;1mgrep -F "feature_only = feature_failures - base_failures" "$workflow"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4933260Z ^[[36;1mgrep -F "Feature test count fell" "$workflow"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4934675Z ^[[36;1m! grep -F "- name: Run complete test suite" "$workflow"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4935965Z ^[[36;1mgit diff --check^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4936840Z ^[[36;1m^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4937710Z ^[[36;1mgit config user.name "github-actions[bot]"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4939364Z ^[[36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4940971Z ^[[36;1mgit add "$workflow"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4942173Z ^[[36;1mgit commit -m "Gate full tests against the exact PR base"^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4943864Z ^[[36;1mgit push origin HEAD:feat/institutional-trade-system^[[0m
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4996401Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.4997733Z ##[endgroup]
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.5399746Z       - name: Run exact-base differential full-test gate
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.5411750Z           base_sha="$(git merge-base HEAD origin/main)"
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.5424134Z           feature_only = feature_failures - base_failures
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.5437145Z                   f"Feature test count fell from {base_summary['tests']} to {feature_summary['tests']}; "
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.5448543Z grep: invalid option -- ' '
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.5450294Z Usage: grep [OPTION]... PATTERNS [FILE]...
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.5452343Z Try 'grep --help' for more information.
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.9939541Z [feat/institutional-trade-system aa1190f8] Gate full tests against the exact PR base
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:28.9941886Z  1 file changed, 130 insertions(+), 3 deletions(-)
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:29.9458930Z To https://github.com/ghuser29384/Website2
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:29.9461326Z  ! [remote rejected]   HEAD -> feat/institutional-trade-system (refusing to allow a GitHub App to create or update workflow `.github/workflows/institutional-trade-qa.yml` without `workflows` permission)
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:29.9462906Z error: failed to push some refs to 'https://github.com/ghuser29384/Website2'
+repair	Replace the absolute full-suite gate with an exact-base differential gate	2026-07-28T07:47:29.9488291Z ##[error]Process completed with exit code 1.
