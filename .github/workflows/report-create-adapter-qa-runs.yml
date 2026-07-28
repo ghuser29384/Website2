@@ -1,0 +1,45 @@
+name: Report current Create QA workflow runs
+
+on:
+  push:
+    branches:
+      - ops/create-adapter-authenticated-qa-20260728
+    paths:
+      - ".github/workflows/report-create-adapter-qa-runs.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Report recent branch runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          runs="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch ops/create-adapter-authenticated-qa-20260728 \
+            --limit 30 \
+            --json databaseId,workflowName,status,conclusion,headSha,event,createdAt,updatedAt)"
+          body="$(python3 - "$runs" <<'PY'
+          import json, sys
+          rows = json.loads(sys.argv[1])
+          lines = ["Current Create QA branch workflow inventory:", "", "```text"]
+          for row in rows:
+              lines.append(
+                  f"{row['databaseId']} | {row['workflowName']} | {row['status']} | "
+                  f"{row.get('conclusion') or '-'} | {row['headSha']} | {row['event']} | {row['updatedAt']}"
+              )
+          lines.append("```")
+          print("\n".join(lines))
+          PY
+          )"
+          gh pr comment 273 --body "$body"
