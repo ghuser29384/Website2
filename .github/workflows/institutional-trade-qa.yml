@@ -476,7 +476,18 @@ jobs:
 
           echo "Exact-base differential full-test gate passed."
 
-      - name: Type-check generated QA schema
+      - name: Run exact-base differential generated-schema typecheck
+        shell: bash
+        run: bash .github/scripts/institutional-differential-typecheck.sh
+
+      - name: Restore committed database type contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -- src/lib/supabase/database.types.ts
+          git diff --exit-code -- src/lib/supabase/database.types.ts
+
+      - name: Type-check application with committed database contract
         run: npx tsc --noEmit
 
       - name: Run full ESLint
