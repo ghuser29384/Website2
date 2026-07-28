@@ -3,6 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+  quoteFailureBonusSuccessPremiumSchedule,
+} from "@/lib/mpgf/failure-bonus-success-premium";
+import {
   REFUND_BONUS_CALCULATION_VERSION,
   REFUND_BONUS_ACCOUNTING_METRIC_KEYS,
   REFUND_BONUS_COMPREHENSION_QUESTIONS,
@@ -1602,6 +1606,14 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   assert.equal(bonusPlan.auditReport.bonusPolicyHash, bonusPolicyHash);
   assert.equal(bonusPlan.auditReport.grossCapturedCents, 0);
   assert.equal(bonusPlan.auditReport.bonusPaidCents, 200);
+  assert.deepEqual(
+    bonusPlan.reserveLedgerEntries.map((entry) => [
+      entry.eventType,
+      entry.cashDeltaCents,
+      entry.exposureDeltaCents,
+    ]),
+    [["failure_bonus_debit", -200, -200]],
+  );
   assert.equal(bonusPlan.auditReport.bonusReserveBackedCents, 25_000);
   assert.equal(bonusPlan.auditReport.bonusHeldCents, 300);
   const publicReport = bonusPlan.auditReport.publicReportJson as RefundBonusPublicReportJson;
@@ -1877,6 +1889,188 @@ test("settlement separates success, qualifying-failure bonus, and unused reserve
   assert.ok(disallowedCapturePlan.blockedReasonCodes.includes("round_record_not_payable"));
   assert.ok(disallowedCapturePlan.blockedReasonCodes.includes("pool_not_payable"));
   assert.ok(disallowedCapturePlan.settlementRows.every((row) => row.settlementState === "blocked"));
+});
+
+
+test("successful refund-bonus pools credit a disclosed premium to the common reserve", () => {
+  const pledges = [
+    pledge("premium-a", "alice", 1_000, "humanitarian"),
+    pledge("premium-b", "bob", 1_000, "animal_inclusive"),
+  ];
+  const premiumPool = pool({
+    status: "payable",
+    thresholdNetRecipientCents: 1_500,
+    minVerifiedSupporters: 2,
+    minDistinctViewpointClusters: 2,
+    successPremiumEnabled: true,
+    successPremiumPayer: "pool_creator_or_sponsor",
+    successPremiumPolicyVersion: FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+    successPremiumIncludedInNetRecipientThreshold: false,
+  });
+  const outcome = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: premiumPool,
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+    authorizationAttempts: [
+      authorizationAttempt({ pledgeId: "premium-a", participantId: "alice", requiredGrossCents: 1_000 }),
+      authorizationAttempt({
+        id: "authorization-attempt-premium-b",
+        pledgeId: "premium-b",
+        participantId: "bob",
+        requiredGrossCents: 1_000,
+        providerAuthorizationRef: "auth-premium-b",
+      }),
+    ],
+  });
+  const premiumSchedule = quoteFailureBonusSuccessPremiumSchedule({
+    premiumPayer: "pool_creator_or_sponsor",
+    defaultPricing: {
+      mode: "operator_override",
+      premiumRateBps: 200,
+      provisional: true,
+      rationale: "Simulation quote pending portfolio claims data.",
+    },
+    thresholds: [
+      {
+        thresholdId: "threshold-1",
+        thresholdIndex: 1,
+        cumulativeNetRecipientThresholdCents: 1_500,
+      },
+    ],
+  });
+
+  const plan = planRefundBonusSettlement({
+    round: round({ status: "payable" }),
+    pool: premiumPool,
+    reserve: reserve(),
+    outcome,
+    roundStatus: "payable",
+    simulationOnly: true,
+    eligibleRowsRecomputed: true,
+    successPremiumSchedule: premiumSchedule,
+    clearedThresholdIndex: 1,
+  });
+
+  assert.deepEqual(plan.blockedReasonCodes, []);
+  assert.equal(plan.auditReport.successPremiumCents, 30);
+  assert.equal(plan.auditReport.grossSuccessRequirementCents, 1_530);
+  assert.equal(plan.auditReport.netRecipientDisbursedCents, 2_000);
+  assert.equal(plan.auditReport.successPremiumPayer, "pool_creator_or_sponsor");
+  assert.equal(plan.auditReport.publicReportJson.successPremiumCents, 30);
+  assert.deepEqual(
+    plan.reserveLedgerEntries.map((entry) => [
+      entry.eventType,
+      entry.cashDeltaCents,
+      entry.exposureDeltaCents,
+    ]),
+    [
+      ["success_premium_credit", 30, 0],
+      ["bonus_exposure_release", 0, -200],
+    ],
+  );
+  assert.ok(plan.reserveLedgerEntries.every((entry) => entry.eventHash.startsWith("sha256:")));
+});
+
+test("multi-threshold settlement charges the highest cleared cumulative premium and rejects an undercharged index", () => {
+  const pledges = [
+    pledge("multi-premium-a", "alice", 1_000, "humanitarian"),
+    pledge("multi-premium-b", "bob", 1_000, "animal_inclusive"),
+  ];
+  const premiumPool = pool({
+    status: "payable",
+    thresholdNetRecipientCents: 1_500,
+    minVerifiedSupporters: 2,
+    minDistinctViewpointClusters: 2,
+    successPremiumEnabled: true,
+    successPremiumPayer: "pool_creator_or_sponsor",
+    successPremiumPolicyVersion: FAILURE_BONUS_SUCCESS_PREMIUM_POLICY_VERSION,
+    successPremiumIncludedInNetRecipientThreshold: false,
+  });
+  const outcome = evaluateRefundBonusRoundOutcome({
+    round: round(),
+    pool: premiumPool,
+    gate: gate(),
+    reserve: reserve(),
+    pledges,
+    authorizationAttempts: [
+      authorizationAttempt({
+        pledgeId: "multi-premium-a",
+        participantId: "alice",
+        requiredGrossCents: 1_000,
+      }),
+      authorizationAttempt({
+        id: "authorization-attempt-multi-premium-b",
+        pledgeId: "multi-premium-b",
+        participantId: "bob",
+        requiredGrossCents: 1_000,
+        providerAuthorizationRef: "auth-multi-premium-b",
+      }),
+    ],
+  });
+  const premiumSchedule = quoteFailureBonusSuccessPremiumSchedule({
+    premiumPayer: "pool_creator_or_sponsor",
+    defaultPricing: {
+      mode: "operator_override",
+      premiumRateBps: 200,
+      provisional: false,
+      rationale: "Approved threshold one.",
+    },
+    thresholds: [
+      {
+        thresholdId: "threshold-1",
+        thresholdIndex: 1,
+        cumulativeNetRecipientThresholdCents: 1_500,
+      },
+      {
+        thresholdId: "threshold-2",
+        thresholdIndex: 2,
+        cumulativeNetRecipientThresholdCents: 1_900,
+        pricing: {
+          mode: "operator_override",
+          premiumRateBps: 500,
+          provisional: false,
+          rationale: "Approved higher-risk incremental tranche.",
+        },
+      },
+    ],
+  });
+
+  const plan = planRefundBonusSettlement({
+    round: round({ status: "payable" }),
+    pool: premiumPool,
+    reserve: reserve(),
+    outcome,
+    roundStatus: "payable",
+    simulationOnly: true,
+    eligibleRowsRecomputed: true,
+    successPremiumSchedule: premiumSchedule,
+  });
+
+  assert.deepEqual(plan.blockedReasonCodes, []);
+  assert.equal(plan.auditReport.successPremiumCents, 50);
+  assert.equal(plan.auditReport.grossSuccessRequirementCents, 1_950);
+  assert.equal(
+    plan.reserveLedgerEntries.find((entry) => entry.eventType === "success_premium_credit")?.thresholdId,
+    "threshold-2",
+  );
+
+  const undercharged = planRefundBonusSettlement({
+    round: round({ status: "payable" }),
+    pool: premiumPool,
+    reserve: reserve(),
+    outcome,
+    roundStatus: "payable",
+    simulationOnly: true,
+    eligibleRowsRecomputed: true,
+    successPremiumSchedule: premiumSchedule,
+    clearedThresholdIndex: 1,
+  });
+  assert.ok(
+    undercharged.blockedReasonCodes.includes("success_premium_cleared_threshold_mismatch"),
+  );
+  assert.equal(undercharged.auditReport.successPremiumCents, 0);
 });
 
 test("refund-bonus receipts distinguish success charge from qualifying-failure bonus", () => {

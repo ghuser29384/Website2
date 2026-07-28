@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+process.env.MORAL_TRADE_DISABLE_SUPABASE = "true";
+
 import { POST as offerFollowRoute } from "../app/api/offers/[offerId]/follow/route";
 
 import {
