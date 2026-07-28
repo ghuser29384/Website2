@@ -45,4 +45,4 @@ jobs:
           git commit -m "Record PR 212 current exact-head QA run"
           git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
 
-# Inspect head 45a27b46fdc1d0a0ec12056bb4bd3552a28032fc.
+# Inspect latest-only head 9ad919bc281a9f701d4a5adfb518055c864393b3.
