@@ -1,0 +1,148 @@
+compare	Run exact-base typecheck and compare with feature failure log	﻿2026-07-28T08:17:45.9067336Z ##[group]Run set -euo pipefail
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9067767Z ^[[36;1mset -euo pipefail^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9068054Z ^[[36;1mmkdir -p ops/pr212-typecheck-baseline^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9068360Z ^[[36;1mset +e^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9068563Z ^[[36;1m(^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9068775Z ^[[36;1m  cd /tmp/pr212-typecheck-base^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9069554Z ^[[36;1m  npx tsc --noEmit --pretty false^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9069853Z ^[[36;1m) > /tmp/base-tsc.log 2>&1^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9070114Z ^[[36;1mbase_status=$?^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9070334Z ^[[36;1mset -e^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9070600Z ^[[36;1mprintf '%s\n' "$base_status" > /tmp/base-tsc.status^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9071164Z ^[[36;1mgh run view "$FEATURE_RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/feature-run.log 2>&1 || true^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9071659Z ^[[36;1m^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9071852Z ^[[36;1mpython - <<'PY'^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9072105Z ^[[36;1mfrom __future__ import annotations^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9072372Z ^[[36;1m^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9072607Z ^[[36;1mfrom collections import Counter^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9073061Z ^[[36;1mimport json^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9073288Z ^[[36;1mfrom pathlib import Path^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9073539Z ^[[36;1mimport re^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9073734Z ^[[36;1m^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9074163Z ^[[36;1mdiagnostic = re.compile(r"(?P<path>[^\s].*?)\((?P<line>\d+),(?P<column>\d+)\): error (?P<code>TS\d+): (?P<message>.*)$")^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9074703Z ^[[36;1mansi = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9074995Z ^[[36;1m^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9075236Z ^[[36;1mdef normalized_key(match: re.Match[str]) -> str:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9075567Z ^[[36;1m    path = match.group("path")^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9075837Z ^[[36;1m    if "##[error]" in path:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9076129Z ^[[36;1m        path = path.split("##[error]", 1)[1]^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9076476Z ^[[36;1m    elif "Type-check generated QA schema" in path:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9076874Z ^[[36;1m        path = path.split("Type-check generated QA schema", 1)[1]^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9077252Z ^[[36;1m    path = path.strip(" \t:-")^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9077631Z ^[[36;1m    return f"{path}|{match.group('code')}|{match.group('message').strip()}"^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9078003Z ^[[36;1m^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9078210Z ^[[36;1mdef parse_base() -> Counter[str]:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9078502Z ^[[36;1m    result: Counter[str] = Counter()^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9079219Z ^[[36;1m    for raw in Path('/tmp/base-tsc.log').read_text(errors='replace').splitlines():^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9079708Z ^[[36;1m        line = ansi.sub('', raw).replace('\ufeff', '')^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9080052Z ^[[36;1m        match = diagnostic.search(line)^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9080337Z ^[[36;1m        if match:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9080603Z ^[[36;1m            result[normalized_key(match)] += 1^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9080896Z ^[[36;1m    return result^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9081116Z ^[[36;1m^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9081336Z ^[[36;1mdef parse_feature() -> Counter[str]:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9081650Z ^[[36;1m    result: Counter[str] = Counter()^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9082092Z ^[[36;1m    for raw in Path('/tmp/feature-run.log').read_text(errors='replace').splitlines():^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9082561Z ^[[36;1m        line = ansi.sub('', raw).replace('\ufeff', '')^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9082930Z ^[[36;1m        if 'Type-check generated QA schema' not in line:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9083252Z ^[[36;1m            continue^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9083519Z ^[[36;1m        match = diagnostic.search(line)^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9083802Z ^[[36;1m        if match:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9084057Z ^[[36;1m            result[normalized_key(match)] += 1^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9084345Z ^[[36;1m    return result^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9084564Z ^[[36;1m^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9084755Z ^[[36;1mbase = parse_base()^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9085001Z ^[[36;1mfeature = parse_feature()^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9085367Z ^[[36;1mbase_status = int(Path('/tmp/base-tsc.status').read_text().strip())^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9085939Z ^[[36;1mif base_status == 0 and base:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9086346Z ^[[36;1m    raise SystemExit('Base typecheck exited zero but diagnostics were parsed.')^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9086779Z ^[[36;1mif base_status != 0 and not base:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9087269Z ^[[36;1m    raise SystemExit(f'Base typecheck exited {base_status} without parseable TypeScript diagnostics.')^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9087772Z ^[[36;1mif not feature:^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9088228Z ^[[36;1m    raise SystemExit('No feature TypeScript diagnostics could be parsed from the exact failed run.')^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9088703Z ^[[36;1m^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9089195Z ^[[36;1mfeature_only = feature - base^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9089488Z ^[[36;1mbase_only = base - feature^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9089753Z ^[[36;1mshared = feature & base^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9089999Z ^[[36;1mpayload = {^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9090287Z ^[[36;1m    'base_sha': 'bb32b5c5a58442f97bef642be58ed01a57f0d91b',^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9090723Z ^[[36;1m    'feature_sha': 'fa1175ff30e1ccdcba0cb140aeccea3acabee6f6',^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9091244Z ^[[36;1m    'feature_run_id': 30340410388,^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9091532Z ^[[36;1m    'base_exit_status': base_status,^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9091855Z ^[[36;1m    'base_diagnostic_count': sum(base.values()),^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9092226Z ^[[36;1m    'feature_diagnostic_count': sum(feature.values()),^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9092602Z ^[[36;1m    'shared_diagnostic_count': sum(shared.values()),^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9093006Z ^[[36;1m    'feature_only_diagnostic_count': sum(feature_only.values()),^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9093435Z ^[[36;1m    'base_only_diagnostic_count': sum(base_only.values()),^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9093878Z ^[[36;1m    'feature_only_diagnostics': sorted(feature_only.elements()),^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9094322Z ^[[36;1m    'base_only_diagnostics': sorted(base_only.elements()),^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9094647Z ^[[36;1m}^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9095136Z ^[[36;1mPath('ops/pr212-typecheck-baseline/report.json').write_text(json.dumps(payload, indent=2, ensure_ascii=False) + '\n')^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9095699Z ^[[36;1mlines = [^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9095995Z ^[[36;1m    f"Base diagnostics: {payload['base_diagnostic_count']}",^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9096438Z ^[[36;1m    f"Feature diagnostics: {payload['feature_diagnostic_count']}",^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9096885Z ^[[36;1m    f"Shared diagnostics: {payload['shared_diagnostic_count']}",^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9097371Z ^[[36;1m    f"Feature-only diagnostics: {payload['feature_only_diagnostic_count']}",^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9097883Z ^[[36;1m    f"Base-only diagnostics: {payload['base_only_diagnostic_count']}",^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9098258Z ^[[36;1m    '',^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9098472Z ^[[36;1m    '=== FEATURE-ONLY ===',^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9098804Z ^[[36;1m    *(payload['feature_only_diagnostics'] or ['(none)']),^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9099487Z ^[[36;1m    '',^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9099704Z ^[[36;1m    '=== BASE-ONLY ===',^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9100036Z ^[[36;1m    *(payload['base_only_diagnostics'] or ['(none)']),^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9100357Z ^[[36;1m]^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9100721Z ^[[36;1mPath('ops/pr212-typecheck-baseline/report.txt').write_text('\n'.join(lines) + '\n')^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9101242Z ^[[36;1mprint(json.dumps(payload, indent=2, ensure_ascii=False))^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9101571Z ^[[36;1mPY^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9101760Z ^[[36;1m^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9102064Z ^[[36;1mcp /tmp/base-tsc.status ops/pr212-typecheck-baseline/base-tsc.status^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9102677Z ^[[36;1mcp /tmp/pr212-typecheck-database.types.sha256 ops/pr212-typecheck-baseline/database.types.sha256^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9103394Z ^[[36;1mgrep -E 'error TS[0-9]+:' /tmp/base-tsc.log > ops/pr212-typecheck-baseline/base-diagnostics.txt || true^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9104264Z ^[[36;1mgrep 'Type-check generated QA schema' /tmp/feature-run.log | grep -E 'error TS[0-9]+:' > ops/pr212-typecheck-baseline/feature-diagnostics.txt || true^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9105048Z ^[[36;1m^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9105281Z ^[[36;1mgit config user.name "github-actions[bot]"^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9105719Z ^[[36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9106168Z ^[[36;1mgit add ops/pr212-typecheck-baseline^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9106528Z ^[[36;1mgit commit -m "Compare PR 212 typecheck with exact base"^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9107005Z ^[[36;1mgit push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727^[[0m
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9151496Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9151849Z env:
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9154346Z   GH_TOKEN: ***
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9154617Z   PR_BASE_SHA: bb32b5c5a58442f97bef642be58ed01a57f0d91b
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9154982Z   FEATURE_SHA: fa1175ff30e1ccdcba0cb140aeccea3acabee6f6
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9155295Z   FEATURE_RUN_ID: 30340410388
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9156054Z   QA_SUPABASE_DB_URL: ***
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9156340Z   SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:17:45.9156639Z ##[endgroup]
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1912442Z {
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1913001Z   "base_sha": "bb32b5c5a58442f97bef642be58ed01a57f0d91b",
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1913780Z   "feature_sha": "fa1175ff30e1ccdcba0cb140aeccea3acabee6f6",
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1914497Z   "feature_run_id": 30340410388,
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1915014Z   "base_exit_status": 2,
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1915528Z   "base_diagnostic_count": 856,
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1916101Z   "feature_diagnostic_count": 857,
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1916669Z   "shared_diagnostic_count": 856,
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1917251Z   "feature_only_diagnostic_count": 1,
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1917838Z   "base_only_diagnostic_count": 0,
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1918407Z   "feature_only_diagnostics": [
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1919797Z     "src/app/institutions/[organizationId]/deals/[dealId]/page.tsx|TS18047|'data.pool' is possibly 'null'."
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1920471Z   ],
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1920729Z   "base_only_diagnostics": []
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.1921070Z }
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.2884679Z [ops/pr212-individual-capacity-qa-controller-20260727 2101e737] Compare PR 212 typecheck with exact base
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.2885797Z  6 files changed, 1741 insertions(+)
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.2886367Z  create mode 100644 ops/pr212-typecheck-baseline/base-diagnostics.txt
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.2886958Z  create mode 100644 ops/pr212-typecheck-baseline/base-tsc.status
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.2887515Z  create mode 100644 ops/pr212-typecheck-baseline/database.types.sha256
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.2888099Z  create mode 100644 ops/pr212-typecheck-baseline/feature-diagnostics.txt
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.2888645Z  create mode 100644 ops/pr212-typecheck-baseline/report.json
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.2889493Z  create mode 100644 ops/pr212-typecheck-baseline/report.txt
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.6410385Z To https://github.com/ghuser29384/Website2
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.6411316Z  ! [rejected]          HEAD -> ops/pr212-individual-capacity-qa-controller-20260727 (fetch first)
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.6412480Z error: failed to push some refs to 'https://github.com/ghuser29384/Website2'
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.6417623Z hint: Updates were rejected because the remote contains work that you do not
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.6418278Z hint: have locally. This is usually caused by another repository pushing to
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.6419090Z hint: the same ref. If you want to integrate the remote changes, use
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.6419546Z hint: 'git pull' before pushing again.
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.6420006Z hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+compare	Run exact-base typecheck and compare with feature failure log	2026-07-28T08:30:58.6434407Z ##[error]Process completed with exit code 1.

@@ -1,0 +1,141 @@
+{
+  "run_id": "30341755851",
+  "status": "completed",
+  "conclusion": "failure",
+  "runs": [
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-28T08:17:01Z",
+      "databaseId": 30341755851,
+      "headSha": "6f179bb9514673dc4e3c7dd2c21f753dfca8c593",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30341755851"
+    }
+  ],
+  "jobs": [
+    {
+      "id": 90218700620,
+      "run_id": 30341755851,
+      "workflow_name": "PR 212 exact-base typecheck comparison",
+      "head_branch": "ops/pr212-individual-capacity-qa-controller-20260727",
+      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30341755851",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR8Oun88AAAAVAXQfTA",
+      "head_sha": "6f179bb9514673dc4e3c7dd2c21f753dfca8c593",
+      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/90218700620",
+      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30341755851/job/90218700620",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-07-28T08:17:01Z",
+      "started_at": "2026-07-28T08:17:04Z",
+      "completed_at": "2026-07-28T08:31:02Z",
+      "name": "compare",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-07-28T08:17:05Z",
+          "completed_at": "2026-07-28T08:17:07Z"
+        },
+        {
+          "name": "Check out operations branch",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-07-28T08:17:07Z",
+          "completed_at": "2026-07-28T08:17:10Z"
+        },
+        {
+          "name": "Validate target and materialize exact base",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-07-28T08:17:10Z",
+          "completed_at": "2026-07-28T08:17:10Z"
+        },
+        {
+          "name": "Set up Node.js",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-07-28T08:17:10Z",
+          "completed_at": "2026-07-28T08:17:11Z"
+        },
+        {
+          "name": "Install exact-base dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-07-28T08:17:11Z",
+          "completed_at": "2026-07-28T08:17:29Z"
+        },
+        {
+          "name": "Set up Supabase CLI",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-07-28T08:17:29Z",
+          "completed_at": "2026-07-28T08:17:32Z"
+        },
+        {
+          "name": "Generate the same isolated-QA database types",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-07-28T08:17:32Z",
+          "completed_at": "2026-07-28T08:17:45Z"
+        },
+        {
+          "name": "Run exact-base typecheck and compare with feature failure log",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 8,
+          "started_at": "2026-07-28T08:17:45Z",
+          "completed_at": "2026-07-28T08:30:58Z"
+        },
+        {
+          "name": "Post Set up Supabase CLI",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-07-28T08:30:58Z",
+          "completed_at": "2026-07-28T08:30:58Z"
+        },
+        {
+          "name": "Post Set up Node.js",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 15,
+          "started_at": "2026-07-28T08:30:58Z",
+          "completed_at": "2026-07-28T08:30:58Z"
+        },
+        {
+          "name": "Post Check out operations branch",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16,
+          "started_at": "2026-07-28T08:30:58Z",
+          "completed_at": "2026-07-28T08:30:58Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-07-28T08:30:58Z",
+          "completed_at": "2026-07-28T08:30:58Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/90218700620",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "runner_id": 1000004940,
+      "runner_name": "GitHub Actions 1000004940",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}
