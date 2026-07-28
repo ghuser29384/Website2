@@ -1,0 +1,46 @@
+name: PR 212 current exact-head run status
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-current-run-status.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record current exact-head workflow state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          head_sha="$(gh api repos/${GITHUB_REPOSITORY}/pulls/212 --jq .head.sha)"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow institutional-trade-qa.yml --branch feat/institutional-trade-system --limit 50 --json databaseId,headSha,status,conclusion,createdAt,event,url > /tmp/runs.json
+          run_id="$(jq -r --arg head "$head_sha" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > /tmp/run.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/jobs.json
+          else
+            printf '%s\n' '{}' > /tmp/run.json
+            printf '%s\n' '{"jobs":[]}' > /tmp/jobs.json
+          fi
+          jq -n --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg head_sha "$head_sha" --arg run_id "$run_id" --slurpfile runs /tmp/runs.json --slurpfile run /tmp/run.json --slurpfile jobs /tmp/jobs.json '{generated_at:$generated_at,head_sha:$head_sha,run_id:$run_id,runs:$runs[0],run:$run[0],jobs:$jobs[0].jobs}' > ops/pr212-current-run-status.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-current-run-status.json
+          git commit -m "Record PR 212 current exact-head QA run"
+          git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
