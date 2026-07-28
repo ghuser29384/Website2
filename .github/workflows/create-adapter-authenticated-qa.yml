@@ -40,7 +40,7 @@ jobs:
         with:
           node-version: 24
 
-      - name: Reconstruct QA runner and browser script
+      - name: Reconstruct and repair QA runner and browser script
         shell: bash
         run: |
           set -euo pipefail
@@ -50,14 +50,47 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('/tmp/create-adapter-authenticated-qa.mjs')
-          source = path.read_text()
+          runner_path = Path('/tmp/run-create-adapter-qa.sh')
+          runner = runner_path.read_text()
+
+          user_columns_old = '''  email_change_token_new, email_change_token_current, reauthentication_token,
+  is_sso_user, is_anonymous, created_at, updated_at'''
+          user_columns_new = '''  email_change_token_new, email_change, email_change_token_current, reauthentication_token,
+  is_sso_user, is_anonymous, created_at, updated_at'''
+          if runner.count(user_columns_old) != 1:
+              raise SystemExit('The expected auth.users column list was not found exactly once.')
+          runner = runner.replace(user_columns_old, user_columns_new)
+
+          user_values_old = "'', '', '', '', '', false, false, now(), now())"
+          if runner.count(user_values_old) != 3:
+              raise SystemExit(f'Expected three auth.users value rows; found {runner.count(user_values_old)}.')
+          runner = runner.replace(user_values_old, "'', '', '', '', '', '', false, false, now(), now())")
+
+          identity_columns_old = 'insert into auth.identities (id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at) values'
+          identity_columns_new = 'insert into auth.identities (id, provider_id, user_id, identity_data, provider, last_sign_in_at, created_at, updated_at, email) values'
+          if runner.count(identity_columns_old) != 1:
+              raise SystemExit('The expected auth.identities column list was not found exactly once.')
+          runner = runner.replace(identity_columns_old, identity_columns_new)
+
+          for role in ('creator', 'contributor', 'outsider'):
+              row_old = f"'email', now(), now(), now())"
+              row_new = f"'email', now(), now(), now(), :'{{role}}_email')"
+              # Replace one row at a time to preserve each role's email binding.
+              occurrence = runner.find(row_old)
+              if occurrence < 0:
+                  raise SystemExit(f'Missing auth.identities row for {role}.')
+              runner = runner[:occurrence] + row_new.format(role=role) + runner[occurrence + len(row_old):]
+
+          runner_path.write_text(runner)
+
+          browser_path = Path('/tmp/create-adapter-authenticated-qa.mjs')
+          browser = browser_path.read_text()
 
           publish_old = '.locator("#publishConfirm").check();'
-          publish_count = source.count(publish_old)
+          publish_count = browser.count(publish_old)
           if publish_count < 2:
               raise SystemExit(f'Expected at least two publish-confirm checks; found {publish_count}.')
-          source = source.replace(
+          browser = browser.replace(
               publish_old,
               '.locator("#publishConfirm").check({ force: true });',
           )
@@ -68,10 +101,10 @@ jobs:
               await creatorPage.locator('input[name="email"]').waitFor({ state: "visible", timeout: 30_000 });
             }
             await creatorPage.locator('input[name="email"]').fill(credentials.creator.email);'''
-          if email_old not in source:
+          if email_old not in browser:
               raise SystemExit('Creator email-login transition was not found.')
-          source = source.replace(email_old, email_new)
-          path.write_text(source)
+          browser = browser.replace(email_old, email_new)
+          browser_path.write_text(browser)
           PY
           chmod +x /tmp/run-create-adapter-qa.sh
           bash -n /tmp/run-create-adapter-qa.sh
