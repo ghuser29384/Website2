@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 
 import { saveCoreOfferAction } from "@/app/core-trade-actions";
+import { CreateInterfaceFrame } from "@/components/create/create-interface-frame";
 import {
   TradeDraftSignInGate,
   TradeDraftWorkbench,
@@ -18,9 +19,9 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata: Metadata = {
-  title: "Create a trade",
+  title: "Create",
   description:
-    "Build one bounded Moral Trade proposal through progressive terms, then save privately or submit it once for review.",
+    "Create a pledge-swap, donation redirect, existing-pool contribution offer, or moral public-goods pool through one interface.",
   robots: { index: false, follow: false },
 };
 
@@ -73,12 +74,18 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   if (structure) returnParams.set("structure", structure);
   if (acceptsCommandHandoff) returnParams.set("handoff", "command-center");
   const returnTo = `/trades/new${returnParams.size ? `?${returnParams.toString()}` : ""}`;
+  const example = valueOf(resolvedSearchParams.example);
+  const useLegacyDraft = Boolean(templateId || structure || acceptsCommandHandoff || example);
+
+  if (!useLegacyDraft) {
+    const resume = valueOf(resolvedSearchParams.resume);
+    return <CreateInterfaceFrame resume={resume === "create"} />;
+  }
 
   if (!viewer) {
     return <TradeDraftSignInGate returnTo={returnTo} />;
   }
 
-  const example = valueOf(resolvedSearchParams.example);
   const templateValues = getPledgeTemplateInitialValues(templateId);
   const templateLabel = templateValues ? getTradeDraftTemplateLabel(templateId) : null;
 
