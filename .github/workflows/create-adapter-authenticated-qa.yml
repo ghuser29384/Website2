@@ -1,9 +1,9 @@
 name: Authenticated Create adapter production-preview QA
 
 on:
-  push:
+  pull_request:
     branches:
-      - ops/create-adapter-authenticated-qa-20260728
+      - main
     paths:
       - ".github/workflows/create-adapter-authenticated-qa.yml"
       - ".github/qa/**"
@@ -24,8 +24,6 @@ jobs:
       EXACT_CANDIDATE_SHA: e8288b8084b88e69a6d23ca3e966ab18178fefb8
       PREVIEW_BASE_URL: https://moraltrade-site-24crjz8zg-ellen-s.vercel.app
       PREVIEW_SHARE_URL: https://moraltrade-site-24crjz8zg-ellen-s.vercel.app/?_vercel_share=IEachfWLgykLNO3f9Zhnk477ewvaMtXx
-      SUPABASE_URL: https://jnpoxvalyjtdghnperyu.supabase.co
-      SUPABASE_PUBLISHABLE_KEY: sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT
       QA_MARKER: prod-create-adapter-authqa-20260728T091057Z-2bce19
       QA_OUTPUT_DIR: qa-artifacts/create-adapter-authenticated
       CREATOR_EMAIL: prod-create-adapter-authqa-20260728T091057Z-2bce19-creator@example.test
@@ -92,38 +90,6 @@ jobs:
           npm ci
           npx playwright install chromium --with-deps
 
-      - name: Create fresh production auth fixtures through public signup
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p /tmp/create-adapter-signups
-          signup() {
-            local role="$1" email="$2" password="$3" display_name="$4"
-            local body status
-            body="$(jq -n \
-              --arg email "$email" \
-              --arg password "$password" \
-              --arg display_name "$display_name" \
-              --arg marker "$QA_MARKER" \
-              '{email:$email,password:$password,data:{display_name:$display_name,qa_fixture:true,qa_marker:$marker}}')"
-            status="$(curl --silent --show-error \
-              --output "/tmp/create-adapter-signups/${role}-raw.json" \
-              --write-out '%{http_code}' \
-              "$SUPABASE_URL/auth/v1/signup" \
-              -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
-              -H 'Content-Type: application/json' \
-              --data "$body")"
-            jq 'del(.access_token,.refresh_token) | if .session then .session |= {present:true} else . end' \
-              "/tmp/create-adapter-signups/${role}-raw.json" \
-              > "/tmp/create-adapter-signups/${role}.json"
-            test "$status" = "200"
-            test "$(jq -r '.user.id // .id // empty' "/tmp/create-adapter-signups/${role}-raw.json")" != ""
-          }
-          signup creator "$CREATOR_EMAIL" "$CREATOR_PASSWORD" "$CREATOR_DISPLAY_NAME"
-          signup contributor "$CONTRIBUTOR_EMAIL" "$CONTRIBUTOR_PASSWORD" "$CONTRIBUTOR_DISPLAY_NAME"
-          signup outsider "$OUTSIDER_EMAIL" "$OUTSIDER_PASSWORD" "$OUTSIDER_DISPLAY_NAME"
-          printf 'QA_MARKER=%s\n' "$QA_MARKER" > /tmp/create-adapter-fixture-ids.txt
-
       - name: Run authenticated desktop and mobile QA
         id: qa
         continue-on-error: true
@@ -138,8 +104,6 @@ jobs:
           path: |
             /tmp/create-adapter-candidate/qa-artifacts/create-adapter-authenticated
             /tmp/create-adapter-e2e-result.json
-            /tmp/create-adapter-fixture-ids.txt
-            /tmp/create-adapter-signups/*.json
           if-no-files-found: warn
           retention-days: 30
 
