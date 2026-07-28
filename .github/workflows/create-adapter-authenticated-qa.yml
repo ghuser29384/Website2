@@ -54,11 +54,26 @@ jobs:
           from pathlib import Path
           path = Path('/tmp/create-adapter-authenticated-qa.mjs')
           source = path.read_text()
-          old = '.locator("#publishConfirm").check();'
-          count = source.count(old)
-          if count < 2:
-              raise SystemExit(f'Expected at least two publish-confirm checks; found {count}.')
-          path.write_text(source.replace(old, '.locator("#publishConfirm").check({ force: true });'))
+
+          publish_old = '.locator("#publishConfirm").check();'
+          publish_count = source.count(publish_old)
+          if publish_count < 2:
+              raise SystemExit(f'Expected at least two publish-confirm checks; found {publish_count}.')
+          source = source.replace(
+              publish_old,
+              '.locator("#publishConfirm").check({ force: true });',
+          )
+
+          email_old = '''    await creatorPage.locator('input[name="email"]').fill(credentials.creator.email);'''
+          email_new = '''    if (await creatorPage.locator('input[name="email"]').count() === 0) {
+              await creatorPage.getByRole("link", { name: "Continue with email", exact: true }).click();
+              await creatorPage.locator('input[name="email"]').waitFor({ state: "visible", timeout: 30_000 });
+            }
+            await creatorPage.locator('input[name="email"]').fill(credentials.creator.email);'''
+          if email_old not in source:
+              raise SystemExit('Creator email-login transition was not found.')
+          source = source.replace(email_old, email_new)
+          path.write_text(source)
           PY
           chmod +x /tmp/run-create-adapter-qa.sh
           bash -n /tmp/run-create-adapter-qa.sh
