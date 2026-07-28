@@ -48,6 +48,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/mpgf": mpgfRuntimeArtifacts,
     "/mpgf/**/*": mpgfRuntimeArtifacts,
+    "/trades/new": ["./public/moral-trade-create/index.html"],
   },
   async redirects() {
     return [
