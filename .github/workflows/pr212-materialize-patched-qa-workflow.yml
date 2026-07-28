@@ -1,0 +1,83 @@
+name: PR 212 materialize patched QA workflow
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-materialize-patched-qa-workflow.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      FEATURE_HEAD: 88b0d44e99c95873247252b7a7737f74e1d35b7b
+      OPS_BRANCH: ops/pr212-individual-capacity-qa-controller-20260727
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/pr212-individual-capacity-qa-controller-20260727
+          fetch-depth: 0
+
+      - name: Materialize exact patched workflow as an ordinary blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin feat/institutional-trade-system "$OPS_BRANCH"
+          actual_head="$(git rev-parse origin/feat/institutional-trade-system)"
+          [[ "$actual_head" == "$FEATURE_HEAD" ]] || {
+            echo "Feature branch moved from the reviewed head: $actual_head" >&2
+            exit 1
+          }
+          git show "$FEATURE_HEAD:.github/workflows/institutional-trade-qa.yml" > /tmp/institutional-trade-qa.yml
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('/tmp/institutional-trade-qa.yml')
+          text = path.read_text()
+          old = """      - name: Type-check generated QA schema
+                  run: npx tsc --noEmit
+          """
+          new = """      - name: Run exact-base differential generated-schema typecheck
+                  shell: bash
+                  run: bash .github/scripts/institutional-differential-typecheck.sh
+
+                - name: Restore committed database type contract
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    git checkout -- src/lib/supabase/database.types.ts
+                    git diff --exit-code -- src/lib/supabase/database.types.ts
+
+                - name: Type-check application with committed database contract
+                  run: npx tsc --noEmit
+          """
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one generated-schema typecheck step, found {text.count(old)}')
+          path.write_text(text.replace(old, new))
+          PY
+          grep -F "Run exact-base differential generated-schema typecheck" /tmp/institutional-trade-qa.yml
+          grep -F "Restore committed database type contract" /tmp/institutional-trade-qa.yml
+          grep -F "Type-check application with committed database contract" /tmp/institutional-trade-qa.yml
+          ! grep -F "- name: Type-check generated QA schema" /tmp/institutional-trade-qa.yml
+
+          git reset --hard "origin/$OPS_BRANCH"
+          mkdir -p ops/pr212-workflow-materialization
+          cp /tmp/institutional-trade-qa.yml ops/pr212-workflow-materialization/institutional-trade-qa.yml
+          git show -s --format=%T "$FEATURE_HEAD" > ops/pr212-workflow-materialization/base-tree.sha
+          printf '%s\n' "$FEATURE_HEAD" > ops/pr212-workflow-materialization/parent-commit.sha
+          sha256sum /tmp/institutional-trade-qa.yml > ops/pr212-workflow-materialization/institutional-trade-qa.sha256
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-workflow-materialization
+          git commit -m "Materialize PR 212 differential QA workflow blob"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:"$OPS_BRANCH"; then exit 0; fi
+            git pull --rebase origin "$OPS_BRANCH"
+          done
+          exit 1
