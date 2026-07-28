@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      FEATURE_HEAD: 88b0d44e99c95873247252b7a7737f74e1d35b7b
+      FEATURE_HEAD: 45a27b46fdc1d0a0ec12056bb4bd3552a28032fc
       OPS_BRANCH: ops/pr212-individual-capacity-qa-controller-20260727
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
           ref: ops/pr212-individual-capacity-qa-controller-20260727
           fetch-depth: 0
 
-      - name: Materialize exact patched workflow as an ordinary blob
+      - name: Materialize exact latest-only QA workflow as an ordinary blob
         shell: bash
         run: |
           set -euo pipefail
@@ -39,31 +39,16 @@ jobs:
           from pathlib import Path
           path = Path('/tmp/institutional-trade-qa.yml')
           text = path.read_text()
-          old = """      - name: Type-check generated QA schema
-                  run: npx tsc --noEmit
-          """
-          new = """      - name: Run exact-base differential generated-schema typecheck
-                  shell: bash
-                  run: bash .github/scripts/institutional-differential-typecheck.sh
-
-                - name: Restore committed database type contract
-                  shell: bash
-                  run: |
-                    set -euo pipefail
-                    git checkout -- src/lib/supabase/database.types.ts
-                    git diff --exit-code -- src/lib/supabase/database.types.ts
-
-                - name: Type-check application with committed database contract
-                  run: npx tsc --noEmit
-          """
+          old = '  cancel-in-progress: false\n'
+          new = '  cancel-in-progress: true\n'
           if text.count(old) != 1:
-              raise SystemExit(f'Expected one generated-schema typecheck step, found {text.count(old)}')
+              raise SystemExit(f'Expected one non-cancelling concurrency setting, found {text.count(old)}')
           path.write_text(text.replace(old, new))
           PY
+          grep -F "cancel-in-progress: true" /tmp/institutional-trade-qa.yml
+          ! grep -F "cancel-in-progress: false" /tmp/institutional-trade-qa.yml
           grep -F "Run exact-base differential generated-schema typecheck" /tmp/institutional-trade-qa.yml
-          grep -F "Restore committed database type contract" /tmp/institutional-trade-qa.yml
           grep -F "Type-check application with committed database contract" /tmp/institutional-trade-qa.yml
-          ! grep -F "- name: Type-check generated QA schema" /tmp/institutional-trade-qa.yml
 
           git reset --hard "origin/$OPS_BRANCH"
           mkdir -p ops/pr212-workflow-materialization
@@ -75,7 +60,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ops/pr212-workflow-materialization
-          git commit -m "Materialize PR 212 differential QA workflow blob"
+          git commit -m "Materialize latest-only PR 212 QA workflow blob"
           for attempt in 1 2 3; do
             if git push origin HEAD:"$OPS_BRANCH"; then exit 0; fi
             git pull --rebase origin "$OPS_BRANCH"
