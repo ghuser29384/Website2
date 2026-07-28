@@ -1,0 +1,55 @@
+name: PR 212 differential repair status
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-differential-repair-status.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait for and record differential-gate repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 90); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow pr212-differential-test-gate-repair.yml --branch ops/pr212-individual-capacity-qa-controller-20260727 --limit 10 --json databaseId,status,conclusion,createdAt,headSha,url > /tmp/runs.json
+            run_id="$(jq -r 'sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+            status="$(jq -r 'sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+            conclusion="$(jq -r 'sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/jobs.json
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
+          else
+            printf '%s\n' '{"jobs":[]}' > /tmp/jobs.json
+            printf '%s\n' 'No repair run found.' > /tmp/failed.log
+          fi
+          jq -n --arg run_id "$run_id" --arg status "$status" --arg conclusion "$conclusion" --slurpfile runs /tmp/runs.json --slurpfile jobs /tmp/jobs.json '{run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0],jobs:$jobs[0].jobs}' > ops/pr212-differential-repair-status.json
+          tail -n 500 /tmp/failed.log > ops/pr212-differential-repair-failed-log.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-differential-repair-status.json ops/pr212-differential-repair-failed-log.txt
+          git commit -m "Record PR 212 differential-gate repair status"
+          git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
