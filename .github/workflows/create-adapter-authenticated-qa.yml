@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ops/create-adapter-authenticated-qa-20260728
+    paths:
+      - ".github/workflows/create-adapter-authenticated-qa.yml"
+      - ".github/qa/**"
   pull_request:
     branches:
       - main
@@ -24,11 +27,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
-      EXACT_CANDIDATE_SHA: f00537d1610a0564c29b88b0ebffc9323340e819
+      EXACT_CANDIDATE_SHA: 8f6355179df103e63bfa95f8d41773d48a702d98
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
-      PREVIEW_BASE_URL: https://moraltrade-site-fymvug67l-ellen-s.vercel.app
-      PREVIEW_SHARE_URL: https://moraltrade-site-fymvug67l-ellen-s.vercel.app/?_vercel_share=XePT7FVkKKhVXO3Xu14AxVPHPXqwM5KX
+      PREVIEW_BASE_URL: https://moraltrade-site-jr9v3zah2-ellen-s.vercel.app
+      PREVIEW_SHARE_URL: https://moraltrade-site-jr9v3zah2-ellen-s.vercel.app/?_vercel_share=9ZiZerH5Zxqs3nZPbCIjDfAuXtuSdSEg
       QA_OUTPUT_DIR: qa-artifacts/create-adapter-authenticated
     steps:
       - name: Check out QA operator branch
