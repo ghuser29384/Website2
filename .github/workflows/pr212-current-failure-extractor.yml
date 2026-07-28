@@ -1,0 +1,57 @@
+name: PR 212 current failure extractor
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-current-failure-extractor.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RUN_ID: "30340410388"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Extract failed step context
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          lines = Path('/tmp/failed.log').read_text(errors='replace').splitlines()
+          patterns = re.compile(r'(error TS\d+|Type error|Cannot find|is not assignable|Property .* does not exist|Expected \d+ arguments|No overload matches|implicitly has an .* type|##\[error\]|Process completed with exit code)', re.I)
+          selected = set()
+          for index, line in enumerate(lines):
+              if patterns.search(line):
+                  selected.update(range(max(0, index - 8), min(len(lines), index + 14)))
+          if not selected:
+              selected.update(range(max(0, len(lines) - 500), len(lines)))
+          output = []
+          previous = None
+          for index in sorted(selected):
+              if previous is not None and index > previous + 1:
+                  output.append('--- omitted ---')
+              output.append(f'{index + 1}: {lines[index]}')
+              previous = index
+          Path('ops/pr212-current-failure-context.txt').write_text('\n'.join(output) + '\n')
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-current-failure-context.txt
+          git commit -m "Record PR 212 current failure context"
+          git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
