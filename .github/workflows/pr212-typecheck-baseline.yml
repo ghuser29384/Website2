@@ -1,0 +1,187 @@
+name: PR 212 exact-base typecheck comparison
+
+on:
+  push:
+    branches:
+      - ops/pr212-individual-capacity-qa-controller-20260727
+    paths:
+      - .github/workflows/pr212-typecheck-baseline.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: pr212-exact-base-typecheck-comparison
+  cancel-in-progress: false
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_BASE_SHA: bb32b5c5a58442f97bef642be58ed01a57f0d91b
+      FEATURE_SHA: fa1175ff30e1ccdcba0cb140aeccea3acabee6f6
+      FEATURE_RUN_ID: "30340410388"
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+    steps:
+      - name: Check out operations branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate target and materialize exact base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$QA_SUPABASE_DB_URL"
+          [[ "$QA_SUPABASE_DB_URL" == *"hvmxfjjbdcgjjudmthdz"* ]]
+          [[ "$QA_SUPABASE_DB_URL" != *"jnpoxvalyjtdghnperyu"* ]]
+          git cat-file -e "${PR_BASE_SHA}^{commit}"
+          rm -rf /tmp/pr212-typecheck-base
+          git worktree add --detach /tmp/pr212-typecheck-base "$PR_BASE_SHA"
+          test "$(git -C /tmp/pr212-typecheck-base rev-parse HEAD)" = "$PR_BASE_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install exact-base dependencies
+        shell: bash
+        working-directory: /tmp/pr212-typecheck-base
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.84.2
+          github-token: ${{ github.token }}
+
+      - name: Generate the same isolated-QA database types
+        shell: bash
+        working-directory: /tmp/pr212-typecheck-base
+        run: |
+          set -euo pipefail
+          supabase gen types typescript --db-url "$QA_SUPABASE_DB_URL" --schema public > /tmp/pr212-typecheck-database.types.ts
+          test -s /tmp/pr212-typecheck-database.types.ts
+          cp /tmp/pr212-typecheck-database.types.ts src/lib/supabase/database.types.ts
+          sha256sum /tmp/pr212-typecheck-database.types.ts > /tmp/pr212-typecheck-database.types.sha256
+
+      - name: Run exact-base typecheck and compare with feature failure log
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-typecheck-baseline
+          set +e
+          (
+            cd /tmp/pr212-typecheck-base
+            npx tsc --noEmit --pretty false
+          ) > /tmp/base-tsc.log 2>&1
+          base_status=$?
+          set -e
+          printf '%s\n' "$base_status" > /tmp/base-tsc.status
+          gh run view "$FEATURE_RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/feature-run.log 2>&1 || true
+
+          python - <<'PY'
+          from __future__ import annotations
+
+          from collections import Counter
+          import json
+          from pathlib import Path
+          import re
+
+          diagnostic = re.compile(r"(?P<path>[^\s].*?)\((?P<line>\d+),(?P<column>\d+)\): error (?P<code>TS\d+): (?P<message>.*)$")
+          ansi = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+
+          def normalized_key(match: re.Match[str]) -> str:
+              path = match.group("path")
+              if "##[error]" in path:
+                  path = path.split("##[error]", 1)[1]
+              elif "Type-check generated QA schema" in path:
+                  path = path.split("Type-check generated QA schema", 1)[1]
+              path = path.strip(" \t:-")
+              return f"{path}|{match.group('code')}|{match.group('message').strip()}"
+
+          def parse_base() -> Counter[str]:
+              result: Counter[str] = Counter()
+              for raw in Path('/tmp/base-tsc.log').read_text(errors='replace').splitlines():
+                  line = ansi.sub('', raw).replace('\ufeff', '')
+                  match = diagnostic.search(line)
+                  if match:
+                      result[normalized_key(match)] += 1
+              return result
+
+          def parse_feature() -> Counter[str]:
+              result: Counter[str] = Counter()
+              for raw in Path('/tmp/feature-run.log').read_text(errors='replace').splitlines():
+                  line = ansi.sub('', raw).replace('\ufeff', '')
+                  if 'Type-check generated QA schema' not in line:
+                      continue
+                  match = diagnostic.search(line)
+                  if match:
+                      result[normalized_key(match)] += 1
+              return result
+
+          base = parse_base()
+          feature = parse_feature()
+          base_status = int(Path('/tmp/base-tsc.status').read_text().strip())
+          if base_status == 0 and base:
+              raise SystemExit('Base typecheck exited zero but diagnostics were parsed.')
+          if base_status != 0 and not base:
+              raise SystemExit(f'Base typecheck exited {base_status} without parseable TypeScript diagnostics.')
+          if not feature:
+              raise SystemExit('No feature TypeScript diagnostics could be parsed from the exact failed run.')
+
+          feature_only = feature - base
+          base_only = base - feature
+          shared = feature & base
+          payload = {
+              'base_sha': 'bb32b5c5a58442f97bef642be58ed01a57f0d91b',
+              'feature_sha': 'fa1175ff30e1ccdcba0cb140aeccea3acabee6f6',
+              'feature_run_id': 30340410388,
+              'base_exit_status': base_status,
+              'base_diagnostic_count': sum(base.values()),
+              'feature_diagnostic_count': sum(feature.values()),
+              'shared_diagnostic_count': sum(shared.values()),
+              'feature_only_diagnostic_count': sum(feature_only.values()),
+              'base_only_diagnostic_count': sum(base_only.values()),
+              'feature_only_diagnostics': sorted(feature_only.elements()),
+              'base_only_diagnostics': sorted(base_only.elements()),
+          }
+          Path('ops/pr212-typecheck-baseline/report.json').write_text(json.dumps(payload, indent=2, ensure_ascii=False) + '\n')
+          lines = [
+              f"Base diagnostics: {payload['base_diagnostic_count']}",
+              f"Feature diagnostics: {payload['feature_diagnostic_count']}",
+              f"Shared diagnostics: {payload['shared_diagnostic_count']}",
+              f"Feature-only diagnostics: {payload['feature_only_diagnostic_count']}",
+              f"Base-only diagnostics: {payload['base_only_diagnostic_count']}",
+              '',
+              '=== FEATURE-ONLY ===',
+              *(payload['feature_only_diagnostics'] or ['(none)']),
+              '',
+              '=== BASE-ONLY ===',
+              *(payload['base_only_diagnostics'] or ['(none)']),
+          ]
+          Path('ops/pr212-typecheck-baseline/report.txt').write_text('\n'.join(lines) + '\n')
+          print(json.dumps(payload, indent=2, ensure_ascii=False))
+          PY
+
+          cp /tmp/base-tsc.status ops/pr212-typecheck-baseline/base-tsc.status
+          cp /tmp/pr212-typecheck-database.types.sha256 ops/pr212-typecheck-baseline/database.types.sha256
+          grep -E 'error TS[0-9]+:' /tmp/base-tsc.log > ops/pr212-typecheck-baseline/base-diagnostics.txt || true
+          grep 'Type-check generated QA schema' /tmp/feature-run.log | grep -E 'error TS[0-9]+:' > ops/pr212-typecheck-baseline/feature-diagnostics.txt || true
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-typecheck-baseline
+          git commit -m "Compare PR 212 typecheck with exact base"
+          git push origin HEAD:ops/pr212-individual-capacity-qa-controller-20260727
