@@ -30,8 +30,8 @@ jobs:
       EXACT_CANDIDATE_SHA: 8f6355179df103e63bfa95f8d41773d48a702d98
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
-      PREVIEW_BASE_URL: https://moraltrade-site-jr9v3zah2-ellen-s.vercel.app
-      PREVIEW_SHARE_URL: https://moraltrade-site-jr9v3zah2-ellen-s.vercel.app/?_vercel_share=9ZiZerH5Zxqs3nZPbCIjDfAuXtuSdSEg
+      PREVIEW_BASE_URL: https://website2-a7t84y4y3-ellen-s.vercel.app
+      PREVIEW_SHARE_URL: https://website2-a7t84y4y3-ellen-s.vercel.app/?_vercel_share=TP4cdtmohFzguYYBT6pN21ryzTMMvuWZ
       QA_OUTPUT_DIR: qa-artifacts/create-adapter-authenticated
     steps:
       - name: Check out QA operator branch
