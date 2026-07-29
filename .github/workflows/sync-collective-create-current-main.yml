@@ -25,7 +25,6 @@ jobs:
       EXPECTED_REPOSITORY: ghuser29384/Website2
       PRODUCT_BRANCH: feature/collective-commitments-in-create-20260729
       EXPECTED_PRODUCT_HEAD: 6ad1b2e87a9fe023de3479550b5596196a210e2a
-      EXPECTED_MAIN: 3f942c9cd4df251f1f2c62d2a8a9f5a1cfb66aea
       ARTIFACT_DIR: ${{ github.workspace }}/collective-create-current-main-sync
 
     steps:
@@ -48,15 +47,16 @@ jobs:
           set -euo pipefail
           mkdir -p "$ARTIFACT_DIR"
           git fetch origin main "$PRODUCT_BRANCH"
-          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          main_head="$(git rev-parse origin/main)"
           test "$(git rev-parse "origin/$PRODUCT_BRANCH")" = "$EXPECTED_PRODUCT_HEAD"
+          printf 'captured_main=%s\n' "$main_head" | tee "$ARTIFACT_DIR/captured-main.txt"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout --detach "$EXPECTED_PRODUCT_HEAD"
 
           set +e
-          git merge --no-ff --no-commit "$EXPECTED_MAIN" \
+          git merge --no-ff --no-commit "$main_head" \
             > "$ARTIFACT_DIR/merge.log" 2>&1
           merge_status=$?
           set -e
@@ -247,7 +247,7 @@ jobs:
 
           printf '%s\n' \
             "product_head_before=${EXPECTED_PRODUCT_HEAD}" \
-            "main_head=${EXPECTED_MAIN}" \
+            "main_head=${main_head}" \
             "product_head_after=${final_head}" \
             "typed_vercel_config=PASS" \
             "duplicate_project_collective_cron=ABSENT" \
