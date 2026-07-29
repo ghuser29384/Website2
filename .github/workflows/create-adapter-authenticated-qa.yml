@@ -116,7 +116,7 @@ jobs:
               raise SystemExit('The durable-record verification block marker was not found exactly once.')
           verify_log_index = runner.index(verify_log)
           verify_heredoc_index = runner.index("<<'SQL'", verify_log_index)
-          verify_sql_start = verify_heredoc_index + len("<<'SQL'")
+          verify_sql_start = runner.index("\n", verify_heredoc_index) + 1
           verify_sql_end = runner.index("\nSQL\nelse", verify_sql_start)
           verify_sql = runner[verify_sql_start:verify_sql_end]
           verify_substitutions = [
@@ -367,5 +367,5 @@ jobs:
           test "$QA_OUTCOME" = success
           test "$BYPASS_CLEANUP_OUTCOME" = success
 
-# Waits for streamed fail-closed receipt content before asserting semantic denial, while
-# preserving exact database, Vercel-bypass, cleanup, and zero-residue requirements.
+# Keeps the psql heredoc command line in shell syntax, waits for streamed fail-closed
+# receipt content, and preserves exact cleanup and zero-residue release requirements.
