@@ -30,6 +30,12 @@ test("the accepted Create interface is mounted without replacing its rendered st
   assert.match(html, /What do you want to improve\?/);
   assert.match(html, /Commitment/);
   assert.match(html, /Donation redirect/);
+  assert.match(html, /Conditional donation/);
+  assert.match(html, /data-fund-mode="conditional"/);
+  assert.match(
+    html,
+    /window\.top\.location\.assign\("\/trades\/new\?structure=conditional-donation"\)/,
+  );
   assert.match(html, /Dominant assurance contract pool/);
   assert.match(html, /Custom mathematical formula/);
   assert.match(html, /Public exact thresholds/);

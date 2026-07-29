@@ -58,6 +58,11 @@ const nextConfig: NextConfig = {
         destination: "https://www.moraltrade.org/:path*",
         permanent: true,
       },
+      {
+        source: "/donation-offsets/conditional",
+        destination: "/trades/new?structure=conditional-donation",
+        permanent: true,
+      },
     ];
   },
   async rewrites() {
