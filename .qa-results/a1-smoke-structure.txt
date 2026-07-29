@@ -1,0 +1,348 @@
+line_count= 726
+
+FUNCTIONS
+39: function sql(query) {
+47: function quote(value) {
+51: function stableHash32(value) {
+60: function assignedViewerId() {
+101: function sanitizeError(error) {
+109: function createSyntheticUsersAndOffer() {
+267: function createCompletedOutcomeRecords() {
+357: async function login(page, email, returnTo = '/feed') {
+369: async function screenshot(page, label) {
+375: function installDiagnostics(page, label) {
+384: async function liveNow(page) {
+402: async function submitFeedback(page, values) {
+416: function verifyExposureAndAssignment(first, second) {
+467: async function runTraining() {
+546: function cleanupSyntheticData() {
+
+=== /feed ===
+--- lines 347-374 ---
+347:     update public.trade_threads
+348:       set agreement_id=${quote(ids.agreement)}::uuid,updated_at=now(),last_message_at=now()
+349:       where id=${quote(ids.thread)}::uuid;
+350: 
+351:     update public.offers set status='matched',updated_at=now() where id=${quote(ids.offer)}::uuid;
+352: 
+353:     commit;
+354:   `);
+355: }
+356: 
+357: async function login(page, email, returnTo = '/feed') {
+358:   const response = await page.goto(`${BASE_URL}/login?method=email`/*xxxxxxxxxxxxxxxxxxxxxxxx*/, {
+359:     waitUntil: 'domcontentloaded',
+360:   });
+361:   assert.ok(response && response.status() < 500, `Login page returned ${response?.status()}.`);
+362:   await page.getByLabel('Email').fill(email);
+363:   await page.getByLabel('Password').fill(PASSWORD);
+364:   await page.getByRole('button', { name: 'Log in' }).click();
+365:   await page.waitForURL((url) => url.pathname !== '/login');/*xxxxxxxxxxxxxxxxxxxx*/
+366:   assert.ok(!/\/login(?:\?|$)/.test(page.url()), `Login did not complete for ${email}.`);
+367: }
+368: 
+369: async function screenshot(page, label) {
+370:   const filename = `${label}.png`;
+371:   await page.screenshot({ path: path.join(OUTPUT_DIR, filename), fullPage: true, animations: 'disabled' });
+372:   result.screenshots.push(filename);
+373: }
+374: 
+--- lines 637-664 ---
+637: ownerPage.setDefaultTimeout(30_000);
+638: viewerPage.setDefaultNavigationTimeout(60_000);
+639: ownerPage.setDefaultNavigationTimeout(60_000);
+640: installDiagnostics(viewerPage, 'viewer');
+641: installDiagnostics(ownerPage, 'owner');
+642: 
+643: try {
+644:   createSyntheticUsersAndOffer();
+645:   result.checks.syntheticSetup = true;
+646: 
+647:   await login(viewerPage, emails.viewer, '/feed');
+648:   await login(ownerPage, emails.owner, '/');
+649:   result.checks.authenticatedSessions = true;
+650: 
+651:   await viewerPage.goto(`${BASE_URL}/feed`, { waitUntil: 'domcontentloaded' });
+652:   const first = await liveNow(viewerPage);
+653:   await viewerPage.waitForTimeout(400);
+654:   const second = await liveNow(viewerPage);
+655:   result.firstFeedDiagnostics = first.body.learningDiagnostics;
+656:   result.secondFeedDiagnostics = second.body.learningDiagnostics;
+657:   verifyExposureAndAssignment(first, second);
+658:   result.checks.feedExposureReceipt = true;
+659:   result.checks.stableExperimentAssignment = true;
+660:   await screenshot(viewerPage, '01-authenticated-feed');
+661: 
+662:   createCompletedOutcomeRecords();
+663:   result.checks.completedOutcomeFixture = true;
+664: 
+--- lines 641-668 ---
+641: installDiagnostics(ownerPage, 'owner');
+642: 
+643: try {
+644:   createSyntheticUsersAndOffer();
+645:   result.checks.syntheticSetup = true;
+646: 
+647:   await login(viewerPage, emails.viewer, '/feed');
+648:   await login(ownerPage, emails.owner, '/');
+649:   result.checks.authenticatedSessions = true;
+650: 
+651:   await viewerPage.goto(`${BASE_URL}/feed`, { waitUntil: 'domcontentloaded' });
+652:   const first = await liveNow(viewerPage);
+653:   await viewerPage.waitForTimeout(400);
+654:   const second = await liveNow(viewerPage);
+655:   result.firstFeedDiagnostics = first.body.learningDiagnostics;
+656:   result.secondFeedDiagnostics = second.body.learningDiagnostics;
+657:   verifyExposureAndAssignment(first, second);
+658:   result.checks.feedExposureReceipt = true;
+659:   result.checks.stableExperimentAssignment = true;
+660:   await screenshot(viewerPage, '01-authenticated-feed');
+661: 
+662:   createCompletedOutcomeRecords();
+663:   result.checks.completedOutcomeFixture = true;
+664: 
+665:   await submitFeedback(viewerPage, {
+666:     gain: 5,
+667:     satisfaction: 5,
+668:     without: 10,
+
+=== cleanupSyntheticData ===
+--- lines 536-563 ---
+536:   assert.equal(audit.trainingRun?.status, 'succeeded');
+537:   assert.equal(audit.trainingRun?.stage, 'complete');
+538:   assert.ok(['cold_start', 'shadow'].includes(audit.model?.status));
+539:   assert.equal(audit.model?.algorithmVersion, MODEL_VERSION);
+540:   assert.ok(Number(audit.model?.sampleCount) >= 1);
+541:   assert.ok(Number(audit.model?.feedbackCount) >= 2);
+542:   assert.ok(Number(audit.guardrailCount) >= 1);
+543:   result.trainingAudit = audit;
+544: }
+545: 
+546: function cleanupSyntheticData() {
+547:   const modelId = result.trainingResponse?.modelId;
+548:   sql(`
+549:     begin;
+550: 
+551:     delete from public.recommendation_outcomes
+552:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+553:     delete from public.recommendation_exposures
+554:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+555:          or owner_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+556:          or opportunity_id=${quote(ids.offer)};
+557:     delete from public.recommendation_experiment_assignments
+558:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+559:     delete from public.recommendation_interactions
+560:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+561:          or opportunity_id=${quote(ids.offer)};
+562:     delete from public.recommendation_graph_edges
+563:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+--- lines 709-726 ---
+709:   result.passed = true;
+710: } catch (error) {
+711:   result.passed = false;
+712:   result.error = { message: sanitizeError(error) };
+713:   throw error;
+714: } finally {
+715:   await viewerContext.close().catch(() => {});
+716:   await ownerContext.close().catch(() => {});
+717:   await browser.close().catch(() => {});
+718:   try {
+719:     cleanupSyntheticData();
+720:   } catch (cleanupError) {
+721:     result.cleanup = { completed: false, error: sanitizeError(cleanupError) };
+722:     result.passed = false;
+723:     process.exitCode = 1;
+724:   }
+725:   await writeFile(path.join(OUTPUT_DIR, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
+726: }
+
+=== async function main ===
+
+=== await browser.close ===
+--- lines 707-726 ---
+707:   assert.deepEqual(result.network.serverErrors, [], 'Server-error responses were detected.');
+708:   result.checks.browserAndServerDiagnostics = true;
+709:   result.passed = true;
+710: } catch (error) {
+711:   result.passed = false;
+712:   result.error = { message: sanitizeError(error) };
+713:   throw error;
+714: } finally {
+715:   await viewerContext.close().catch(() => {});
+716:   await ownerContext.close().catch(() => {});
+717:   await browser.close().catch(() => {});
+718:   try {
+719:     cleanupSyntheticData();
+720:   } catch (cleanupError) {
+721:     result.cleanup = { completed: false, error: sanitizeError(cleanupError) };
+722:     result.passed = false;
+723:     process.exitCode = 1;
+724:   }
+725:   await writeFile(path.join(OUTPUT_DIR, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
+726: }
+
+=== page.goto ===
+--- lines 348-375 ---
+348:       set agreement_id=${quote(ids.agreement)}::uuid,updated_at=now(),last_message_at=now()
+349:       where id=${quote(ids.thread)}::uuid;
+350: 
+351:     update public.offers set status='matched',updated_at=now() where id=${quote(ids.offer)}::uuid;
+352: 
+353:     commit;
+354:   `);
+355: }
+356: 
+357: async function login(page, email, returnTo = '/feed') {
+358:   const response = await page.goto(`${BASE_URL}/login?method=email`/*xxxxxxxxxxxxxxxxxxxxxxxx*/, {
+359:     waitUntil: 'domcontentloaded',
+360:   });
+361:   assert.ok(response && response.status() < 500, `Login page returned ${response?.status()}.`);
+362:   await page.getByLabel('Email').fill(email);
+363:   await page.getByLabel('Password').fill(PASSWORD);
+364:   await page.getByRole('button', { name: 'Log in' }).click();
+365:   await page.waitForURL((url) => url.pathname !== '/login');/*xxxxxxxxxxxxxxxxxxxx*/
+366:   assert.ok(!/\/login(?:\?|$)/.test(page.url()), `Login did not complete for ${email}.`);
+367: }
+368: 
+369: async function screenshot(page, label) {
+370:   const filename = `${label}.png`;
+371:   await page.screenshot({ path: path.join(OUTPUT_DIR, filename), fullPage: true, animations: 'disabled' });
+372:   result.screenshots.push(filename);
+373: }
+374: 
+375: function installDiagnostics(page, label) {
+--- lines 393-420 ---
+393:     try {
+394:       body = JSON.parse(text);
+395:     } catch {
+396:       body = { raw: text.slice(0, 500) };
+397:     }
+398:     return { status: response.status, body };
+399:   });
+400: }
+401: 
+402: async function submitFeedback(page, values) {
+403:   await page.goto(`${BASE_URL}/trade-agreements/${ids.agreement}`, { waitUntil: 'domcontentloaded' });
+404:   await page.getByRole('heading', { name: /Did this completed trade improve matters by your lights/i }).waitFor();
+405:   const form = page.locator('form').filter({ has: page.getByRole('button', { name: /Save outcome feedback|Update outcome feedback/ }) });
+406:   await form.getByLabel('Gain by your own lights').selectOption(String(values.gain));
+407:   await form.getByLabel('Overall satisfaction').selectOption(String(values.satisfaction));
+408:   await form.getByLabel('Chance this outcome would have happened without the trade').fill(String(values.without));
+409:   await form.getByLabel('Concern about harms or negative externalities').selectOption(values.externality);
+410:   await form.getByLabel('Optional private note').fill(values.note);
+411:   await form.getByRole('button', { name: /Save outcome feedback|Update outcome feedback/ }).click();
+412:   await page.waitForLoadState('domcontentloaded');
+413:   await page.getByText(/Private outcome feedback saved/i).first().waitFor();
+414: }
+415: 
+416: function verifyExposureAndAssignment(first, second) {
+417:   for (const [label, response] of [['first', first], ['second', second]]) {
+418:     assert.equal(response.status, 200, `${label} authenticated Feed request failed.`);
+419:     assert.equal(response.body.authenticated, true, `${label} Feed response was not authenticated.`);
+420:     assert.equal(response.body.learningDiagnostics?.exposureWriteStatus, 'written', `${label} exposure receipts were not written.`);
+
+=== data-opportunity-id ===
+
+=== exposureRequestId ===
+
+TAIL
+627:   }
+628:   result.cleanup = { completed: true, leftovers };
+629: }
+630: 
+631: const browser = await chromium.launch({ headless: true });
+632: const viewerContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+633: const ownerContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+634: const viewerPage = await viewerContext.newPage();
+635: const ownerPage = await ownerContext.newPage();
+636: viewerPage.setDefaultTimeout(30_000);
+637: ownerPage.setDefaultTimeout(30_000);
+638: viewerPage.setDefaultNavigationTimeout(60_000);
+639: ownerPage.setDefaultNavigationTimeout(60_000);
+640: installDiagnostics(viewerPage, 'viewer');
+641: installDiagnostics(ownerPage, 'owner');
+642: 
+643: try {
+644:   createSyntheticUsersAndOffer();
+645:   result.checks.syntheticSetup = true;
+646: 
+647:   await login(viewerPage, emails.viewer, '/feed');
+648:   await login(ownerPage, emails.owner, '/');
+649:   result.checks.authenticatedSessions = true;
+650: 
+651:   await viewerPage.goto(`${BASE_URL}/feed`, { waitUntil: 'domcontentloaded' });
+652:   const first = await liveNow(viewerPage);
+653:   await viewerPage.waitForTimeout(400);
+654:   const second = await liveNow(viewerPage);
+655:   result.firstFeedDiagnostics = first.body.learningDiagnostics;
+656:   result.secondFeedDiagnostics = second.body.learningDiagnostics;
+657:   verifyExposureAndAssignment(first, second);
+658:   result.checks.feedExposureReceipt = true;
+659:   result.checks.stableExperimentAssignment = true;
+660:   await screenshot(viewerPage, '01-authenticated-feed');
+661: 
+662:   createCompletedOutcomeRecords();
+663:   result.checks.completedOutcomeFixture = true;
+664: 
+665:   await submitFeedback(viewerPage, {
+666:     gain: 5,
+667:     satisfaction: 5,
+668:     without: 10,
+669:     externality: 'none',
+670:     note: `Viewer private A1 smoke feedback ${RUN_TAG}.`,
+671:   });
+672:   await screenshot(viewerPage, '02-viewer-private-feedback');
+673: 
+674:   await submitFeedback(ownerPage, {
+675:     gain: 4,
+676:     satisfaction: 4,
+677:     without: 20,
+678:     externality: 'low',
+679:     note: `Owner private A1 smoke feedback ${RUN_TAG}.`,
+680:   });
+681:   await screenshot(ownerPage, '03-owner-private-feedback');
+682: 
+683:   const feedbackAudit = JSON.parse(sql(`
+684:     select jsonb_build_object(
+685:       'count',count(*),
+686:       'profiles',array_agg(profile_id::text order by profile_id::text),
+687:       'minimumGain',min(own_lights_gain),
+688:       'minimumSatisfaction',min(satisfaction)
+689:     )::text
+690:     from public.recommendation_outcome_feedback
+691:     where agreement_id=${quote(ids.agreement)}::uuid;
+692:   `));
+693:   assert.equal(Number(feedbackAudit.count), 2);
+694:   assert.ok(Number(feedbackAudit.minimumGain) >= 4);
+695:   assert.ok(Number(feedbackAudit.minimumSatisfaction) >= 4);
+696:   result.feedbackAudit = feedbackAudit;
+697:   result.checks.privateCompletionFeedback = true;
+698: 
+699:   await runTraining();
+700:   result.checks.proposalOutcomeReconciliation = true;
+701:   result.checks.successfulTrainingRun = true;
+702:   result.checks.coldStartOrShadowModel = true;
+703: 
+704:   if (result.network.pageErrors.length) {
+705:     result.warnings = [...(result.warnings ?? []), `${result.network.pageErrors.length} unrelated browser page error(s) were recorded for review.`];
+706:   }
+707:   assert.deepEqual(result.network.serverErrors, [], 'Server-error responses were detected.');
+708:   result.checks.browserAndServerDiagnostics = true;
+709:   result.passed = true;
+710: } catch (error) {
+711:   result.passed = false;
+712:   result.error = { message: sanitizeError(error) };
+713:   throw error;
+714: } finally {
+715:   await viewerContext.close().catch(() => {});
+716:   await ownerContext.close().catch(() => {});
+717:   await browser.close().catch(() => {});
+718:   try {
+719:     cleanupSyntheticData();
+720:   } catch (cleanupError) {
+721:     result.cleanup = { completed: false, error: sanitizeError(cleanupError) };
+722:     result.passed = false;
+723:     process.exitCode = 1;
+724:   }
+725:   await writeFile(path.join(OUTPUT_DIR, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
+726: }
