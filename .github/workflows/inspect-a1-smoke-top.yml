@@ -1,0 +1,63 @@
+name: Inspect prior A1 smoke setup and cleanup
+
+on:
+  push:
+    branches:
+      - qa/home-authenticated-feed-20260727
+    paths:
+      - .qa/inspect-a1-smoke-top-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out workbench
+        uses: actions/checkout@v4
+        with:
+          ref: qa/home-authenticated-feed-20260727
+          path: report
+          fetch-depth: 0
+
+      - name: Check out prior successful smoke source
+        uses: actions/checkout@v4
+        with:
+          ref: ops/a1-production-smoke-20260725
+          path: source
+          fetch-depth: 1
+
+      - name: Decode selected source ranges
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode source/.a1-production-smoke/final.gz.b64 | gzip -d > /tmp/a1-smoke.mjs
+          mkdir -p report/.qa-results
+          python3 - <<'PY' > report/.qa-results/a1-smoke-top-and-setup.txt
+          from pathlib import Path
+          lines = Path('/tmp/a1-smoke.mjs').read_text().splitlines()
+          for label, start, end in [
+              ('TOP', 1, 120),
+              ('SETUP', 100, 285),
+              ('LIVE_NOW_AND_ASSERTIONS', 375, 470),
+              ('CLEANUP', 540, 635),
+              ('MAIN', 630, 726),
+          ]:
+              print(f'===== {label} lines {start}-{end} =====')
+              for n in range(start - 1, min(end, len(lines))):
+                  print(f'{n + 1}: {lines[n]}')
+              print()
+          PY
+
+      - name: Publish inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd report
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .qa-results/a1-smoke-top-and-setup.txt
+          git commit -m "Record A1 smoke setup and cleanup source" || true
+          git push origin HEAD:qa/home-authenticated-feed-20260727
