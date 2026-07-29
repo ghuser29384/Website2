@@ -186,6 +186,15 @@ async function expectSuccess(page: Page, message: string) {
   });
 }
 
+async function waitForInteractivePage(page: Page) {
+  await page.waitForLoadState("networkidle");
+}
+
+async function gotoReady(page: Page, path: string) {
+  await page.goto(path);
+  await waitForInteractivePage(page);
+}
+
 function formWithButton(page: Page, buttonName: string) {
   return page.locator("form").filter({
     has: page.getByRole("button", { name: buttonName, exact: true }),
@@ -193,6 +202,7 @@ function formWithButton(page: Page, buttonName: string) {
 }
 
 async function nominatePaymentReviewer(page: Page, reviewerId: string) {
+  await waitForInteractivePage(page);
   const form = page.locator("form").filter({
     has: page.getByRole("heading", {
       name: "Choose a reviewer for the disputed or unanswered receipt",
@@ -211,6 +221,7 @@ async function nominatePaymentReviewer(page: Page, reviewerId: string) {
 }
 
 async function nominatePaymentAppealReviewer(page: Page, reviewerId: string) {
+  await waitForInteractivePage(page);
   const form = page.locator("form").filter({
     has: page.getByRole("heading", {
       name: "Choose a different neutral reviewer",
@@ -229,6 +240,7 @@ async function nominatePaymentAppealReviewer(page: Page, reviewerId: string) {
 }
 
 async function reportExternalPayment(page: Page, reference: string) {
+  await waitForInteractivePage(page);
   const form = formWithButton(page, "Report external payment");
   await expect(form).toHaveCount(1);
   await form.locator('input[name="payment_provider"]').fill("QA bank");
@@ -251,6 +263,7 @@ async function recordPaymentReviewDecision(
   outcome: "allow_correction" | "confirm_paid" | "still_due",
   rationale: string,
 ) {
+  await waitForInteractivePage(page);
   const form = formWithButton(page, "Record payment-review decision");
   await expect(form).toHaveCount(1);
   await form
@@ -272,6 +285,7 @@ async function recordPaymentAppealDecision(
   outcome: "confirm_paid" | "still_due",
   rationale: string,
 ) {
+  await waitForInteractivePage(page);
   const form = formWithButton(page, "Record final payment-appeal decision");
   await expect(form).toHaveCount(1);
   await form
@@ -336,7 +350,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       const admin = await context(adminAal2.session, { width: 1440, height: 1000 });
 
       const outsiderPage = await outsider.newPage();
-      await outsiderPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(outsiderPage, `/trade-agreements/${IDS.agreement}`);
       await expect(
         outsiderPage.getByRole("heading", { name: "Unavailable", exact: true }),
       ).toBeVisible();
@@ -362,18 +376,18 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("passed outsider read/RPC denial");
 
       const reviewerAal1Page = await reviewerAal1.newPage();
-      await reviewerAal1Page.goto(`/trade-review/${IDS.milestone}`);
+      await gotoReady(reviewerAal1Page, `/trade-review/${IDS.milestone}`);
       await expect(
         reviewerAal1Page.getByText("Authenticator verification required", { exact: true }),
       ).toBeVisible();
 
       const adminAal1Page = await adminAal1.newPage();
-      await adminAal1Page.goto("/admin/trade-review");
+      await gotoReady(adminAal1Page, "/admin/trade-review");
       await expect(adminAal1Page.getByText("Operator access blocked", { exact: true })).toBeVisible();
       qaCheckpoint("passed reviewer and administrator AAL1 denials");
 
       const adminPage = await admin.newPage();
-      await adminPage.goto("/admin/trade-review");
+      await gotoReady(adminPage, "/admin/trade-review");
       await expect(
         adminPage.getByText("Profile-bound administrator grant with active AAL2 MFA.", {
           exact: true,
@@ -399,7 +413,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("completed MFA-gated administrator fallback");
 
       const payerPage = await payer.newPage();
-      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payerPage, `/trade-agreements/${IDS.agreement}`);
       await expect(
         payerPage.getByRole("heading", {
           name: "Record payment made outside Moral Trade",
@@ -410,7 +424,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("reported initial external payment on desktop");
 
       const payeePage = await payee.newPage();
-      await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payeePage, `/trade-agreements/${IDS.agreement}`);
       expect(
         await payeePage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
       ).toBe(true);
@@ -428,14 +442,14 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       );
       qaCheckpoint("disputed initial receipt on mobile");
 
-      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payerPage, `/trade-agreements/${IDS.agreement}`);
       await nominatePaymentReviewer(payerPage, IDS.reviewer);
-      await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payeePage, `/trade-agreements/${IDS.agreement}`);
       await nominatePaymentReviewer(payeePage, IDS.reviewer);
       qaCheckpoint("completed mutual payment-reviewer nomination");
 
       const reviewerPage = await reviewer.newPage();
-      await reviewerPage.goto(`/trade-review/${IDS.milestone}`);
+      await gotoReady(reviewerPage, `/trade-review/${IDS.milestone}`);
       await expect(
         reviewerPage.getByRole("heading", {
           name: "Decide whether the frozen external amount was paid.",
@@ -453,7 +467,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       );
       qaCheckpoint("allowed one corrected receipt");
 
-      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payerPage, `/trade-agreements/${IDS.agreement}`);
       await expect(
         payerPage.getByRole("heading", {
           name: "Submit the one permitted corrected receipt",
@@ -463,7 +477,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       await reportExternalPayment(payerPage, `correction-${Date.now()}`);
       qaCheckpoint("submitted corrected receipt with a fresh response window");
 
-      await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payeePage, `/trade-agreements/${IDS.agreement}`);
       const correctedResponseForm = formWithButton(payeePage, "Dispute payment report");
       await expect(correctedResponseForm).toHaveCount(1);
       await correctedResponseForm
@@ -478,7 +492,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       );
       qaCheckpoint("disputed corrected receipt on mobile");
 
-      await reviewerPage.goto(`/trade-review/${IDS.milestone}`);
+      await gotoReady(reviewerPage, `/trade-review/${IDS.milestone}`);
       await recordPaymentReviewDecision(
         reviewerPage,
         "still_due",
@@ -490,7 +504,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       );
       qaCheckpoint("recorded provisional still-due decision");
 
-      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payerPage, `/trade-agreements/${IDS.agreement}`);
       const appealRequestForm = formWithButton(payerPage, "Open the single payment appeal");
       await expect(appealRequestForm).toHaveCount(1);
       await appealRequestForm
@@ -528,12 +542,12 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("blocked original reviewer from deciding the appeal");
 
       await nominatePaymentAppealReviewer(payerPage, IDS.appealReviewer);
-      await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payeePage, `/trade-agreements/${IDS.agreement}`);
       await nominatePaymentAppealReviewer(payeePage, IDS.appealReviewer);
       qaCheckpoint("completed different-reviewer appeal nomination");
 
       const appealReviewerPage = await appealReviewer.newPage();
-      await appealReviewerPage.goto(`/trade-review/${IDS.milestone}`);
+      await gotoReady(appealReviewerPage, `/trade-review/${IDS.milestone}`);
       expect(
         await appealReviewerPage.evaluate(
           () => document.documentElement.scrollWidth <= window.innerWidth + 1,
@@ -553,7 +567,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       );
       qaCheckpoint("recorded final still-due appeal decision on mobile");
 
-      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payerPage, `/trade-agreements/${IDS.agreement}`);
       await expect(
         payerPage.getByRole("heading", {
           name: "Report a later external payment",
@@ -563,7 +577,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       await reportExternalPayment(payerPage, `cycle-2-${Date.now()}`);
       qaCheckpoint("reported a later external-payment cycle");
 
-      await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payeePage, `/trade-agreements/${IDS.agreement}`);
       await payeePage
         .getByRole("button", { name: "Confirm payment received", exact: true })
         .click();
@@ -573,7 +587,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       );
       qaCheckpoint("confirmed external payment on mobile");
 
-      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await gotoReady(payerPage, `/trade-agreements/${IDS.agreement}`);
       await expect(payerPage.getByText("Completed", { exact: true })).toBeVisible();
       await expect(payerPage.getByText("2.50 USD", { exact: true })).toBeVisible();
 
