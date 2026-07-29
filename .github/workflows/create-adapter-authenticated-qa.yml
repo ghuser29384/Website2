@@ -110,6 +110,30 @@ jobs:
           if email_old not in browser:
               raise SystemExit('Creator email-login transition was not found.')
           browser = browser.replace(email_old, email_new)
+
+          fixed_radio_old = '''    await frame.locator('input[name="poolFailureBonusType"][value="fixed"]').check({ force: true });'''
+          fixed_radio_new = '''    const fixedBonusOption = frame.locator('label.pool-choice-option:has(input[name="poolFailureBonusType"][value="fixed"]) > span');
+              await fixedBonusOption.click();
+              await assertEventually(
+                async () => frame.locator('input[name="poolFailureBonusType"][value="fixed"]').isChecked(),
+                "Fixed failure-bonus type did not become selected",
+              );'''
+          if browser.count(fixed_radio_old) != 1:
+              raise SystemExit('The fixed failure-bonus radio setup line was not found exactly once.')
+          browser = browser.replace(fixed_radio_old, fixed_radio_new)
+
+          formula_radio_old = '''    await frame.locator('input[name="poolFailureTimingMode"][value="formula"]').check({ force: true });'''
+          formula_radio_new = '''    await frame.locator("#timingControls").waitFor({ state: "visible", timeout: 10_000 });
+              const formulaTimingOption = frame.locator('label.pool-choice-option:has(input[name="poolFailureTimingMode"][value="formula"]) > span');
+              await formulaTimingOption.click();
+              await assertEventually(
+                async () => frame.locator('input[name="poolFailureTimingMode"][value="formula"]').isChecked(),
+                "Custom-formula timing mode did not become selected",
+              );'''
+          if browser.count(formula_radio_old) != 1:
+              raise SystemExit('The custom-formula timing radio setup line was not found exactly once.')
+          browser = browser.replace(formula_radio_old, formula_radio_new)
+
           browser_path.write_text(browser)
           PY
           chmod +x /tmp/run-create-adapter-qa.sh
@@ -151,4 +175,4 @@ jobs:
           QA_OUTCOME: ${{ steps.qa.outcome }}
         run: test "$QA_OUTCOME" = success
 
-# Uses the exact candidate Preview created with per-deployment isolated-QA runtime credentials.
+# Uses visible option labels for stylized radios and the exact credentialed candidate Preview.
