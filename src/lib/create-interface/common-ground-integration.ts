@@ -1,0 +1,109 @@
+const HEADER_COPY = [
+  "Create a pledge-swap, donation redirect, or public-goods pool.",
+  "Create a trade, redirect, or pool.",
+] as const;
+
+const REQUEST_COPY = [
+  "Choose Commitment, Skill, or Fund. If you choose Fund, also choose whether you are creating a pledge-swap, a donation redirect, or a dominant assurance contract pool.",
+  "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, shared-project pools, and threshold pools.",
+] as const;
+
+const FUND_KICKER = [
+  '<div class="fund-mode-kicker">If you chose Fund, choose the structure</div>',
+  '<div class="fund-mode-kicker">Choose a funding structure</div>',
+] as const;
+
+const THRESHOLD_POOL_CARD = `                <button type="button" class="fund-mode-choice" data-fund-mode="dac" aria-pressed="false">
+                  <span class="fund-mode-mark">Public-good pool</span>
+                  <strong>Dominant assurance contract pool</strong>
+                  <p>Either launch a new threshold pool or ask a counterparty to contribute to a pool that already exists.</p>
+                </button>`;
+
+const COMPACT_POOL_CARDS = `                <button type="button" class="fund-mode-choice" data-fund-mode="commonGround" aria-pressed="false">
+                  <span class="fund-mode-mark">Shared project</span>
+                  <strong>Common Ground Pool</strong>
+                  <p>Split one shared project across people who value it for different reasons.</p>
+                </button>
+                <button type="button" class="fund-mode-choice" data-fund-mode="dac" aria-pressed="false">
+                  <span class="fund-mode-mark">Threshold</span>
+                  <strong>Threshold pool</strong>
+                  <p>Fund only if a target is reached. Add a failure bonus only when needed.</p>
+                </button>`;
+
+const COMMON_GROUND_PANEL = `
+            <div class="common-ground-panel" id="commonGroundFields" hidden data-common-ground-create-integration-v1>
+              <div class="common-ground-toolbar">
+                <strong>Shared split</strong>
+                <button type="button" id="commonGroundExample">Reset example</button>
+              </div>
+              <div class="common-ground-top-grid">
+                <div class="offer-field">
+                  <label for="commonGroundTargetInput">Target</label>
+                  <div class="money-input-shell"><span>$</span><input id="commonGroundTargetInput" type="number" inputmode="decimal" min="0.01" step="0.01" value="10000.00" /><span>USD</span></div>
+                </div>
+                <div class="offer-field">
+                  <label for="commonGroundDeadlineInput">Deadline</label>
+                  <input id="commonGroundDeadlineInput" type="text" maxlength="100" placeholder="e.g. 30 September 2026, 23:59 UTC" />
+                </div>
+              </div>
+              <div class="common-ground-participants-head">
+                <span id="commonGroundParticipantCount">2 participants</span>
+                <button type="button" id="addCommonGroundParticipant">+ Add</button>
+              </div>
+              <div class="common-ground-participant-list" id="commonGroundParticipantList"></div>
+              <label class="common-ground-confirm">
+                <input type="checkbox" id="commonGroundBaselineConfirm" />
+                <span>These are honest no-pool defaults.</span>
+              </label>
+              <div class="common-ground-status" id="commonGroundStatus" role="status" aria-live="polite"></div>
+            </div>
+`;
+
+const ASSET_LINKS = `  <link rel="stylesheet" href="/moral-trade-create/common-ground.css" />
+`;
+const DEFERRED_SCRIPT = `  <script defer src="/moral-trade-create/common-ground.js"></script>
+`;
+
+function replaceExactlyOnce(source: string, oldValue: string, newValue: string, label: string) {
+  const firstIndex = source.indexOf(oldValue);
+  const lastIndex = source.lastIndexOf(oldValue);
+  if (firstIndex < 0 || firstIndex !== lastIndex) {
+    throw new Error(`The Create interface ${label} contract could not be located exactly once.`);
+  }
+  return source.replace(oldValue, newValue);
+}
+
+export function integrateCommonGroundCreateSource(source: string) {
+  if (source.includes("data-common-ground-create-integration-v1")) return source;
+
+  let integrated = source;
+  integrated = replaceExactlyOnce(integrated, HEADER_COPY[0], HEADER_COPY[1], "header-copy");
+  integrated = replaceExactlyOnce(integrated, REQUEST_COPY[0], REQUEST_COPY[1], "request-copy");
+  integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");
+  integrated = replaceExactlyOnce(
+    integrated,
+    THRESHOLD_POOL_CARD,
+    COMPACT_POOL_CARDS,
+    "funding-card",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    '            <div class="dac-terms-panel" id="dacCreateFields" hidden>',
+    `${COMMON_GROUND_PANEL}            <div class="dac-terms-panel" id="dacCreateFields" hidden>`,
+    "Common Ground panel",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    "</head>",
+    `${ASSET_LINKS}</head>`,
+    "stylesheet insertion",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    '  <script>\n    "use strict";',
+    `${DEFERRED_SCRIPT}  <script>\n    "use strict";`,
+    "deferred-script insertion",
+  );
+
+  return integrated;
+}
