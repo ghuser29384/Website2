@@ -12,54 +12,52 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
   diagnose:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 10
     steps:
-      - name: Check out exact candidate
+      - name: Check out QA operator branch
         uses: actions/checkout@v4
         with:
-          ref: 1a8dca60ea9f510bf8d8c232820d584097fd1f81
+          ref: ops/create-adapter-authenticated-qa-20260728
           fetch-depth: 0
+          persist-credentials: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
+      - name: Correct the verification heredoc boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
 
-      - name: Install dependencies
-        run: npm ci
+          path = Path('.github/workflows/create-adapter-authenticated-qa.yml')
+          text = path.read_text()
+          old = '''          verify_sql_start = verify_heredoc_index + len("<<'SQL'")'''
+          new = '''          verify_sql_start = runner.index("\\n", verify_heredoc_index) + 1'''
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one heredoc-start calculation; found {text.count(old)}.')
+          path.write_text(text.replace(old, new))
+          PY
+          git diff --check
+          git diff -- .github/workflows/create-adapter-authenticated-qa.yml
 
-      - name: Run focused tests with persistent log
-        id: focused
-        continue-on-error: true
-        run: >-
-          node --import tsx --test
-          src/lib/create-interface/*.test.ts
-          src/lib/command-center-handoff.test.ts
-          src/live-template-system.test.ts
-          src/lib/public-route-smoke.test.ts
-          > focused-tests.log 2>&1
+      - name: Commit and push the exact correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add .github/workflows/create-adapter-authenticated-qa.yml
+          git commit -m "Keep the psql heredoc pipeline outside verification SQL"
+          git push origin HEAD:ops/create-adapter-authenticated-qa-20260728
+          echo "PATCHED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
-      - name: Upload focused-test log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: create-adapter-focused-diagnostic-${{ github.run_id }}
-          path: focused-tests.log
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Print failing tail
-        if: always()
-        run: tail -n 260 focused-tests.log || true
-
-      - name: Preserve failure result
-        if: always()
+      - name: Report patch
         env:
-          OUTCOME: ${{ steps.focused.outcome }}
-        run: test "$OUTCOME" = success
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment 275 --body "Patched the authenticated Create QA runner at \`${PATCHED_SHA}\` so the psql heredoc pipeline remains shell syntax rather than SQL."
