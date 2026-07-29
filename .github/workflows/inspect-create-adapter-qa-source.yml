@@ -27,6 +27,8 @@ jobs:
           cat .github/qa/browser.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/create-adapter-qa-source/create-adapter-authenticated-qa.mjs
           bash -n /tmp/create-adapter-qa-source/run-create-adapter-qa.sh
           node --check /tmp/create-adapter-qa-source/create-adapter-authenticated-qa.mjs
+          grep -n -B 8 -A 12 'contributor cannot open creator receipt' /tmp/create-adapter-qa-source/create-adapter-authenticated-qa.mjs \
+            > /tmp/create-adapter-qa-source/contributor-receipt-assertion.txt
       - name: Upload decoded source
         uses: actions/upload-artifact@v4
         with:
@@ -37,4 +39,4 @@ jobs:
       - name: Report run
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr comment 273 --body "Decoded Create QA source inspection run \`${GITHUB_RUN_ID}\` completed."
+        run: gh pr comment 275 --body "Decoded Create QA source inspection run \`${GITHUB_RUN_ID}\` completed for the contributor receipt boundary."
