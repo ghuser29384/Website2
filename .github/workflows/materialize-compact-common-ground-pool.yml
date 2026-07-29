@@ -1,17 +1,22 @@
-# Registered on the preceding commit; this push intentionally triggers the guarded run.
 name: Materialize compact Common Ground Pool
 
 on:
   push:
     branches:
       - feature/create-common-ground-pool-compact-20260729
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/scripts/materialize-compact-common-ground-pool.py"
+      - ".github/workflows/materialize-compact-common-ground-pool.yml"
 
 permissions:
   contents: write
 
 concurrency:
   group: materialize-compact-common-ground-pool
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   materialize-and-verify:
@@ -28,7 +33,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REF_NAME}" = "feature/create-common-ground-pool-compact-20260729"
+          branch="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          test "$branch" = "feature/create-common-ground-pool-compact-20260729"
           git merge-base --is-ancestor d943f68baa47e9b27ef181fa493472015b168954 HEAD
           test -f .github/scripts/materialize-compact-common-ground-pool.py
           test -f .github/workflows/materialize-compact-common-ground-pool.yml
