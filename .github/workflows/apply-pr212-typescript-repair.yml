@@ -1,0 +1,86 @@
+name: Apply PR 212 absolute TypeScript repair
+
+on:
+  push:
+    branches:
+      - ops/pr212-absolute-gates-20260729
+    paths:
+      - .github/workflows/apply-pr212-typescript-repair.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-pr212-typescript-repair
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_HEAD: 9ad919bc281a9f701d4a5adfb518055c864393b3
+      EXPECTED_PATCH_SHA256: 7ad9ef54459296e38cd234c6938a1f5dbe72edd36fed8e0772e7cbc363314173
+    steps:
+      - name: Check out exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Verify head and apply exact repair patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          if [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then
+            echo "PR #212 moved: expected $EXPECTED_HEAD, got $actual_head" >&2
+            exit 1
+          fi
+
+          cat > /tmp/pr212-typescript-repair.patch.gz.b64 <<'PATCH'
+          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
+          PATCH
+          base64 --decode /tmp/pr212-typescript-repair.patch.gz.b64 | gzip --decompress > /tmp/pr212-typescript-repair.patch
+          echo "${EXPECTED_PATCH_SHA256}  /tmp/pr212-typescript-repair.patch" | sha256sum --check --strict
+          git apply --check /tmp/pr212-typescript-repair.patch
+          git apply /tmp/pr212-typescript-repair.patch
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Require absolute TypeScript success
+        run: npx tsc --noEmit --pretty false
+
+      - name: Commit exact repair to PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/app/how-it-works/page.tsx \
+            src/lib/crawlability.test.ts \
+            src/lib/discovery-ranking.test.ts \
+            src/lib/funding.test.ts \
+            src/lib/payments/conditional-state.test.ts \
+            src/lib/public-route-smoke.test.ts \
+            src/lib/x-profile-connector.test.ts \
+            tsconfig.json
+          git commit -m "Repair repository-wide TypeScript errors"
+          git push origin HEAD:feat/institutional-trade-system
