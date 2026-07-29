@@ -1,0 +1,324 @@
+name: Collective Commitments in Create integration QA
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-commitments-in-create-20260729
+    paths:
+      - ".github/scripts/collective-in-create-browser-qa.mjs"
+      - ".github/workflows/collective-in-create-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collective-in-create-qa-20260729
+  cancel-in-progress: false
+
+jobs:
+  repository-database-browser:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'qa/collective-in-create-20260729'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_PRODUCT_HEAD: 3ff0e2a6b5a4a9b344a388a255623f15f436ade2
+      PRODUCT_BRANCH: feature/collective-commitments-in-create-20260729
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      BROWSER_QA_BASE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      COLLECTIVE_COMMITMENTS_ENABLED: "true"
+      COLLECTIVE_COMMITMENT_MIN_DEADLINE_MINUTES: "60"
+      VERCEL_ENV: preview
+      NEXT_PUBLIC_VERCEL_ENV: preview
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-in-create-qa-artifacts
+      BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/collective-in-create-qa-artifacts/browser
+
+    steps:
+      - name: Validate exact repository, branch, and required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "qa/collective-in-create-20260729"
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_SUPABASE_DB_URL; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required GitHub Actions secret: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Check out exact QA head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact product head and QA-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$PRODUCT_BRANCH"
+          actual_product_head="$(git rev-parse "origin/$PRODUCT_BRANCH")"
+          if [[ "$actual_product_head" != "$EXPECTED_PRODUCT_HEAD" ]]; then
+            echo "Refusing moved product branch. Expected $EXPECTED_PRODUCT_HEAD, found $actual_product_head." >&2
+            exit 1
+          fi
+          test "$(git merge-base "$EXPECTED_PRODUCT_HEAD" HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+          changed="$(git diff --name-only "$EXPECTED_PRODUCT_HEAD"...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/collective-in-create-browser-qa.mjs' \
+            '.github/workflows/collective-in-create-qa.yml' | sort)"
+          if [[ "$changed" != "$expected" ]]; then
+            echo "Unexpected QA branch diff:" >&2
+            printf '%s\n' "$changed" >&2
+            exit 1
+          fi
+          mkdir -p "$ARTIFACT_DIR" "$BROWSER_QA_ARTIFACT_DIR"
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate isolated runtime secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          master_key="$(openssl rand -base64 32 | tr -d '\n')"
+          cron_secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$master_key"
+          echo "::add-mask::$cron_secret"
+          echo "COLLECTIVE_COMMITMENT_MASTER_KEY=$master_key" >> "$GITHUB_ENV"
+          echo "CRON_SECRET=$cron_secret" >> "$GITHUB_ENV"
+
+      - name: Run focused integration and security source contracts
+        shell: bash
+        run: |
+          set -o pipefail
+          node --import tsx --test \
+            src/lib/collective-commitments/types.test.ts \
+            src/collective-commitments-wiring.test.ts \
+            src/collective-commitments-mobile-subnav.test.ts \
+            src/collective-commitments-create-integration.test.ts \
+            2>&1 | tee "$ARTIFACT_DIR/focused-tests.log"
+
+          npx eslint \
+            .github/scripts/collective-in-create-browser-qa.mjs \
+            src/app/trades/new/page.tsx \
+            src/app/collective-commitments/actions.ts \
+            src/app/collective-commitments/page.tsx \
+            src/app/collective-commitments/new/page.tsx \
+            src/app/collective-commitments/identity/page.tsx \
+            'src/app/collective-commitments/[commitmentId]/page.tsx' \
+            src/components/create/create-interface-frame.tsx \
+            src/components/create/collective-create-workspace.tsx \
+            src/components/collective-commitments/collective-commitment-form.tsx \
+            src/components/collective-commitments/collective-commitment-shell.tsx \
+            src/components/collective-commitments/collective-signature-controls.tsx \
+            src/lib/collective-commitments/config.ts \
+            src/lib/collective-commitments/crypto.ts \
+            src/lib/collective-commitments/service.ts \
+            src/collective-commitments-wiring.test.ts \
+            src/collective-commitments-mobile-subnav.test.ts \
+            src/collective-commitments-create-integration.test.ts \
+            2>&1 | tee "$ARTIFACT_DIR/focused-eslint.log"
+
+      - name: Run complete repository tests and lint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$ARTIFACT_DIR/full-tests.log"
+          npm run lint 2>&1 | tee "$ARTIFACT_DIR/full-eslint.log"
+
+      - name: Verify migration version uniqueness
+        shell: bash
+        run: |
+          set -euo pipefail
+          duplicates="$(find supabase/migrations -maxdepth 1 -type f -printf '%f\n' \
+            | sed -E 's/^([0-9]+)_.*/\1/' \
+            | sort | uniq -d)"
+          if [[ -n "$duplicates" ]]; then
+            echo "Duplicate migration versions:" >&2
+            printf '%s\n' "$duplicates" >&2
+            exit 1
+          fi
+          test ! -e supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql
+          test -e supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql
+          printf 'migration_versions_unique=PASS\n' | tee "$ARTIFACT_DIR/migration-inventory.txt"
+
+      - name: Validate exact QA database and install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected = os.environ["EXPECTED_QA_REF"]
+          if expected not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL outside exact MoralTrade QA.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit(f"Refusing unexpected database host: {parsed.hostname}")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Run complete transactional Collective database regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/collective_identity_threshold_commitments.sql \
+            2>&1 | tee "$ARTIFACT_DIR/database-regression.log"
+          for marker in \
+            "PASS: duplicate-human and duplicate-account signatures are rejected" \
+            "PASS: withdrawal and re-signing preserve exact private counts" \
+            "PASS: incomplete or altered reveal manifests publish zero identities" \
+            "PASS: exact manifest activation publishes all names atomically and only opted-in affiliations" \
+            "PASS: activation and expiry erase private ciphertext and per-commitment keys" \
+            "PASS: frozen terms and direct sensitive-table access are denied"; do
+            grep -Fq "$marker" "$ARTIFACT_DIR/database-regression.log"
+          done
+
+      - name: Verify final activation function and access boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' \
+            > "$ARTIFACT_DIR/database-inventory.txt"
+          select case
+            when pg_get_functiondef(
+              'public.activate_collective_commitment_v1(uuid,uuid,jsonb,text)'::regprocedure
+            ) !~* 'jsonb_to_recordset\(p_manifest\)[[:space:]]+as[[:space:]]+manifest_record'
+              then 'FAIL:typed_manifest_recordset_missing'
+            when has_table_privilege('authenticated', 'public.collective_commitment_private_signatures', 'select')
+              then 'FAIL:private_signature_select'
+            when has_table_privilege('authenticated', 'public.collective_commitment_keys', 'select')
+              then 'FAIL:key_select'
+            when has_function_privilege(
+              'authenticated',
+              'public.activate_collective_commitment_v1(uuid,uuid,jsonb,text)',
+              'execute'
+            ) then 'FAIL:activation_execute'
+            when not has_function_privilege(
+              'service_role',
+              'public.activate_collective_commitment_v1(uuid,uuid,jsonb,text)',
+              'execute'
+            ) then 'FAIL:service_activation_execute'
+            else 'PASS'
+          end;
+          SQL
+          test "$(tr -d '[:space:]' < "$ARTIFACT_DIR/database-inventory.txt")" = "PASS"
+
+      - name: Build exact current-main integration candidate
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$ARTIFACT_DIR/build.log"
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact candidate locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          nohup npm start -- --hostname 127.0.0.1 --port 3000 \
+            > "$ARTIFACT_DIR/server.log" 2>&1 &
+          echo "APP_PID=$!" >> "$GITHUB_ENV"
+          ready=0
+          for _ in $(seq 1 120); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/trades/new >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != "1" ]]; then
+            cat "$ARTIFACT_DIR/server.log" >&2
+            exit 1
+          fi
+
+      - name: Run authenticated rendered Create integration workflow
+        run: node .github/scripts/collective-in-create-browser-qa.mjs
+
+      - name: Verify browser audit and exact cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          audit="$BROWSER_QA_ARTIFACT_DIR/audit.json"
+          test -s "$audit"
+          jq -e '.outcome == "pass"' "$audit" >/dev/null
+          jq -e '[.checks[] | select(.outcome != "pass")] | length == 0' "$audit" >/dev/null
+          jq -e '.cleanup.completed == true' "$audit" >/dev/null
+          jq -e '.cleanup.remaining | to_entries | all(.value == 0)' "$audit" >/dev/null
+          jq -e '.diagnostics.consoleErrors | length == 0' "$audit" >/dev/null
+          jq -e '.diagnostics.pageErrors | length == 0' "$audit" >/dev/null
+          jq -e '.diagnostics.failedRequests | length == 0' "$audit" >/dev/null
+          jq -e '.diagnostics.errorResponses | length == 0' "$audit" >/dev/null
+          jq -e '.screenshots | length >= 6' "$audit" >/dev/null
+
+          if grep -E \
+            'Missing COLLECTIVE_COMMITMENT_MASTER_KEY|Collective commitments are disabled|permission denied for table|Unhandled|FATAL' \
+            "$ARTIFACT_DIR/server.log"; then
+            echo "Detected a prohibited runtime failure." >&2
+            exit 1
+          fi
+
+      - name: Record sanitized result
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$ARTIFACT_DIR/result.txt" <<RESULT
+          product_head=${EXPECTED_PRODUCT_HEAD}
+          canonical_create_route=/trades/new?mode=collective
+          four_create_modes=PASS
+          authenticated_collective_workspace=PASS
+          create_commitment_from_integrated_form=PASS
+          exact_terms_record_route=PASS
+          legacy_entries_redirect_into_create=PASS
+          desktop_render=PASS
+          mobile_390x844=PASS
+          mobile_320x568=PASS
+          full_repository_tests=PASS
+          full_repository_lint=PASS
+          production_build=PASS
+          database_regression=PASS
+          exact_cleanup=PASS
+          production_changed=NO
+          RESULT
+
+      - name: Upload complete QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-in-create-qa-${{ github.run_id }}
+          path: collective-in-create-qa-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Stop local application
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${APP_PID:-}" ]]; then
+            kill "$APP_PID" 2>/dev/null || true
+          fi
