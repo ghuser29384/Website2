@@ -237,6 +237,13 @@ jobs:
               record("contributor cannot open creator receipt", Boolean(contributorReceiptResponse && contributorReceiptResponse.status() === 404), String(contributorReceiptResponse?.status()));
               record("contributor denial leaks no marker", !(await contributorPage.locator("body").innerText()).includes(marker));'''
           contributor_denial_new = '''    const contributorReceiptResponse = await contributorPage.goto(receipt.canonicalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+              if (contributorReceiptResponse?.status() !== 404) {
+                await contributorPage.waitForFunction(
+                  () => /route is not available as a backed Moral Trade record/i.test(document.body?.innerText || ""),
+                  null,
+                  { timeout: 30_000 },
+                );
+              }
               const contributorReceiptBody = await contributorPage.locator("body").innerText();
               const contributorDenied = Boolean(
                 contributorReceiptResponse && (
@@ -265,6 +272,13 @@ jobs:
               record("outsider denial leaks no submission id", !outsiderBody.includes(receipt.submissionId));
               record("outsider denial leaks no marker", !outsiderBody.includes(marker));'''
           outsider_denial_new = '''    const outsiderReceiptResponse = await outsiderPage.goto(receipt.canonicalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+              if (outsiderReceiptResponse?.status() !== 404) {
+                await outsiderPage.waitForFunction(
+                  () => /route is not available as a backed Moral Trade record/i.test(document.body?.innerText || ""),
+                  null,
+                  { timeout: 30_000 },
+                );
+              }
               const outsiderBody = await outsiderPage.locator("body").innerText();
               const outsiderDenied = Boolean(
                 outsiderReceiptResponse && (
@@ -353,5 +367,5 @@ jobs:
           test "$QA_OUTCOME" = success
           test "$BYPASS_CLEANUP_OUTCOME" = success
 
-# Passes browser identities into PL/pgSQL through session-local custom settings because
-# psql variables are not substituted inside dollar-quoted DO blocks; cleanup remains exact.
+# Waits for streamed fail-closed receipt content before asserting semantic denial, while
+# preserving exact database, Vercel-bypass, cleanup, and zero-residue requirements.
