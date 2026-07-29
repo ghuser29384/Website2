@@ -1,0 +1,30 @@
+name: Diagnose LocalDateTime paths
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-commitments-in-create-20260729
+    paths:
+      - ".github/workflows/diagnose-local-date-time.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.head_ref == 'diag/local-date-time-path-20260729'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Locate date components and route smoke expectations
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== paths ==='
+          find src -type f | grep -Ei 'local.*date|date.*time|time.*date' || true
+          echo '=== LocalDateTime references ==='
+          grep -R -n --include='*.tsx' --include='*.ts' 'LocalDateTime' src || true
+          echo '=== public route smoke create section ==='
+          grep -n -A35 -B20 'create trade route family' src/lib/public-route-smoke.test.ts || true
