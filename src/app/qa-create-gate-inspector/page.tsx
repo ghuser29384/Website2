@@ -10,7 +10,7 @@ const TARGETS = [
   },
   {
     label: "authenticated",
-    head: "fef478083c2ce5c69d8c07060e233d0eb343dc21",
+    head: "7543bed8be511f6fff154a164365cd7801341117",
     workflow: "Authenticated Create adapter isolated-QA release gate",
   },
 ] as const;
