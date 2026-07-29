@@ -41,9 +41,8 @@ jobs:
           path = Path("src/lib/smart-query-llm.ts")
           text = path.read_text()
 
-          old_non_ok = """    if (!response.ok) return fallback;
-          """.replace("          ", "")
-          new_non_ok = """    if (!response.ok) {
+          old_non_ok = "    if (!response.ok) return fallback;\n"
+          new_non_ok = '''    if (!response.ok) {
             let errorPayload: unknown = null;
             try {
               errorPayload = await response.json() as unknown;
@@ -66,18 +65,19 @@ jobs:
             });
             return fallback;
           }
-          """.replace("          ", "")
+          '''.replace("          ", "")
           if old_non_ok not in text:
             raise SystemExit("non-OK fallback statement not found")
           text = text.replace(old_non_ok, new_non_ok, 1)
 
-          old_no_text = """    const payload = await response.json() as unknown;
-            const text = extractResponseText(payload);
-            if (!text) return fallback;
-            const resolution = cleanResolution(JSON.parse(text) as unknown);
-            if (!resolution) return fallback;
-          """.replace("          ", "")
-          new_no_text = """    const payload = await response.json() as unknown;
+          old_no_text = (
+            "    const payload = await response.json() as unknown;\n"
+            "    const text = extractResponseText(payload);\n"
+            "    if (!text) return fallback;\n"
+            "    const resolution = cleanResolution(JSON.parse(text) as unknown);\n"
+            "    if (!resolution) return fallback;\n"
+          )
+          new_no_text = '''    const payload = await response.json() as unknown;
             const outputText = extractResponseText(payload);
             if (!outputText) {
               const responseRecord = payload && typeof payload === "object" && !Array.isArray(payload)
@@ -109,22 +109,20 @@ jobs:
               console.warn("[smart-query-llm] invalid_structured_resolution");
               return fallback;
             }
-          """.replace("          ", "")
+          '''.replace("          ", "")
           if old_no_text not in text:
             raise SystemExit("payload parsing block not found")
           text = text.replace(old_no_text, new_no_text, 1)
 
-          old_catch = """  } catch {
-              return fallback;
-          """.replace("          ", "")
-          new_catch = """  } catch (error) {
+          old_catch = "  } catch {\n    return fallback;\n"
+          new_catch = '''  } catch (error) {
               // Operational metadata only: never log the key, query, prompt, or provider message.
               // eslint-disable-next-line no-console
               console.warn("[smart-query-llm] request_exception", {
                 name: error instanceof Error ? error.name : "unknown",
               });
               return fallback;
-          """.replace("          ", "")
+          '''.replace("          ", "")
           if old_catch not in text:
             raise SystemExit("resolver catch block not found")
           text = text.replace(old_catch, new_catch, 1)
