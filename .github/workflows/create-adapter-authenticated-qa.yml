@@ -208,7 +208,7 @@ jobs:
               const contributorDenied = Boolean(
                 contributorReceiptResponse && (
                   contributorReceiptResponse.status() === 404
-                  || /(?:404|not found|could not be found)/i.test(contributorReceiptBody)
+                  || /(?:404|not found|could not be found|route is not available as a backed Moral Trade record)/i.test(contributorReceiptBody)
                 )
               );
               record(
@@ -236,7 +236,7 @@ jobs:
               const outsiderDenied = Boolean(
                 outsiderReceiptResponse && (
                   outsiderReceiptResponse.status() === 404
-                  || /(?:404|not found|could not be found)/i.test(outsiderBody)
+                  || /(?:404|not found|could not be found|route is not available as a backed Moral Trade record)/i.test(outsiderBody)
                 )
               );
               record(
@@ -320,6 +320,5 @@ jobs:
           test "$QA_OUTCOME" = success
           test "$BYPASS_CLEANUP_OUTCOME" = success
 
-# Validates denial semantically as well as by status because streamed Next.js not-found
-# responses may have an HTTP 200 after headers are committed. Any receipt identifier or
-# marker in the denied body still fails the release gate.
+# Validates private receipt denial using the exact fail-closed UI as well as HTTP 404,
+# while independently requiring that neither the submission identifier nor QA marker leaks.
