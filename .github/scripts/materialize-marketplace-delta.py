@@ -813,7 +813,7 @@ def patch_offers_page() -> None:
     source = replace_once(
         source,
         '''              {livePage.total.toLocaleString()} live proposal{livePage.total === 1 ? "" : "s"} in the
-               current result set. Open a record to review its complete terms and evidence state.
+              current result set. Open a record to review its complete terms and evidence state.
 ''',
         '''              {participantGroups.length.toLocaleString()} participant{participantGroups.length === 1 ? "" : "s"}
                across {livePage.items.length.toLocaleString()} exact proposal{livePage.items.length === 1 ? "" : "s"}
