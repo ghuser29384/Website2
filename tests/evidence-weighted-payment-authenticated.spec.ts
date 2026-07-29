@@ -299,9 +299,11 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
 
       const adminPage = await admin.newPage();
       await adminPage.goto("/admin/trade-review");
-      await expect(adminPage.getByText("Profile-bound administrator access verified at AAL2.", {
-        exact: true,
-      })).toBeVisible();
+      await expect(
+        adminPage.getByText("Profile-bound administrator grant with active AAL2 MFA.", {
+          exact: true,
+        }),
+      ).toBeVisible();
       const adminFallbackForm = adminPage
         .locator("form")
         .filter({
