@@ -1,0 +1,70 @@
+name: Inspect prior A1 smoke structure
+
+on:
+  push:
+    branches:
+      - qa/home-authenticated-feed-20260727
+    paths:
+      - .qa/inspect-a1-smoke-trigger.txt
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out workbench
+        uses: actions/checkout@v4
+        with:
+          ref: qa/home-authenticated-feed-20260727
+          path: report
+          fetch-depth: 0
+
+      - name: Check out prior smoke branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/a1-production-smoke-20260725
+          path: source
+          fetch-depth: 1
+
+      - name: Decode and inspect structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode source/.a1-production-smoke/final.gz.b64 | gzip -d > /tmp/a1-smoke.mjs
+          python3 - <<'PY' > report/.qa-results/a1-smoke-structure.txt
+          from pathlib import Path
+          import re
+          source = Path('/tmp/a1-smoke.mjs').read_text()
+          lines = source.splitlines()
+          print('line_count=', len(lines))
+          print('\nFUNCTIONS')
+          for i, line in enumerate(lines, 1):
+              if re.match(r'^(?:async )?function\s+', line):
+                  print(f'{i}: {line}')
+          patterns = ['/feed', 'cleanupSyntheticData', 'async function main', 'await browser.close', 'page.goto', 'data-opportunity-id', 'exposureRequestId']
+          for pattern in patterns:
+              print(f'\n=== {pattern} ===')
+              hits = [i for i, line in enumerate(lines) if pattern in line]
+              for hit in hits[:12]:
+                  start=max(0, hit-10); end=min(len(lines), hit+18)
+                  print(f'--- lines {start+1}-{end} ---')
+                  for n in range(start,end):
+                      print(f'{n+1}: {lines[n]}')
+          print('\nTAIL')
+          for n in range(max(0,len(lines)-100),len(lines)):
+              print(f'{n+1}: {lines[n]}')
+          PY
+
+      - name: Publish structure report
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd report
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .qa-results/a1-smoke-structure.txt
+          git commit -m "Record prior A1 smoke structure" || true
+          git push origin HEAD:qa/home-authenticated-feed-20260727
