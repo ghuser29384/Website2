@@ -28,6 +28,6 @@ test("the duplicate website2 project receives no A1 training cron", () => {
   assert.deepEqual(trainingCrons(DUPLICATE_WEBSITE2_PROJECT_ID), []);
 });
 
-test("unidentified local configuration retains the canonical schedule", () => {
-  assert.equal(trainingCrons(undefined).length, 1);
+test("an explicitly unidentified local configuration retains the canonical schedule", () => {
+  assert.equal(trainingCrons(null).length, 1);
 });
