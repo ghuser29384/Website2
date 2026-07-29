@@ -208,3 +208,20 @@ test("participant, reviewer, and administrator surfaces expose every payment tra
     /adminAssignTradePaymentAppealReviewerAction/,
   );
 });
+
+test("authenticated workflow and authorization states remain visibly rendered", () => {
+  const agreementPage = source(
+    "src/app/trade-agreements/[agreementId]/page.tsx",
+  );
+  const reviewerPage = source("src/app/trade-review/[milestoneId]/page.tsx");
+  const administratorPage = source("src/app/admin/trade-review/page.tsx");
+  const styles = source("src/app/globals.css");
+
+  for (const page of [agreementPage, reviewerPage, administratorPage]) {
+    assert.match(page, /marketplace-app-shell trade-workflow-shell/);
+  }
+  assert.match(
+    styles,
+    /\.trade-workflow-shell\.marketplace-app-shell #main-content > \.section\s*{\s*display:\s*block;/,
+  );
+});

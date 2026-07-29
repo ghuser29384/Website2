@@ -112,7 +112,7 @@ export default async function TradeAgreementPage({
 
   if (!version) {
     return (
-      <div className="page-shell marketplace-app-shell">
+      <div className="page-shell marketplace-app-shell trade-workflow-shell">
         <main id="main-content" tabIndex={-1}>
           <section className="section section-white">
             <div className="status-banner status-banner-error">
@@ -166,7 +166,7 @@ export default async function TradeAgreementPage({
   });
 
   return (
-    <div className="marketplace-app-shell">
+    <div className="marketplace-app-shell trade-workflow-shell">
       <div id="main-content" tabIndex={-1}>
         <TradeAgreementStage
           acceptedEvidenceCount={acceptedEvidenceCount}

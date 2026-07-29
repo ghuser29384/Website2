@@ -49,7 +49,7 @@ export default async function TradeReviewPage({
   const viewer = await requireViewer(returnTo);
   if (security.verifiedTotpCount < 1 || security.currentLevel !== "aal2") {
     return (
-      <div className="page-shell marketplace-app-shell">
+      <div className="page-shell marketplace-app-shell trade-workflow-shell">
         <header className="v72-route-header">
           <SiteTopbar
             brandHref="/"
@@ -223,7 +223,7 @@ export default async function TradeReviewPage({
       : null;
 
     return (
-      <div className="page-shell marketplace-app-shell">
+      <div className="page-shell marketplace-app-shell trade-workflow-shell">
         <header className="v72-route-header">
           <SiteTopbar
             brandHref="/"
@@ -439,7 +439,7 @@ export default async function TradeReviewPage({
   }
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className="page-shell marketplace-app-shell trade-workflow-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"

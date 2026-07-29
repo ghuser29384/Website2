@@ -142,7 +142,7 @@ export default async function TradeReviewPage({ searchParams }: TradeReviewPageP
   const paymentAppealFallbacks = paymentAppealFallbacksResult.data ?? [];
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className="page-shell marketplace-app-shell trade-workflow-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"

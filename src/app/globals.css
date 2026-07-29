@@ -14173,6 +14173,10 @@ pre,
   display: none;
 }
 
+.trade-workflow-shell.marketplace-app-shell #main-content > .section {
+  display: block;
+}
+
 .offer-create-shell.marketplace-app-shell #main-content > .section {
   display: block;
 }
