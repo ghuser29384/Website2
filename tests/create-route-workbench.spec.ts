@@ -118,6 +118,7 @@ test.describe("Create route workbench", () => {
       await mkdir(captureDirectory, { recursive: true });
       await prepareForVisualCapture(page);
       await captureFrame(create, "implementation-common-ground-mobile.png");
+      await page.setViewportSize({ width: 390, height: 2200 });
       await captureCommonGroundPanel(create, "implementation-common-ground-panel-mobile.png");
     }
   });
