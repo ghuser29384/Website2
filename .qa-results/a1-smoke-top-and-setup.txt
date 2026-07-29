@@ -1,0 +1,605 @@
+===== TOP lines 1-120 =====
+1: import assert from 'node:assert/strict';
+2: import { execFileSync } from 'node:child_process';
+3: import { createHash, randomUUID } from 'node:crypto';
+4: import { mkdir, writeFile } from 'node:fs/promises';
+5: import path from 'node:path';
+6: import { chromium } from '@playwright/test';
+7: 
+8: const required = (name) => {
+9:   const value = String(process.env[name] ?? '').trim();
+10:   if (!value) throw new Error(`Missing required environment variable: ${name}`);
+11:   return value;
+12: };
+13: 
+14: const BASE_URL = required('A1_SMOKE_BASE_URL').replace(/\/$/, '');
+15: const DB_URL = required('PROD_SUPABASE_DB_URL');
+16: const PASSWORD = required('QA_TEST_PASSWORD');
+17: const CRON_SECRET = required('CRON_SECRET');
+18: const RUN_ID = required('GITHUB_RUN_ID');
+19: const OUTPUT_DIR = process.env.A1_SMOKE_OUTPUT_DIR || 'a1-production-smoke-evidence';
+20: const RUN_TAG = `a1-prod-smoke-${RUN_ID}`;
+21: const DAY = new Date().toISOString().slice(0, 10);
+22: const EXPERIMENT_KEY = 'pareto-nondirect-holdout-v1';
+23: const MODEL_VERSION = 'pareto-causal-v1';
+24: const CAUSE = 'Animal welfare';
+25: 
+26: await mkdir(OUTPUT_DIR, { recursive: true });
+27: 
+28: const databaseUrl = new URL(DB_URL);
+29: const postgresEnv = {
+30:   ...process.env,
+31:   PGDATABASE: decodeURIComponent(databaseUrl.pathname.replace(/^\//, '')),
+32:   PGHOST: databaseUrl.hostname,
+33:   PGPASSWORD: decodeURIComponent(databaseUrl.password),
+34:   PGPORT: databaseUrl.port || '5432',
+35:   PGSSLMODE: databaseUrl.searchParams.get('sslmode') || 'require',
+36:   PGUSER: decodeURIComponent(databaseUrl.username),
+37: };
+38: 
+39: function sql(query) {
+40:   return execFileSync('psql', ['-v', 'ON_ERROR_STOP=1', '-At', '-c', query], {
+41:     encoding: 'utf8',
+42:     env: postgresEnv,
+43:     maxBuffer: 20 * 1024 * 1024,
+44:   }).trim();
+45: }
+46: 
+47: function quote(value) {
+48:   return `'${String(value).replaceAll("'", "''")}'`;
+49: }
+50: 
+51: function stableHash32(value) {
+52:   let hash = 2_166_136_261;
+53:   for (let index = 0; index < value.length; index += 1) {
+54:     hash ^= value.charCodeAt(index);
+55:     hash = Math.imul(hash, 16_777_619);
+56:   }
+57:   return hash >>> 0;
+58: }
+59: 
+60: function assignedViewerId() {
+61:   for (let attempt = 0; attempt < 100_000; attempt += 1) {
+62:     const id = randomUUID();
+63:     const bucket = stableHash32(`${EXPERIMENT_KEY}:${id}:${DAY}`) % 10_000;
+64:     const treatment = stableHash32(`arm:${id}:${DAY}`) % 2 === 0;
+65:     if (bucket < 500 && treatment) return { id, bucket };
+66:   }
+67:   throw new Error('Unable to derive a deterministic 5% treatment-profile UUID.');
+68: }
+69: 
+70: const selectedViewer = assignedViewerId();
+71: const ids = {
+72:   viewer: selectedViewer.id,
+73:   owner: randomUUID(),
+74:   offer: randomUUID(),
+75:   interest: randomUUID(),
+76:   agreement: randomUUID(),
+77:   version: randomUUID(),
+78:   thread: randomUUID(),
+79:   evidence: randomUUID(),
+80: };
+81: const emails = {
+82:   viewer: `a1.${RUN_TAG}.viewer@example.com`,
+83:   owner: `a1.${RUN_TAG}.owner@example.com`,
+84: };
+85: const termsHash = createHash('sha256').update(`${RUN_TAG}:${ids.agreement}`).digest('hex');
+86: const result = {
+87:   baseUrl: BASE_URL,
+88:   day: DAY,
+89:   runId: RUN_ID,
+90:   runTag: RUN_TAG,
+91:   deterministicAssignment: {
+92:     expectedArm: 'treatment',
+93:     expectedStableBucket: selectedViewer.bucket,
+94:   },
+95:   ids,
+96:   checks: {},
+97:   screenshots: [],
+98:   network: { pageErrors: [], serverErrors: [] },
+99: };
+100: 
+101: function sanitizeError(error) {
+102:   const raw = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
+103:   return [DB_URL, PASSWORD, CRON_SECRET]
+104:     .filter(Boolean)
+105:     .reduce((text, secret) => text.replaceAll(secret, '[redacted]'), raw)
+106:     .slice(0, 30_000);
+107: }
+108: 
+109: function createSyntheticUsersAndOffer() {
+110:   const allocations = JSON.stringify([
+111:     { label: CAUSE, causeArea: CAUSE, share: 100, sparks: 100, rank: 1 },
+112:   ]);
+113:   sql(`
+114:     begin;
+115: 
+116:     insert into auth.users (
+117:       instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,
+118:       confirmation_token,recovery_token,email_change_token_new,email_change_token_current,
+119:       email_change,email_change_confirm_status,raw_app_meta_data,raw_user_meta_data,
+120:       is_super_admin,created_at,updated_at,is_sso_user,is_anonymous
+
+===== SETUP lines 100-285 =====
+100: 
+101: function sanitizeError(error) {
+102:   const raw = error instanceof Error ? `${error.message}\n${error.stack ?? ''}` : String(error);
+103:   return [DB_URL, PASSWORD, CRON_SECRET]
+104:     .filter(Boolean)
+105:     .reduce((text, secret) => text.replaceAll(secret, '[redacted]'), raw)
+106:     .slice(0, 30_000);
+107: }
+108: 
+109: function createSyntheticUsersAndOffer() {
+110:   const allocations = JSON.stringify([
+111:     { label: CAUSE, causeArea: CAUSE, share: 100, sparks: 100, rank: 1 },
+112:   ]);
+113:   sql(`
+114:     begin;
+115: 
+116:     insert into auth.users (
+117:       instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,
+118:       confirmation_token,recovery_token,email_change_token_new,email_change_token_current,
+119:       email_change,email_change_confirm_status,raw_app_meta_data,raw_user_meta_data,
+120:       is_super_admin,created_at,updated_at,is_sso_user,is_anonymous
+121:     ) values
+122:     (
+123:       '00000000-0000-0000-0000-000000000000'::uuid,
+124:       ${quote(ids.viewer)}::uuid,
+125:       'authenticated','authenticated',${quote(emails.viewer)},
+126:       extensions.crypt(${quote(PASSWORD)}, extensions.gen_salt('bf')),
+127:       now(),'','','','', '',0,
+128:       '{"provider":"email","providers":["email"]}'::jsonb,
+129:       jsonb_build_object(
+130:         'sub',${quote(ids.viewer)},'email',${quote(emails.viewer)},
+131:         'email_verified',true,'phone_verified',false,'public_location_granularity','hidden'
+132:       ),
+133:       false,now(),now(),false,false
+134:     ),
+135:     (
+136:       '00000000-0000-0000-0000-000000000000'::uuid,
+137:       ${quote(ids.owner)}::uuid,
+138:       'authenticated','authenticated',${quote(emails.owner)},
+139:       extensions.crypt(${quote(PASSWORD)}, extensions.gen_salt('bf')),
+140:       now(),'','','','', '',0,
+141:       '{"provider":"email","providers":["email"]}'::jsonb,
+142:       jsonb_build_object(
+143:         'sub',${quote(ids.owner)},'email',${quote(emails.owner)},
+144:         'email_verified',true,'phone_verified',false,'public_location_granularity','hidden'
+145:       ),
+146:       false,now(),now(),false,false
+147:     );
+148: 
+149:     insert into auth.identities (
+150:       id,provider_id,user_id,identity_data,provider,last_sign_in_at,created_at,updated_at
+151:     ) values
+152:     (
+153:       gen_random_uuid(),${quote(ids.viewer)},${quote(ids.viewer)}::uuid,
+154:       jsonb_build_object(
+155:         'sub',${quote(ids.viewer)},'email',${quote(emails.viewer)},
+156:         'email_verified',true,'phone_verified',false
+157:       ),
+158:       'email',now(),now(),now()
+159:     ),
+160:     (
+161:       gen_random_uuid(),${quote(ids.owner)},${quote(ids.owner)}::uuid,
+162:       jsonb_build_object(
+163:         'sub',${quote(ids.owner)},'email',${quote(emails.owner)},
+164:         'email_verified',true,'phone_verified',false
+165:       ),
+166:       'email',now(),now(),now()
+167:     );
+168: 
+169:     update public.profiles set display_name='A1 smoke viewer' where id=${quote(ids.viewer)}::uuid;
+170:     update public.profiles set display_name='A1 smoke owner' where id=${quote(ids.owner)}::uuid;
+171: 
+172:     insert into public.wish_profiles (
+173:       profile_id,participant_kind,causes,capabilities,constraints,verification_preferences,
+174:       uncertainty_notes,openness_to_payment,openness_to_pledges,background_search_enabled,
+175:       notification_dashboard_enabled,privacy_stage,is_discoverable,share_public_preview,
+176:       safety_status
+177:     ) values (
+178:       ${quote(ids.viewer)}::uuid,'individual',array[${quote(CAUSE)}]::text[],
+179:       'Can review a bounded public-safe research summary.',
+180:       'Synthetic production smoke profile; no monetary commitment.',
+181:       'Private participant attestation','Synthetic bounded test only',false,true,true,true,
+182:       'broad',true,true,'clear'
+183:     ) on conflict (profile_id) do update set
+184:       causes=excluded.causes,
+185:       openness_to_payment=excluded.openness_to_payment,
+186:       openness_to_pledges=excluded.openness_to_pledges,
+187:       updated_at=now();
+188: 
+189:     insert into public.cohort_onboarding_profiles (
+190:       profile_id,primary_goal,participant_kind,first_action,cause_areas,invite_target,
+191:       referral_source,status,completed_at,priority_allocations
+192:     ) values (
+193:       ${quote(ids.viewer)}::uuid,
+194:       'Verify the production A1 outcome-learning loop','individual','Review a live opportunity',
+195:       array[${quote(CAUSE)}]::text[],'A1 synthetic counterparty','A1 production smoke',
+196:       'completed',now(),${quote(allocations)}::jsonb
+197:     ) on conflict (profile_id) do update set
+198:       primary_goal=excluded.primary_goal,
+199:       participant_kind=excluded.participant_kind,
+200:       first_action=excluded.first_action,
+201:       cause_areas=excluded.cause_areas,
+202:       status='completed',completed_at=now(),priority_allocations=excluded.priority_allocations,
+203:       updated_at=now();
+204: 
+205:     insert into public.cohort_onboarding_profiles (
+206:       profile_id,primary_goal,participant_kind,first_action,cause_areas,invite_target,
+207:       referral_source,status,completed_at,priority_allocations
+208:     ) values (
+209:       ${quote(ids.owner)}::uuid,
+210:       'Provide a synthetic production opportunity','individual','Publish one bounded offer',
+211:       array[${quote(CAUSE)}]::text[],'A1 synthetic viewer','A1 production smoke',
+212:       'completed',now(),${quote(allocations)}::jsonb
+213:     ) on conflict (profile_id) do update set
+214:       primary_goal=excluded.primary_goal,
+215:       participant_kind=excluded.participant_kind,
+216:       first_action=excluded.first_action,
+217:       cause_areas=excluded.cause_areas,
+218:       status='completed',completed_at=now(),priority_allocations=excluded.priority_allocations,
+219:       updated_at=now();
+220: 
+221:     insert into public.recommendation_interactions (
+222:       profile_id,opportunity_type,opportunity_id,event_type,benefit_causes,action_causes,
+223:       action_key,action_label,inferred_difficulty,dwell_ms,idempotency_key,metadata,occurred_at,created_at
+224:     ) values
+225:     (
+226:       ${quote(ids.viewer)}::uuid,'offer',${quote(ids.offer)},'hard',
+227:       array[${quote(CAUSE)}]::text[],array['Research communication']::text[],
+228:       'work:knowledge','Produce research or skilled work',5,0,
+229:       ${quote(`${RUN_TAG}:hard:1`)},jsonb_build_object('syntheticSmoke',true),now() - interval '2 seconds',now()
+230:     ),
+231:     (
+232:       ${quote(ids.viewer)}::uuid,'offer',${quote(ids.offer)},'hard',
+233:       array[${quote(CAUSE)}]::text[],array['Research communication']::text[],
+234:       'work:knowledge','Produce research or skilled work',5,0,
+235:       ${quote(`${RUN_TAG}:hard:2`)},jsonb_build_object('syntheticSmoke',true),now() - interval '1 second',now()
+236:     );
+237: 
+238:     insert into public.offers (
+239:       id,owner_id,owner_alias,mode,offered_cause,requested_cause,offer_action,request_action,
+240:       compromise_cause,offer_impact,min_counterparty_impact,verification,duration,trust_level,
+241:       notes,discount_note,status,workflow_status,moderation_reason,submission_key,fingerprint,
+242:       no_trade_baseline,start_date,exit_conditions,maximum_burden,privacy_scope,evidence_due_date,
+243:       submitted_at,published_at,terms_version,created_at,updated_at
+244:     ) values (
+245:       ${quote(ids.offer)}::uuid,${quote(ids.owner)}::uuid,'A1 smoke owner','pledge',
+246:       ${quote(CAUSE)},'Research communication',
+247:       ${quote(`Produce one five-sentence public-safe animal-welfare summary for ${RUN_TAG}.`)},
+248:       ${quote(`Complete one demanding but reversible 100-hour synthetic research task for ${RUN_TAG}.`)},
+249:       'Not needed',5,1,
+250:       'Private participant attestation plus accepted public-safe evidence.','7 days',5,
+251:       ${quote(`SYNTHETIC_A1_PRODUCTION_SMOKE_${RUN_TAG}`)},'',
+252:       'open','published','',${quote(RUN_TAG)},${quote(RUN_TAG)},
+253:       'Without this synthetic trade, neither bounded action occurs.',current_date,
+254:       'Either participant may end future synthetic obligations.',
+255:       'Synthetic test only; no payment, donation, health risk, or sensitive data.',
+256:       'Participants and operator only',current_date + 14,
+257:       now(),now(),1,now(),now()
+258:     );
+259: 
+260:     commit;
+261:   `);
+262: 
+263:   const profiles = Number(sql(`select count(*) from public.profiles where id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);`) || '0');
+264:   assert.equal(profiles, 2, 'Synthetic auth users did not create both production profiles.');
+265: }
+266: 
+267: function createCompletedOutcomeRecords() {
+268:   sql(`
+269:     begin;
+270: 
+271:     insert into public.trade_threads (
+272:       id,offer_id,agreement_id,participant_a,participant_b,status,last_message_at,created_at,updated_at
+273:     ) values (
+274:       ${quote(ids.thread)}::uuid,${quote(ids.offer)}::uuid,null,
+275:       ${quote(ids.owner)}::uuid,${quote(ids.viewer)}::uuid,'active',now(),now(),now()
+276:     );
+277: 
+278:     insert into public.interests (
+279:       id,offer_id,user_id,interested_alias,message,status,created_at,updated_at
+280:     ) values (
+281:       ${quote(ids.interest)}::uuid,${quote(ids.offer)}::uuid,${quote(ids.viewer)}::uuid,
+282:       'A1 smoke viewer','Synthetic proposal created after Feed exposure.','accepted',now(),now()
+283:     );
+284: 
+285:     insert into public.agreements (
+
+===== LIVE_NOW_AND_ASSERTIONS lines 375-470 =====
+375: function installDiagnostics(page, label) {
+376:   page.on('pageerror', (error) => result.network.pageErrors.push({ label, message: error.message }));
+377:   page.on('response', (response) => {
+378:     if (response.status() >= 500) {
+379:       result.network.serverErrors.push({ label, status: response.status(), url: response.url() });
+380:     }
+381:   });
+382: }
+383: 
+384: async function liveNow(page) {
+385:   return page.evaluate(async () => {
+386:     const response = await fetch('/api/live-now', {
+387:       credentials: 'same-origin',
+388:       headers: { Accept: 'application/json' },
+389:       cache: 'no-store',
+390:     });
+391:     const text = await response.text();
+392:     let body;
+393:     try {
+394:       body = JSON.parse(text);
+395:     } catch {
+396:       body = { raw: text.slice(0, 500) };
+397:     }
+398:     return { status: response.status, body };
+399:   });
+400: }
+401: 
+402: async function submitFeedback(page, values) {
+403:   await page.goto(`${BASE_URL}/trade-agreements/${ids.agreement}`, { waitUntil: 'domcontentloaded' });
+404:   await page.getByRole('heading', { name: /Did this completed trade improve matters by your lights/i }).waitFor();
+405:   const form = page.locator('form').filter({ has: page.getByRole('button', { name: /Save outcome feedback|Update outcome feedback/ }) });
+406:   await form.getByLabel('Gain by your own lights').selectOption(String(values.gain));
+407:   await form.getByLabel('Overall satisfaction').selectOption(String(values.satisfaction));
+408:   await form.getByLabel('Chance this outcome would have happened without the trade').fill(String(values.without));
+409:   await form.getByLabel('Concern about harms or negative externalities').selectOption(values.externality);
+410:   await form.getByLabel('Optional private note').fill(values.note);
+411:   await form.getByRole('button', { name: /Save outcome feedback|Update outcome feedback/ }).click();
+412:   await page.waitForLoadState('domcontentloaded');
+413:   await page.getByText(/Private outcome feedback saved/i).first().waitFor();
+414: }
+415: 
+416: function verifyExposureAndAssignment(first, second) {
+417:   for (const [label, response] of [['first', first], ['second', second]]) {
+418:     assert.equal(response.status, 200, `${label} authenticated Feed request failed.`);
+419:     assert.equal(response.body.authenticated, true, `${label} Feed response was not authenticated.`);
+420:     assert.equal(response.body.learningDiagnostics?.exposureWriteStatus, 'written', `${label} exposure receipts were not written.`);
+421:     assert.equal(response.body.learningDiagnostics?.experiment?.arm, 'treatment', `${label} request was not in the deterministic treatment arm.`);
+422:     assert.equal(response.body.learningDiagnostics?.directMatchesRandomized, false, 'Direct matches were reported as randomized.');
+423:     assert.ok(
+424:       Array.isArray(response.body.recommendations) && response.body.recommendations.some((item) => item.id === ids.offer),
+425:       `${label} Feed response did not contain the synthetic opportunity.`,
+426:     );
+427:   }
+428:   const firstExperiment = first.body.learningDiagnostics.experiment;
+429:   const secondExperiment = second.body.learningDiagnostics.experiment;
+430:   assert.equal(firstExperiment.stableBucket, selectedViewer.bucket);
+431:   assert.equal(secondExperiment.stableBucket, selectedViewer.bucket);
+432:   for (const key of ['arm', 'affectedCandidateKey', 'assignmentProbability', 'jointPropensity', 'stableBucket']) {
+433:     assert.deepEqual(secondExperiment[key], firstExperiment[key], `Experiment field ${key} was not stable across requests.`);
+434:   }
+435: 
+436:   const audit = JSON.parse(sql(`
+437:     select jsonb_build_object(
+438:       'assignmentCount',(
+439:         select count(*) from public.recommendation_experiment_assignments
+440:         where profile_id=${quote(ids.viewer)}::uuid and experiment_key=${quote(EXPERIMENT_KEY)} and assignment_day=${quote(DAY)}::date
+441:       ),
+442:       'assignmentArm',(
+443:         select arm from public.recommendation_experiment_assignments
+444:         where profile_id=${quote(ids.viewer)}::uuid and experiment_key=${quote(EXPERIMENT_KEY)} and assignment_day=${quote(DAY)}::date
+445:       ),
+446:       'stableBucket',(
+447:         select stable_bucket from public.recommendation_experiment_assignments
+448:         where profile_id=${quote(ids.viewer)}::uuid and experiment_key=${quote(EXPERIMENT_KEY)} and assignment_day=${quote(DAY)}::date
+449:       ),
+450:       'exposureCount',(
+451:         select count(*) from public.recommendation_exposures where profile_id=${quote(ids.viewer)}::uuid
+452:       ),
+453:       'syntheticOfferExposureCount',(
+454:         select count(*) from public.recommendation_exposures
+455:         where profile_id=${quote(ids.viewer)}::uuid and opportunity_id=${quote(ids.offer)}
+456:       )
+457:     )::text;
+458:   `));
+459:   assert.equal(Number(audit.assignmentCount), 1);
+460:   assert.equal(audit.assignmentArm, 'treatment');
+461:   assert.equal(Number(audit.stableBucket), selectedViewer.bucket);
+462:   assert.ok(Number(audit.exposureCount) >= 1);
+463:   assert.ok(Number(audit.syntheticOfferExposureCount) >= 1);
+464:   result.assignmentAudit = audit;
+465: }
+466: 
+467: async function runTraining() {
+468:   const unauthorized = await fetch(`${BASE_URL}/api/jobs/recommendation-training`, {
+469:     headers: { Accept: 'application/json' },
+470:   });
+
+===== CLEANUP lines 540-635 =====
+540:   assert.ok(Number(audit.model?.sampleCount) >= 1);
+541:   assert.ok(Number(audit.model?.feedbackCount) >= 2);
+542:   assert.ok(Number(audit.guardrailCount) >= 1);
+543:   result.trainingAudit = audit;
+544: }
+545: 
+546: function cleanupSyntheticData() {
+547:   const modelId = result.trainingResponse?.modelId;
+548:   sql(`
+549:     begin;
+550: 
+551:     delete from public.recommendation_outcomes
+552:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+553:     delete from public.recommendation_exposures
+554:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+555:          or owner_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+556:          or opportunity_id=${quote(ids.offer)};
+557:     delete from public.recommendation_experiment_assignments
+558:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+559:     delete from public.recommendation_interactions
+560:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+561:          or opportunity_id=${quote(ids.offer)};
+562:     delete from public.recommendation_graph_edges
+563:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+564:          or opportunity_key=${quote(`offer:${ids.offer}`)};
+565:     delete from public.recommendation_user_factors
+566:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+567:     delete from public.recommendation_opportunity_factors
+568:       where opportunity_key=${quote(`offer:${ids.offer}`)};
+569:     delete from public.recommendation_counterparty_priors
+570:       where owner_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+571:     delete from public.recommendation_outcome_feedback where agreement_id=${quote(ids.agreement)}::uuid;
+572: 
+573:     delete from public.email_outbox
+574:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+575:          or recipient_email in (${quote(emails.viewer)},${quote(emails.owner)});
+576:     delete from public.trade_notifications
+577:       where user_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+578:     delete from public.core_loop_events
+579:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+580:          or entity_id in (${quote(ids.interest)}::uuid,${quote(ids.agreement)}::uuid,${quote(ids.offer)}::uuid);
+581:     delete from public.credibility_events
+582:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+583:          or counterparty_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)
+584:          or agreement_id=${quote(ids.agreement)}::uuid;
+585:     delete from public.credibility_public_aggregates
+586:       where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+587: 
+588:     delete from public.trade_thread_reads where thread_id=${quote(ids.thread)}::uuid;
+589:     delete from public.trade_messages where thread_id=${quote(ids.thread)}::uuid;
+590:     delete from public.trade_counterproposals where thread_id=${quote(ids.thread)}::uuid;
+591:     delete from public.trade_completion_confirmations where agreement_id=${quote(ids.agreement)}::uuid;
+592:     delete from public.trade_evidence_items where agreement_id=${quote(ids.agreement)}::uuid;
+593:     delete from public.trade_agreement_confirmations where agreement_version_id=${quote(ids.version)}::uuid;
+594:     delete from public.trade_threads where id=${quote(ids.thread)}::uuid or agreement_id=${quote(ids.agreement)}::uuid;
+595:     update public.agreements set current_version_id=null where id=${quote(ids.agreement)}::uuid;
+596:     delete from public.trade_agreement_versions where agreement_id=${quote(ids.agreement)}::uuid;
+597:     delete from public.agreements where id=${quote(ids.agreement)}::uuid;
+598:     delete from public.interests where id=${quote(ids.interest)}::uuid or offer_id=${quote(ids.offer)}::uuid;
+599:     delete from public.offers where id=${quote(ids.offer)}::uuid;
+600: 
+601:     delete from public.route_recommendation_profiles where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+602:     delete from public.wish_profiles where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+603:     delete from public.cohort_onboarding_profiles where profile_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+604:     delete from public.profiles where id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+605:     delete from auth.identities where user_id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+606:     delete from auth.users where id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid);
+607: 
+608:     ${modelId ? `update public.recommendation_model_versions
+609:       set activation_reason=concat('Production authenticated smoke verified; synthetic inputs removed. ',activation_reason)
+610:       where id=${quote(modelId)}::uuid;` : ''}
+611: 
+612:     commit;
+613:   `);
+614: 
+615:   const leftovers = JSON.parse(sql(`
+616:     select jsonb_build_object(
+617:       'authUsers',(select count(*) from auth.users where id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)),
+618:       'profiles',(select count(*) from public.profiles where id in (${quote(ids.viewer)}::uuid,${quote(ids.owner)}::uuid)),
+619:       'offers',(select count(*) from public.offers where id=${quote(ids.offer)}::uuid),
+620:       'agreements',(select count(*) from public.agreements where id=${quote(ids.agreement)}::uuid),
+621:       'exposures',(select count(*) from public.recommendation_exposures where profile_id=${quote(ids.viewer)}::uuid),
+622:       'feedback',(select count(*) from public.recommendation_outcome_feedback where agreement_id=${quote(ids.agreement)}::uuid)
+623:     )::text;
+624:   `));
+625:   for (const [key, value] of Object.entries(leftovers)) {
+626:     assert.equal(Number(value), 0, `Synthetic cleanup left ${key}.`);
+627:   }
+628:   result.cleanup = { completed: true, leftovers };
+629: }
+630: 
+631: const browser = await chromium.launch({ headless: true });
+632: const viewerContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+633: const ownerContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+634: const viewerPage = await viewerContext.newPage();
+635: const ownerPage = await ownerContext.newPage();
+
+===== MAIN lines 630-726 =====
+630: 
+631: const browser = await chromium.launch({ headless: true });
+632: const viewerContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+633: const ownerContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+634: const viewerPage = await viewerContext.newPage();
+635: const ownerPage = await ownerContext.newPage();
+636: viewerPage.setDefaultTimeout(30_000);
+637: ownerPage.setDefaultTimeout(30_000);
+638: viewerPage.setDefaultNavigationTimeout(60_000);
+639: ownerPage.setDefaultNavigationTimeout(60_000);
+640: installDiagnostics(viewerPage, 'viewer');
+641: installDiagnostics(ownerPage, 'owner');
+642: 
+643: try {
+644:   createSyntheticUsersAndOffer();
+645:   result.checks.syntheticSetup = true;
+646: 
+647:   await login(viewerPage, emails.viewer, '/feed');
+648:   await login(ownerPage, emails.owner, '/');
+649:   result.checks.authenticatedSessions = true;
+650: 
+651:   await viewerPage.goto(`${BASE_URL}/feed`, { waitUntil: 'domcontentloaded' });
+652:   const first = await liveNow(viewerPage);
+653:   await viewerPage.waitForTimeout(400);
+654:   const second = await liveNow(viewerPage);
+655:   result.firstFeedDiagnostics = first.body.learningDiagnostics;
+656:   result.secondFeedDiagnostics = second.body.learningDiagnostics;
+657:   verifyExposureAndAssignment(first, second);
+658:   result.checks.feedExposureReceipt = true;
+659:   result.checks.stableExperimentAssignment = true;
+660:   await screenshot(viewerPage, '01-authenticated-feed');
+661: 
+662:   createCompletedOutcomeRecords();
+663:   result.checks.completedOutcomeFixture = true;
+664: 
+665:   await submitFeedback(viewerPage, {
+666:     gain: 5,
+667:     satisfaction: 5,
+668:     without: 10,
+669:     externality: 'none',
+670:     note: `Viewer private A1 smoke feedback ${RUN_TAG}.`,
+671:   });
+672:   await screenshot(viewerPage, '02-viewer-private-feedback');
+673: 
+674:   await submitFeedback(ownerPage, {
+675:     gain: 4,
+676:     satisfaction: 4,
+677:     without: 20,
+678:     externality: 'low',
+679:     note: `Owner private A1 smoke feedback ${RUN_TAG}.`,
+680:   });
+681:   await screenshot(ownerPage, '03-owner-private-feedback');
+682: 
+683:   const feedbackAudit = JSON.parse(sql(`
+684:     select jsonb_build_object(
+685:       'count',count(*),
+686:       'profiles',array_agg(profile_id::text order by profile_id::text),
+687:       'minimumGain',min(own_lights_gain),
+688:       'minimumSatisfaction',min(satisfaction)
+689:     )::text
+690:     from public.recommendation_outcome_feedback
+691:     where agreement_id=${quote(ids.agreement)}::uuid;
+692:   `));
+693:   assert.equal(Number(feedbackAudit.count), 2);
+694:   assert.ok(Number(feedbackAudit.minimumGain) >= 4);
+695:   assert.ok(Number(feedbackAudit.minimumSatisfaction) >= 4);
+696:   result.feedbackAudit = feedbackAudit;
+697:   result.checks.privateCompletionFeedback = true;
+698: 
+699:   await runTraining();
+700:   result.checks.proposalOutcomeReconciliation = true;
+701:   result.checks.successfulTrainingRun = true;
+702:   result.checks.coldStartOrShadowModel = true;
+703: 
+704:   if (result.network.pageErrors.length) {
+705:     result.warnings = [...(result.warnings ?? []), `${result.network.pageErrors.length} unrelated browser page error(s) were recorded for review.`];
+706:   }
+707:   assert.deepEqual(result.network.serverErrors, [], 'Server-error responses were detected.');
+708:   result.checks.browserAndServerDiagnostics = true;
+709:   result.passed = true;
+710: } catch (error) {
+711:   result.passed = false;
+712:   result.error = { message: sanitizeError(error) };
+713:   throw error;
+714: } finally {
+715:   await viewerContext.close().catch(() => {});
+716:   await ownerContext.close().catch(() => {});
+717:   await browser.close().catch(() => {});
+718:   try {
+719:     cleanupSyntheticData();
+720:   } catch (cleanupError) {
+721:     result.cleanup = { completed: false, error: sanitizeError(cleanupError) };
+722:     result.passed = false;
+723:     process.exitCode = 1;
+724:   }
+725:   await writeFile(path.join(OUTPUT_DIR, 'result.json'), `${JSON.stringify(result, null, 2)}\n`);
+726: }
+
