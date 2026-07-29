@@ -88,12 +88,6 @@ jobs:
             )
           ' vercel.json >/dev/null
 
-          if grep -Eq 'SUPABASE_ACCESS_TOKEN|REPO_ADMIN_TOKEN|PROD_SUPABASE_DB_URL_NEXT|QA_SUPABASE_DB_URL' \
-            .github/workflows/verify-a1-natural-cron-20260730.yml; then
-            echo '::error::The observer references a temporary or cross-environment credential.'
-            exit 1
-          fi
-
           sudo apt-get update -qq
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
           psql "$PROD_SUPABASE_DB_URL" -X -v ON_ERROR_STOP=1 -Atqc \
