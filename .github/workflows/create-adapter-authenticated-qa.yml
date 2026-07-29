@@ -134,6 +134,12 @@ jobs:
               raise SystemExit('The custom-formula timing radio setup line was not found exactly once.')
           browser = browser.replace(formula_radio_old, formula_radio_new)
 
+          receipt_status_old = '''    record("receipt display says submitted for review", receipt.displayStatus === "Submitted for review", receipt.displayStatus);'''
+          receipt_status_new = '''    record("receipt display says submitted for review", receipt.displayStatus.trim().toLowerCase() === "submitted for review", receipt.displayStatus);'''
+          if browser.count(receipt_status_old) != 1:
+              raise SystemExit('The case-sensitive receipt-status assertion was not found exactly once.')
+          browser = browser.replace(receipt_status_old, receipt_status_new)
+
           browser_path.write_text(browser)
           PY
           chmod +x /tmp/run-create-adapter-qa.sh
@@ -175,4 +181,4 @@ jobs:
           QA_OUTCOME: ${{ steps.qa.outcome }}
         run: test "$QA_OUTCOME" = success
 
-# Uses visible option labels for stylized radios and the exact credentialed candidate Preview.
+# Normalizes rendered status casing while preserving the required pending-review semantics.
