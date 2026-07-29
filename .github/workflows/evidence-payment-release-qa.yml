@@ -34,16 +34,22 @@ jobs:
     timeout-minutes: 45
     env:
       EVIDENCE_PAYMENT_BASE_URL: http://127.0.0.1:3210
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
       NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      PGSSLMODE: require
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
 
     steps:
       - name: Check out the exact candidate
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Use Node 24
         uses: actions/setup-node@v4
@@ -58,16 +64,17 @@ jobs:
           test -n "${QA_SUPABASE_DB_URL:-}"
           python3 - <<'PY'
           import os
-          from urllib.parse import urlparse
+          from urllib.parse import parse_qs, urlparse
 
           parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
           valid = (
               parsed.scheme in {"postgres", "postgresql"}
               and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
               and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
               and parsed.port == 5432
               and parsed.path == "/postgres"
-              and parsed.query == "sslmode=require"
+              and ssl_modes == ["require"]
               and bool(parsed.password)
           )
           if not valid:
@@ -86,6 +93,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" HEAD
           {
             printf 'commit=%s\n' "$(git rev-parse HEAD)"
             printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
@@ -208,7 +217,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evidence-payment-release-qa-${{ github.run_id }}-${{ github.sha }}
+          name: evidence-payment-release-qa-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: warn
           retention-days: 30
           path: |
