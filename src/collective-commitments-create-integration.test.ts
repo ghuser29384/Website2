@@ -19,7 +19,7 @@ test("the canonical Create route owns Collective Commitments creation and discov
   assert.match(workspace, /id="collective-commitment-form"/);
   assert.match(workspace, /id="collective-identity"/);
   assert.match(workspace, /id="collective-commitments-list"/);
-  assert.match(frame, /data-request-kind=\\"collective\\"/);
+  assert.match(frame, /data-request-kind="collective"/);
   assert.match(frame, />Collective commitment</);
   assert.match(frame, /window\.parent\.location\.assign\(target\)/);
   assert.match(frame, /repeat\(2, minmax\(0, 1fr\)\)/);
