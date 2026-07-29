@@ -54,7 +54,7 @@ export function CollectiveSignatureControls({
       <section className={styles.controlPanel} aria-labelledby="verification-required-heading">
         <h2 id="verification-required-heading">Current identity verification required</h2>
         <p>A current, operator-approved real-name and human-uniqueness credential is required. Stale, revoked, rejected, or duplicate-flagged credentials cannot sign.</p>
-        <Link className="button button-secondary" href="/collective-commitments/identity">
+        <Link className="button button-secondary" href="/trades/new?mode=collective#collective-identity">
           Review identity requirements
         </Link>
       </section>
