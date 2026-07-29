@@ -114,34 +114,35 @@ jobs:
         run: |
           set -euo pipefail
           expected="$(printf '%s\n' \
-            20260729165525 \
-            20260729165526 \
-            20260729165527 \
-            20260729165528 \
-            20260729165529 \
-            20260729165531 \
-            20260729165532)"
+            credibility_model_seed_invariant \
+            evidence_weighted_milestones_additive \
+            evidence_weighted_payment_advisor_indexes \
+            evidence_weighted_payment_completion \
+            evidence_weighted_payment_rls_hardening \
+            evidence_weighted_remaining_fk_indexes \
+            evidence_weighted_rls_identity_binding \
+            | sort)"
           recorded="$(psql "$QA_SUPABASE_DB_URL" \
             --no-psqlrc \
             --tuples-only \
             --no-align \
             --set ON_ERROR_STOP=1 <<'SQL' | sed '/^[[:space:]]*$/d' | sort
-          select version
+          select name
           from supabase_migrations.schema_migrations
-          where version in (
-            '20260729165525',
-            '20260729165526',
-            '20260729165527',
-            '20260729165528',
-            '20260729165529',
-            '20260729165531',
-            '20260729165532'
+          where name in (
+            'credibility_model_seed_invariant',
+            'evidence_weighted_milestones_additive',
+            'evidence_weighted_payment_advisor_indexes',
+            'evidence_weighted_payment_completion',
+            'evidence_weighted_payment_rls_hardening',
+            'evidence_weighted_remaining_fk_indexes',
+            'evidence_weighted_rls_identity_binding'
           );
           SQL
           )"
           if [[ "$recorded" != "$expected" ]]; then
-            printf 'Expected migration versions:\n%s\n' "$expected" >&2
-            printf 'Recorded migration versions:\n%s\n' "$recorded" >&2
+            printf 'Expected migration names:\n%s\n' "$expected" >&2
+            printf 'Recorded migration names:\n%s\n' "$recorded" >&2
             exit 1
           fi
 
