@@ -1,0 +1,152 @@
+name: PR 212 absolute TypeScript ESLint build diagnostic
+
+on:
+  push:
+    branches:
+      - ops/pr212-absolute-gates-20260729
+    paths:
+      - .github/workflows/pr212-absolute-gates-diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      INSTITUTIONAL_TRADES_ENABLED: "true"
+      INSTITUTIONAL_POOLS_ENABLED: "true"
+      INSTITUTIONAL_ENTERPRISE_API_ENABLED: "true"
+      INSTITUTIONAL_WEBHOOKS_ENABLED: "true"
+      CRON_SECRET: qa-institutional-cron-not-production
+
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: 9ad919bc281a9f701d4a5adfb518055c864393b3
+          fetch-depth: 0
+
+      - name: Verify exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "9ad919bc281a9f701d4a5adfb518055c864393b3"
+          mkdir -p /tmp/pr212-absolute-gates
+          git status --short > /tmp/pr212-absolute-gates/git-status.txt
+          git rev-parse HEAD > /tmp/pr212-absolute-gates/head-sha.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci > /tmp/pr212-absolute-gates/npm-ci.log 2>&1; then
+              echo 0 > /tmp/pr212-absolute-gates/npm-ci.status
+              exit 0
+            fi
+            if (( attempt == 4 )); then
+              cat /tmp/pr212-absolute-gates/npm-ci.log
+              echo 1 > /tmp/pr212-absolute-gates/npm-ci.status
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run absolute TypeScript, ESLint, and production build diagnostics
+        shell: bash
+        run: |
+          set +e
+          npx tsc --noEmit --pretty false > /tmp/pr212-absolute-gates/typescript.log 2>&1
+          echo $? > /tmp/pr212-absolute-gates/typescript.status
+
+          npm run lint -- --format stylish > /tmp/pr212-absolute-gates/eslint.log 2>&1
+          echo $? > /tmp/pr212-absolute-gates/eslint.status
+
+          npm run build > /tmp/pr212-absolute-gates/build.log 2>&1
+          echo $? > /tmp/pr212-absolute-gates/build.status
+          set -e
+
+          cat /tmp/pr212-absolute-gates/typescript.log
+          cat /tmp/pr212-absolute-gates/eslint.log
+          cat /tmp/pr212-absolute-gates/build.log
+
+      - name: Summarize diagnostics
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pr212-absolute-gates
+          for gate in npm-ci typescript eslint build; do
+            status_file="/tmp/pr212-absolute-gates/${gate}.status"
+            if [[ ! -f "$status_file" ]]; then echo 99 > "$status_file"; fi
+          done
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          root = Path('/tmp/pr212-absolute-gates')
+          ts = (root / 'typescript.log').read_text(errors='replace') if (root / 'typescript.log').exists() else ''
+          eslint = (root / 'eslint.log').read_text(errors='replace') if (root / 'eslint.log').exists() else ''
+          build = (root / 'build.log').read_text(errors='replace') if (root / 'build.log').exists() else ''
+
+          ts_lines = [line for line in ts.splitlines() if re.search(r'error TS\d+:', line)]
+          eslint_problem_lines = [line for line in eslint.splitlines() if re.search(r'\s(?:error|warning)\s{2,}', line)]
+          build_error_lines = [line for line in build.splitlines() if re.search(r'(error|failed|failure|type error)', line, re.I)]
+
+          report = {
+              'head_sha': (root / 'head-sha.txt').read_text().strip() if (root / 'head-sha.txt').exists() else None,
+              'statuses': {gate: int((root / f'{gate}.status').read_text().strip()) for gate in ['npm-ci','typescript','eslint','build']},
+              'typescript_diagnostic_count': len(ts_lines),
+              'eslint_problem_line_count': len(eslint_problem_lines),
+              'build_error_line_count': len(build_error_lines),
+              'typescript_diagnostics': ts_lines,
+              'eslint_problem_lines': eslint_problem_lines,
+              'build_error_lines': build_error_lines[-200:],
+          }
+          (root / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
+          PY
+
+      - name: Upload absolute-gate diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-absolute-gates-${{ github.run_id }}
+          path: /tmp/pr212-absolute-gates
+          if-no-files-found: error
+          retention-days: 5
+
+      - name: Record run identifier on operations branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout ops/pr212-absolute-gates-20260729
+          mkdir -p ops
+          cat > ops/pr212-absolute-gates-run.json <<JSON
+          {
+            "run_id": "${GITHUB_RUN_ID}",
+            "workflow_run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "diagnosed_sha": "9ad919bc281a9f701d4a5adfb518055c864393b3",
+            "artifact_name": "pr212-absolute-gates-${GITHUB_RUN_ID}"
+          }
+          JSON
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-absolute-gates-run.json
+          git commit -m "Record PR 212 absolute-gate diagnostic run"
+          git push origin HEAD:ops/pr212-absolute-gates-20260729
