@@ -1,12 +1,12 @@
 "use client";
 
-import { LocalDateTime } from "@/components/ui/local-date-time";
-
+import { FullNavigationActionForm } from "./full-navigation-action-form";
 import { PendingSubmitButton } from "./pending-submit-button";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 
 export type ExternalPaymentResponseAction = (
   formData: FormData,
-) => Promise<string>;
+) => void | Promise<void>;
 
 export function ExternalPaymentResponseForm({
   action,
@@ -23,17 +23,8 @@ export function ExternalPaymentResponseForm({
   returnTo?: string;
   versionId: string;
 }) {
-  async function submitResponse(formData: FormData) {
-    const nextPath = await action(formData);
-    const nextUrl = new URL(nextPath, window.location.origin);
-    if (nextUrl.origin !== window.location.origin) {
-      throw new Error("External payment response returned an invalid destination.");
-    }
-    window.location.assign(`${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`);
-  }
-
   return (
-    <form action={submitResponse} className="panel stack-form">
+    <FullNavigationActionForm action={action} className="panel stack-form">
       <input name="agreement_id" type="hidden" value={agreementId} />
       <input name="milestone_id" type="hidden" value={milestoneId} />
       <input name="agreement_version_id" type="hidden" value={versionId} />
@@ -76,6 +67,6 @@ export function ExternalPaymentResponseForm({
           Dispute payment report
         </PendingSubmitButton>
       </div>
-    </form>
+    </FullNavigationActionForm>
   );
 }

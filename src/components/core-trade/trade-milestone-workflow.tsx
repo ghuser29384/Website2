@@ -4,6 +4,7 @@ import {
   ExternalPaymentResponseForm,
   type ExternalPaymentResponseAction,
 } from "@/components/core-trade/external-payment-response-form";
+import { FullNavigationActionForm } from "@/components/core-trade/full-navigation-action-form";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 
@@ -963,7 +964,7 @@ function ExternalPaymentForms({
       {milestone.canNominatePaymentReviewer &&
       actions.nominatePaymentReviewerAction &&
       payment.payoutId ? (
-        <form
+        <FullNavigationActionForm
           action={actions.nominatePaymentReviewerAction}
           className="panel stack-form"
         >
@@ -1005,13 +1006,13 @@ function ExternalPaymentForms({
           >
             Record payment-reviewer nomination
           </PendingSubmitButton>
-        </form>
+        </FullNavigationActionForm>
       ) : null}
 
       {milestone.canRequestPaymentAppeal &&
       actions.requestPaymentAppealAction &&
       payment.reviewCaseId ? (
-        <form
+        <FullNavigationActionForm
           action={actions.requestPaymentAppealAction}
           className="panel stack-form"
         >
@@ -1040,13 +1041,13 @@ function ExternalPaymentForms({
           <PendingSubmitButton pendingLabel="Opening payment appeal…">
             Open the single payment appeal
           </PendingSubmitButton>
-        </form>
+        </FullNavigationActionForm>
       ) : null}
 
       {milestone.canNominatePaymentAppealReviewer &&
       actions.nominatePaymentAppealReviewerAction &&
       payment.appealId ? (
-        <form
+        <FullNavigationActionForm
           action={actions.nominatePaymentAppealReviewerAction}
           className="panel stack-form"
         >
@@ -1087,13 +1088,13 @@ function ExternalPaymentForms({
           >
             Record payment-appeal nomination
           </PendingSubmitButton>
-        </form>
+        </FullNavigationActionForm>
       ) : null}
 
       {milestone.canFinalizePaymentReview &&
       actions.finalizePaymentReviewAction &&
       payment.reviewCaseId ? (
-        <form
+        <FullNavigationActionForm
           action={actions.finalizePaymentReviewAction}
           className="panel stack-form"
         >
@@ -1117,12 +1118,12 @@ function ExternalPaymentForms({
           <PendingSubmitButton pendingLabel="Finalizing payment decision…">
             Finalize external-payment decision
           </PendingSubmitButton>
-        </form>
+        </FullNavigationActionForm>
       ) : null}
 
       {milestone.canReportExternalPayment &&
       actions.reportExternalPaymentAction ? (
-        <form
+        <FullNavigationActionForm
           action={actions.reportExternalPaymentAction}
           className="panel stack-form"
           encType="multipart/form-data"
@@ -1181,7 +1182,7 @@ function ExternalPaymentForms({
           <PendingSubmitButton pendingLabel="Recording payment…">
             Report external payment
           </PendingSubmitButton>
-        </form>
+        </FullNavigationActionForm>
       ) : null}
 
       {milestone.canConfirmExternalPayment &&

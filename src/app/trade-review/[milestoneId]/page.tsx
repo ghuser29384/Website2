@@ -9,6 +9,7 @@ import {
   submitNeutralTradeMilestoneReviewAction,
 } from "@/app/trade-milestone-actions";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
+import { FullNavigationActionForm } from "@/components/core-trade/full-navigation-action-form";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { LocalDateTime } from "@/components/ui/local-date-time";
@@ -397,7 +398,10 @@ export default async function TradeReviewPage({
                 <p>{inactivePaymentReviewCopy.body}</p>
               </div>
             ) : (
-              <form action={paymentAction} className="panel stack-form">
+              <FullNavigationActionForm
+                action={paymentAction}
+                className="panel stack-form"
+              >
                 <input
                   name="agreement_id"
                   type="hidden"
@@ -458,7 +462,7 @@ export default async function TradeReviewPage({
                     ? "Record final payment-appeal decision"
                     : "Record payment-review decision"}
                 </PendingSubmitButton>
-              </form>
+              </FullNavigationActionForm>
             )}
 
             <Link className="button button-secondary" href="/dashboard">

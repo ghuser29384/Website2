@@ -183,6 +183,9 @@ test("participant, reviewer, and administrator surfaces expose every payment tra
   const paymentResponseForm = source(
     "src/components/core-trade/external-payment-response-form.tsx",
   );
+  const fullNavigationForm = source(
+    "src/components/core-trade/full-navigation-action-form.tsx",
+  );
   const reviewerPage = source("src/app/trade-review/[milestoneId]/page.tsx");
   const administratorPage = source("src/app/admin/trade-review/page.tsx");
 
@@ -202,9 +205,10 @@ test("participant, reviewer, and administrator surfaces expose every payment tra
   assert.match(reviewerPage, /allow_correction/i);
   assert.match(reviewerPage, /confirm_paid/i);
   assert.match(reviewerPage, /still_due/i);
-  assert.match(paymentResponseForm, /await action\(formData\)/);
-  assert.match(paymentResponseForm, /nextUrl\.origin !== window\.location\.origin/);
-  assert.match(paymentResponseForm, /window\.location\.assign/);
+  assert.match(paymentResponseForm, /FullNavigationActionForm/);
+  assert.match(fullNavigationForm, /event\.preventDefault\(\)/);
+  assert.match(fullNavigationForm, /HTMLFormElement\.prototype\.submit\.call\(form\)/);
+  assert.match(fullNavigationForm, /submitter\.name/);
   assert.match(
     administratorPage,
     /adminAssignTradePaymentReviewerAction/,

@@ -12,6 +12,7 @@ import {
   adminAssignTradeMilestoneReviewerAction,
 } from "@/app/trade-milestone-actions";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
+import { FullNavigationActionForm } from "@/components/core-trade/full-navigation-action-form";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { LocalDateTime } from "@/components/ui/local-date-time";
@@ -288,7 +289,7 @@ export default async function TradeReviewPage({ searchParams }: TradeReviewPageP
                 ))}
 
                 {paymentFallbacks.map((reviewCase: Record<string, any>) => (
-                  <form
+                  <FullNavigationActionForm
                     action={adminAssignTradePaymentReviewerAction}
                     className="panel stack-form"
                     key={String(reviewCase.id)}
@@ -322,11 +323,11 @@ export default async function TradeReviewPage({ searchParams }: TradeReviewPageP
                     >
                       Assign payment reviewer
                     </PendingSubmitButton>
-                  </form>
+                  </FullNavigationActionForm>
                 ))}
 
                 {paymentAppealFallbacks.map((appeal: Record<string, any>) => (
-                  <form
+                  <FullNavigationActionForm
                     action={adminAssignTradePaymentAppealReviewerAction}
                     className="panel stack-form"
                     key={String(appeal.id)}
@@ -359,7 +360,7 @@ export default async function TradeReviewPage({ searchParams }: TradeReviewPageP
                     >
                       Assign payment-appeal reviewer
                     </PendingSubmitButton>
-                  </form>
+                  </FullNavigationActionForm>
                 ))}
 
                 {!milestoneFallbacks.length &&
