@@ -185,8 +185,15 @@ async function expectSuccess(page: Page, message: string) {
 }
 
 async function nominatePaymentReviewer(page: Page, reviewerId: string) {
-  await page.getByLabel("Eligible reviewer", { exact: true }).selectOption(reviewerId);
-  await page
+  const form = page.locator("form").filter({
+    has: page.getByRole("heading", {
+      name: "Choose a reviewer for the disputed or unanswered receipt",
+      exact: true,
+    }),
+  });
+  await expect(form).toHaveCount(1);
+  await form.getByLabel("Eligible reviewer", { exact: true }).selectOption(reviewerId);
+  await form
     .getByRole("button", { name: "Record payment-reviewer nomination", exact: true })
     .click();
   await expectSuccess(
@@ -196,8 +203,17 @@ async function nominatePaymentReviewer(page: Page, reviewerId: string) {
 }
 
 async function nominatePaymentAppealReviewer(page: Page, reviewerId: string) {
-  await page.getByLabel("Eligible appeal reviewer", { exact: true }).selectOption(reviewerId);
-  await page
+  const form = page.locator("form").filter({
+    has: page.getByRole("heading", {
+      name: "Choose a different neutral reviewer",
+      exact: true,
+    }),
+  });
+  await expect(form).toHaveCount(1);
+  await form
+    .getByLabel("Eligible appeal reviewer", { exact: true })
+    .selectOption(reviewerId);
+  await form
     .getByRole("button", { name: "Record payment-appeal nomination", exact: true })
     .click();
   await expectSuccess(

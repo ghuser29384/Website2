@@ -977,9 +977,16 @@ function ExternalPaymentForms({
             If no agreement is reached within seven days, the MFA-gated
             administrator fallback becomes available.
           </p>
-          <label className="field">
+          <label
+            className="field"
+            htmlFor={`payment-reviewer-${milestone.id}`}
+          >
             <span>Eligible reviewer</span>
-            <select name="reviewer_id" required>
+            <select
+              id={`payment-reviewer-${milestone.id}`}
+              name="reviewer_id"
+              required
+            >
               <option value="">Choose a neutral reviewer</option>
               {paymentReviewCandidates.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
@@ -1052,9 +1059,16 @@ function ExternalPaymentForms({
           />
           <p className="detail-kicker">Payment-appeal reviewer</p>
           <h4>Choose a different neutral reviewer</h4>
-          <label className="field">
+          <label
+            className="field"
+            htmlFor={`payment-appeal-reviewer-${milestone.id}`}
+          >
             <span>Eligible appeal reviewer</span>
-            <select name="reviewer_id" required>
+            <select
+              id={`payment-appeal-reviewer-${milestone.id}`}
+              name="reviewer_id"
+              required
+            >
               <option value="">Choose a different reviewer</option>
               {paymentAppealCandidates.map((candidate) => (
                 <option key={candidate.id} value={candidate.id}>
