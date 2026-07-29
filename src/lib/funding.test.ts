@@ -3,8 +3,12 @@ import test from "node:test";
 
 import { getMoralTradeFundingReadiness } from "@/lib/funding";
 
+function testEnv(values: Partial<NodeJS.ProcessEnv> = {}): NodeJS.ProcessEnv {
+  return { NODE_ENV: "test", ...values };
+}
+
 test("funding defaults to direct-to-charity routes and pledge-only external handoff", () => {
-  const readiness = getMoralTradeFundingReadiness({} as NodeJS.ProcessEnv);
+  const readiness = getMoralTradeFundingReadiness(testEnv());
 
   assert.equal(readiness.mode, "external_charities_only");
   assert.equal(readiness.sponsorStatus, "not_configured");
@@ -16,10 +20,10 @@ test("funding defaults to direct-to-charity routes and pledge-only external hand
 });
 
 test("fiscal-sponsor mode fails closed when disclosures are incomplete", () => {
-  const readiness = getMoralTradeFundingReadiness({
+  const readiness = getMoralTradeFundingReadiness(testEnv({
     MORAL_TRADE_FUNDING_MODE: "fiscal_sponsor",
     FISCAL_SPONSOR_LEGAL_NAME: "Example Sponsor",
-  } as NodeJS.ProcessEnv);
+  }));
 
   assert.equal(readiness.mode, "external_charities_only");
   assert.equal(readiness.sponsorStatus, "configuration_incomplete");
@@ -28,7 +32,7 @@ test("fiscal-sponsor mode fails closed when disclosures are incomplete", () => {
 });
 
 test("fiscal-sponsor mode activates only with complete public disclosures", () => {
-  const readiness = getMoralTradeFundingReadiness({
+  const readiness = getMoralTradeFundingReadiness(testEnv({
     MORAL_TRADE_FUNDING_MODE: "fiscal_sponsor",
     FISCAL_SPONSOR_LEGAL_NAME: "Example Sponsor",
     FISCAL_SPONSOR_JURISDICTION: "United States — 501(c)(3)",
@@ -37,7 +41,7 @@ test("fiscal-sponsor mode activates only with complete public disclosures", () =
     FISCAL_SPONSOR_TAX_RECEIPT_DISCLOSURE:
       "US charitable receipts are issued by the sponsor; treatment elsewhere depends on donor jurisdiction.",
     FISCAL_SPONSOR_REFUND_POLICY_URL: "https://example.org/refunds",
-  } as NodeJS.ProcessEnv);
+  }));
 
   assert.equal(readiness.mode, "fiscal_sponsor");
   assert.equal(readiness.sponsorStatus, "active");
@@ -48,7 +52,7 @@ test("fiscal-sponsor mode activates only with complete public disclosures", () =
 });
 
 test("fiscal-sponsor mode rejects non-HTTPS contribution and refund URLs", () => {
-  const readiness = getMoralTradeFundingReadiness({
+  const readiness = getMoralTradeFundingReadiness(testEnv({
     MORAL_TRADE_FUNDING_MODE: "fiscal_sponsor",
     FISCAL_SPONSOR_LEGAL_NAME: "Example Sponsor",
     FISCAL_SPONSOR_JURISDICTION: "United States — 501(c)(3)",
@@ -56,7 +60,7 @@ test("fiscal-sponsor mode rejects non-HTTPS contribution and refund URLs", () =>
     FISCAL_SPONSOR_FEE_DISCLOSURE: "Sponsor fee disclosed.",
     FISCAL_SPONSOR_TAX_RECEIPT_DISCLOSURE: "Receipt status disclosed.",
     FISCAL_SPONSOR_REFUND_POLICY_URL: "not-a-url",
-  } as NodeJS.ProcessEnv);
+  }));
 
   assert.equal(readiness.projectFundingAvailable, false);
   assert.equal(readiness.sponsorStatus, "configuration_incomplete");

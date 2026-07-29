@@ -37,32 +37,54 @@ function readRepoFile(path: string) {
   return readFileSync(join(process.cwd(), path), "utf8");
 }
 
+interface PrimaryNavItem {
+  href: string;
+  label: string;
+  description?: string;
+  section?: string;
+}
+
+interface PrimaryNavEntry {
+  href?: string;
+  label: string;
+  summary?: string;
+  items?: readonly PrimaryNavItem[];
+}
+
+function getTypedPrimaryNavLinks(): readonly PrimaryNavEntry[] {
+  return getPrimaryNavLinks(false);
+}
+
 function flattenPrimaryNavHrefs() {
-  return getPrimaryNavLinks(false).flatMap((link) => link.items.map((item) => item.href));
+  return getTypedPrimaryNavLinks().flatMap((link) =>
+    link.items?.map((item) => item.href) ?? (link.href ? [link.href] : []),
+  );
 }
 
 test("public navigation exposes professional marketplace routes", () => {
-  const labels = getPrimaryNavLinks(false).map((link) => link.label);
+  const primaryNavLinks = getTypedPrimaryNavLinks();
+  const labels = primaryNavLinks.map((link) => link.label);
   const hrefs = flattenPrimaryNavHrefs();
-  const footerHrefs = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));
-  const tradeMenu = getPrimaryNavLinks(false).find((link) => link.label === "Trade");
-  const publicGoodsMenu = getPrimaryNavLinks(false).find((link) => link.label === "Moral Public Goods");
+  const footerHrefs: string[] = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));
+  const tradeMenu = primaryNavLinks.find((link) => link.label === "Trade");
+  const publicGoodsMenu = primaryNavLinks.find((link) => link.label === "Moral Public Goods");
   const groupBuyingSearchResults = filterSiteSearchItems("group buying", 6);
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
   const authenticatedPrimaryAction = getTopbarActions(true).primaryAction;
+  const unauthenticatedActions = getTopbarActions(false);
 
   assert.deepEqual(labels, ["Trade", "Moral Public Goods"]);
   assert.equal(getTopbarActions(false).primaryAction, undefined);
   assert.ok(authenticatedPrimaryAction);
   assert.equal(authenticatedPrimaryAction.href, "/offers/new?mode=offset");
   assert.equal(authenticatedPrimaryAction.label, "Create trade");
-  assert.equal(getTopbarActions(false).authLink.label, "Sign in");
+  assert.equal(unauthenticatedActions.authLink?.label, "Sign in");
   assert.match(tradeMenu?.summary ?? "", /bounded moral trade commitments/);
   assert.match(publicGoodsMenu?.summary ?? "", /common budgets, and group-buying pools/);
-  assert.ok(getPrimaryNavLinks(false).every((link) => link.items?.every((item) => item.description)));
-  assert.ok(getPrimaryNavLinks(false).every((link) => link.items?.every((item) => item.section)));
+  assert.ok(primaryNavLinks.every((link) => link.items?.every((item) => item.description)));
+  assert.ok(primaryNavLinks.every((link) => link.items?.every((item) => item.section)));
   assert.ok(tradeMenu?.items?.some((item) => item.label === "Create donation offset" && item.section === "Participate"));
   assert.ok(tradeMenu?.items?.some((item) => item.label === "Group buying" && item.section === "Trade lanes"));
   assert.equal(

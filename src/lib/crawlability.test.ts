@@ -6,7 +6,7 @@ import test from "node:test";
 import { GET as aiTxtRoute } from "@/app/ai.txt/route";
 import { metadata as faqMetadata } from "@/app/faq/page";
 import { metadata as howItWorksMetadata } from "@/app/how-it-works/page";
-import { metadata as offersMetadata } from "@/app/offers/page";
+import { generateMetadata as generateOffersMetadata } from "@/app/offers/page";
 import { metadata as offersNewMetadata } from "@/app/offers/new/page";
 import { metadata as paidActionOffersMetadata } from "@/app/paid-action-offers/page";
 import { GET as robotsTxtRoute } from "@/app/robots.txt/route";
@@ -136,7 +136,8 @@ test("paid action offers page has crawler-readable SSR content and honest metada
   assert.equal(JSON.stringify(paidActionOffersMetadata).includes("noindex"), false);
 });
 
-test("public route metadata has unique titles, descriptions, canonicals, and indexable robots", () => {
+test("public route metadata has unique titles, descriptions, canonicals, and indexable robots", async () => {
+  const offersMetadata = await generateOffersMetadata({ searchParams: Promise.resolve({}) });
   const publicMetadata = [
     ["/what-is-moral-trade", whatIsMoralTradeMetadata],
     ["/how-it-works", howItWorksMetadata],
