@@ -271,6 +271,22 @@ export function mergeLlmSmartQueryResolution(
   };
 }
 
+const DEFAULT_SMART_QUERY_LLM_TIMEOUT_MS = 12_000;
+const MIN_SMART_QUERY_LLM_TIMEOUT_MS = 3_000;
+const MAX_SMART_QUERY_LLM_TIMEOUT_MS = 20_000;
+
+export function smartQueryLlmTimeoutMs(
+  rawValue = process.env.OPENAI_QUERY_TIMEOUT_MS,
+) {
+  if (!rawValue) return DEFAULT_SMART_QUERY_LLM_TIMEOUT_MS;
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed)) return DEFAULT_SMART_QUERY_LLM_TIMEOUT_MS;
+  return Math.min(
+    MAX_SMART_QUERY_LLM_TIMEOUT_MS,
+    Math.max(MIN_SMART_QUERY_LLM_TIMEOUT_MS, Math.round(parsed)),
+  );
+}
+
 export async function resolveSmartQueryWithLlm(
   base: SmartQueryInterpretation,
 ): Promise<LlmSmartQueryResult> {
@@ -289,7 +305,7 @@ export async function resolveSmartQueryWithLlm(
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3_000);
+  const timeout = setTimeout(() => controller.abort(), smartQueryLlmTimeoutMs());
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
