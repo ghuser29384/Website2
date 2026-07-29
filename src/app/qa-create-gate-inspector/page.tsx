@@ -2,8 +2,8 @@ export const dynamic = "force-static";
 
 const REPOSITORY = "ghuser29384/Website2";
 const BRANCH = "ops/create-adapter-authenticated-qa-20260728";
-const TARGET_HEAD = "b8f1450618390b88b3fbc472e8abe98226be4a32";
-const WORKFLOW_NAME = "Prepare integrated Create release QA previews";
+const TARGET_HEAD = "05f0a47df0d7851d17d3fbc9f475059291475e0d";
+const WORKFLOW_NAME = "Authenticated Create adapter isolated-QA release gate";
 
 type Run = {
   id: number;
@@ -107,7 +107,7 @@ export default async function QaCreateGateInspectorPage() {
 
   return (
     <main>
-      <h1>Prepare Create release QA previews inspector</h1>
+      <h1>Authenticated Create QA gate inspector</h1>
       <pre>{JSON.stringify(payload, null, 2)}</pre>
     </main>
   );
