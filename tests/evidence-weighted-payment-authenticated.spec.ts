@@ -192,7 +192,7 @@ async function nominatePaymentReviewer(page: Page, reviewerId: string) {
     }),
   });
   await expect(form).toHaveCount(1);
-  await form.getByLabel("Eligible reviewer", { exact: true }).selectOption(reviewerId);
+  await form.locator('select[name="reviewer_id"]').selectOption(reviewerId);
   await form
     .getByRole("button", { name: "Record payment-reviewer nomination", exact: true })
     .click();
@@ -210,9 +210,7 @@ async function nominatePaymentAppealReviewer(page: Page, reviewerId: string) {
     }),
   });
   await expect(form).toHaveCount(1);
-  await form
-    .getByLabel("Eligible appeal reviewer", { exact: true })
-    .selectOption(reviewerId);
+  await form.locator('select[name="reviewer_id"]').selectOption(reviewerId);
   await form
     .getByRole("button", { name: "Record payment-appeal nomination", exact: true })
     .click();
