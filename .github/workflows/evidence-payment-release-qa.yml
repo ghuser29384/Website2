@@ -170,6 +170,47 @@ jobs:
             --file supabase/tests/evidence_weighted_payment_browser_fixture.sql \
             | tee evidence-payment-fixture.log
 
+      - name: Verify the synthetic Auth contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' | tee evidence-payment-auth-contract.log
+          import { createClient } from "@supabase/supabase-js";
+
+          const emails = [
+            "evidence-payment-payer@qa.invalid",
+            "evidence-payment-payee@qa.invalid",
+            "evidence-payment-reviewer@qa.invalid",
+            "evidence-payment-appeal-reviewer@qa.invalid",
+            "evidence-payment-outsider@qa.invalid",
+            "evidence-payment-admin@qa.invalid",
+          ];
+
+          for (const email of emails) {
+            const client = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL,
+              process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+              {
+                auth: {
+                  autoRefreshToken: false,
+                  detectSessionInUrl: false,
+                  persistSession: false,
+                },
+              },
+            );
+            const { error } = await client.auth.signInWithPassword({
+              email,
+              password: process.env.EVIDENCE_PAYMENT_QA_PASSWORD,
+            });
+            if (error) {
+              throw new Error(`Synthetic Auth sign-in failed for ${email}: ${error.message}`);
+            }
+            await client.auth.signOut({ scope: "local" });
+          }
+
+          console.log(`Verified ${emails.length} isolated-QA synthetic Auth identities.`);
+          NODE
+
       - name: Build the exact candidate
         shell: bash
         run: |
