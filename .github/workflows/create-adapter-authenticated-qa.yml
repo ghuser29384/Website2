@@ -140,6 +140,25 @@ jobs:
               raise SystemExit('The case-sensitive receipt-status assertion was not found exactly once.')
           browser = browser.replace(receipt_status_old, receipt_status_new)
 
+          owner_receipt_old = '''    record("owner receipt repeats pending-review boundary", (await creatorPage.locator("body").innerText()).includes("not public") && (await creatorPage.locator("body").innerText()).includes("Pending Review"));'''
+          owner_receipt_new = '''    await creatorPage.getByText("Durable Create receipt", { exact: true }).waitFor({
+              state: "visible",
+              timeout: 30_000,
+            });
+            await creatorPage.getByText("Pending Review", { exact: true }).waitFor({
+              state: "visible",
+              timeout: 30_000,
+            });
+            const ownerReceiptBody = await creatorPage.locator("body").innerText();
+            record(
+              "owner receipt repeats pending-review boundary",
+              ownerReceiptBody.includes("not public") && ownerReceiptBody.includes("Pending Review"),
+              ownerReceiptBody,
+            );'''
+          if browser.count(owner_receipt_old) != 1:
+              raise SystemExit('The immediate owner-receipt assertion was not found exactly once.')
+          browser = browser.replace(owner_receipt_old, owner_receipt_new)
+
           browser_path.write_text(browser)
           PY
           chmod +x /tmp/run-create-adapter-qa.sh
@@ -181,4 +200,4 @@ jobs:
           QA_OUTCOME: ${{ steps.qa.outcome }}
         run: test "$QA_OUTCOME" = success
 
-# Normalizes rendered status casing while preserving the required pending-review semantics.
+# Waits for the server-rendered owner receipt before asserting its pending-review boundary.
