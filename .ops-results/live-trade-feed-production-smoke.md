@@ -3,8 +3,8 @@
 - Result: **FAIL**
 - Production commit: `57a9224771636140c73b0b4156992e8ccfd8eb0d`
 - Production URL: `https://www.moraltrade.org`
-- GitHub Actions run: `30469738338`
-- Completed: `2026-07-29T16:14:55.991Z`
+- GitHub Actions run: `30470010588`
+- Completed: `2026-07-29T16:18:19.322Z`
 
 | Identity field | `/feed` | `/#trade` | Match |
 |---|---|---|---:|
@@ -20,4 +20,9 @@
 ## Cleanup leftovers
 ```json
 {}
+```
+
+## Failure
+```text
+Create synthetic auth user mt-feed-parity-viewer-30470010588-885eb595@example.test: Invalid API key
 ```
