@@ -2,18 +2,8 @@ export const dynamic = "force-static";
 
 const REPOSITORY = "ghuser29384/Website2";
 const BRANCH = "ops/create-adapter-authenticated-qa-20260728";
-const TARGETS = [
-  {
-    label: "prepare",
-    head: "d682e3c0f532868f9e0a218f63dbd1753cb02739",
-    workflow: "Prepare integrated Create release QA previews",
-  },
-  {
-    label: "authenticated",
-    head: "7543bed8be511f6fff154a164365cd7801341117",
-    workflow: "Authenticated Create adapter isolated-QA release gate",
-  },
-] as const;
+const TARGET_HEAD = "7543bed8be511f6fff154a164365cd7801341117";
+const WORKFLOW_NAME = "Authenticated Create adapter isolated-QA release gate";
 
 type Run = {
   id: number;
@@ -24,6 +14,26 @@ type Run = {
   created_at: string;
   updated_at: string;
   html_url: string;
+};
+
+type Job = {
+  id: number;
+  name: string;
+  status: string;
+  conclusion: string | null;
+  steps?: Array<{
+    name: string;
+    status: string;
+    conclusion: string | null;
+    number: number;
+  }>;
+};
+
+type Artifact = {
+  id: number;
+  name: string;
+  size_in_bytes: number;
+  expired: boolean;
 };
 
 async function githubJson<T>(path: string): Promise<T> {
@@ -47,42 +57,56 @@ export default async function QaCreateGateInspectorPage() {
   const runsResponse = await githubJson<{ workflow_runs?: Run[] }>(
     `/repos/${REPOSITORY}/actions/runs?branch=${encodeURIComponent(BRANCH)}&event=push&per_page=100`,
   );
-  const allRuns = (runsResponse.workflow_runs ?? []).sort((left, right) =>
-    left.created_at.localeCompare(right.created_at),
-  );
+  const run = (runsResponse.workflow_runs ?? [])
+    .filter((candidate) => candidate.name === WORKFLOW_NAME && candidate.head_sha === TARGET_HEAD)
+    .sort((left, right) => left.created_at.localeCompare(right.created_at))
+    .at(-1) ?? null;
 
-  const inspections = [];
-  for (const target of TARGETS) {
-    const run = allRuns
-      .filter((candidate) => candidate.name === target.workflow && candidate.head_sha === target.head)
-      .at(-1) ?? null;
-    let jobs: unknown[] = [];
-    let artifacts: unknown[] = [];
-    if (run) {
-      const [jobsResponse, artifactsResponse] = await Promise.all([
-        githubJson<{ jobs?: unknown[] }>(
-          `/repos/${REPOSITORY}/actions/runs/${run.id}/jobs?per_page=100`,
-        ),
-        githubJson<{ artifacts?: unknown[] }>(
-          `/repos/${REPOSITORY}/actions/runs/${run.id}/artifacts?per_page=100`,
-        ),
-      ]);
-      jobs = jobsResponse.jobs ?? [];
-      artifacts = artifactsResponse.artifacts ?? [];
-    }
-    inspections.push({ target, run, jobs, artifacts });
+  let jobs: Job[] = [];
+  let artifacts: Artifact[] = [];
+  if (run) {
+    const [jobsResponse, artifactsResponse] = await Promise.all([
+      githubJson<{ jobs?: Job[] }>(
+        `/repos/${REPOSITORY}/actions/runs/${run.id}/jobs?per_page=100`,
+      ),
+      githubJson<{ artifacts?: Artifact[] }>(
+        `/repos/${REPOSITORY}/actions/runs/${run.id}/artifacts?per_page=100`,
+      ),
+    ]);
+    jobs = jobsResponse.jobs ?? [];
+    artifacts = artifactsResponse.artifacts ?? [];
   }
 
   const payload = {
-    inspections,
-    recentRuns: allRuns.slice(-20),
+    targetHead: TARGET_HEAD,
+    run: run && {
+      id: run.id,
+      status: run.status,
+      conclusion: run.conclusion,
+      createdAt: run.created_at,
+      updatedAt: run.updated_at,
+      url: run.html_url,
+    },
+    jobs: jobs.map((job) => ({
+      id: job.id,
+      name: job.name,
+      status: job.status,
+      conclusion: job.conclusion,
+      steps: job.steps,
+    })),
+    artifacts: artifacts.map((artifact) => ({
+      id: artifact.id,
+      name: artifact.name,
+      size: artifact.size_in_bytes,
+      expired: artifact.expired,
+    })),
   };
 
-  console.log(`CREATE_QA_GATE_INSPECTOR ${JSON.stringify(payload)}`);
+  console.log(`CREATE_QA_GATE_COMPACT ${JSON.stringify(payload)}`);
 
   return (
     <main>
-      <h1>Create release QA inspector</h1>
+      <h1>Authenticated Create QA gate inspector</h1>
       <pre>{JSON.stringify(payload, null, 2)}</pre>
     </main>
   );
