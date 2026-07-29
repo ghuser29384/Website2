@@ -12,9 +12,15 @@
   </style>
 </head>
 <body>
+  <!-- The root URL remains the live Feed; Trade creation routes through /trades/new. -->
   <main><p id="loading">Loading Moral Trade…</p></main>
   <script>
     (async () => {
+      if (window.location.hash === '#trade') {
+        window.location.replace('/trades/new');
+        return;
+      }
+
       try {
         const stripLegacyNowFocus = (source) => {
           const startMarker = 'function nowFocus(){';
@@ -158,6 +164,7 @@
           ? source.replace('</head>', `${headEnhancements}</head>`)
           : `${headEnhancements}${source}`;
         const enhancementScripts = [
+          '<script src="/moral-trade-live-create-router.js"><\/script>',
           '<script src="/moral-trade-live-navigation.js"><\/script>',
           '<script src="/moral-trade-live-local-time.js"><\/script>',
           '<script src="/moral-trade-live-route-resources.js"><\/script>',
