@@ -19,8 +19,16 @@ const idempotencyMigration = readFileSync(
   "supabase/migrations/20260729170500_recommendation_training_idempotency_provenance.sql",
   "utf8",
 );
+const denyPolicyMigration = readFileSync(
+  "supabase/migrations/20260729171000_recommendation_training_slot_deny_policies.sql",
+  "utf8",
+);
+const indexMigration = readFileSync(
+  "supabase/migrations/20260729171500_recommendation_training_provenance_fk_indexes.sql",
+  "utf8",
+);
 const config = readFileSync("next.config.ts", "utf8");
-const vercel = readFileSync("vercel.mjs", "utf8");
+const vercel = readFileSync("vercel.ts", "utf8");
 const vercelProjectConfig = readFileSync("scripts/vercel-project-config.mjs", "utf8");
 const stage = readFileSync("src/components/core-trade/trade-agreement-stage.tsx", "utf8");
 const loader = readFileSync("public/moral-trade-live.html", "utf8");
@@ -64,13 +72,16 @@ test("natural training is project-owned, durable, and auditable", () => {
   assert.match(vercelProjectConfig, /projectId !== DUPLICATE_WEBSITE2_PROJECT_ID/);
   assert.match(vercelProjectConfig, /\/api\/jobs\/recommendation-training/);
   assert.match(trainingRoute, /runParetoRecommendationTrainingExecution/);
+  assert.match(execution, /x-vercel-cron-schedule/);
   assert.match(execution, /claim_recommendation_training_slot/);
   assert.match(execution, /complete_recommendation_training_slot/);
   assert.match(execution, /duplicate_scheduled_slot/);
   assert.match(idempotencyMigration, /recommendation_training_slots/);
   assert.match(idempotencyMigration, /one_canonical_slot/);
   assert.match(idempotencyMigration, /noncanonical_duplicate/);
-  assert.match(idempotencyMigration, /PROD|production|canonical/i);
+  assert.match(denyPolicyMigration, /deny_browser_access/);
+  assert.match(indexMigration, /recommendation_training_slots_run_idx/);
+  assert.match(indexMigration, /recommendation_training_slots_model_idx/);
 });
 
 test("completed agreements collect private own-lights and additionality feedback", () => {
