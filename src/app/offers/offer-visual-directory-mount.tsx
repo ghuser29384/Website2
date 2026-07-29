@@ -103,18 +103,13 @@ export function OfferVisualDirectoryMount() {
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    if (!queryState.shouldShow) {
-      setEntries([]);
-      setHost(null);
-      return;
-    }
+    if (!queryState.shouldShow) return;
 
     document.getElementById(HOST_ID)?.remove();
     const portalHost = document.createElement("div");
     portalHost.id = HOST_ID;
     portalHost.className = styles.portalHost;
     portalHost.dataset.visualOfferDirectory = "true";
-    setHost(portalHost);
 
     const controller = new AbortController();
     let payload: OfferPlaneResponse | null = null;
@@ -172,7 +167,10 @@ export function OfferVisualDirectoryMount() {
 
     const observer = new MutationObserver(syncDirectory);
     observer.observe(document.body, { childList: true, subtree: true });
-    const frame = window.requestAnimationFrame(syncDirectory);
+    const frame = window.requestAnimationFrame(() => {
+      setHost(portalHost);
+      syncDirectory();
+    });
 
     fetch("/api/offers/plane", {
       cache: "no-store",

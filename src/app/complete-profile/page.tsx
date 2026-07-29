@@ -98,6 +98,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
   return (
     <div className={styles.pageShell}>
       <CompleteProfileConnections
+        key={initialConnectionsOpen ? "connections-open" : "connections-closed"}
         feedback={formMessage}
         initialOpen={initialConnectionsOpen}
         isAuthenticated={Boolean(viewer)}

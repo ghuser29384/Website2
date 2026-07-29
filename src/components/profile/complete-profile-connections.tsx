@@ -108,10 +108,6 @@ export function CompleteProfileConnections({
   const descriptionId = useId();
 
   useEffect(() => {
-    if (initialOpen) setOpen(true);
-  }, [initialOpen]);
-
-  useEffect(() => {
     if (!open) return;
 
     const previousOverflow = document.body.style.overflow;
