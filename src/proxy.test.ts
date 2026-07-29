@@ -30,7 +30,7 @@ test("a first human homepage visit redirects to the mandatory walkthrough", () =
   assert.equal(response.headers.get("cache-control"), "private, no-store");
 });
 
-test("a returning visitor receives the exact live homepage", () => {
+test("a returning visitor receives the unified Create interface at the Trade entry", () => {
   const response = proxy(
     makeRequest("/?utm_source=invite", { cookie: `${WALKTHROUGH_SEEN_COOKIE}=1` }),
   );
@@ -38,7 +38,7 @@ test("a returning visitor receives the exact live homepage", () => {
   assert.equal(response.status, 200);
   assert.equal(
     response.headers.get("x-middleware-rewrite"),
-    "https://moraltrade.org/moral-trade-live.html?utm_source=invite",
+    "https://moraltrade.org/trades/new?utm_source=invite",
   );
   assert.equal(response.headers.get("location"), null);
   assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
@@ -53,7 +53,7 @@ test("opening the walkthrough directly records the visit without redirecting", (
   assert.equal(response.headers.get("cache-control"), "private, no-store");
 });
 
-test("bots and prefetches receive the live homepage without consuming the walkthrough", () => {
+test("bots and prefetches receive the unified Create interface without consuming the walkthrough", () => {
   const botResponse = proxy(
     makeRequest("/", { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }),
   );
@@ -65,11 +65,30 @@ test("bots and prefetches receive the live homepage without consuming the walkth
     assert.equal(response.status, 200);
     assert.equal(
       response.headers.get("x-middleware-rewrite"),
-      "https://moraltrade.org/moral-trade-live.html",
+      "https://moraltrade.org/trades/new",
     );
     assert.equal(response.headers.get("location"), null);
     assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
   }
+});
+
+test("the default Create route is replaced by the unified Create interface", () => {
+  const response = proxy(makeRequest("/create?source=topbar&resume=create"));
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    response.headers.get("x-middleware-rewrite"),
+    "https://moraltrade.org/trades/new?source=topbar&resume=create",
+  );
+  assert.equal(response.headers.get("location"), null);
+});
+
+test("the reviewed career-backing lane remains available", () => {
+  const response = proxy(makeRequest("/create?source=walkthrough&mode=back"));
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-middleware-next"), "1");
+  assert.equal(response.headers.get("x-middleware-rewrite"), null);
 });
 
 test("the legacy queryless offers entry opens Discover", () => {
@@ -92,20 +111,32 @@ test("query-driven offer searches continue to default to the live list", () => {
   );
 });
 
-test("explicit offer views pass through without redirecting", () => {
-  const response = proxy(makeRequest("/offers?view=templates"));
+test("the Create Offer template page is replaced by the unified Create interface", () => {
+  const response = proxy(makeRequest("/offers?view=templates&utm_source=legacy"));
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    response.headers.get("x-middleware-rewrite"),
+    "https://moraltrade.org/trades/new?view=templates&utm_source=legacy",
+  );
+  assert.equal(response.headers.get("location"), null);
+});
+
+test("legacy template tabs are also replaced by the unified Create interface", () => {
+  const response = proxy(makeRequest("/offers?tab=templates&utm_source=legacy"));
+
+  assert.equal(response.status, 200);
+  assert.equal(
+    response.headers.get("x-middleware-rewrite"),
+    "https://moraltrade.org/trades/new?tab=templates&utm_source=legacy",
+  );
+  assert.equal(response.headers.get("location"), null);
+});
+
+test("non-template explicit offer views pass through without redirecting", () => {
+  const response = proxy(makeRequest("/offers?view=live"));
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("x-middleware-next"), "1");
   assert.equal(response.headers.get("location"), null);
-});
-
-test("legacy template tabs canonicalize to the real template library", () => {
-  const response = proxy(makeRequest("/offers?tab=templates&utm_source=legacy"));
-
-  assert.equal(response.status, 307);
-  assert.equal(
-    response.headers.get("location"),
-    "https://moraltrade.org/offers?utm_source=legacy&view=templates",
-  );
 });
