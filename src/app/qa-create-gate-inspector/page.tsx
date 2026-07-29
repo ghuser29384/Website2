@@ -2,7 +2,7 @@ export const dynamic = "force-static";
 
 const REPOSITORY = "ghuser29384/Website2";
 const BRANCH = "ops/create-adapter-authenticated-qa-20260728";
-const EXPECTED_QA_HEAD = "a2308552eff0fe21f3a9c53c4e51a2d34854c4ae";
+const EXPECTED_QA_HEAD = "fef478083c2ce5c69d8c07060e233d0eb343dc21";
 const WORKFLOW_NAME = "Authenticated Create adapter isolated-QA release gate";
 
 type Run = {
