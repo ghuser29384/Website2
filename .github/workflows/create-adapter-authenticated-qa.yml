@@ -200,6 +200,60 @@ jobs:
               raise SystemExit('The immediate owner-receipt assertion was not found exactly once.')
           browser = browser.replace(owner_receipt_old, owner_receipt_new)
 
+          contributor_denial_old = '''    const contributorReceiptResponse = await contributorPage.goto(receipt.canonicalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+              record("contributor cannot open creator receipt", Boolean(contributorReceiptResponse && contributorReceiptResponse.status() === 404), String(contributorReceiptResponse?.status()));
+              record("contributor denial leaks no marker", !(await contributorPage.locator("body").innerText()).includes(marker));'''
+          contributor_denial_new = '''    const contributorReceiptResponse = await contributorPage.goto(receipt.canonicalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+              const contributorReceiptBody = await contributorPage.locator("body").innerText();
+              const contributorDenied = Boolean(
+                contributorReceiptResponse && (
+                  contributorReceiptResponse.status() === 404
+                  || /(?:404|not found|could not be found)/i.test(contributorReceiptBody)
+                )
+              );
+              record(
+                "contributor cannot open creator receipt",
+                contributorDenied,
+                JSON.stringify({
+                  status: contributorReceiptResponse?.status(),
+                  url: contributorPage.url(),
+                  body: contributorReceiptBody.slice(0, 1200),
+                }),
+              );
+              record("contributor denial leaks no submission id", !contributorReceiptBody.includes(receipt.submissionId), contributorReceiptBody);
+              record("contributor denial leaks no marker", !contributorReceiptBody.includes(marker), contributorReceiptBody);'''
+          if browser.count(contributor_denial_old) != 1:
+              raise SystemExit('The contributor receipt-denial assertion block was not found exactly once.')
+          browser = browser.replace(contributor_denial_old, contributor_denial_new)
+
+          outsider_denial_old = '''    const outsiderReceiptResponse = await outsiderPage.goto(receipt.canonicalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+              record("outsider cannot open creator receipt", Boolean(outsiderReceiptResponse && outsiderReceiptResponse.status() === 404), String(outsiderReceiptResponse?.status()));
+              const outsiderBody = await outsiderPage.locator("body").innerText();
+              record("outsider denial leaks no submission id", !outsiderBody.includes(receipt.submissionId));
+              record("outsider denial leaks no marker", !outsiderBody.includes(marker));'''
+          outsider_denial_new = '''    const outsiderReceiptResponse = await outsiderPage.goto(receipt.canonicalUrl, { waitUntil: "domcontentloaded", timeout: 60_000 });
+              const outsiderBody = await outsiderPage.locator("body").innerText();
+              const outsiderDenied = Boolean(
+                outsiderReceiptResponse && (
+                  outsiderReceiptResponse.status() === 404
+                  || /(?:404|not found|could not be found)/i.test(outsiderBody)
+                )
+              );
+              record(
+                "outsider cannot open creator receipt",
+                outsiderDenied,
+                JSON.stringify({
+                  status: outsiderReceiptResponse?.status(),
+                  url: outsiderPage.url(),
+                  body: outsiderBody.slice(0, 1200),
+                }),
+              );
+              record("outsider denial leaks no submission id", !outsiderBody.includes(receipt.submissionId), outsiderBody);
+              record("outsider denial leaks no marker", !outsiderBody.includes(marker), outsiderBody);'''
+          if browser.count(outsider_denial_old) != 1:
+              raise SystemExit('The outsider receipt-denial assertion block was not found exactly once.')
+          browser = browser.replace(outsider_denial_old, outsider_denial_new)
+
           browser_path.write_text(browser)
           PY
           chmod +x /tmp/run-create-adapter-qa.sh
@@ -266,6 +320,6 @@ jobs:
           test "$QA_OUTCOME" = success
           test "$BYPASS_CLEANUP_OUTCOME" = success
 
-# Uses a one-run automation bypass rather than a user-scoped Vercel share link, then
-# revokes it after the full creator, contributor, outsider, desktop, mobile, RLS,
-# idempotency, pending-review, fail-closed, cleanup, and zero-residue sequence.
+# Validates denial semantically as well as by status because streamed Next.js not-found
+# responses may have an HTTP 200 after headers are committed. Any receipt identifier or
+# marker in the denied body still fails the release gate.
