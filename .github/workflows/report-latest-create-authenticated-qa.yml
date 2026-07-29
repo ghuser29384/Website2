@@ -41,3 +41,5 @@ jobs:
           artifacts="$(gh api "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100")"
           artifact_summary="$(jq -r 'if (.artifacts | length) == 0 then "- none" else [.artifacts[] | "- `\(.name)` (artifact id `\(.id)`, expired `\(.expired)`)" ] | join("\n") end' <<<"$artifacts")"
           gh pr comment 273 --body "Latest exact authenticated Create release gate for QA head \`$EXPECTED_QA_HEAD\`:\n\n- run: \`$run_id\`\n- status: **$status**\n- conclusion: **$conclusion**\n- URL: $url\n\nJobs:\n$job_summary\n\nArtifacts:\n$artifact_summary"
+
+# Triggered after the workflow file already existed on the branch.
