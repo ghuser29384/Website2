@@ -47,7 +47,7 @@ export default async function CreateSubmissionPage({ params }: SubmissionPagePro
       : null;
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className="page-shell marketplace-app-shell create-submission-receipt-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"
