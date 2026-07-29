@@ -64,13 +64,28 @@ const ASSET_LINKS = `  <link rel="stylesheet" href="/moral-trade-create/common-g
 const DEFERRED_SCRIPT = `  <script defer src="/moral-trade-create/common-ground.js"></script>
 `;
 
-function replaceExactlyOnce(source: string, oldValue: string, newValue: string, label: string) {
-  const firstIndex = source.indexOf(oldValue);
-  const lastIndex = source.lastIndexOf(oldValue);
-  if (firstIndex < 0 || firstIndex !== lastIndex) {
-    throw new Error(`The Create interface ${label} contract could not be located exactly once.`);
+function occurrenceCount(source: string, value: string) {
+  return source.split(value).length - 1;
+}
+
+function replaceExactCount(
+  source: string,
+  oldValue: string,
+  newValue: string,
+  expectedCount: number,
+  label: string,
+) {
+  const actualCount = occurrenceCount(source, oldValue);
+  if (actualCount !== expectedCount) {
+    throw new Error(
+      `The Create interface ${label} contract was expected ${expectedCount} time(s), but appeared ${actualCount}.`,
+    );
   }
-  return source.replace(oldValue, newValue);
+  return source.split(oldValue).join(newValue);
+}
+
+function replaceExactlyOnce(source: string, oldValue: string, newValue: string, label: string) {
+  return replaceExactCount(source, oldValue, newValue, 1, label);
 }
 
 export function integrateCommonGroundCreateSource(source: string) {
@@ -78,7 +93,7 @@ export function integrateCommonGroundCreateSource(source: string) {
 
   let integrated = source;
   integrated = replaceExactlyOnce(integrated, HEADER_COPY[0], HEADER_COPY[1], "header-copy");
-  integrated = replaceExactlyOnce(integrated, REQUEST_COPY[0], REQUEST_COPY[1], "request-copy");
+  integrated = replaceExactCount(integrated, REQUEST_COPY[0], REQUEST_COPY[1], 2, "request-copy");
   integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");
   integrated = replaceExactlyOnce(
     integrated,
