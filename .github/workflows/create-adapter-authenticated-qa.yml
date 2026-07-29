@@ -111,6 +111,39 @@ jobs:
               raise SystemExit(f'Expected three auth.users value rows; found {runner.count(user_values_old)}.')
           runner = runner.replace(user_values_old, "'', '', '', '', '', '', false, false, now(), now())")
 
+          verify_log = '  log "verifying durable records, idempotency, and outsider RLS"'
+          if runner.count(verify_log) != 1:
+              raise SystemExit('The durable-record verification block marker was not found exactly once.')
+          verify_log_index = runner.index(verify_log)
+          verify_heredoc_index = runner.index("<<'SQL'", verify_log_index)
+          verify_sql_start = verify_heredoc_index + len("<<'SQL'")
+          verify_sql_end = runner.index("\nSQL\nelse", verify_sql_start)
+          verify_sql = runner[verify_sql_start:verify_sql_end]
+          verify_substitutions = [
+              (":'submission_id'::uuid", "current_setting('moral_trade_qa.submission_id')::uuid"),
+              (":'creator_id'::uuid", "current_setting('moral_trade_qa.creator_id')::uuid"),
+              (":'contributor_id'::uuid", "current_setting('moral_trade_qa.contributor_id')::uuid"),
+              (":'outsider_id'::uuid", "current_setting('moral_trade_qa.outsider_id')::uuid"),
+              (":'target_id'::uuid", "current_setting('moral_trade_qa.target_id')::uuid"),
+              (":'submission_key'", "current_setting('moral_trade_qa.submission_key')"),
+              (":'submission_id'", "current_setting('moral_trade_qa.submission_id')"),
+              (":'qa_marker'", "current_setting('moral_trade_qa.qa_marker')"),
+              (":'outsider_id'", "current_setting('moral_trade_qa.outsider_id')"),
+          ]
+          for old, new in verify_substitutions:
+              if verify_sql.count(old) < 1:
+                  raise SystemExit(f'The verification SQL token {old!r} was not found.')
+              verify_sql = verify_sql.replace(old, new)
+          verify_prelude = '''
+          select set_config('moral_trade_qa.creator_id', :'creator_id', false);
+          select set_config('moral_trade_qa.contributor_id', :'contributor_id', false);
+          select set_config('moral_trade_qa.outsider_id', :'outsider_id', false);
+          select set_config('moral_trade_qa.submission_id', :'submission_id', false);
+          select set_config('moral_trade_qa.target_id', :'target_id', false);
+          select set_config('moral_trade_qa.submission_key', :'submission_key', false);
+          select set_config('moral_trade_qa.qa_marker', :'qa_marker', false);'''
+          runner = runner[:verify_sql_start] + verify_prelude + verify_sql + runner[verify_sql_end:]
+
           runner_path.write_text(runner)
 
           browser_path = Path('/tmp/create-adapter-authenticated-qa.mjs')
@@ -320,5 +353,5 @@ jobs:
           test "$QA_OUTCOME" = success
           test "$BYPASS_CLEANUP_OUTCOME" = success
 
-# Validates private receipt denial using the exact fail-closed UI as well as HTTP 404,
-# while independently requiring that neither the submission identifier nor QA marker leaks.
+# Passes browser identities into PL/pgSQL through session-local custom settings because
+# psql variables are not substituted inside dollar-quoted DO blocks; cleanup remains exact.
