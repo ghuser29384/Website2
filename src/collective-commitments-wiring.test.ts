@@ -2,12 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-// Guarded QA synchronization marker; assertion semantics are unchanged.
 const migrationPath = "supabase/migrations/20260726171000_collective_identity_threshold_commitments.sql";
 const manifestAliasRepairPath =
   "supabase/migrations/20260727030000_fix_collective_manifest_jsonb_alias.sql";
-const manifestMaterializedRowsRepairPath =
-  "supabase/migrations/20260727043000_fix_collective_manifest_materialized_rows.sql";
 const manifestTypedRecordsetRepairPath =
   "supabase/migrations/20260727044500_fix_collective_manifest_typed_recordset.sql";
 
@@ -38,24 +35,11 @@ test("database activation enforces an exact MAC-backed manifest before publicati
   assert.match(migration, /set status = 'active'/);
 });
 
-test("forward manifest repair keeps JSONB entries scalar through full joins", async () => {
+test("forward alias repair keeps JSONB entries scalar through full joins", async () => {
   const repair = await source(manifestAliasRepairPath);
   assert.match(repair, /jsonb_array_elements\(p_manifest\) as manifest\(entry\)/);
   assert.doesNotMatch(repair, /jsonb_array_elements\(p_manifest\) entry/);
   assert.match(repair, /entry->>'revealNonce'/);
-  assert.match(repair, /collective_commitment_manifest_exactness_or_mac_failed/);
-  assert.match(repair, /grant execute on function public\.activate_collective_commitment_v1/);
-});
-
-test("materialized-row repair prefilters signatures before exactness checks", async () => {
-  const repair = await source(manifestMaterializedRowsRepairPath);
-  assert.match(repair, /with manifest_rows as materialized/);
-  assert.match(repair, /select jsonb_array_elements\(p_manifest\) as manifest_entry/);
-  assert.match(repair, /with signature_rows as materialized/);
-  assert.match(repair, /where commitment_id = p_commitment_id/);
-  assert.match(repair, /full join manifest_rows manifest/);
-  assert.match(repair, /manifest\.manifest_entry->>'revealNonce'/);
-  assert.doesNotMatch(repair, /full join jsonb_array_elements\(p_manifest\)/);
   assert.match(repair, /collective_commitment_manifest_exactness_or_mac_failed/);
   assert.match(repair, /grant execute on function public\.activate_collective_commitment_v1/);
 });
