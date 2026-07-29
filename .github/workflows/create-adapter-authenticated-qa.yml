@@ -23,11 +23,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     env:
-      EXACT_CANDIDATE_SHA: e8288b8084b88e69a6d23ca3e966ab18178fefb8
+      EXACT_CANDIDATE_SHA: ee5ef38aa8141b56f7010d58b524a728ab22f73d
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
-      PREVIEW_BASE_URL: https://website2-lp9x7bexh-ellen-s.vercel.app
-      PREVIEW_SHARE_URL: https://website2-lp9x7bexh-ellen-s.vercel.app/?_vercel_share=lhA9dNAXj9i3dJMhSuCzkdqPqE6dWbY8
+      PREVIEW_BASE_URL: https://website2-p23lofnj0-ellen-s.vercel.app
+      PREVIEW_SHARE_URL: https://website2-p23lofnj0-ellen-s.vercel.app/?_vercel_share=3IXNXo8tHxnRgX1Vrgvo9OjxZc3X8peV
       QA_OUTPUT_DIR: qa-artifacts/create-adapter-authenticated
     steps:
       - name: Check out QA operator branch
@@ -174,7 +174,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: create-adapter-isolated-qa-authenticated-${{ github.run_id }}
+          name: create-adapter-isolated-qa-authenticated-website2-${{ github.run_id }}
           path: |
             /tmp/create-adapter-candidate/qa-artifacts/create-adapter-authenticated
             /tmp/create-adapter-e2e-result.json
@@ -192,7 +192,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           QA_OUTCOME: ${{ steps.qa.outcome }}
         run: |
-          gh pr comment 273 --body "Authenticated isolated-QA Create release gate run \`${GITHUB_RUN_ID}\` completed with outcome **${QA_OUTCOME}** against exact integrated candidate \`${EXACT_CANDIDATE_SHA}\` and Preview \`${PREVIEW_BASE_URL}\`."
+          gh pr comment 275 --body "Authenticated isolated-QA Create release gate run \`${GITHUB_RUN_ID}\` completed with outcome **${QA_OUTCOME}** against exact candidate \`${EXACT_CANDIDATE_SHA}\` and website2 Preview \`${PREVIEW_BASE_URL}\`."
 
       - name: Require all authenticated QA gates
         if: always()
@@ -200,4 +200,5 @@ jobs:
           QA_OUTCOME: ${{ steps.qa.outcome }}
         run: test "$QA_OUTCOME" = success
 
-# Waits for the server-rendered owner receipt before asserting its pending-review boundary.
+# Runs the full creator, contributor, outsider, desktop, mobile, RLS, idempotency,
+# pending-review, fail-closed, cleanup, and zero-residue sequence against the exact release head.
