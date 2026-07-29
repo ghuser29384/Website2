@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { CollectiveCommitmentShell } from "@/components/collective-commitments/collective-commitment-shell";
 import { CollectiveSignatureControls } from "@/components/collective-commitments/collective-signature-controls";
 import styles from "@/components/collective-commitments/collective-commitments.module.css";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import { isCollectiveCommitmentsEnabled } from "@/lib/collective-commitments/config";
 import {
@@ -32,14 +33,6 @@ function statusClass(status: string) {
   if (status === "expired") return `${styles.status} ${styles.statusExpired}`;
   if (status === "activating") return `${styles.status} ${styles.statusActivating}`;
   return styles.status;
-}
-
-function utcDate(value: string) {
-  return `${new Date(value).toLocaleString("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "UTC",
-  })} UTC`;
 }
 
 export default async function CollectiveCommitmentPage({ params }: CollectiveCommitmentPageProps) {
@@ -101,7 +94,7 @@ export default async function CollectiveCommitmentPage({ params }: CollectiveCom
             <section className={styles.termBlock}>
               <dl className={styles.termGrid}>
                 <div><dt>Exact threshold</dt><dd>{commitment.thresholdCount} qualifying verified humans</dd></div>
-                <div><dt>Deadline</dt><dd>{utcDate(commitment.deadlineAt)}</dd></div>
+                <div><dt>Deadline</dt><dd><LocalDateTime fallback="Date unavailable" value={commitment.deadlineAt} /></dd></div>
                 <div><dt>Risk dimensions</dt><dd>{commitment.riskDimensions.length ? commitment.riskDimensions.join(", ") : "No additional dimensions selected"}</dd></div>
                 <div><dt>Frozen-terms hash</dt><dd className={styles.hash}>{commitment.termsHash}</dd></div>
               </dl>
@@ -174,7 +167,7 @@ export default async function CollectiveCommitmentPage({ params }: CollectiveCom
               <div><dt>Terms hash</dt><dd className={styles.hash}>{commitment.receipt.termsHash}</dd></div>
               <div><dt>Signer manifest hash</dt><dd className={styles.hash}>{commitment.receipt.signerManifestHash ?? "No manifest—expired without publication"}</dd></div>
               <div><dt>Receipt hash</dt><dd className={styles.hash}>{commitment.receipt.receiptHash}</dd></div>
-              <div><dt>Recorded</dt><dd>{utcDate(commitment.receipt.createdAt)}</dd></div>
+              <div><dt>Recorded</dt><dd><LocalDateTime fallback="Date unavailable" value={commitment.receipt.createdAt} /></dd></div>
             </dl>
           </section>
         ) : null}
