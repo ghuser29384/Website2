@@ -73,28 +73,24 @@ jobs:
           fi
           test -z "$(git diff --name-only --diff-filter=U)"
 
-          python3 - <<'PY'
-          from pathlib import Path
-
-          config_path = Path("scripts/vercel-project-config.mjs")
-          config = config_path.read_text()
-          old_constants = '''export const RECOMMENDATION_TRAINING_PATH = "/api/jobs/recommendation-training";
-          export const RECOMMENDATION_TRAINING_SCHEDULE = "30 12 * * *";
-          '''
-          new_constants = '''export const RECOMMENDATION_TRAINING_PATH = "/api/jobs/recommendation-training";
+          cat > scripts/vercel-project-config.mjs <<'EOF'
+          export const CANONICAL_MORAL_TRADE_PROJECT_ID = "prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7";
+          export const DUPLICATE_WEBSITE2_PROJECT_ID = "prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK";
+          export const RECOMMENDATION_TRAINING_PATH = "/api/jobs/recommendation-training";
           export const RECOMMENDATION_TRAINING_SCHEDULE = "30 12 * * *";
           export const COLLECTIVE_COMMITMENT_EXPIRY_PATH = "/api/jobs/collective-commitments-expire";
           export const COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE = "*/5 * * * *";
-          '''
-          if config.count(old_constants) != 1:
-              raise SystemExit("Could not locate the Vercel cron constants exactly once.")
-          config = config.replace(old_constants, new_constants)
-          old_cron = '''const recommendationTrainingCron = Object.freeze({
-            path: RECOMMENDATION_TRAINING_PATH,
-            schedule: RECOMMENDATION_TRAINING_SCHEDULE,
-          });
-          '''
-          new_cron = '''const recommendationTrainingCron = Object.freeze({
+
+          const sharedCrons = Object.freeze([
+            { path: "/api/jobs/saved-searches", schedule: "0 9 * * *" },
+            { path: "/api/jobs/delegates", schedule: "30 9 * * *" },
+            { path: "/api/jobs/email", schedule: "0 10 * * *" },
+            { path: "/api/jobs/trade-reminders", schedule: "0 11 * * *" },
+            { path: "/api/jobs/background-networking", schedule: "0 * * * *" },
+            { path: "/api/jobs/conditional-redirects", schedule: "15 * * * *" },
+          ]);
+
+          const recommendationTrainingCron = Object.freeze({
             path: RECOMMENDATION_TRAINING_PATH,
             schedule: RECOMMENDATION_TRAINING_SCHEDULE,
           });
@@ -103,64 +99,90 @@ jobs:
             path: COLLECTIVE_COMMITMENT_EXPIRY_PATH,
             schedule: COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE,
           });
-          '''
-          if config.count(old_cron) != 1:
-              raise SystemExit("Could not locate the A1 cron definition exactly once.")
-          config = config.replace(old_cron, new_cron)
-          old_push = '''  if (projectId !== DUPLICATE_WEBSITE2_PROJECT_ID) {
-            crons.push({ ...recommendationTrainingCron });
-          }
-          '''
-          new_push = '''  if (projectId !== DUPLICATE_WEBSITE2_PROJECT_ID) {
-            crons.push(
-              { ...recommendationTrainingCron },
-              { ...collectiveCommitmentExpiryCron },
-            );
-          }
-          '''
-          if config.count(old_push) != 1:
-              raise SystemExit("Could not locate the canonical-project cron gate exactly once.")
-          config_path.write_text(config.replace(old_push, new_push))
 
-          declarations_path = Path("scripts/vercel-project-config.d.mts")
-          declarations = declarations_path.read_text()
-          marker = '''export const RECOMMENDATION_TRAINING_PATH: string;
-          export const RECOMMENDATION_TRAINING_SCHEDULE: string;
-          '''
-          replacement = '''export const RECOMMENDATION_TRAINING_PATH: string;
+          export function buildVercelProjectConfig({
+            projectId = process.env.VERCEL_PROJECT_ID,
+          } = {}) {
+            const crons = sharedCrons.map((cron) => ({ ...cron }));
+
+            // Both Vercel projects deploy the same repository. Only the canonical Moral Trade
+            // project owns scheduled state transitions; website2 must not invoke them.
+            if (projectId !== DUPLICATE_WEBSITE2_PROJECT_ID) {
+              crons.push(
+                { ...recommendationTrainingCron },
+                { ...collectiveCommitmentExpiryCron },
+              );
+            }
+
+            return {
+              ignoreCommand: "node scripts/vercel-ignore-build.mjs",
+              crons,
+            };
+          }
+          EOF
+          sed -i 's/^          //' scripts/vercel-project-config.mjs
+
+          cat > scripts/vercel-project-config.d.mts <<'EOF'
+          export interface MoralTradeVercelCron {
+            path: string;
+            schedule: string;
+          }
+
+          export interface MoralTradeVercelProjectConfig {
+            ignoreCommand: string;
+            crons: MoralTradeVercelCron[];
+          }
+
+          export const CANONICAL_MORAL_TRADE_PROJECT_ID: string;
+          export const DUPLICATE_WEBSITE2_PROJECT_ID: string;
+          export const RECOMMENDATION_TRAINING_PATH: string;
           export const RECOMMENDATION_TRAINING_SCHEDULE: string;
           export const COLLECTIVE_COMMITMENT_EXPIRY_PATH: string;
           export const COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE: string;
-          '''
-          if declarations.count(marker) != 1:
-              raise SystemExit("Could not locate Vercel declarations exactly once.")
-          declarations_path.write_text(declarations.replace(marker, replacement))
 
-          test_path = Path("scripts/vercel-project-config.test.mjs")
-          test = test_path.read_text()
-          import_marker = '''  RECOMMENDATION_TRAINING_PATH,
-            RECOMMENDATION_TRAINING_SCHEDULE,
-            buildVercelProjectConfig,
-          '''
-          import_replacement = '''  RECOMMENDATION_TRAINING_PATH,
+          export function buildVercelProjectConfig(options?: {
+            projectId?: string | null;
+          }): MoralTradeVercelProjectConfig;
+          EOF
+          sed -i 's/^          //' scripts/vercel-project-config.d.mts
+
+          cat > scripts/vercel-project-config.test.mjs <<'EOF'
+          import assert from "node:assert/strict";
+          import test from "node:test";
+
+          import {
+            CANONICAL_MORAL_TRADE_PROJECT_ID,
+            DUPLICATE_WEBSITE2_PROJECT_ID,
+            RECOMMENDATION_TRAINING_PATH,
             RECOMMENDATION_TRAINING_SCHEDULE,
             COLLECTIVE_COMMITMENT_EXPIRY_PATH,
             COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE,
             buildVercelProjectConfig,
-          '''
-          if test.count(import_marker) != 1:
-              raise SystemExit("Could not locate Vercel test imports exactly once.")
-          test = test.replace(import_marker, import_replacement)
-          test += '''
+          } from "./vercel-project-config.mjs";
 
-          function collectiveExpiryCrons(projectId) {
+          function matchingCrons(projectId, path) {
             return buildVercelProjectConfig({ projectId }).crons.filter(
-              (cron) => cron.path === COLLECTIVE_COMMITMENT_EXPIRY_PATH,
+              (cron) => cron.path === path,
             );
           }
 
+          test("the canonical Moral Trade project owns exactly one A1 training cron", () => {
+            assert.deepEqual(matchingCrons(CANONICAL_MORAL_TRADE_PROJECT_ID, RECOMMENDATION_TRAINING_PATH), [
+              { path: RECOMMENDATION_TRAINING_PATH, schedule: RECOMMENDATION_TRAINING_SCHEDULE },
+            ]);
+          });
+
+          test("the duplicate website2 project receives no A1 training cron", () => {
+            assert.deepEqual(matchingCrons(DUPLICATE_WEBSITE2_PROJECT_ID, RECOMMENDATION_TRAINING_PATH), []);
+          });
+
+          test("an explicitly unidentified local configuration retains the canonical schedules", () => {
+            assert.equal(matchingCrons(null, RECOMMENDATION_TRAINING_PATH).length, 1);
+            assert.equal(matchingCrons(null, COLLECTIVE_COMMITMENT_EXPIRY_PATH).length, 1);
+          });
+
           test("the canonical Moral Trade project owns exactly one Collective Commitment expiry cron", () => {
-            assert.deepEqual(collectiveExpiryCrons(CANONICAL_MORAL_TRADE_PROJECT_ID), [
+            assert.deepEqual(matchingCrons(CANONICAL_MORAL_TRADE_PROJECT_ID, COLLECTIVE_COMMITMENT_EXPIRY_PATH), [
               {
                 path: COLLECTIVE_COMMITMENT_EXPIRY_PATH,
                 schedule: COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE,
@@ -169,31 +191,21 @@ jobs:
           });
 
           test("the duplicate website2 project receives no Collective Commitment expiry cron", () => {
-            assert.deepEqual(collectiveExpiryCrons(DUPLICATE_WEBSITE2_PROJECT_ID), []);
+            assert.deepEqual(matchingCrons(DUPLICATE_WEBSITE2_PROJECT_ID, COLLECTIVE_COMMITMENT_EXPIRY_PATH), []);
           });
-          '''
-          test_path.write_text(test)
+          EOF
+          sed -i 's/^          //' scripts/vercel-project-config.test.mjs
 
-          integration_path = Path("src/collective-commitments-create-integration.test.ts")
-          integration = integration_path.read_text()
-          old_test = '''test("Collective expiry and encryption configuration remain fail-closed", async () => {
-            const [env, vercel] = await Promise.all([
-              source(".env.example"),
-              source("vercel.json"),
-            ]);
-            assert.match(env, /COLLECTIVE_COMMITMENTS_ENABLED=false/);
-            assert.match(env, /COLLECTIVE_COMMITMENT_MASTER_KEY=/);
-            const parsed = JSON.parse(vercel) as { crons: Array<{ path: string; schedule: string }> };
-            assert.ok(
-              parsed.crons.some(
-                (cron) =>
-                  cron.path === "/api/jobs/collective-commitments-expire" &&
-                  cron.schedule === "*/5 * * * *",
-              ),
-            );
-          });
-          '''
-          new_test = '''test("Collective expiry and encryption configuration remain fail-closed", async () => {
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("src/collective-commitments-create-integration.test.ts")
+          text = path.read_text()
+          pattern = re.compile(
+              r'test\("Collective expiry and encryption configuration remain fail-closed", async \(\) => \{[\s\S]*?\n\}\);\n\n(?=test\("the superseded)',
+          )
+          replacement = '''test("Collective expiry and encryption configuration remain fail-closed", async () => {
             const [env, vercelConfig] = await Promise.all([
               source(".env.example"),
               source("scripts/vercel-project-config.mjs"),
@@ -201,14 +213,16 @@ jobs:
             assert.match(env, /COLLECTIVE_COMMITMENTS_ENABLED=false/);
             assert.match(env, /COLLECTIVE_COMMITMENT_MASTER_KEY=/);
             assert.match(vercelConfig, /COLLECTIVE_COMMITMENT_EXPIRY_PATH/);
-            assert.match(vercelConfig, /COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE = "\*\/5 \* \* \* \*"/);
+            assert.match(vercelConfig, /COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE = "\\*\\/5 \\* \\* \\* \\*"/);
             assert.match(vercelConfig, /collectiveCommitmentExpiryCron/);
             assert.match(vercelConfig, /projectId !== DUPLICATE_WEBSITE2_PROJECT_ID/);
           });
+
           '''
-          if integration.count(old_test) != 1:
-              raise SystemExit("Could not locate the old Vercel integration contract exactly once.")
-          integration_path.write_text(integration.replace(old_test, new_test))
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"Expected one old Vercel integration contract; found {count}.")
+          path.write_text(updated)
           PY
 
           git add \
