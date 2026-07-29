@@ -1,0 +1,125 @@
+name: Apply PR 212 absolute TypeScript repair v2
+
+on:
+  push:
+    branches:
+      - ops/pr212-absolute-gates-20260729
+    paths:
+      - .github/workflows/apply-pr212-typescript-repair-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-pr212-typescript-repair-v2
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_HEAD: 9ad919bc281a9f701d4a5adfb518055c864393b3
+      EXPECTED_ORIGINAL_PATCH_SHA256: 7ad9ef54459296e38cd234c6938a1f5dbe72edd36fed8e0772e7cbc363314173
+    steps:
+      - name: Check out operations control branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/pr212-absolute-gates-20260729
+          path: control
+          fetch-depth: 0
+
+      - name: Check out exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          path: feature
+          fetch-depth: 0
+
+      - name: Reconstruct reviewed patch and apply final narrow correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(git -C feature rev-parse HEAD)"
+          if [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then
+            echo "PR #212 moved: expected $EXPECTED_HEAD, got $actual_head" >&2
+            exit 1
+          fi
+
+          awk '
+            /cat > \/tmp\/pr212-typescript-repair.patch.gz.b64 <<'\''PATCH'\''/ { capture=1; next }
+            capture && /^          PATCH$/ { exit }
+            capture { sub(/^          /, ""); print }
+          ' control/.github/workflows/apply-pr212-typescript-repair.yml \
+            > /tmp/pr212-typescript-repair.patch.gz.b64
+
+          test -s /tmp/pr212-typescript-repair.patch.gz.b64
+          base64 --decode /tmp/pr212-typescript-repair.patch.gz.b64 \
+            | gzip --decompress > /tmp/pr212-typescript-repair.patch
+          echo "${EXPECTED_ORIGINAL_PATCH_SHA256}  /tmp/pr212-typescript-repair.patch" \
+            | sha256sum --check --strict
+
+          git -C feature apply --check /tmp/pr212-typescript-repair.patch
+          git -C feature apply /tmp/pr212-typescript-repair.patch
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("feature/src/lib/public-route-smoke.test.ts")
+          source = path.read_text()
+          action_marker = '  const authenticatedPrimaryAction = getTopbarActions(true).primaryAction;\n'
+          action_replacement = action_marker + '  const unauthenticatedActions = getTopbarActions(false);\n'
+          assertion_marker = '  assert.equal(getTopbarActions(false).authLink.label, "Sign in");\n'
+          assertion_replacement = '  assert.equal(unauthenticatedActions.authLink?.label, "Sign in");\n'
+
+          if source.count(action_marker) != 1:
+              raise SystemExit(f"Expected one authenticated action marker, found {source.count(action_marker)}")
+          if source.count(assertion_marker) != 1:
+              raise SystemExit(f"Expected one unsafe auth-link assertion, found {source.count(assertion_marker)}")
+
+          path.write_text(source.replace(action_marker, action_replacement).replace(assertion_marker, assertion_replacement))
+          PY
+
+          git -C feature diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: feature/package-lock.json
+
+      - name: Install dependencies
+        shell: bash
+        working-directory: feature
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Require absolute TypeScript success
+        working-directory: feature
+        run: npx tsc --noEmit --pretty false
+
+      - name: Commit exact repair to PR branch
+        shell: bash
+        working-directory: feature
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/app/how-it-works/page.tsx \
+            src/lib/crawlability.test.ts \
+            src/lib/discovery-ranking.test.ts \
+            src/lib/funding.test.ts \
+            src/lib/payments/conditional-state.test.ts \
+            src/lib/public-route-smoke.test.ts \
+            src/lib/x-profile-connector.test.ts \
+            tsconfig.json
+          git commit -m "Repair repository-wide TypeScript errors"
+          git push origin HEAD:feat/institutional-trade-system
