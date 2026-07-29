@@ -274,6 +274,8 @@ export function mergeLlmSmartQueryResolution(
 const DEFAULT_SMART_QUERY_LLM_TIMEOUT_MS = 12_000;
 const MIN_SMART_QUERY_LLM_TIMEOUT_MS = 3_000;
 const MAX_SMART_QUERY_LLM_TIMEOUT_MS = 20_000;
+export const SMART_QUERY_LLM_MAX_OUTPUT_TOKENS = 1_200;
+export const SMART_QUERY_LLM_REASONING_EFFORT = "minimal" as const;
 
 export function smartQueryLlmTimeoutMs(
   rawValue = process.env.OPENAI_QUERY_TIMEOUT_MS,
@@ -317,7 +319,8 @@ export async function resolveSmartQueryWithLlm(
       body: JSON.stringify({
         model: process.env.OPENAI_QUERY_MODEL || "gpt-5-nano",
         store: false,
-        max_output_tokens: 600,
+        reasoning: { effort: SMART_QUERY_LLM_REASONING_EFFORT },
+        max_output_tokens: SMART_QUERY_LLM_MAX_OUTPUT_TOKENS,
         input: [
           {
             role: "system",
