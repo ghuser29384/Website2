@@ -160,6 +160,8 @@ async function authenticatedContext(
     baseURL: BASE_URL,
     viewport,
   });
+  context.setDefaultTimeout(10_000);
+  context.setDefaultNavigationTimeout(20_000);
   await context.addCookies([
     ...(await sessionCookies(session)),
     {
@@ -172,6 +174,10 @@ async function authenticatedContext(
     },
   ]);
   return context;
+}
+
+function qaCheckpoint(message: string) {
+  console.log(`[evidence-payment-qa] ${message}`);
 }
 
 async function expectSuccess(page: Page, message: string) {
@@ -228,6 +234,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
     const appealReviewerAuth = await signIn(EMAILS.appealReviewer);
     const outsiderAuth = await signIn(EMAILS.outsider);
     const adminAuth = await signIn(EMAILS.admin);
+    qaCheckpoint("signed in all six isolated-QA roles");
 
     const reviewerAal2 = await elevateWithTotp(reviewerAuth.client, reviewerAuth.session);
     const appealReviewerAal2 = await elevateWithTotp(
@@ -235,6 +242,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       appealReviewerAuth.session,
     );
     const adminAal2 = await elevateWithTotp(adminAuth.client, adminAuth.session);
+    qaCheckpoint("verified reviewer, appeal-reviewer, and administrator AAL2 sessions");
 
     const contexts: BrowserContext[] = [];
     const context = async (
@@ -286,6 +294,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         },
       );
       expect(outsiderReportError).not.toBeNull();
+      qaCheckpoint("passed outsider read/RPC denial");
 
       const reviewerAal1Page = await reviewerAal1.newPage();
       await reviewerAal1Page.goto(`/trade-review/${IDS.milestone}`);
@@ -296,6 +305,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       const adminAal1Page = await adminAal1.newPage();
       await adminAal1Page.goto("/admin/trade-review");
       await expect(adminAal1Page.getByText("Operator access blocked", { exact: true })).toBeVisible();
+      qaCheckpoint("passed reviewer and administrator AAL1 denials");
 
       const adminPage = await admin.newPage();
       await adminPage.goto("/admin/trade-review");
@@ -321,6 +331,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         adminPage,
         "Neutral payment reviewer assigned after the seven-day participant-selection deadline.",
       );
+      qaCheckpoint("completed MFA-gated administrator fallback");
 
       const payerPage = await payer.newPage();
       await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
@@ -331,6 +342,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         }),
       ).toBeVisible();
       await reportExternalPayment(payerPage, `initial-${Date.now()}`);
+      qaCheckpoint("reported initial external payment on desktop");
 
       const payeePage = await payee.newPage();
       await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
@@ -347,11 +359,13 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         payeePage,
         "External payment marked disputed. The private receipt and history remain available for resolution.",
       );
+      qaCheckpoint("disputed initial receipt on mobile");
 
       await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
       await nominatePaymentReviewer(payerPage, IDS.reviewer);
       await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
       await nominatePaymentReviewer(payeePage, IDS.reviewer);
+      qaCheckpoint("completed mutual payment-reviewer nomination");
 
       const reviewerPage = await reviewer.newPage();
       await reviewerPage.goto(`/trade-review/${IDS.milestone}`);
@@ -372,6 +386,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         reviewerPage,
         "External-payment review recorded. A paid/still-due decision remains provisional for seven days; correction permission is not appealable.",
       );
+      qaCheckpoint("allowed one corrected receipt");
 
       await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
       await expect(
@@ -381,6 +396,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         }),
       ).toBeVisible();
       await reportExternalPayment(payerPage, `correction-${Date.now()}`);
+      qaCheckpoint("submitted corrected receipt with a fresh response window");
 
       await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
       await payeePage
@@ -393,6 +409,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         payeePage,
         "External payment marked disputed. The private receipt and history remain available for resolution.",
       );
+      qaCheckpoint("disputed corrected receipt on mobile");
 
       await reviewerPage.goto(`/trade-review/${IDS.milestone}`);
       await reviewerPage.getByLabel("Decision", { exact: true }).selectOption("still_due");
@@ -406,6 +423,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         reviewerPage,
         "External-payment review recorded. A paid/still-due decision remains provisional for seven days; correction permission is not appealable.",
       );
+      qaCheckpoint("recorded provisional still-due decision");
 
       await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
       await payerPage
@@ -418,6 +436,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         payerPage,
         "The single payment appeal is open and requires a different neutral reviewer.",
       );
+      qaCheckpoint("opened the single payment appeal");
 
       const { data: paymentCase } = await payerAuth.client
         .from("trade_payment_review_cases")
@@ -439,10 +458,12 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         },
       );
       expect(originalReviewerAppealError).not.toBeNull();
+      qaCheckpoint("blocked original reviewer from deciding the appeal");
 
       await nominatePaymentAppealReviewer(payerPage, IDS.appealReviewer);
       await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
       await nominatePaymentAppealReviewer(payeePage, IDS.appealReviewer);
+      qaCheckpoint("completed different-reviewer appeal nomination");
 
       const appealReviewerPage = await appealReviewer.newPage();
       await appealReviewerPage.goto(`/trade-review/${IDS.milestone}`);
@@ -468,6 +489,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         appealReviewerPage,
         "The different neutral reviewer recorded the final external-payment decision.",
       );
+      qaCheckpoint("recorded final still-due appeal decision on mobile");
 
       await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
       await expect(
@@ -477,6 +499,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         }),
       ).toBeVisible();
       await reportExternalPayment(payerPage, `cycle-2-${Date.now()}`);
+      qaCheckpoint("reported a later external-payment cycle");
 
       await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
       await payeePage
@@ -486,6 +509,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         payeePage,
         "External payment confirmed. Moral Trade recorded the receipt without moving funds.",
       );
+      qaCheckpoint("confirmed external payment on mobile");
 
       await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
       await expect(payerPage.getByText("Completed", { exact: true })).toBeVisible();
@@ -514,6 +538,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         .update({ status: "still_due" })
         .eq("id", IDS.payout);
       expect(payeeDirectWriteError).not.toBeNull();
+      qaCheckpoint("verified completion and blocked a direct payout write");
     } finally {
       await Promise.all(contexts.map((openContext) => openContext.close()));
     }
