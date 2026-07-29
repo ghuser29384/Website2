@@ -30,7 +30,7 @@ test("a first human homepage visit redirects to the mandatory walkthrough", () =
   assert.equal(response.headers.get("cache-control"), "private, no-store");
 });
 
-test("a returning visitor receives the unified Create interface at the Trade entry", () => {
+test("a returning visitor receives the live personalized homepage", () => {
   const response = proxy(
     makeRequest("/?utm_source=invite", { cookie: `${WALKTHROUGH_SEEN_COOKIE}=1` }),
   );
@@ -38,7 +38,7 @@ test("a returning visitor receives the unified Create interface at the Trade ent
   assert.equal(response.status, 200);
   assert.equal(
     response.headers.get("x-middleware-rewrite"),
-    "https://moraltrade.org/trades/new?utm_source=invite",
+    "https://moraltrade.org/moral-trade-live.html?utm_source=invite",
   );
   assert.equal(response.headers.get("location"), null);
   assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
@@ -53,7 +53,7 @@ test("opening the walkthrough directly records the visit without redirecting", (
   assert.equal(response.headers.get("cache-control"), "private, no-store");
 });
 
-test("bots and prefetches receive the unified Create interface without consuming the walkthrough", () => {
+test("bots and prefetches receive the live homepage without consuming the walkthrough", () => {
   const botResponse = proxy(
     makeRequest("/", { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }),
   );
@@ -65,7 +65,7 @@ test("bots and prefetches receive the unified Create interface without consuming
     assert.equal(response.status, 200);
     assert.equal(
       response.headers.get("x-middleware-rewrite"),
-      "https://moraltrade.org/trades/new",
+      "https://moraltrade.org/moral-trade-live.html",
     );
     assert.equal(response.headers.get("location"), null);
     assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);

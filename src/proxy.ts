@@ -36,6 +36,13 @@ function markWalkthroughSeen(response: NextResponse, request: NextRequest) {
   return response;
 }
 
+function rewriteToLiveHome(request: NextRequest) {
+  const liveUrl = request.nextUrl.clone();
+  liveUrl.pathname = "/moral-trade-live.html";
+
+  return NextResponse.rewrite(liveUrl);
+}
+
 function rewriteToUnifiedCreate(request: NextRequest) {
   const createUrl = request.nextUrl.clone();
   createUrl.pathname = "/trades/new";
@@ -56,7 +63,7 @@ export function proxy(request: NextRequest) {
       return markWalkthroughSeen(NextResponse.redirect(walkthroughUrl), request);
     }
 
-    return rewriteToUnifiedCreate(request);
+    return rewriteToLiveHome(request);
   }
 
   if (pathname === "/walkthrough") {
