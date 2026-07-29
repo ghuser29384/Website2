@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: prepare-integrated-create-release-qa-previews-20260728
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   prepare:
@@ -65,7 +65,7 @@ jobs:
           test "$(git -C /tmp/create-adapter-integrated-candidate rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"
           test "$(git rev-parse origin/$RELEASE_BRANCH)" = "$EXACT_CANDIDATE_SHA"
 
-      - name: Configure branch-scoped isolated-QA variables and deploy both projects
+      - name: Configure isolated-QA variables and deploy both projects
         id: deploy
         shell: bash
         working-directory: /tmp/create-adapter-integrated-candidate
@@ -124,6 +124,9 @@ jobs:
               --prebuilt \
               --force \
               --yes \
+              --env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL" \
+              --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY" \
+              --env "SUPABASE_SERVICE_ROLE_KEY=$QA_SUPABASE_SERVICE_ROLE_KEY" \
               --meta githubCommitOrg=ghuser29384 \
               --meta githubCommitRepo=Website2 \
               --meta githubCommitRef="$RELEASE_BRANCH" \
@@ -162,6 +165,7 @@ jobs:
               'exact_candidate_sha': 'e8288b8084b88e69a6d23ca3e966ab18178fefb8',
               'release_branch': 'release/moral-trade-create-adapter-20260728',
               'supabase_project': 'hvmxfjjbdcgjjudmthdz',
+              'runtime_credentials_injected_per_deployment': True,
               'deployments': rows,
           }
           Path('/tmp/create-adapter-release-qa-deployments.json').write_text(json.dumps(payload, indent=2) + '\n')
@@ -188,4 +192,4 @@ jobs:
           set -euo pipefail
           website2_url="$(awk -F '\t' '$1 == "website2" {print $2}' /tmp/create-adapter-release-qa-deployments.tsv)"
           moraltrade_url="$(awk -F '\t' '$1 == "moraltrade-site" {print $2}' /tmp/create-adapter-release-qa-deployments.tsv)"
-          gh pr comment 273 --body "Prepared fresh isolated-QA Preview deployments from exact integrated candidate \`$EXACT_CANDIDATE_SHA\`: website2 \`$website2_url\`; moraltrade-site \`$moraltrade_url\`. Both use branch-scoped MoralTrade QA credentials for \`$RELEASE_BRANCH\`; production configuration and data remain unchanged."
+          gh pr comment 273 --body "Prepared fresh isolated-QA Preview deployments from exact integrated candidate \`$EXACT_CANDIDATE_SHA\`: website2 \`$website2_url\`; moraltrade-site \`$moraltrade_url\`. Both deployments received the isolated-QA Supabase URL, publishable key, and service-role key at deployment creation; production configuration and data remain unchanged."
