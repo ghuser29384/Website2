@@ -1,3 +1,4 @@
+# One-time repair workflow; the verified implementation commit removes this file.
 name: Apply smart-query OpenAI timeout fix
 
 on:
@@ -129,8 +130,7 @@ jobs:
           set -o pipefail
           npx eslint \
             src/lib/smart-query-llm.ts \
-            src/lib/smart-query-llm-timeout.test.ts \
-            .github/workflows/smart-query-qa.yml
+            src/lib/smart-query-llm-timeout.test.ts
           node --import tsx --test \
             src/lib/smart-query-llm-timeout.test.ts \
             src/lib/smart-query.test.ts \
