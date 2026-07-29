@@ -70,12 +70,14 @@ function commonGroundPayload() {
 
 test("validates a compact Common Ground Pool without private value estimates", () => {
   const result = validateCreatePayload(commonGroundPayload());
+  const serializedTerms = JSON.stringify(result.poolTerms?.commonGround);
 
   assert.equal(result.kind, "pool_create");
   assert.equal(result.poolTerms?.commonGround?.targetAmountCents, 1_000_000);
   assert.equal(result.poolTerms?.commonGround?.participants.length, 2);
   assert.equal(result.poolTerms?.commonGround?.privateValueEstimatesStored, false);
-  assert.equal(JSON.stringify(result.poolTerms?.commonGround).includes("privateValue"), false);
+  assert.equal(serializedTerms.includes("privateValueBps"), false);
+  assert.equal(serializedTerms.includes("sharedValueBps"), false);
 });
 
 test("rejects Common Ground contribution totals that miss the target", () => {
