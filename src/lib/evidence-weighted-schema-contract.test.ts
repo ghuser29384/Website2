@@ -12,6 +12,7 @@ const migration = [
   "20260729165531_evidence_weighted_rls_identity_binding.sql",
   "20260729165532_evidence_weighted_remaining_fk_indexes.sql",
   "20260729165533_evidence_weighted_privacy_authorization_cutover.sql",
+  "20260729165534_evidence_weighted_post_cutover_advisor_hardening.sql",
 ]
   .map((filename) =>
     readFileSync(join(process.cwd(), "supabase/migrations", filename), "utf8"),
@@ -173,6 +174,21 @@ test("legacy public evidence and participant state rewrites are revoked", () => 
     migration,
     /revoke execute on function public\.get_public_moral_trade_evidence_v1\(uuid\)[\s\S]*from public, anon, authenticated/i,
   );
+  for (const signature of [
+    String.raw`initialize_public_trade_evidence\(\)`,
+    String.raw`register_trade_evidence_v3\([\s\S]*?uuid, uuid, text, text, text, text, text, uuid[\s\S]*?\)`,
+    String.raw`publish_trade_evidence_v3\([\s\S]*?uuid, uuid, text, text, text, text, text, text, text[\s\S]*?\)`,
+    String.raw`review_trade_evidence_v3\([\s\S]*?uuid, uuid, text, text[\s\S]*?\)`,
+    String.raw`withdraw_trade_evidence_v3\([\s\S]*?uuid, uuid, text[\s\S]*?\)`,
+  ]) {
+    assert.match(
+      migration,
+      new RegExp(
+        String.raw`revoke all on function public\.${signature}[\s\S]*?from public, anon, authenticated, service_role`,
+        "i",
+      ),
+    );
+  }
   assert.match(
     migration,
     /drop policy if exists "agreements_update_participants"/i,
@@ -185,6 +201,27 @@ test("legacy public evidence and participant state rewrites are revoked", () => 
     migration,
     /drop policy if exists "agreement_payments_update_participants"/i,
   );
+});
+
+test("post-cutover advisor hardening covers every release-owned foreign key", () => {
+  for (const definition of [
+    "agreement_review_cases\\(appeal_requested_by\\)",
+    "agreement_review_cases\\(assigned_reviewer_id\\)",
+    "agreement_review_cases\\(evidence_item_id\\)",
+    "agreement_review_cases\\(opened_by\\)",
+    "agreement_review_cases\\(reviewed_by\\)",
+    "trade_milestone_reviewer_nominations\\(nominated_by\\)",
+    "trade_milestone_reviewer_nominations\\(reviewer_id\\)",
+    "trade_review_role_grants\\(granted_by\\)",
+  ]) {
+    assert.match(
+      migration,
+      new RegExp(
+        String.raw`create index if not exists [a-z0-9_]+[\s\S]*?on public\.${definition}`,
+        "i",
+      ),
+    );
+  }
 });
 
 test("full profiles are self-only and the safe label projection excludes email", () => {

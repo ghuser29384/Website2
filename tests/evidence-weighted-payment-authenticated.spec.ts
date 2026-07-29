@@ -307,6 +307,48 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
     test.setTimeout(5 * 60_000);
     test.skip(!QA_PASSWORD, "EVIDENCE_PAYMENT_QA_PASSWORD is required.");
 
+    const anonymousClient = authClient();
+    const anonymousLegacyCalls = [
+      anonymousClient.rpc("register_trade_evidence_v3", {
+        p_actor_id: IDS.payer,
+        p_agreement_id: IDS.agreement,
+        p_submission_key: `anonymous-${Date.now()}`,
+        p_evidence_type: "attestation",
+        p_storage_path: "",
+        p_evidence_url: "",
+        p_attestation: "This call must never reach the legacy function.",
+        p_replaces_evidence_id: null,
+      }),
+      anonymousClient.rpc("publish_trade_evidence_v3", {
+        p_actor_id: IDS.payer,
+        p_evidence_id: IDS.milestone,
+        p_public_title: "",
+        p_public_summary: "",
+        p_public_url: "",
+        p_public_storage_path: "",
+        p_public_original_filename: "",
+        p_public_mime_type: "",
+        p_public_redaction_note: "This call must be denied before execution.",
+      }),
+      anonymousClient.rpc("review_trade_evidence_v3", {
+        p_actor_id: IDS.payee,
+        p_evidence_id: IDS.milestone,
+        p_decision: "accept",
+        p_challenge_reason: "",
+      }),
+      anonymousClient.rpc("withdraw_trade_evidence_v3", {
+        p_actor_id: IDS.payer,
+        p_evidence_id: IDS.milestone,
+        p_reason: "This call must be denied before execution.",
+      }),
+    ];
+    for (const legacyCall of anonymousLegacyCalls) {
+      const { data, error } = await legacyCall;
+      expect(data).toBeNull();
+      expect(error?.code).toBe("42501");
+    }
+    qaCheckpoint("blocked anonymous legacy evidence RPC impersonation");
+
     const payerAuth = await signIn(EMAILS.payer);
     const payeeAuth = await signIn(EMAILS.payee);
     const reviewerAuth = await signIn(EMAILS.reviewer);

@@ -4,6 +4,41 @@
 
 begin;
 
+do $test$
+declare
+  retired_function regprocedure;
+begin
+  foreach retired_function in array array[
+    'public.initialize_public_trade_evidence()'::regprocedure,
+    'public.register_trade_evidence_v3(uuid,uuid,text,text,text,text,text,uuid)'::regprocedure,
+    'public.publish_trade_evidence_v3(uuid,uuid,text,text,text,text,text,text,text)'::regprocedure,
+    'public.review_trade_evidence_v3(uuid,uuid,text,text)'::regprocedure,
+    'public.withdraw_trade_evidence_v3(uuid,uuid,text)'::regprocedure
+  ]
+  loop
+    if has_function_privilege('anon', retired_function, 'EXECUTE')
+       or has_function_privilege('authenticated', retired_function, 'EXECUTE')
+       or has_function_privilege('service_role', retired_function, 'EXECUTE') then
+      raise exception 'Retired evidence function % remains API-executable.', retired_function;
+    end if;
+  end loop;
+
+  if exists (
+    select 1
+    from pg_policies
+    where (schemaname, tablename, policyname) in (
+      ('public', 'profiles', 'profiles_public_read'),
+      ('public', 'agreements', 'agreements_update_participants'),
+      ('public', 'agreement_review_cases', 'agreement_review_cases_update_participants'),
+      ('public', 'agreement_payments', 'agreement_payments_update_participants'),
+      ('storage', 'objects', 'public_safe_trade_evidence_read')
+    )
+  ) then
+    raise exception 'A retired public-read or participant-write policy remains installed.';
+  end if;
+end;
+$test$;
+
 create temporary table qa_payment_actors (
   actor_role text primary key,
   profile_id uuid not null unique

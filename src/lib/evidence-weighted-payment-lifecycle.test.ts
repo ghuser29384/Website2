@@ -21,6 +21,9 @@ const rlsHardening = source(
 const privacyCutover = source(
   "supabase/migrations/20260729165533_evidence_weighted_privacy_authorization_cutover.sql",
 );
+const postCutoverHardening = source(
+  "supabase/migrations/20260729165534_evidence_weighted_post_cutover_advisor_hardening.sql",
+);
 
 test("the rollout keeps additive compatibility separate from the restrictive cutover", () => {
   assert.match(additive, /Phase 1A: additive/i);
@@ -46,6 +49,10 @@ test("the rollout keeps additive compatibility separate from the restrictive cut
   assert.match(
     privacyCutover,
     /drop policy if exists "agreements_update_participants"/i,
+  );
+  assert.match(
+    postCutoverHardening,
+    /revoke all on function public\.register_trade_evidence_v3[\s\S]*from public, anon, authenticated, service_role/i,
   );
 });
 

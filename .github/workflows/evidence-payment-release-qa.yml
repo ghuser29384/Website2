@@ -121,6 +121,8 @@ jobs:
             evidence_weighted_payment_rls_hardening \
             evidence_weighted_remaining_fk_indexes \
             evidence_weighted_rls_identity_binding \
+            evidence_weighted_privacy_authorization_cutover \
+            evidence_weighted_post_cutover_advisor_hardening \
             | sort)"
           recorded="$(psql "$QA_SUPABASE_DB_URL" \
             --no-psqlrc \
@@ -136,7 +138,9 @@ jobs:
             'evidence_weighted_payment_completion',
             'evidence_weighted_payment_rls_hardening',
             'evidence_weighted_remaining_fk_indexes',
-            'evidence_weighted_rls_identity_binding'
+            'evidence_weighted_rls_identity_binding',
+            'evidence_weighted_privacy_authorization_cutover',
+            'evidence_weighted_post_cutover_advisor_hardening'
           );
           SQL
           )"
