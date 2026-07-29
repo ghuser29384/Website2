@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+async function completeMandatoryWalkthrough(page: import("@playwright/test").Page) {
+  await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
+  await expect(page).toHaveURL(/\/walkthrough(?:\?|$)/);
+}
+
 async function expectUnifiedCreate(page: import("@playwright/test").Page) {
   const frameElement = page.locator('[data-create-interface-frame="true"]');
 
@@ -13,6 +18,7 @@ async function expectUnifiedCreate(page: import("@playwright/test").Page) {
 
 test.describe("Home, Trade, and Create entry routing", () => {
   test("keeps the root route on the live Feed and opens Create from Trade", async ({ page }) => {
+    await completeMandatoryWalkthrough(page);
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/$/);
@@ -27,6 +33,7 @@ test.describe("Home, Trade, and Create entry routing", () => {
   });
 
   test("replaces a direct legacy Trade hash without replacing Home", async ({ page }) => {
+    await completeMandatoryWalkthrough(page);
     await page.goto("/#trade", { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/trades\/new(?:\?|$)/);
