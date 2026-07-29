@@ -1,0 +1,98 @@
+name: Apply PR 212 absolute ESLint repair
+
+on:
+  push:
+    branches:
+      - ops/pr212-absolute-gates-20260729
+    paths:
+      - .github/workflows/apply-pr212-eslint-repair.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-pr212-eslint-repair
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      EXPECTED_HEAD: ee10013b192371e28a01cededc5573cce1e0ce6f
+      EXPECTED_PATCH_SHA256: a8677eed3cfb9d38cd7a8b26cd0f00f571dd89f3d05fa8162e82b26c19a587dd
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      INSTITUTIONAL_TRADES_ENABLED: "true"
+      INSTITUTIONAL_POOLS_ENABLED: "true"
+      INSTITUTIONAL_ENTERPRISE_API_ENABLED: "true"
+      INSTITUTIONAL_WEBHOOKS_ENABLED: "true"
+      CRON_SECRET: qa-institutional-cron-not-production
+    steps:
+      - name: Check out exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Verify head and apply exact ESLint repair patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          if [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then
+            echo "PR #212 moved: expected $EXPECTED_HEAD, got $actual_head" >&2
+            exit 1
+          fi
+
+          cat > /tmp/pr212-eslint-repair.patch.gz.b64 <<'PATCH'
+          H4sICDcoamoAA3ByMjEyLWVzbGludC1yZXBhaXIucGF0Y2gAtVbfc9o4EH7nr9D5yQzYAdIASUvatM1NMtNcMpfOvXQ6N0JaB02F5ZPkJAzH/34ryxhDAiW5uxf/0O63u5K+/SQukoRE0Z2whB4YzQ5olh0wNc0kWIgyrRIh4SCjdxBb80jGP/dpiJTDI6HHlB8NeBzTfr87HjLS7XT6b940oijaJ1Oj1Wrtle3DBxIdD9t90sLngOAvPGZKW8IhobnEaZlZykiSp8wKlZJPZaQbH+gG44RzYoBqNrmhmk4NWZyseTUIIRpsrlMSum9C3nFxT5ikxvxGpzCaGzuTYGJX0+0EpFycej/03Ej3SaUpFIWYRqv0IT9gNpqLVFhBZc3hOoOUvCcBWw1FCscCcrI+yKQywIPFMikhCQAfU/ZjNE+Unl6BMVhazV4mcxm2Za57m7PcTiC1glELfDT/qJQEmob3Ah5ANxcN/hyLVJKANv4VZZKmEIlUCnxNVZ7aDT7t4V0ya3gM3T704rjT67HhAJ5n1j7x1jm2D8KxbdBDnrXw2a+xreLXtYPfOPRlAb5y2LBJ5n49nTOVF8rYWHAyIhfXt1//vPz89om1ohc6LflVWZ+6c2qpARurjfSIDqzOIXjbiBwEfZx/uII2MZgPV80BJ8+gcKvqJgQZZyyxuPVjqjEsVyyfIiniv3LQs1uQSB6l3118vfpyLsFZTsMgntqIC12YZlEJDjBl0bZdt5DHnXa384qVXCzLrlVbTtKXmmi/eg9IG/UQa8BCjT1LxZS6+L86c1iBEdt6IRZrGZ1iOWUjr9VRjj273IVt0Sw30SdUYwP6HtzCpvBArnJbJLouh9fqLGBLQFx+hNV+jBWftcmcsImQ/Isw9oQ4BrSJycdWA/hfX8AenXsvTE5lbRd/2r3bEWUHHx71huwQ4jjhgzHnyR4dvCPmji7egXIE7HYO290haRXvw60c/KOI8nkZZI2Hizb5llE7SZEQ7bVj5PuysXID5xiG2YowBUlFQsJffO/gXkNsJiqX/HaiHppLl4I/56nVAkz47fuS3itapbmUq1F/SJW/C0+zXVmW/mUfVQS6w6S+gz/OLnlYSlTzPbbBVCHT1pm7onZdFJgGTFeGCQM8MIPmU9X6XyTQb3qxc9WevUQG/bTwabWSsmrJszH6fqpGq1XA051kdCYV5Sc1zfodTIaBgPxN3C65IPjywtf1R0i3P9glfdtp9xLhcLefKsZ/Kh4vldrNSv6l3G6XVrTVU4VrklsedWDZJAxQMcRSMYoTP2jXDjzKJjjfIFWRwThoe6qW7l6qUlw4xJc3082ralS7qtVU8xXIUj3Z4KhDj5I4ZsB6veOjp+r5mtgrFX0N2qtpQeeWez97Ndp+Fw6LRfdcmADlIr27dNKA0okC5FnrrRwM0yJzqA0Px8cdUlu78jYdd9xH6Ljsmex0vOZSaO3z4k0qWVVFrJWK/gOSwUdYTA0AAA==
+          PATCH
+          base64 --decode /tmp/pr212-eslint-repair.patch.gz.b64 | gzip --decompress > /tmp/pr212-eslint-repair.patch
+          echo "${EXPECTED_PATCH_SHA256}  /tmp/pr212-eslint-repair.patch" | sha256sum --check --strict
+          git apply --check /tmp/pr212-eslint-repair.patch
+          git apply /tmp/pr212-eslint-repair.patch
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Require absolute TypeScript success
+        run: npx tsc --noEmit --pretty false
+
+      - name: Require absolute ESLint success
+        run: npm run lint
+
+      - name: Require absolute production build success
+        run: npm run build
+
+      - name: Commit exact repair to PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/app/complete-profile/page.tsx \
+            src/app/offers/offer-plane-inline-mount.tsx \
+            src/app/offers/offer-visual-directory-mount.tsx \
+            src/components/profile/complete-profile-connections.tsx
+          git commit -m "Repair repository-wide ESLint errors"
+          git push origin HEAD:feat/institutional-trade-system
