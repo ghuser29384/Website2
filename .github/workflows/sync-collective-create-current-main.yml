@@ -1,0 +1,264 @@
+name: Synchronize Collective-in-Create candidate with current main
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-commitments-in-create-20260729
+    paths:
+      - ".github/workflows/sync-collective-create-current-main.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-collective-create-current-main-20260729
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/sync-collective-create-current-main-20260729'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      PRODUCT_BRANCH: feature/collective-commitments-in-create-20260729
+      EXPECTED_PRODUCT_HEAD: 6ad1b2e87a9fe023de3479550b5596196a210e2a
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-create-current-main-sync
+
+    steps:
+      - name: Validate exact execution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "ops/sync-collective-create-current-main-20260729"
+
+      - name: Check out helper branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Merge current main and resolve the typed Vercel configuration transition
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          git fetch origin main "$PRODUCT_BRANCH"
+          main_head="$(git rev-parse origin/main)"
+          test "$(git rev-parse "origin/$PRODUCT_BRANCH")" = "$EXPECTED_PRODUCT_HEAD"
+          printf 'captured_main=%s\n' "$main_head" | tee "$ARTIFACT_DIR/captured-main.txt"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --detach "$EXPECTED_PRODUCT_HEAD"
+
+          set +e
+          git merge --no-ff --no-commit "$main_head" \
+            > "$ARTIFACT_DIR/merge.log" 2>&1
+          merge_status=$?
+          set -e
+
+          unmerged="$(git diff --name-only --diff-filter=U | sort)"
+          if [[ -n "$unmerged" && "$unmerged" != "vercel.json" ]]; then
+            echo "Unexpected merge conflicts:" >&2
+            printf '%s\n' "$unmerged" >&2
+            cat "$ARTIFACT_DIR/merge.log" >&2
+            exit 1
+          fi
+          if [[ -e vercel.json || "$unmerged" == "vercel.json" ]]; then
+            git rm -f vercel.json
+          fi
+          test -z "$(git diff --name-only --diff-filter=U)"
+
+          cat > scripts/vercel-project-config.mjs <<'EOF'
+          export const CANONICAL_MORAL_TRADE_PROJECT_ID = "prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7";
+          export const DUPLICATE_WEBSITE2_PROJECT_ID = "prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK";
+          export const RECOMMENDATION_TRAINING_PATH = "/api/jobs/recommendation-training";
+          export const RECOMMENDATION_TRAINING_SCHEDULE = "30 12 * * *";
+          export const COLLECTIVE_COMMITMENT_EXPIRY_PATH = "/api/jobs/collective-commitments-expire";
+          export const COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE = "*/5 * * * *";
+
+          const sharedCrons = Object.freeze([
+            { path: "/api/jobs/saved-searches", schedule: "0 9 * * *" },
+            { path: "/api/jobs/delegates", schedule: "30 9 * * *" },
+            { path: "/api/jobs/email", schedule: "0 10 * * *" },
+            { path: "/api/jobs/trade-reminders", schedule: "0 11 * * *" },
+            { path: "/api/jobs/background-networking", schedule: "0 * * * *" },
+            { path: "/api/jobs/conditional-redirects", schedule: "15 * * * *" },
+          ]);
+
+          const recommendationTrainingCron = Object.freeze({
+            path: RECOMMENDATION_TRAINING_PATH,
+            schedule: RECOMMENDATION_TRAINING_SCHEDULE,
+          });
+
+          const collectiveCommitmentExpiryCron = Object.freeze({
+            path: COLLECTIVE_COMMITMENT_EXPIRY_PATH,
+            schedule: COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE,
+          });
+
+          export function buildVercelProjectConfig({
+            projectId = process.env.VERCEL_PROJECT_ID,
+          } = {}) {
+            const crons = sharedCrons.map((cron) => ({ ...cron }));
+
+            // Both Vercel projects deploy the same repository. Only the canonical Moral Trade
+            // project owns scheduled state transitions; website2 must not invoke them.
+            if (projectId !== DUPLICATE_WEBSITE2_PROJECT_ID) {
+              crons.push(
+                { ...recommendationTrainingCron },
+                { ...collectiveCommitmentExpiryCron },
+              );
+            }
+
+            return {
+              ignoreCommand: "node scripts/vercel-ignore-build.mjs",
+              crons,
+            };
+          }
+          EOF
+          sed -i 's/^          //' scripts/vercel-project-config.mjs
+
+          cat > scripts/vercel-project-config.d.mts <<'EOF'
+          export interface MoralTradeVercelCron {
+            path: string;
+            schedule: string;
+          }
+
+          export interface MoralTradeVercelProjectConfig {
+            ignoreCommand: string;
+            crons: MoralTradeVercelCron[];
+          }
+
+          export const CANONICAL_MORAL_TRADE_PROJECT_ID: string;
+          export const DUPLICATE_WEBSITE2_PROJECT_ID: string;
+          export const RECOMMENDATION_TRAINING_PATH: string;
+          export const RECOMMENDATION_TRAINING_SCHEDULE: string;
+          export const COLLECTIVE_COMMITMENT_EXPIRY_PATH: string;
+          export const COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE: string;
+
+          export function buildVercelProjectConfig(options?: {
+            projectId?: string | null;
+          }): MoralTradeVercelProjectConfig;
+          EOF
+          sed -i 's/^          //' scripts/vercel-project-config.d.mts
+
+          cat > scripts/vercel-project-config.test.mjs <<'EOF'
+          import assert from "node:assert/strict";
+          import test from "node:test";
+
+          import {
+            CANONICAL_MORAL_TRADE_PROJECT_ID,
+            DUPLICATE_WEBSITE2_PROJECT_ID,
+            RECOMMENDATION_TRAINING_PATH,
+            RECOMMENDATION_TRAINING_SCHEDULE,
+            COLLECTIVE_COMMITMENT_EXPIRY_PATH,
+            COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE,
+            buildVercelProjectConfig,
+          } from "./vercel-project-config.mjs";
+
+          function matchingCrons(projectId, path) {
+            return buildVercelProjectConfig({ projectId }).crons.filter(
+              (cron) => cron.path === path,
+            );
+          }
+
+          test("the canonical Moral Trade project owns exactly one A1 training cron", () => {
+            assert.deepEqual(matchingCrons(CANONICAL_MORAL_TRADE_PROJECT_ID, RECOMMENDATION_TRAINING_PATH), [
+              { path: RECOMMENDATION_TRAINING_PATH, schedule: RECOMMENDATION_TRAINING_SCHEDULE },
+            ]);
+          });
+
+          test("the duplicate website2 project receives no A1 training cron", () => {
+            assert.deepEqual(matchingCrons(DUPLICATE_WEBSITE2_PROJECT_ID, RECOMMENDATION_TRAINING_PATH), []);
+          });
+
+          test("an explicitly unidentified local configuration retains the canonical schedules", () => {
+            assert.equal(matchingCrons(null, RECOMMENDATION_TRAINING_PATH).length, 1);
+            assert.equal(matchingCrons(null, COLLECTIVE_COMMITMENT_EXPIRY_PATH).length, 1);
+          });
+
+          test("the canonical Moral Trade project owns exactly one Collective Commitment expiry cron", () => {
+            assert.deepEqual(matchingCrons(CANONICAL_MORAL_TRADE_PROJECT_ID, COLLECTIVE_COMMITMENT_EXPIRY_PATH), [
+              {
+                path: COLLECTIVE_COMMITMENT_EXPIRY_PATH,
+                schedule: COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE,
+              },
+            ]);
+          });
+
+          test("the duplicate website2 project receives no Collective Commitment expiry cron", () => {
+            assert.deepEqual(matchingCrons(DUPLICATE_WEBSITE2_PROJECT_ID, COLLECTIVE_COMMITMENT_EXPIRY_PATH), []);
+          });
+          EOF
+          sed -i 's/^          //' scripts/vercel-project-config.test.mjs
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("src/collective-commitments-create-integration.test.ts")
+          text = path.read_text()
+          pattern = re.compile(
+              r'test\("Collective expiry and encryption configuration remain fail-closed", async \(\) => \{[\s\S]*?\n\}\);\n\n(?=test\("the superseded)',
+          )
+          replacement = '''test("Collective expiry and encryption configuration remain fail-closed", async () => {
+            const [env, vercelConfig] = await Promise.all([
+              source(".env.example"),
+              source("scripts/vercel-project-config.mjs"),
+            ]);
+            assert.match(env, /COLLECTIVE_COMMITMENTS_ENABLED=false/);
+            assert.match(env, /COLLECTIVE_COMMITMENT_MASTER_KEY=/);
+            assert.match(vercelConfig, /COLLECTIVE_COMMITMENT_EXPIRY_PATH/);
+            assert.match(vercelConfig, /COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE = "\\*\\/5 \\* \\* \\* \\*"/);
+            assert.match(vercelConfig, /collectiveCommitmentExpiryCron/);
+            assert.match(vercelConfig, /projectId !== DUPLICATE_WEBSITE2_PROJECT_ID/);
+          });
+
+          '''
+          updated, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise SystemExit(f"Expected one old Vercel integration contract; found {count}.")
+          path.write_text(updated)
+          PY
+
+          git add \
+            scripts/vercel-project-config.mjs \
+            scripts/vercel-project-config.d.mts \
+            scripts/vercel-project-config.test.mjs \
+            src/collective-commitments-create-integration.test.ts \
+            vercel.ts
+          git status --short | tee "$ARTIFACT_DIR/status.txt"
+          git diff --check
+          node --test scripts/vercel-project-config.test.mjs \
+            2>&1 | tee "$ARTIFACT_DIR/vercel-config-tests.log"
+
+          if [[ "$merge_status" != "0" ]]; then
+            grep -Fq 'CONFLICT (modify/delete): vercel.json' "$ARTIFACT_DIR/merge.log"
+          fi
+
+          git commit -m "Sync Collective-in-Create with current main"
+          final_head="$(git rev-parse HEAD)"
+          git push --force-with-lease="refs/heads/${PRODUCT_BRANCH}:${EXPECTED_PRODUCT_HEAD}" \
+            origin "HEAD:${PRODUCT_BRANCH}"
+
+          printf '%s\n' \
+            "product_head_before=${EXPECTED_PRODUCT_HEAD}" \
+            "main_head=${main_head}" \
+            "product_head_after=${final_head}" \
+            "typed_vercel_config=PASS" \
+            "duplicate_project_collective_cron=ABSENT" \
+            "production_changed=NO" \
+            > "$ARTIFACT_DIR/result.txt"
+
+      - name: Upload synchronization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-create-current-main-sync-${{ github.run_id }}
+          path: collective-create-current-main-sync
+          if-no-files-found: warn
+          retention-days: 14
