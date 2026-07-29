@@ -26,8 +26,8 @@ jobs:
       EXACT_CANDIDATE_SHA: e8288b8084b88e69a6d23ca3e966ab18178fefb8
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
-      PREVIEW_BASE_URL: https://moraltrade-site-25zzfqsv7-ellen-s.vercel.app
-      PREVIEW_SHARE_URL: https://moraltrade-site-25zzfqsv7-ellen-s.vercel.app/?_vercel_share=Kwz7I3OxsCi3Qikt7pRQkeUJtcIqYhU0
+      PREVIEW_BASE_URL: https://website2-lp9x7bexh-ellen-s.vercel.app
+      PREVIEW_SHARE_URL: https://website2-lp9x7bexh-ellen-s.vercel.app/?_vercel_share=lhA9dNAXj9i3dJMhSuCzkdqPqE6dWbY8
       QA_OUTPUT_DIR: qa-artifacts/create-adapter-authenticated
     steps:
       - name: Check out QA operator branch
@@ -151,4 +151,4 @@ jobs:
           QA_OUTCOME: ${{ steps.qa.outcome }}
         run: test "$QA_OUTCOME" = success
 
-# Exact rerun requested on 2026-07-29 after correcting generated auth.identity fields.
+# Uses the exact candidate Preview created with per-deployment isolated-QA runtime credentials.
