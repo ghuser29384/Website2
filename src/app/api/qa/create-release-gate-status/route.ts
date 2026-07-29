@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 const REPOSITORY = "ghuser29384/Website2";
 const BRANCH = "ops/create-adapter-authenticated-qa-20260728";
-const EXPECTED_QA_HEAD = "7fdadf036e079d115736458916828a6fba7a6be7";
+const EXPECTED_QA_HEAD = "1e65f3d4088934b4da5609862de8fbcabceeadb6";
 const WORKFLOW_NAME = "Authenticated Create adapter isolated-QA release gate";
 
 interface WorkflowRun {
