@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 
 import { isCronRequestAuthorized } from "@/lib/cron";
-import { runParetoRecommendationTrainingJob } from "@/lib/recommendation-training";
+import {
+  buildRecommendationTrainingExecutionContext,
+  runParetoRecommendationTrainingExecution,
+} from "@/lib/recommendation-training-execution";
 import { evaluateRecommendationTrainingRuntime } from "@/lib/recommendation-training-runtime";
 
 export const runtime = "nodejs";
@@ -29,7 +32,8 @@ async function run(request: Request) {
   }
 
   try {
-    const result = await runParetoRecommendationTrainingJob();
+    const context = buildRecommendationTrainingExecutionContext(request, runtimeDecision);
+    const result = await runParetoRecommendationTrainingExecution(context);
     return NextResponse.json({
       ...result,
       objective: "pareto_safe_additionality",
