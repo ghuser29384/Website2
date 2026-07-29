@@ -598,7 +598,7 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
         .single();
       expect(agreementError).toBeNull();
       expect(finalAgreement?.lifecycle_status).toBe("completed");
-      expect(finalAgreement?.completion_state).toBe("completed");
+      expect(finalAgreement?.completion_state).toBe("reviewed_complete");
       expect(finalAgreement?.completed_at).not.toBeNull();
 
       const { data: finalPayout, error: payoutError } = await payerAuth.client
