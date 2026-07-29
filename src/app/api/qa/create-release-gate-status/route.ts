@@ -1,11 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
 const REPOSITORY = "ghuser29384/Website2";
 const BRANCH = "ops/create-adapter-authenticated-qa-20260728";
-const EXPECTED_QA_HEAD = "1e65f3d4088934b4da5609862de8fbcabceeadb6";
 const WORKFLOW_NAME = "Authenticated Create adapter isolated-QA release gate";
+const DEFAULT_QA_HEAD = "a2308552eff0fe21f3a9c53c4e51a2d34854c4ae";
 
 interface WorkflowRun {
   id: number;
@@ -74,29 +74,38 @@ async function githubJson<T>(path: string): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const requestedSha = request.nextUrl.searchParams.get("sha")?.trim();
+  const expectedQaHead = requestedSha || DEFAULT_QA_HEAD;
+
+  if (!/^[0-9a-f]{40}$/.test(expectedQaHead)) {
+    return NextResponse.json(
+      { ok: false, error: "sha must be a full 40-character lowercase commit SHA." },
+      { status: 400 },
+    );
+  }
+
   try {
     const runs = await githubJson<WorkflowRunsResponse>(
       `/repos/${REPOSITORY}/actions/runs?branch=${encodeURIComponent(BRANCH)}&event=push&per_page=100`,
     );
 
-    const matchingRuns = (runs.workflow_runs ?? [])
-      .filter(
-        (run) =>
-          run.name === WORKFLOW_NAME && run.head_sha === EXPECTED_QA_HEAD,
-      )
-      .sort((left, right) =>
-        left.created_at.localeCompare(right.created_at),
-      );
-
+    const workflowRuns = (runs.workflow_runs ?? [])
+      .filter((run) => run.name === WORKFLOW_NAME)
+      .sort((left, right) => left.created_at.localeCompare(right.created_at));
+    const matchingRuns = workflowRuns.filter(
+      (run) => run.head_sha === expectedQaHead,
+    );
     const run = matchingRuns.at(-1);
+
     if (!run) {
       return NextResponse.json(
         {
           ok: false,
           error: "No exact authenticated release-gate run was found.",
-          expectedQaHead: EXPECTED_QA_HEAD,
+          expectedQaHead,
           workflowName: WORKFLOW_NAME,
+          recentWorkflowRuns: workflowRuns.slice(-10),
         },
         { status: 404 },
       );
@@ -114,7 +123,7 @@ export async function GET() {
     return NextResponse.json(
       {
         ok: true,
-        expectedQaHead: EXPECTED_QA_HEAD,
+        expectedQaHead,
         workflowName: WORKFLOW_NAME,
         run,
         jobs: jobs.jobs ?? [],
