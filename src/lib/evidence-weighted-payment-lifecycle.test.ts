@@ -224,4 +224,11 @@ test("authenticated workflow and authorization states remain visibly rendered", 
     styles,
     /\.trade-workflow-shell\.marketplace-app-shell #main-content > \.section\s*{\s*display:\s*block;/,
   );
+  assert.match(reviewerPage, /isPaymentAppealViewer/);
+  assert.match(reviewerPage, /Waiting for the payer’s corrected receipt\./);
+  assert.match(
+    reviewerPage,
+    /The provisional payment decision is awaiting finality\./,
+  );
+  assert.match(reviewerPage, /This payment appeal is final\./);
 });

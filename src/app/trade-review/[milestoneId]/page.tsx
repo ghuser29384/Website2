@@ -181,19 +181,17 @@ export default async function TradeReviewPage({
     !isAppealReview &&
     String(milestone.assigned_reviewer_id) === viewer.authUser.id &&
     milestone.status === "under_review";
+  const isPaymentAppealViewer =
+    String(paymentAppeal?.assigned_reviewer_id ?? "") === viewer.authUser.id;
   const isPaymentAppealReview =
-    paymentAppeal?.status === "assigned" &&
-    String(paymentAppeal.assigned_reviewer_id) === viewer.authUser.id;
+    isPaymentAppealViewer && paymentAppeal?.status === "assigned";
   const isPaymentReview =
-    !isPaymentAppealReview &&
-    String(paymentCase?.assigned_reviewer_id ?? "") === viewer.authUser.id &&
-    ["assigned", "corrected_response", "final_review"].includes(
-      String(paymentCase?.status),
-    );
+    !isPaymentAppealViewer &&
+    String(paymentCase?.assigned_reviewer_id ?? "") === viewer.authUser.id;
   if (
     !isAppealReview &&
     !isInitialReview &&
-    !isPaymentAppealReview &&
+    !isPaymentAppealViewer &&
     !isPaymentReview
   ) {
     notFound();
@@ -205,19 +203,59 @@ export default async function TradeReviewPage({
   const formMessage = getFormMessage(resolvedSearchParams);
   const paymentReviewReady =
     isPaymentAppealReview ||
-    paymentCase?.status === "assigned" ||
-    paymentCase?.status === "final_review" ||
-    (paymentCase?.status === "corrected_response" &&
-      deadlineHasPassed(paymentReceipt?.response_deadline_at));
+    (isPaymentReview &&
+      (paymentCase?.status === "assigned" ||
+        paymentCase?.status === "final_review" ||
+        (paymentCase?.status === "corrected_response" &&
+          deadlineHasPassed(paymentReceipt?.response_deadline_at))));
 
-  if (isPaymentReview || isPaymentAppealReview) {
+  if (isPaymentReview || isPaymentAppealViewer) {
     const basePaymentDecision = (paymentDecisions ?? []).find(
       (decision: Record<string, any>) =>
         String(decision.id) === String(paymentAppeal?.base_decision_id),
     );
-    const paymentAction = isPaymentAppealReview
+    const paymentAction = isPaymentAppealViewer
       ? resolveTradePaymentAppealAction
       : resolveTradePaymentReviewAction;
+    const inactivePaymentReviewCopy = isPaymentAppealViewer
+      ? paymentAppeal?.status === "resolved"
+        ? {
+            title: "This payment appeal is final.",
+            body: "The different neutral reviewer’s final paid or still-due decision is recorded in the private history.",
+          }
+        : {
+            title: "This payment appeal is not currently actionable.",
+            body: "The appeal remains visible to its assigned reviewer, but no further decision is available in its current state.",
+          }
+      : paymentCase?.status === "correction_due"
+        ? {
+            title: "Waiting for the payer’s corrected receipt.",
+            body: "One correction was permitted. The same neutral reviewer remains assigned for the final decision after the fresh payee response window.",
+          }
+        : paymentCase?.status === "corrected_response"
+          ? {
+              title: "The payee response window is still open.",
+              body: "A corrected receipt receives a fresh seven-day response window. If it remains unanswered, this same reviewer may make the final decision after the deadline.",
+            }
+          : paymentCase?.status === "decision_pending"
+            ? {
+                title: "The provisional payment decision is awaiting finality.",
+                body: "Either participant may use the single seven-day appeal. Otherwise the paid or still-due decision becomes final after the deadline.",
+              }
+            : paymentCase?.status === "appeal_pending"
+              ? {
+                  title: "A different neutral reviewer will decide the appeal.",
+                  body: "The original reviewer’s decision and private rationale remain visible, but the original reviewer cannot decide the appeal.",
+                }
+              : paymentCase?.status === "resolved"
+                ? {
+                    title: "This payment review is final.",
+                    body: "The final paid or still-due result is recorded in the private payment history.",
+                  }
+                : {
+                    title: "This payment review is not currently actionable.",
+                    body: "The assigned reviewer retains private read access while the participants complete the next lifecycle step.",
+                  };
     const formattedAmount = Number.isSafeInteger(Number(paymentReceipt?.amount_cents))
       ? (Number(paymentReceipt.amount_cents) / 100).toFixed(2)
       : null;
@@ -238,7 +276,7 @@ export default async function TradeReviewPage({
           <section className="section section-white" aria-labelledby="payment-review-heading">
             <div className="section-head section-head-compact">
               <p className="eyebrow">
-                {isPaymentAppealReview
+                {isPaymentAppealViewer
                   ? "Independent payment appeal"
                   : paymentCase?.corrected_receipt_id
                     ? "Final corrected-receipt review"
@@ -274,7 +312,7 @@ export default async function TradeReviewPage({
                   <h2>{String(milestone.description)}</h2>
                 </div>
                 <span className="badge">
-                  {isPaymentAppealReview ? "Payment appeal" : "Payment review"}
+                  {isPaymentAppealViewer ? "Payment appeal" : "Payment review"}
                 </span>
               </div>
               <dl className="detail-grid">
@@ -344,7 +382,7 @@ export default async function TradeReviewPage({
               )}
             </article>
 
-            {isPaymentAppealReview && basePaymentDecision ? (
+            {isPaymentAppealViewer && basePaymentDecision ? (
               <div className="status-banner">
                 <strong>
                   Prior decision: {String(basePaymentDecision.outcome).replaceAll("_", " ")}
@@ -355,12 +393,8 @@ export default async function TradeReviewPage({
 
             {!paymentReviewReady ? (
               <div className="status-banner status-banner-warning">
-                <strong>The payee response window is still open.</strong>
-                <p>
-                  A corrected receipt receives a fresh seven-day response window.
-                  If it remains unanswered, this same reviewer may make the final
-                  decision after the deadline.
-                </p>
+                <strong>{inactivePaymentReviewCopy.title}</strong>
+                <p>{inactivePaymentReviewCopy.body}</p>
               </div>
             ) : (
               <form action={paymentAction} className="panel stack-form">
