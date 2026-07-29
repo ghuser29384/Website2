@@ -27,7 +27,10 @@ jobs:
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
       PREVIEW_BASE_URL: https://website2-p23lofnj0-ellen-s.vercel.app
-      PREVIEW_SHARE_URL: https://website2-p23lofnj0-ellen-s.vercel.app/?_vercel_share=3IXNXo8tHxnRgX1Vrgvo9OjxZc3X8peV
+      PREVIEW_SHARE_URL: https://website2-p23lofnj0-ellen-s.vercel.app
+      VERCEL_PROJECT_NAME: website2
+      VERCEL_SCOPE: ellen-s
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       QA_OUTPUT_DIR: qa-artifacts/create-adapter-authenticated
     steps:
       - name: Check out QA operator branch
@@ -40,11 +43,32 @@ jobs:
         with:
           node-version: 24
 
+      - name: Enable one-run Vercel automation bypass
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          bypass_secret="$(openssl rand -hex 16)"
+          printf '::add-mask::%s\n' "$bypass_secret"
+          payload="$(jq -nc \
+            --arg secret "$bypass_secret" \
+            --arg note "Create release QA run ${GITHUB_RUN_ID}" \
+            '{generate:{secret:$secret,note:$note}}')"
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --url "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_NAME}/protection-bypass?slug=${VERCEL_SCOPE}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            >/tmp/vercel-automation-bypass-create.json
+          printf 'VERCEL_AUTOMATION_BYPASS_SECRET=%s\n' "$bypass_secret" >> "$GITHUB_ENV"
+
       - name: Reconstruct and repair QA runner and browser script
         shell: bash
         run: |
           set -euo pipefail
           test -n "${QA_SUPABASE_DB_URL:-}"
+          test -n "${VERCEL_AUTOMATION_BYPASS_SECRET:-}"
           cat .github/qa/runner.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/run-create-adapter-qa.sh
           cat .github/qa/browser.b64.part-* | tr -d '\n' | base64 --decode | xz --decompress > /tmp/create-adapter-authenticated-qa.mjs
           python3 - <<'PY'
@@ -91,6 +115,23 @@ jobs:
 
           browser_path = Path('/tmp/create-adapter-authenticated-qa.mjs')
           browser = browser_path.read_text()
+
+          contexts_with_options = browser.count('browser.newContext({')
+          contexts_without_options = browser.count('browser.newContext()')
+          if contexts_with_options + contexts_without_options < 1:
+              raise SystemExit('No Playwright browser contexts were found for the Vercel automation bypass.')
+          bypass_headers = '''extraHTTPHeaders: {
+                    "x-vercel-protection-bypass": process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+                    "x-vercel-set-bypass-cookie": "samesitenone",
+                  },'''
+          browser = browser.replace(
+              'browser.newContext({',
+              f'browser.newContext({{{bypass_headers}',
+          )
+          browser = browser.replace(
+              'browser.newContext()',
+              f'browser.newContext({{{bypass_headers}}})',
+          )
 
           publish_old = '.locator("#publishConfirm").check();'
           publish_count = browser.count(publish_old)
@@ -170,6 +211,25 @@ jobs:
         continue-on-error: true
         run: /tmp/run-create-adapter-qa.sh
 
+      - name: Revoke one-run Vercel automation bypass
+        id: bypass_cleanup
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_AUTOMATION_BYPASS_SECRET:-}"
+          payload="$(jq -nc \
+            --arg secret "$VERCEL_AUTOMATION_BYPASS_SECRET" \
+            '{revoke:{secret:$secret,regenerate:false}}')"
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --url "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_NAME}/protection-bypass?slug=${VERCEL_SCOPE}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$payload" \
+            >/tmp/vercel-automation-bypass-revoke.json
+
       - name: Upload authenticated QA evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -183,6 +243,8 @@ jobs:
             /tmp/create-adapter-cleanup.log
             /tmp/create-adapter-zero-residue.json
             /tmp/create-adapter-final-status.txt
+            /tmp/vercel-automation-bypass-create.json
+            /tmp/vercel-automation-bypass-revoke.json
           if-no-files-found: warn
           retention-days: 30
 
@@ -191,14 +253,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           QA_OUTCOME: ${{ steps.qa.outcome }}
+          BYPASS_CLEANUP_OUTCOME: ${{ steps.bypass_cleanup.outcome }}
         run: |
-          gh pr comment 275 --body "Authenticated isolated-QA Create release gate run \`${GITHUB_RUN_ID}\` completed with outcome **${QA_OUTCOME}** against exact candidate \`${EXACT_CANDIDATE_SHA}\` and website2 Preview \`${PREVIEW_BASE_URL}\`."
+          gh pr comment 275 --body "Authenticated isolated-QA Create release gate run \`${GITHUB_RUN_ID}\` completed with browser/database outcome **${QA_OUTCOME}** and Vercel-bypass cleanup outcome **${BYPASS_CLEANUP_OUTCOME}** against exact candidate \`${EXACT_CANDIDATE_SHA}\` and website2 Preview \`${PREVIEW_BASE_URL}\`."
 
       - name: Require all authenticated QA gates
         if: always()
         env:
           QA_OUTCOME: ${{ steps.qa.outcome }}
-        run: test "$QA_OUTCOME" = success
+          BYPASS_CLEANUP_OUTCOME: ${{ steps.bypass_cleanup.outcome }}
+        run: |
+          test "$QA_OUTCOME" = success
+          test "$BYPASS_CLEANUP_OUTCOME" = success
 
-# Runs the full creator, contributor, outsider, desktop, mobile, RLS, idempotency,
-# pending-review, fail-closed, cleanup, and zero-residue sequence against the exact release head.
+# Uses a one-run automation bypass rather than a user-scoped Vercel share link, then
+# revokes it after the full creator, contributor, outsider, desktop, mobile, RLS,
+# idempotency, pending-review, fail-closed, cleanup, and zero-residue sequence.
