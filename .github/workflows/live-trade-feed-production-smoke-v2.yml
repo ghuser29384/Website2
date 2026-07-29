@@ -1,0 +1,167 @@
+name: Authenticated Trade Feed production smoke v2
+
+on:
+  push:
+    branches:
+      - ops/live-trade-feed-production-smoke-20260729
+    paths:
+      - .ops/live-trade-feed-production-smoke-v2-trigger.txt
+
+permissions:
+  contents: write
+
+concurrency:
+  group: authenticated-live-trade-feed-production-smoke-v2
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPECTED_PRODUCTION_SHA: 57a9224771636140c73b0b4156992e8ccfd8eb0d
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      SMOKE_BASE_URL: https://www.moraltrade.org
+      SMOKE_OUTPUT_DIR: live-trade-feed-production-smoke-evidence
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      VERCEL_SCOPE: ellen-s
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Check out operational smoke branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/live-trade-feed-production-smoke-20260729
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Pull protected production environment
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes vercel@latest env pull .env.production.local \
+            --environment=production \
+            --yes \
+            --token "$VERCEL_TOKEN" \
+            --scope "$VERCEL_SCOPE" >/dev/null
+          printf '\nNEXT_PUBLIC_SUPABASE_URL="https://jnpoxvalyjtdghnperyu.supabase.co"\n' >> .env.production.local
+          node --env-file=.env.production.local -e '
+            if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+              throw new Error("Production environment is missing SUPABASE_SERVICE_ROLE_KEY");
+            }
+            if (process.env.NEXT_PUBLIC_SUPABASE_URL !== "https://jnpoxvalyjtdghnperyu.supabase.co") {
+              throw new Error("Unexpected Supabase project URL");
+            }
+          '
+
+      - name: Verify production deployment commit
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const response = await fetch('https://api.vercel.com/v13/deployments/www.moraltrade.org', {
+            headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
+          });
+          if (!response.ok) throw new Error(`Vercel deployment lookup returned ${response.status}`);
+          const payload = await response.json();
+          const sha = payload.meta?.githubCommitSha || '';
+          const state = payload.readyState || payload.state || '';
+          if (sha !== process.env.EXPECTED_PRODUCTION_SHA) {
+            throw new Error(`Production points to ${sha || 'no SHA'}, expected ${process.env.EXPECTED_PRODUCTION_SHA}`);
+          }
+          if (state !== 'READY') throw new Error(`Production deployment is ${state}, not READY`);
+          console.log(`Production deployment ${payload.id} is READY at ${sha}.`);
+          NODE
+
+      - name: Run authenticated synthetic production smoke
+        id: smoke
+        shell: bash
+        run: |
+          set +e
+          node --env-file=.env.production.local .ops/live-trade-feed-production-smoke.mjs
+          STATUS=$?
+          set -e
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Build public smoke report
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p .ops-results
+          node - <<'NODE'
+          import fs from 'node:fs';
+          const source = 'live-trade-feed-production-smoke-evidence/result.json';
+          const output = '.ops-results/live-trade-feed-production-smoke.md';
+          const result = fs.existsSync(source) ? JSON.parse(fs.readFileSync(source, 'utf8')) : null;
+          const feed = result?.browser?.feedIdentity ?? {};
+          const trade = result?.browser?.tradeIdentity ?? {};
+          const rows = result?.browser?.authoritativeExposureRows ?? [];
+          const cleanup = result?.cleanup ?? {};
+          const status = result?.passed && cleanup.completed ? 'PASS' : 'FAIL';
+          const lines = [
+            '# Authenticated Trade Feed production smoke',
+            '',
+            `- Result: **${status}**`,
+            `- Production commit: \`${process.env.EXPECTED_PRODUCTION_SHA}\``,
+            `- Production URL: \`${process.env.SMOKE_BASE_URL}\``,
+            `- GitHub Actions run: \`${process.env.GITHUB_RUN_ID}\``,
+            `- Completed: \`${result?.completedAt ?? new Date().toISOString()}\``,
+            '',
+            '| Identity field | `/feed` | `/#trade` | Match |',
+            '|---|---|---|---:|',
+            `| Opportunity ID | \`${feed.opportunityId ?? ''}\` | \`${trade.opportunityId ?? ''}\` | ${feed.opportunityId && feed.opportunityId === trade.opportunityId ? 'yes' : 'no'} |`,
+            `| Feed key | \`${feed.feedItemKey ?? ''}\` | \`${trade.feedItemKey ?? ''}\` | ${feed.feedItemKey && feed.feedItemKey === trade.feedItemKey ? 'yes' : 'no'} |`,
+            `| Exposure receipt | \`${feed.exposureRequestId ?? ''}\` | \`${trade.exposureRequestId ?? ''}\` | ${feed.exposureRequestId && feed.exposureRequestId === trade.exposureRequestId ? 'yes' : 'no'} |`,
+            '',
+            `- Authoritative exposure rows for the shared snapshot: **${rows.length}**`,
+            `- Browser page errors: **${result?.browser?.pageErrors?.length ?? 'unknown'}**`,
+            `- Browser console errors: **${result?.browser?.consoleErrors?.length ?? 'unknown'}**`,
+            `- Synthetic cleanup complete: **${cleanup.completed === true ? 'yes' : 'no'}**`,
+            '',
+            '## Cleanup leftovers',
+            '```json',
+            JSON.stringify(cleanup.leftovers ?? {}, null, 2),
+            '```',
+          ];
+          if (result?.error) {
+            lines.push('', '## Failure', '```text', result.error.message || 'Unknown smoke failure', '```');
+          }
+          fs.writeFileSync(output, `${lines.join('\n')}\n`);
+          NODE
+
+      - name: Upload screenshots and raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-live-trade-feed-production-smoke-${{ github.run_id }}
+          path: |
+            live-trade-feed-production-smoke-evidence
+            .ops-results/live-trade-feed-production-smoke.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish smoke report
+        if: always()
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .ops-results/live-trade-feed-production-smoke.md
+          git commit -m "Record authenticated Trade Feed production smoke v2" || true
+          git push origin HEAD:ops/live-trade-feed-production-smoke-20260729
+
+      - name: Enforce smoke result
+        if: steps.smoke.outputs.status != '0'
+        run: exit 1
