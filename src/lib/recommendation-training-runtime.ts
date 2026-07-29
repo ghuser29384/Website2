@@ -2,6 +2,7 @@ export const CANONICAL_RECOMMENDATION_TRAINING_PROJECT_ID =
   "prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7";
 
 export interface RecommendationTrainingRuntimeEnvironment {
+  [key: string]: string | undefined;
   VERCEL_PROJECT_ID?: string;
   VERCEL_TARGET_ENV?: string;
 }
