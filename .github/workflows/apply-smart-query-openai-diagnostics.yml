@@ -1,0 +1,155 @@
+name: Apply smart-query OpenAI diagnostics
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/apply-smart-query-openai-diagnostics.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-smart-query-openai-diagnostics
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out diagnostics branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/smart-query-openai-diagnostics-20260729
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Add secret-safe failure diagnostics
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path("src/lib/smart-query-llm.ts")
+          text = path.read_text()
+
+          old_non_ok = """    if (!response.ok) return fallback;
+          """.replace("          ", "")
+          new_non_ok = """    if (!response.ok) {
+            let errorPayload: unknown = null;
+            try {
+              errorPayload = await response.json() as unknown;
+            } catch {
+              errorPayload = null;
+            }
+            const errorRecord = errorPayload && typeof errorPayload === "object" && !Array.isArray(errorPayload)
+              ? (errorPayload as Record<string, unknown>).error
+              : null;
+            const error = errorRecord && typeof errorRecord === "object" && !Array.isArray(errorRecord)
+              ? errorRecord as Record<string, unknown>
+              : null;
+            // Operational metadata only: never log the key, query, prompt, or provider message.
+            // eslint-disable-next-line no-console
+            console.warn("[smart-query-llm] openai_non_ok", {
+              status: response.status,
+              type: typeof error?.type === "string" ? error.type : null,
+              code: typeof error?.code === "string" ? error.code : null,
+              param: typeof error?.param === "string" ? error.param : null,
+            });
+            return fallback;
+          }
+          """.replace("          ", "")
+          if old_non_ok not in text:
+            raise SystemExit("non-OK fallback statement not found")
+          text = text.replace(old_non_ok, new_non_ok, 1)
+
+          old_no_text = """    const payload = await response.json() as unknown;
+            const text = extractResponseText(payload);
+            if (!text) return fallback;
+            const resolution = cleanResolution(JSON.parse(text) as unknown);
+            if (!resolution) return fallback;
+          """.replace("          ", "")
+          new_no_text = """    const payload = await response.json() as unknown;
+            const outputText = extractResponseText(payload);
+            if (!outputText) {
+              const responseRecord = payload && typeof payload === "object" && !Array.isArray(payload)
+                ? payload as Record<string, unknown>
+                : null;
+              const incompleteDetails = responseRecord?.incomplete_details;
+              const incompleteRecord = incompleteDetails && typeof incompleteDetails === "object" && !Array.isArray(incompleteDetails)
+                ? incompleteDetails as Record<string, unknown>
+                : null;
+              const output = Array.isArray(responseRecord?.output) ? responseRecord.output : [];
+              const outputTypes = output
+                .map((item) => item && typeof item === "object" && !Array.isArray(item)
+                  ? (item as Record<string, unknown>).type
+                  : null)
+                .filter((value): value is string => typeof value === "string")
+                .slice(0, 8);
+              // Operational metadata only: never log generated content or user input.
+              // eslint-disable-next-line no-console
+              console.warn("[smart-query-llm] openai_no_output_text", {
+                status: typeof responseRecord?.status === "string" ? responseRecord.status : null,
+                incompleteReason: typeof incompleteRecord?.reason === "string" ? incompleteRecord.reason : null,
+                outputTypes,
+              });
+              return fallback;
+            }
+            const resolution = cleanResolution(JSON.parse(outputText) as unknown);
+            if (!resolution) {
+              // eslint-disable-next-line no-console
+              console.warn("[smart-query-llm] invalid_structured_resolution");
+              return fallback;
+            }
+          """.replace("          ", "")
+          if old_no_text not in text:
+            raise SystemExit("payload parsing block not found")
+          text = text.replace(old_no_text, new_no_text, 1)
+
+          old_catch = """  } catch {
+              return fallback;
+          """.replace("          ", "")
+          new_catch = """  } catch (error) {
+              // Operational metadata only: never log the key, query, prompt, or provider message.
+              // eslint-disable-next-line no-console
+              console.warn("[smart-query-llm] request_exception", {
+                name: error instanceof Error ? error.name : "unknown",
+              });
+              return fallback;
+          """.replace("          ", "")
+          if old_catch not in text:
+            raise SystemExit("resolver catch block not found")
+          text = text.replace(old_catch, new_catch, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify diagnostics patch
+        run: |
+          set -o pipefail
+          npx eslint src/lib/smart-query-llm.ts
+          node --import tsx --test \
+            src/lib/smart-query.test.ts \
+            src/lib/smart-query-llm-gate.test.ts \
+            src/lib/smart-query-llm-timeout.test.ts \
+            src/lib/smart-evidence-ranking.test.ts
+          npm run build
+
+      - name: Commit verified diagnostics
+        run: |
+          git config user.name "moral-trade-query-bot"
+          git config user.email "moral-trade-query-bot@users.noreply.github.com"
+          git add src/lib/smart-query-llm.ts
+          git commit -m "Log secret-safe OpenAI query failures"
+          git push origin HEAD:fix/smart-query-openai-diagnostics-20260729
