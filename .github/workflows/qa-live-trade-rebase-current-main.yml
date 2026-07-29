@@ -8,7 +8,7 @@ on:
       - .qa/live-trade-rebase-current-main-trigger.txt
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: qa-live-trade-rebase-current-main
@@ -22,6 +22,13 @@ jobs:
       BASELINE_SHA: b6eb88a1e08c754445d87c8da6f0b02f9678afc2
       CANDIDATE_SHA: a012d8a3c3b8477ef4ed57b21c5ac838b9bd5399
     steps:
+      - name: Check out QA workbench
+        uses: actions/checkout@v4
+        with:
+          ref: qa/home-authenticated-feed-20260727
+          path: report
+          fetch-depth: 0
+
       - name: Check out current main baseline
         uses: actions/checkout@v4
         with:
@@ -52,41 +59,46 @@ jobs:
           npx playwright install --with-deps chromium
           ln -s "$GITHUB_WORKSPACE/candidate/node_modules" "$GITHUB_WORKSPACE/baseline/node_modules"
 
-      - name: JavaScript syntax checks
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --check candidate/public/moral-trade-live-trade-feed.js
-          node --check candidate/public/moral-trade-requester-identity.js
-
-      - name: Focused contract and routing tests
-        working-directory: candidate
-        run: >-
-          node --import tsx --test
-          src/live-trade-feed-contract.test.ts
-          src/proxy.test.ts
-          src/lib/create-interface/unified-entry-routes.test.ts
-
-      - name: Focused ESLint
-        working-directory: candidate
-        run: >-
-          npx eslint
-          src/proxy.ts
-          src/proxy.test.ts
-          src/lib/create-interface/unified-entry-routes.test.ts
-          src/live-trade-feed-contract.test.ts
-          tests/exact-live-trade-feed.spec.ts
-
-      - name: Full repository tests versus current main
+      - name: Run every requested gate and collect results
+        id: gates
         shell: bash
         run: |
           set +e
-          (cd baseline && npm test) > baseline-tests.log 2>&1
-          BASELINE_STATUS=$?
-          (cd candidate && npm test) > candidate-tests.log 2>&1
-          CANDIDATE_STATUS=$?
-          set -e
-          python3 - baseline-tests.log candidate-tests.log "$BASELINE_STATUS" "$CANDIDATE_STATUS" <<'PY'
+          LOGS="$GITHUB_WORKSPACE/gate-logs"
+          mkdir -p "$LOGS"
+
+          (
+            node --check candidate/public/moral-trade-live-trade-feed.js &&
+            node --check candidate/public/moral-trade-requester-identity.js
+          ) >"$LOGS/javascript-syntax.log" 2>&1
+          JS_STATUS=$?
+
+          (
+            cd candidate
+            node --import tsx --test \
+              src/live-trade-feed-contract.test.ts \
+              src/proxy.test.ts \
+              src/lib/create-interface/unified-entry-routes.test.ts
+          ) >"$LOGS/focused-tests.log" 2>&1
+          FOCUSED_STATUS=$?
+
+          (
+            cd candidate
+            npx eslint \
+              src/proxy.ts \
+              src/proxy.test.ts \
+              src/lib/create-interface/unified-entry-routes.test.ts \
+              src/live-trade-feed-contract.test.ts \
+              tests/exact-live-trade-feed.spec.ts
+          ) >"$LOGS/focused-lint.log" 2>&1
+          FOCUSED_LINT_STATUS=$?
+
+          (cd baseline && npm test) >"$LOGS/baseline-tests.log" 2>&1
+          BASELINE_TEST_STATUS=$?
+          (cd candidate && npm test) >"$LOGS/candidate-tests.log" 2>&1
+          CANDIDATE_TEST_STATUS=$?
+
+          python3 - "$LOGS/baseline-tests.log" "$LOGS/candidate-tests.log" "$BASELINE_TEST_STATUS" "$CANDIDATE_TEST_STATUS" >"$LOGS/test-comparison.log" 2>&1 <<'PY'
           import collections
           import re
           import sys
@@ -126,17 +138,14 @@ jobs:
               sys.exit(2)
           sys.exit(1 if unexpected else 0)
           PY
+          TEST_COMPARISON_STATUS=$?
 
-      - name: Full lint versus current main
-        shell: bash
-        run: |
-          set +e
-          (cd baseline && npm run lint) > baseline-lint.log 2>&1
-          BASELINE_STATUS=$?
-          (cd candidate && npm run lint) > candidate-lint.log 2>&1
-          CANDIDATE_STATUS=$?
-          set -e
-          python3 - baseline-lint.log candidate-lint.log "$BASELINE_STATUS" "$CANDIDATE_STATUS" <<'PY'
+          (cd baseline && npm run lint) >"$LOGS/baseline-lint.log" 2>&1
+          BASELINE_LINT_STATUS=$?
+          (cd candidate && npm run lint) >"$LOGS/candidate-lint.log" 2>&1
+          CANDIDATE_LINT_STATUS=$?
+
+          python3 - "$LOGS/baseline-lint.log" "$LOGS/candidate-lint.log" "$BASELINE_LINT_STATUS" "$CANDIDATE_LINT_STATUS" >"$LOGS/lint-comparison.log" 2>&1 <<'PY'
           import re
           import sys
 
@@ -159,18 +168,101 @@ jobs:
           print(f"resolved_baseline_error_count={max(0, baseline - candidate)}")
           sys.exit(1 if candidate > baseline else 0)
           PY
+          LINT_COMPARISON_STATUS=$?
 
-      - name: Production build
-        working-directory: candidate
-        run: npm run build
+          (cd candidate && npm run build) >"$LOGS/build.log" 2>&1
+          BUILD_STATUS=$?
 
-      - name: Targeted desktop and mobile Playwright on /#trade
-        working-directory: candidate
-        run: npx playwright test tests/exact-live-trade-feed.spec.ts --workers=1
+          (cd candidate && npx playwright test tests/exact-live-trade-feed.spec.ts --workers=1) >"$LOGS/playwright.log" 2>&1
+          PLAYWRIGHT_STATUS=$?
 
-      - name: Whitespace check
-        working-directory: candidate
-        run: git diff --check ${{ env.BASELINE_SHA }}...${{ env.CANDIDATE_SHA }}
+          (
+            cd candidate
+            git diff --check "$BASELINE_SHA...$CANDIDATE_SHA"
+          ) >"$LOGS/diff-check.log" 2>&1
+          DIFF_STATUS=$?
+
+          OVERALL=0
+          for status in \
+            "$JS_STATUS" \
+            "$FOCUSED_STATUS" \
+            "$FOCUSED_LINT_STATUS" \
+            "$TEST_COMPARISON_STATUS" \
+            "$LINT_COMPARISON_STATUS" \
+            "$BUILD_STATUS" \
+            "$PLAYWRIGHT_STATUS" \
+            "$DIFF_STATUS"; do
+            if [ "$status" -ne 0 ]; then OVERALL=1; fi
+          done
+
+          {
+            echo "JS_STATUS=$JS_STATUS"
+            echo "FOCUSED_STATUS=$FOCUSED_STATUS"
+            echo "FOCUSED_LINT_STATUS=$FOCUSED_LINT_STATUS"
+            echo "TEST_COMPARISON_STATUS=$TEST_COMPARISON_STATUS"
+            echo "LINT_COMPARISON_STATUS=$LINT_COMPARISON_STATUS"
+            echo "BUILD_STATUS=$BUILD_STATUS"
+            echo "PLAYWRIGHT_STATUS=$PLAYWRIGHT_STATUS"
+            echo "DIFF_STATUS=$DIFF_STATUS"
+            echo "OVERALL=$OVERALL"
+          } > "$LOGS/status.env"
+          echo "overall=$OVERALL" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Publish verification report to the workbench
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOGS="$GITHUB_WORKSPACE/gate-logs"
+          source "$LOGS/status.env"
+          RESULT=PASS
+          if [ "$OVERALL" -ne 0 ]; then RESULT=FAIL; fi
+          REPORT="$GITHUB_WORKSPACE/report/.qa-results/live-trade-rebase-current-main.md"
+          mkdir -p "$(dirname "$REPORT")"
+          {
+            echo "# Rebased authenticated Trade Feed verification"
+            echo
+            echo "- Result: **$RESULT**"
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Baseline: \`$BASELINE_SHA\`"
+            echo "- Recorded: \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`"
+            echo
+            echo "| Gate | Status |"
+            echo "|---|---:|"
+            echo "| JavaScript syntax | $JS_STATUS |"
+            echo "| Focused tests | $FOCUSED_STATUS |"
+            echo "| Focused ESLint | $FOCUSED_LINT_STATUS |"
+            echo "| Full tests versus current main | $TEST_COMPARISON_STATUS |"
+            echo "| Full lint versus current main | $LINT_COMPARISON_STATUS |"
+            echo "| Production build | $BUILD_STATUS |"
+            echo "| Targeted Playwright on /#trade | $PLAYWRIGHT_STATUS |"
+            echo "| git diff --check | $DIFF_STATUS |"
+            echo
+            echo "## Full-test comparison"
+            echo '```text'
+            cat "$LOGS/test-comparison.log"
+            echo '```'
+            echo
+            echo "## Full-lint comparison"
+            echo '```text'
+            cat "$LOGS/lint-comparison.log"
+            echo '```'
+            for name in javascript-syntax focused-tests focused-lint build playwright diff-check; do
+              echo
+              echo "## $name"
+              echo '```text'
+              tail -n 140 "$LOGS/$name.log"
+              echo '```'
+            done
+          } > "$REPORT"
+
+          cd "$GITHUB_WORKSPACE/report"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .qa-results/live-trade-rebase-current-main.md
+          git commit -m "Record rebased Trade Feed verification [$RESULT]" || true
+          git push origin HEAD:qa/home-authenticated-feed-20260727
 
       - name: Upload verification evidence
         if: always()
@@ -178,11 +270,12 @@ jobs:
         with:
           name: rebased-authenticated-trade-feed-${{ github.run_id }}
           path: |
-            baseline-tests.log
-            candidate-tests.log
-            baseline-lint.log
-            candidate-lint.log
+            gate-logs
             candidate/test-results
             candidate/playwright-report
           if-no-files-found: ignore
           retention-days: 30
+
+      - name: Enforce requested gates
+        if: steps.gates.outputs.overall != '0'
+        run: exit 1
