@@ -1,3 +1,4 @@
+# Registered on the preceding commit; this push intentionally triggers the guarded run.
 name: Materialize compact Common Ground Pool
 
 on:
