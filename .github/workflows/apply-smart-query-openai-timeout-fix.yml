@@ -1,4 +1,4 @@
-# One-time repair workflow; the verified implementation commit removes this file.
+# One-time repair workflow; remove this file after the verified implementation commit lands.
 name: Apply smart-query OpenAI timeout fix
 
 on:
@@ -104,27 +104,6 @@ jobs:
               raise SystemExit("OpenAI query model environment marker not found")
             env_text = env_text.replace(env_marker, env_marker + env_line, 1)
           env_path.write_text(env_text)
-
-          qa_path = Path(".github/workflows/smart-query-qa.yml")
-          qa = qa_path.read_text()
-          lint_marker = "            src/lib/smart-query-llm-gate.test.ts \\\n"
-          lint_line = "            src/lib/smart-query-llm-timeout.test.ts \\\n"
-          if lint_line not in qa:
-            if lint_marker not in qa:
-              raise SystemExit("Smart-query lint marker not found")
-            qa = qa.replace(lint_marker, lint_marker + lint_line, 1)
-
-          test_marker = "            src/lib/smart-query-llm-gate.test.ts \\\n"
-          test_line = "            src/lib/smart-query-llm-timeout.test.ts \\\n"
-          test_section = qa.split("Test deterministic and semantic query interpretation", 1)[1]
-          if test_line not in test_section:
-            split_at = qa.index("Test deterministic and semantic query interpretation")
-            before, after = qa[:split_at], qa[split_at:]
-            if test_marker not in after:
-              raise SystemExit("Smart-query test marker not found")
-            after = after.replace(test_marker, test_marker + test_line, 1)
-            qa = before + after
-          qa_path.write_text(qa)
           PY
 
       - name: Install dependencies
@@ -147,11 +126,8 @@ jobs:
         run: |
           git config user.name "moral-trade-query-bot"
           git config user.email "moral-trade-query-bot@users.noreply.github.com"
-          rm .github/workflows/apply-smart-query-openai-timeout-fix.yml
           git add \
             .env.example \
-            .github/workflows/smart-query-qa.yml \
-            .github/workflows/apply-smart-query-openai-timeout-fix.yml \
             src/lib/smart-query-llm.ts \
             src/lib/smart-query-llm-timeout.test.ts
           git commit -m "Allow production query interpretation to finish"
