@@ -1,0 +1,69 @@
+name: PR 212 exact-head source export
+
+on:
+  push:
+    branches:
+      - ops/pr212-source-export-20260729
+    paths:
+      - .github/workflows/pr212-source-export.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: 9ad919bc281a9f701d4a5adfb518055c864393b3
+          fetch-depth: 0
+
+      - name: Verify and package exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "9ad919bc281a9f701d4a5adfb518055c864393b3"
+          git status --short
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.next \
+            --exclude=output \
+            --exclude=test-results \
+            --exclude=playwright-report \
+            -czf /tmp/pr212-exact-head-source.tar.gz .
+          sha256sum /tmp/pr212-exact-head-source.tar.gz > /tmp/pr212-exact-head-source.sha256
+
+      - name: Upload exact source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-exact-head-source-${{ github.run_id }}
+          path: |
+            /tmp/pr212-exact-head-source.tar.gz
+            /tmp/pr212-exact-head-source.sha256
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Record run identifier on operations branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout ops/pr212-source-export-20260729
+          mkdir -p ops
+          cat > ops/pr212-source-export-run.json <<JSON
+          {
+            "run_id": "${GITHUB_RUN_ID}",
+            "workflow_run_attempt": "${GITHUB_RUN_ATTEMPT}",
+            "exported_sha": "9ad919bc281a9f701d4a5adfb518055c864393b3",
+            "artifact_name": "pr212-exact-head-source-${GITHUB_RUN_ID}"
+          }
+          JSON
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-source-export-run.json
+          git commit -m "Record PR 212 exact-head source export"
+          git push origin HEAD:ops/pr212-source-export-20260729
