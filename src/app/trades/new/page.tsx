@@ -31,6 +31,8 @@ import {
   getTradeDraftTemplateLabel,
 } from "@/lib/trade-template-library";
 
+// The default Create surface is rendered from public/moral-trade-create/index.html by
+// CreateInterfaceFrame; the Collective mode is a sibling workflow within this same route.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
