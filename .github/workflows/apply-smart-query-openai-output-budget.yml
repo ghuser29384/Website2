@@ -1,0 +1,112 @@
+name: Apply smart-query OpenAI output budget
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/apply-smart-query-openai-output-budget.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-smart-query-openai-output-budget
+  cancel-in-progress: true
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/smart-query-openai-output-budget-20260729
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply low-reasoning structured-output budget
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          llm_path = Path("src/lib/smart-query-llm.ts")
+          text = llm_path.read_text()
+
+          timeout_constants = (
+            "const DEFAULT_SMART_QUERY_LLM_TIMEOUT_MS = 12_000;\n"
+            "const MIN_SMART_QUERY_LLM_TIMEOUT_MS = 3_000;\n"
+            "const MAX_SMART_QUERY_LLM_TIMEOUT_MS = 20_000;\n"
+          )
+          generation_constants = (
+            timeout_constants
+            + "export const SMART_QUERY_LLM_MAX_OUTPUT_TOKENS = 1_200;\n"
+            + 'export const SMART_QUERY_LLM_REASONING_EFFORT = "minimal" as const;\n'
+          )
+          if "SMART_QUERY_LLM_MAX_OUTPUT_TOKENS" not in text:
+            if timeout_constants not in text:
+              raise SystemExit("timeout constants block not found")
+            text = text.replace(timeout_constants, generation_constants, 1)
+
+          old_request = "        store: false,\n        max_output_tokens: 600,\n"
+          new_request = (
+            "        store: false,\n"
+            "        reasoning: { effort: SMART_QUERY_LLM_REASONING_EFFORT },\n"
+            "        max_output_tokens: SMART_QUERY_LLM_MAX_OUTPUT_TOKENS,\n"
+          )
+          if old_request in text:
+            text = text.replace(old_request, new_request, 1)
+          elif new_request not in text:
+            raise SystemExit("OpenAI generation settings not found")
+          llm_path.write_text(text)
+
+          test_path = Path("src/lib/smart-query-llm-generation.test.ts")
+          test_path.write_text('''import assert from "node:assert/strict";
+          import test from "node:test";
+
+          import {
+            SMART_QUERY_LLM_MAX_OUTPUT_TOKENS,
+            SMART_QUERY_LLM_REASONING_EFFORT,
+          } from "./smart-query-llm";
+
+          test("reserves output for the structured ambiguity decision", () => {
+            assert.equal(SMART_QUERY_LLM_REASONING_EFFORT, "minimal");
+            assert.equal(SMART_QUERY_LLM_MAX_OUTPUT_TOKENS, 1_200);
+          });
+          '''.replace("          ", ""))
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify output-budget repair
+        run: |
+          set -o pipefail
+          npx eslint \
+            src/lib/smart-query-llm.ts \
+            src/lib/smart-query-llm-generation.test.ts
+          node --import tsx --test \
+            src/lib/smart-query-llm-generation.test.ts \
+            src/lib/smart-query-llm-timeout.test.ts \
+            src/lib/smart-query.test.ts \
+            src/lib/smart-query-llm-gate.test.ts \
+            src/lib/smart-evidence-ranking.test.ts
+          npm run build
+
+      - name: Commit verified repair
+        run: |
+          git config user.name "moral-trade-query-bot"
+          git config user.email "moral-trade-query-bot@users.noreply.github.com"
+          git add \
+            src/lib/smart-query-llm.ts \
+            src/lib/smart-query-llm-generation.test.ts
+          git commit -m "Reserve output budget for query interpretation"
+          git push origin HEAD:fix/smart-query-openai-output-budget-20260729
