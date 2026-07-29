@@ -57,7 +57,8 @@ test.describe("compact Common Ground Pool in Create", () => {
     ).toBeVisible();
     await expect(create.getByRole("button", { name: /Submit for review/ })).toBeDisabled();
 
-    await create.getByLabel("The split and no-pool defaults are accurate.").check();
+    await create.locator("label.publish-confirm").click();
+    await expect(create.locator("#publishConfirm")).toBeChecked();
     await create.getByRole("button", { name: /Submit for review/ }).click();
     await expect(create.getByText("Common Ground Pool proposal", { exact: true })).toBeVisible();
 
