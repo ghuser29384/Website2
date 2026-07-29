@@ -28,8 +28,8 @@ test.describe("compact Common Ground Pool in Create", () => {
     const create = page.frameLocator('iframe[title="Moral Trade Create"]');
 
     await create.getByRole("button", { name: "Future flourishing" }).click();
-    await create.getByRole("button", { name: /^Fund/ }).click();
-    await create.getByRole("button", { name: /Common Ground Pool/ }).click();
+    await create.locator('[data-request-kind="fund"]').click();
+    await create.locator('[data-fund-mode="commonGround"]').click();
 
     await expect(
       create.getByRole("heading", { name: "What should everyone fund together?" }),
@@ -99,8 +99,8 @@ test.describe("compact Common Ground Pool in Create", () => {
     const create = page.frameLocator('iframe[title="Moral Trade Create"]');
 
     await create.getByRole("button", { name: "Future flourishing" }).click();
-    await create.getByRole("button", { name: /^Fund/ }).click();
-    await create.getByRole("button", { name: /Common Ground Pool/ }).click();
+    await create.locator('[data-request-kind="fund"]').click();
+    await create.locator('[data-fund-mode="commonGround"]').click();
     await expect(create.locator("#commonGroundFields")).toBeVisible();
 
     const hasHorizontalOverflow = await create.locator("html").evaluate(
