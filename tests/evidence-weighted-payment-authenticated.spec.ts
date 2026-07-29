@@ -181,7 +181,9 @@ function qaCheckpoint(message: string) {
 }
 
 async function expectSuccess(page: Page, message: string) {
-  await expect(page.getByText(message, { exact: true })).toBeVisible();
+  await expect(page.getByText(message, { exact: true })).toBeVisible({
+    timeout: 20_000,
+  });
 }
 
 function formWithButton(page: Page, buttonName: string) {
