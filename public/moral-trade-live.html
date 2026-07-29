@@ -37,6 +37,30 @@
 }`;
           return `${withoutFocus.slice(0, planStart)}${loadingPlan}${withoutFocus.slice(planEnd)}`;
         };
+        const stripLegacyTradeSidebar = (source) => {
+          const clauseStartMarker = 'function clauseBuilder(){';
+          const exchangeStartMarker = '\nfunction exchangeBuilder(){';
+          const sidebarStartMarker = '<aside class="stack"><section class="panel matchcard"><div class="between"><div class="eyebrow">Potential matches</div>';
+          const sidebarEndMarker = '</aside></div>`;\n}';
+          const clauseStart = source.indexOf(clauseStartMarker);
+          const exchangeStart = source.indexOf(exchangeStartMarker, clauseStart);
+          const sidebarStart = source.indexOf(sidebarStartMarker, clauseStart);
+          const sidebarEnd = source.indexOf(sidebarEndMarker, sidebarStart);
+          if (
+            clauseStart < 0 ||
+            exchangeStart <= clauseStart ||
+            sidebarStart <= clauseStart ||
+            sidebarStart >= exchangeStart ||
+            sidebarEnd <= sidebarStart ||
+            sidebarEnd >= exchangeStart
+          ) {
+            throw new Error('live Trade sidebar source markers');
+          }
+          const loadingSidebar = '<aside class="stack" data-mt-live-trade-feed="loading" aria-label="Personalized Trade feed"><section class="panel matchcard"><div class="eyebrow">Personalized matches</div><h3>Loading your Feed…</h3><p style="font-size:10px">No generic or demo records are shown.</p></section></aside></div>`;\n}';
+          return `${source.slice(0, sidebarStart)}${loadingSidebar}${source.slice(
+            sidebarEnd + sidebarEndMarker.length,
+          )}`;
+        };
         const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
         const unavailableLiveNow = (payload = {}) => ({
           ...payload,
@@ -95,7 +119,9 @@
           throw new Error('integrity');
         }
 
-        const source = stripLegacyNowFocus(new TextDecoder().decode(raw));
+        const source = stripLegacyTradeSidebar(
+          stripLegacyNowFocus(new TextDecoder().decode(raw)),
+        );
         const accountJson = JSON.stringify(liveAccount)
           .replace(/</g, '\\u003c')
           .replace(/>/g, '\\u003e')
@@ -113,6 +139,7 @@
           '<link id="mt-plan-resources-styles" rel="stylesheet" href="/moral-trade-live-plan-resources.css">',
           '<link id="mt-custom-route-styles" rel="stylesheet" href="/moral-trade-live-custom-route.css">',
           '<link id="mt-adaptive-feed-styles" rel="stylesheet" href="/moral-trade-live-feed.css">',
+          '<link id="mt-live-trade-feed-styles" rel="stylesheet" href="/moral-trade-live-trade-feed.css">',
           '<link id="mt-reciprocal-feed-diagnostics-styles" rel="stylesheet" href="/moral-trade-live-feed-diagnostics.css">',
           '<link id="mt-pareto-feed-learning-styles" rel="stylesheet" href="/moral-trade-live-learning-diagnostics.css">',
           '<link id="mt-home-offer-cta-styles" rel="stylesheet" href="/moral-trade-live-home-offer.css">',
@@ -141,6 +168,7 @@
           '<script src="/moral-trade-live-verification.js"><\/script>',
           '<script src="/moral-trade-live-templates.js"><\/script>',
           '<script src="/moral-trade-live-now.js"><\/script>',
+          '<script src="/moral-trade-live-trade-feed.js"><\/script>',
           '<script src="/moral-trade-live-feed-diagnostics.js"><\/script>',
           '<script src="/moral-trade-live-learning-diagnostics.js"><\/script>',
           '<script src="/moral-trade-live-route-recommendations.js"><\/script>',
