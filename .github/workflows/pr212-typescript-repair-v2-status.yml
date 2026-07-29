@@ -1,0 +1,56 @@
+name: PR 212 TypeScript repair v2 status
+
+on:
+  push:
+    branches:
+      - ops/pr212-absolute-gates-20260729
+    paths:
+      - .github/workflows/pr212-typescript-repair-v2-status.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/pr212-absolute-gates-20260729
+          fetch-depth: 0
+
+      - name: Record latest v2 repair run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 90); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow apply-pr212-typescript-repair-v2.yml --branch ops/pr212-absolute-gates-20260729 --limit 10 --json databaseId,status,conclusion,createdAt,headSha,url > /tmp/runs.json
+            run_id="$(jq -r 'sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+            status="$(jq -r 'sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+            conclusion="$(jq -r 'sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 8
+          done
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/jobs.json
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
+          else
+            printf '%s\n' '{"jobs":[]}' > /tmp/jobs.json
+            printf '%s\n' 'No repair run found.' > /tmp/failed.log
+          fi
+          jq -n --arg run_id "$run_id" --arg status "$status" --arg conclusion "$conclusion" --slurpfile runs /tmp/runs.json --slurpfile jobs /tmp/jobs.json '{run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0],jobs:$jobs[0].jobs}' > ops/pr212-typescript-repair-v2-status.json
+          tail -n 800 /tmp/failed.log > ops/pr212-typescript-repair-v2-failed.log
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-typescript-repair-v2-status.json ops/pr212-typescript-repair-v2-failed.log
+          git commit -m "Record PR 212 TypeScript repair v2 status"
+          git push origin HEAD:ops/pr212-absolute-gates-20260729
