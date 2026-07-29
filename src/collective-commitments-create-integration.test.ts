@@ -53,20 +53,16 @@ test("individual exact-terms records retain a dedicated shareable route", async 
 });
 
 test("Collective expiry and encryption configuration remain fail-closed", async () => {
-  const [env, vercel] = await Promise.all([
+  const [env, vercelConfig] = await Promise.all([
     source(".env.example"),
-    source("vercel.json"),
+    source("scripts/vercel-project-config.mjs"),
   ]);
   assert.match(env, /COLLECTIVE_COMMITMENTS_ENABLED=false/);
   assert.match(env, /COLLECTIVE_COMMITMENT_MASTER_KEY=/);
-  const parsed = JSON.parse(vercel) as { crons: Array<{ path: string; schedule: string }> };
-  assert.ok(
-    parsed.crons.some(
-      (cron) =>
-        cron.path === "/api/jobs/collective-commitments-expire" &&
-        cron.schedule === "*/5 * * * *",
-    ),
-  );
+  assert.match(vercelConfig, /COLLECTIVE_COMMITMENT_EXPIRY_PATH/);
+  assert.match(vercelConfig, /COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE = "\*\/5 \* \* \* \*"/);
+  assert.match(vercelConfig, /collectiveCommitmentExpiryCron/);
+  assert.match(vercelConfig, /projectId !== DUPLICATE_WEBSITE2_PROJECT_ID/);
 });
 
 test("the superseded duplicate-version migration is absent", async () => {
