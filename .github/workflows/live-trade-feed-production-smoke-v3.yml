@@ -1,0 +1,175 @@
+name: Authenticated Trade Feed production smoke v3
+
+on:
+  push:
+    branches:
+      - ops/live-trade-feed-production-smoke-20260729
+    paths:
+      - .ops/live-trade-feed-production-smoke-v3-trigger.txt
+
+permissions:
+  contents: write
+
+concurrency:
+  group: authenticated-live-trade-feed-production-smoke-v3
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      A1_SMOKE_BASE_URL: https://www.moraltrade.org
+      A1_SMOKE_OUTPUT_DIR: live-trade-feed-production-smoke-evidence
+      CRON_SECRET: not-used-by-focused-trade-feed-parity-smoke
+      EXPECTED_PRODUCTION_SHA: 57a9224771636140c73b0b4156992e8ccfd8eb0d
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+    steps:
+      - name: Check out operational smoke controller
+        uses: actions/checkout@v4
+        with:
+          ref: ops/live-trade-feed-production-smoke-20260729
+          path: ops
+          fetch-depth: 0
+
+      - name: Check out prior proven synthetic smoke
+        uses: actions/checkout@v4
+        with:
+          ref: ops/a1-production-smoke-20260725
+          path: prior
+          fetch-depth: 1
+
+      - name: Check out exact production source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_PRODUCTION_SHA }}
+          path: app
+          fetch-depth: 1
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Validate and mask protected inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in PROD_SUPABASE_DB_URL QA_TEST_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required secret: $name"
+              exit 1
+            fi
+          done
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$QA_TEST_PASSWORD"
+          test "$(git -C app rev-parse HEAD)" = "$EXPECTED_PRODUCTION_SHA"
+          test "$(curl -sS -o /dev/null -w '%{http_code}' https://www.moraltrade.org/api/live-now)" = "200"
+
+      - name: Install PostgreSQL and browser dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          cd app
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Materialize focused authenticated parity smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode prior/.a1-production-smoke/final.gz.b64 | gzip -d > app/.trade-feed-production-smoke.mjs
+          node ops/.ops/patch-a1-smoke-for-trade-feed-parity.mjs app/.trade-feed-production-smoke.mjs
+          node --check app/.trade-feed-production-smoke.mjs
+
+      - name: Run one authenticated production parity smoke
+        id: smoke
+        working-directory: app
+        shell: bash
+        run: |
+          set +e
+          node .trade-feed-production-smoke.mjs
+          STATUS=$?
+          set -e
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Build public smoke report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/.ops-results
+          node - <<'NODE'
+          import fs from 'node:fs';
+          const source = 'app/live-trade-feed-production-smoke-evidence/result.json';
+          const output = 'ops/.ops-results/live-trade-feed-production-smoke.md';
+          const result = fs.existsSync(source) ? JSON.parse(fs.readFileSync(source, 'utf8')) : null;
+          const feed = result?.feedIdentity ?? {};
+          const trade = result?.tradeIdentity ?? {};
+          const audit = result?.parityAudit ?? {};
+          const cleanup = result?.cleanup ?? {};
+          const status = result?.passed && cleanup.completed ? 'PASS' : 'FAIL';
+          const lines = [
+            '# Authenticated Trade Feed production smoke',
+            '',
+            `- Result: **${status}**`,
+            `- Production commit: \`${process.env.EXPECTED_PRODUCTION_SHA}\``,
+            `- Production URL: \`${process.env.A1_SMOKE_BASE_URL}\``,
+            `- GitHub Actions run: \`${process.env.GITHUB_RUN_ID}\``,
+            `- Completed: \`${new Date().toISOString()}\``,
+            '',
+            '| Identity field | `/feed` | `/#trade` | Match |',
+            '|---|---|---|---:|',
+            `| Opportunity ID | \`${feed.opportunityId ?? ''}\` | \`${trade.opportunityId ?? ''}\` | ${feed.opportunityId && feed.opportunityId === trade.opportunityId ? 'yes' : 'no'} |`,
+            `| Feed key | \`${feed.feedItemKey ?? ''}\` | \`${trade.feedItemKey ?? ''}\` | ${feed.feedItemKey && feed.feedItemKey === trade.feedItemKey ? 'yes' : 'no'} |`,
+            `| Exposure receipt | \`${feed.exposureRequestId ?? ''}\` | \`${trade.exposureRequestId ?? ''}\` | ${feed.exposureRequestId && feed.exposureRequestId === trade.exposureRequestId ? 'yes' : 'no'} |`,
+            '',
+            `- Authoritative exposure rows for the shared snapshot: **${audit.count ?? 0}**`,
+            `- Authoritative shown rows: **${audit.shownCount ?? 0}**`,
+            `- Browser page errors: **${result?.network?.pageErrors?.length ?? 'unknown'}**`,
+            `- Server-error responses: **${result?.network?.serverErrors?.length ?? 'unknown'}**`,
+            `- Synthetic cleanup complete: **${cleanup.completed === true ? 'yes' : 'no'}**`,
+            '',
+            '## Cleanup leftovers',
+            '```json',
+            JSON.stringify(cleanup.leftovers ?? {}, null, 2),
+            '```',
+          ];
+          if (result?.error) {
+            lines.push('', '## Failure', '```text', result.error.message || 'Unknown smoke failure', '```');
+          }
+          fs.writeFileSync(output, `${lines.join('\n')}\n`);
+          NODE
+
+      - name: Upload screenshots and raw evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: authenticated-live-trade-feed-production-smoke-${{ github.run_id }}
+          path: |
+            app/live-trade-feed-production-smoke-evidence
+            ops/.ops-results/live-trade-feed-production-smoke.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish smoke report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ops
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .ops-results/live-trade-feed-production-smoke.md
+          git commit -m "Record authenticated Trade Feed production smoke v3" || true
+          git push origin HEAD:ops/live-trade-feed-production-smoke-20260729
+
+      - name: Enforce smoke result
+        if: steps.smoke.outputs.status != '0'
+        run: exit 1
