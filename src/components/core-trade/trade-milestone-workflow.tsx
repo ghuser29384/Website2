@@ -1,5 +1,9 @@
 import type { ReactNode } from "react";
 
+import {
+  ExternalPaymentResponseForm,
+  type ExternalPaymentResponseAction,
+} from "@/components/core-trade/external-payment-response-form";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 
@@ -188,7 +192,7 @@ export interface TradeMilestoneWorkflowData {
 }
 
 export interface TradeMilestoneWorkflowActions {
-  confirmExternalPaymentAction?: TradeMilestoneAction;
+  confirmExternalPaymentAction?: ExternalPaymentResponseAction;
   createMilestoneAction?: TradeMilestoneAction;
   finalizeMilestoneManifestAction?: TradeMilestoneAction;
   finalizeMilestoneReviewAction?: TradeMilestoneAction;
@@ -1182,48 +1186,14 @@ function ExternalPaymentForms({
 
       {milestone.canConfirmExternalPayment &&
       actions.confirmExternalPaymentAction ? (
-        <form
+        <ExternalPaymentResponseForm
           action={actions.confirmExternalPaymentAction}
-          className="panel stack-form"
-        >
-          {hiddenWorkflowFields({
-            agreementId,
-            milestoneId: milestone.id,
-            returnTo,
-            versionId: milestone.versionId,
-          })}
-          <p className="detail-kicker">Performer confirmation</p>
-          <h4>Respond to the latest external payment receipt</h4>
-          <p className="route-text">
-            Respond by {renderDate(payment.responseDeadline)}. Silence or a
-            dispute opens neutral review; silence never counts as confirmation.
-          </p>
-          <label className="field">
-            <span>Private note</span>
-            <textarea
-              name="confirmation_note"
-              placeholder="Optional note about the received payment"
-              rows={3}
-            />
-          </label>
-          <div className="form-actions">
-            <PendingSubmitButton
-              name="payment_response"
-              pendingLabel="Confirming payment…"
-              value="confirm"
-            >
-              Confirm payment received
-            </PendingSubmitButton>
-            <PendingSubmitButton
-              className="button button-secondary"
-              name="payment_response"
-              pendingLabel="Disputing receipt…"
-              value="dispute"
-            >
-              Dispute payment report
-            </PendingSubmitButton>
-          </div>
-        </form>
+          agreementId={agreementId}
+          milestoneId={milestone.id}
+          responseDeadline={payment.responseDeadline}
+          returnTo={returnTo}
+          versionId={milestone.versionId}
+        />
       ) : null}
     </div>
   );

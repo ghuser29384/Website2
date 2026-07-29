@@ -564,24 +564,20 @@ export async function respondTradeExternalPaymentAction(formData: FormData) {
       p_response: response,
     });
   } catch (error) {
-    redirect(
-      withMessage(
-        returnTo,
-        "error",
-        errorMessage(error, "External payment response could not be recorded."),
-      ),
+    return withMessage(
+      returnTo,
+      "error",
+      errorMessage(error, "External payment response could not be recorded."),
     );
   }
 
   revalidatePath(returnTo);
-  redirect(
-    withMessage(
-      returnTo,
-      "message",
-      read(formData, "payment_response") === "dispute"
-        ? "External payment marked disputed. The private receipt and history remain available for resolution."
-        : "External payment confirmed. Moral Trade recorded the receipt without moving funds.",
-    ),
+  return withMessage(
+    returnTo,
+    "message",
+    read(formData, "payment_response") === "dispute"
+      ? "External payment marked disputed. The private receipt and history remain available for resolution."
+      : "External payment confirmed. Moral Trade recorded the receipt without moving funds.",
   );
 }
 
