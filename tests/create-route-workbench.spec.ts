@@ -26,6 +26,14 @@ async function captureFrame(frame: FrameLocator, filename: string) {
   });
 }
 
+async function captureCommonGroundPanel(frame: FrameLocator, filename: string) {
+  await mkdir(captureDirectory, { recursive: true });
+  await frame.locator("#commonGroundFields").screenshot({
+    animations: "disabled",
+    path: path.join(captureDirectory, filename),
+  });
+}
+
 test.describe("Create route workbench", () => {
   test("routes /create into the unified, no-capture Create interface", async ({ browser, page }) => {
     let publishRequestCount = 0;
@@ -73,6 +81,7 @@ test.describe("Create route workbench", () => {
 
     if (captureVisuals) {
       await captureFrame(create, "implementation-common-ground-desktop.png");
+      await captureCommonGroundPanel(create, "implementation-common-ground-panel-desktop.png");
 
       const liveContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
       const livePage = await liveContext.newPage();
@@ -109,6 +118,7 @@ test.describe("Create route workbench", () => {
       await mkdir(captureDirectory, { recursive: true });
       await prepareForVisualCapture(page);
       await captureFrame(create, "implementation-common-ground-mobile.png");
+      await captureCommonGroundPanel(create, "implementation-common-ground-panel-mobile.png");
     }
   });
 
