@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+process.env.MORAL_TRADE_DISABLE_SUPABASE = "true";
+
 import { GET as publicOfferDetailRoute } from "../app/api/offers/[...slug]/route";
 import { GET as publicOffersFacetsRoute } from "../app/api/offers/facets/route";
 import { GET as publicOffersRoute } from "../app/api/offers/route";

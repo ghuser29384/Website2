@@ -72,7 +72,6 @@ export function OfferPlaneInlineMount() {
     portalHost.id = HOST_ID;
     portalHost.className = styles.portalHost;
     portalHost.dataset.offerPlaneInline = "true";
-    setHost(portalHost);
 
     function placeHost() {
       const toolbar = document.querySelector<HTMLElement>(".mt-directory-toolbar");
@@ -91,7 +90,10 @@ export function OfferPlaneInlineMount() {
     }
 
     placeHost();
-    const frame = window.requestAnimationFrame(placeHost);
+    const frame = window.requestAnimationFrame(() => {
+      placeHost();
+      setHost(portalHost);
+    });
     const observer = new MutationObserver(placeHost);
     observer.observe(document.body, { childList: true, subtree: true });
 

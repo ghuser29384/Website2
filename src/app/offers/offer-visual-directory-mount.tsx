@@ -104,8 +104,6 @@ export function OfferVisualDirectoryMount() {
 
   useEffect(() => {
     if (!queryState.shouldShow) {
-      setEntries([]);
-      setHost(null);
       return;
     }
 
@@ -114,9 +112,9 @@ export function OfferVisualDirectoryMount() {
     portalHost.id = HOST_ID;
     portalHost.className = styles.portalHost;
     portalHost.dataset.visualOfferDirectory = "true";
-    setHost(portalHost);
 
     const controller = new AbortController();
+    let disposed = false;
     let payload: OfferPlaneResponse | null = null;
     let activeGrid: HTMLElement | null = null;
     let activeHeading: HTMLElement | null = null;
@@ -136,6 +134,8 @@ export function OfferVisualDirectoryMount() {
     }
 
     function syncDirectory() {
+      if (disposed) return;
+
       const directory = document.querySelector<HTMLElement>(".mt-directory-view");
       const grid = directory?.querySelector<HTMLElement>(".mt-market-grid");
       if (!directory || !grid) return;
@@ -172,7 +172,10 @@ export function OfferVisualDirectoryMount() {
 
     const observer = new MutationObserver(syncDirectory);
     observer.observe(document.body, { childList: true, subtree: true });
-    const frame = window.requestAnimationFrame(syncDirectory);
+    const frame = window.requestAnimationFrame(() => {
+      setHost(portalHost);
+      syncDirectory();
+    });
 
     fetch("/api/offers/plane", {
       cache: "no-store",
@@ -191,13 +194,12 @@ export function OfferVisualDirectoryMount() {
       });
 
     return () => {
+      disposed = true;
       controller.abort();
       observer.disconnect();
       window.cancelAnimationFrame(frame);
       restoreDirectory();
       portalHost.remove();
-      setEntries([]);
-      setHost(null);
     };
   }, [queryState.key, queryState.shouldShow]);
 
