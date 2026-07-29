@@ -60,24 +60,24 @@ jobs:
           runner = runner.replace(strict_old, strict_new)
 
           candidate_old = '''log "materializing exact candidate worktree"
-git fetch --no-tags origin "+refs/heads/feature/moral-trade-create-interface-adapter-20260727:refs/remotes/origin/create-adapter-candidate"
-test "$(git rev-parse refs/remotes/origin/create-adapter-candidate)" = "$EXACT_CANDIDATE_SHA"
-rm -rf "$CANDIDATE"
-git worktree add --detach "$CANDIDATE" refs/remotes/origin/create-adapter-candidate
-test "$(git -C "$CANDIDATE" rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"'''
+          git fetch --no-tags origin "+refs/heads/feature/moral-trade-create-interface-adapter-20260727:refs/remotes/origin/create-adapter-candidate"
+          test "$(git rev-parse refs/remotes/origin/create-adapter-candidate)" = "$EXACT_CANDIDATE_SHA"
+          rm -rf "$CANDIDATE"
+          git worktree add --detach "$CANDIDATE" refs/remotes/origin/create-adapter-candidate
+          test "$(git -C "$CANDIDATE" rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"'''
           candidate_new = '''log "materializing exact integrated candidate worktree"
-git fetch --no-tags origin "$EXACT_CANDIDATE_SHA"
-rm -rf "$CANDIDATE"
-git worktree add --detach "$CANDIDATE" "$EXACT_CANDIDATE_SHA"
-test "$(git -C "$CANDIDATE" rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"'''
+          git fetch --no-tags origin "$EXACT_CANDIDATE_SHA"
+          rm -rf "$CANDIDATE"
+          git worktree add --detach "$CANDIDATE" "$EXACT_CANDIDATE_SHA"
+          test "$(git -C "$CANDIDATE" rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"'''
           if runner.count(candidate_old) != 1:
               raise SystemExit('The stale product-branch candidate block was not found exactly once.')
           runner = runner.replace(candidate_old, candidate_new)
 
           user_columns_old = '''  email_change_token_new, email_change_token_current, reauthentication_token,
-  is_sso_user, is_anonymous, created_at, updated_at'''
+            is_sso_user, is_anonymous, created_at, updated_at'''
           user_columns_new = '''  email_change_token_new, email_change, email_change_token_current, reauthentication_token,
-  is_sso_user, is_anonymous, created_at, updated_at'''
+            is_sso_user, is_anonymous, created_at, updated_at'''
           if runner.count(user_columns_old) != 1:
               raise SystemExit('The expected auth.users column list was not found exactly once.')
           runner = runner.replace(user_columns_old, user_columns_new)
@@ -117,10 +117,10 @@ test "$(git -C "$CANDIDATE" rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"'''
 
           email_old = '''    await creatorPage.locator('input[name="email"]').fill(credentials.creator.email);'''
           email_new = '''    if (await creatorPage.locator('input[name="email"]').count() === 0) {
-              await creatorPage.getByRole("link", { name: "Continue with email", exact: true }).click();
-              await creatorPage.locator('input[name="email"]').waitFor({ state: "visible", timeout: 30_000 });
-            }
-            await creatorPage.locator('input[name="email"]').fill(credentials.creator.email);'''
+                await creatorPage.getByRole("link", { name: "Continue with email", exact: true }).click();
+                await creatorPage.locator('input[name="email"]').waitFor({ state: "visible", timeout: 30_000 });
+              }
+              await creatorPage.locator('input[name="email"]').fill(credentials.creator.email);'''
           if email_old not in browser:
               raise SystemExit('Creator email-login transition was not found.')
           browser = browser.replace(email_old, email_new)
@@ -164,3 +164,5 @@ test "$(git -C "$CANDIDATE" rev-parse HEAD)" = "$EXACT_CANDIDATE_SHA"'''
         env:
           QA_OUTCOME: ${{ steps.qa.outcome }}
         run: test "$QA_OUTCOME" = success
+
+# Exact rerun requested on 2026-07-29 after fixture-schema repair.
