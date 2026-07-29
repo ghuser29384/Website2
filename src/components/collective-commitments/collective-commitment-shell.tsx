@@ -26,12 +26,16 @@ export function CollectiveCommitmentShell({
           showLogout={viewerPresent}
         />
         <nav
-          aria-label="Collective commitments"
+          aria-label="Collective commitment record"
           className={`${styles.subnav} ${mobileStyles.responsiveSubnav}`}
         >
-          <Link href="/collective-commitments">Collective commitments</Link>
-          <Link href="/collective-commitments/new">Create</Link>
-          <Link href="/collective-commitments/identity">Identity verification</Link>
+          <Link href="/trades/new">Create</Link>
+          <Link href="/trades/new?mode=collective#collective-commitments-list">
+            Collective commitments
+          </Link>
+          <Link href="/trades/new?mode=collective#collective-identity">
+            Identity verification
+          </Link>
         </nav>
       </header>
       <main className={styles.main} id="main-content" tabIndex={-1}>
