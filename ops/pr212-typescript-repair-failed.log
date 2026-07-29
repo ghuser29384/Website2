@@ -1,0 +1,9 @@
+apply	Require absolute TypeScript success	﻿2026-07-29T16:11:25.5252268Z ##[group]Run npx tsc --noEmit --pretty false
+apply	Require absolute TypeScript success	2026-07-29T16:11:25.5252672Z ^[[36;1mnpx tsc --noEmit --pretty false^[[0m
+apply	Require absolute TypeScript success	2026-07-29T16:11:25.5298460Z shell: /usr/bin/bash -e {0}
+apply	Require absolute TypeScript success	2026-07-29T16:11:25.5298733Z env:
+apply	Require absolute TypeScript success	2026-07-29T16:11:25.5299000Z   EXPECTED_HEAD: 9ad919bc281a9f701d4a5adfb518055c864393b3
+apply	Require absolute TypeScript success	2026-07-29T16:11:25.5299522Z   EXPECTED_PATCH_SHA256: 7ad9ef54459296e38cd234c6938a1f5dbe72edd36fed8e0772e7cbc363314173
+apply	Require absolute TypeScript success	2026-07-29T16:11:25.5300002Z ##[endgroup]
+apply	Require absolute TypeScript success	2026-07-29T16:12:05.3863238Z ##[error]src/lib/public-route-smoke.test.ts(82,16): error TS2532: Object is possibly 'undefined'.
+apply	Require absolute TypeScript success	2026-07-29T16:12:05.5458846Z ##[error]Process completed with exit code 2.
