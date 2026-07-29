@@ -44,6 +44,9 @@ const nextConfig: NextConfig = {
     // RSS crossing the 8 GB preview-builder limit on this route-heavy app.
     webpackBuildWorker: process.env.VERCEL !== "1",
     webpackMemoryOptimizations: true,
+    serverActions: {
+      bodySizeLimit: "4mb",
+    },
   },
   outputFileTracingIncludes: {
     "/mpgf": mpgfRuntimeArtifacts,

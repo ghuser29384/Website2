@@ -715,8 +715,20 @@ async function getProfileSummaryMap(
   }
 
   const supabase = await createClient();
-  const [{ data: profiles, error: profilesError }, followsResult, previewResult, badgesResult] = await Promise.all([
-    supabase.from("profiles").select("*").in("id", uniqueProfileIds),
+  const [
+    { data: publicProfiles, error: profilesError },
+    selfProfileResult,
+    followsResult,
+    previewResult,
+    badgesResult,
+  ] = await Promise.all([
+    (supabase as any)
+      .from("public_profile_cards_v1")
+      .select("*")
+      .in("id", uniqueProfileIds),
+    viewerId && uniqueProfileIds.includes(viewerId)
+      ? supabase.from("profiles").select("*").eq("id", viewerId).maybeSingle()
+      : Promise.resolve({ data: null as ProfileRow | null, error: null }),
     viewerId
       ? supabase
           .from("user_follows")
@@ -734,6 +746,9 @@ async function getProfileSummaryMap(
 
   if (profilesError) {
     throw new Error(profilesError.message);
+  }
+  if (selfProfileResult.error) {
+    throw new Error(selfProfileResult.error.message);
   }
   if (followsResult.error) {
     throw new Error(followsResult.error.message);
@@ -761,8 +776,16 @@ async function getProfileSummaryMap(
     }
   }
 
+  const selfProfile = selfProfileResult.data as ProfileRow | null;
+  const profiles = ((publicProfiles ?? []) as Array<Omit<ProfileRow, "email">>).map(
+    (profile) =>
+      selfProfile?.id === profile.id
+        ? selfProfile
+        : ({ ...profile, email: "" } satisfies ProfileRow),
+  );
+
   return new Map(
-    ((profiles ?? []) as ProfileRow[]).map((profile) => {
+    profiles.map((profile) => {
       const preview = previewMap.get(profile.id);
 
       return [
@@ -1346,7 +1369,9 @@ export async function getMarketplaceOverview(): Promise<MarketplaceOverview> {
   const [openOffersResult, profilesResult, completedAgreementsResult, donationOffsetOverview] =
     await Promise.all([
       supabase.from("offers").select("id", { count: "exact", head: true }).eq("status", "open"),
-      supabase.from("profiles").select("id", { count: "exact", head: true }),
+      (supabase as any)
+        .from("public_profile_cards_v1")
+        .select("id", { count: "exact", head: true }),
       supabase
         .from("agreements")
         .select("id", { count: "exact", head: true })
@@ -1900,17 +1925,19 @@ export async function listPublicProfilesPage(
   const normalizedPage = normalizePage(page);
   const offset = (normalizedPage - 1) * pageSize;
   const supabase = await createClient();
-  const query = applyPublicProfileSort(supabase.from("profiles").select("*"), sort).range(
-    offset,
-    offset + pageSize,
-  );
+  const query = applyPublicProfileSort(
+    (supabase as any).from("public_profile_cards_v1").select("*"),
+    sort,
+  ).range(offset, offset + pageSize - 1);
   const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
   }
 
-  const profiles = (data ?? []) as ProfileRow[];
+  const profiles = ((data ?? []) as Array<Omit<ProfileRow, "email">>).map(
+    (profile) => ({ ...profile, email: "" }) satisfies ProfileRow,
+  );
   const profileMap = await getProfileSummaryMap(
     viewerId,
     profiles.map((profile) => profile.id),
