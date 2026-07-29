@@ -184,6 +184,12 @@ async function expectSuccess(page: Page, message: string) {
   await expect(page.getByText(message, { exact: true })).toBeVisible();
 }
 
+function formWithButton(page: Page, buttonName: string) {
+  return page.locator("form").filter({
+    has: page.getByRole("button", { name: buttonName, exact: true }),
+  });
+}
+
 async function nominatePaymentReviewer(page: Page, reviewerId: string) {
   const form = page.locator("form").filter({
     has: page.getByRole("heading", {
@@ -221,20 +227,63 @@ async function nominatePaymentAppealReviewer(page: Page, reviewerId: string) {
 }
 
 async function reportExternalPayment(page: Page, reference: string) {
-  await page.getByLabel("External provider or method", { exact: true }).fill("QA bank");
-  await page.getByLabel("Payment date", { exact: true }).fill(new Date().toISOString().slice(0, 10));
-  await page.getByLabel("Private external reference", { exact: true }).fill(reference);
-  await page
-    .getByLabel(
-      "I attest that I sent the final calculated amount directly through the named external method.",
-      { exact: true },
-    )
-    .check();
-  await page.getByRole("button", { name: "Report external payment", exact: true }).click();
+  const form = formWithButton(page, "Report external payment");
+  await expect(form).toHaveCount(1);
+  await form.locator('input[name="payment_provider"]').fill("QA bank");
+  await form
+    .locator('input[name="paid_at"]')
+    .fill(new Date().toISOString().slice(0, 10));
+  await form.locator('input[name="external_reference"]').fill(reference);
+  await form.locator('input[name="payment_attested"]').check();
+  await form
+    .getByRole("button", { name: "Report external payment", exact: true })
+    .click();
   await expectSuccess(
     page,
     "External payment reported privately. The payee has seven days to confirm or dispute the receipt.",
   );
+}
+
+async function recordPaymentReviewDecision(
+  page: Page,
+  outcome: "allow_correction" | "confirm_paid" | "still_due",
+  rationale: string,
+) {
+  const form = formWithButton(page, "Record payment-review decision");
+  await expect(form).toHaveCount(1);
+  await form
+    .locator('select[name="payment_review_outcome"]')
+    .selectOption(outcome);
+  await form
+    .locator('textarea[name="payment_review_rationale"]')
+    .fill(rationale);
+  await form
+    .getByRole("button", {
+      name: "Record payment-review decision",
+      exact: true,
+    })
+    .click();
+}
+
+async function recordPaymentAppealDecision(
+  page: Page,
+  outcome: "confirm_paid" | "still_due",
+  rationale: string,
+) {
+  const form = formWithButton(page, "Record final payment-appeal decision");
+  await expect(form).toHaveCount(1);
+  await form
+    .locator('select[name="payment_appeal_outcome"]')
+    .selectOption(outcome);
+  await form
+    .locator('textarea[name="payment_review_rationale"]')
+    .fill(rationale);
+  await form
+    .getByRole("button", {
+      name: "Record final payment-appeal decision",
+      exact: true,
+    })
+    .click();
 }
 
 test.describe("authenticated evidence-weighted payment release gate", () => {
@@ -363,10 +412,12 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       expect(
         await payeePage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
       ).toBe(true);
-      await payeePage.getByLabel("Private note", { exact: true }).fill(
-        "The initial external-payment evidence is not sufficient.",
-      );
-      await payeePage
+      const initialResponseForm = formWithButton(payeePage, "Dispute payment report");
+      await expect(initialResponseForm).toHaveCount(1);
+      await initialResponseForm
+        .locator('textarea[name="confirmation_note"]')
+        .fill("The initial external-payment evidence is not sufficient.");
+      await initialResponseForm
         .getByRole("button", { name: "Dispute payment report", exact: true })
         .click();
       await expectSuccess(
@@ -389,13 +440,11 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
           exact: true,
         }),
       ).toBeVisible();
-      await reviewerPage.getByLabel("Decision", { exact: true }).selectOption("allow_correction");
-      await reviewerPage
-        .getByLabel("Private rationale visible to the participants", { exact: true })
-        .fill("The payer may provide one corrected receipt.");
-      await reviewerPage
-        .getByRole("button", { name: "Record payment-review decision", exact: true })
-        .click();
+      await recordPaymentReviewDecision(
+        reviewerPage,
+        "allow_correction",
+        "The payer may provide one corrected receipt.",
+      );
       await expectSuccess(
         reviewerPage,
         "External-payment review recorded. A paid/still-due decision remains provisional for seven days; correction permission is not appealable.",
@@ -413,10 +462,12 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("submitted corrected receipt with a fresh response window");
 
       await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
-      await payeePage
-        .getByLabel("Private note", { exact: true })
+      const correctedResponseForm = formWithButton(payeePage, "Dispute payment report");
+      await expect(correctedResponseForm).toHaveCount(1);
+      await correctedResponseForm
+        .locator('textarea[name="confirmation_note"]')
         .fill("The corrected receipt still does not establish payment.");
-      await payeePage
+      await correctedResponseForm
         .getByRole("button", { name: "Dispute payment report", exact: true })
         .click();
       await expectSuccess(
@@ -426,13 +477,11 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("disputed corrected receipt on mobile");
 
       await reviewerPage.goto(`/trade-review/${IDS.milestone}`);
-      await reviewerPage.getByLabel("Decision", { exact: true }).selectOption("still_due");
-      await reviewerPage
-        .getByLabel("Private rationale visible to the participants", { exact: true })
-        .fill("The corrected receipt remains insufficient; the frozen amount is still due.");
-      await reviewerPage
-        .getByRole("button", { name: "Record payment-review decision", exact: true })
-        .click();
+      await recordPaymentReviewDecision(
+        reviewerPage,
+        "still_due",
+        "The corrected receipt remains insufficient; the frozen amount is still due.",
+      );
       await expectSuccess(
         reviewerPage,
         "External-payment review recorded. A paid/still-due decision remains provisional for seven days; correction permission is not appealable.",
@@ -440,10 +489,12 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       qaCheckpoint("recorded provisional still-due decision");
 
       await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
-      await payerPage
-        .getByLabel("Reason for appeal", { exact: true })
+      const appealRequestForm = formWithButton(payerPage, "Open the single payment appeal");
+      await expect(appealRequestForm).toHaveCount(1);
+      await appealRequestForm
+        .locator('textarea[name="payment_appeal_reason"]')
         .fill("A different reviewer should reconsider the corrected receipt facts.");
-      await payerPage
+      await appealRequestForm
         .getByRole("button", { name: "Open the single payment appeal", exact: true })
         .click();
       await expectSuccess(
@@ -489,16 +540,11 @@ test.describe("authenticated evidence-weighted payment release gate", () => {
       await expect(
         appealReviewerPage.getByText("Independent payment appeal", { exact: true }),
       ).toBeVisible();
-      await appealReviewerPage.getByLabel("Decision", { exact: true }).selectOption("still_due");
-      await appealReviewerPage
-        .getByLabel("Private rationale visible to the participants", { exact: true })
-        .fill("The independent appeal confirms the frozen amount remains due.");
-      await appealReviewerPage
-        .getByRole("button", {
-          name: "Record final payment-appeal decision",
-          exact: true,
-        })
-        .click();
+      await recordPaymentAppealDecision(
+        appealReviewerPage,
+        "still_due",
+        "The independent appeal confirms the frozen amount remains due.",
+      );
       await expectSuccess(
         appealReviewerPage,
         "The different neutral reviewer recorded the final external-payment decision.",
