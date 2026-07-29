@@ -1,0 +1,519 @@
+import { createHmac } from "node:crypto";
+
+import { createServerClient } from "@supabase/ssr";
+import {
+  createClient as createSupabaseClient,
+  type Session,
+  type SupabaseClient,
+} from "@supabase/supabase-js";
+import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
+
+const BASE_URL = process.env.EVIDENCE_PAYMENT_BASE_URL ?? "http://127.0.0.1:3210";
+const SUPABASE_URL =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://hvmxfjjbdcgjjudmthdz.supabase.co";
+const SUPABASE_KEY =
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+  "sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8";
+const QA_PASSWORD = process.env.EVIDENCE_PAYMENT_QA_PASSWORD ?? "";
+
+const IDS = {
+  admin: "71000000-0000-4000-8000-000000000006",
+  agreement: "72000000-0000-4000-8000-000000000001",
+  adminFallbackAgreement: "72000000-0000-4000-8000-000000000002",
+  appealReviewer: "71000000-0000-4000-8000-000000000004",
+  milestone: "74000000-0000-4000-8000-000000000001",
+  outsider: "71000000-0000-4000-8000-000000000005",
+  payee: "71000000-0000-4000-8000-000000000002",
+  payer: "71000000-0000-4000-8000-000000000001",
+  payout: "77000000-0000-4000-8000-000000000001",
+  reviewer: "71000000-0000-4000-8000-000000000003",
+} as const;
+
+const EMAILS = {
+  admin: "evidence-payment-admin@qa.invalid",
+  appealReviewer: "evidence-payment-appeal-reviewer@qa.invalid",
+  outsider: "evidence-payment-outsider@qa.invalid",
+  payee: "evidence-payment-payee@qa.invalid",
+  payer: "evidence-payment-payer@qa.invalid",
+  reviewer: "evidence-payment-reviewer@qa.invalid",
+} as const;
+
+function decodeBase32(value: string) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const normalized = value.toUpperCase().replace(/[^A-Z2-7]/g, "");
+  let bits = "";
+
+  for (const character of normalized) {
+    const index = alphabet.indexOf(character);
+    if (index < 0) throw new Error("Unexpected TOTP secret encoding.");
+    bits += index.toString(2).padStart(5, "0");
+  }
+
+  const bytes: number[] = [];
+  for (let index = 0; index + 8 <= bits.length; index += 8) {
+    bytes.push(Number.parseInt(bits.slice(index, index + 8), 2));
+  }
+  return Buffer.from(bytes);
+}
+
+function totpCode(secret: string, offset = 0) {
+  const counter = BigInt(Math.floor(Date.now() / 30_000) + offset);
+  const counterBytes = Buffer.alloc(8);
+  counterBytes.writeBigUInt64BE(counter);
+  const digest = createHmac("sha1", decodeBase32(secret)).update(counterBytes).digest();
+  const position = digest[digest.length - 1] & 0x0f;
+  const binary =
+    ((digest[position] & 0x7f) << 24) |
+    ((digest[position + 1] & 0xff) << 16) |
+    ((digest[position + 2] & 0xff) << 8) |
+    (digest[position + 3] & 0xff);
+  return String(binary % 1_000_000).padStart(6, "0");
+}
+
+function authClient() {
+  return createSupabaseClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+  });
+}
+
+async function signIn(email: string) {
+  const client = authClient();
+  const { data, error } = await client.auth.signInWithPassword({
+    email,
+    password: QA_PASSWORD,
+  });
+  if (error || !data.session) {
+    throw new Error(`Isolated-QA sign-in failed for ${email}: ${error?.message ?? "no session"}`);
+  }
+  return { client, session: data.session };
+}
+
+async function elevateWithTotp(client: SupabaseClient, aal1Session: Session) {
+  const { data: enrollment, error: enrollmentError } = await client.auth.mfa.enroll({
+    factorType: "totp",
+    friendlyName: `evidence-payment-${Date.now()}`,
+  });
+  if (enrollmentError || !enrollment?.totp?.secret) {
+    throw new Error(`TOTP enrollment failed: ${enrollmentError?.message ?? "missing secret"}`);
+  }
+
+  let lastError = "";
+  for (const offset of [0, -1, 1]) {
+    const { data, error } = await client.auth.mfa.challengeAndVerify({
+      factorId: enrollment.id,
+      code: totpCode(enrollment.totp.secret, offset),
+    });
+    if (data && !error) {
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (!sessionError && sessionData.session) {
+        return { aal1Session, session: sessionData.session };
+      }
+    }
+    lastError = error?.message ?? "missing AAL2 session";
+  }
+
+  throw new Error(`TOTP verification failed: ${lastError}`);
+}
+
+async function sessionCookies(session: Session) {
+  const captured: Array<{
+    name: string;
+    value: string;
+    options: Record<string, unknown>;
+  }> = [];
+  const client = createServerClient(SUPABASE_URL, SUPABASE_KEY, {
+    cookies: {
+      getAll() {
+        return [];
+      },
+      setAll(values) {
+        captured.splice(0, captured.length, ...values);
+      },
+    },
+  });
+  const { error } = await client.auth.setSession({
+    access_token: session.access_token,
+    refresh_token: session.refresh_token,
+  });
+  if (error) throw error;
+
+  return captured.map(({ name, value }) => ({
+    name,
+    value,
+    url: BASE_URL,
+    httpOnly: true,
+    secure: BASE_URL.startsWith("https://"),
+    sameSite: "Lax" as const,
+  }));
+}
+
+async function authenticatedContext(
+  browser: Browser,
+  session: Session,
+  viewport: { height: number; width: number },
+) {
+  const context = await browser.newContext({
+    baseURL: BASE_URL,
+    viewport,
+  });
+  await context.addCookies([
+    ...(await sessionCookies(session)),
+    {
+      name: "mt_walkthrough_seen",
+      value: "1",
+      url: BASE_URL,
+      httpOnly: true,
+      secure: BASE_URL.startsWith("https://"),
+      sameSite: "Lax",
+    },
+  ]);
+  return context;
+}
+
+async function expectSuccess(page: Page, message: string) {
+  await expect(page.getByText(message, { exact: true })).toBeVisible();
+}
+
+async function nominatePaymentReviewer(page: Page, reviewerId: string) {
+  await page.getByLabel("Eligible reviewer", { exact: true }).selectOption(reviewerId);
+  await page
+    .getByRole("button", { name: "Record payment-reviewer nomination", exact: true })
+    .click();
+  await expectSuccess(
+    page,
+    "Payment-reviewer nomination recorded. Assignment requires both participants to choose the same eligible reviewer.",
+  );
+}
+
+async function nominatePaymentAppealReviewer(page: Page, reviewerId: string) {
+  await page.getByLabel("Eligible appeal reviewer", { exact: true }).selectOption(reviewerId);
+  await page
+    .getByRole("button", { name: "Record payment-appeal nomination", exact: true })
+    .click();
+  await expectSuccess(
+    page,
+    "Payment-appeal reviewer nomination recorded. The reviewer must differ from the original payment reviewer.",
+  );
+}
+
+async function reportExternalPayment(page: Page, reference: string) {
+  await page.getByLabel("External provider or method", { exact: true }).fill("QA bank");
+  await page.getByLabel("Payment date", { exact: true }).fill(new Date().toISOString().slice(0, 10));
+  await page.getByLabel("Private external reference", { exact: true }).fill(reference);
+  await page
+    .getByLabel(
+      "I attest that I sent the final calculated amount directly through the named external method.",
+      { exact: true },
+    )
+    .check();
+  await page.getByRole("button", { name: "Report external payment", exact: true }).click();
+  await expectSuccess(
+    page,
+    "External payment reported privately. The payee has seven days to confirm or dispute the receipt.",
+  );
+}
+
+test.describe("authenticated evidence-weighted payment release gate", () => {
+  test("completes every role, viewport, and negative-authorization path", async ({ browser }) => {
+    test.setTimeout(5 * 60_000);
+    test.skip(!QA_PASSWORD, "EVIDENCE_PAYMENT_QA_PASSWORD is required.");
+
+    const payerAuth = await signIn(EMAILS.payer);
+    const payeeAuth = await signIn(EMAILS.payee);
+    const reviewerAuth = await signIn(EMAILS.reviewer);
+    const appealReviewerAuth = await signIn(EMAILS.appealReviewer);
+    const outsiderAuth = await signIn(EMAILS.outsider);
+    const adminAuth = await signIn(EMAILS.admin);
+
+    const reviewerAal2 = await elevateWithTotp(reviewerAuth.client, reviewerAuth.session);
+    const appealReviewerAal2 = await elevateWithTotp(
+      appealReviewerAuth.client,
+      appealReviewerAuth.session,
+    );
+    const adminAal2 = await elevateWithTotp(adminAuth.client, adminAuth.session);
+
+    const contexts: BrowserContext[] = [];
+    const context = async (
+      session: Session,
+      viewport: { height: number; width: number },
+    ) => {
+      const created = await authenticatedContext(browser, session, viewport);
+      contexts.push(created);
+      return created;
+    };
+
+    try {
+      const payer = await context(payerAuth.session, { width: 1440, height: 1000 });
+      const payee = await context(payeeAuth.session, { width: 390, height: 844 });
+      const reviewerAal1 = await context(reviewerAal2.aal1Session, {
+        width: 1280,
+        height: 900,
+      });
+      const reviewer = await context(reviewerAal2.session, { width: 1440, height: 1000 });
+      const appealReviewer = await context(appealReviewerAal2.session, {
+        width: 412,
+        height: 915,
+      });
+      const outsider = await context(outsiderAuth.session, { width: 1280, height: 900 });
+      const adminAal1 = await context(adminAal2.aal1Session, { width: 1280, height: 900 });
+      const admin = await context(adminAal2.session, { width: 1440, height: 1000 });
+
+      const outsiderPage = await outsider.newPage();
+      await outsiderPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await expect(
+        outsiderPage.getByRole("heading", { name: "Unavailable", exact: true }),
+      ).toBeVisible();
+      const { data: outsiderCases, error: outsiderReadError } = await outsiderAuth.client
+        .from("trade_payment_review_cases")
+        .select("id")
+        .eq("payout_id", IDS.payout);
+      expect(outsiderReadError).toBeNull();
+      expect(outsiderCases).toEqual([]);
+      const { error: outsiderReportError } = await outsiderAuth.client.rpc(
+        "report_trade_external_payment_v1",
+        {
+          p_amount_cents: 250,
+          p_currency: "USD",
+          p_paid_on: new Date().toISOString().slice(0, 10),
+          p_payout_id: IDS.payout,
+          p_provider: "QA outsider",
+          p_provider_reference: `outsider-${Date.now()}`,
+          p_receipt_storage_path: "",
+        },
+      );
+      expect(outsiderReportError).not.toBeNull();
+
+      const reviewerAal1Page = await reviewerAal1.newPage();
+      await reviewerAal1Page.goto(`/trade-review/${IDS.milestone}`);
+      await expect(
+        reviewerAal1Page.getByText("Authenticator verification required", { exact: true }),
+      ).toBeVisible();
+
+      const adminAal1Page = await adminAal1.newPage();
+      await adminAal1Page.goto("/admin/trade-review");
+      await expect(adminAal1Page.getByText("Operator access blocked", { exact: true })).toBeVisible();
+
+      const adminPage = await admin.newPage();
+      await adminPage.goto("/admin/trade-review");
+      await expect(adminPage.getByText("Profile-bound administrator access verified at AAL2.", {
+        exact: true,
+      })).toBeVisible();
+      const adminFallbackForm = adminPage
+        .locator("form")
+        .filter({
+          has: adminPage.getByRole("heading", {
+            name: "Assign a neutral payment reviewer",
+            exact: true,
+          }),
+        });
+      await expect(adminFallbackForm).toHaveCount(1);
+      await adminFallbackForm.locator('select[name="reviewer_id"]').selectOption(IDS.reviewer);
+      await adminFallbackForm
+        .getByRole("button", { name: "Assign payment reviewer", exact: true })
+        .click();
+      await expectSuccess(
+        adminPage,
+        "Neutral payment reviewer assigned after the seven-day participant-selection deadline.",
+      );
+
+      const payerPage = await payer.newPage();
+      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await expect(
+        payerPage.getByRole("heading", {
+          name: "Record payment made outside Moral Trade",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await reportExternalPayment(payerPage, `initial-${Date.now()}`);
+
+      const payeePage = await payee.newPage();
+      await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
+      expect(
+        await payeePage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1),
+      ).toBe(true);
+      await payeePage.getByLabel("Private note", { exact: true }).fill(
+        "The initial external-payment evidence is not sufficient.",
+      );
+      await payeePage
+        .getByRole("button", { name: "Dispute payment report", exact: true })
+        .click();
+      await expectSuccess(
+        payeePage,
+        "External payment marked disputed. The private receipt and history remain available for resolution.",
+      );
+
+      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await nominatePaymentReviewer(payerPage, IDS.reviewer);
+      await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
+      await nominatePaymentReviewer(payeePage, IDS.reviewer);
+
+      const reviewerPage = await reviewer.newPage();
+      await reviewerPage.goto(`/trade-review/${IDS.milestone}`);
+      await expect(
+        reviewerPage.getByRole("heading", {
+          name: "Decide whether the frozen external amount was paid.",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await reviewerPage.getByLabel("Decision", { exact: true }).selectOption("allow_correction");
+      await reviewerPage
+        .getByLabel("Private rationale visible to the participants", { exact: true })
+        .fill("The payer may provide one corrected receipt.");
+      await reviewerPage
+        .getByRole("button", { name: "Record payment-review decision", exact: true })
+        .click();
+      await expectSuccess(
+        reviewerPage,
+        "External-payment review recorded. A paid/still-due decision remains provisional for seven days; correction permission is not appealable.",
+      );
+
+      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await expect(
+        payerPage.getByRole("heading", {
+          name: "Submit the one permitted corrected receipt",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await reportExternalPayment(payerPage, `correction-${Date.now()}`);
+
+      await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
+      await payeePage
+        .getByLabel("Private note", { exact: true })
+        .fill("The corrected receipt still does not establish payment.");
+      await payeePage
+        .getByRole("button", { name: "Dispute payment report", exact: true })
+        .click();
+      await expectSuccess(
+        payeePage,
+        "External payment marked disputed. The private receipt and history remain available for resolution.",
+      );
+
+      await reviewerPage.goto(`/trade-review/${IDS.milestone}`);
+      await reviewerPage.getByLabel("Decision", { exact: true }).selectOption("still_due");
+      await reviewerPage
+        .getByLabel("Private rationale visible to the participants", { exact: true })
+        .fill("The corrected receipt remains insufficient; the frozen amount is still due.");
+      await reviewerPage
+        .getByRole("button", { name: "Record payment-review decision", exact: true })
+        .click();
+      await expectSuccess(
+        reviewerPage,
+        "External-payment review recorded. A paid/still-due decision remains provisional for seven days; correction permission is not appealable.",
+      );
+
+      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await payerPage
+        .getByLabel("Reason for appeal", { exact: true })
+        .fill("A different reviewer should reconsider the corrected receipt facts.");
+      await payerPage
+        .getByRole("button", { name: "Open the single payment appeal", exact: true })
+        .click();
+      await expectSuccess(
+        payerPage,
+        "The single payment appeal is open and requires a different neutral reviewer.",
+      );
+
+      const { data: paymentCase } = await payerAuth.client
+        .from("trade_payment_review_cases")
+        .select("id")
+        .eq("payout_id", IDS.payout)
+        .eq("payment_cycle", 1)
+        .single();
+      const { data: paymentAppeal } = await payerAuth.client
+        .from("trade_payment_appeals")
+        .select("id")
+        .eq("case_id", paymentCase?.id)
+        .single();
+      const { error: originalReviewerAppealError } = await reviewerAuth.client.rpc(
+        "resolve_trade_payment_appeal_v1",
+        {
+          p_appeal_id: paymentAppeal?.id,
+          p_outcome: "still_due",
+          p_private_reason: "The original reviewer must not decide the appeal.",
+        },
+      );
+      expect(originalReviewerAppealError).not.toBeNull();
+
+      await nominatePaymentAppealReviewer(payerPage, IDS.appealReviewer);
+      await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
+      await nominatePaymentAppealReviewer(payeePage, IDS.appealReviewer);
+
+      const appealReviewerPage = await appealReviewer.newPage();
+      await appealReviewerPage.goto(`/trade-review/${IDS.milestone}`);
+      expect(
+        await appealReviewerPage.evaluate(
+          () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+        ),
+      ).toBe(true);
+      await expect(
+        appealReviewerPage.getByText("Independent payment appeal", { exact: true }),
+      ).toBeVisible();
+      await appealReviewerPage.getByLabel("Decision", { exact: true }).selectOption("still_due");
+      await appealReviewerPage
+        .getByLabel("Private rationale visible to the participants", { exact: true })
+        .fill("The independent appeal confirms the frozen amount remains due.");
+      await appealReviewerPage
+        .getByRole("button", {
+          name: "Record final payment-appeal decision",
+          exact: true,
+        })
+        .click();
+      await expectSuccess(
+        appealReviewerPage,
+        "The different neutral reviewer recorded the final external-payment decision.",
+      );
+
+      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await expect(
+        payerPage.getByRole("heading", {
+          name: "Report a later external payment",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await reportExternalPayment(payerPage, `cycle-2-${Date.now()}`);
+
+      await payeePage.goto(`/trade-agreements/${IDS.agreement}`);
+      await payeePage
+        .getByRole("button", { name: "Confirm payment received", exact: true })
+        .click();
+      await expectSuccess(
+        payeePage,
+        "External payment confirmed. Moral Trade recorded the receipt without moving funds.",
+      );
+
+      await payerPage.goto(`/trade-agreements/${IDS.agreement}`);
+      await expect(payerPage.getByText("Completed", { exact: true })).toBeVisible();
+      await expect(payerPage.getByText("2.50 USD", { exact: true })).toBeVisible();
+
+      const { data: finalAgreement, error: agreementError } = await payerAuth.client
+        .from("agreements")
+        .select("lifecycle_status,completion_state,completed_at")
+        .eq("id", IDS.agreement)
+        .single();
+      expect(agreementError).toBeNull();
+      expect(finalAgreement?.lifecycle_status).toBe("completed");
+      expect(finalAgreement?.completion_state).toBe("completed");
+      expect(finalAgreement?.completed_at).not.toBeNull();
+
+      const { data: finalPayout, error: payoutError } = await payerAuth.client
+        .from("trade_milestone_payouts")
+        .select("status,amount_due_cents")
+        .eq("id", IDS.payout)
+        .single();
+      expect(payoutError).toBeNull();
+      expect(finalPayout).toMatchObject({ status: "confirmed", amount_due_cents: 250 });
+
+      const { error: payeeDirectWriteError } = await payeeAuth.client
+        .from("trade_milestone_payouts")
+        .update({ status: "still_due" })
+        .eq("id", IDS.payout);
+      expect(payeeDirectWriteError).not.toBeNull();
+    } finally {
+      await Promise.all(contexts.map((openContext) => openContext.close()));
+    }
+  });
+});
