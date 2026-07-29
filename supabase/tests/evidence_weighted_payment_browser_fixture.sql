@@ -127,8 +127,7 @@ insert into auth.identities (
   provider,
   last_sign_in_at,
   created_at,
-  updated_at,
-  email
+  updated_at
 )
 select
   actor.id::text,
@@ -144,8 +143,7 @@ select
   'email',
   now(),
   now(),
-  now(),
-  actor.email
+  now()
 from (
   values
     (
@@ -176,7 +174,6 @@ from (
 on conflict (provider_id, provider) do update
 set user_id = excluded.user_id,
     identity_data = excluded.identity_data,
-    email = excluded.email,
     updated_at = now();
 
 insert into public.profiles (id, email, display_name, bio, affiliation)
@@ -333,9 +330,9 @@ values
     'Participants and assigned reviewers only',
     'No trade',
     repeat('a', 64),
-    true,
-    repeat('b', 64),
-    repeat('c', 64)
+    false,
+    null,
+    null
   ),
   (
     '73000000-0000-4000-8000-000000000002',
@@ -351,9 +348,9 @@ values
     'Participants and assigned reviewers only',
     'No trade',
     repeat('d', 64),
-    true,
-    repeat('e', 64),
-    repeat('f', 64)
+    false,
+    null,
+    null
   );
 
 update public.agreements
@@ -421,6 +418,33 @@ values
     'Private completion evidence',
     'graded'
   );
+
+with version_hashes as (
+  select
+    version_row.id,
+    version_row.terms_hash,
+    public.trade_milestone_manifest_hash_v1(version_row.id) as manifest_hash
+  from public.trade_agreement_versions version_row
+  where version_row.id in (
+    '73000000-0000-4000-8000-000000000001',
+    '73000000-0000-4000-8000-000000000002'
+  )
+)
+update public.trade_agreement_versions version_row
+set requires_milestone_manifest = true,
+    milestone_manifest_hash = version_hashes.manifest_hash,
+    complete_terms_hash = encode(
+      extensions.digest(
+        convert_to(
+          version_hashes.terms_hash || chr(31) || version_hashes.manifest_hash,
+          'UTF8'
+        ),
+        'sha256'
+      ),
+      'hex'
+    )
+from version_hashes
+where version_row.id = version_hashes.id;
 
 insert into public.trade_evidence_bundles (
   id,
