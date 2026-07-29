@@ -6,6 +6,11 @@ const html = readFileSync("public/moral-trade-create/index.html", "utf8");
 const route = readFileSync("src/app/api/create/publish/route.ts", "utf8");
 const page = readFileSync("src/app/trades/new/page.tsx", "utf8");
 const frame = readFileSync("src/components/create/create-interface-frame.tsx", "utf8");
+const receiptPage = readFileSync(
+  "src/app/create/submissions/[submissionId]/page.tsx",
+  "utf8",
+);
+const activationCritical = readFileSync("src/app/activation-critical.css", "utf8");
 const nextConfig = readFileSync("next.config.ts", "utf8");
 const migration = readFileSync(
   "supabase/migrations/20260727041000_moral_trade_create_interface_adapter.sql",
@@ -40,6 +45,20 @@ test("the browser waits for a durable server receipt and contains no simulated p
   assert.doesNotMatch(html, /Prototype: public/);
   assert.doesNotMatch(html, /state\.publishedId\s*=.*Date\.now/);
   assert.doesNotMatch(html, /setTimeout\(\(\) => \{\s*state\.published = true/);
+});
+
+test("the owner-only durable receipt remains visibly rendered with its review boundary", () => {
+  assert.match(
+    receiptPage,
+    /page-shell marketplace-app-shell create-submission-receipt-shell/,
+  );
+  assert.match(receiptPage, /Durable Create receipt/);
+  assert.match(receiptPage, /It is not public/);
+  assert.match(receiptPage, /<dt>Status<\/dt><dd>\{label\(submission\.status\)\}<\/dd>/);
+  assert.match(
+    activationCritical,
+    /\.create-submission-receipt-shell\.marketplace-app-shell[\s\S]*header\.v72-route-header[\s\S]*main#main-content[\s\S]*> \.section[\s\S]*display:\s*block/,
+  );
 });
 
 test("the API validates, authenticates, and uses the atomic database adapter", () => {
