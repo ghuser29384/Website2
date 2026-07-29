@@ -6,7 +6,7 @@ async function source(path: string) {
   return readFile(path, "utf8");
 }
 
-test("Collective Commitments shell applies responsive shell and subnavigation classes", async () => {
+test("Collective commitment record shell applies responsive shell and subnavigation classes", async () => {
   const shell = await source(
     "src/components/collective-commitments/collective-commitment-shell.tsx",
   );
@@ -20,12 +20,21 @@ test("Collective Commitments shell applies responsive shell and subnavigation cl
     shell,
     /className=\{`\$\{styles\.subnav\} \$\{mobileStyles\.responsiveSubnav\}`\}/,
   );
-  assert.match(shell, />Collective commitments<\/Link>/);
-  assert.match(shell, />Create<\/Link>/);
-  assert.match(shell, />Identity verification<\/Link>/);
+  assert.match(shell, /href="\/trades\/new"/);
+  assert.match(
+    shell,
+    /href="\/trades\/new\?mode=collective#collective-commitments-list"/,
+  );
+  assert.match(
+    shell,
+    /href="\/trades\/new\?mode=collective#collective-identity"/,
+  );
+  assert.match(shell, />\s*Collective commitments\s*<\/Link>/);
+  assert.match(shell, />\s*Create\s*<\/Link>/);
+  assert.match(shell, />\s*Identity verification\s*<\/Link>/);
 });
 
-test("narrow Collective Commitments shell wraps navigation and removes decorative overflow", async () => {
+test("narrow Collective commitment record shell wraps navigation and removes decorative overflow", async () => {
   const css = await source(
     "src/components/collective-commitments/collective-commitments-mobile.module.css",
   );
