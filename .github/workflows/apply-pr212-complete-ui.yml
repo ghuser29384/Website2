@@ -1,0 +1,124 @@
+name: Apply PR 212 complete institutional interfaces
+
+on:
+  push:
+    branches:
+      - ops/pr212-complete-ui-20260729
+    paths:
+      - .github/workflows/apply-pr212-complete-ui.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-pr212-complete-ui
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      EXPECTED_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+      EXPECTED_PATCH_SHA256: d0b3c68affcb27cebc0d4773d487d056e66dc500ccf99776a85b97ac051cd2f0
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      INSTITUTIONAL_TRADES_ENABLED: "true"
+      INSTITUTIONAL_POOLS_ENABLED: "true"
+      INSTITUTIONAL_ENTERPRISE_API_ENABLED: "true"
+      INSTITUTIONAL_WEBHOOKS_ENABLED: "true"
+      CRON_SECRET: qa-institutional-cron-not-production
+
+    steps:
+      - name: Check out exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Verify exact head and apply reviewed implementation patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          if [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then
+            echo "PR #212 moved: expected $EXPECTED_HEAD, got $actual_head" >&2
+            exit 1
+          fi
+
+          cat > /tmp/pr212-complete-ui.patch.gz.b64 <<'PATCH'
+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
+PATCH
+          base64 --decode /tmp/pr212-complete-ui.patch.gz.b64 | gzip --decompress > /tmp/pr212-complete-ui.patch
+          echo "${EXPECTED_PATCH_SHA256}  /tmp/pr212-complete-ui.patch" | sha256sum --check --strict
+          git apply --check --binary /tmp/pr212-complete-ui.patch
+          git apply --binary /tmp/pr212-complete-ui.patch
+          git diff --check
+
+          cat > /tmp/expected-paths.txt <<'PATHS'
+.github/scripts/institutional-trade-qa-e2e.mjs
+.github/workflows/institutional-trade-qa.yml
+src/app/admin/institutional-deal-desk/page.tsx
+src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
+src/app/institutions/[organizationId]/page.tsx
+src/app/institutions/actions.ts
+src/app/institutions/individual/deals/[dealId]/page.tsx
+src/app/institutions/individual/page.tsx
+src/app/institutions/institutions.module.css
+src/components/institutions/institutional-deal-workspace.tsx
+src/institutional-individual-capacity.test.ts
+src/institutional-product-completeness.test.ts
+src/institutional-trade-migration.test.ts
+src/institutional-trade-wiring.test.ts
+src/lib/institutional-data.ts
+src/lib/institutional-trade.ts
+supabase/migrations/20260726123000_institutional_trade_system.sql
+PATHS
+          git status --short | sed -E 's/^.. //' | sort -u > /tmp/actual-paths.txt
+          diff -u <(sort /tmp/expected-paths.txt) /tmp/actual-paths.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run institutional source-contract and domain tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test             src/institutional-individual-capacity.test.ts             src/institutional-product-completeness.test.ts             src/institutional-trade-migration.test.ts             src/institutional-trade-wiring.test.ts             src/lib/institutional-trade.test.ts             src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Require absolute TypeScript success
+        run: npx tsc --noEmit --pretty false
+
+      - name: Require absolute ESLint success
+        run: npm run lint
+
+      - name: Require absolute production build success
+        run: npm run build
+
+      - name: Commit complete interfaces to PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Complete institutional trade interfaces and authenticated flows"
+          git push origin HEAD:feat/institutional-trade-system
