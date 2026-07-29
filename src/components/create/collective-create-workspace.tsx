@@ -3,6 +3,7 @@ import Link from "next/link";
 import { MoralTradeWordmark } from "@/components/brand/moral-trade-wordmark";
 import { CollectiveCommitmentForm } from "@/components/collective-commitments/collective-commitment-form";
 import collectiveStyles from "@/components/collective-commitments/collective-commitments.module.css";
+import { LocalDateTime } from "@/components/local-date-time";
 import {
   collectiveCredentialIsCurrent,
   COLLECTIVE_PROPOSITION_TYPE_META,
@@ -154,7 +155,7 @@ export function CollectiveCreateWorkspace({
                     <div><dt>Verified affiliation</dt><dd>{credential.verifiedAffiliation || "None"}</dd></div>
                     <div><dt>Uniqueness check</dt><dd>{credential.duplicateCheckResult}</dd></div>
                     <div><dt>Assurance tier</dt><dd>{credential.assuranceTier}</dd></div>
-                    <div><dt>Expires</dt><dd>{new Date(credential.expiresAt).toLocaleString("en-US")}</dd></div>
+                    <div><dt>Expires</dt><dd><LocalDateTime value={credential.expiresAt} /></dd></div>
                   </dl>
                 ) : (
                   <div className={styles.identityEmpty}>
@@ -195,7 +196,7 @@ export function CollectiveCreateWorkspace({
                         <div><dt>Type</dt><dd>{COLLECTIVE_PROPOSITION_TYPE_META[commitment.propositionType].label}</dd></div>
                         <div><dt>Verified signers</dt><dd>{commitment.qualifyingSignerCount} / {commitment.thresholdCount}</dd></div>
                         <div><dt>Creator</dt><dd>{commitment.creatorDisplayName}</dd></div>
-                        <div><dt>Deadline</dt><dd>{new Date(commitment.deadlineAt).toLocaleString("en-US", { timeZone: "UTC" })} UTC</dd></div>
+                        <div><dt>Deadline</dt><dd><LocalDateTime value={commitment.deadlineAt} /></dd></div>
                       </dl>
                     </article>
                   ))}
