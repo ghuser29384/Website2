@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      EXACT_CANDIDATE_SHA: e8288b8084b88e69a6d23ca3e966ab18178fefb8
+      EXACT_CANDIDATE_SHA: ee5ef38aa8141b56f7010d58b524a728ab22f73d
       RELEASE_BRANCH: release/moral-trade-create-adapter-20260728
       QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
       QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
@@ -44,7 +44,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$EXACT_CANDIDATE_SHA" = "e8288b8084b88e69a6d23ca3e966ab18178fefb8"
+          test "$EXACT_CANDIDATE_SHA" = "ee5ef38aa8141b56f7010d58b524a728ab22f73d"
           test "$RELEASE_BRANCH" = "release/moral-trade-create-adapter-20260728"
           test "$QA_SUPABASE_URL" = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
           for name in QA_SUPABASE_PUBLISHABLE_KEY QA_SUPABASE_SERVICE_ROLE_KEY VERCEL_TOKEN; do
@@ -162,7 +162,7 @@ jobs:
           if set(rows) != {'website2', 'moraltrade-site'}:
               raise SystemExit(f'Unexpected deployment inventory: {rows}')
           payload = {
-              'exact_candidate_sha': 'e8288b8084b88e69a6d23ca3e966ab18178fefb8',
+              'exact_candidate_sha': 'ee5ef38aa8141b56f7010d58b524a728ab22f73d',
               'release_branch': 'release/moral-trade-create-adapter-20260728',
               'supabase_project': 'hvmxfjjbdcgjjudmthdz',
               'runtime_credentials_injected_per_deployment': True,
@@ -192,4 +192,4 @@ jobs:
           set -euo pipefail
           website2_url="$(awk -F '\t' '$1 == "website2" {print $2}' /tmp/create-adapter-release-qa-deployments.tsv)"
           moraltrade_url="$(awk -F '\t' '$1 == "moraltrade-site" {print $2}' /tmp/create-adapter-release-qa-deployments.tsv)"
-          gh pr comment 273 --body "Prepared fresh isolated-QA Preview deployments from exact integrated candidate \`$EXACT_CANDIDATE_SHA\`: website2 \`$website2_url\`; moraltrade-site \`$moraltrade_url\`. Both deployments received the isolated-QA Supabase URL, publishable key, and service-role key at deployment creation; production configuration and data remain unchanged."
+          gh pr comment 275 --body "Prepared fresh isolated-QA Preview deployments from exact integrated candidate \`$EXACT_CANDIDATE_SHA\`: website2 \`$website2_url\`; moraltrade-site \`$moraltrade_url\`. Both deployments received the isolated-QA Supabase URL, publishable key, and service-role key at deployment creation; production configuration and data remain unchanged."
