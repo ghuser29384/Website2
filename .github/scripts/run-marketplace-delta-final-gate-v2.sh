@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# This branch exists only to run and retain the final exact-head QA evidence.
 SOURCE_BRANCH="ops/materialize-marketplace-delta-final-20260730"
 BASE_SCRIPT="$RUNNER_TEMP/run-marketplace-delta-exact-browser-gate-base.sh"
 PATCHED_SCRIPT="$RUNNER_TEMP/run-marketplace-delta-exact-browser-gate-v2.sh"
