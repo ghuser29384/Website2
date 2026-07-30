@@ -57,6 +57,20 @@ test.describe("compact Co-Fund in Create", () => {
     ).toBeVisible();
     await expect(create.getByRole("button", { name: /Submit for review/ })).toBeDisabled();
 
+    await create
+      .getByLabel("What happens without this proposal?")
+      .fill(
+        "Without this proposal, each participant will fund only the separate project recorded as their no-pool default.",
+      );
+    await create.getByLabel("The stated baseline is genuine.").check();
+    await create
+      .getByLabel("No harm or costly baseline was manufactured or escalated for leverage.")
+      .check();
+    await create
+      .getByLabel("Could someone outside the proposal bear a material cost?")
+      .selectOption("none_identified");
+    await create.getByLabel("I am acting only in my individual capacity.").check();
+
     await create.locator("label.publish-confirm").click();
     await expect(create.locator("#publishConfirm")).toBeChecked();
     await create.getByRole("button", { name: /Submit for review/ }).click();
@@ -67,6 +81,15 @@ test.describe("compact Co-Fund in Create", () => {
       fundMode: "dac",
       dacPath: "create",
       offers: [],
+      safeguards: {
+        noTradeBaseline:
+          "Without this proposal, each participant will fund only the separate project recorded as their no-pool default.",
+        baselineConfirmed: true,
+        noManufacturedLeverage: true,
+        affectedPartyStatus: "none_identified",
+        affectedPartyPlan: "",
+        capacity: "individual",
+      },
       pool: {
         commonGround: {
           targetAmountCents: 1_000_000,
