@@ -140,6 +140,11 @@ begin
     update public.offers
     set
       no_trade_baseline = baseline_value,
+      terms_version = case
+        when no_trade_baseline is distinct from baseline_value
+          then terms_version + 1
+        else terms_version
+      end,
       updated_at = case
         when no_trade_baseline is distinct from baseline_value
           then timezone('utc', now())
