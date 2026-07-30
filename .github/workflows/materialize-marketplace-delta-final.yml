@@ -6,12 +6,8 @@ on:
       - main
     paths:
       - ".github/workflows/materialize-marketplace-delta-final.yml"
-      - ".github/scripts/materialize-marketplace-delta.py"
-      - ".github/scripts/patch-marketplace-delta-final.py"
-      - ".github/scripts/run-marketplace-delta-candidate-final.sh"
-      - ".github/scripts/run-marketplace-delta-candidate-v7.sh"
-      - ".github/scripts/run-marketplace-delta-candidate-v6.sh"
-      - ".github/scripts/run-marketplace-delta-candidate.sh"
+      - ".github/scripts/run-marketplace-delta-exact-browser-gate.sh"
+      - ".github/scripts/marketplace-delta-exact-browser-qa.mjs"
 
 permissions:
   contents: write
@@ -21,21 +17,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  materialize-test-push:
+  exact-head-browser-gate:
     if: >-
       github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
       github.head_ref == 'ops/materialize-marketplace-delta-final-20260730'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
-      TARGET_BRANCH: agent/marketplace-delta-current-main-20260729
-      HISTORICAL_BRANCH: agent/dynamic-marketplace-clearing-rounds
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
-      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
-      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
-      EXPECTED_PROD_REF: jnpoxvalyjtdghnperyu
-      MIGRATION_VERSION: "20260729170000"
-      MIGRATION_NAME: marketplace_atomic_acceptance_current_core
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
       - name: Check out clean orchestration branch
@@ -49,19 +42,24 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Materialize, validate, align QA, and push candidate
+      - name: Run exact-head environment, browser, and cleanup gate
         shell: bash
-        run: bash .github/scripts/run-marketplace-delta-candidate-final.sh
+        run: bash .github/scripts/run-marketplace-delta-exact-browser-gate.sh
 
-      - name: Upload sanitized validation evidence
+      - name: Upload rendered browser evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: marketplace-delta-validation-final-${{ github.run_id }}
-          path: |
-            marketplace-delta-validation.txt
-            production-rollback-result.txt
-            typescript-differential.txt
-            docs/marketplace-pr158-delta-audit.md
+          name: marketplace-delta-browser-evidence-${{ github.run_id }}
+          path: marketplace-delta-browser-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload exact-head and clean-state proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-delta-final-proof-${{ github.run_id }}
+          path: marketplace-delta-final-proof
           if-no-files-found: warn
           retention-days: 14
