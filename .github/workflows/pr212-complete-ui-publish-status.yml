@@ -1,0 +1,80 @@
+name: PR 212 complete UI publication monitor
+
+on:
+  push:
+    branches:
+      - ops/pr212-complete-ui-status-20260730
+    paths:
+      - .github/workflows/pr212-complete-ui-publish-status.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait for publication workflow and record exact result
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-complete-ui-publish-status
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 150); do
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow publish-pr212-complete-ui.yml \
+              --branch ops/pr212-complete-ui-publish-20260730 \
+              --limit 20 \
+              --json databaseId,name,displayTitle,headBranch,headSha,status,conclusion,createdAt,updatedAt,event,url \
+              > /tmp/runs.json
+            run_id="$(jq -r 'sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+            status="$(jq -r 'sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+            conclusion="$(jq -r 'sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then
+              break
+            fi
+            sleep 10
+          done
+
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/jobs.json
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
+          else
+            printf '%s\n' '{"jobs":[]}' > /tmp/jobs.json
+            printf '%s\n' 'No publication workflow run found.' > /tmp/failed.log
+          fi
+          gh api repos/${GITHUB_REPOSITORY}/pulls/212 > /tmp/pr.json
+
+          jq -n \
+            --arg run_id "$run_id" \
+            --arg status "$status" \
+            --arg conclusion "$conclusion" \
+            --slurpfile runs /tmp/runs.json \
+            --slurpfile jobs /tmp/jobs.json \
+            --slurpfile pr /tmp/pr.json \
+            '{generated_at:(now|todateiso8601),run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0],jobs:$jobs[0].jobs,pr:$pr[0]}' \
+            > ops/pr212-complete-ui-publish-status/report.json
+          tail -n 800 /tmp/failed.log > ops/pr212-complete-ui-publish-status/failed.log
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-complete-ui-publish-status
+          git commit -m "Record PR 212 complete UI publication result"
+          git push origin HEAD:ops/pr212-complete-ui-status-20260730
+
+          if [[ -z "$run_id" || "$status" != "completed" ]]; then
+            exit 1
+          fi
