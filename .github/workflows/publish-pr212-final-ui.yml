@@ -1,0 +1,149 @@
+name: Publish PR 212 final institutional UI
+
+on:
+  push:
+    branches:
+      - ops/pr212-final-ui-publish-20260730
+    paths:
+      - .github/workflows/publish-pr212-final-ui.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-pr212-final-institutional-ui
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      FEATURE_BRANCH: feat/institutional-trade-system
+      PAYLOAD_BRANCH: ops/pr212-final-ui-publish-20260730
+      EXPECTED_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+      EXPECTED_BASE64_SHA256: 46352b4f6e89992c17e15e0505587d98d964d218e22612f96f2615fe3f810354
+      EXPECTED_GZIP_SHA256: 3afa3f3226a5e014c3173979aa2f50e8796ce473859ab680b6663e6d01a9fd86
+      EXPECTED_PATCH_SHA256: 62e1fa2b4976d50a1b22897437d80d3b8581e90b0445f4524fd6e9f9ba313fae
+    steps:
+      - name: Check out exact feature head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Reconstruct and verify the exact patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          if [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then
+            echo "PR #212 moved: expected $EXPECTED_HEAD, got $actual_head" >&2
+            exit 1
+          fi
+
+          git fetch origin "refs/heads/${PAYLOAD_BRANCH}:refs/remotes/origin/${PAYLOAD_BRANCH}"
+          payload=/tmp/pr212-final.patch.gz.b64
+          gzip_file=/tmp/pr212-final.patch.gz
+          patch=/tmp/pr212-final.patch
+          : > "$payload"
+          for index in $(seq -w 0 10); do
+            git show "refs/remotes/origin/${PAYLOAD_BRANCH}:.github/pr212-final-payload.chunk-${index}" >> "$payload"
+          done
+
+          echo "${EXPECTED_BASE64_SHA256}  ${payload}" | sha256sum --check --strict
+          base64 --decode "$payload" > "$gzip_file"
+          echo "${EXPECTED_GZIP_SHA256}  ${gzip_file}" | sha256sum --check --strict
+          gzip --decompress --stdout "$gzip_file" > "$patch"
+          echo "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict
+
+          git apply --check --binary "$patch"
+          git apply --binary "$patch"
+          git diff --check
+
+          cat > /tmp/expected-files.txt <<'FILES'
+          .github/scripts/institutional-trade-qa-e2e.mjs
+          .github/workflows/institutional-trade-qa.yml
+          src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
+          src/app/institutions/[organizationId]/page.tsx
+          src/app/institutions/actions.ts
+          src/app/institutions/individual/deals/[dealId]/page.tsx
+          src/app/institutions/individual/page.tsx
+          src/app/institutions/institutions.module.css
+          src/components/institutions/institutional-deal-workspace.tsx
+          src/components/institutions/institutional-organization-administration.tsx
+          src/institutional-individual-capacity.test.ts
+          src/institutional-product-completeness.test.ts
+          src/institutional-trade-migration.test.ts
+          src/institutional-trade-wiring.test.ts
+          src/lib/institutional-data.ts
+          supabase/migrations/20260726123000_institutional_trade_system.sql
+          FILES
+          git diff --name-only | sort > /tmp/actual-files.txt
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+          mkdir -p /tmp/pr212-final-publication-evidence
+          cp /tmp/expected-files.txt /tmp/pr212-final-publication-evidence/expected-files.txt
+          cp /tmp/actual-files.txt /tmp/pr212-final-publication-evidence/actual-files.txt
+          sha256sum "$payload" "$gzip_file" "$patch" > /tmp/pr212-final-publication-evidence/payload-hashes.txt
+          git diff --stat > /tmp/pr212-final-publication-evidence/diff-stat.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run institutional source and domain tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Require absolute TypeScript success
+        run: npx tsc --noEmit --pretty false
+
+      - name: Require absolute ESLint success
+        run: npm run lint
+
+      - name: Require absolute production build success
+        run: npm run build
+
+      - name: Commit exact implementation to PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Complete institutional trade interfaces and authenticated workflows"
+          git push origin HEAD:"${FEATURE_BRANCH}"
+          git rev-parse HEAD | tee /tmp/pr212-final-publication-evidence/published-commit.txt
+
+      - name: Upload publication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-final-ui-publication-${{ github.run_id }}
+          path: /tmp/pr212-final-publication-evidence
+          if-no-files-found: warn
+          retention-days: 7
