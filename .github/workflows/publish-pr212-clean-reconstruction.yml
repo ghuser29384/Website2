@@ -1,0 +1,197 @@
+name: Publish PR 212 clean reconstruction
+
+on:
+  push:
+    branches:
+      - agent/pr212-clean-reconstruction-staging-20260730
+    paths:
+      - .github/workflows/publish-pr212-clean-reconstruction.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: publish-pr212-clean-reconstruction
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      FEATURE_BRANCH: feat/institutional-trade-system
+      STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
+      FINAL_BRANCH: agent/pr212-clean-reconstruction-20260730
+      EXPECTED_PR_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+      EXPECTED_BASE64_SHA256: 32432ad98bffc63704336f313491f03e86070e88eb217c37e74cf255125637c7
+      EXPECTED_GZIP_SHA256: 5e03aa5b29836c54880a607950d9651fced78c0d98d3aa27bd2fce3c2321bf49
+      EXPECTED_PATCH_SHA256: 145589ad3cdc3f9ea4a09c7f800196c752c8d45c0139d8f618b736074f3d9ecb
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out the exact PR branch head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Reconstruct and verify the exact reviewable patch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          actual_pr_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .head.sha)"
+          actual_branch_head="$(git rev-parse HEAD)"
+          if [[ "$actual_pr_head" != "$EXPECTED_PR_HEAD" || "$actual_branch_head" != "$EXPECTED_PR_HEAD" ]]; then
+            echo "PR #212 or its feature branch moved; refusing to publish." >&2
+            echo "Expected: $EXPECTED_PR_HEAD" >&2
+            echo "PR head:  $actual_pr_head" >&2
+            echo "Git head: $actual_branch_head" >&2
+            exit 1
+          fi
+
+          if git ls-remote --exit-code --heads origin "refs/heads/${FINAL_BRANCH}" >/dev/null 2>&1; then
+            echo "The final clean-reconstruction branch already exists; refusing to overwrite it." >&2
+            exit 1
+          fi
+
+          git fetch origin "refs/heads/${STAGING_BRANCH}:refs/remotes/origin/${STAGING_BRANCH}"
+
+          payload=/tmp/pr212-clean-reconstruction.patch.gz.b64
+          gzip_file=/tmp/pr212-clean-reconstruction.patch.gz
+          patch=/tmp/pr212-clean-reconstruction.patch
+          part_dir=/tmp/pr212-clean-reconstruction-parts
+          evidence=/tmp/pr212-clean-reconstruction-publication-evidence
+          rm -rf "$part_dir" "$evidence"
+          mkdir -p "$part_dir" "$evidence"
+
+          for part in 000 001 002 003 004 005 008; do
+            git show "refs/remotes/origin/${STAGING_BRANCH}:.github/pr212-clean-reconstruction.payload-${part}" \
+              > "${part_dir}/${part}"
+          done
+
+          cat > /tmp/pr212-clean-reconstruction-parts.sha256 <<'HASHES'
+          8e200e772f16ee924aae30510ff163660fb655d730a2a6eab1918dde55c2c059  /tmp/pr212-clean-reconstruction-parts/000
+          e4bf20f743c7d695515645b98c3c3c2b6dc3ffc7a6f187e86526a12d68d4b7cc  /tmp/pr212-clean-reconstruction-parts/001
+          5a42d33377cfc834e1f3bdf0cad90e46a1e462624d435c50ec993bfed480ea62  /tmp/pr212-clean-reconstruction-parts/002
+          5f588bcc561c0facb04ca9a3bebaf8c77b8e1a374f51200cd0eccc3fbf3ac85d  /tmp/pr212-clean-reconstruction-parts/003
+          98bfa47b309c78d3cb9c9707cbb54b232991b1933844789d1203ecc6b15afa20  /tmp/pr212-clean-reconstruction-parts/004
+          c031da22d8fdc0686557e539ae685f37eeb6ea3038ed5e3063ba6815ee4d7d07  /tmp/pr212-clean-reconstruction-parts/005
+          4216cf1a8b659488ae695e4ddbd3c973002cd32ada26a5beee687465f1e39798  /tmp/pr212-clean-reconstruction-parts/008
+          HASHES
+          sha256sum --check --strict /tmp/pr212-clean-reconstruction-parts.sha256
+
+          cat \
+            "${part_dir}/000" \
+            "${part_dir}/001" \
+            "${part_dir}/002" \
+            "${part_dir}/003" \
+            "${part_dir}/004" \
+            "${part_dir}/005" \
+            "${part_dir}/008" \
+            > "$payload"
+
+          echo "${EXPECTED_BASE64_SHA256}  ${payload}" | sha256sum --check --strict
+          base64 --decode "$payload" > "$gzip_file"
+          echo "${EXPECTED_GZIP_SHA256}  ${gzip_file}" | sha256sum --check --strict
+          gzip --decompress --stdout "$gzip_file" > "$patch"
+          echo "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict
+
+          git apply --check --binary "$patch"
+          git apply --binary "$patch"
+          git diff --check
+
+          cat > /tmp/pr212-clean-reconstruction-expected-files.txt <<'FILES'
+          .github/scripts/institutional-trade-qa-e2e.mjs
+          .github/workflows/institutional-trade-qa.yml
+          .github/workflows/pr212-clean-reconstruction-gates.yml
+          src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
+          src/app/institutions/[organizationId]/page.tsx
+          src/app/institutions/actions.ts
+          src/app/institutions/individual/deals/[dealId]/page.tsx
+          src/components/institutions/institutional-deal-workspace.tsx
+          src/components/institutions/institutional-organization-administration.tsx
+          src/components/institutions/institutional-pool-workspace.tsx
+          src/institutional-individual-capacity.test.ts
+          src/institutional-product-completeness.test.ts
+          src/institutional-trade-migration.test.ts
+          src/institutional-trade-wiring.test.ts
+          src/lib/institutional-data.ts
+          src/lib/institutional-trade.ts
+          supabase/migrations/20260726123000_institutional_trade_system.sql
+          FILES
+          git diff --name-only | sort > /tmp/pr212-clean-reconstruction-actual-files.txt
+          sort -o /tmp/pr212-clean-reconstruction-expected-files.txt /tmp/pr212-clean-reconstruction-expected-files.txt
+          diff -u /tmp/pr212-clean-reconstruction-expected-files.txt /tmp/pr212-clean-reconstruction-actual-files.txt
+
+          cp /tmp/pr212-clean-reconstruction-parts.sha256 "$evidence/part-hashes.txt"
+          sha256sum "$payload" "$gzip_file" "$patch" > "$evidence/payload-hashes.txt"
+          cp /tmp/pr212-clean-reconstruction-expected-files.txt "$evidence/expected-files.txt"
+          cp /tmp/pr212-clean-reconstruction-actual-files.txt "$evidence/actual-files.txt"
+          git diff --stat > "$evidence/diff-stat.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then
+              exit 0
+            fi
+            if (( attempt == 4 )); then
+              echo "npm ci failed after four attempts." >&2
+              exit 1
+            fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run institutional source and domain tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Require absolute TypeScript success
+        run: npx tsc --noEmit --pretty false
+
+      - name: Require absolute ESLint success
+        run: npm run lint
+
+      - name: Require absolute production build success
+        run: npm run build
+
+      - name: Publish reviewable source to the clean reconstruction branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Reconstruct complete PR 212 institutional interfaces"
+          published_commit="$(git rev-parse HEAD)"
+          git push origin "HEAD:refs/heads/${FINAL_BRANCH}"
+          printf '%s\n' "$published_commit" | tee /tmp/pr212-clean-reconstruction-publication-evidence/published-commit.txt
+
+      - name: Upload clean reconstruction publication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-clean-reconstruction-publication-${{ github.run_id }}
+          path: /tmp/pr212-clean-reconstruction-publication-evidence
+          if-no-files-found: warn
+          retention-days: 14
