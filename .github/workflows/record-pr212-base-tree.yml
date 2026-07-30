@@ -1,0 +1,47 @@
+name: Record PR 212 base tree
+
+on:
+  push:
+    branches:
+      - agent/pr212-clean-reconstruction-staging-20260730
+    paths:
+      - .github/workflows/record-pr212-base-tree.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_PR_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+      STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-clean-reconstruction-staging-20260730
+          fetch-depth: 0
+
+      - name: Record the exact base Git tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "refs/heads/feat/institutional-trade-system:refs/remotes/origin/feat/institutional-trade-system"
+          actual_head="$(git rev-parse refs/remotes/origin/feat/institutional-trade-system)"
+          if [[ "$actual_head" != "$EXPECTED_PR_HEAD" ]]; then
+            echo "PR #212 moved; refusing to record a different base tree." >&2
+            exit 1
+          fi
+          tree_sha="$(git rev-parse "${actual_head}^{tree}")"
+          mkdir -p ops/pr212-clean-reconstruction
+          {
+            echo "commit_sha=${actual_head}"
+            echo "tree_sha=${tree_sha}"
+          } > ops/pr212-clean-reconstruction/base-tree.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-clean-reconstruction/base-tree.txt
+          git commit -m "Record PR 212 reconstruction base tree"
+          git push origin "HEAD:refs/heads/${STAGING_BRANCH}"
