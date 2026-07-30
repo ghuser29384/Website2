@@ -1,0 +1,80 @@
+name: Stage PR 212 tested workflow blobs
+
+on:
+  push:
+    branches:
+      - agent/pr212-clean-reconstruction-staging-20260730
+    paths:
+      - .github/workflows/stage-pr212-tested-workflow-blobs.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  stage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
+      SOURCE_RUN_ID: "30557865903"
+      SOURCE_RUN_HEAD: 7b234d234ce2a2b91dd132b4196deeed69d58378
+      SOURCE_ARTIFACT: pr212-clean-reconstruction-publication-30557865903
+      EXPECTED_SOURCE_TAR_SHA256: eea13b75ed938fb1e7cc4025fdac1853fad3e288579c9791ca0b375372351072
+      EXPECTED_QA_WORKFLOW_SHA256: 0ef8f185569594b6e21ca59477e800fa20bbfa726523561125cec5608b4638fd
+      EXPECTED_GATE_WORKFLOW_SHA256: 71b68028a6baa519f25ae76d12ed6225cdc39ea9ea971e86bc2d7be60759a959
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-clean-reconstruction-staging-20260730
+          fetch-depth: 0
+
+      - name: Verify the exact tested run and stage its workflow blobs safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          work=/tmp/pr212-tested-workflow-blobs
+          rm -rf "$work"
+          mkdir -p "$work/artifact" "$work/source"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" > "$work/run.json"
+          test "$(jq -r .head_sha "$work/run.json")" = "$SOURCE_RUN_HEAD"
+          test "$(jq -r .status "$work/run.json")" = "completed"
+          test "$(jq -r .conclusion "$work/run.json")" = "failure"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/jobs?per_page=100" > "$work/jobs.json"
+          jq -e '
+            .jobs | length == 1 and
+            .[0].steps[] | select(.name == "Reconstruct and verify the exact reviewable source") | .conclusion == "success"
+          ' "$work/jobs.json" >/dev/null
+          for step in \
+            "Run institutional source and domain tests" \
+            "Require absolute TypeScript success" \
+            "Require absolute ESLint success" \
+            "Require absolute production build success"; do
+            jq -e --arg step "$step" '.jobs[0].steps[] | select(.name == $step) | .conclusion == "success"' "$work/jobs.json" >/dev/null
+          done
+          jq -e '.jobs[0].steps[] | select(.name == "Publish reviewable source to the clean reconstruction branch") | .conclusion == "failure"' "$work/jobs.json" >/dev/null
+
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_ARTIFACT" --dir "$work/artifact"
+          echo "${EXPECTED_SOURCE_TAR_SHA256}  $work/artifact/reconstructed-source.tar.gz" | sha256sum --check --strict
+          tar -xzf "$work/artifact/reconstructed-source.tar.gz" -C "$work/source" \
+            .github/workflows/institutional-trade-qa.yml \
+            .github/workflows/pr212-clean-reconstruction-gates.yml
+          echo "${EXPECTED_QA_WORKFLOW_SHA256}  $work/source/.github/workflows/institutional-trade-qa.yml" | sha256sum --check --strict
+          echo "${EXPECTED_GATE_WORKFLOW_SHA256}  $work/source/.github/workflows/pr212-clean-reconstruction-gates.yml" | sha256sum --check --strict
+
+          destination=ops/pr212-clean-reconstruction/workflow-blobs
+          mkdir -p "$destination"
+          cp "$work/source/.github/workflows/institutional-trade-qa.yml" "$destination/institutional-trade-qa.yml"
+          cp "$work/source/.github/workflows/pr212-clean-reconstruction-gates.yml" "$destination/pr212-clean-reconstruction-gates.yml"
+          sha256sum "$destination"/*.yml > "$destination/sha256.txt"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$destination"
+          git commit -m "Stage exact tested PR 212 workflow blobs"
+          git push origin "HEAD:refs/heads/${STAGING_BRANCH}"
