@@ -120,24 +120,25 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   const sourceOfferWithCoreTerms = sourceOffer
     ? (sourceOffer as NonNullable<typeof sourceOffer> & SourceOfferCoreTerms)
     : null;
-  const sourceValues: Partial<TradeDraftValues> | undefined = sourceOfferWithCoreTerms
-    ? {
-        offeredCause: sourceOfferWithCoreTerms.requested_cause,
-        requestedCause: sourceOfferWithCoreTerms.offered_cause,
-        proposedAction: sourceOfferWithCoreTerms.request_action,
-        requestedAction: sourceOfferWithCoreTerms.offer_action,
-        noTradeBaseline: sourceOfferWithCoreTerms.no_trade_baseline,
-        duration: sourceOfferWithCoreTerms.duration,
-        startDate: sourceOfferWithCoreTerms.start_date ?? "",
-        evidenceDueDate: sourceOfferWithCoreTerms.evidence_due_date ?? "",
-        evidenceRule: sourceOfferWithCoreTerms.verification,
-        maximumBurden: sourceOfferWithCoreTerms.maximum_burden,
-        privacyScope: sourceOfferWithCoreTerms.privacy_scope,
-        exitConditions: sourceOfferWithCoreTerms.exit_conditions,
-        notes: "",
-        voluntaryCertification: false,
-      }
-    : undefined;
+  const sourceValues: Partial<TradeDraftValues> | undefined =
+    sourceOffer && sourceOfferWithCoreTerms
+      ? {
+          offeredCause: sourceOffer.requested_cause,
+          requestedCause: sourceOffer.offered_cause,
+          proposedAction: sourceOffer.request_action,
+          requestedAction: sourceOffer.offer_action,
+          noTradeBaseline: sourceOfferWithCoreTerms.no_trade_baseline,
+          duration: sourceOffer.duration,
+          startDate: sourceOfferWithCoreTerms.start_date ?? "",
+          evidenceDueDate: sourceOfferWithCoreTerms.evidence_due_date ?? "",
+          evidenceRule: sourceOffer.verification,
+          maximumBurden: sourceOfferWithCoreTerms.maximum_burden,
+          privacyScope: sourceOfferWithCoreTerms.privacy_scope,
+          exitConditions: sourceOfferWithCoreTerms.exit_conditions,
+          notes: "",
+          voluntaryCertification: false,
+        }
+      : undefined;
   const templateLabel = sourceOffer
     ? `Counteroffer to ${sourceOffer.ownerProfile?.resolvedName ?? sourceOffer.owner_alias}`
     : templateValues
