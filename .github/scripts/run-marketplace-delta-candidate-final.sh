@@ -3,6 +3,8 @@ set -euo pipefail
 
 cp .github/scripts/patch-marketplace-delta-final.py \
   "$RUNNER_TEMP/patch-marketplace-delta-final.py"
+cp .github/scripts/patch-marketplace-delta-compile-check.py \
+  "$RUNNER_TEMP/patch-marketplace-delta-compile-check.py"
 python3 "$RUNNER_TEMP/patch-marketplace-delta-final.py" \
   --materializer .github/scripts/materialize-marketplace-delta.py
 
@@ -29,6 +31,7 @@ v6 = Path(os.environ['RUNNER_TEMP']) / 'run-marketplace-delta-candidate-v6.sh'
 source = v6.read_text(encoding='utf-8')
 old = 'bash "$runner"\n'
 new = '''python3 "$RUNNER_TEMP/patch-marketplace-delta-final.py" --runner "$runner"
+python3 "$RUNNER_TEMP/patch-marketplace-delta-compile-check.py" "$runner"
 bash "$runner"
 '''
 if source.count(old) != 1:
