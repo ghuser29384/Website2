@@ -24,6 +24,7 @@ test("Next metadata, the manifest, and the favicon fallback use the canonical Mo
   const canonicalIcon = readFileSync(CANONICAL_FAVICON_PATH);
 
   assert.match(layout, /SITE_FAVICON_PATH = `\$\{SITE_IMAGE_PATH\}\?v=20260730`/);
+  assert.ok((layout.match(/rel="(?:shortcut icon|icon|apple-touch-icon)"/g) ?? []).length >= 3);
   assert.match(manifest, /\/brand\/moral-trade-mark\.png\?v=20260730/);
   assert.doesNotMatch(manifest, /O%20\(8\)\.png/);
   assert.match(route, /"public", "brand", "moral-trade-mark\.png"/);
@@ -58,6 +59,20 @@ test("the legacy branding runtime removes competing icons and restores the canon
 
   assert.match(runtime, /FAVICON_PATH = "\/brand\/moral-trade-mark\.png\?v=20260730"/);
   assert.match(runtime, /querySelectorAll\('link\[rel\*="icon" i\]'\)/);
+  assert.match(runtime, /link\.setAttribute\("sizes", "512x512"\)/);
   assert.match(runtime, /installFavicons\(\);/);
   assert.match(runtime, /data-mt-favicon-canonical/);
+});
+
+test("the raw Create implementation document redirects to the canonical Create page", () => {
+  const nextConfig = source("next.config.ts");
+
+  assert.match(
+    nextConfig,
+    /source: "\/moral-trade-create"[\s\S]*destination: "\/trades\/new"/,
+  );
+  assert.match(
+    nextConfig,
+    /source: "\/moral-trade-create\/index\.html"[\s\S]*destination: "\/trades\/new"/,
+  );
 });
