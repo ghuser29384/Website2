@@ -24,7 +24,7 @@ const migration = readFileSync(
   "utf8",
 );
 
-test("the accepted Create interface is mounted with the compact Co-Fund", () => {
+test("the accepted Create interface is mounted with Donation Upgrade and compact Co-Fund", () => {
   assert.match(page, /CreateInterfaceFrame/);
   assert.match(page, /resume=\{resume === "create"\}/);
   assert.match(frame, /public[",\s]+"moral-trade-create"[",\s]+"index\.html"/);
@@ -38,7 +38,8 @@ test("the accepted Create interface is mounted with the compact Co-Fund", () => 
   assert.match(html, /What do you want to improve\?/);
   assert.match(html, /Commitment/);
   assert.match(html, /Donation redirect/);
-  assert.match(html, /Conditional donation/);
+  assert.match(html, /Donation Upgrade/);
+  assert.doesNotMatch(html, />Conditional donation</);
   assert.match(html, /data-fund-mode="conditional"/);
   assert.match(
     html,

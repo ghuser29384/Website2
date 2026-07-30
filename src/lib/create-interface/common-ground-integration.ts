@@ -1,11 +1,11 @@
 const HEADER_COPY = [
   "Create a trade, conditional donation, or public-goods pool.",
-  "Create a trade, conditional donation, or public-goods pool.",
+  "Create a trade, Donation Upgrade, or public-goods pool.",
 ] as const;
 
 const REQUEST_COPY = [
   "Choose Commitment, Skill, or Fund. Fund includes pledge-swaps, donation redirects, conditional donations, and public-goods pools.",
-  "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, conditional donations, shared-project pools, and threshold pools.",
+  "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, Donation Upgrades, shared-project pools, and threshold pools.",
 ] as const;
 
 const FUND_KICKER = [
@@ -101,6 +101,19 @@ export function integrateCommonGroundCreateSource(source: string) {
   integrated = replaceExactlyOnce(integrated, BLANK_FAVICON, CANONICAL_FAVICONS, "favicon");
   integrated = replaceExactlyOnce(integrated, HEADER_COPY[0], HEADER_COPY[1], "header-copy");
   integrated = replaceExactCount(integrated, REQUEST_COPY[0], REQUEST_COPY[1], 2, "request-copy");
+  integrated = replaceExactCount(
+    integrated,
+    "Conditional donation",
+    "Donation Upgrade",
+    4,
+    "Donation Upgrade label",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    "Set up a conditional donation.",
+    "Set up a Donation Upgrade.",
+    "Donation Upgrade heading",
+  );
   integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");
   integrated = replaceExactlyOnce(
     integrated,

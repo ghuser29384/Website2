@@ -23,7 +23,7 @@ export const revalidate = 0;
 export const metadata: Metadata = {
   title: "Create",
   description:
-    "Create a pledge-swap, donation redirect, conditional donation, existing-pool contribution offer, or moral public-goods pool through one interface.",
+    "Create a pledge-swap, donation redirect, Donation Upgrade, existing-pool contribution offer, or moral public-goods pool through one interface.",
   robots: { index: false, follow: false },
 };
 
