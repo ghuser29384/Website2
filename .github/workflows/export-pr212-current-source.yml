@@ -1,0 +1,64 @@
+name: Export PR 212 current source
+
+on:
+  push:
+    branches:
+      - ops/pr212-current-export-20260730
+    paths:
+      - .github/workflows/export-pr212-current-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Verify and package exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected=9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+          actual="$(git rev-parse HEAD)"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "PR moved: expected $expected, got $actual" >&2
+            exit 1
+          fi
+          tar --exclude=.git --exclude=node_modules --exclude=.next --exclude=output --exclude=test-results --exclude=playwright-report -czf /tmp/pr212-current-source.tar.gz .
+          sha256sum /tmp/pr212-current-source.tar.gz > /tmp/pr212-current-source.sha256
+
+      - name: Upload exact source artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-current-source-${{ github.run_id }}
+          path: |
+            /tmp/pr212-current-source.tar.gz
+            /tmp/pr212-current-source.sha256
+          retention-days: 3
+
+      - name: Record export manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout ops/pr212-current-export-20260730
+          mkdir -p ops
+          cat > ops/pr212-current-export.json <<JSON
+          {
+            "run_id": "${GITHUB_RUN_ID}",
+            "source_sha": "9ec3bd79618a704469bc4f3547d2d8a1e4dc2730",
+            "artifact_name": "pr212-current-source-${GITHUB_RUN_ID}"
+          }
+          JSON
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-current-export.json
+          git commit -m "Record PR 212 current source export"
+          git push origin HEAD:ops/pr212-current-export-20260730
