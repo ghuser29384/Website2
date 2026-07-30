@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/marketplace-delta-exact-browser-gate.yml"
       - ".github/scripts/run-marketplace-delta-exact-browser-gate.sh"
+      - ".github/scripts/run-marketplace-delta-exact-browser-gate-v2.sh"
       - ".github/scripts/marketplace-delta-exact-browser-qa.mjs"
 
 permissions:
@@ -44,7 +45,7 @@ jobs:
 
       - name: Run exact-head environment, browser, and cleanup gate
         shell: bash
-        run: bash .github/scripts/run-marketplace-delta-exact-browser-gate.sh
+        run: bash .github/scripts/run-marketplace-delta-exact-browser-gate-v2.sh
 
       - name: Upload rendered browser evidence
         if: always()
