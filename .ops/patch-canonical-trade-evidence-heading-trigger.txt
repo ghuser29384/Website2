@@ -1,3 +1,0 @@
-branch=cleanup/canonical-trade-entry-20260730
-failure_run=30525523350
-requested_at=2026-07-30T08:12:00Z
