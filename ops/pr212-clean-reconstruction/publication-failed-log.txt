@@ -1,35 +1,156 @@
-publish	Require absolute ESLint success	﻿2026-07-30T15:11:18.4036522Z ##[group]Run npm run lint
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4036828Z ^[[36;1mnpm run lint^[[0m
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4080504Z shell: /usr/bin/bash -e {0}
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4080773Z env:
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4081018Z   FEATURE_BRANCH: feat/institutional-trade-system
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4081444Z   STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4082068Z   FINAL_BRANCH: agent/pr212-clean-reconstruction-20260730
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4082463Z   EXPECTED_PR_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4082945Z   EXPECTED_BASE64_SHA256: 32432ad98bffc63704336f313491f03e86070e88eb217c37e74cf255125637c7
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4083542Z   EXPECTED_GZIP_SHA256: 5e03aa5b29836c54880a607950d9651fced78c0d98d3aa27bd2fce3c2321bf49
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4084124Z   EXPECTED_PATCH_SHA256: 145589ad3cdc3f9ea4a09c7f800196c752c8d45c0139d8f618b736074f3d9ecb
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4086748Z   GH_TOKEN: ***
-publish	Require absolute ESLint success	2026-07-30T15:11:18.4086970Z ##[endgroup]
-publish	Require absolute ESLint success	2026-07-30T15:11:18.5150346Z 
-publish	Require absolute ESLint success	2026-07-30T15:11:18.5151003Z > moral-trade@0.1.0 lint
-publish	Require absolute ESLint success	2026-07-30T15:11:18.5151381Z > eslint .
-publish	Require absolute ESLint success	2026-07-30T15:11:18.5151619Z 
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4729502Z 
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4733803Z /home/runner/work/Website2/Website2/src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4735246Z   120:15  error  Error: Cannot call impure function during render
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4735765Z 
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4737848Z `Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4739646Z 
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4740501Z /home/runner/work/Website2/Website2/src/app/institutions/[organizationId]/deals/[dealId]/page.tsx:120:15
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4742088Z   118 |   const committedContributions = data.contributions.filter((row) => ["committed", "paid"].includes(row.status));
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4744104Z   119 |   const committedCents = committedContributions.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0);
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4745240Z > 120 |   const now = Date.now();
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4745847Z       |               ^^^^^^^^^^ Cannot call impure function
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4747196Z   121 |   const canManageDeal = Boolean(organizationParty?.joined_at && !organizationParty?.left_at) && activeAuthorityGrants.some((grant) => {
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4748904Z   122 |     const validFrom = Date.parse(String(grant.valid_from ?? ""));
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4750288Z   123 |     const validUntil = grant.valid_until ? Date.parse(String(grant.valid_until)) : Number.POSITIVE_INFINITY;  react-hooks/purity
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4751203Z 
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4751747Z ✖ 1 problem (1 error, 0 warnings)
-publish	Require absolute ESLint success	2026-07-30T15:12:20.4752071Z 
-publish	Require absolute ESLint success	2026-07-30T15:12:20.8553602Z ##[error]Process completed with exit code 1.
+publish	Reconstruct and verify the exact reviewable source	﻿2026-07-30T15:35:49.8770070Z ##[group]Run set -euo pipefail
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8771649Z ^[[36;1mset -euo pipefail^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8772863Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8774482Z ^[[36;1mactual_pr_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .head.sha)"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8776897Z ^[[36;1mactual_branch_head="$(git rev-parse HEAD)"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8779244Z ^[[36;1mif [[ "$actual_pr_head" != "$EXPECTED_PR_HEAD" || "$actual_branch_head" != "$EXPECTED_PR_HEAD" ]]; then^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8782230Z ^[[36;1m  echo "PR #212 or its feature branch moved; refusing to publish." >&2^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8784148Z ^[[36;1m  echo "Expected: $EXPECTED_PR_HEAD" >&2^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8785774Z ^[[36;1m  echo "PR head:  $actual_pr_head" >&2^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8787282Z ^[[36;1m  echo "Git head: $actual_branch_head" >&2^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8788686Z ^[[36;1m  exit 1^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8789635Z ^[[36;1mfi^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8790534Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8792283Z ^[[36;1mif git ls-remote --exit-code --heads origin "refs/heads/${FINAL_BRANCH}" >/dev/null 2>&1; then^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8795391Z ^[[36;1m  echo "The final clean-reconstruction branch already exists; refusing to overwrite it." >&2^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8797696Z ^[[36;1m  exit 1^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8798646Z ^[[36;1mfi^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8799538Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8801160Z ^[[36;1mgit fetch origin "refs/heads/${STAGING_BRANCH}:refs/remotes/origin/${STAGING_BRANCH}"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8803138Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8804381Z ^[[36;1mpayload=/tmp/pr212-clean-reconstruction.patch.gz.b64^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8806390Z ^[[36;1mgzip_file=/tmp/pr212-clean-reconstruction.patch.gz^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8808135Z ^[[36;1mpatch=/tmp/pr212-clean-reconstruction.patch^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8810142Z ^[[36;1mauthorization_payload=/tmp/pr212-authorization-snapshot.patch.gz.b64^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8812497Z ^[[36;1mauthorization_gzip=/tmp/pr212-authorization-snapshot.patch.gz^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8814693Z ^[[36;1mauthorization_patch=/tmp/pr212-authorization-snapshot.patch^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8816729Z ^[[36;1mpart_dir=/tmp/pr212-clean-reconstruction-parts^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8818641Z ^[[36;1mevidence=/tmp/pr212-clean-reconstruction-publication-evidence^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8820403Z ^[[36;1mrm -rf "$part_dir" "$evidence"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8821717Z ^[[36;1mmkdir -p "$part_dir" "$evidence"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8822973Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8823991Z ^[[36;1mfor part in 000 001 002 003 004 005 008; do^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8826394Z ^[[36;1m  git show "refs/remotes/origin/${STAGING_BRANCH}:.github/pr212-clean-reconstruction.payload-${part}" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8828684Z ^[[36;1m    > "${part_dir}/${part}"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8829881Z ^[[36;1mdone^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8830797Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8832082Z ^[[36;1mcat > /tmp/pr212-clean-reconstruction-parts.sha256 <<'HASHES'^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8834940Z ^[[36;1m8e200e772f16ee924aae30510ff163660fb655d730a2a6eab1918dde55c2c059  /tmp/pr212-clean-reconstruction-parts/000^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8838765Z ^[[36;1me4bf20f743c7d695515645b98c3c3c2b6dc3ffc7a6f187e86526a12d68d4b7cc  /tmp/pr212-clean-reconstruction-parts/001^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8842385Z ^[[36;1m5a42d33377cfc834e1f3bdf0cad90e46a1e462624d435c50ec993bfed480ea62  /tmp/pr212-clean-reconstruction-parts/002^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8846103Z ^[[36;1m5f588bcc561c0facb04ca9a3bebaf8c77b8e1a374f51200cd0eccc3fbf3ac85d  /tmp/pr212-clean-reconstruction-parts/003^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8849713Z ^[[36;1m98bfa47b309c78d3cb9c9707cbb54b232991b1933844789d1203ecc6b15afa20  /tmp/pr212-clean-reconstruction-parts/004^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8853256Z ^[[36;1mc031da22d8fdc0686557e539ae685f37eeb6ea3038ed5e3063ba6815ee4d7d07  /tmp/pr212-clean-reconstruction-parts/005^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8856874Z ^[[36;1m4216cf1a8b659488ae695e4ddbd3c973002cd32ada26a5beee687465f1e39798  /tmp/pr212-clean-reconstruction-parts/008^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8859262Z ^[[36;1mHASHES^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8860740Z ^[[36;1msha256sum --check --strict /tmp/pr212-clean-reconstruction-parts.sha256^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8862734Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8863572Z ^[[36;1mcat \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8864474Z ^[[36;1m  "${part_dir}/000" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8865538Z ^[[36;1m  "${part_dir}/001" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8866713Z ^[[36;1m  "${part_dir}/002" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8867805Z ^[[36;1m  "${part_dir}/003" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8868879Z ^[[36;1m  "${part_dir}/004" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8870083Z ^[[36;1m  "${part_dir}/005" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8871161Z ^[[36;1m  "${part_dir}/008" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8872215Z ^[[36;1m  > "$payload"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8873164Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8874488Z ^[[36;1mecho "${EXPECTED_BASE64_SHA256}  ${payload}" | sha256sum --check --strict^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8876393Z ^[[36;1mbase64 --decode "$payload" > "$gzip_file"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8878141Z ^[[36;1mecho "${EXPECTED_GZIP_SHA256}  ${gzip_file}" | sha256sum --check --strict^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8880050Z ^[[36;1mgzip --decompress --stdout "$gzip_file" > "$patch"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8881875Z ^[[36;1mecho "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8883478Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8885629Z ^[[36;1mgit show "refs/remotes/origin/${STAGING_BRANCH}:.github/pr212-clean-reconstruction.authorization-snapshot.patch.gz.b64" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8888259Z ^[[36;1m  > "$authorization_payload"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8890294Z ^[[36;1mecho "${EXPECTED_AUTHORIZATION_BASE64_SHA256}  ${authorization_payload}" | sha256sum --check --strict^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8892774Z ^[[36;1mbase64 --decode "$authorization_payload" > "$authorization_gzip"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8895182Z ^[[36;1mecho "${EXPECTED_AUTHORIZATION_GZIP_SHA256}  ${authorization_gzip}" | sha256sum --check --strict^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8897780Z ^[[36;1mgzip --decompress --stdout "$authorization_gzip" > "$authorization_patch"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8900321Z ^[[36;1mecho "${EXPECTED_AUTHORIZATION_PATCH_SHA256}  ${authorization_patch}" | sha256sum --check --strict^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8902335Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8903286Z ^[[36;1mgit apply --check --binary "$patch"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8904554Z ^[[36;1mgit apply --binary "$patch"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8906019Z ^[[36;1mgit apply --check --binary "$authorization_patch"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8907577Z ^[[36;1mgit apply --binary "$authorization_patch"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8908877Z ^[[36;1mgit diff --check^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8909842Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8911126Z ^[[36;1mcat > /tmp/pr212-clean-reconstruction-expected-files.txt <<'FILES'^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8912951Z ^[[36;1m.github/scripts/institutional-trade-qa-e2e.mjs^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8914481Z ^[[36;1m.github/workflows/institutional-trade-qa.yml^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8916198Z ^[[36;1m.github/workflows/pr212-clean-reconstruction-gates.yml^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8918043Z ^[[36;1msrc/app/institutions/[organizationId]/deals/[dealId]/page.tsx^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8919796Z ^[[36;1msrc/app/institutions/[organizationId]/page.tsx^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8921201Z ^[[36;1msrc/app/institutions/actions.ts^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8922687Z ^[[36;1msrc/app/institutions/individual/deals/[dealId]/page.tsx^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8924580Z ^[[36;1msrc/components/institutions/institutional-deal-workspace.tsx^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8926861Z ^[[36;1msrc/components/institutions/institutional-organization-administration.tsx^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8929108Z ^[[36;1msrc/components/institutions/institutional-pool-workspace.tsx^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8930977Z ^[[36;1msrc/institutional-authorization-snapshot.test.ts^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8932601Z ^[[36;1msrc/institutional-individual-capacity.test.ts^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8934184Z ^[[36;1msrc/institutional-product-completeness.test.ts^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8935819Z ^[[36;1msrc/institutional-trade-migration.test.ts^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8937266Z ^[[36;1msrc/institutional-trade-wiring.test.ts^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8938628Z ^[[36;1msrc/lib/institutional-data.ts^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8940057Z ^[[36;1msrc/lib/institutional-trade.ts^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8941675Z ^[[36;1msupabase/migrations/20260726123000_institutional_trade_system.sql^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8943267Z ^[[36;1mFILES^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8944807Z ^[[36;1mgit status --short | cut -c4- | sort > /tmp/pr212-clean-reconstruction-actual-files.txt^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8947831Z ^[[36;1msort -o /tmp/pr212-clean-reconstruction-expected-files.txt /tmp/pr212-clean-reconstruction-expected-files.txt^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8951314Z ^[[36;1mdiff -u /tmp/pr212-clean-reconstruction-expected-files.txt /tmp/pr212-clean-reconstruction-actual-files.txt^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8953536Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8954968Z ^[[36;1mcp /tmp/pr212-clean-reconstruction-parts.sha256 "$evidence/part-hashes.txt"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8956818Z ^[[36;1msha256sum \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8957838Z ^[[36;1m  "$payload" "$gzip_file" "$patch" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8959534Z ^[[36;1m  "$authorization_payload" "$authorization_gzip" "$authorization_patch" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8961310Z ^[[36;1m  > "$evidence/payload-hashes.txt"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8963249Z ^[[36;1mcp /tmp/pr212-clean-reconstruction-expected-files.txt "$evidence/expected-files.txt"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8965906Z ^[[36;1mcp /tmp/pr212-clean-reconstruction-actual-files.txt "$evidence/actual-files.txt"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8967899Z ^[[36;1mgit diff --stat > "$evidence/diff-stat.txt"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8969467Z ^[[36;1mcp "$patch" "$evidence/pr212-clean-reconstruction.patch"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8971402Z ^[[36;1mcp "$authorization_patch" "$evidence/pr212-authorization-snapshot.patch"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8973507Z ^[[36;1mtar --create --gzip --file "$evidence/reconstructed-source.tar.gz" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8975516Z ^[[36;1m  --files-from /tmp/pr212-clean-reconstruction-expected-files.txt^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8977185Z ^[[36;1msha256sum \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8978312Z ^[[36;1m  "$evidence/pr212-clean-reconstruction.patch" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8979879Z ^[[36;1m  "$evidence/pr212-authorization-snapshot.patch" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8981372Z ^[[36;1m  "$evidence/reconstructed-source.tar.gz" \^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.8982859Z ^[[36;1m  > "$evidence/reconstruction-artifact-hashes.txt"^[[0m
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9039010Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9040403Z env:
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9041365Z   FEATURE_BRANCH: feat/institutional-trade-system
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9043031Z   STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9044763Z   FINAL_BRANCH: agent/pr212-clean-reconstruction-20260730
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9046522Z   EXPECTED_PR_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9048518Z   EXPECTED_BASE64_SHA256: 32432ad98bffc63704336f313491f03e86070e88eb217c37e74cf255125637c7
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9050881Z   EXPECTED_GZIP_SHA256: 5e03aa5b29836c54880a607950d9651fced78c0d98d3aa27bd2fce3c2321bf49
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9053251Z   EXPECTED_PATCH_SHA256: 145589ad3cdc3f9ea4a09c7f800196c752c8d45c0139d8f618b736074f3d9ecb
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9055943Z   EXPECTED_AUTHORIZATION_BASE64_SHA256: a2736fc4b4940fa9e6e16b057139432c91dc66f1780aa6136d6abf102410be52
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9058699Z   EXPECTED_AUTHORIZATION_GZIP_SHA256: 9bbc792a71a146b166b1f2e36f16fa5d335689a159df036d7247817a2fa106a5
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9061434Z   EXPECTED_AUTHORIZATION_PATCH_SHA256: 793771d842b462fb20824feda276022be6806ac7aa02d00cc84c681e32e77f34
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9070968Z   GH_TOKEN: ***
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:49.9071873Z ##[endgroup]
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.8877441Z /tmp/pr212-clean-reconstruction-parts/000: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.8879651Z /tmp/pr212-clean-reconstruction-parts/001: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.8880351Z /tmp/pr212-clean-reconstruction-parts/002: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.8880943Z /tmp/pr212-clean-reconstruction-parts/003: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.8881405Z /tmp/pr212-clean-reconstruction-parts/004: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.8881960Z /tmp/pr212-clean-reconstruction-parts/005: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.8883006Z /tmp/pr212-clean-reconstruction-parts/008: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.8916500Z /tmp/pr212-clean-reconstruction.patch.gz.b64: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.8953491Z /tmp/pr212-clean-reconstruction.patch.gz: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.9005765Z /tmp/pr212-clean-reconstruction.patch: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.9048582Z /tmp/pr212-authorization-snapshot.patch.gz.b64: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.9078961Z /tmp/pr212-authorization-snapshot.patch.gz: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:51.9137466Z /tmp/pr212-authorization-snapshot.patch: OK
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2780123Z --- /tmp/pr212-clean-reconstruction-expected-files.txt	2026-07-30 15:35:52.271594282 +0000
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2780909Z +++ /tmp/pr212-clean-reconstruction-actual-files.txt	2026-07-30 15:35:52.268844689 +0000
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2781383Z @@ -8,7 +8,6 @@
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2781786Z  src/components/institutions/institutional-deal-workspace.tsx
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2782592Z  src/components/institutions/institutional-organization-administration.tsx
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2783574Z  src/components/institutions/institutional-pool-workspace.tsx
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2784149Z -src/institutional-authorization-snapshot.test.ts
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2784541Z  src/institutional-individual-capacity.test.ts
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2784892Z  src/institutional-product-completeness.test.ts
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2785232Z  src/institutional-trade-migration.test.ts
+publish	Reconstruct and verify the exact reviewable source	2026-07-30T15:35:52.2798422Z ##[error]Process completed with exit code 1.
