@@ -142,7 +142,7 @@ export default async function EvidencePage({ params, searchParams }: EvidencePag
   const isAuthenticated = Boolean(viewer);
 
   return (
-    <div className="page-shell marketplace-app-shell">
+    <div className="page-shell marketplace-app-shell evidence-outcomes-shell">
       <header className="v72-route-header">
         <SiteTopbar
           brandHref="/"

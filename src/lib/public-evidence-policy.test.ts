@@ -51,6 +51,7 @@ test("the canonical agreement uses private milestone evidence and neutral gradin
 
 test("the anonymous outcome page requests only the v2 metadata projection", () => {
   const page = source("src/app/evidence/[[...recordId]]/page.tsx");
+  const styles = source("src/app/globals.css");
 
   assert.match(page, /list_public_moral_trade_outcomes_v2/);
   assert.doesNotMatch(page, /get_public_moral_trade_evidence_v1/);
@@ -68,6 +69,11 @@ test("the anonymous outcome page requests only the v2 metadata projection", () =
     assert.match(page, new RegExp(field));
   }
   assert.match(page, /Individual public dossier links have been retired/i);
+  assert.match(page, /marketplace-app-shell evidence-outcomes-shell/);
+  assert.match(
+    styles,
+    /\.evidence-outcomes-shell\.marketplace-app-shell #main-content > \.section\s*{\s*display:\s*block;/,
+  );
 });
 
 test("the database exposes exactly the approved six public fields", () => {
