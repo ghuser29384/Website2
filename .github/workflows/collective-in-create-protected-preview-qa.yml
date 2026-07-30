@@ -4,36 +4,28 @@ on:
   push:
     branches:
       - qa/collective-in-create-protected-preview-20260730
-  pull_request:
-    branches:
-      - feature/collective-commitments-in-create-20260729
-    paths:
-      - ".github/scripts/collective-in-create-protected-preview-qa.mjs"
-      - ".github/workflows/collective-in-create-protected-preview-qa.yml"
 
 permissions:
   contents: read
 
 concurrency:
   group: collective-in-create-protected-preview-qa-20260730
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   rendered-qa:
-    if: >-
-      github.event_name == 'push' ||
-      (github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
-       github.head_ref == 'qa/collective-in-create-protected-preview-20260730')
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 45
     env:
       EXPECTED_REPOSITORY: ghuser29384/Website2
       EXPECTED_QA_BRANCH: qa/collective-in-create-protected-preview-20260730
       EXPECTED_PRODUCT_BRANCH: feature/collective-commitments-in-create-20260729
       EXPECTED_PRODUCT_HEAD: e33c7040d643b5af6e337c02ff3b986f7cf9b235
+      EXPECTED_DEPLOYMENT_ID: dpl_38CDpMAx96qxM4nNp1cJqLcwbhCQ
+      EXPECTED_PREVIEW_HOSTNAME: moraltrade-site-7zx5docsd-ellen-s.vercel.app
+      PREVIEW_BASE_URL: https://moraltrade-site-7zx5docsd-ellen-s.vercel.app
       VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
       VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
-      VERCEL_PROJECT_NAME: moraltrade-site
       NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
@@ -46,7 +38,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
-          test "${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}" = "$EXPECTED_QA_BRANCH"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_QA_BRANCH"
           for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY VERCEL_TOKEN; do
             test -n "${!name:-}" || { echo "Missing required secret: $name" >&2; exit 1; }
           done
@@ -54,7 +46,7 @@ jobs:
       - name: Check out exact QA head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
       - name: Verify two-file QA-only diff and unmoved product head
@@ -77,9 +69,11 @@ jobs:
           printf '%s\n' \
             "qa_head=$(git rev-parse HEAD)" \
             "product_head=${EXPECTED_PRODUCT_HEAD}" \
+            "deployment_id=${EXPECTED_DEPLOYMENT_ID}" \
+            "deployment_url=${PREVIEW_BASE_URL}" \
             > "$BROWSER_QA_ARTIFACT_DIR/exact-boundary.txt"
 
-      - name: Adapt QA to current rendered copy and authentication flow
+      - name: Adapt QA to exact rendered copy and authentication flow
         shell: bash
         run: |
           set -euo pipefail
@@ -172,6 +166,24 @@ jobs:
           PY
           node --check .github/scripts/collective-in-create-protected-preview-qa.mjs
 
+      - name: Verify exact ready protected canonical deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body \
+            --url "https://api.vercel.com/v13/deployments/${EXPECTED_DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            > "$RUNNER_TEMP/deployment.json"
+          jq -e \
+            --arg id "$EXPECTED_DEPLOYMENT_ID" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$EXPECTED_PRODUCT_HEAD" \
+            --arg url "$EXPECTED_PREVIEW_HOSTNAME" \
+            '.id == $id and .project.id == $project and .url == $url and (.readyState // .state) == "READY" and .target == null and .meta.githubCommitSha == $sha and .meta.purpose == "collective-in-create-authenticated-rendered-qa"' \
+            "$RUNNER_TEMP/deployment.json" >/dev/null
+          jq '{id,url,readyState,state,target,project:{id,name},meta:{githubCommitSha,githubCommitRef,purpose,exactProductHead}}' \
+            "$RUNNER_TEMP/deployment.json" > "$BROWSER_QA_ARTIFACT_DIR/deployment.json"
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -185,186 +197,6 @@ jobs:
           npm ci
           node --check .github/scripts/collective-in-create-protected-preview-qa.mjs
           npx playwright install --with-deps chromium
-
-      - name: Remove superseded exact synthetic feature-review fixtures
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE' | tee "$BROWSER_QA_ARTIFACT_DIR/prior-fixture-cleanup.log"
-          import { createClient } from "@supabase/supabase-js";
-
-          const client = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL,
-            process.env.SUPABASE_SERVICE_ROLE_KEY,
-            { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } },
-          );
-          const titlePrefix = "[LIVE FEATURE REVIEW 3228deff]";
-          const emailPrefix = "qa-collective-live-review-3228deff-";
-
-          const users = [];
-          for (let page = 1; page <= 20; page += 1) {
-            const { data, error } = await client.auth.admin.listUsers({ page, perPage: 100 });
-            if (error) throw error;
-            users.push(...data.users);
-            if (data.users.length < 100) break;
-          }
-          const matchingUsers = users.filter((user) =>
-            String(user.email ?? "").toLowerCase().startsWith(emailPrefix),
-          );
-
-          for (const user of matchingUsers) {
-            const { data: commitments, error: commitmentReadError } = await client
-              .from("collective_commitments")
-              .select("id,title")
-              .eq("creator_id", user.id);
-            if (commitmentReadError) throw commitmentReadError;
-            const unsafe = (commitments ?? []).filter(
-              (row) => !String(row.title).startsWith(titlePrefix),
-            );
-            if (unsafe.length) {
-              throw new Error(`Refusing cleanup for ${user.id}: non-review commitments exist.`);
-            }
-            if ((commitments ?? []).length) {
-              const { error } = await client
-                .from("collective_commitments")
-                .delete()
-                .eq("creator_id", user.id)
-                .like("title", `${titlePrefix}%`);
-              if (error) throw error;
-            }
-            const { error: credentialError } = await client
-              .from("collective_identity_credentials")
-              .delete()
-              .eq("profile_id", user.id);
-            if (credentialError) throw credentialError;
-            const { error: profileError } = await client.from("profiles").delete().eq("id", user.id);
-            if (profileError) throw profileError;
-            const { error: authError } = await client.auth.admin.deleteUser(user.id);
-            if (authError) throw authError;
-          }
-
-          const { data: remainingCommitments, error: remainingCommitmentError } = await client
-            .from("collective_commitments")
-            .select("id")
-            .like("title", `${titlePrefix}%`);
-          if (remainingCommitmentError) throw remainingCommitmentError;
-          if ((remainingCommitments ?? []).length) {
-            const { error } = await client
-              .from("collective_commitments")
-              .delete()
-              .like("title", `${titlePrefix}%`);
-            if (error) throw error;
-          }
-
-          const verifyUsers = [];
-          for (let page = 1; page <= 20; page += 1) {
-            const { data, error } = await client.auth.admin.listUsers({ page, perPage: 100 });
-            if (error) throw error;
-            verifyUsers.push(...data.users);
-            if (data.users.length < 100) break;
-          }
-          const remainingUsers = verifyUsers.filter((user) =>
-            String(user.email ?? "").toLowerCase().startsWith(emailPrefix),
-          );
-          const { count, error: countError } = await client
-            .from("collective_commitments")
-            .select("id", { count: "exact", head: true })
-            .like("title", `${titlePrefix}%`);
-          if (countError) throw countError;
-          if (remainingUsers.length || (count ?? 0) !== 0) {
-            throw new Error(`Superseded fixture residue: users=${remainingUsers.length}, commitments=${count ?? 0}`);
-          }
-          console.log(`Removed ${matchingUsers.length} superseded synthetic users; exact fixture residue is zero.`);
-          NODE
-
-      - name: Configure isolated branch-scoped Preview environment
-        shell: bash
-        run: |
-          set -euo pipefail
-          master_key="$(openssl rand -base64 32 | tr -d '\n')"
-          echo "::add-mask::$master_key"
-          upsert_env() {
-            local key="$1" value="$2" type="$3"
-            jq -n \
-              --arg key "$key" \
-              --arg value "$value" \
-              --arg type "$type" \
-              --arg branch "$EXPECTED_PRODUCT_BRANCH" \
-              '{key:$key,value:$value,type:$type,target:["preview"],gitBranch:$branch,comment:"Isolated QA-only Collective-in-Create protected Preview; production unaffected."}' \
-              > "$RUNNER_TEMP/env.json"
-            curl --silent --show-error --fail-with-body \
-              --request POST \
-              --url "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env?teamId=${VERCEL_TEAM_ID}&upsert=true" \
-              --header "Authorization: Bearer ${VERCEL_TOKEN}" \
-              --header "Content-Type: application/json" \
-              --data-binary @"$RUNNER_TEMP/env.json" \
-              > "$RUNNER_TEMP/env-response.json"
-            jq -e '((.failed // []) | length) == 0 and (.created // .) != null' "$RUNNER_TEMP/env-response.json" >/dev/null
-            printf '%s=CONFIGURED\n' "$key" >> "$BROWSER_QA_ARTIFACT_DIR/environment-status.txt"
-          }
-          upsert_env COLLECTIVE_COMMITMENTS_ENABLED true plain
-          upsert_env COLLECTIVE_COMMITMENT_MASTER_KEY "$master_key" sensitive
-          upsert_env COLLECTIVE_COMMITMENT_MIN_DEADLINE_MINUTES 60 plain
-          upsert_env NEXT_PUBLIC_SUPABASE_URL "$NEXT_PUBLIC_SUPABASE_URL" plain
-          upsert_env NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" encrypted
-          upsert_env SUPABASE_SERVICE_ROLE_KEY "$SUPABASE_SERVICE_ROLE_KEY" sensitive
-          rm -f "$RUNNER_TEMP/env.json" "$RUNNER_TEMP/env-response.json"
-
-      - name: Deploy exact product SHA to protected canonical Preview
-        shell: bash
-        run: |
-          set -euo pipefail
-          jq -n \
-            --arg name "$VERCEL_PROJECT_NAME" \
-            --arg project "$VERCEL_PROJECT_ID" \
-            --arg ref "$EXPECTED_PRODUCT_BRANCH" \
-            --arg sha "$EXPECTED_PRODUCT_HEAD" \
-            '{name:$name,project:$project,gitSource:{type:"github",org:"ghuser29384",repo:"Website2",ref:$ref,sha:$sha},meta:{purpose:"collective-in-create-authenticated-rendered-qa",exactProductHead:$sha}}' \
-            > "$RUNNER_TEMP/deploy.json"
-          curl --silent --show-error --fail-with-body \
-            --request POST \
-            --url "https://api.vercel.com/v13/deployments?teamId=${VERCEL_TEAM_ID}&forceNew=1" \
-            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
-            --header "Content-Type: application/json" \
-            --data-binary @"$RUNNER_TEMP/deploy.json" \
-            > "$RUNNER_TEMP/deploy-response.json"
-          deployment_id="$(jq -r '.id // empty' "$RUNNER_TEMP/deploy-response.json")"
-          deployment_host="$(jq -r '.url // empty' "$RUNNER_TEMP/deploy-response.json")"
-          test -n "$deployment_id" && test -n "$deployment_host"
-
-          state=""
-          for _ in $(seq 1 180); do
-            curl --silent --show-error --fail-with-body \
-              --url "https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_TEAM_ID}" \
-              --header "Authorization: Bearer ${VERCEL_TOKEN}" \
-              > "$RUNNER_TEMP/deployment-poll.json"
-            state="$(jq -r '.readyState // .state // empty' "$RUNNER_TEMP/deployment-poll.json")"
-            [[ "$state" == "READY" ]] && break
-            if [[ "$state" == "ERROR" || "$state" == "CANCELED" ]]; then
-              cat "$RUNNER_TEMP/deployment-poll.json" >&2
-              exit 1
-            fi
-            sleep 5
-          done
-          test "$state" = "READY"
-          jq -e \
-            --arg id "$deployment_id" \
-            --arg project "$VERCEL_PROJECT_ID" \
-            --arg sha "$EXPECTED_PRODUCT_HEAD" \
-            '.id == $id and .project.id == $project and (.readyState // .state) == "READY" and .target == null and .meta.githubCommitSha == $sha' \
-            "$RUNNER_TEMP/deployment-poll.json" >/dev/null
-          jq '{id,url,readyState,state,target,project:{id,name},meta:{githubCommitSha,githubCommitRef,purpose,exactProductHead}}' \
-            "$RUNNER_TEMP/deployment-poll.json" > "$BROWSER_QA_ARTIFACT_DIR/deployment.json"
-          echo "EXPECTED_DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
-          echo "EXPECTED_PREVIEW_HOSTNAME=$deployment_host" >> "$GITHUB_ENV"
-          echo "PREVIEW_BASE_URL=https://$deployment_host" >> "$GITHUB_ENV"
-          printf '%s\n' \
-            "deployment_id=${deployment_id}" \
-            "deployment_url=https://${deployment_host}" \
-            "product_head=${EXPECTED_PRODUCT_HEAD}" \
-            "canonical_project=${VERCEL_PROJECT_ID}" \
-            "target=preview" \
-            >> "$BROWSER_QA_ARTIFACT_DIR/exact-boundary.txt"
 
       - name: Generate ephemeral automation bypass
         shell: bash
