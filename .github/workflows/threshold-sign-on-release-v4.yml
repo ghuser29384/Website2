@@ -1,3 +1,4 @@
+# Temporary exact-head release gate; close this operations PR without merge.
 name: Threshold Sign-On release integration v4
 
 on:
