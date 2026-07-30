@@ -25,3 +25,14 @@ test("the integration preserves the static source and adds the compact funding c
   assert.match(integrated, /Common Ground Pool/);
   assert.match(integrated, /Threshold pool/);
 });
+
+test("the embedded Create document uses the canonical Moral Trade favicon", () => {
+  const integrated = integrateCommonGroundCreateSource(source);
+
+  assert.match(source, /<link rel="icon" href="data:," \/>/);
+  assert.doesNotMatch(integrated, /href="data:,"/);
+  assert.equal(
+    (integrated.match(/\/brand\/moral-trade-mark\.png\?v=20260730/g) ?? []).length,
+    3,
+  );
+});
