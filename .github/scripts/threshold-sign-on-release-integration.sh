@@ -1,0 +1,366 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${EXPECTED_MAIN:?}"
+: "${EXPECTED_FEATURE:?}"
+: "${FEATURE_BRANCH:?}"
+: "${ARTIFACT_DIR:?}"
+: "${QA_SUPABASE_DB_URL:?}"
+
+mkdir -p "$ARTIFACT_DIR"
+git fetch origin main "$FEATURE_BRANCH"
+test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+test "$(git rev-parse origin/$FEATURE_BRANCH)" = "$EXPECTED_FEATURE"
+git checkout -B "$FEATURE_BRANCH" "$EXPECTED_FEATURE"
+git config user.name "github-actions[bot]"
+git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+set +e
+git merge --no-commit --no-ff "$EXPECTED_MAIN"
+merge_status=$?
+set -e
+if [[ "$merge_status" != "0" ]]; then
+  conflicts="$(git diff --name-only --diff-filter=U | sort)"
+  expected_conflict="src/app/trades/new/page.tsx"
+  if [[ "$conflicts" != "$expected_conflict" ]]; then
+    printf '%s\n' "$conflicts" | tee "$ARTIFACT_DIR/unexpected-merge-conflicts.txt" >&2
+    exit 1
+  fi
+  cat > src/app/trades/new/page.tsx <<'TSX'
+import { randomUUID } from "node:crypto";
+import type { Metadata } from "next";
+
+import { saveCoreOfferAction } from "@/app/core-trade-actions";
+import {
+  CollectiveCreateSignInGate,
+  CollectiveCreateWorkspace,
+} from "@/components/create/collective-create-workspace";
+import { CreateInterfaceFrame } from "@/components/create/create-interface-frame";
+import {
+  TradeDraftSignInGate,
+  TradeDraftWorkbench,
+  type TradeDraftValues,
+} from "@/components/core-trade/trade-draft-workbench";
+import { getViewer } from "@/lib/app-data";
+import {
+  getCollectiveCommitmentMinimumDeadlineMinutes,
+  isCollectiveCommitmentsEnabled,
+} from "@/lib/collective-commitments/config";
+import {
+  getCollectiveIdentityCredential,
+  listCollectiveCommitments,
+} from "@/lib/collective-commitments/service";
+import type {
+  CollectiveCommitmentSummary,
+  CollectiveIdentityCredential,
+} from "@/lib/collective-commitments/types";
+import { getFormMessage } from "@/lib/form-state";
+import {
+  getPledgeTemplateInitialValues,
+  getTradeDraftTemplateLabel,
+} from "@/lib/trade-template-library";
+import { ConditionalDonationCreate } from "./conditional-donation";
+
+// The default Create surface is rendered from public/moral-trade-create/index.html by
+// CreateInterfaceFrame; Threshold Sign-On is a sibling workflow within this same route.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export const metadata: Metadata = {
+  title: "Create",
+  description:
+    "Create a pledge-swap, donation redirect, Donation Upgrade, Threshold Sign-On, existing-pool contribution offer, or moral public-goods pool through one interface.",
+  robots: { index: false, follow: false },
+};
+
+interface NewTradePageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+function valueOf(value: string | string[] | undefined) {
+  return Array.isArray(value) ? value[0] ?? "" : value ?? "";
+}
+
+const VICTORIA_EXAMPLE: Partial<TradeDraftValues> = {
+  offeredCause: "Global poverty reduction",
+  requestedCause: "Animal welfare",
+  proposedAction:
+    "Donate 1% of income to an agreed global-poverty charity for the stated term.",
+  requestedAction: "Follow a vegetarian diet for the stated term.",
+  noTradeBaseline:
+    "Without an agreement, I keep my current giving and the counterparty keeps their current diet.",
+  duration: "12 months",
+  evidenceRule:
+    "Donation receipt for the giving commitment and participant attestation for the diet commitment.",
+  maximumBurden: "The stated 1% donation and the stated 12-month dietary commitment only.",
+  privacyScope:
+    "Agreement evidence and public-safe source copies are public by default. Private messages remain private. A documented safety exception may withhold specific proof.",
+  exitConditions:
+    "Either participant may end future obligations by notifying the other; completed periods remain recorded.",
+};
+
+const WORKBENCH_GRID = `
+  #main-content > form {
+    grid-template-rows: 76px auto minmax(0, 1fr) 96px;
+  }
+
+  @media (max-width: 840px) {
+    #main-content > form {
+      grid-template-rows: 68px auto auto 88px;
+    }
+  }
+`;
+
+export default async function NewTradePage({ searchParams }: NewTradePageProps) {
+  const resolvedSearchParams = await searchParams;
+  const templateId = valueOf(resolvedSearchParams.template);
+  const structure = valueOf(resolvedSearchParams.structure);
+  if (structure === "conditional-donation") {
+    return <ConditionalDonationCreate params={resolvedSearchParams} />;
+  }
+
+  const mode = valueOf(resolvedSearchParams.mode);
+  const selectedCause = valueOf(resolvedSearchParams.cause).slice(0, 120);
+  if (mode === "collective") {
+    const viewer = await getViewer();
+    const collectiveParams = new URLSearchParams({ mode: "collective" });
+    if (selectedCause) collectiveParams.set("cause", selectedCause);
+    const returnTo = `/trades/new?${collectiveParams.toString()}`;
+    if (!viewer) return <CollectiveCreateSignInGate returnTo={returnTo} />;
+
+    const enabled = isCollectiveCommitmentsEnabled();
+    let credential: CollectiveIdentityCredential | null = null;
+    let commitments: CollectiveCommitmentSummary[] = [];
+    if (enabled) {
+      [credential, commitments] = await Promise.all([
+        getCollectiveIdentityCredential(viewer.profile.id),
+        listCollectiveCommitments(),
+      ]);
+    }
+
+    return (
+      <CollectiveCreateWorkspace
+        cause={selectedCause || undefined}
+        commitments={commitments}
+        credential={credential}
+        enabled={enabled}
+        minimumDeadlineMinutes={getCollectiveCommitmentMinimumDeadlineMinutes()}
+      />
+    );
+  }
+
+  const acceptsCommandHandoff =
+    valueOf(resolvedSearchParams.handoff) === "command-center";
+  const returnParams = new URLSearchParams();
+  if (templateId) returnParams.set("template", templateId);
+  if (structure) returnParams.set("structure", structure);
+  if (acceptsCommandHandoff) returnParams.set("handoff", "command-center");
+  const returnTo = `/trades/new${returnParams.size ? `?${returnParams.toString()}` : ""}`;
+  const example = valueOf(resolvedSearchParams.example);
+  const useLegacyDraft = Boolean(templateId || structure || acceptsCommandHandoff || example);
+
+  if (!useLegacyDraft) {
+    // CreateInterfaceFrame embeds /moral-trade-create/index.html as same-origin srcDoc.
+    const resume = valueOf(resolvedSearchParams.resume);
+    return <CreateInterfaceFrame resume={resume === "create"} />;
+  }
+
+  const viewer = await getViewer();
+  if (!viewer) {
+    return <TradeDraftSignInGate returnTo={returnTo} />;
+  }
+
+  const templateValues = getPledgeTemplateInitialValues(templateId);
+  const templateLabel = templateValues ? getTradeDraftTemplateLabel(templateId) : null;
+
+  return (
+    <>
+      <style>{WORKBENCH_GRID}</style>
+      <TradeDraftWorkbench
+        acceptCommandHandoff={acceptsCommandHandoff}
+        formMessage={getFormMessage(resolvedSearchParams)}
+        initialValues={templateValues ?? (example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined)}
+        saveAction={saveCoreOfferAction}
+        submissionKey={randomUUID()}
+        templateLabel={templateLabel}
+      />
+    </>
+  );
+}
+TSX
+  git add src/app/trades/new/page.tsx
+  git commit -m "Merge current main for Threshold Sign-On release"
+fi
+test -z "$(git diff --name-only --diff-filter=U)"
+
+python3 - <<'PY'
+from pathlib import Path
+import subprocess
+
+exact = {
+    "# Collective identity-threshold commitments": "# Threshold Sign-On: identity-threshold commitments",
+    "Create · collective commitment": "Create · Threshold Sign-On",
+    "No collective-commitment credential": "No Threshold Sign-On credential",
+    "Open and completed commitments": "Open and completed sign-ons",
+    "No collective commitments yet.": "No Threshold Sign-Ons yet.",
+}
+general = {
+    "Collective Commitments": "Threshold Sign-Ons",
+    "Collective Commitment": "Threshold Sign-On",
+    "Collective commitments": "Threshold Sign-Ons",
+    "Collective commitment": "Threshold Sign-On",
+    "collective commitments": "threshold sign-ons",
+    "collective commitment": "threshold sign-on",
+}
+result = subprocess.run(
+    [
+        "git", "grep", "-Il",
+        "-e", "Collective Commitments", "-e", "Collective Commitment",
+        "-e", "Collective commitments", "-e", "Collective commitment",
+        "-e", "collective commitments", "-e", "collective commitment",
+        "-e", "collective-commitment credential",
+        "-e", "Open and completed commitments",
+        "-e", "Collective identity-threshold commitments",
+        "--", ".", ":!supabase/migrations/**", ":!.github/**",
+    ],
+    check=False,
+    text=True,
+    capture_output=True,
+)
+changed = []
+for raw in result.stdout.splitlines():
+    path = Path(raw)
+    try:
+        text = path.read_text()
+    except UnicodeDecodeError:
+        continue
+    updated = text
+    for old, new in exact.items():
+        updated = updated.replace(old, new)
+    for old, new in general.items():
+        updated = updated.replace(old, new)
+    if updated != text:
+        path.write_text(updated)
+        changed.append(raw)
+if not changed:
+    raise SystemExit("No user-facing rename was applied.")
+print("\n".join(changed))
+PY
+
+if git grep -n -I -E '(Collective|collective) [Cc]ommitments?' -- . ':!supabase/migrations/**' ':!.github/**'; then
+  echo "Legacy spaced user-facing terminology remains." >&2
+  exit 1
+fi
+if git grep -n -I 'collective-commitment credential' -- src docs public; then
+  echo "Legacy hyphenated user-facing credential copy remains." >&2
+  exit 1
+fi
+if git grep -n -I -E 'Threshold Signatures?' -- . ':!.github/**'; then
+  echo "The cryptographically ambiguous Threshold Signature name must not be used." >&2
+  exit 1
+fi
+git grep -n -I 'Threshold Sign-On' -- src docs public > "$ARTIFACT_DIR/threshold-sign-on-occurrences.txt"
+test -s "$ARTIFACT_DIR/threshold-sign-on-occurrences.txt"
+git diff --check
+git add --all
+git commit -m "Rename Collective Commitments to Threshold Sign-On"
+printf '%s\n' \
+  "main=${EXPECTED_MAIN}" \
+  "feature_before=${EXPECTED_FEATURE}" \
+  "candidate=$(git rev-parse HEAD)" \
+  > "$ARTIFACT_DIR/exact-boundary.txt"
+
+master_key="$(openssl rand -base64 32 | tr -d '\n')"
+cron_secret="$(openssl rand -hex 32)"
+export COLLECTIVE_COMMITMENT_MASTER_KEY="$master_key"
+export CRON_SECRET="$cron_secret"
+
+npm ci
+set +e
+npm test > "$ARTIFACT_DIR/candidate-tests.log" 2>&1
+candidate_status=$?
+set -e
+echo "$candidate_status" > "$ARTIFACT_DIR/candidate-test-status.txt"
+cat "$ARTIFACT_DIR/candidate-tests.log"
+
+base_dir="$RUNNER_TEMP/exact-main"
+git worktree add --detach "$base_dir" "$EXPECTED_MAIN"
+(
+  cd "$base_dir"
+  npm ci
+  set +e
+  npm test > "$ARTIFACT_DIR/base-tests.log" 2>&1
+  status=$?
+  set -e
+  echo "$status" > "$ARTIFACT_DIR/base-test-status.txt"
+)
+cat "$ARTIFACT_DIR/base-tests.log"
+
+python3 - <<'PY'
+from pathlib import Path
+import os, re
+root = Path(os.environ["ARTIFACT_DIR"])
+def parse(name):
+    text = (root / name).read_text(errors="replace")
+    failures = {
+        m.group(1).strip()
+        for m in re.finditer(r"^not ok\s+\d+\s+-\s+(.+?)(?:\s+#.*)?$", text, re.M)
+    }
+    totals = [int(v) for v in re.findall(r"^# tests\s+(\d+)\s*$", text, re.M)]
+    return failures, (totals[-1] if totals else None)
+candidate_failures, candidate_total = parse("candidate-tests.log")
+base_failures, base_total = parse("base-tests.log")
+new_failures = sorted(candidate_failures - base_failures)
+if new_failures:
+    raise SystemExit(f"New failing tests: {new_failures}")
+if candidate_total is None or base_total is None or candidate_total < base_total:
+    raise SystemExit(f"Test-count regression: candidate={candidate_total}, base={base_total}")
+print(f"Candidate failures={len(candidate_failures)}, base failures={len(base_failures)}")
+print(f"Candidate tests={candidate_total}, base tests={base_total}")
+PY
+
+npx tsc --noEmit 2>&1 | tee "$ARTIFACT_DIR/typescript.log"
+npm run lint 2>&1 | tee "$ARTIFACT_DIR/eslint.log"
+npm run build 2>&1 | tee "$ARTIFACT_DIR/build.log"
+
+python3 - <<'PY'
+import os
+from urllib.parse import urlparse
+parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+if "hvmxfjjbdcgjjudmthdz" not in (parsed.username or ""):
+    raise SystemExit("Refusing database outside exact MoralTrade QA.")
+if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com" or parsed.port != 5432:
+    raise SystemExit("Refusing unexpected database connection parameters.")
+PY
+sudo apt-get update -qq
+sudo apt-get install --yes postgresql-client > /dev/null
+psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+  --file supabase/tests/collective_identity_threshold_commitments.sql \
+  2>&1 | tee "$ARTIFACT_DIR/database-regression.log"
+for marker in \
+  "PASS: duplicate-human and duplicate-account signatures are rejected" \
+  "PASS: withdrawal and re-signing preserve exact private counts" \
+  "PASS: incomplete or altered reveal manifests publish zero identities" \
+  "PASS: exact manifest activation publishes all names atomically and only opted-in affiliations" \
+  "PASS: activation and expiry erase private ciphertext and per-commitment keys" \
+  "PASS: frozen terms and direct sensitive-table access are denied"; do
+  grep -Fq "$marker" "$ARTIFACT_DIR/database-regression.log"
+done
+
+git fetch origin "$FEATURE_BRANCH"
+test "$(git rev-parse origin/$FEATURE_BRANCH)" = "$EXPECTED_FEATURE"
+git push origin "HEAD:$FEATURE_BRANCH"
+printf '%s\n' \
+  "candidate_head=$(git rev-parse HEAD)" \
+  "test_differential=PASS" \
+  "typescript=PASS" \
+  "eslint=PASS" \
+  "production_build=PASS" \
+  "database_regression=PASS" \
+  "production_changed=NO" \
+  > "$ARTIFACT_DIR/result.txt"
+
+if [[ -n "${GH_TOKEN:-}" ]]; then
+  candidate="$(git rev-parse HEAD)"
+  gh pr comment 286 --repo "$EXPECTED_REPOSITORY" --body "Current main \`${EXPECTED_MAIN}\` was integrated with the reviewed Create-route resolution. User-facing **Collective Commitment** terminology was replaced by **Threshold Sign-On** while internal routes and schema identifiers remain stable. Exact candidate \`${candidate}\` passed the complete exact-base test policy, absolute TypeScript, absolute ESLint, production build, and transactional QA database regression. Production remains unchanged pending exact-head protected Preview and production gates."
+fi
