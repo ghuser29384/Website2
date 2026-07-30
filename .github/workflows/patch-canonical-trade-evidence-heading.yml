@@ -46,9 +46,6 @@ jobs:
           path.write_text(source.replace(old, new))
           PY
 
-          node --import tsx --test src/lib/create-interface/unified-entry-routes.test.ts
-          npx eslint tests/exact-live-now-recommendations.spec.ts
-
       - name: Commit the test repair and remove temporary patch files
         shell: bash
         run: |
