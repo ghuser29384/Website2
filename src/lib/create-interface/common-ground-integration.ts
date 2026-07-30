@@ -13,50 +13,56 @@ const FUND_KICKER = [
   '<div class="fund-mode-kicker">Choose a funding structure</div>',
 ] as const;
 
+const BLANK_FAVICON = '  <link rel="icon" href="data:," />\n';
+const CANONICAL_FAVICONS = `  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
+  <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
+  <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
+`;
+
 const THRESHOLD_POOL_CARD = `                <button type="button" class="fund-mode-choice" data-fund-mode="dac" aria-pressed="false">
-                  <span class="fund-mode-mark">Public-good pool</span>
-                  <strong>Dominant assurance contract pool</strong>
-                  <p>Either launch a new threshold pool or ask a counterparty to contribute to a pool that already exists.</p>
-                </button>`;
+                   <span class="fund-mode-mark">Public-good pool</span>
+                   <strong>Dominant assurance contract pool</strong>
+                   <p>Either launch a new threshold pool or ask a counterparty to contribute to a pool that already exists.</p>
+                 </button>`;
 
 const COMPACT_POOL_CARDS = `                <button type="button" class="fund-mode-choice" data-fund-mode="commonGround" aria-pressed="false">
-                  <span class="fund-mode-mark">Shared project</span>
-                  <strong>Common Ground Pool</strong>
-                  <p>Split one shared project across people who value it for different reasons.</p>
-                </button>
-                <button type="button" class="fund-mode-choice" data-fund-mode="dac" aria-pressed="false">
-                  <span class="fund-mode-mark">Threshold</span>
-                  <strong>Threshold pool</strong>
-                  <p>Fund only if a target is reached. Add a failure bonus only when needed.</p>
-                </button>`;
+                   <span class="fund-mode-mark">Shared project</span>
+                   <strong>Common Ground Pool</strong>
+                   <p>Split one shared project across people who value it for different reasons.</p>
+                 </button>
+                 <button type="button" class="fund-mode-choice" data-fund-mode="dac" aria-pressed="false">
+                   <span class="fund-mode-mark">Threshold</span>
+                   <strong>Threshold pool</strong>
+                   <p>Fund only if a target is reached. Add a failure bonus only when needed.</p>
+                 </button>`;
 
 const COMMON_GROUND_PANEL = `
-            <div class="common-ground-panel" id="commonGroundFields" hidden data-common-ground-create-integration-v1>
-              <div class="common-ground-toolbar">
-                <strong>Shared split</strong>
-                <button type="button" id="commonGroundExample">Reset example</button>
-              </div>
-              <div class="common-ground-top-grid">
-                <div class="offer-field">
-                  <label for="commonGroundTargetInput">Target</label>
-                  <div class="money-input-shell"><span>$</span><input id="commonGroundTargetInput" type="number" inputmode="decimal" min="0.01" step="0.01" value="10000.00" /><span>USD</span></div>
-                </div>
-                <div class="offer-field">
-                  <label for="commonGroundDeadlineInput">Deadline</label>
-                  <input id="commonGroundDeadlineInput" type="text" maxlength="100" placeholder="e.g. 30 September 2026, 23:59 UTC" />
-                </div>
-              </div>
-              <div class="common-ground-participants-head">
-                <span id="commonGroundParticipantCount">2 participants</span>
-                <button type="button" id="addCommonGroundParticipant">+ Add</button>
-              </div>
-              <div class="common-ground-participant-list" id="commonGroundParticipantList"></div>
-              <label class="common-ground-confirm">
-                <input type="checkbox" id="commonGroundBaselineConfirm" />
-                <span>These are honest no-pool defaults.</span>
-              </label>
-              <div class="common-ground-status" id="commonGroundStatus" role="status" aria-live="polite"></div>
-            </div>
+             <div class="common-ground-panel" id="commonGroundFields" hidden data-common-ground-create-integration-v1>
+               <div class="common-ground-toolbar">
+                 <strong>Shared split</strong>
+                 <button type="button" id="commonGroundExample">Reset example</button>
+               </div>
+               <div class="common-ground-top-grid">
+                 <div class="offer-field">
+                   <label for="commonGroundTargetInput">Target</label>
+                   <div class="money-input-shell"><span>$</span><input id="commonGroundTargetInput" type="number" inputmode="decimal" min="0.01" step="0.01" value="10000.00" /><span>USD</span></div>
+                 </div>
+                 <div class="offer-field">
+                   <label for="commonGroundDeadlineInput">Deadline</label>
+                   <input id="commonGroundDeadlineInput" type="text" maxlength="100" placeholder="e.g. 30 September 2026, 23:59 UTC" />
+                 </div>
+               </div>
+               <div class="common-ground-participants-head">
+                 <span id="commonGroundParticipantCount">2 participants</span>
+                 <button type="button" id="addCommonGroundParticipant">+ Add</button>
+               </div>
+               <div class="common-ground-participant-list" id="commonGroundParticipantList"></div>
+               <label class="common-ground-confirm">
+                 <input type="checkbox" id="commonGroundBaselineConfirm" />
+                 <span>These are honest no-pool defaults.</span>
+               </label>
+               <div class="common-ground-status" id="commonGroundStatus" role="status" aria-live="polite"></div>
+             </div>
 `;
 
 const ASSET_LINKS = `  <link rel="stylesheet" href="/moral-trade-create/common-ground.css" />
@@ -92,6 +98,7 @@ export function integrateCommonGroundCreateSource(source: string) {
   if (source.includes("data-common-ground-create-integration-v1")) return source;
 
   let integrated = source;
+  integrated = replaceExactlyOnce(integrated, BLANK_FAVICON, CANONICAL_FAVICONS, "favicon");
   integrated = replaceExactlyOnce(integrated, HEADER_COPY[0], HEADER_COPY[1], "header-copy");
   integrated = replaceExactCount(integrated, REQUEST_COPY[0], REQUEST_COPY[1], 2, "request-copy");
   integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");
