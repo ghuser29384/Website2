@@ -56,6 +56,8 @@ jobs:
           test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
           test "$(git rev-parse origin/$FEATURE_BRANCH)" = "$EXPECTED_FEATURE"
           git checkout --detach "$EXPECTED_FEATURE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           set +e
           git merge --no-commit --no-ff "$EXPECTED_MAIN" >"$ARTIFACT_DIR/merge.stdout" 2>"$ARTIFACT_DIR/merge.stderr"
