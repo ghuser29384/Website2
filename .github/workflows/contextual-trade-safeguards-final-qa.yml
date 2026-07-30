@@ -1,0 +1,140 @@
+name: Final contextual trade safeguards QA
+
+on:
+  pull_request:
+    branches:
+      - agent/contextual-trade-safeguards-20260730
+  workflow_dispatch:
+
+concurrency:
+  group: final-contextual-trade-safeguards-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PRODUCT_BASE_SHA: 15358988b5ee311111c575f11b9e4bc81992f271
+  PRODUCT_HEAD_SHA: 7dd509d1379d90a747ceb9f0524129031b4501b7
+
+jobs:
+  quality:
+    name: Full test, lint, differential type, and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+
+      - name: Confirm the exact product head is included
+        run: |
+          git fetch --no-tags origin "$PRODUCT_HEAD_SHA"
+          git merge-base --is-ancestor "$PRODUCT_HEAD_SHA" HEAD
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.4"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Check browser JavaScript syntax
+        run: |
+          node --check public/moral-trade-create/safeguards.js
+          node --check public/moral-trade-live-navigation.js
+
+      - name: Run the complete Node test suite
+        run: npm test
+
+      - name: Run repository-wide ESLint
+        run: npm run lint
+
+      - name: Capture candidate TypeScript diagnostics
+        run: |
+          rm -rf .next
+          rm -f tsconfig.tsbuildinfo
+          set +e
+          npx tsc --noEmit --pretty false > /tmp/candidate-tsc.log 2>&1
+          status=$?
+          set -e
+          printf '%s\n' "$status" > /tmp/candidate-tsc-status
+          cat /tmp/candidate-tsc.log
+
+      - name: Require zero new repository-wide TypeScript errors
+        run: |
+          candidate_sha="$(git rev-parse HEAD)"
+          git fetch --no-tags origin "$PRODUCT_BASE_SHA"
+          git checkout --detach "$PRODUCT_BASE_SHA"
+          rm -rf .next
+          rm -f tsconfig.tsbuildinfo
+          set +e
+          npx tsc --noEmit --pretty false > /tmp/base-tsc.log 2>&1
+          base_status=$?
+          set -e
+          git checkout --detach "$candidate_sha"
+          rm -rf .next
+          rm -f tsconfig.tsbuildinfo
+
+          if ! diff -u /tmp/base-tsc.log /tmp/candidate-tsc.log; then
+            echo "::error::The candidate changes the repository-wide TypeScript diagnostic set relative to exact base $PRODUCT_BASE_SHA."
+            exit 1
+          fi
+
+          candidate_status="$(cat /tmp/candidate-tsc-status)"
+          if [ "$candidate_status" -ne "$base_status" ]; then
+            echo "::error::The candidate TypeScript exit status differs from the exact base."
+            exit 1
+          fi
+
+          if [ "$candidate_status" -ne 0 ]; then
+            echo "::notice::Repository-wide TypeScript has pre-existing test-file diagnostics on both exact base and candidate; the candidate introduces none."
+          fi
+
+      - name: Run the production build
+        run: npm run build
+
+  browser:
+    name: Desktop and narrow-mobile rendered workflows
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.4"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run contextual safeguards browser tests
+        run: >-
+          npx playwright test
+          tests/trade-controls.spec.ts
+          tests/contextual-create-safeguards-qa.spec.ts
+
+      - name: Upload Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-contextual-trade-safeguards-playwright
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
