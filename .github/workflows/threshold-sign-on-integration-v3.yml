@@ -3,7 +3,7 @@ name: Threshold Sign-On current-main integration v3
 on:
   push:
     branches:
-      - ops/threshold-sign-on-merge-report-v2-20260730
+      - ops/threshold-sign-on-release-v4-20260730
   pull_request:
     branches:
       - main
@@ -17,7 +17,7 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: threshold-sign-on-current-main-integration-v3-20260730
+  group: threshold-sign-on-current-main-integration-final-20260730
   cancel-in-progress: false
 
 jobs:
@@ -25,7 +25,7 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       (github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
-       github.head_ref == 'ops/threshold-sign-on-merge-report-v2-20260730')
+       github.head_ref == 'ops/threshold-sign-on-release-v4-20260730')
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
@@ -45,7 +45,7 @@ jobs:
       SITE_URL: http://127.0.0.1:3000
       VERCEL_ENV: preview
       NEXT_PUBLIC_VERCEL_ENV: preview
-      ARTIFACT_DIR: ${{ github.workspace }}/threshold-sign-on-integration-v3
+      ARTIFACT_DIR: ${{ github.workspace }}/threshold-sign-on-integration-final
       GH_TOKEN: ${{ github.token }}
 
     steps:
@@ -55,7 +55,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
           branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          test "$branch" = "ops/threshold-sign-on-merge-report-v2-20260730"
+          test "$branch" = "ops/threshold-sign-on-release-v4-20260730"
           for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_SUPABASE_DB_URL; do
             test -n "${!name:-}" || { echo "Missing required secret: $name" >&2; exit 1; }
           done
@@ -72,7 +72,7 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Run guarded integration and validation
+      - name: Run guarded current-main integration and all release gates
         shell: bash
         run: |
           set -euo pipefail
@@ -84,7 +84,6 @@ jobs:
 
           path = Path(sys.argv[1])
           text = path.read_text()
-
           parser_old = 'totals = [int(v) for v in re.findall(r"^# tests\\s+(\\d+)\\s*$", text, re.M)]'
           parser_new = 'totals = [int(v) for v in re.findall(r"^(?:#|ℹ) tests\\s+(\\d+)\\s*$", text, re.M)]'
           if text.count(parser_old) != 1:
@@ -114,7 +113,7 @@ from pathlib import Path
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: threshold-sign-on-integration-v3-${{ github.run_id }}
-          path: threshold-sign-on-integration-v3
+          name: threshold-sign-on-integration-final-${{ github.run_id }}
+          path: threshold-sign-on-integration-final
           if-no-files-found: warn
           retention-days: 14
