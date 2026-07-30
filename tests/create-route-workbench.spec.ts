@@ -142,7 +142,7 @@ test.describe("Create route workbench", () => {
 
   test("keeps the Conditional donation entry usable without horizontal overflow on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/create");
+    await page.goto("/trades/new");
     const create = page.frameLocator('iframe[title="Moral Trade Create"]');
 
     await create.getByRole("button", { name: "Future flourishing" }).click();
