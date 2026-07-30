@@ -7,9 +7,13 @@ cp .github/scripts/patch-marketplace-delta-compile-check.py \
   "$RUNNER_TEMP/patch-marketplace-delta-compile-check.py"
 cp .github/scripts/patch-marketplace-delta-milestone-regression.py \
   "$RUNNER_TEMP/patch-marketplace-delta-milestone-regression.py"
+cp .github/scripts/patch-marketplace-delta-savepoint-regression.py \
+  "$RUNNER_TEMP/patch-marketplace-delta-savepoint-regression.py"
 python3 "$RUNNER_TEMP/patch-marketplace-delta-final.py" \
   --materializer .github/scripts/materialize-marketplace-delta.py
 python3 "$RUNNER_TEMP/patch-marketplace-delta-milestone-regression.py" \
+  .github/scripts/materialize-marketplace-delta.py
+python3 "$RUNNER_TEMP/patch-marketplace-delta-savepoint-regression.py" \
   .github/scripts/materialize-marketplace-delta.py
 
 # Preserve the already reviewed v7/v6 chain outside the worktree. This lets the
