@@ -45,6 +45,7 @@ jobs:
 
           git fetch origin "refs/heads/${PAYLOAD_BRANCH}:refs/remotes/origin/${PAYLOAD_BRANCH}"
           payload=/tmp/pr212-final.patch.gz.b64
+          normalized_payload=/tmp/pr212-final.patch.gz.normalized.b64
           gzip_file=/tmp/pr212-final.patch.gz
           patch=/tmp/pr212-final.patch
           : > "$payload"
@@ -53,13 +54,41 @@ jobs:
             git show "refs/remotes/origin/${PAYLOAD_BRANCH}:.github/pr212-final-payload.chunk-${index}" >> "$payload"
           done
 
-          actual_base64_sha256="$(sha256sum "$payload" | awk '{print $1}')"
-          echo "Reconstructed base64 SHA-256: ${actual_base64_sha256}"
-          if [[ "$actual_base64_sha256" != "$EXPECTED_BASE64_SHA256" ]]; then
-            echo "The textual base64 transport checksum differs; continuing only to verify the decoded gzip and exact patch checksums." >&2
-          fi
+          python - "$payload" "$normalized_payload" "$gzip_file" <<'PY'
+          from __future__ import annotations
 
-          base64 --decode "$payload" > "$gzip_file"
+          import base64
+          import hashlib
+          from pathlib import Path
+          import sys
+
+          source_path, normalized_path, decoded_path = map(Path, sys.argv[1:])
+          raw = source_path.read_bytes()
+          allowed_whitespace = b" \t\r\n\v\f"
+          normalized = bytes(byte for byte in raw if byte not in allowed_whitespace)
+          invalid = [(index, byte) for index, byte in enumerate(normalized) if byte not in b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="]
+          print(f"Raw base64 bytes: {len(raw)}")
+          print(f"Normalized base64 bytes: {len(normalized)}")
+          print(f"Raw base64 SHA-256: {hashlib.sha256(raw).hexdigest()}")
+          print(f"Normalized base64 SHA-256: {hashlib.sha256(normalized).hexdigest()}")
+          if invalid:
+              print("First invalid normalized base64 bytes:", invalid[:20])
+              raise SystemExit("The reconstructed payload contains non-base64, non-whitespace bytes.")
+          if len(normalized) % 4:
+              raise SystemExit(f"Normalized base64 length is not divisible by four: {len(normalized)}")
+          first_padding = normalized.find(b"=")
+          if first_padding >= 0 and any(byte != ord("=") for byte in normalized[first_padding:]):
+              raise SystemExit(f"Base64 padding occurs before the end at offset {first_padding}.")
+          try:
+              decoded = base64.b64decode(normalized, validate=True)
+          except Exception as exc:
+              raise SystemExit(f"Strict base64 decoding failed: {exc}") from exc
+          normalized_path.write_bytes(normalized)
+          decoded_path.write_bytes(decoded)
+          print(f"Decoded gzip bytes: {len(decoded)}")
+          print(f"Decoded gzip SHA-256: {hashlib.sha256(decoded).hexdigest()}")
+          PY
+
           echo "${EXPECTED_GZIP_SHA256}  ${gzip_file}" | sha256sum --check --strict
           gzip --decompress --stdout "$gzip_file" > "$patch"
           echo "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict
@@ -95,8 +124,7 @@ jobs:
           cp /tmp/actual-files.txt /tmp/pr212-final-publication-evidence/actual-files.txt
           {
             printf 'expected_base64_sha256=%s\n' "$EXPECTED_BASE64_SHA256"
-            printf 'actual_base64_sha256=%s\n' "$actual_base64_sha256"
-            sha256sum "$gzip_file" "$patch"
+            sha256sum "$payload" "$normalized_payload" "$gzip_file" "$patch"
           } > /tmp/pr212-final-publication-evidence/payload-hashes.txt
           git diff --stat > /tmp/pr212-final-publication-evidence/diff-stat.txt
 
