@@ -26,4 +26,3 @@ where not exists (
   select 1
   from public.credibility_model_versions
 );
-
