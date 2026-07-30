@@ -1,0 +1,104 @@
+name: PR 212 complete UI payload export
+
+on:
+  push:
+    branches:
+      - ops/pr212-complete-ui-status-20260730
+    paths:
+      - .github/workflows/pr212-complete-ui-payload-export.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract raw payload and diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin \
+            refs/heads/ops/pr212-complete-ui-20260729:refs/remotes/origin/ops/pr212-complete-ui-20260729
+          git show origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml \
+            > /tmp/source.yml
+          mkdir -p /tmp/pr212-payload ops/pr212-complete-ui-payload
+          python - <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import hashlib
+          import json
+          import re
+          import zlib
+          from pathlib import Path
+
+          source = Path('/tmp/source.yml').read_text()
+          match = re.search(
+              r"cat > /tmp/pr212-complete-ui\.patch\.gz\.b64 <<'PATCH'\s*\n(.*?)\n\s*PATCH\s*\n",
+              source,
+              flags=re.DOTALL,
+          )
+          if not match:
+              raise SystemExit('payload marker not found')
+          encoded = ''.join(match.group(1).split())
+          compressed = base64.b64decode(encoded, validate=True)
+          out = Path('/tmp/pr212-payload')
+          (out / 'payload.b64').write_text(encoded + '\n')
+          (out / 'payload.gz').write_bytes(compressed)
+
+          decompressor = zlib.decompressobj(16 + zlib.MAX_WBITS)
+          prefix = b''
+          error = None
+          try:
+              prefix = decompressor.decompress(compressed)
+              prefix += decompressor.flush()
+          except Exception as exc:
+              prefix = prefix + decompressor.unconsumed_tail[:0]
+              error = f'{type(exc).__name__}: {exc}'
+          (out / 'partial.patch').write_bytes(prefix)
+
+          diagnostics = {
+              'encoded_length': len(encoded),
+              'encoded_sha256': hashlib.sha256(encoded.encode()).hexdigest(),
+              'compressed_length': len(compressed),
+              'compressed_sha256': hashlib.sha256(compressed).hexdigest(),
+              'compressed_prefix_hex': compressed[:32].hex(),
+              'compressed_suffix_hex': compressed[-32:].hex(),
+              'partial_length': len(prefix),
+              'partial_sha256': hashlib.sha256(prefix).hexdigest(),
+              'decompression_error': error,
+              'expected_patch_sha256': 'd0b3c68affcb27cebc0d4773d487d056e66dc500ccf99776a85b97ac051cd2f0',
+          }
+          (out / 'diagnostics.json').write_text(json.dumps(diagnostics, indent=2) + '\n')
+          Path('ops/pr212-complete-ui-payload/diagnostics.json').write_text(json.dumps(diagnostics, indent=2) + '\n')
+          PY
+
+      - name: Upload raw payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-complete-ui-payload-${{ github.run_id }}
+          path: /tmp/pr212-payload
+          retention-days: 3
+
+      - name: Record payload run
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg artifact "pr212-complete-ui-payload-${GITHUB_RUN_ID}" \
+            --arg source_sha "a23bee6b8d96593788a86d6dcf39be3b2a3e1db1" \
+            '{run_id:$run_id,artifact:$artifact,source_sha:$source_sha}' \
+            > ops/pr212-complete-ui-payload/run.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-complete-ui-payload
+          git commit -m "Record PR 212 complete UI payload diagnostics"
+          git push origin HEAD:ops/pr212-complete-ui-status-20260730
