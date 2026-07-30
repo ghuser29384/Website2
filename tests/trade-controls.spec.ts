@@ -36,7 +36,11 @@ for (const viewport of viewports) {
       await expect(page.getByRole("link", { name })).toHaveAttribute("href", href);
     }
 
-    await expect(page.getByRole("heading", { name: "Trade Circles" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "The preview was removed; no live mechanism was implied.",
+      }),
+    ).toBeVisible();
     await expect(
       page.getByText(/does not currently offer durable multi-party Trade Circles/i),
     ).toBeVisible();
