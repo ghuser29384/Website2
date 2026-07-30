@@ -19,6 +19,7 @@ import {
   serializeOpportunityBriefCard,
   type BackgroundRequesterOpportunityBriefCard,
 } from "@/lib/background-opportunity-briefs";
+import { isMissingOptionalLegacyAgreementRelation } from "@/lib/optional-legacy-agreement-relations";
 import type { Database } from "@/lib/supabase/database.types";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
@@ -216,6 +217,7 @@ export interface AgreementRecord extends AgreementRow {
   payments: AgreementPaymentRow[];
   paymentSchedules: AgreementPaymentScheduleRow[];
   events: AgreementEventRow[];
+  legacyEvidenceReviewAvailable: boolean;
   evidenceItems: AgreementEvidenceItemRow[];
   reviewCases: AgreementReviewCaseRow[];
   performanceBonds: PerformanceBondRow[];
@@ -2130,10 +2132,19 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
   if (eventsError) {
     throw new Error(eventsError.message);
   }
-  if (evidenceItemsError) {
+  const evidenceItemsUnavailable = isMissingOptionalLegacyAgreementRelation(
+    evidenceItemsError,
+    "agreement_evidence_items",
+  );
+  const reviewCasesUnavailable = isMissingOptionalLegacyAgreementRelation(
+    reviewCasesError,
+    "agreement_review_cases",
+  );
+
+  if (evidenceItemsError && !evidenceItemsUnavailable) {
     throw new Error(evidenceItemsError.message);
   }
-  if (reviewCasesError) {
+  if (reviewCasesError && !reviewCasesUnavailable) {
     throw new Error(reviewCasesError.message);
   }
   if (performanceBondsError) {
@@ -2312,6 +2323,8 @@ async function hydrateAgreementRows(agreements: AgreementRow[], userId: string) 
       payments: paymentsByAgreement.get(agreement.id) ?? [],
       paymentSchedules: paymentSchedulesByAgreement.get(agreement.id) ?? [],
       events: eventsByAgreement.get(agreement.id) ?? [],
+      legacyEvidenceReviewAvailable:
+        !evidenceItemsUnavailable && !reviewCasesUnavailable,
       evidenceItems: evidenceItemsByAgreement.get(agreement.id) ?? [],
       reviewCases: reviewCasesByAgreement.get(agreement.id) ?? [],
       performanceBonds: agreementPerformanceBonds,
