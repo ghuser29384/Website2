@@ -1,0 +1,111 @@
+name: Dispatch PR 212 exact-head institutional QA
+
+on:
+  push:
+    branches:
+      - ops/pr212-complete-ui-status-20260730
+    paths:
+      - .github/workflows/pr212-dispatch-final-qa.yml
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: pr212-dispatch-final-exact-head-qa
+  cancel-in-progress: false
+
+jobs:
+  dispatch-and-observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HEAD: 7ed2cf755f453a21419d11773b3d062a9edda72f
+      TARGET_BRANCH: feat/institutional-trade-system
+      TARGET_WORKFLOW: institutional-trade-qa.yml
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate exact PR head and dispatch isolated-QA workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(gh api repos/${GITHUB_REPOSITORY}/pulls/212 --jq .head.sha)"
+          if [[ "$actual_head" != "$TARGET_HEAD" ]]; then
+            echo "PR #212 moved: expected $TARGET_HEAD, got $actual_head" >&2
+            exit 1
+          fi
+          gh workflow run "$TARGET_WORKFLOW" \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$TARGET_BRANCH" \
+            -f confirm_target="$QA_PROJECT_REF"
+
+      - name: Poll exact-head QA run to terminal state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-final-qa
+          run_id=""
+          run_status=""
+          run_conclusion=""
+
+          for attempt in $(seq 1 430); do
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$TARGET_WORKFLOW" \
+              --branch "$TARGET_BRANCH" \
+              --limit 100 \
+              --json databaseId,headSha,status,conclusion,createdAt,event,url,displayTitle \
+              > /tmp/pr212-dispatched-runs.json
+
+            run_id="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head and .event == "workflow_dispatch")] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/pr212-dispatched-runs.json)"
+            run_status="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head and .event == "workflow_dispatch")] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/pr212-dispatched-runs.json)"
+            run_conclusion="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head and .event == "workflow_dispatch")] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/pr212-dispatched-runs.json)"
+
+            if [[ -n "$run_id" && "$run_status" == "completed" ]]; then
+              break
+            fi
+            sleep 12
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "No exact-head workflow-dispatch run was found." >&2
+            exit 1
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > /tmp/pr212-dispatched-run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/pr212-dispatched-jobs.json
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/pr212-dispatched-failed.log 2>&1 || true
+
+          jq -n \
+            --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg target_head "$TARGET_HEAD" \
+            --arg run_id "$run_id" \
+            --arg run_status "$run_status" \
+            --arg run_conclusion "$run_conclusion" \
+            --slurpfile run /tmp/pr212-dispatched-run.json \
+            --slurpfile jobs /tmp/pr212-dispatched-jobs.json \
+            '{generated_at:$generated_at,target_head:$target_head,selected_run_id:$run_id,selected_run_status:$run_status,selected_run_conclusion:$run_conclusion,run:$run[0],jobs:$jobs[0].jobs}' \
+            > ops/pr212-final-qa/dispatched-run-report.json
+          cp /tmp/pr212-dispatched-failed.log ops/pr212-final-qa/dispatched-failed-log.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-final-qa/dispatched-run-report.json ops/pr212-final-qa/dispatched-failed-log.txt
+          git commit -m "Record dispatched PR 212 exact-head QA result"
+          git push origin HEAD:ops/pr212-complete-ui-status-20260730
+
+          if [[ "$run_status" != "completed" ]]; then
+            echo "Exact-head QA did not reach a terminal state within the polling window." >&2
+            exit 1
+          fi
+          if [[ "$run_conclusion" != "success" ]]; then
+            echo "Exact-head QA completed with conclusion: $run_conclusion" >&2
+            exit 1
+          fi
