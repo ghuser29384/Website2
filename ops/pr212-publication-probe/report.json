@@ -1,0 +1,87 @@
+{
+  "target_head": "e8ebb1aa132db61d6566091175015f1aadb3d978",
+  "exact_head_runs": [
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-30T08:35:30Z",
+      "databaseId": 30527297986,
+      "displayTitle": "Recover omitted character in PR 212 final payload",
+      "event": "push",
+      "headSha": "e8ebb1aa132db61d6566091175015f1aadb3d978",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30527297986"
+    }
+  ],
+  "all_runs": [
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-30T08:35:30Z",
+      "databaseId": 30527297986,
+      "displayTitle": "Recover omitted character in PR 212 final payload",
+      "event": "push",
+      "headSha": "e8ebb1aa132db61d6566091175015f1aadb3d978",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30527297986"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-30T08:29:34Z",
+      "databaseId": 30526900726,
+      "displayTitle": "Recover PR 212 payload only by exact decoded hash",
+      "event": "push",
+      "headSha": "e45c3d8c10e6a6e7ea0325f2b290e3b8f7f4684b",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30526900726"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-30T08:23:13Z",
+      "databaseId": 30526484073,
+      "displayTitle": "Restore omitted terminal padding in PR 212 payload",
+      "event": "push",
+      "headSha": "fb531746207ab1dac425eab291d5b6e0b185bc3f",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30526484073"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-30T08:19:44Z",
+      "databaseId": 30526256943,
+      "displayTitle": "Normalize and strictly verify PR 212 payload encoding",
+      "event": "push",
+      "headSha": "1295bd26112f64c61c50040dbd041a0d830c6dff",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30526256943"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-30T08:16:29Z",
+      "databaseId": 30526044828,
+      "displayTitle": "Verify decoded PR 212 patch rather than base64 formatting",
+      "event": "push",
+      "headSha": "80927eb230257fa7c7ee07a6cda61964dec0d393",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30526044828"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-30T08:11:45Z",
+      "databaseId": 30525729798,
+      "displayTitle": "Fix PR 212 final payload chunk reconstruction",
+      "event": "push",
+      "headSha": "aa9f63b45bb24a5a782550fa3315fcdf6baf15a3",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30525729798"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-30T05:05:19Z",
+      "databaseId": 30515638373,
+      "displayTitle": "Publish exact PR 212 final institutional interface patch",
+      "event": "push",
+      "headSha": "80c1856134bf049bbf2ae286f84308b7b0a38e12",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30515638373"
+    }
+  ]
+}
