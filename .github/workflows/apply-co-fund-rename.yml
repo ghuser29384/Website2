@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - "product/rename-common-ground-to-co-fund-20260730"
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -18,9 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - name: Check out exact branch head
+      - name: Check out exact product branch
         uses: actions/checkout@v4
         with:
+          ref: product/rename-common-ground-to-co-fund-20260730
           fetch-depth: 0
 
       - name: Set up Node.js
