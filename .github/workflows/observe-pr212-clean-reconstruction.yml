@@ -23,7 +23,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       PUBLICATION_WORKFLOW: publish-pr212-clean-reconstruction.yml
-      PUBLICATION_HEAD: f7a4a8d37cb787c50ec71f05caf3a0f5bd1c4802
+      PUBLICATION_HEAD: fa677a28919b4ef73cf0c30eadd1e5f1d5968b00
       STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
       FINAL_WORKFLOW: pr212-clean-reconstruction-gates.yml
       FINAL_BRANCH: agent/pr212-clean-reconstruction-20260730
