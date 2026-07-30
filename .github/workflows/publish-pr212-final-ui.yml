@@ -100,22 +100,46 @@ jobs:
 
           candidates: list[tuple[str, bytes, bytes]] = []
 
+          def canonicalize(value: bytes) -> bytes | None:
+              if b"=" in value[:-2]:
+                  return None
+              core = value.rstrip(b"=")
+              remainder = len(core) % 4
+              if remainder == 1:
+                  return None
+              return core + b"=" * ((4 - remainder) % 4)
+
           def accept(description: str, candidate: bytes) -> None:
               try:
                   decoded = base64.b64decode(candidate, validate=True)
               except Exception:
                   return
-              if hashlib.sha256(decoded).hexdigest() == expected_gzip:
+              decoded_sha = hashlib.sha256(decoded).hexdigest()
+              candidate_sha = hashlib.sha256(candidate).hexdigest()
+              print(
+                  f"Decoded candidate {description}: base64_bytes={len(candidate)} "
+                  f"base64_sha256={candidate_sha} decoded_bytes={len(decoded)} decoded_sha256={decoded_sha}"
+              )
+              if decoded_sha == expected_gzip:
                   candidates.append((description, candidate, decoded))
 
-          # A canonical payload with only omitted terminal padding.
-          if b"=" not in reconstructed[:-2]:
-              remainder = len(reconstructed) % 4
-              if remainder != 1:
-                  accept(
-                      "canonical reconstructed payload",
-                      reconstructed + b"=" * ((4 - remainder) % 4),
-                  )
+          canonical_full = canonicalize(reconstructed)
+          if canonical_full is not None:
+              accept("all stored chunks", canonical_full)
+
+          # The transport branch contains remnants of more than one payload write. Test
+          # every contiguous chunk range and accept only one whose decoded bytes match the
+          # exact pre-recorded gzip SHA-256.
+          for start in range(len(chunks)):
+              segment = b""
+              for end in range(start, len(chunks)):
+                  segment += chunks[end]
+                  candidate = canonicalize(segment)
+                  if candidate is not None:
+                      accept(
+                          f"contiguous chunk range {chunk_names[start]}..{chunk_names[end]}",
+                          candidate,
+                      )
 
           first_padding = reconstructed.find(b"=")
           if first_padding >= 0 and first_padding < len(reconstructed) - 2:
@@ -144,17 +168,12 @@ jobs:
                   suffix = core[position:]
                   for character in alphabet:
                       repaired_core = prefix + bytes((character,)) + suffix
-                      remainder = len(repaired_core) % 4
-                      if remainder == 1:
-                          continue
-                      candidate = repaired_core + b"=" * ((4 - remainder) % 4)
-                      if hashlib.sha256(candidate).hexdigest() == expected_base64:
+                      candidate = canonicalize(repaired_core)
+                      if candidate is not None and hashlib.sha256(candidate).hexdigest() == expected_base64:
                           repaired = (position, character, candidate)
                           break
                   if repaired is not None:
                       break
-                  if (position - search_start) % 500 == 0:
-                      print(f"Recovery search reached offset {position}.")
 
               if repaired is not None:
                   position, character, candidate = repaired
