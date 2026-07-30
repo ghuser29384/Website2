@@ -104,15 +104,15 @@ export async function ConditionalDonationCreate({
             { href: "/trades/new", label: "Create" },
             {
               href: "/trades/new?structure=conditional-donation",
-              label: "Conditional donation",
+              label: "Donation Upgrade",
             },
           ]}
         />
         <PageHero
           eyebrow={
             readiness.mode === "live"
-              ? "Create · Live conditional giving"
-              : "Create · Conditional giving"
+              ? "Create · Live Donation Upgrade"
+              : "Create · Donation Upgrade"
           }
           title="Redirect your donation when someone adds to it."
           description="Authorize your original donation first. If an eligible matcher authorizes the added amount before your deadline, both linked donations go to the matched charity. Otherwise your original donation goes to your fallback charity."
@@ -131,7 +131,7 @@ export async function ConditionalDonationCreate({
       <main id="main-content" tabIndex={-1}>
         {!pageData.available ? (
           <div className="status-banner status-banner-error" role="status">
-            Conditional donation authorizations are temporarily unavailable. No payment
+            Donation Upgrade authorizations are temporarily unavailable. No payment
             authorization can be created or charged from this page. Please try again later.
           </div>
         ) : null}
@@ -277,7 +277,7 @@ export async function ConditionalDonationCreate({
                 </article>
               );
             })}
-            {!offerRows.length ? <p>No conditional redirects are open yet.</p> : null}
+            {!offerRows.length ? <p>No Donation Upgrades are open yet.</p> : null}
           </div>
         </section>
 
@@ -359,7 +359,7 @@ export async function ConditionalDonationCreate({
                 </article>
               );
             })}
-            {!commitments.length ? <p>You have no conditional donation authorizations yet.</p> : null}
+            {!commitments.length ? <p>You have no Donation Upgrade authorizations yet.</p> : null}
           </div>
         </section>
       </main>
