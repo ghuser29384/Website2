@@ -33,7 +33,7 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Replace the retired product name everywhere it is tracked
+      - name: Replace the retired product name in product and test files
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -41,7 +41,6 @@ jobs:
 
           old = "Common Ground Pool"
           new = "Co-Fund"
-          workflow = Path(".github/workflows/apply-co-fund-rename.yml")
 
           result = subprocess.run(
               ["git", "grep", "-Il", "--null", old],
@@ -53,7 +52,7 @@ jobs:
           changed = []
 
           for path in paths:
-              if path == workflow:
+              if path.parts[:2] == (".github", "workflows"):
                   continue
               text = path.read_text(encoding="utf-8")
               count = text.count(old)
@@ -65,16 +64,27 @@ jobs:
           if replacements == 0:
               raise SystemExit("No tracked product-name occurrences were replaced.")
 
-          workflow.unlink()
-
-          remaining = subprocess.run(
-              ["git", "grep", "-n", old],
-              check=False,
-              text=True,
+          remaining = []
+          tracked = subprocess.run(
+              ["git", "ls-files", "-z"],
+              check=True,
               stdout=subprocess.PIPE,
-          )
-          if remaining.returncode == 0:
-              raise SystemExit(f"Retired product name remains:\n{remaining.stdout}")
+          ).stdout.split(b"\0")
+          for raw in tracked:
+              if not raw:
+                  continue
+              path = Path(raw.decode("utf-8"))
+              if path.parts[:2] == (".github", "workflows"):
+                  continue
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+              if old in text:
+                  remaining.append(str(path))
+
+          if remaining:
+              raise SystemExit("Retired product name remains outside workflow files:\n" + "\n".join(remaining))
 
           print(f"Replaced {replacements} occurrence(s):")
           print("\n".join(changed))
@@ -99,6 +109,7 @@ jobs:
           src/lib/create-interface/source-contract.test.ts
           src/lib/create-interface/validation.ts
           tests/create-common-ground-pool.spec.ts
+          tests/create-route-workbench.spec.ts
 
       - name: Build the production application
         env:
@@ -113,20 +124,42 @@ jobs:
       - name: Verify desktop and mobile Co-Fund workflows
         run: npx playwright test tests/create-common-ground-pool.spec.ts --reporter=line
 
-      - name: Verify exact diff boundaries
+      - name: Verify exact product diff boundaries
         run: |
           git diff --check
-          if git grep -n "Common Ground Pool"; then
-            echo "Retired product name remains." >&2
-            exit 1
-          fi
-          git grep -n "Co-Fund"
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          old = "Common Ground Pool"
+          remaining = []
+          tracked = subprocess.run(
+              ["git", "ls-files", "-z"],
+              check=True,
+              stdout=subprocess.PIPE,
+          ).stdout.split(b"\0")
+          for raw in tracked:
+              if not raw:
+                  continue
+              path = Path(raw.decode("utf-8"))
+              if path.parts[:2] == (".github", "workflows"):
+                  continue
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+              if old in text:
+                  remaining.append(str(path))
+          if remaining:
+              raise SystemExit("Retired product name remains outside workflow files:\n" + "\n".join(remaining))
+          PY
+          git grep -n "Co-Fund" -- docs public src tests
           git status --short
 
-      - name: Commit the verified rename and remove this temporary workflow
+      - name: Commit and push the verified product rename
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add docs public src tests
           git commit -m "Rename Common Ground Pool to Co-Fund"
           git push origin HEAD:product/rename-common-ground-to-co-fund-20260730
