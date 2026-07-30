@@ -1,0 +1,59 @@
+name: Inspect PR 212 clean gate
+
+on:
+  push:
+    branches:
+      - agent/pr212-clean-gate-inspector-20260730
+    paths:
+      - .github/workflows/inspect-pr212-clean-gate.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr212-clean-reconstruction-gates.yml
+      TARGET_BRANCH: agent/pr212-clean-reconstruction-20260730
+      TARGET_HEAD: e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e
+      INSPECTOR_BRANCH: agent/pr212-clean-gate-inspector-20260730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-clean-gate-inspector-20260730
+          fetch-depth: 0
+
+      - name: Record current exact-head run state
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 60
+          output=ops/pr212-clean-reconstruction/clean-gate-inspection
+          mkdir -p "$output"
+          gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow "$TARGET_WORKFLOW" \
+            --branch "$TARGET_BRANCH" \
+            --limit 50 \
+            --json databaseId,headSha,status,conclusion,createdAt,url,displayTitle \
+            > "$output/runs.json"
+          run_id="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' "$output/runs.json")"
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$output/run.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$output/jobs.json"
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/failed-log.txt" 2>&1 || true
+          else
+            printf '%s\n' '{}' > "$output/run.json"
+            printf '%s\n' '{"jobs":[]}' > "$output/jobs.json"
+            printf '%s\n' 'No exact-head run found.' > "$output/failed-log.txt"
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Inspect PR 212 clean reconstruction gate"
+          git push origin "HEAD:refs/heads/${INSPECTOR_BRANCH}"
