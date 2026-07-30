@@ -14,7 +14,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: marketplace-delta-exact-head-browser-gate
+  group: marketplace-delta-exact-head-browser-gate-terminal-v8
   cancel-in-progress: true
 
 jobs:
