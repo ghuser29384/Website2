@@ -37,10 +37,27 @@ declare
   affected_party_status text;
   affected_party_plan text;
 begin
-  if jsonb_typeof(safeguards) <> 'object' then
+  if jsonb_typeof(safeguards) is distinct from 'object' then
     raise exception using
       errcode = '22023',
       message = 'Create safeguards are required.';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_object_keys(safeguards) as safeguard_key(key_name)
+    where key_name not in (
+      'affectedPartyPlan',
+      'affectedPartyStatus',
+      'baselineConfirmed',
+      'capacity',
+      'noManufacturedLeverage',
+      'noTradeBaseline'
+    )
+  ) then
+    raise exception using
+      errcode = '22023',
+      message = 'Create safeguards contain an unsupported field.';
   end if;
 
   baseline_value := btrim(coalesce(safeguards ->> 'noTradeBaseline', ''));
@@ -54,17 +71,17 @@ begin
       errcode = '22023',
       message = 'No-trade baseline must describe the specific default, not only the absence of an agreement.';
   end if;
-  if safeguards -> 'baselineConfirmed' is distinct from 'true'::jsonb then
+  if (safeguards -> 'baselineConfirmed') is distinct from 'true'::jsonb then
     raise exception using
       errcode = '22023',
       message = 'The no-trade baseline confirmation is required.';
   end if;
-  if safeguards -> 'noManufacturedLeverage' is distinct from 'true'::jsonb then
+  if (safeguards -> 'noManufacturedLeverage') is distinct from 'true'::jsonb then
     raise exception using
       errcode = '22023',
       message = 'The no-manufactured-leverage confirmation is required.';
   end if;
-  if safeguards ->> 'capacity' <> 'individual' then
+  if (safeguards ->> 'capacity') is distinct from 'individual' then
     raise exception using
       errcode = '22023',
       message = 'The current Create flow accepts individual capacity only.';
@@ -72,10 +89,15 @@ begin
 
   affected_party_status := safeguards ->> 'affectedPartyStatus';
   affected_party_plan := btrim(coalesce(safeguards ->> 'affectedPartyPlan', ''));
-  if affected_party_status not in ('none_identified', 'review_required') then
+  if coalesce(affected_party_status, '') not in ('none_identified', 'review_required') then
     raise exception using
       errcode = '22023',
       message = 'Affected-party status is invalid.';
+  end if;
+  if length(affected_party_plan) > 600 then
+    raise exception using
+      errcode = '22023',
+      message = 'Affected-party plan must be 600 characters or fewer.';
   end if;
   if affected_party_status = 'review_required' and length(affected_party_plan) < 20 then
     raise exception using
