@@ -76,6 +76,7 @@ jobs:
 
           chunks: list[bytes] = []
           boundaries = [0]
+          chunk_names: list[str] = []
           for path in sorted(chunk_dir.glob("chunk-*.b64")):
               raw_chunk = path.read_bytes()
               clean_chunk = bytes(byte for byte in raw_chunk if byte not in whitespace)
@@ -88,6 +89,7 @@ jobs:
                   f"padding={padding_positions[:10]}"
               )
               chunks.append(clean_chunk)
+              chunk_names.append(path.name)
               boundaries.append(boundaries[-1] + len(clean_chunk))
 
           reconstructed = b"".join(chunks)
@@ -96,66 +98,77 @@ jobs:
           print(f"Reconstructed SHA-256: {hashlib.sha256(reconstructed).hexdigest()}")
           print(f"Chunk boundaries: {boundaries}")
 
-          def decode_and_check(candidate: bytes) -> bytes | None:
+          candidates: list[tuple[str, bytes, bytes]] = []
+
+          def accept(description: str, candidate: bytes) -> None:
               try:
                   decoded = base64.b64decode(candidate, validate=True)
               except Exception:
-                  return None
-              if hashlib.sha256(decoded).hexdigest() != expected_gzip:
-                  return None
-              return decoded
+                  return
+              if hashlib.sha256(decoded).hexdigest() == expected_gzip:
+                  candidates.append((description, candidate, decoded))
 
-          candidates: list[tuple[str, bytes, bytes]] = []
-
-          # First try the reconstructed payload as a single canonical base64 string.
-          no_whitespace = reconstructed
-          if b"=" not in no_whitespace[:-2]:
-              remainder = len(no_whitespace) % 4
+          # A canonical payload with only omitted terminal padding.
+          if b"=" not in reconstructed[:-2]:
+              remainder = len(reconstructed) % 4
               if remainder != 1:
-                  canonical = no_whitespace + b"=" * ((4 - remainder) % 4)
-                  decoded = decode_and_check(canonical)
-                  if decoded is not None:
-                      candidates.append(("canonical reconstructed payload", canonical, decoded))
+                  accept(
+                      "canonical reconstructed payload",
+                      reconstructed + b"=" * ((4 - remainder) % 4),
+                  )
 
-          # The stored transport was assembled through multiple connector writes. If a
-          # single base64 character was omitted at a chunk boundary and an unrelated tail
-          # was appended after the original terminal padding, recover only a candidate
-          # whose decoded bytes match the pre-recorded exact gzip SHA-256.
           first_padding = reconstructed.find(b"=")
           if first_padding >= 0 and first_padding < len(reconstructed) - 2:
-              core = reconstructed[:first_padding]
               padding_end = first_padding
               while padding_end < len(reconstructed) and reconstructed[padding_end] == ord("="):
                   padding_end += 1
+              core = reconstructed[:first_padding]
               tail = reconstructed[padding_end:]
-              print(
-                  f"Internal padding begins at {first_padding}; padding run length={padding_end-first_padding}; "
-                  f"discarded-tail-bytes-if-recovered={len(tail)}; tail-sha256={hashlib.sha256(tail).hexdigest()}"
+              containing_chunk = max(
+                  index for index, boundary in enumerate(boundaries[:-1]) if boundary <= first_padding
               )
-              insertion_positions = set()
-              for boundary in boundaries:
-                  for delta in (-2, -1, 0, 1, 2):
-                      position = boundary + delta
-                      if 0 <= position <= len(core):
-                          insertion_positions.add(position)
-              for position in sorted(insertion_positions):
+              search_start = boundaries[containing_chunk]
+              print(
+                  f"Internal padding begins at {first_padding} in {chunk_names[containing_chunk]}; "
+                  f"padding run length={padding_end-first_padding}; discarded tail={len(tail)} bytes; "
+                  f"tail SHA-256={hashlib.sha256(tail).hexdigest()}"
+              )
+              print(
+                  f"Searching for one omitted base64 character from offset {search_start} "
+                  f"through {len(core)} using the exact expected base64 SHA-256."
+              )
+
+              repaired: tuple[int, int, bytes] | None = None
+              for position in range(search_start, len(core) + 1):
+                  prefix = core[:position]
+                  suffix = core[position:]
                   for character in alphabet:
-                      repaired_core = core[:position] + bytes((character,)) + core[position:]
+                      repaired_core = prefix + bytes((character,)) + suffix
                       remainder = len(repaired_core) % 4
                       if remainder == 1:
                           continue
                       candidate = repaired_core + b"=" * ((4 - remainder) % 4)
-                      decoded = decode_and_check(candidate)
-                      if decoded is not None:
-                          candidates.append(
-                              (
-                                  f"single-character boundary recovery at offset {position} with {chr(character)!r}",
-                                  candidate,
-                                  decoded,
-                              )
-                          )
+                      if hashlib.sha256(candidate).hexdigest() == expected_base64:
+                          repaired = (position, character, candidate)
+                          break
+                  if repaired is not None:
+                      break
+                  if (position - search_start) % 500 == 0:
+                      print(f"Recovery search reached offset {position}.")
 
-          # The exact gzip hash makes any accepted recovery unique and fail-closed.
+              if repaired is not None:
+                  position, character, candidate = repaired
+                  print(
+                      f"Recovered exact base64 transport by inserting {chr(character)!r} "
+                      f"at offset {position}."
+                  )
+                  accept(
+                      f"exact-base64 single-character recovery at offset {position}",
+                      candidate,
+                  )
+              else:
+                  print("No single-character insertion in the truncated final chunk matched the expected base64 SHA-256.")
+
           unique: dict[bytes, tuple[str, bytes]] = {}
           for description, candidate, decoded in candidates:
               unique.setdefault(decoded, (description, candidate))
@@ -167,10 +180,9 @@ jobs:
               )
 
           decoded, (description, candidate) = next(iter(unique.items()))
-          candidate_sha = hashlib.sha256(candidate).hexdigest()
           print(f"Accepted recovery: {description}")
           print(f"Accepted base64 bytes: {len(candidate)}")
-          print(f"Accepted base64 SHA-256: {candidate_sha}")
+          print(f"Accepted base64 SHA-256: {hashlib.sha256(candidate).hexdigest()}")
           print(f"Expected base64 SHA-256: {expected_base64}")
           print(f"Decoded gzip bytes: {len(decoded)}")
           print(f"Decoded gzip SHA-256: {hashlib.sha256(decoded).hexdigest()}")
