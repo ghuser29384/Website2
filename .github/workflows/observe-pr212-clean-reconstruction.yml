@@ -1,0 +1,150 @@
+name: Observe PR 212 clean reconstruction
+
+on:
+  push:
+    branches:
+      - agent/pr212-clean-reconstruction-staging-20260730
+    paths:
+      - .github/workflows/observe-pr212-clean-reconstruction.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: observe-pr212-clean-reconstruction
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PUBLICATION_WORKFLOW: publish-pr212-clean-reconstruction.yml
+      PUBLICATION_HEAD: f62d924d6a442958bc2f1bcb47c27a044d2437e0
+      STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
+      FINAL_WORKFLOW: pr212-clean-reconstruction-gates.yml
+      FINAL_BRANCH: agent/pr212-clean-reconstruction-20260730
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-clean-reconstruction-staging-20260730
+          fetch-depth: 0
+
+      - name: Poll publication and final validation to terminal states
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-clean-reconstruction
+          mkdir -p "$output"
+
+          publication_run_id=""
+          publication_status=""
+          publication_conclusion=""
+          for attempt in $(seq 1 300); do
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$PUBLICATION_WORKFLOW" \
+              --branch "$STAGING_BRANCH" \
+              --limit 50 \
+              --json databaseId,headSha,status,conclusion,createdAt,event,url,displayTitle \
+              > /tmp/publication-runs.json
+            publication_run_id="$(jq -r --arg head "$PUBLICATION_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/publication-runs.json)"
+            publication_status="$(jq -r --arg head "$PUBLICATION_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/publication-runs.json)"
+            publication_conclusion="$(jq -r --arg head "$PUBLICATION_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/publication-runs.json)"
+            if [[ -n "$publication_run_id" && "$publication_status" == "completed" ]]; then
+              break
+            fi
+            sleep 12
+          done
+
+          if [[ -n "$publication_run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${publication_run_id}" > /tmp/publication-run.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${publication_run_id}/jobs?per_page=100" > /tmp/publication-jobs.json
+            gh run view "$publication_run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/publication-failed-log.txt" 2>&1 || true
+          else
+            printf '%s\n' '{}' > /tmp/publication-run.json
+            printf '%s\n' '{"jobs":[]}' > /tmp/publication-jobs.json
+            printf '%s\n' 'No exact publication run found.' > "$output/publication-failed-log.txt"
+          fi
+
+          final_head=""
+          final_run_id=""
+          final_status=""
+          final_conclusion=""
+          printf '%s\n' '[]' > /tmp/final-runs.json
+          printf '%s\n' '{}' > /tmp/final-run.json
+          printf '%s\n' '{"jobs":[]}' > /tmp/final-jobs.json
+          printf '%s\n' 'Final validation was not reached.' > "$output/final-failed-log.txt"
+
+          if [[ "$publication_status" == "completed" && "$publication_conclusion" == "success" ]]; then
+            for attempt in $(seq 1 60); do
+              final_head="$(git ls-remote --heads origin "refs/heads/${FINAL_BRANCH}" | awk '{print $1}')"
+              if [[ -n "$final_head" ]]; then
+                break
+              fi
+              sleep 5
+            done
+
+            if [[ -n "$final_head" ]]; then
+              for attempt in $(seq 1 250); do
+                gh run list \
+                  --repo "$GITHUB_REPOSITORY" \
+                  --workflow "$FINAL_WORKFLOW" \
+                  --branch "$FINAL_BRANCH" \
+                  --limit 50 \
+                  --json databaseId,headSha,status,conclusion,createdAt,event,url,displayTitle \
+                  > /tmp/final-runs.json
+                final_run_id="$(jq -r --arg head "$final_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/final-runs.json)"
+                final_status="$(jq -r --arg head "$final_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/final-runs.json)"
+                final_conclusion="$(jq -r --arg head "$final_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/final-runs.json)"
+                if [[ -n "$final_run_id" && "$final_status" == "completed" ]]; then
+                  break
+                fi
+                sleep 12
+              done
+
+              if [[ -n "$final_run_id" ]]; then
+                gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${final_run_id}" > /tmp/final-run.json
+                gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${final_run_id}/jobs?per_page=100" > /tmp/final-jobs.json
+                gh run view "$final_run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/final-failed-log.txt" 2>&1 || true
+              fi
+            fi
+          fi
+
+          jq -n \
+            --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg publication_head "$PUBLICATION_HEAD" \
+            --arg publication_run_id "$publication_run_id" \
+            --arg publication_status "$publication_status" \
+            --arg publication_conclusion "$publication_conclusion" \
+            --arg final_head "$final_head" \
+            --arg final_run_id "$final_run_id" \
+            --arg final_status "$final_status" \
+            --arg final_conclusion "$final_conclusion" \
+            --slurpfile publication_runs /tmp/publication-runs.json \
+            --slurpfile publication_run /tmp/publication-run.json \
+            --slurpfile publication_jobs /tmp/publication-jobs.json \
+            --slurpfile final_runs /tmp/final-runs.json \
+            --slurpfile final_run /tmp/final-run.json \
+            --slurpfile final_jobs /tmp/final-jobs.json \
+            '{generated_at:$generated_at,publication:{head:$publication_head,run_id:$publication_run_id,status:$publication_status,conclusion:$publication_conclusion,runs:$publication_runs[0],run:$publication_run[0],jobs:$publication_jobs[0].jobs},final_validation:{head:$final_head,run_id:$final_run_id,status:$final_status,conclusion:$final_conclusion,runs:$final_runs[0],run:$final_run[0],jobs:$final_jobs[0].jobs}}' \
+            > "$output/report.json"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 clean reconstruction validation"
+          git push origin "HEAD:refs/heads/${STAGING_BRANCH}"
+
+          if [[ "$publication_status" != "completed" || "$publication_conclusion" != "success" ]]; then
+            echo "Clean reconstruction publication did not pass." >&2
+            exit 1
+          fi
+          if [[ -z "$final_head" || "$final_status" != "completed" || "$final_conclusion" != "success" ]]; then
+            echo "Clean reconstruction final validation did not pass." >&2
+            exit 1
+          fi
