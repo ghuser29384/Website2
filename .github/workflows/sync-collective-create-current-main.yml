@@ -1,0 +1,131 @@
+name: Synchronize Collective Create with exact current main
+
+on:
+  pull_request:
+    branches:
+      - feature/collective-commitments-in-create-20260729
+    paths:
+      - ".github/workflows/sync-collective-create-current-main.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-collective-create-current-main-20260730
+  cancel-in-progress: false
+
+jobs:
+  synchronize:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/sync-collective-create-current-main-20260730'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_OPS_BRANCH: ops/sync-collective-create-current-main-20260730
+      PRODUCT_BRANCH: feature/collective-commitments-in-create-20260729
+      EXPECTED_PRODUCT_HEAD: 5ac3ebf6a7b5b71a92a13b4ea600bd8a24648b37
+      EXPECTED_MAIN_HEAD: 1cea71197ade15bf91dc94ec0e99e11ae94bde41
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-create-sync-evidence
+
+    steps:
+      - name: Validate exact execution boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_HEAD_REF" = "$EXPECTED_OPS_BRANCH"
+
+      - name: Check out exact operations head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Merge exact current main into the product branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          git fetch origin main "$PRODUCT_BRANCH"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_HEAD"
+          test "$(git rev-parse "origin/$PRODUCT_BRANCH")" = "$EXPECTED_PRODUCT_HEAD"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$PRODUCT_BRANCH" "origin/$PRODUCT_BRANCH"
+
+          set +e
+          git merge --no-ff --no-commit "$EXPECTED_MAIN_HEAD"
+          merge_status=$?
+          set -e
+
+          if [[ "$merge_status" != "0" ]]; then
+            unresolved="$(git diff --name-only --diff-filter=U | sort)"
+            test "$unresolved" = "scripts/vercel-project-config.d.mts" || {
+              echo "Unexpected merge conflicts:" >&2
+              printf '%s\n' "$unresolved" >&2
+              exit 1
+            }
+          fi
+
+          cat > scripts/vercel-project-config.d.mts <<'EOF'
+          export interface MoralTradeVercelCron {
+            path: string;
+            schedule: string;
+          }
+
+          export interface MoralTradeVercelProjectConfig {
+            ignoreCommand: string;
+            crons: MoralTradeVercelCron[];
+          }
+
+          export declare const CANONICAL_MORAL_TRADE_PROJECT_ID: string;
+          export declare const DUPLICATE_WEBSITE2_PROJECT_ID: string;
+          export declare const RECOMMENDATION_TRAINING_PATH: string;
+          export declare const RECOMMENDATION_TRAINING_SCHEDULE: string;
+          export declare const COLLECTIVE_COMMITMENT_EXPIRY_PATH: string;
+          export declare const COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE: string;
+
+          export declare function buildVercelProjectConfig(options?: {
+            projectId?: string | null;
+          }): MoralTradeVercelProjectConfig;
+          EOF
+
+          # Strip the workflow indentation from the exact here-document.
+          sed -i 's/^          //' scripts/vercel-project-config.d.mts
+          git add scripts/vercel-project-config.d.mts
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git diff --check
+          git commit -m "Merge current main into Collective Create candidate"
+
+          final_head="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^1)" = "$EXPECTED_PRODUCT_HEAD"
+          test "$(git rev-parse HEAD^2)" = "$EXPECTED_MAIN_HEAD"
+          git push origin "HEAD:$PRODUCT_BRANCH"
+
+          printf '%s\n' \
+            "product_head_before=${EXPECTED_PRODUCT_HEAD}" \
+            "main_head=${EXPECTED_MAIN_HEAD}" \
+            "product_head_after=${final_head}" \
+            "conflict_resolution=scripts/vercel-project-config.d.mts" \
+            "production_changed=NO" \
+            > "$ARTIFACT_DIR/result.txt"
+
+      - name: Comment synchronization result
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment 286 --repo "$EXPECTED_REPOSITORY" --body "Current main \`${EXPECTED_MAIN_HEAD}\` was merged into the Collective-in-Create product branch through the guarded exact-head synchronization workflow. The product branch was the only branch advanced; production was not changed."
+
+      - name: Upload synchronization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-create-current-main-sync-${{ github.run_id }}
+          path: collective-create-sync-evidence
+          if-no-files-found: warn
+          retention-days: 14
