@@ -122,7 +122,7 @@ jobs:
           src/lib/institutional-trade.ts
           supabase/migrations/20260726123000_institutional_trade_system.sql
           FILES
-          git diff --name-only | sort > /tmp/pr212-clean-reconstruction-actual-files.txt
+          git status --short | cut -c4- | sort > /tmp/pr212-clean-reconstruction-actual-files.txt
           sort -o /tmp/pr212-clean-reconstruction-expected-files.txt /tmp/pr212-clean-reconstruction-expected-files.txt
           diff -u /tmp/pr212-clean-reconstruction-expected-files.txt /tmp/pr212-clean-reconstruction-actual-files.txt
 
@@ -196,4 +196,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-# Retry after all payload parts were staged.
+# Retry with untracked reconstructed source included in the exact file inventory.
