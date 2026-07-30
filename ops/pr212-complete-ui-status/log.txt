@@ -1,0 +1,25 @@
+a23bee6b (origin/ops/pr212-complete-ui-20260729) Apply complete institutional interfaces to PR 212 after absolute gates
+9ec3bd79 (origin/feat/institutional-trade-system) Repair repository-wide ESLint errors
+ee10013b Repair repository-wide TypeScript errors
+9ad919bc Cancel obsolete institutional QA runs
+45a27b46 Differentiate generated-schema typecheck from application typecheck
+88b0d44e Add exact-base generated-schema typecheck gate
+97b0be89 Fix institutional pool render nullability
+fa1175ff Fix differential test result parsing
+80716ea5 Gate institutional full tests against exact PR base
+2e45845e Strengthen read-only institutional view contract test
+578e347d Make institutional public views explicitly read-only
+4991fa8f Gate institutional lint against exact QA baseline
+c83d9119 Remove temporary institutional lint repair workflow
+6bb5f479 Fix institutional secret scanner ambiguity
+101bb28a Prepare exact institutional lint repair
+b70e3af8 Retry individual-capacity institutional QA on clean isolated schema
+87f5e368 Remove temporary individual-capacity importer
+49297765 Add individual-capacity institutional QA gates
+1d09b957 Support individual institutional deal parties
+5df88758 Import individual-capacity correction into PR 212
+f2a2e0a4 Run exact institutional implementation importer
+0fa43a32 Implement institutional trade system integrity and QA
+dc88a046 Record latest institutional importer diagnostic
+9189cc9b Read corrected-tree importer result
+647bc636 Correct institutional tree verification for tracked output artifact

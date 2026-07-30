@@ -1,0 +1,11 @@
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:1:name: Apply PR 212 complete institutional interfaces
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:6:      - ops/pr212-complete-ui-20260729
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:8:      - .github/workflows/apply-pr212-complete-ui.yml
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:15:  group: apply-pr212-complete-ui
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:53:          cat > /tmp/pr212-complete-ui.patch.gz.b64 <<'PATCH'
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:56:          base64 --decode /tmp/pr212-complete-ui.patch.gz.b64 | gzip --decompress > /tmp/pr212-complete-ui.patch
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:57:          echo "${EXPECTED_PATCH_SHA256}  /tmp/pr212-complete-ui.patch" | sha256sum --check --strict
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:58:          git apply --check --binary /tmp/pr212-complete-ui.patch
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:59:          git apply --binary /tmp/pr212-complete-ui.patch
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:116:      - name: Commit complete interfaces to PR branch
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:123:          git commit -m "Complete institutional trade interfaces and authenticated flows"

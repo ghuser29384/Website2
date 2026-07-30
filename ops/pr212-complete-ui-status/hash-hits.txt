@@ -1,0 +1,1 @@
+origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml:24:      EXPECTED_PATCH_SHA256: d0b3c68affcb27cebc0d4773d487d056e66dc500ccf99776a85b97ac051cd2f0
