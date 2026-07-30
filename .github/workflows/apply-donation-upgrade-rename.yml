@@ -1,0 +1,191 @@
+name: Apply Donation Upgrade rename
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-donation-upgrade-rename
+  cancel-in-progress: false
+
+jobs:
+  rename-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out the exact product branch
+        uses: actions/checkout@v4
+        with:
+          ref: product/rename-conditional-donation-to-donation-upgrade-20260730
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Replace the retired product name in tracked product and test files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          replacements = [
+              ("Conditional donation", "Donation Upgrade"),
+              ("conditional donation", "Donation Upgrade"),
+              ("Create · Live conditional giving", "Create · Live Donation Upgrade"),
+              ("Create · Conditional giving", "Create · Donation Upgrade"),
+              ("No conditional redirects are open yet.", "No Donation Upgrades are open yet."),
+          ]
+
+          tracked = subprocess.run(
+              ["git", "ls-files", "-z"],
+              check=True,
+              stdout=subprocess.PIPE,
+          ).stdout.split(b"\0")
+
+          changed = []
+          counts = {old: 0 for old, _ in replacements}
+
+          for raw in tracked:
+              if not raw:
+                  continue
+              path = Path(raw.decode("utf-8"))
+              if path.parts[:2] == (".github", "workflows"):
+                  continue
+              try:
+                  before = path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+
+              after = before
+              file_counts = []
+              for old, new in replacements:
+                  count = after.count(old)
+                  if count:
+                      after = after.replace(old, new)
+                      counts[old] += count
+                      file_counts.append(f"{old!r}: {count}")
+
+              if after != before:
+                  path.write_text(after, encoding="utf-8")
+                  changed.append(path)
+                  print(f"{path}: " + ", ".join(file_counts))
+
+          if counts["Conditional donation"] + counts["conditional donation"] == 0:
+              raise SystemExit("No tracked Conditional donation product-name occurrences were replaced.")
+
+          remaining = []
+          retired_terms = [
+              "Conditional donation",
+              "conditional donation",
+              "Create · Live conditional giving",
+              "Create · Conditional giving",
+              "No conditional redirects are open yet.",
+          ]
+          for raw in tracked:
+              if not raw:
+                  continue
+              path = Path(raw.decode("utf-8"))
+              if path.parts[:2] == (".github", "workflows"):
+                  continue
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+              for term in retired_terms:
+                  if term in text:
+                      remaining.append(f"{path}: {term}")
+
+          if remaining:
+              raise SystemExit(
+                  "Retired product copy remains outside workflow files:\n" + "\n".join(remaining)
+              )
+
+          if not changed:
+              raise SystemExit("The rename did not change any tracked product or test file.")
+
+          Path("/tmp/donation-upgrade-paths").write_bytes(
+              b"\0".join(str(path).encode("utf-8") for path in changed) + b"\0"
+          )
+          print(f"Changed {len(changed)} tracked file(s).")
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run the complete repository test suite
+        run: npm test
+
+      - name: Run the absolute TypeScript gate
+        run: npx tsc --noEmit
+
+      - name: Run the absolute ESLint gate
+        run: npm run lint
+
+      - name: Build the production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Install Chromium for rendered QA
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify desktop and mobile Create-page behavior
+        run: npx playwright test tests/create-route-workbench.spec.ts --reporter=line
+
+      - name: Verify exact rename and compatibility boundaries
+        run: |
+          git diff --check
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          expected = {
+              Path(raw.decode("utf-8"))
+              for raw in Path("/tmp/donation-upgrade-paths").read_bytes().split(b"\0")
+              if raw
+          }
+          status = subprocess.run(
+              ["git", "status", "--porcelain=v1", "-z"],
+              check=True,
+              stdout=subprocess.PIPE,
+          ).stdout.split(b"\0")
+          changed = set()
+          for raw in status:
+              if not raw:
+                  continue
+              entry = raw.decode("utf-8")
+              path = Path(entry[3:])
+              if path.parts[:2] == (".github", "workflows"):
+                  continue
+              changed.add(path)
+          unexpected = sorted(changed - expected)
+          missing = sorted(expected - changed)
+          if unexpected or missing:
+              raise SystemExit(
+                  "Unexpected rename diff boundary.\n"
+                  + "Unexpected: " + ", ".join(map(str, unexpected)) + "\n"
+                  + "Missing: " + ", ".join(map(str, missing))
+              )
+          PY
+          git grep -n "Donation Upgrade" -- docs public src tests
+          git grep -n "structure=conditional-donation" -- next.config.ts public src tests
+          git grep -n "ConditionalDonationCreate" -- src
+          git status --short
+
+      - name: Commit and push the verified product rename
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          xargs -0 git add -- < /tmp/donation-upgrade-paths
+          git commit -m "Rename Conditional donation to Donation Upgrade"
+          git push origin HEAD:product/rename-conditional-donation-to-donation-upgrade-20260730
