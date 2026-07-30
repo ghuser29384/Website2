@@ -25,7 +25,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TARGET_BRANCH: ops/pr212-final-ui-publish-20260730
       TARGET_WORKFLOW: publish-pr212-final-ui.yml
-      TARGET_HEAD: 1295bd26112f64c61c50040dbd041a0d830c6dff
+      TARGET_HEAD: fb531746207ab1dac425eab291d5b6e0b185bc3f
     steps:
       - uses: actions/checkout@v4
         with:
