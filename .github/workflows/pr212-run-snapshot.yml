@@ -36,3 +36,5 @@ jobs:
           git add ops/pr212-final-qa/run-snapshot.json
           git commit -m "Snapshot PR 212 institutional QA runs"
           git push origin HEAD:ops/pr212-complete-ui-status-20260730
+
+# Snapshot refresh 2026-07-30T08:00Z
