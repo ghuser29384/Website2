@@ -24,16 +24,19 @@ revoke all on function public.withdraw_trade_evidence_v3(
 
 -- Cover the remaining release-owned foreign keys reported after the
 -- restrictive migration was exercised in isolated QA.
-create index if not exists agreement_review_cases_appeal_requester_idx
-  on public.agreement_review_cases(appeal_requested_by);
-create index if not exists agreement_review_cases_assigned_reviewer_idx
-  on public.agreement_review_cases(assigned_reviewer_id);
-create index if not exists agreement_review_cases_evidence_item_idx
-  on public.agreement_review_cases(evidence_item_id);
-create index if not exists agreement_review_cases_opener_idx
-  on public.agreement_review_cases(opened_by);
-create index if not exists agreement_review_cases_reviewer_idx
-  on public.agreement_review_cases(reviewed_by);
+-- The legacy review console is optional in older production lineages.
+do $legacy_review_indexes$
+begin
+  if to_regclass('public.agreement_review_cases') is not null then
+    execute 'create index if not exists agreement_review_cases_appeal_requester_idx on public.agreement_review_cases(appeal_requested_by)';
+    execute 'create index if not exists agreement_review_cases_assigned_reviewer_idx on public.agreement_review_cases(assigned_reviewer_id)';
+    execute 'create index if not exists agreement_review_cases_evidence_item_idx on public.agreement_review_cases(evidence_item_id)';
+    execute 'create index if not exists agreement_review_cases_opener_idx on public.agreement_review_cases(opened_by)';
+    execute 'create index if not exists agreement_review_cases_reviewer_idx on public.agreement_review_cases(reviewed_by)';
+  end if;
+end;
+$legacy_review_indexes$;
+
 create index if not exists trade_milestone_reviewer_nominations_nominator_idx
   on public.trade_milestone_reviewer_nominations(nominated_by);
 create index if not exists trade_milestone_reviewer_nominations_reviewer_idx

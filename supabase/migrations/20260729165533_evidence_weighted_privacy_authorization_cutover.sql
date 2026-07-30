@@ -117,22 +117,31 @@ where public_title <> ''
 -- identity-bound RPCs.
 drop policy if exists "agreements_update_participants" on public.agreements;
 drop policy if exists "agreements_insert_participants" on public.agreements;
-drop policy if exists "agreement_evidence_items_insert_participants"
-  on public.agreement_evidence_items;
-drop policy if exists "agreement_evidence_items_update_participants"
-  on public.agreement_evidence_items;
-drop policy if exists "agreement_review_cases_insert_participants"
-  on public.agreement_review_cases;
-drop policy if exists "agreement_review_cases_update_participants"
-  on public.agreement_review_cases;
 drop policy if exists "agreement_payments_insert_participants"
   on public.agreement_payments;
 drop policy if exists "agreement_payments_update_participants"
   on public.agreement_payments;
 
 revoke insert, update on table public.agreements from authenticated;
-revoke insert, update on table public.agreement_evidence_items from authenticated;
-revoke insert, update on table public.agreement_review_cases from authenticated;
 revoke insert, update on table public.agreement_payments from authenticated;
+
+-- These two legacy workflow tables predate the evidence-weighted schema and
+-- are not installed in every production lineage. Harden them when present
+-- without making their absence block the new private workflow cutover.
+do $legacy_evidence_cutover$
+begin
+  if to_regclass('public.agreement_evidence_items') is not null then
+    execute 'drop policy if exists "agreement_evidence_items_insert_participants" on public.agreement_evidence_items';
+    execute 'drop policy if exists "agreement_evidence_items_update_participants" on public.agreement_evidence_items';
+    execute 'revoke insert, update on table public.agreement_evidence_items from authenticated';
+  end if;
+
+  if to_regclass('public.agreement_review_cases') is not null then
+    execute 'drop policy if exists "agreement_review_cases_insert_participants" on public.agreement_review_cases';
+    execute 'drop policy if exists "agreement_review_cases_update_participants" on public.agreement_review_cases';
+    execute 'revoke insert, update on table public.agreement_review_cases from authenticated';
+  end if;
+end;
+$legacy_evidence_cutover$;
 
 notify pgrst, 'reload schema';

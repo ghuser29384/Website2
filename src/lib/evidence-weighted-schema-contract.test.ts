@@ -201,9 +201,21 @@ test("legacy public evidence and participant state rewrites are revoked", () => 
     migration,
     /drop policy if exists "agreement_payments_update_participants"/i,
   );
+  assert.match(
+    migration,
+    /to_regclass\('public\.agreement_evidence_items'\)[\s\S]*drop policy if exists "agreement_evidence_items_update_participants"/i,
+  );
+  assert.match(
+    migration,
+    /to_regclass\('public\.agreement_review_cases'\)[\s\S]*drop policy if exists "agreement_review_cases_update_participants"/i,
+  );
 });
 
 test("post-cutover advisor hardening covers every release-owned foreign key", () => {
+  assert.match(
+    migration,
+    /to_regclass\('public\.agreement_review_cases'\)[\s\S]*agreement_review_cases_appeal_requester_idx/i,
+  );
   for (const definition of [
     "agreement_review_cases\\(appeal_requested_by\\)",
     "agreement_review_cases\\(assigned_reviewer_id\\)",
