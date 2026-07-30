@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "public/moral-trade-live-create-router.js"
+      - "public/moral-trade-live-feed-identity.js"
       - "public/moral-trade-live.html"
       - "src/lib/create-interface/unified-entry-routes.test.ts"
       - "src/proxy.test.ts"
@@ -15,6 +16,7 @@ on:
       - main
     paths:
       - "public/moral-trade-live-create-router.js"
+      - "public/moral-trade-live-feed-identity.js"
       - "public/moral-trade-live.html"
       - "src/lib/create-interface/unified-entry-routes.test.ts"
       - "src/proxy.test.ts"
@@ -43,13 +45,16 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Verify route JavaScript syntax
-        run: node --check public/moral-trade-live-create-router.js
+      - name: Verify route and Feed identity JavaScript syntax
+        run: |
+          node --check public/moral-trade-live-create-router.js
+          node --check public/moral-trade-live-feed-identity.js
 
       - name: Lint route implementation and tests
         run: |
           npx eslint \
             public/moral-trade-live-create-router.js \
+            public/moral-trade-live-feed-identity.js \
             src/lib/create-interface/unified-entry-routes.test.ts \
             src/proxy.test.ts \
             src/proxy.ts \

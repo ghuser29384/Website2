@@ -2098,7 +2098,7 @@
 
     .fund-mode-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }
 
@@ -2165,6 +2165,49 @@
       gap: 12px;
     }
 
+    .conditional-donation-entry {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 20px;
+      align-items: center;
+      margin-top: 14px;
+      padding: 17px 18px;
+      border: 1px solid var(--blue);
+      background: var(--blue-soft);
+    }
+
+    .conditional-donation-entry[hidden] { display: none !important; }
+
+    .conditional-donation-entry strong {
+      display: block;
+      margin-bottom: 5px;
+      font: 700 11px/1.2 var(--mono);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+
+    .conditional-donation-entry p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .conditional-donation-open {
+      min-height: 48px;
+      border: 1px solid var(--blue);
+      padding: 0 18px;
+      background: var(--blue);
+      color: white;
+      font: 700 10px/1 var(--mono);
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .conditional-donation-open:hover { background: #0f4fc5; }
+
     .request-mode-note {
       margin: 12px 0 0;
       color: var(--muted);
@@ -2180,9 +2223,15 @@
       .fund-mode-choice { min-height: auto; }
     }
 
+    @media (max-width: 620px) {
+      .conditional-donation-entry { grid-template-columns: 1fr; }
+      .conditional-donation-open { width: 100%; }
+    }
+
 
     .request-primary[hidden],
     .request-bottom[hidden],
+    .conditional-donation-entry[hidden],
     .dac-path-shell[hidden],
     .dac-terms-panel[hidden] { display: none !important; }
 
@@ -3428,7 +3477,7 @@
       <span class="brand-mark" aria-hidden="true"></span>
       <div>
         <p class="brand-title">Create</p>
-        <p class="brand-subtitle">Create a pledge-swap, donation redirect, or public-goods pool.</p>
+        <p class="brand-subtitle">Create a trade, conditional donation, or public-goods pool.</p>
       </div>
     </div>
 
@@ -3472,7 +3521,7 @@
         <div class="intro">
           <div class="step-label" id="requestStepLabel">Requested action · 2 of 4</div>
           <h1 id="requestHeading">What do you want other people to do?</h1>
-          <p class="intro-copy" id="requestIntroCopy">Choose Commitment, Skill, or Fund. If you choose Fund, also choose whether you are creating a pledge-swap, a donation redirect, or a dominant assurance contract pool.</p>
+          <p class="intro-copy" id="requestIntroCopy">Choose Commitment, Skill, or Fund. Fund includes pledge-swaps, donation redirects, conditional donations, and public-goods pools.</p>
           <div class="chosen-strip" aria-live="polite">
             <span class="chosen-dot" id="requestCauseDot"></span>
             <div><span>Cause to improve</span><strong id="requestCause">—</strong></div>
@@ -3520,10 +3569,25 @@
                   <strong>Donation redirect</strong>
                   <p>Create a redirect between donations or add money so the final amount goes to a target organization or project.</p>
                 </button>
+                <button type="button" class="fund-mode-choice" data-fund-mode="conditional" aria-pressed="false">
+                  <span class="fund-mode-mark">Conditional donation</span>
+                  <strong>Conditional donation</strong>
+                  <p>Authorize a fallback donation that changes destination—or becomes a larger match—when someone adds money.</p>
+                </button>
                 <button type="button" class="fund-mode-choice" data-fund-mode="dac" aria-pressed="false">
                   <span class="fund-mode-mark">Public-good pool</span>
                   <strong>Dominant assurance contract pool</strong>
                   <p>Either launch a new threshold pool or ask a counterparty to contribute to a pool that already exists.</p>
+                </button>
+              </div>
+
+              <div class="conditional-donation-entry" id="conditionalDonationEntry" hidden>
+                <div>
+                  <strong>Authorize inside Create</strong>
+                  <p>No money is held now. The next step shows the exact matched and fallback branches before any payment method is saved.</p>
+                </div>
+                <button class="conditional-donation-open" id="openConditionalDonation" type="button">
+                  Set up donation →
                 </button>
               </div>
 
@@ -4256,6 +4320,12 @@
         placeholder: "e.g. Redirect $150 to Against Malaria Foundation if I add $50",
         note: "Use this when the funding action is a redirect between organizations, donors, or donation destinations."
       },
+      conditional: {
+        label: "Conditional donation",
+        fieldLabel: "",
+        placeholder: "",
+        note: "Set the fallback donation, the matched destination, the added amount, and the deadline before authorizing."
+      },
       dac: {
         label: "Dominant assurance contract pool",
         fieldLabel: "Choose how to use the pool",
@@ -4631,10 +4701,15 @@
       return state.requestKind === "fund" && state.fundMode === "dac" && state.dacPath === "existing";
     }
 
+    function isConditionalDonationRoute() {
+      return state.requestKind === "fund" && state.fundMode === "conditional";
+    }
+
     function requestStructureReady() {
       if (!state.requestKind) return false;
       if (state.requestKind !== "fund") return true;
       if (!state.fundMode) return false;
+      if (state.fundMode === "conditional") return false;
       if (state.fundMode !== "dac") return true;
       return Boolean(state.dacPath);
     }
@@ -4658,6 +4733,7 @@
     function getCreationFormatLabel() {
       if (state.requestKind === "fund") {
         if (state.fundMode === "redirect") return "Donation redirect";
+        if (state.fundMode === "conditional") return "Conditional donation";
         if (state.fundMode === "dac" && state.dacPath === "create") return "Dominant assurance contract pool";
         if (state.fundMode === "dac" && state.dacPath === "existing") return "Existing-pool contribution offer";
       }
@@ -4683,7 +4759,10 @@
     }
 
     function updateRequestPageCopy() {
-      if (isDirectPoolRoute()) {
+      if (isConditionalDonationRoute()) {
+        $("#requestHeading").textContent = "Set up a conditional donation.";
+        $("#requestIntroCopy").textContent = "Continue to choose both destinations, both amounts, and the deadline. You will see the exact future-charge terms before authorizing.";
+      } else if (isDirectPoolRoute()) {
         $("#requestHeading").textContent = "What public-good pool do you want to create?";
         $("#requestIntroCopy").textContent = "Name the public good, then define 1–10 thresholds, the deadline, the base failure bonus, who receives it, fundraising behavior, and visibility. This route publishes a pool directly and skips the reciprocal-offer page.";
       } else if (isExistingPoolRoute()) {
@@ -4691,7 +4770,7 @@
         $("#requestIntroCopy").textContent = "Choose the existing pool and the requested contribution. You will then specify what you could offer the counterparty in exchange.";
       } else {
         $("#requestHeading").textContent = "What do you want other people to do?";
-        $("#requestIntroCopy").textContent = "Choose Commitment, Skill, or Fund. If you choose Fund, also choose whether you are creating a pledge-swap, a donation redirect, or a dominant assurance contract pool.";
+        $("#requestIntroCopy").textContent = "Choose Commitment, Skill, or Fund. Fund includes pledge-swaps, donation redirects, conditional donations, and public-goods pools.";
       }
     }
 
@@ -6308,6 +6387,8 @@
           $("#fundModeGrid .fund-mode-choice")?.focus();
         } else if (state.requestKind === "fund" && state.fundMode === "dac" && !state.dacPath) {
           $("#dacPathGrid .dac-path-choice")?.focus();
+        } else if (isConditionalDonationRoute()) {
+          $("#openConditionalDonation").focus();
         } else {
           $("#requestActionInput").focus();
           renderSuggestions();
@@ -6331,6 +6412,8 @@
       window.setTimeout(() => {
         if (state.fundMode === "dac" && !state.dacPath) {
           $("#dacPathGrid .dac-path-choice")?.focus();
+        } else if (isConditionalDonationRoute()) {
+          $("#openConditionalDonation").focus();
         } else {
           $("#requestActionInput").focus();
           renderSuggestions();
@@ -6376,6 +6459,7 @@
 
       const isDac = state.fundMode === "dac";
       $("#dacPathShell").hidden = !isDac;
+      $("#conditionalDonationEntry").hidden = !isConditionalDonationRoute();
 
       $$(".dac-path-choice").forEach(button => {
         const selected = button.dataset.dacPath === state.dacPath;
@@ -6395,6 +6479,7 @@
       $("#requestEntry").classList.toggle("visible", hasKind);
       if (!hasKind) {
         $("#fundModeShell").hidden = true;
+        $("#conditionalDonationEntry").hidden = true;
         $("#requestPrimary").hidden = true;
         $("#dacCreateFields").hidden = true;
         $("#dacExistingFields").hidden = true;
@@ -7225,6 +7310,9 @@
     });
     $$(".fund-mode-choice").forEach(button => {
       button.addEventListener("click", () => selectFundMode(button));
+    });
+    $("#openConditionalDonation").addEventListener("click", () => {
+      window.top.location.assign("/trades/new?structure=conditional-donation");
     });
     $$(".dac-path-choice").forEach(button => {
       button.addEventListener("click", () => selectDacPath(button));

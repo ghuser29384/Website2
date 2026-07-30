@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Moral Trade — redirect opposed donations, form coalitions, and discover reciprocal commitments through an interactive walkthrough.">
+  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
   <title>Moral Trade</title>
   <style>
     html, body { margin: 0; min-height: 100%; background: #11120f; color: #f2eee6; font-family: system-ui, sans-serif; }
@@ -55,16 +58,24 @@
           .replace(/&/g, "\\u0026")
           .replace(/\u2028/g, "\\u2028")
           .replace(/\u2029/g, "\\u2029");
+        const faviconLinks = [
+          '<link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+        ].join("");
         const accountScripts = [
           `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};<\/script>`,
           '<script src="/moral-trade-account-identity.js"><\/script>',
           '<script src="/moral-trade-live-account.js"><\/script>',
         ].join("");
+        const headEnhancements = [
+          faviconLinks,
+          '<link rel="stylesheet" href="/walkthrough-profile-enhancement.css">',
+          '<link rel="stylesheet" href="/moral-trade-input-assist.css">',
+          accountScripts,
+        ].join("");
 
-        html = html.replace(
-          "</head>",
-          `<link rel="stylesheet" href="/walkthrough-profile-enhancement.css"><link rel="stylesheet" href="/moral-trade-input-assist.css">${accountScripts}</head>`
-        );
+        html = html.replace("</head>", `${headEnhancements}</head>`);
         html = html.replace(
           "</body>",
           '<script src="/walkthrough-profile-enhancement.js"><\/script><script src="/moral-trade-brand.js"><\/script><script src="/moral-trade-input-assist.js"><\/script></body>'

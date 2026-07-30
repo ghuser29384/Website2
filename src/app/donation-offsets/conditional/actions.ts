@@ -11,7 +11,17 @@ import {
   withdrawConditionalRedirectCandidate,
 } from "@/lib/payments/conditional-redirect-service";
 
-const PATH = "/donation-offsets/conditional";
+const CREATE_PATH = "/trades/new";
+const CONDITIONAL_STRUCTURE = "conditional-donation";
+const RETURN_PATH = `${CREATE_PATH}?structure=${CONDITIONAL_STRUCTURE}`;
+
+function returnPath(values: Record<string, string>) {
+  const params = new URLSearchParams({
+    structure: CONDITIONAL_STRUCTURE,
+    ...values,
+  });
+  return `${CREATE_PATH}?${params.toString()}`;
+}
 
 function required(formData: FormData, key: string) {
   const value = String(formData.get(key) ?? "").trim();
@@ -44,14 +54,14 @@ function origin() {
 
 function fail(error: unknown): never {
   const message = error instanceof Error ? error.message : "Unable to complete that request.";
-  redirect(`${PATH}?error=${encodeURIComponent(message)}`);
+  redirect(returnPath({ error: message }));
 }
 
 export async function createConditionalRedirectOfferAction(formData: FormData) {
   let checkoutUrl: string | null = null;
   try {
     requireConsent(formData);
-    const viewer = await requireViewer(PATH);
+    const viewer = await requireViewer(RETURN_PATH);
     const deadline = new Date(required(formData, "deadline_at"));
     if (Number.isNaN(deadline.valueOf())) throw new Error("Choose a valid deadline.");
     const result = await createConditionalRedirectOffer({
@@ -75,7 +85,7 @@ export async function joinConditionalRedirectOfferAction(formData: FormData) {
   let checkoutUrl: string | null = null;
   try {
     requireConsent(formData);
-    const viewer = await requireViewer(PATH);
+    const viewer = await requireViewer(RETURN_PATH);
     const result = await joinConditionalRedirectOffer({
       offerId: required(formData, "offer_id"),
       matcherProfileId: viewer.authUser.id,
@@ -93,7 +103,7 @@ export async function reauthorizeConditionalRedirectAction(formData: FormData) {
   let checkoutUrl: string | null = null;
   try {
     requireConsent(formData);
-    const viewer = await requireViewer(PATH);
+    const viewer = await requireViewer(RETURN_PATH);
     const result = await reauthorizeConditionalRedirect({
       offerId: required(formData, "offer_id"),
       profileId: viewer.authUser.id,
@@ -109,7 +119,7 @@ export async function reauthorizeConditionalRedirectAction(formData: FormData) {
 
 export async function cancelConditionalRedirectOfferAction(formData: FormData) {
   try {
-    const viewer = await requireViewer(PATH);
+    const viewer = await requireViewer(RETURN_PATH);
     await cancelConditionalRedirectOffer({
       offerId: required(formData, "offer_id"),
       creatorProfileId: viewer.authUser.id,
@@ -117,12 +127,12 @@ export async function cancelConditionalRedirectOfferAction(formData: FormData) {
   } catch (error) {
     fail(error);
   }
-  redirect(`${PATH}?change=cancelled`);
+  redirect(returnPath({ change: "cancelled" }));
 }
 
 export async function withdrawConditionalRedirectCandidateAction(formData: FormData) {
   try {
-    const viewer = await requireViewer(PATH);
+    const viewer = await requireViewer(RETURN_PATH);
     await withdrawConditionalRedirectCandidate({
       offerId: required(formData, "offer_id"),
       matcherProfileId: viewer.authUser.id,
@@ -130,5 +140,5 @@ export async function withdrawConditionalRedirectCandidateAction(formData: FormD
   } catch (error) {
     fail(error);
   }
-  redirect(`${PATH}?change=withdrawn`);
+  redirect(returnPath({ change: "withdrawn" }));
 }

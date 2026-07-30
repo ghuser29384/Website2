@@ -212,7 +212,7 @@ function parseDeadline(value: unknown) {
 }
 
 function validateCommonGround(raw: unknown): NonNullable<ValidatedCreatePoolTerms["commonGround"]> {
-  const input = objectValue(raw, "Common Ground Pool terms");
+  const input = objectValue(raw, "Co-Fund terms");
   const allowedTopLevel = new Set([
     "targetAmountCents",
     "calculationPolicy",
@@ -223,31 +223,31 @@ function validateCommonGround(raw: unknown): NonNullable<ValidatedCreatePoolTerm
   ]);
   for (const key of Object.keys(input)) {
     if (!allowedTopLevel.has(key)) {
-      throw new Error("Common Ground Pool terms contain an unsupported or private field.");
+      throw new Error("Co-Fund terms contain an unsupported or private field.");
     }
   }
 
   const targetAmountCents = exactIntegerValue(
     input.targetAmountCents,
-    "Common Ground Pool target",
+    "Co-Fund target",
     { minimum: 1 },
   );
   if (input.calculationPolicy !== "balanced_surplus_v1") {
-    throw new Error("Common Ground Pool calculation policy is invalid.");
+    throw new Error("Co-Fund calculation policy is invalid.");
   }
   if (input.privateValueEstimatesStored !== false) {
-    throw new Error("Private Common Ground Pool value estimates must not be submitted.");
+    throw new Error("Private Co-Fund value estimates must not be submitted.");
   }
   if (input.participantGainChecked !== true || input.baselineConfirmed !== true) {
-    throw new Error("Common Ground Pool gain and no-pool baseline confirmations are required.");
+    throw new Error("Co-Fund gain and no-pool baseline confirmations are required.");
   }
   if (!Array.isArray(input.participants) || input.participants.length < 2 || input.participants.length > 8) {
-    throw new Error("A Common Ground Pool requires between two and eight participants.");
+    throw new Error("A Co-Fund requires between two and eight participants.");
   }
 
   const seen = new Set<string>();
   const participants = input.participants.map((rawParticipant, index) => {
-    const participant = objectValue(rawParticipant, `Common Ground Pool participant ${index + 1}`);
+    const participant = objectValue(rawParticipant, `Co-Fund participant ${index + 1}`);
     const allowedParticipantFields = new Set([
       "id",
       "name",
@@ -257,37 +257,37 @@ function validateCommonGround(raw: unknown): NonNullable<ValidatedCreatePoolTerm
     ]);
     for (const key of Object.keys(participant)) {
       if (!allowedParticipantFields.has(key)) {
-        throw new Error("Common Ground Pool participant terms contain an unsupported or private field.");
+        throw new Error("Co-Fund participant terms contain an unsupported or private field.");
       }
     }
 
-    const id = textValue(participant.id, `Common Ground Pool participant ${index + 1} id`, 2, 80);
+    const id = textValue(participant.id, `Co-Fund participant ${index + 1} id`, 2, 80);
     if (!/^[A-Za-z0-9:_-]+$/.test(id)) {
-      throw new Error(`Common Ground Pool participant ${index + 1} id contains unsupported characters.`);
+      throw new Error(`Co-Fund participant ${index + 1} id contains unsupported characters.`);
     }
-    if (seen.has(id)) throw new Error("Common Ground Pool participant ids must be unique.");
+    if (seen.has(id)) throw new Error("Co-Fund participant ids must be unique.");
     seen.add(id);
 
     const budgetCents = exactIntegerValue(
       participant.budgetCents,
-      `Common Ground Pool participant ${index + 1} budget`,
+      `Co-Fund participant ${index + 1} budget`,
       { minimum: 1 },
     );
     const contributionCents = exactIntegerValue(
       participant.contributionCents,
-      `Common Ground Pool participant ${index + 1} contribution`,
+      `Co-Fund participant ${index + 1} contribution`,
       { minimum: 1 },
     );
     if (contributionCents > budgetCents) {
-      throw new Error(`Common Ground Pool participant ${index + 1} contribution exceeds their controlled budget.`);
+      throw new Error(`Co-Fund participant ${index + 1} contribution exceeds their controlled budget.`);
     }
 
     return {
       id,
-      name: textValue(participant.name, `Common Ground Pool participant ${index + 1} name`, 1, 80),
+      name: textValue(participant.name, `Co-Fund participant ${index + 1} name`, 1, 80),
       defaultProject: textValue(
         participant.defaultProject,
-        `Common Ground Pool participant ${index + 1} no-pool default`,
+        `Co-Fund participant ${index + 1} no-pool default`,
         1,
         160,
       ),
@@ -301,7 +301,7 @@ function validateCommonGround(raw: unknown): NonNullable<ValidatedCreatePoolTerm
     0,
   );
   if (!Number.isSafeInteger(contributionTotal) || contributionTotal !== targetAmountCents) {
-    throw new Error("Common Ground Pool participant contributions must equal the target exactly.");
+    throw new Error("Co-Fund participant contributions must equal the target exactly.");
   }
 
   return {
@@ -472,19 +472,19 @@ function validatePool(raw: unknown): ValidatedCreatePoolTerms {
 
   if (commonGround) {
     if (thresholdAmountsCents.length !== 1 || thresholdAmountsCents[0] !== commonGround.targetAmountCents) {
-      throw new Error("A Common Ground Pool requires one threshold equal to its shared target.");
+      throw new Error("A Co-Fund requires one threshold equal to its shared target.");
     }
     if (failureBonusType !== "none" || failureTimingMode !== "all") {
-      throw new Error("A Common Ground Pool cannot include a failure bonus or timing multiplier.");
+      throw new Error("A Co-Fund cannot include a failure bonus or timing multiplier.");
     }
     if (continuation !== "stop") {
-      throw new Error("A Common Ground Pool must stop at its shared target.");
+      throw new Error("A Co-Fund must stop at its shared target.");
     }
     if (thresholdVisibility !== "public_exact" || progressVisibility !== "exact") {
-      throw new Error("A Common Ground Pool requires exact target and progress disclosure after approval.");
+      throw new Error("A Co-Fund requires exact target and progress disclosure after approval.");
     }
     if (moralTradeBonusShareBps !== 0) {
-      throw new Error("A Common Ground Pool cannot request Moral Trade failure-bonus funding.");
+      throw new Error("A Co-Fund cannot request Moral Trade failure-bonus funding.");
     }
   }
 

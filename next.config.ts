@@ -61,6 +61,21 @@ const nextConfig: NextConfig = {
         destination: "https://www.moraltrade.org/:path*",
         permanent: true,
       },
+      {
+        source: "/donation-offsets/conditional",
+        destination: "/trades/new?structure=conditional-donation",
+        permanent: true,
+      },
+      {
+        source: "/moral-trade-create",
+        destination: "/trades/new",
+        permanent: true,
+      },
+      {
+        source: "/moral-trade-create/index.html",
+        destination: "/trades/new",
+        permanent: true,
+      },
     ];
   },
   async rewrites() {

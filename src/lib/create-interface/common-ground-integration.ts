@@ -1,17 +1,23 @@
 const HEADER_COPY = [
-  "Create a pledge-swap, donation redirect, or public-goods pool.",
-  "Create a trade, redirect, or pool.",
+  "Create a trade, conditional donation, or public-goods pool.",
+  "Create a trade, Donation Upgrade, or public-goods pool.",
 ] as const;
 
 const REQUEST_COPY = [
-  "Choose Commitment, Skill, or Fund. If you choose Fund, also choose whether you are creating a pledge-swap, a donation redirect, or a dominant assurance contract pool.",
-  "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, shared-project pools, and threshold pools.",
+  "Choose Commitment, Skill, or Fund. Fund includes pledge-swaps, donation redirects, conditional donations, and public-goods pools.",
+  "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, Donation Upgrades, shared-project pools, and threshold pools.",
 ] as const;
 
 const FUND_KICKER = [
   '<div class="fund-mode-kicker">If you chose Fund, choose the structure</div>',
   '<div class="fund-mode-kicker">Choose a funding structure</div>',
 ] as const;
+
+const BLANK_FAVICON = '  <link rel="icon" href="data:," />\n';
+const CANONICAL_FAVICONS = `  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
+  <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
+  <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
+`;
 
 const THRESHOLD_POOL_CARD = `                <button type="button" class="fund-mode-choice" data-fund-mode="dac" aria-pressed="false">
                   <span class="fund-mode-mark">Public-good pool</span>
@@ -21,7 +27,7 @@ const THRESHOLD_POOL_CARD = `                <button type="button" class="fund-m
 
 const COMPACT_POOL_CARDS = `                <button type="button" class="fund-mode-choice" data-fund-mode="commonGround" aria-pressed="false">
                   <span class="fund-mode-mark">Shared project</span>
-                  <strong>Common Ground Pool</strong>
+                  <strong>Co-Fund</strong>
                   <p>Split one shared project across people who value it for different reasons.</p>
                 </button>
                 <button type="button" class="fund-mode-choice" data-fund-mode="dac" aria-pressed="false">
@@ -92,8 +98,22 @@ export function integrateCommonGroundCreateSource(source: string) {
   if (source.includes("data-common-ground-create-integration-v1")) return source;
 
   let integrated = source;
+  integrated = replaceExactlyOnce(integrated, BLANK_FAVICON, CANONICAL_FAVICONS, "favicon");
   integrated = replaceExactlyOnce(integrated, HEADER_COPY[0], HEADER_COPY[1], "header-copy");
   integrated = replaceExactCount(integrated, REQUEST_COPY[0], REQUEST_COPY[1], 2, "request-copy");
+  integrated = replaceExactCount(
+    integrated,
+    "Conditional donation",
+    "Donation Upgrade",
+    4,
+    "Donation Upgrade label",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    "Set up a conditional donation.",
+    "Set up a Donation Upgrade.",
+    "Donation Upgrade heading",
+  );
   integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");
   integrated = replaceExactlyOnce(
     integrated,

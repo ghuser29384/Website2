@@ -13,7 +13,7 @@
   const originalSelectFundMode = selectFundMode;
 
   fundModeMeta.commonGround = {
-    label: "Common Ground Pool",
+    label: "Co-Fund",
     fieldLabel: "Shared project",
     placeholder: "e.g. Shared research and coordination",
     note: "",
@@ -34,7 +34,7 @@
   };
 
   getCreationFormatLabel = function commonGroundAwareFormatLabel() {
-    return isCommonGroundRoute() ? "Common Ground Pool" : originalGetCreationFormatLabel();
+    return isCommonGroundRoute() ? "Co-Fund" : originalGetCreationFormatLabel();
   };
 
   function defaultDeadline() {
@@ -420,7 +420,7 @@
   function continueFromCommonGround() {
     const result = recalculate();
     if (!result.ok) {
-      setRequestError(result.blockers[0] || "Complete the Common Ground Pool split.");
+      setRequestError(result.blockers[0] || "Complete the Co-Fund split.");
       return;
     }
 
@@ -440,7 +440,7 @@
     $("#summaryJoin").textContent = "→";
     $("#summaryRightLabel").textContent = "Who pays";
     $("#summaryRightFoot").textContent = "Private value estimates are not submitted.";
-    $("#summaryRequestKind").textContent = "Fund · Common Ground Pool";
+    $("#summaryRequestKind").textContent = "Fund · Co-Fund";
     $("#summaryRequestAction").textContent = result.project;
 
     const rows = [
@@ -531,7 +531,7 @@
 
     const result = evaluatePool();
     if (!result.ok) {
-      throw new Error(result.blockers[0] || "The Common Ground Pool split is incomplete.");
+      throw new Error(result.blockers[0] || "The Co-Fund split is incomplete.");
     }
 
     payload.fundMode = "dac";
@@ -558,7 +558,7 @@
     if (!isCommonGroundRoute()) return;
 
     const result = evaluatePool();
-    $("#publishedObjectLabel").textContent = "Common Ground Pool proposal";
+    $("#publishedObjectLabel").textContent = "Co-Fund proposal";
     $("#publishedHeadline").textContent = result.project;
     $("#publishedLede").textContent =
       "Saved for review. It stays private and cannot accept pledges until every named participant confirms and the review gates pass.";

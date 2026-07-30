@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Link from "next/link";
 
 import {
@@ -7,8 +6,11 @@ import {
   joinConditionalRedirectOfferAction,
   reauthorizeConditionalRedirectAction,
   withdrawConditionalRedirectCandidateAction,
-} from "./actions";
-import { DeadlineField, LocalDateTime } from "./deadline-field";
+} from "@/app/donation-offsets/conditional/actions";
+import {
+  DeadlineField,
+  LocalDateTime,
+} from "@/app/donation-offsets/conditional/deadline-field";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs, PageHero, SectionHeader } from "@/components/ui/page-primitives";
 import { requireViewer } from "@/lib/app-data";
@@ -20,12 +22,6 @@ import {
 import { loadConditionalRedirectPageData } from "@/lib/payments/conditional-redirect-page-data";
 import { getConditionalPaymentReadiness } from "@/lib/payments/conditional-readiness";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
-
-export const metadata: Metadata = {
-  title: "Conditional donation redirect",
-  description: "Redirect a planned donation when another donor adds a specified amount.",
-  robots: { index: false, follow: false },
-};
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(cents / 100);
@@ -43,13 +39,12 @@ async function loadRequestTime() {
   return Date.now();
 }
 
-export default async function ConditionalRedirectPage({
-  searchParams,
+export async function ConditionalDonationCreate({
+  params,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  params: Record<string, string | string[] | undefined>;
 }) {
-  const viewer = await requireViewer("/donation-offsets/conditional");
-  const params = await searchParams;
+  const viewer = await requireViewer("/trades/new?structure=conditional-donation");
   const error = queryValue(params.error);
   const setup = queryValue(params.setup);
   const change = queryValue(params.change);
@@ -106,25 +101,37 @@ export default async function ConditionalRedirectPage({
         />
         <Breadcrumbs
           items={[
-            { href: "/donation-offsets", label: "Donation offsets" },
-            { href: "/donation-offsets/conditional", label: "Conditional redirect" },
+            { href: "/trades/new", label: "Create" },
+            {
+              href: "/trades/new?structure=conditional-donation",
+              label: "Donation Upgrade",
+            },
           ]}
         />
         <PageHero
-          eyebrow={readiness.mode === "live" ? "Live conditional giving" : "Conditional giving"}
+          eyebrow={
+            readiness.mode === "live"
+              ? "Create · Live Donation Upgrade"
+              : "Create · Donation Upgrade"
+          }
           title="Redirect your donation when someone adds to it."
           description="Authorize your original donation first. If an eligible matcher authorizes the added amount before your deadline, both linked donations go to the matched charity. Otherwise your original donation goes to your fallback charity."
           actions={
-            <Link className="button button-secondary" href="/donation-offsets/payments">
-              Payment workspace
-            </Link>
+            <>
+              <Link className="button button-secondary" href="/trades/new">
+                Back to Create
+              </Link>
+              <Link className="button button-secondary" href="/donation-offsets/payments">
+                Payment workspace
+              </Link>
+            </>
           }
         />
       </header>
       <main id="main-content" tabIndex={-1}>
         {!pageData.available ? (
           <div className="status-banner status-banner-error" role="status">
-            Conditional donation authorizations are temporarily unavailable. No payment
+            Donation Upgrade authorizations are temporarily unavailable. No payment
             authorization can be created or charged from this page. Please try again later.
           </div>
         ) : null}
@@ -270,7 +277,7 @@ export default async function ConditionalRedirectPage({
                 </article>
               );
             })}
-            {!offerRows.length ? <p>No conditional redirects are open yet.</p> : null}
+            {!offerRows.length ? <p>No Donation Upgrades are open yet.</p> : null}
           </div>
         </section>
 
@@ -352,7 +359,7 @@ export default async function ConditionalRedirectPage({
                 </article>
               );
             })}
-            {!commitments.length ? <p>You have no conditional donation authorizations yet.</p> : null}
+            {!commitments.length ? <p>You have no Donation Upgrade authorizations yet.</p> : null}
           </div>
         </section>
       </main>
