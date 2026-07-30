@@ -1,3 +1,4 @@
+# Temporary exact-head rename workflow; removed before merge.
 name: Apply Donation Upgrade rename
 
 on:
