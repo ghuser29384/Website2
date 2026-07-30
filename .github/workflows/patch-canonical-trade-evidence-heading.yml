@@ -1,9 +1,11 @@
 name: Patch canonical Trade integration evidence assertion
 
 on:
-  push:
+  pull_request:
     branches:
-      - cleanup/canonical-trade-entry-20260730
+      - main
+    types:
+      - reopened
     paths:
       - .ops/patch-canonical-trade-evidence-heading-trigger.txt
 
@@ -12,6 +14,7 @@ permissions:
 
 jobs:
   patch:
+    if: github.event.pull_request.head.ref == 'cleanup/canonical-trade-entry-20260730'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
