@@ -5,8 +5,12 @@ cp .github/scripts/patch-marketplace-delta-final.py \
   "$RUNNER_TEMP/patch-marketplace-delta-final.py"
 cp .github/scripts/patch-marketplace-delta-compile-check.py \
   "$RUNNER_TEMP/patch-marketplace-delta-compile-check.py"
+cp .github/scripts/patch-marketplace-delta-milestone-regression.py \
+  "$RUNNER_TEMP/patch-marketplace-delta-milestone-regression.py"
 python3 "$RUNNER_TEMP/patch-marketplace-delta-final.py" \
   --materializer .github/scripts/materialize-marketplace-delta.py
+python3 "$RUNNER_TEMP/patch-marketplace-delta-milestone-regression.py" \
+  .github/scripts/materialize-marketplace-delta.py
 
 # Preserve the already reviewed v7/v6 chain outside the worktree. This lets the
 # product runner restore orchestration edits before checking out exact current main.
