@@ -21,7 +21,14 @@ test("the integration preserves the static source and adds the compact funding c
   assert.doesNotMatch(source, /data-fund-mode="commonGround"/);
 
   const integrated = integrateCommonGroundCreateSource(source);
-  assert.match(integrated, /Create a trade, redirect, or pool\./);
+  assert.match(
+    integrated,
+    /Create a trade, conditional donation, or public-goods pool\./,
+  );
+  assert.match(
+    integrated,
+    /Fund includes swaps, redirects, conditional donations, shared-project pools, and threshold pools\./,
+  );
   assert.match(integrated, /Common Ground Pool/);
   assert.match(integrated, /Threshold pool/);
 });

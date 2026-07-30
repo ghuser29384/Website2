@@ -14,6 +14,7 @@ import {
   getPledgeTemplateInitialValues,
   getTradeDraftTemplateLabel,
 } from "@/lib/trade-template-library";
+import { ConditionalDonationCreate } from "./conditional-donation";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,7 +22,7 @@ export const revalidate = 0;
 export const metadata: Metadata = {
   title: "Create",
   description:
-    "Create a pledge-swap, donation redirect, existing-pool contribution offer, or moral public-goods pool through one interface.",
+    "Create a pledge-swap, donation redirect, conditional donation, existing-pool contribution offer, or moral public-goods pool through one interface.",
   robots: { index: false, follow: false },
 };
 
@@ -64,9 +65,14 @@ const WORKBENCH_GRID = `
 `;
 
 export default async function NewTradePage({ searchParams }: NewTradePageProps) {
-  const [viewer, resolvedSearchParams] = await Promise.all([getViewer(), searchParams]);
+  const resolvedSearchParams = await searchParams;
   const templateId = valueOf(resolvedSearchParams.template);
   const structure = valueOf(resolvedSearchParams.structure);
+  if (structure === "conditional-donation") {
+    return <ConditionalDonationCreate params={resolvedSearchParams} />;
+  }
+
+  const viewer = await getViewer();
   const acceptsCommandHandoff =
     valueOf(resolvedSearchParams.handoff) === "command-center";
   const returnParams = new URLSearchParams();
