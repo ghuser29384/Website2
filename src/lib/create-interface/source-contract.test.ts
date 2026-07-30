@@ -57,6 +57,13 @@ test("the accepted Create interface is mounted with compact pools and safeguards
   assert.match(html, /What do you want to improve\?/);
   assert.match(html, /Commitment/);
   assert.match(html, /Donation redirect/);
+  assert.match(html, /Conditional donation/);
+  assert.match(html, /data-fund-mode="conditional"/);
+  assert.match(
+    html,
+    /window\.top\.location\.assign\("\/trades\/new\?structure=conditional-donation"\)/,
+  );
+  assert.match(html, /Dominant assurance contract pool/);
   assert.match(html, /Common Ground Pool/);
   assert.match(html, /data-fund-mode="commonGround"/);
   assert.match(html, /Threshold pool/);
