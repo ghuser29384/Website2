@@ -16,32 +16,45 @@ const createInterfaceSource = integrateCommonGroundCreateSource(
 const resumeExpression =
   'const shouldResume = new URLSearchParams(window.location.search).get("resume") === "create";';
 
-function replaceRequired(source: string, search: string, replacement: string, label: string) {
+function replaceRequired(
+  source: string,
+  search: string,
+  replacement: string,
+  label: string,
+  expectedOccurrences = 1,
+) {
   const occurrences = source.split(search).length - 1;
-  if (occurrences !== 1) {
-    throw new Error(`The Moral Trade Create ${label} contract could not be located exactly once.`);
+  if (occurrences !== expectedOccurrences) {
+    throw new Error(
+      `The Moral Trade Create ${label} contract was expected ${expectedOccurrences} time(s), but appeared ${occurrences}.`,
+    );
   }
-  return source.replace(search, replacement);
+  return source.split(search).join(replacement);
 }
 
 function integrateCollectiveCommitmentMode(source: string) {
   let integrated = replaceRequired(
     source,
-    "Create a pledge-swap, donation redirect, or public-goods pool.",
-    "Create a trade, collective commitment, donation redirect, or public-goods pool.",
+    "Create a trade, redirect, or pool.",
+    "Create a trade, collective commitment, redirect, or pool.",
     "subtitle",
   );
   integrated = replaceRequired(
     integrated,
-    "grid-template-columns: repeat(3, minmax(0, 1fr));",
-    "grid-template-columns: repeat(2, minmax(0, 1fr));",
+    `    .request-kind-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));`,
+    `    .request-kind-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));`,
     "request-kind grid",
   );
   integrated = replaceRequired(
     integrated,
-    "Choose Commitment, Skill, or Fund. If you choose Fund, also choose whether you are creating a pledge-swap, a donation redirect, or a dominant assurance contract pool.",
-    "Choose Commitment, Skill, Fund, or Collective commitment. Funding requests also choose a pledge-swap, donation redirect, or dominant assurance contract pool.",
+    "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, shared-project pools, and threshold pools.",
+    "Choose Commitment, Skill, Fund, or Collective commitment. Fund includes swaps, redirects, Common Ground Pools, and threshold pools.",
     "request introduction",
+    2,
   );
 
   const fundCard = `            <button type="button" class="request-choice" data-request-kind="fund" aria-pressed="false">
