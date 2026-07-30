@@ -117,7 +117,10 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run contextual safeguards browser tests
-        run: npx playwright test tests/trade-controls.spec.ts
+        run: >-
+          npx playwright test
+          tests/trade-controls.spec.ts
+          tests/contextual-create-safeguards-qa.spec.ts
 
       - name: Upload Playwright diagnostics
         if: always()
