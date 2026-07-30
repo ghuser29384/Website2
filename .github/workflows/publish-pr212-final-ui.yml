@@ -48,52 +48,134 @@ jobs:
           normalized_payload=/tmp/pr212-final.patch.gz.normalized.b64
           gzip_file=/tmp/pr212-final.patch.gz
           patch=/tmp/pr212-final.patch
+          chunk_dir=/tmp/pr212-final-payload-chunks
+          rm -rf "$chunk_dir"
+          mkdir -p "$chunk_dir"
           : > "$payload"
           for number in $(seq 0 10); do
             index="$(printf '%03d' "$number")"
-            git show "refs/remotes/origin/${PAYLOAD_BRANCH}:.github/pr212-final-payload.chunk-${index}" >> "$payload"
+            chunk_path="${chunk_dir}/chunk-${index}.b64"
+            git show "refs/remotes/origin/${PAYLOAD_BRANCH}:.github/pr212-final-payload.chunk-${index}" > "$chunk_path"
+            cat "$chunk_path" >> "$payload"
           done
 
-          python - "$payload" "$normalized_payload" "$gzip_file" <<'PY'
+          python - "$chunk_dir" "$payload" "$normalized_payload" "$gzip_file" <<'PY'
           from __future__ import annotations
 
           import base64
           import hashlib
+          import os
           from pathlib import Path
           import sys
 
-          source_path, normalized_path, decoded_path = map(Path, sys.argv[1:])
-          raw = source_path.read_bytes()
-          allowed_whitespace = b" \t\r\n\v\f"
-          normalized = bytes(byte for byte in raw if byte not in allowed_whitespace)
-          invalid = [(index, byte) for index, byte in enumerate(normalized) if byte not in b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="]
-          print(f"Raw base64 bytes: {len(raw)}")
-          print(f"Unpadded normalized base64 bytes: {len(normalized)}")
-          print(f"Raw base64 SHA-256: {hashlib.sha256(raw).hexdigest()}")
-          print(f"Unpadded normalized base64 SHA-256: {hashlib.sha256(normalized).hexdigest()}")
-          if invalid:
-              print("First invalid normalized base64 bytes:", invalid[:20])
-              raise SystemExit("The reconstructed payload contains non-base64, non-whitespace bytes.")
-          remainder = len(normalized) % 4
-          if remainder == 1:
-              raise SystemExit(f"Normalized base64 length has impossible remainder one: {len(normalized)}")
-          if remainder:
-              padding = b"=" * (4 - remainder)
-              print(f"Restoring {len(padding)} omitted terminal base64 padding byte(s).")
-              normalized += padding
-          first_padding = normalized.find(b"=")
-          if first_padding >= 0 and any(byte != ord("=") for byte in normalized[first_padding:]):
-              raise SystemExit(f"Base64 padding occurs before the end at offset {first_padding}.")
-          try:
-              decoded = base64.b64decode(normalized, validate=True)
-          except Exception as exc:
-              raise SystemExit(f"Strict base64 decoding failed: {exc}") from exc
-          normalized_path.write_bytes(normalized)
-          decoded_path.write_bytes(decoded)
-          print(f"Padded normalized base64 bytes: {len(normalized)}")
-          print(f"Padded normalized base64 SHA-256: {hashlib.sha256(normalized).hexdigest()}")
+          chunk_dir, source_path, normalized_path, decoded_path = map(Path, sys.argv[1:])
+          expected_base64 = os.environ["EXPECTED_BASE64_SHA256"]
+          expected_gzip = os.environ["EXPECTED_GZIP_SHA256"]
+          alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+          whitespace = b" \t\r\n\v\f"
+
+          chunks: list[bytes] = []
+          boundaries = [0]
+          for path in sorted(chunk_dir.glob("chunk-*.b64")):
+              raw_chunk = path.read_bytes()
+              clean_chunk = bytes(byte for byte in raw_chunk if byte not in whitespace)
+              invalid = [(index, byte) for index, byte in enumerate(clean_chunk) if byte not in alphabet + b"="]
+              if invalid:
+                  raise SystemExit(f"{path.name} contains invalid base64 bytes: {invalid[:20]}")
+              padding_positions = [index for index, byte in enumerate(clean_chunk) if byte == ord("=")]
+              print(
+                  f"{path.name}: bytes={len(clean_chunk)} sha256={hashlib.sha256(clean_chunk).hexdigest()} "
+                  f"padding={padding_positions[:10]}"
+              )
+              chunks.append(clean_chunk)
+              boundaries.append(boundaries[-1] + len(clean_chunk))
+
+          reconstructed = b"".join(chunks)
+          source_path.write_bytes(reconstructed)
+          print(f"Reconstructed bytes: {len(reconstructed)}")
+          print(f"Reconstructed SHA-256: {hashlib.sha256(reconstructed).hexdigest()}")
+          print(f"Chunk boundaries: {boundaries}")
+
+          def decode_and_check(candidate: bytes) -> bytes | None:
+              try:
+                  decoded = base64.b64decode(candidate, validate=True)
+              except Exception:
+                  return None
+              if hashlib.sha256(decoded).hexdigest() != expected_gzip:
+                  return None
+              return decoded
+
+          candidates: list[tuple[str, bytes, bytes]] = []
+
+          # First try the reconstructed payload as a single canonical base64 string.
+          no_whitespace = reconstructed
+          if b"=" not in no_whitespace[:-2]:
+              remainder = len(no_whitespace) % 4
+              if remainder != 1:
+                  canonical = no_whitespace + b"=" * ((4 - remainder) % 4)
+                  decoded = decode_and_check(canonical)
+                  if decoded is not None:
+                      candidates.append(("canonical reconstructed payload", canonical, decoded))
+
+          # The stored transport was assembled through multiple connector writes. If a
+          # single base64 character was omitted at a chunk boundary and an unrelated tail
+          # was appended after the original terminal padding, recover only a candidate
+          # whose decoded bytes match the pre-recorded exact gzip SHA-256.
+          first_padding = reconstructed.find(b"=")
+          if first_padding >= 0 and first_padding < len(reconstructed) - 2:
+              core = reconstructed[:first_padding]
+              padding_end = first_padding
+              while padding_end < len(reconstructed) and reconstructed[padding_end] == ord("="):
+                  padding_end += 1
+              tail = reconstructed[padding_end:]
+              print(
+                  f"Internal padding begins at {first_padding}; padding run length={padding_end-first_padding}; "
+                  f"discarded-tail-bytes-if-recovered={len(tail)}; tail-sha256={hashlib.sha256(tail).hexdigest()}"
+              )
+              insertion_positions = set()
+              for boundary in boundaries:
+                  for delta in (-2, -1, 0, 1, 2):
+                      position = boundary + delta
+                      if 0 <= position <= len(core):
+                          insertion_positions.add(position)
+              for position in sorted(insertion_positions):
+                  for character in alphabet:
+                      repaired_core = core[:position] + bytes((character,)) + core[position:]
+                      remainder = len(repaired_core) % 4
+                      if remainder == 1:
+                          continue
+                      candidate = repaired_core + b"=" * ((4 - remainder) % 4)
+                      decoded = decode_and_check(candidate)
+                      if decoded is not None:
+                          candidates.append(
+                              (
+                                  f"single-character boundary recovery at offset {position} with {chr(character)!r}",
+                                  candidate,
+                                  decoded,
+                              )
+                          )
+
+          # The exact gzip hash makes any accepted recovery unique and fail-closed.
+          unique: dict[bytes, tuple[str, bytes]] = {}
+          for description, candidate, decoded in candidates:
+              unique.setdefault(decoded, (description, candidate))
+          if len(unique) != 1:
+              descriptions = [description for description, _, _ in candidates]
+              raise SystemExit(
+                  f"Expected exactly one payload whose decoded SHA-256 is {expected_gzip}; "
+                  f"found {len(unique)}. Candidate descriptions: {descriptions}"
+              )
+
+          decoded, (description, candidate) = next(iter(unique.items()))
+          candidate_sha = hashlib.sha256(candidate).hexdigest()
+          print(f"Accepted recovery: {description}")
+          print(f"Accepted base64 bytes: {len(candidate)}")
+          print(f"Accepted base64 SHA-256: {candidate_sha}")
+          print(f"Expected base64 SHA-256: {expected_base64}")
           print(f"Decoded gzip bytes: {len(decoded)}")
           print(f"Decoded gzip SHA-256: {hashlib.sha256(decoded).hexdigest()}")
+          normalized_path.write_bytes(candidate)
+          decoded_path.write_bytes(decoded)
           PY
 
           echo "${EXPECTED_GZIP_SHA256}  ${gzip_file}" | sha256sum --check --strict
