@@ -1,0 +1,38 @@
+name: PR 212 institutional QA run snapshot
+
+on:
+  push:
+    branches:
+      - ops/pr212-complete-ui-status-20260730
+    paths:
+      - .github/workflows/pr212-run-snapshot.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HEAD: 7ed2cf755f453a21419d11773b3d062a9edda72f
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Capture current institutional QA runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-final-qa
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow institutional-trade-qa.yml --branch feat/institutional-trade-system --limit 100 --json databaseId,headSha,status,conclusion,createdAt,event,url,displayTitle > /tmp/runs.json
+          jq --arg head "$TARGET_HEAD" '{target_head:$head,exact_head_runs:[.[] | select(.headSha == $head)],all_runs:.}' /tmp/runs.json > ops/pr212-final-qa/run-snapshot.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-final-qa/run-snapshot.json
+          git commit -m "Snapshot PR 212 institutional QA runs"
+          git push origin HEAD:ops/pr212-complete-ui-status-20260730
