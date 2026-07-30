@@ -1,0 +1,91 @@
+name: Temporary exact-head contextual safeguards gate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/qa-contextual-safeguards-exact.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qa-contextual-safeguards-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-head:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 78616fb05b1735006023c6be517b0b082840532c
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify browser JavaScript syntax
+        run: node --check public/moral-trade-create/safeguards.js
+
+      - name: Run complete unit and source-contract suite
+        run: npm test
+
+      - name: Run repository-wide ESLint
+        run: npm run lint
+
+      - name: Enforce exact-base TypeScript differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_SHA=78616fb05b1735006023c6be517b0b082840532c
+          BASE_SHA=a0400cc79993dc4ad2f5a6dc65d9a3b8f72f65c3
+
+          "$GITHUB_WORKSPACE/node_modules/.bin/tsc" --noEmit --pretty false > /tmp/candidate-tsc.txt 2>&1 || true
+          git worktree add --detach /tmp/contextual-safeguards-base "$BASE_SHA"
+          ln -s "$GITHUB_WORKSPACE/node_modules" /tmp/contextual-safeguards-base/node_modules
+          (
+            cd /tmp/contextual-safeguards-base
+            "$GITHUB_WORKSPACE/node_modules/.bin/tsc" --noEmit --pretty false > /tmp/base-tsc.txt 2>&1 || true
+          )
+
+          grep -E 'error TS[0-9]+' /tmp/base-tsc.txt | sed -E 's#^/tmp/contextual-safeguards-base/##' | sort -u > /tmp/base-tsc-errors.txt || true
+          grep -E 'error TS[0-9]+' /tmp/candidate-tsc.txt | sed -E "s#^${GITHUB_WORKSPACE}/##" | sort -u > /tmp/candidate-tsc-errors.txt || true
+          comm -13 /tmp/base-tsc-errors.txt /tmp/candidate-tsc-errors.txt > /tmp/new-tsc-errors.txt
+
+          echo "Base TypeScript diagnostics: $(wc -l < /tmp/base-tsc-errors.txt)"
+          echo "Candidate TypeScript diagnostics: $(wc -l < /tmp/candidate-tsc-errors.txt)"
+          if [ -s /tmp/new-tsc-errors.txt ]; then
+            echo "New TypeScript diagnostics introduced by $CANDIDATE_SHA:" >&2
+            cat /tmp/new-tsc-errors.txt >&2
+            exit 1
+          fi
+
+      - name: Build the production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run desktop and mobile contextual-safeguard browser suite
+        run: >-
+          npx playwright test
+          tests/trade-controls.spec.ts
+          tests/create-safeguards.spec.ts
+          tests/create-common-ground-pool.spec.ts
+          --reporter=line
+
+      - name: Check exact-head whitespace
+        run: git diff --check a0400cc79993dc4ad2f5a6dc65d9a3b8f72f65c3..78616fb05b1735006023c6be517b0b082840532c
