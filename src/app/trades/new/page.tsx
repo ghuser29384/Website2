@@ -31,6 +31,15 @@ interface NewTradePageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+interface SourceOfferCoreTerms {
+  no_trade_baseline: string;
+  start_date: string | null;
+  evidence_due_date: string | null;
+  maximum_burden: string;
+  privacy_scope: string;
+  exit_conditions: string;
+}
+
 function valueOf(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
@@ -106,20 +115,25 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   }
 
   const templateValues = getPledgeTemplateInitialValues(templateId);
-  const sourceValues: Partial<TradeDraftValues> | undefined = sourceOffer
+  // These current-core columns exist in production and QA, but the legacy
+  // generated OfferRow type has not yet been regenerated with them.
+  const sourceOfferWithCoreTerms = sourceOffer
+    ? (sourceOffer as NonNullable<typeof sourceOffer> & SourceOfferCoreTerms)
+    : null;
+  const sourceValues: Partial<TradeDraftValues> | undefined = sourceOfferWithCoreTerms
     ? {
-        offeredCause: sourceOffer.requested_cause,
-        requestedCause: sourceOffer.offered_cause,
-        proposedAction: sourceOffer.request_action,
-        requestedAction: sourceOffer.offer_action,
-        noTradeBaseline: sourceOffer.no_trade_baseline,
-        duration: sourceOffer.duration,
-        startDate: sourceOffer.start_date ?? "",
-        evidenceDueDate: sourceOffer.evidence_due_date ?? "",
-        evidenceRule: sourceOffer.verification,
-        maximumBurden: sourceOffer.maximum_burden,
-        privacyScope: sourceOffer.privacy_scope,
-        exitConditions: sourceOffer.exit_conditions,
+        offeredCause: sourceOfferWithCoreTerms.requested_cause,
+        requestedCause: sourceOfferWithCoreTerms.offered_cause,
+        proposedAction: sourceOfferWithCoreTerms.request_action,
+        requestedAction: sourceOfferWithCoreTerms.offer_action,
+        noTradeBaseline: sourceOfferWithCoreTerms.no_trade_baseline,
+        duration: sourceOfferWithCoreTerms.duration,
+        startDate: sourceOfferWithCoreTerms.start_date ?? "",
+        evidenceDueDate: sourceOfferWithCoreTerms.evidence_due_date ?? "",
+        evidenceRule: sourceOfferWithCoreTerms.verification,
+        maximumBurden: sourceOfferWithCoreTerms.maximum_burden,
+        privacyScope: sourceOfferWithCoreTerms.privacy_scope,
+        exitConditions: sourceOfferWithCoreTerms.exit_conditions,
         notes: "",
         voluntaryCertification: false,
       }
