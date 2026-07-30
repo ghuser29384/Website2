@@ -8,6 +8,7 @@ on:
     branches:
       - main
     paths:
+      - ".github/scripts/repair-current-main-typescript.py"
       - ".github/scripts/threshold-sign-on-release-integration.sh"
       - ".github/workflows/threshold-sign-on-integration-v3.yml"
 
@@ -75,6 +76,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cp .github/scripts/repair-current-main-typescript.py "$RUNNER_TEMP/repair-current-main-typescript.py"
           cp .github/scripts/threshold-sign-on-release-integration.sh "$RUNNER_TEMP/threshold-sign-on-release-integration.sh"
           python3 - "$RUNNER_TEMP/threshold-sign-on-release-integration.sh" <<'PY'
           from pathlib import Path
@@ -82,11 +84,28 @@ jobs:
 
           path = Path(sys.argv[1])
           text = path.read_text()
-          old = 'totals = [int(v) for v in re.findall(r"^# tests\\s+(\\d+)\\s*$", text, re.M)]'
-          new = 'totals = [int(v) for v in re.findall(r"^(?:#|ℹ) tests\\s+(\\d+)\\s*$", text, re.M)]'
-          if text.count(old) != 1:
-              raise SystemExit(f"Expected one Node test-summary parser; found {text.count(old)}")
-          path.write_text(text.replace(old, new))
+
+          parser_old = 'totals = [int(v) for v in re.findall(r"^# tests\\s+(\\d+)\\s*$", text, re.M)]'
+          parser_new = 'totals = [int(v) for v in re.findall(r"^(?:#|ℹ) tests\\s+(\\d+)\\s*$", text, re.M)]'
+          if text.count(parser_old) != 1:
+              raise SystemExit(f"Expected one Node test-summary parser; found {text.count(parser_old)}")
+          text = text.replace(parser_old, parser_new)
+
+          insertion_old = '''test -z "$(git diff --name-only --diff-filter=U)"
+
+python3 - <<'PY'
+from pathlib import Path
+'''
+          insertion_new = '''test -z "$(git diff --name-only --diff-filter=U)"
+
+python3 "$RUNNER_TEMP/repair-current-main-typescript.py"
+
+python3 - <<'PY'
+from pathlib import Path
+'''
+          if text.count(insertion_old) != 1:
+              raise SystemExit(f"Expected one post-merge repair insertion point; found {text.count(insertion_old)}")
+          path.write_text(text.replace(insertion_old, insertion_new))
           PY
           chmod +x "$RUNNER_TEMP/threshold-sign-on-release-integration.sh"
           "$RUNNER_TEMP/threshold-sign-on-release-integration.sh"
