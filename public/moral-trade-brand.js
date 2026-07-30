@@ -49,7 +49,7 @@
       link.rel = spec.rel;
       link.href = FAVICON_PATH;
       link.type = "image/png";
-      link.sizes = "512x512";
+      link.setAttribute("sizes", "512x512");
     }
   }
 
