@@ -25,6 +25,7 @@ concurrency:
 
 jobs:
   exact-head-browser-gate:
+    # This branch is temporary and this job is the only permitted writer.
     if: >-
       (github.event_name == 'push' && github.ref_name == 'ops/materialize-marketplace-delta-final-20260730') ||
       (github.event_name == 'pull_request' &&
