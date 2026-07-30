@@ -1,4 +1,4 @@
-name: Compact Common Ground Pool UI
+name: Compact Co-Fund UI
 
 on:
   pull_request:

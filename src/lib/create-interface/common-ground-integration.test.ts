@@ -29,7 +29,7 @@ test("the integration preserves the static source and adds the compact funding c
     integrated,
     /Fund includes swaps, redirects, conditional donations, shared-project pools, and threshold pools\./,
   );
-  assert.match(integrated, /Common Ground Pool/);
+  assert.match(integrated, /Co-Fund/);
   assert.match(integrated, /Threshold pool/);
 });
 

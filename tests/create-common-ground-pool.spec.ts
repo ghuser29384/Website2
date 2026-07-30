@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("compact Common Ground Pool in Create", () => {
+test.describe("compact Co-Fund in Create", () => {
   test("builds and submits the worked split without the advanced threshold editor", async ({ page }) => {
     let submittedPayload: unknown = null;
     await page.route("**/api/create/publish", async (route) => {
@@ -15,7 +15,7 @@ test.describe("compact Common Ground Pool in Create", () => {
             canonicalUrl: "https://www.moraltrade.org/create/submissions/create-common-ground-test",
             title: "Your submission is in review.",
             lede: "The shared-project split is saved privately.",
-            objectLabel: "Common Ground Pool proposal",
+            objectLabel: "Co-Fund proposal",
             visibility: "Private until approved",
             openStatus: "Pending Moral Trade review",
           },
@@ -60,7 +60,7 @@ test.describe("compact Common Ground Pool in Create", () => {
     await create.locator("label.publish-confirm").click();
     await expect(create.locator("#publishConfirm")).toBeChecked();
     await create.getByRole("button", { name: /Submit for review/ }).click();
-    await expect(create.getByText("Common Ground Pool proposal", { exact: true })).toBeVisible();
+    await expect(create.getByText("Co-Fund proposal", { exact: true })).toBeVisible();
 
     expect(submittedPayload).toMatchObject({
       requestKind: "fund",

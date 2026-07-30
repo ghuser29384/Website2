@@ -1,6 +1,6 @@
-# Common Ground Pool in Create
+# Co-Fund in Create
 
-`/trades/new` includes **Common Ground Pool** as a compact Fund structure. It is not a standalone page.
+`/trades/new` includes **Co-Fund** as a compact Fund structure. It is not a standalone page.
 
 The creator enters one shared project, one target and deadline, and two to eight participants. Each participant row records a no-pool default and controlled budget. Relative value estimates remain only in the browser tab. The browser proposes a balanced split and enables review only when every participant has a positive estimated gain, each contribution fits the stated budget, contributions exactly meet the target, and the creator confirms the no-pool defaults.
 
