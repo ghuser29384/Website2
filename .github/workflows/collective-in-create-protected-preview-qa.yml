@@ -85,6 +85,23 @@ jobs:
             "deployment_id=${EXPECTED_DEPLOYMENT_ID}" \
             > "$BROWSER_QA_ARTIFACT_DIR/exact-boundary.txt"
 
+      - name: Align selectors with the exact rendered Create interface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/collective-in-create-protected-preview-qa.mjs')
+          text = path.read_text()
+          old = 'frame.getByText("Choose a cause to improve.")'
+          new = 'frame.getByRole("heading", { name: "What do you want to improve?" })'
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one legacy Create-copy selector; found {text.count(old)}.')
+          path.write_text(text.replace(old, new))
+          PY
+          node --check .github/scripts/collective-in-create-protected-preview-qa.mjs
+
       - name: Verify exact protected canonical deployment
         shell: bash
         run: |
