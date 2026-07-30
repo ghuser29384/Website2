@@ -50,7 +50,7 @@ test.describe("Create route workbench", () => {
     ).toBeVisible();
     await expect(
       create.getByText(
-        "Create a trade, conditional donation, or public-goods pool.",
+        "Create a trade, Donation Upgrade, or public-goods pool.",
         { exact: true },
       ),
     ).toBeVisible();
@@ -67,7 +67,7 @@ test.describe("Create route workbench", () => {
 
     await expect(create.locator("#fundModeGrid .fund-mode-choice")).toHaveCount(5);
     await expect(create.locator('[data-fund-mode="conditional"]')).toContainText(
-      "Conditional donation",
+      "Donation Upgrade",
     );
     await expect(create.locator('[data-fund-mode="commonGround"]')).toContainText(
       "Co-Fund",
@@ -140,7 +140,7 @@ test.describe("Create route workbench", () => {
     }
   });
 
-  test("keeps the Conditional donation entry usable without horizontal overflow on mobile", async ({ page }) => {
+  test("keeps the Donation Upgrade entry usable without horizontal overflow on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/trades/new");
     const create = page.frameLocator('iframe[title="Moral Trade Create"]');
