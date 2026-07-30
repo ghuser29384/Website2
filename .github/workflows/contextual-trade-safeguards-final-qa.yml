@@ -14,7 +14,8 @@ permissions:
   contents: read
 
 env:
-  PRODUCT_BASE_SHA: 499bfab35ad859319b6eb665308d6a5b00fa6178
+  PRODUCT_BASE_SHA: 15358988b5ee311111c575f11b9e4bc81992f271
+  PRODUCT_HEAD_SHA: 7dd509d1379d90a747ceb9f0524129031b4501b7
 
 jobs:
   quality:
@@ -27,6 +28,11 @@ jobs:
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@v4
+
+      - name: Confirm the exact product head is included
+        run: |
+          git fetch --no-tags origin "$PRODUCT_HEAD_SHA"
+          git merge-base --is-ancestor "$PRODUCT_HEAD_SHA" HEAD
 
       - name: Use Node.js 20
         uses: actions/setup-node@v4
