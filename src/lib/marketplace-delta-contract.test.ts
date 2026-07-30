@@ -80,7 +80,8 @@ test("directory groups exact proposals and exposes exact-offer actions", () => {
 });
 
 test("pledge counteroffers keep the exact source id and reverse its authorized terms", () => {
-  assert.match(offersNew, /tradeParams\.set\("source_offer", sourceOfferId\)/);
+  assert.match(offersNew, /new URLSearchParams\(\{ source_offer: sourceOfferId \}\)/);
+  assert.match(offersNew, /redirect\(`\/trades\/new\?\$\{tradeParams\.toString\(\)\}`\)/);
   assert.match(tradesNew, /const sourceOfferId = valueOf\(resolvedSearchParams\.source_offer\)/);
   assert.match(tradesNew, /offeredCause: sourceOffer\.requested_cause/);
   assert.match(tradesNew, /requestedCause: sourceOffer\.offered_cause/);
