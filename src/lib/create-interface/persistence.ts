@@ -32,7 +32,7 @@ export async function persistCreateSubmission(input: {
     existingPoolCurrency: validated.existingPoolCurrency,
   };
 
-  const { data, error } = await input.supabase.rpc("moral_trade_create_submit_service" as never, {
+  const { data, error } = await input.supabase.rpc("moral_trade_create_submit_service_v2" as never, {
     p_actor_id: input.actorId,
     p_submission_key: validated.source.submissionKey,
     p_submission_kind: validated.kind,
@@ -79,7 +79,7 @@ export async function persistCreateSubmission(input: {
       ? "The shared-project split is saved privately. It cannot accept pledges until every named participant confirms and the review gates pass."
       : isPool
         ? "The pool proposal is durable but not public and cannot accept pledges until its recipient, underwriting, reserve, formula, and operator-review gates are complete."
-        : "The proposal is durable but not public. It creates no obligation until review is complete and both sides confirm final terms.",
+        : "The proposal and its safeguard declarations are durable but not public. They create no obligation until review is complete and both sides confirm final terms.",
     visibility: "Private until approved",
     openStatus: "Pending Moral Trade review",
   };
