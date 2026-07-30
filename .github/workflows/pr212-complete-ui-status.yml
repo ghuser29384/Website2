@@ -1,0 +1,66 @@
+name: PR 212 complete UI status
+
+on:
+  push:
+    branches:
+      - ops/pr212-complete-ui-status-20260730
+    paths:
+      - .github/workflows/pr212-complete-ui-status.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record complete-UI branch and workflow state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-complete-ui-status
+
+          gh api repos/${GITHUB_REPOSITORY}/pulls/212 > /tmp/pr.json
+          gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch ops/pr212-complete-ui-20260729 \
+            --limit 100 \
+            --json databaseId,name,displayTitle,headBranch,headSha,status,conclusion,createdAt,updatedAt,event,url \
+            > /tmp/runs.json
+
+          git ls-tree -r --name-only origin/ops/pr212-complete-ui-20260729 > /tmp/tree.txt
+          git log --oneline --decorate -25 origin/ops/pr212-complete-ui-20260729 > /tmp/log.txt
+          git grep -n -F 'd0b3c68affcb27cebc0d4773d487d056e66dc500ccf99776a85b97ac051cd2f0' origin/ops/pr212-complete-ui-20260729 -- . ':!node_modules' > /tmp/hash-hits.txt || true
+          git grep -n -i -E 'complete.*interface|complete.*ui|institutional.*interface|apply.*pr.?212' origin/ops/pr212-complete-ui-20260729 -- .github/workflows ops > /tmp/workflow-hits.txt || true
+
+          jq -n \
+            --slurpfile pr /tmp/pr.json \
+            --slurpfile runs /tmp/runs.json \
+            --rawfile tree /tmp/tree.txt \
+            --rawfile log /tmp/log.txt \
+            --rawfile hash_hits /tmp/hash-hits.txt \
+            --rawfile workflow_hits /tmp/workflow-hits.txt \
+            '{generated_at:(now|todateiso8601),pr:$pr[0],runs:$runs[0],tree:$tree,log:$log,hash_hits:$hash_hits,workflow_hits:$workflow_hits}' \
+            > ops/pr212-complete-ui-status/report.json
+
+          cp /tmp/runs.json ops/pr212-complete-ui-status/runs.json
+          cp /tmp/tree.txt ops/pr212-complete-ui-status/tree.txt
+          cp /tmp/log.txt ops/pr212-complete-ui-status/log.txt
+          cp /tmp/hash-hits.txt ops/pr212-complete-ui-status/hash-hits.txt
+          cp /tmp/workflow-hits.txt ops/pr212-complete-ui-status/workflow-hits.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-complete-ui-status
+          git commit -m "Record PR 212 complete UI publication status"
+          git push origin HEAD:ops/pr212-complete-ui-status-20260730
