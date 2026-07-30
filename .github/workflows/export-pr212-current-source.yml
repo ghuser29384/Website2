@@ -1,0 +1,59 @@
+name: Export PR 212 current source
+
+on:
+  push:
+    branches:
+      - ops/pr212-current-source-export-20260730
+    paths:
+      - .github/workflows/export-pr212-current-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_SHA: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Archive the exact PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${EXPECTED_SHA}^{commit}"
+          git archive --format=tar.gz --output=/tmp/pr212-current-source.tar.gz "$EXPECTED_SHA"
+          sha256sum /tmp/pr212-current-source.tar.gz | tee /tmp/pr212-current-source.sha256
+
+      - name: Upload exact source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-current-source-${{ github.run_id }}
+          path: |
+            /tmp/pr212-current-source.tar.gz
+            /tmp/pr212-current-source.sha256
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Record export manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops
+          cat > ops/pr212-current-source-export.json <<JSON
+          {
+            "run_id": "${GITHUB_RUN_ID}",
+            "exported_sha": "${EXPECTED_SHA}",
+            "artifact_name": "pr212-current-source-${GITHUB_RUN_ID}"
+          }
+          JSON
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-current-source-export.json
+          git commit -m "Record PR 212 current source export"
+          git push origin HEAD:ops/pr212-current-source-export-20260730
