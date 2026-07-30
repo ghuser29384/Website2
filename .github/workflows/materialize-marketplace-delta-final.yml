@@ -8,6 +8,13 @@ on:
       - ".github/workflows/materialize-marketplace-delta-final.yml"
       - ".github/scripts/run-marketplace-delta-exact-browser-gate.sh"
       - ".github/scripts/marketplace-delta-exact-browser-qa.mjs"
+  push:
+    branches:
+      - ops/materialize-marketplace-delta-final-20260730
+    paths:
+      - ".github/workflows/materialize-marketplace-delta-final.yml"
+      - ".github/scripts/run-marketplace-delta-exact-browser-gate.sh"
+      - ".github/scripts/marketplace-delta-exact-browser-qa.mjs"
 
 permissions:
   contents: write
@@ -19,8 +26,10 @@ concurrency:
 jobs:
   exact-head-browser-gate:
     if: >-
-      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
-      github.head_ref == 'ops/materialize-marketplace-delta-final-20260730'
+      (github.event_name == 'push' && github.ref_name == 'ops/materialize-marketplace-delta-final-20260730') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+       github.head_ref == 'ops/materialize-marketplace-delta-final-20260730')
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
