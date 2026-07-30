@@ -55,18 +55,24 @@ export default async function OfferCreatePage({ searchParams }: OfferCreatePageP
       redirect("/mpgf/pools/new?template=threshold-coalition");
     }
 
-    const tradeParams = new URLSearchParams();
+    if (!sourceOfferId) {
+      if (example === "seed-victoria") {
+        redirect("/trades/new?example=seed-victoria");
+      }
+      if (requestedTemplate?.format === "pledge_swap") {
+        redirect(`/trades/new?template=${encodeURIComponent(requestedTemplate.id)}`);
+      }
+      redirect("/trades/new");
+    }
+
+    const tradeParams = new URLSearchParams({ source_offer: sourceOfferId });
     if (example === "seed-victoria") {
       tradeParams.set("example", "seed-victoria");
     }
     if (requestedTemplate?.format === "pledge_swap") {
       tradeParams.set("template", requestedTemplate.id);
     }
-    if (sourceOfferId) {
-      tradeParams.set("source_offer", sourceOfferId);
-    }
-
-    redirect(`/trades/new${tradeParams.size ? `?${tradeParams.toString()}` : ""}`);
+    redirect(`/trades/new?${tradeParams.toString()}`);
   }
 
   const requestedParticipationModeValue = single(resolved.offset_participation_mode);
