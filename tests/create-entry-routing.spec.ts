@@ -19,13 +19,15 @@ async function expectCanonicalFavicon(page: import("@playwright/test").Page) {
   await expect
     .poll(
       async () =>
-        page.locator('head link[rel*="icon" i]').evaluateAll((links, canonicalFavicon) =>
-          links.length > 0 &&
-          links.every((link) => {
-            const url = new URL((link as HTMLLinkElement).href);
-            return `${url.pathname}${url.search}` === canonicalFavicon;
-          }),
-        , CANONICAL_FAVICON),
+        page.locator('head link[rel*="icon" i]').evaluateAll(
+          (links, canonicalFavicon) =>
+            links.length > 0 &&
+            links.every((link) => {
+              const url = new URL((link as HTMLLinkElement).href);
+              return `${url.pathname}${url.search}` === canonicalFavicon;
+            }),
+          CANONICAL_FAVICON,
+        ),
       { timeout: 15_000 },
     )
     .toBe(true);
