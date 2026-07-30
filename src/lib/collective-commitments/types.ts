@@ -154,6 +154,19 @@ export interface FrozenCollectiveCommitmentTerms {
   riskDimensions: CollectiveRiskDimension[];
 }
 
+export function collectiveCredentialIsCurrent(
+  credential: CollectiveIdentityCredential,
+  now = Date.now(),
+) {
+  return (
+    credential.status === "verified" &&
+    credential.manualReviewStatus === "approved" &&
+    credential.duplicateCheckResult === "clear" &&
+    Boolean(credential.verifiedAt) &&
+    (!credential.expiresAt || new Date(credential.expiresAt).getTime() > now)
+  );
+}
+
 export function isCollectivePropositionType(value: string): value is CollectivePropositionType {
   return (COLLECTIVE_PROPOSITION_TYPES as readonly string[]).includes(value);
 }
