@@ -75,8 +75,8 @@ function settlementItem(lifecycleStatus: string): TradeSafeguardItem {
 
   if (normalizedStatus === "cancelled" || normalizedStatus === "expired") {
     return {
-      actionLabel: "Inspect exit record",
-      href: "#exit",
+      actionLabel: "Inspect exit terms",
+      href: "#terms",
       id: "settlement",
       label: "Settlement, completion, and exit",
       status: "recorded",
