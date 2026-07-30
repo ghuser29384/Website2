@@ -5,7 +5,6 @@ import { notFound } from "next/navigation";
 import {
   acceptGuestInterestAction,
   acceptInterestAction,
-  addOfferCommentAction,
   addOfferRecommendationAction,
   expressInterestAction,
   removeOfferRecommendationAction,
@@ -18,6 +17,8 @@ import { EveryOrgDonateButton } from "@/components/donate/every-org-donate-butto
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { LocalDateTime } from "@/components/ui/local-date-time";
+import { OfferQuestionForm } from "@/components/marketplace/offer-question-form";
+
 import {
   CommitmentSheet,
   CommitmentTermsPanel,
@@ -249,6 +250,9 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
   const viewer = await getViewer();
   const isOwner = viewer?.authUser.id === offer.owner_id;
   const formMessage = getFormMessage(resolvedSearchParams);
+  const questionResetToken = Array.isArray(resolvedSearchParams.question_posted)
+    ? resolvedSearchParams.question_posted[0] ?? ""
+    : resolvedSearchParams.question_posted ?? "";
   const [
     myInterest,
     incomingResponses,
@@ -1578,37 +1582,35 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </div>
         </section>
 
-        <section className="section section-subtle">
+        <section
+          aria-labelledby="discussion-heading"
+          className="section section-subtle"
+          id="discussion"
+        >
           <div className="section-head">
-            <p className="eyebrow">Public comments</p>
-            <h2>Structured discussion</h2>
+            <p className="eyebrow">Questions and discussion</p>
+            <h2 id="discussion-heading">Clarify the exact proposal before responding.</h2>
             <p>
-              Each offer has a public comment thread. Comments can be nested, voted on once per
-              user, and linked back to public member profiles.
+              Ask about evidence, the no-trade baseline, timing, limits, or externalities. Questions
+              and replies remain public and linked to member profiles.
             </p>
           </div>
 
+          {questionResetToken ? (
+            <div className="status-banner status-banner-success" role="status">
+              Question posted.
+            </div>
+          ) : null}
+
           {viewer ? (
-            <form action={addOfferCommentAction} className="stack-form comment-compose-form">
-              <input name="offer_id" type="hidden" value={offer.id} />
-              <input name="return_to" type="hidden" value={`/offers/${offer.id}`} />
-              <label className="field">
-                <span>Add a public comment</span>
-                <textarea
-                  name="body"
-                  placeholder="State a clarifying question, objection, or supporting premise."
-                  rows={4}
-                />
-              </label>
-              <div className="form-actions">
-                <button className="button button-primary" type="submit">
-                  Post comment
-                </button>
-              </div>
-            </form>
+            <OfferQuestionForm
+              offerId={offer.id}
+              resetToken={questionResetToken}
+              returnTo={`/offers/${offer.id}`}
+            />
           ) : (
             <div className="status-banner status-banner-success">
-              Log in to comment, reply, or vote on comments.
+              Log in to ask, reply, or vote on public questions.
             </div>
           )}
 

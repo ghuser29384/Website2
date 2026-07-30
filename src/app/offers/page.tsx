@@ -4,11 +4,12 @@ import Link from "next/link";
 import filterStyles from "@/components/discovery/discovery-filters.module.css";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { ParticipantOfferGroup } from "@/components/marketplace/participant-offer-group";
 import { SmartQueryForm } from "@/components/search/smart-query-form";
 import { TradeTemplateLibrary } from "@/components/trade-templates/trade-template-library";
 import { getViewer, OFFERS_PAGE_SIZE } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
-import { formatMode } from "@/lib/offers";
+import { groupOffersByParticipant } from "@/lib/marketplace-participant-groups";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import {
@@ -356,6 +357,28 @@ async function loadPersonalCausePriorities(viewerId: string | null) {
   return data?.cause_priorities ?? [];
 }
 
+async function listSavedOfferIds(viewerId: string | null, offerIds: readonly string[]) {
+  if (!viewerId || !offerIds.length || !hasSupabaseEnv()) return new Set<string>();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("offer_carts")
+    .select("offer_id")
+    .eq("user_id", viewerId)
+    .in("offer_id", [...offerIds]);
+
+  if (error) {
+    console.error("[offers] Failed to load saved-offer state for participant groups", {
+      code: error.code,
+      message: error.message,
+      viewerId,
+    });
+    return new Set<string>();
+  }
+
+  return new Set((data ?? []).map((row) => row.offer_id));
+}
+
 async function listLiveOffers({
   facets,
   interpretation,
@@ -479,45 +502,6 @@ function formatMoneyConstraint(facets: SmartQueryFacets) {
   return null;
 }
 
-function LiveProposalCard({ offer }: { offer: OfferRow }) {
-  const participantName = offer.owner_alias || "Participant";
-  const verified = isVerifiedEvidenceText(offer.verification);
-
-  return (
-    <article className="mt-market-card">
-      <div className="mt-market-card-head">
-        <span className="mt-market-eyebrow">{formatMode(offer.mode)}</span>
-        <span className="mt-market-state is-live">Live proposal</span>
-      </div>
-      <h3>
-        {offer.offered_cause}
-        <span aria-hidden="true">↔</span>
-        {offer.requested_cause}
-      </h3>
-      <p className="listing-alias">By {participantName}</p>
-      <div className="tag-row" aria-label="Proposal boundaries">
-        <span className="badge">{offer.discount_note || "Bounded terms"}</span>
-        <span className={verified ? "impact-pill" : "source-pill"}>
-          {verified ? "Verification evidence named" : "Verification terms stated"}
-        </span>
-      </div>
-      <dl>
-        <div><dt>Offers</dt><dd>{offer.offer_action}</dd></div>
-        <div><dt>Requests</dt><dd>{offer.request_action}</dd></div>
-        <div>
-          <dt>Terms</dt>
-          <dd>{offer.discount_note || "Open the complete proposal for its baseline and boundaries."}</dd>
-        </div>
-        <div><dt>Evidence</dt><dd>{offer.verification}</dd></div>
-      </dl>
-      <div className="mt-market-card-foot">
-        <span>{offer.duration}</span>
-        <Link href={`/offers/${offer.id}`}>Open proposal ↗</Link>
-      </div>
-    </article>
-  );
-}
-
 export default async function OffersPage({ searchParams }: OffersPageProps) {
   const resolvedSearchParams = await searchParams;
   const view = readParam(resolvedSearchParams, "view");
@@ -544,6 +528,11 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
     sort,
   });
   const isAuthenticated = Boolean(viewer);
+  const participantGroups = groupOffersByParticipant(livePage.items);
+  const savedOfferIds = await listSavedOfferIds(
+    viewer?.authUser.id ?? null,
+    livePage.items.map((offer) => offer.id),
+  );
   const formMessage = getFormMessage(resolvedSearchParams);
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
   const activeConstraintLabels = [
@@ -555,6 +544,7 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   ].filter((label): label is string => Boolean(label));
   const hasFilters = Boolean(search || mode !== "all" || activeConstraintLabels.length || sort !== "newest");
   const pageCount = Math.max(1, Math.ceil(livePage.total / livePage.pageSize));
+  const currentReturnTo = buildLiveHref({ facets, mode, page, search, sort });
 
   return (
     <div className="page-shell marketplace-product-shell">
@@ -618,8 +608,9 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
               <h2 id="directory-heading">Open participant proposals</h2>
             </div>
             <p>
-              {livePage.total.toLocaleString()} live proposal{livePage.total === 1 ? "" : "s"} in the
-              current result set. Open a record to review its complete terms and evidence state.
+              {participantGroups.length.toLocaleString()} participant{participantGroups.length === 1 ? "" : "s"}
+               across {livePage.items.length.toLocaleString()} exact proposal{livePage.items.length === 1 ? "" : "s"}
+               on this page; {livePage.total.toLocaleString()} proposal{livePage.total === 1 ? "" : "s"} match the full result set.
             </p>
           </div>
 
@@ -672,7 +663,17 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
           <div className="mt-directory-view">
             {livePage.items.length ? (
               <div className="mt-market-grid">
-                {livePage.items.map((offer) => <LiveProposalCard key={offer.id} offer={offer} />)}
+                {participantGroups.map((group) => (
+                  <ParticipantOfferGroup
+                    currentReturnTo={currentReturnTo}
+                    isAuthenticated={isAuthenticated}
+                    key={group.ownerId}
+                    offers={group.offers}
+                    participantName={group.participantName}
+                    savedOfferIds={savedOfferIds}
+                    viewerId={viewer?.authUser.id ?? null}
+                  />
+                ))}
               </div>
             ) : (
               <div className="panel empty-state">

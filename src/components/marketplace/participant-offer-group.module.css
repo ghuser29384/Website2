@@ -1,0 +1,217 @@
+.group {
+  overflow: hidden;
+  border: 1px solid #dfe8e1;
+  border-radius: 22px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(18, 46, 29, 0.07);
+}
+
+.groupHeader {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e6ede8;
+  background: linear-gradient(145deg, #f7fbf8 0%, #eef6f0 100%);
+}
+
+.identity {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+}
+
+.identity h3,
+.offerHeading h4 {
+  margin: 0;
+  color: #172119;
+}
+
+.identity h3 {
+  font-size: 1.05rem;
+}
+
+.avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #0a8f47;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.kicker {
+  margin: 0 0 4px;
+  color: #08763c;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.proposalCount,
+.liveState {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #31503a;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.offerList {
+  display: grid;
+}
+
+.offer {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+}
+
+.offer + .offer {
+  border-top: 1px solid #e6ede8;
+}
+
+.offerHeading {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.offerHeading h4 {
+  font-size: 1rem;
+  line-height: 1.35;
+}
+
+.exchange {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.termCard {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #e1e9e3;
+  border-radius: 16px;
+  background: #fbfdfb;
+}
+
+.termCard span {
+  color: #607066;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.termCard strong {
+  color: #1d2b21;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.exchangeArrow {
+  display: inline-flex;
+  align-items: center;
+  color: #0a8f47;
+  font-weight: 800;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.meta span {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: #f0f5f1;
+  color: #46564b;
+  font-size: 0.75rem;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.actions form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.detailLink {
+  margin-left: auto;
+  color: #08763c;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.detailLink:hover,
+.detailLink:focus-visible {
+  text-decoration: underline;
+}
+
+.truthNote {
+  margin: 0;
+  color: #66736b;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .groupHeader,
+  .offerHeading {
+    align-items: flex-start;
+  }
+
+  .groupHeader,
+  .offerHeading,
+  .exchange {
+    grid-template-columns: 1fr;
+  }
+
+  .groupHeader,
+  .offerHeading {
+    flex-direction: column;
+  }
+
+  .exchange {
+    display: grid;
+  }
+
+  .exchangeArrow {
+    justify-content: center;
+    min-height: 18px;
+    transform: rotate(90deg);
+  }
+
+  .detailLink {
+    width: 100%;
+    margin-left: 0;
+    padding-top: 4px;
+  }
+}
