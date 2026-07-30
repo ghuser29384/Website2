@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type FrameLocator, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
@@ -18,77 +18,70 @@ async function prepareForVisualCapture(page: Page) {
   });
 }
 
+async function captureFrame(frame: FrameLocator, filename: string) {
+  await mkdir(captureDirectory, { recursive: true });
+  await frame.locator("body").screenshot({
+    animations: "disabled",
+    path: path.join(captureDirectory, filename),
+  });
+}
+
+async function captureCommonGroundPanel(frame: FrameLocator, filename: string) {
+  await mkdir(captureDirectory, { recursive: true });
+  await frame.locator("#commonGroundFields").screenshot({
+    animations: "disabled",
+    path: path.join(captureDirectory, filename),
+  });
+}
+
 test.describe("Create route workbench", () => {
-  test("compares routes without creating a commitment", async ({ browser, page }) => {
+  test("routes /create into the unified, no-capture Create interface", async ({ browser, page }) => {
+    let publishRequestCount = 0;
+    page.on("request", (request) => {
+      if (new URL(request.url()).pathname === "/api/create/publish") publishRequestCount += 1;
+    });
+
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto("/create");
+    const create = page.frameLocator('iframe[title="Moral Trade Create"]');
 
-    await expect(page.getByRole("heading", { level: 1, name: "Create." })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Swap commitments." })).toBeVisible();
     await expect(
-      page.getByText("Choose a route. Nothing happens until you confirm.", { exact: true }),
+      create.getByRole("heading", { level: 1, name: "What do you want to improve?" }),
     ).toBeVisible();
-    await expect(page.locator('[data-create-mode="trade"]')).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
+    await expect(create.getByText("Create a trade, redirect, or pool.", { exact: true })).toBeVisible();
+    await expect(create.locator("#screenCause")).toBeVisible();
+    expect(publishRequestCount).toBe(0);
 
     if (captureVisuals) {
-      await mkdir(captureDirectory, { recursive: true });
       await prepareForVisualCapture(page);
-      await page.screenshot({
-        fullPage: true,
-        path: path.join(captureDirectory, "implementation-default-desktop.png"),
-      });
+      await captureFrame(create, "implementation-default-desktop.png");
     }
 
-    await page.locator('[data-create-mode="offset"]').click();
+    await create.getByRole("button", { name: "Future flourishing" }).click();
+    await create.locator('[data-request-kind="fund"]').click();
 
-    await expect(page).toHaveURL(/\?mode=offset$/);
-    await expect(page.locator('[data-create-mode="offset"]')).toHaveAttribute(
-      "aria-pressed",
-      "true",
+    await expect(create.locator("#fundModeGrid .fund-mode-choice")).toHaveCount(4);
+    await expect(create.locator('[data-fund-mode="commonGround"]')).toContainText(
+      "Common Ground Pool",
     );
-    await expect(page.getByRole("heading", { name: "Redirect planned gifts." })).toBeVisible();
-    await expect(page.getByText("Plans stay", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Review offset safeguards" })).toHaveAttribute(
-      "href",
-      "/donation-offsets",
+    await expect(create.locator('[data-fund-mode="dac"]')).toContainText("Threshold pool");
+
+    await create.locator('[data-fund-mode="commonGround"]').click();
+    await expect(create.locator("#commonGroundFields")).toBeVisible();
+    await expect(create.locator("#dacCreateFields")).toBeHidden();
+    await expect(
+      create.getByText(/Both gain \$1,000 by their own estimates\./),
+    ).toBeVisible();
+    expect(publishRequestCount).toBe(0);
+
+    const commonGroundWords = await create.locator("#commonGroundFields").evaluate((element) =>
+      (element.textContent || "").trim().split(/\s+/).filter(Boolean).length,
     );
-
-    await page.locator('[data-create-mode="pool"]').click();
-
-    await expect(page).toHaveURL(/\?mode=pool$/);
-    await expect(page.getByRole("heading", { name: "Pay only if the pool fills." })).toBeVisible();
-    await expect(page.getByLabel("Pool process")).toBeVisible();
-    await expect(page.getByText("Set your cap", { exact: true })).toBeVisible();
-    await expect(page.getByText("Pay ≤ cap", { exact: true })).toBeVisible();
-    await expect(page.getByText("Pay $0", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Explore pools" })).toHaveAttribute(
-      "href",
-      "/pools",
-    );
-
-    const selectedRouteWords = (await page.locator("#selected-route-panel").innerText())
-      .trim()
-      .split(/\s+/);
-    expect(selectedRouteWords.length).toBeLessThanOrEqual(40);
-
-    await expect(page.getByText("How it works", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Who this is for", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("Next step", { exact: true })).toHaveCount(0);
-
-    const preservesDraftBoundary = await page.evaluate(() =>
-      document.body.textContent?.includes("Nothing happens until you confirm."),
-    );
-    expect(preservesDraftBoundary).toBe(true);
+    expect(commonGroundWords).toBeLessThanOrEqual(95);
 
     if (captureVisuals) {
-      await prepareForVisualCapture(page);
-      await page.screenshot({
-        fullPage: true,
-        path: path.join(captureDirectory, "implementation-selected-pool-desktop.png"),
-      });
+      await captureFrame(create, "implementation-common-ground-desktop.png");
+      await captureCommonGroundPanel(create, "implementation-common-ground-panel-desktop.png");
 
       const liveContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
       const livePage = await liveContext.newPage();
@@ -102,58 +95,31 @@ test.describe("Create route workbench", () => {
     }
   });
 
-  test("shows a distinct hover color for each route", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    await page.goto("/create");
-
-    const expectedHoverColors = [
-      ["trade", "rgb(220, 239, 253)"],
-      ["offset", "rgb(236, 234, 255)"],
-      ["pool", "rgb(241, 247, 204)"],
-      ["back", "rgb(231, 239, 229)"],
-    ] as const;
-    const observedHoverColors: string[] = [];
-
-    for (const [mode, expectedColor] of expectedHoverColors) {
-      const routeButton = page.locator(`[data-create-mode="${mode}"]`);
-      await routeButton.hover();
-      await expect(routeButton).toHaveCSS("background-color", expectedColor);
-      observedHoverColors.push(
-        await routeButton.evaluate((element) => getComputedStyle(element).backgroundColor),
-      );
-    }
-
-    expect(new Set(observedHoverColors).size).toBe(expectedHoverColors.length);
-  });
-
-  test("keeps the route chooser usable without horizontal overflow on mobile", async ({ page }) => {
+  test("keeps the unified Common Ground editor usable without horizontal overflow on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/create?mode=offset");
+    await page.goto("/create");
+    const create = page.frameLocator('iframe[title="Moral Trade Create"]');
 
-    await expect(page.locator('[data-create-mode="offset"]')).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await page.locator('[data-create-mode="back"]').click();
-    await expect(page.getByRole("heading", { name: "Fund a verified gap." })).toBeVisible();
-    await expect(page.getByText("No funds move", { exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: "Start review" })).toHaveAttribute(
-      "href",
-      "/create?mode=back",
-    );
+    await create.getByRole("button", { name: "Future flourishing" }).click();
+    await create.locator('[data-request-kind="fund"]').click();
+    await create.locator('[data-fund-mode="commonGround"]').click();
+    await expect(create.locator("#commonGroundFields")).toBeVisible();
 
-    const hasHorizontalOverflow = await page.evaluate(
-      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    const frameHasHorizontalOverflow = await create.locator("html").evaluate(
+      (element) => element.scrollWidth > element.clientWidth + 1,
     );
-    expect(hasHorizontalOverflow).toBe(false);
+    const parentHasHorizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    );
+    expect(frameHasHorizontalOverflow).toBe(false);
+    expect(parentHasHorizontalOverflow).toBe(false);
 
     if (captureVisuals) {
       await mkdir(captureDirectory, { recursive: true });
       await prepareForVisualCapture(page);
-      await page.screenshot({
-        fullPage: true,
-        path: path.join(captureDirectory, "implementation-mobile.png"),
-      });
+      await captureFrame(create, "implementation-common-ground-mobile.png");
+      await page.setViewportSize({ width: 390, height: 2200 });
+      await captureCommonGroundPanel(create, "implementation-common-ground-panel-mobile.png");
     }
   });
 

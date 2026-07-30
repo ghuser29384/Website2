@@ -54,13 +54,16 @@ export async function persistCreateSubmission(input: {
   }
 
   const isPool = row.target_type === "mpgf_pool_proposal";
+  const isCommonGround = Boolean(validated.poolTerms?.commonGround);
   const kindLabel = validated.kind === "donation_redirect"
     ? "Donation redirect proposal"
     : validated.kind === "existing_pool_contribution"
       ? "Existing-pool contribution offer"
-      : isPool
-        ? "Moral public-goods pool proposal"
-        : "Pledge-swap proposal";
+      : isCommonGround
+        ? "Common Ground Pool proposal"
+        : isPool
+          ? "Moral public-goods pool proposal"
+          : "Pledge-swap proposal";
 
   return {
     id: row.submission_id,
@@ -72,9 +75,11 @@ export async function persistCreateSubmission(input: {
     canonicalUrl: new URL(row.canonical_path, input.origin).toString(),
     objectLabel: kindLabel,
     title: "Your submission is in review.",
-    lede: isPool
-      ? "The pool proposal is durable but not public and cannot accept pledges until its recipient, underwriting, reserve, formula, and operator-review gates are complete."
-      : "The proposal is durable but not public. It creates no obligation until review is complete and both sides confirm final terms.",
+    lede: isCommonGround
+      ? "The shared-project split is saved privately. It cannot accept pledges until every named participant confirms and the review gates pass."
+      : isPool
+        ? "The pool proposal is durable but not public and cannot accept pledges until its recipient, underwriting, reserve, formula, and operator-review gates are complete."
+        : "The proposal is durable but not public. It creates no obligation until review is complete and both sides confirm final terms.",
     visibility: "Private until approved",
     openStatus: "Pending Moral Trade review",
   };
