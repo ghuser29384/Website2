@@ -1,0 +1,100 @@
+name: PR 212 final publication observer
+
+on:
+  push:
+    branches:
+      - ops/pr212-complete-ui-status-20260730
+    paths:
+      - .github/workflows/pr212-final-publication-observer.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: pr212-final-publication-observer
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: ops/pr212-final-ui-publish-20260730
+      TARGET_WORKFLOW: publish-pr212-final-ui.yml
+      TARGET_HEAD: aa9f63b45bb24a5a782550fa3315fcdf6baf15a3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Poll exact publication run to terminal state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-final-publication
+          run_id=""
+          run_status=""
+          run_conclusion=""
+
+          for attempt in $(seq 1 280); do
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$TARGET_WORKFLOW" \
+              --branch "$TARGET_BRANCH" \
+              --limit 50 \
+              --json databaseId,headSha,status,conclusion,createdAt,event,url,displayTitle \
+              > /tmp/pr212-publication-runs.json
+
+            run_id="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/pr212-publication-runs.json)"
+            run_status="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/pr212-publication-runs.json)"
+            run_conclusion="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/pr212-publication-runs.json)"
+
+            if [[ -n "$run_id" && "$run_status" == "completed" ]]; then
+              break
+            fi
+            sleep 12
+          done
+
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > /tmp/pr212-publication-run.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/pr212-publication-jobs.json
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/pr212-publication-failed.log 2>&1 || true
+          else
+            printf '%s\n' '{}' > /tmp/pr212-publication-run.json
+            printf '%s\n' '{"jobs":[]}' > /tmp/pr212-publication-jobs.json
+            printf '%s\n' 'No exact publication run found.' > /tmp/pr212-publication-failed.log
+          fi
+
+          current_pr_head="$(gh api repos/${GITHUB_REPOSITORY}/pulls/212 --jq .head.sha)"
+          jq -n \
+            --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg target_head "$TARGET_HEAD" \
+            --arg selected_run_id "$run_id" \
+            --arg selected_run_status "$run_status" \
+            --arg selected_run_conclusion "$run_conclusion" \
+            --arg current_pr_head "$current_pr_head" \
+            --slurpfile runs /tmp/pr212-publication-runs.json \
+            --slurpfile run /tmp/pr212-publication-run.json \
+            --slurpfile jobs /tmp/pr212-publication-jobs.json \
+            '{generated_at:$generated_at,target_head:$target_head,selected_run_id:$selected_run_id,selected_run_status:$selected_run_status,selected_run_conclusion:$selected_run_conclusion,current_pr_head:$current_pr_head,runs:$runs[0],run:$run[0],jobs:$jobs[0].jobs}' \
+            > ops/pr212-final-publication/run-report.json
+          cp /tmp/pr212-publication-failed.log ops/pr212-final-publication/failed-log.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-final-publication/run-report.json ops/pr212-final-publication/failed-log.txt
+          git commit -m "Record PR 212 final publication result"
+          git push origin HEAD:ops/pr212-complete-ui-status-20260730
+
+          if [[ -z "$run_id" ]]; then
+            echo "No exact publication run was found." >&2
+            exit 1
+          fi
+          if [[ "$run_status" != "completed" ]]; then
+            echo "Publication run did not reach a terminal state within the polling window." >&2
+            exit 1
+          fi
