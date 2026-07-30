@@ -1,0 +1,79 @@
+name: Record PR 212 clean source tree
+
+on:
+  push:
+    branches:
+      - agent/pr212-clean-reconstruction-tree-record-20260730
+    paths:
+      - .github/workflows/record-pr212-clean-source-tree.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  record:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_PR_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+      FINAL_BRANCH: agent/pr212-clean-reconstruction-20260730
+      RECORD_BRANCH: agent/pr212-clean-reconstruction-tree-record-20260730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-clean-reconstruction-tree-record-20260730
+          fetch-depth: 0
+
+      - name: Verify and record the exact clean-source commit and tree
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch origin \
+            "refs/heads/feat/institutional-trade-system:refs/remotes/origin/feat/institutional-trade-system" \
+            "refs/heads/${FINAL_BRANCH}:refs/remotes/origin/${FINAL_BRANCH}"
+
+          actual_pr_head="$(git rev-parse refs/remotes/origin/feat/institutional-trade-system)"
+          final_head="$(git rev-parse "refs/remotes/origin/${FINAL_BRANCH}")"
+          if [[ "$actual_pr_head" != "$EXPECTED_PR_HEAD" ]]; then
+            echo "PR #212 moved; refusing to record a different base." >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "$EXPECTED_PR_HEAD" "$final_head"
+
+          cat > /tmp/expected-files.txt <<'FILES'
+          .github/scripts/institutional-trade-qa-e2e.mjs
+          src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
+          src/app/institutions/[organizationId]/page.tsx
+          src/app/institutions/actions.ts
+          src/app/institutions/individual/deals/[dealId]/page.tsx
+          src/components/institutions/institutional-deal-workspace.tsx
+          src/components/institutions/institutional-organization-administration.tsx
+          src/components/institutions/institutional-pool-workspace.tsx
+          src/institutional-authorization-snapshot.test.ts
+          src/institutional-individual-capacity.test.ts
+          src/institutional-product-completeness.test.ts
+          src/institutional-trade-migration.test.ts
+          src/institutional-trade-wiring.test.ts
+          src/lib/institutional-data.ts
+          src/lib/institutional-trade.ts
+          supabase/migrations/20260726123000_institutional_trade_system.sql
+          FILES
+          git diff --name-only "$EXPECTED_PR_HEAD" "$final_head" | sort > /tmp/actual-files.txt
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+          tree_sha="$(git rev-parse "${final_head}^{tree}")"
+          mkdir -p ops/pr212-clean-reconstruction
+          {
+            echo "base_commit_sha=${EXPECTED_PR_HEAD}"
+            echo "commit_sha=${final_head}"
+            echo "tree_sha=${tree_sha}"
+          } > ops/pr212-clean-reconstruction/final-source-tree.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-clean-reconstruction/final-source-tree.txt
+          git commit -m "Record PR 212 clean reconstruction source tree"
+          git push origin "HEAD:refs/heads/${RECORD_BRANCH}"
