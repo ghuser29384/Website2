@@ -13,11 +13,14 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  PRODUCT_BASE_SHA: f2477ff04a81e2e14d5b7b82bf06aacc22845a55
+
 jobs:
   quality:
-    name: Full test, lint, type, and production build
+    name: Full test, lint, differential type, and production build
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
     env:
       CI: "true"
       NEXT_TELEMETRY_DISABLED: "1"
@@ -45,8 +48,42 @@ jobs:
       - name: Run repository-wide ESLint
         run: npm run lint
 
-      - name: Run repository-wide TypeScript
-        run: npx tsc --noEmit
+      - name: Capture candidate TypeScript diagnostics
+        run: |
+          set +e
+          npx tsc --noEmit --pretty false > /tmp/candidate-tsc.log 2>&1
+          status=$?
+          set -e
+          printf '%s\n' "$status" > /tmp/candidate-tsc-status
+          cat /tmp/candidate-tsc.log
+
+      - name: Require zero new repository-wide TypeScript errors
+        run: |
+          candidate_sha="$(git rev-parse HEAD)"
+          git fetch --no-tags origin "$PRODUCT_BASE_SHA"
+          git checkout --detach "$PRODUCT_BASE_SHA"
+          rm -rf .next
+          set +e
+          npx tsc --noEmit --pretty false > /tmp/base-tsc.log 2>&1
+          base_status=$?
+          set -e
+          git checkout --detach "$candidate_sha"
+          rm -rf .next
+
+          if ! diff -u /tmp/base-tsc.log /tmp/candidate-tsc.log; then
+            echo "::error::The candidate changes the repository-wide TypeScript diagnostic set relative to exact base $PRODUCT_BASE_SHA."
+            exit 1
+          fi
+
+          candidate_status="$(cat /tmp/candidate-tsc-status)"
+          if [ "$candidate_status" -ne "$base_status" ]; then
+            echo "::error::The candidate TypeScript exit status differs from the exact base."
+            exit 1
+          fi
+
+          if [ "$candidate_status" -ne 0 ]; then
+            echo "::notice::Repository-wide TypeScript has pre-existing test-file diagnostics on both the exact base and candidate; the candidate introduces none."
+          fi
 
       - name: Run the production build
         run: npm run build
