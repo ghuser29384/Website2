@@ -1,0 +1,391 @@
+name: Temporary Threshold Sign-On current-main release gate
+
+on:
+  push:
+    branches:
+      - integration/threshold-sign-on-current-main-20260730
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: threshold-sign-on-current-main-release-gate-20260730
+  cancel-in-progress: false
+
+jobs:
+  validate-and-publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_REPOSITORY: ghuser29384/Website2
+      EXPECTED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+      PRODUCT_BRANCH: feature/collective-commitments-in-create-20260729
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      COLLECTIVE_COMMITMENTS_ENABLED: "true"
+      COLLECTIVE_COMMITMENT_MIN_DEADLINE_MINUTES: "1"
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      VERCEL_ENV: preview
+      NEXT_PUBLIC_VERCEL_ENV: preview
+      ARTIFACT_DIR: ${{ github.workspace }}/threshold-sign-on-current-main-gate
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Validate exact boundary and secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "integration/threshold-sign-on-current-main-20260730"
+          for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY QA_SUPABASE_DB_URL; do
+            test -n "${!name:-}" || { echo "Missing required secret: $name" >&2; exit 1; }
+          done
+
+      - name: Check out exact integration head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Verify current-main ancestry and product branch boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARTIFACT_DIR"
+          git fetch origin main "$PRODUCT_BRANCH"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git merge-base "$EXPECTED_MAIN" HEAD)" = "$EXPECTED_MAIN"
+          printf '%s\n' \
+            "source_head=$(git rev-parse HEAD)" \
+            "main=${EXPECTED_MAIN}" \
+            "product_before=$(git rev-parse origin/$PRODUCT_BRANCH)" \
+            > "$ARTIFACT_DIR/exact-boundary.txt"
+
+      - name: Apply Threshold Sign-On terminology and inherited TypeScript repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          exact = {
+              "# Collective identity-threshold commitments": "# Threshold Sign-On: identity-threshold commitments",
+              "Create · collective commitment": "Create · Threshold Sign-On",
+              "No collective-commitment credential": "No Threshold Sign-On credential",
+              "Open and completed commitments": "Open and completed sign-ons",
+              "No collective commitments yet.": "No Threshold Sign-Ons yet.",
+          }
+          general = {
+              "Collective Commitments": "Threshold Sign-Ons",
+              "Collective Commitment": "Threshold Sign-On",
+              "Collective commitments": "Threshold Sign-Ons",
+              "Collective commitment": "Threshold Sign-On",
+              "collective commitments": "threshold sign-ons",
+              "collective commitment": "threshold sign-on",
+          }
+          tracked = subprocess.run(
+              ["git", "ls-files", "-z"], check=True, stdout=subprocess.PIPE
+          ).stdout.split(b"\0")
+          renamed = []
+          for raw in tracked:
+              if not raw:
+                  continue
+              path = Path(raw.decode("utf-8"))
+              if path.parts[:2] == (".github", "workflows"):
+                  continue
+              if path.parts[:2] == ("supabase", "migrations"):
+                  continue
+              try:
+                  before = path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+              after = before
+              for old, new in exact.items():
+                  after = after.replace(old, new)
+              for old, new in general.items():
+                  after = after.replace(old, new)
+              if after != before:
+                  path.write_text(after, encoding="utf-8")
+                  renamed.append(str(path))
+          if not renamed:
+              raise SystemExit("No user-facing Threshold Sign-On rename was applied.")
+          Path("threshold-sign-on-current-main-gate/renamed-files.txt").write_text(
+              "\n".join(renamed) + "\n"
+          )
+
+          def replace_exact(path_text, old, new, label, expected=1):
+              path = Path(path_text)
+              text = path.read_text()
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(f"{path}: expected {expected} {label}; found {count}")
+              path.write_text(text.replace(old, new))
+
+          replace_exact(
+              "src/lib/discovery-ranking.test.ts",
+              'function offer(overrides: Partial<OfferDiscoveryLike> & Pick<OfferDiscoveryLike, "id">): OfferDiscoveryLike {\n  return {\n    id: overrides.id,\n',
+              'function offer(overrides: Partial<OfferDiscoveryLike> & Pick<OfferDiscoveryLike, "id">): OfferDiscoveryLike {\n  const { id, ...rest } = overrides;\n  return {\n    id,\n',
+              "offer override destructuring",
+          )
+          replace_exact(
+              "src/lib/discovery-ranking.test.ts",
+              '    donationOffset: null,\n    ...overrides,\n',
+              '    donationOffset: null,\n    ...rest,\n',
+              "offer rest spread",
+          )
+          replace_exact(
+              "src/lib/discovery-ranking.test.ts",
+              'function profile(\n  overrides: Partial<ProfileDiscoveryLike> & Pick<ProfileDiscoveryLike, "id" | "resolvedName">,\n): ProfileDiscoveryLike {\n  return {\n    id: overrides.id,\n    resolvedName: overrides.resolvedName,\n    display_name: overrides.resolvedName,\n',
+              'function profile(\n  overrides: Partial<ProfileDiscoveryLike> & Pick<ProfileDiscoveryLike, "id" | "resolvedName">,\n): ProfileDiscoveryLike {\n  const { id, resolvedName, ...rest } = overrides;\n  return {\n    id,\n    resolvedName,\n    display_name: resolvedName,\n',
+              "profile override destructuring",
+          )
+          replace_exact(
+              "src/lib/discovery-ranking.test.ts",
+              '    created_at: "2026-07-01T00:00:00.000Z",\n    ...overrides,\n',
+              '    created_at: "2026-07-01T00:00:00.000Z",\n    ...rest,\n',
+              "profile rest spread",
+          )
+          replace_exact(
+              "src/lib/funding.test.ts",
+              'getMoralTradeFundingReadiness({} as NodeJS.ProcessEnv)',
+              'getMoralTradeFundingReadiness({ NODE_ENV: "test" } as NodeJS.ProcessEnv)',
+              "empty funding environment",
+          )
+          replace_exact(
+              "src/lib/funding.test.ts",
+              '  const readiness = getMoralTradeFundingReadiness({\n    MORAL_TRADE_FUNDING_MODE:',
+              '  const readiness = getMoralTradeFundingReadiness({\n    NODE_ENV: "test",\n    MORAL_TRADE_FUNDING_MODE:',
+              "funding NODE_ENV fields",
+              expected=3,
+          )
+          replace_exact(
+              "src/lib/mpgf/failure-bonus-operator.test.ts",
+              '  assert.equal(result.ok, true);\n  if (!result.ok) throw new Error(result.errors.join(" "));\n',
+              '  if (!result.ok) throw new Error(result.errors.join(" "));\n  assert.equal(result.ok, true);\n',
+              "failure-bonus result guard",
+          )
+          for label, anchor in [
+              ("preview", '  const previewSandbox = getConditionalPaymentsEnvironment({\n    VERCEL_ENV:'),
+              ("production", '  const productionSandbox = getConditionalPaymentsEnvironment({\n    CONDITIONAL_PAYMENTS_MODE:'),
+              ("disabled", '  const disabled = getConditionalPaymentsEnvironment({\n    CONDITIONAL_PAYMENTS_MODE:'),
+              ("invalid-live", '  const invalidLive = getConditionalPaymentsEnvironment({\n    CONDITIONAL_PAYMENTS_MODE:'),
+          ]:
+              replace_exact(
+                  "src/lib/payments/conditional-state.test.ts",
+                  anchor,
+                  anchor.replace("{\n    ", '{\n    NODE_ENV: "test",\n    ', 1),
+                  f"{label} payment NODE_ENV",
+              )
+          replace_exact(
+              "src/lib/public-route-smoke.test.ts",
+              'function flattenPrimaryNavHrefs() {\n  return getPrimaryNavLinks(false).flatMap((link) =>\n    "items" in link && link.items\n      ? link.items.map((item) => item.href)\n      : "href" in link && link.href\n        ? [link.href]\n        : [],\n  );\n}\n',
+              'function flattenPrimaryNavHrefs(): string[] {\n  return getPrimaryNavLinks(false).map((link) => link.href);\n}\n',
+              "primary navigation flattening",
+          )
+          replace_exact(
+              "src/lib/recommendation-training-execution.test.ts",
+              '{ VERCEL_DEPLOYMENT_ID: "dpl_canonical" },',
+              '{ NODE_ENV: "test", VERCEL_DEPLOYMENT_ID: "dpl_canonical" },',
+              "deployment execution environment",
+          )
+          replace_exact(
+              "src/lib/recommendation-training-execution.test.ts",
+              '    {},\n    new Date(',
+              '    { NODE_ENV: "test" },\n    new Date(',
+              "manual execution environments",
+              expected=2,
+          )
+          replace_exact(
+              "src/lib/x-profile-connector.test.ts",
+              'const readyEnv = {\n  X_PROFILE_CONNECTOR_ENABLED:',
+              'const readyEnv = {\n  NODE_ENV: "test",\n  X_PROFILE_CONNECTOR_ENABLED:',
+              "ready X connector NODE_ENV",
+          )
+          replace_exact(
+              "src/lib/x-profile-connector.test.ts",
+              '    getXProfileConnectorAvailability({\n      env: {},\n',
+              '    getXProfileConnectorAvailability({\n      env: { NODE_ENV: "test" },\n',
+              "disabled X connector NODE_ENV",
+          )
+          replace_exact(
+              "src/live-account-data.test.ts",
+              r'/Cache-Control.*private, no-store/s',
+              r'/Cache-Control[\s\S]*private, no-store/',
+              "ES2017-compatible live-account regex",
+          )
+          replace_exact(
+              "src/sitewide-account-identity.test.ts",
+              r'/Cache-Control.*private, no-store/su',
+              r'/Cache-Control[\s\S]*private, no-store/u',
+              "ES2017-compatible sitewide identity regex",
+          )
+          PY
+
+          if git grep -n -I -E '(Collective|collective) [Cc]ommitments?' -- . ':!supabase/migrations/**' ':!.github/workflows/**'; then
+            echo "Legacy spaced user-facing Collective Commitment terminology remains." >&2
+            exit 1
+          fi
+          if git grep -n -I -E 'Threshold Signatures?' -- . ':!.github/workflows/**'; then
+            echo "The cryptographically ambiguous Threshold Signature name must not be used." >&2
+            exit 1
+          fi
+          git grep -n -I 'Threshold Sign-On' -- docs public src > "$ARTIFACT_DIR/threshold-sign-on-occurrences.txt"
+          test -s "$ARTIFACT_DIR/threshold-sign-on-occurrences.txt"
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Generate isolated runtime secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          master_key="$(openssl rand -base64 32 | tr -d '\n')"
+          cron_secret="$(openssl rand -hex 32)"
+          echo "::add-mask::$master_key"
+          echo "::add-mask::$cron_secret"
+          echo "COLLECTIVE_COMMITMENT_MASTER_KEY=$master_key" >> "$GITHUB_ENV"
+          echo "CRON_SECRET=$cron_secret" >> "$GITHUB_ENV"
+
+      - name: Install dependencies and run complete candidate suite
+        shell: bash
+        run: |
+          set -uo pipefail
+          npm ci
+          set +e
+          npm test > "$ARTIFACT_DIR/candidate-tests.log" 2>&1
+          status=$?
+          set -e
+          echo "$status" > "$ARTIFACT_DIR/candidate-test-status.txt"
+          cat "$ARTIFACT_DIR/candidate-tests.log"
+
+      - name: Run exact-main complete test baseline
+        shell: bash
+        run: |
+          set -uo pipefail
+          base_dir="$RUNNER_TEMP/exact-main"
+          git worktree add --detach "$base_dir" "$EXPECTED_MAIN"
+          cd "$base_dir"
+          npm ci
+          set +e
+          npm test > "$ARTIFACT_DIR/base-tests.log" 2>&1
+          status=$?
+          set -e
+          echo "$status" > "$ARTIFACT_DIR/base-test-status.txt"
+          cat "$ARTIFACT_DIR/base-tests.log"
+
+      - name: Enforce exact-base full-test policy and test-count non-regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os, re
+          root = Path(os.environ["ARTIFACT_DIR"])
+          def parse(name):
+              text = (root / name).read_text(errors="replace")
+              failures = {
+                  m.group(1).strip()
+                  for m in re.finditer(r"^not ok\s+\d+\s+-\s+(.+?)(?:\s+#.*)?$", text, re.M)
+              }
+              totals = [int(v) for v in re.findall(r"^(?:#|ℹ) tests\s+(\d+)\s*$", text, re.M)]
+              return failures, (totals[-1] if totals else None)
+          candidate_failures, candidate_total = parse("candidate-tests.log")
+          base_failures, base_total = parse("base-tests.log")
+          new_failures = sorted(candidate_failures - base_failures)
+          if new_failures:
+              raise SystemExit(f"Candidate introduced new failing tests: {new_failures}")
+          if candidate_total is None or base_total is None or candidate_total < base_total:
+              raise SystemExit(f"Test-count regression: candidate={candidate_total}, base={base_total}")
+          print(f"No new failures; candidate tests={candidate_total}, base tests={base_total}.")
+          PY
+
+      - name: Run absolute TypeScript, ESLint, and production-build gates
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee "$ARTIFACT_DIR/typescript.log"
+          npm run lint 2>&1 | tee "$ARTIFACT_DIR/eslint.log"
+          npm run build 2>&1 | tee "$ARTIFACT_DIR/build.log"
+
+      - name: Run exact QA transactional database regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          if "hvmxfjjbdcgjjudmthdz" not in (parsed.username or ""):
+              raise SystemExit("Refusing database outside exact MoralTrade QA.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com" or parsed.port != 5432:
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/collective_identity_threshold_commitments.sql \
+            2>&1 | tee "$ARTIFACT_DIR/database-regression.log"
+          for marker in \
+            "PASS: duplicate-human and duplicate-account signatures are rejected" \
+            "PASS: withdrawal and re-signing preserve exact private counts" \
+            "PASS: incomplete or altered reveal manifests publish zero identities" \
+            "PASS: exact manifest activation publishes all names atomically and only opted-in affiliations" \
+            "PASS: activation and expiry erase private ciphertext and per-commitment keys" \
+            "PASS: frozen terms and direct sensitive-table access are denied"; do
+            grep -Fq "$marker" "$ARTIFACT_DIR/database-regression.log"
+          done
+
+      - name: Commit passing product tree and publish to product branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/temporary-threshold-sign-on-release.yml
+          git add --all
+          git diff --cached --check
+          git commit -m "Rename and validate Threshold Sign-On on current main"
+          candidate="$(git rev-parse HEAD)"
+          git fetch origin "$PRODUCT_BRANCH"
+          product_before="$(awk -F= '/^product_before=/{print $2}' "$ARTIFACT_DIR/exact-boundary.txt")"
+          test "$(git rev-parse origin/$PRODUCT_BRANCH)" = "$product_before"
+          git push origin "HEAD:$PRODUCT_BRANCH"
+          printf '%s\n' \
+            "candidate_head=${candidate}" \
+            "exact_main=${EXPECTED_MAIN}" \
+            "full_test_differential=PASS" \
+            "typescript=PASS" \
+            "eslint=PASS" \
+            "production_build=PASS" \
+            "database_regression=PASS" \
+            "production_changed=NO" \
+            > "$ARTIFACT_DIR/result.txt"
+          gh pr comment 286 --repo "$EXPECTED_REPOSITORY" --body "Exact current main \`${EXPECTED_MAIN}\` was integrated. User-facing copy is now **Threshold Sign-On** while internal routes and schema identifiers remain stable. Candidate \`${candidate}\` passed the complete exact-base test policy, absolute TypeScript, absolute ESLint, production build, and transactional QA database regression. Production remains unchanged pending protected-Preview rendered QA and controlled production enablement."
+
+      - name: Report workflow result on product PR
+        if: always()
+        shell: bash
+        run: |
+          status="${{ job.status }}"
+          gh pr comment 286 --repo "$EXPECTED_REPOSITORY" --body "Threshold Sign-On current-main gate run \`${GITHUB_RUN_ID}\` completed with job status **${status}** from source \`${GITHUB_SHA}\`."
+
+      - name: Upload complete release-gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: threshold-sign-on-current-main-gate-${{ github.run_id }}
+          path: threshold-sign-on-current-main-gate
+          if-no-files-found: warn
+          retention-days: 14
