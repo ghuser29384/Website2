@@ -48,7 +48,8 @@ jobs:
           gzip_file=/tmp/pr212-final.patch.gz
           patch=/tmp/pr212-final.patch
           : > "$payload"
-          for index in $(seq -w 0 10); do
+          for number in $(seq 0 10); do
+            index="$(printf '%03d' "$number")"
             git show "refs/remotes/origin/${PAYLOAD_BRANCH}:.github/pr212-final-payload.chunk-${index}" >> "$payload"
           done
 
