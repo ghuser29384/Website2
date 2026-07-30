@@ -13,6 +13,12 @@ const FUND_KICKER = [
   '<div class="fund-mode-kicker">Choose a funding structure</div>',
 ] as const;
 
+const BLANK_FAVICON = '  <link rel="icon" href="data:," />\n';
+const CANONICAL_FAVICONS = `  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
+  <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
+  <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
+`;
+
 const THRESHOLD_POOL_CARD = `                <button type="button" class="fund-mode-choice" data-fund-mode="dac" aria-pressed="false">
                   <span class="fund-mode-mark">Public-good pool</span>
                   <strong>Dominant assurance contract pool</strong>
@@ -92,6 +98,7 @@ export function integrateCommonGroundCreateSource(source: string) {
   if (source.includes("data-common-ground-create-integration-v1")) return source;
 
   let integrated = source;
+  integrated = replaceExactlyOnce(integrated, BLANK_FAVICON, CANONICAL_FAVICONS, "favicon");
   integrated = replaceExactlyOnce(integrated, HEADER_COPY[0], HEADER_COPY[1], "header-copy");
   integrated = replaceExactCount(integrated, REQUEST_COPY[0], REQUEST_COPY[1], 2, "request-copy");
   integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");

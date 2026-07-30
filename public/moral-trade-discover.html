@@ -6,6 +6,9 @@
   <meta name="theme-color" content="#050505">
   <meta name="description" content="Explore Moral Trade offers, threshold pools, and trusted counterparties through transparent, inspectable discovery views.">
   <link rel="canonical" href="https://moraltrade.org/discover">
+  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
   <title>Moral Trade — Discover</title>
   <style>
     html,body{margin:0;min-height:100%;background:#f7f5ef;color:#0b0b0a;font-family:system-ui,sans-serif}
@@ -56,7 +59,13 @@
           .replace(/&/g, "\\u0026")
           .replace(/\u2028/g, "\\u2028")
           .replace(/\u2029/g, "\\u2029");
+        const faviconLinks = [
+          '<link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+        ].join("");
         const headScripts = [
+          faviconLinks,
           '<link rel="stylesheet" href="/moral-trade-input-assist.css">',
           '<script src="/moral-trade-discover-local-time.js"></scr' + 'ipt>',
           `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};</scr` + 'ipt>',

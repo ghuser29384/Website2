@@ -1,8 +1,42 @@
 import { expect, test } from "@playwright/test";
 
+const CANONICAL_FAVICON = "/brand/moral-trade-mark.png?v=20260730";
+
+async function expectCanonicalFavicon(page: import("@playwright/test").Page) {
+  await expect
+    .poll(
+      async () =>
+        page.locator('head link[rel*="icon" i]').evaluateAll((links) =>
+          links.map((link) => {
+            const url = new URL((link as HTMLLinkElement).href);
+            return `${url.pathname}${url.search}`;
+          }),
+        ),
+      { timeout: 15_000 },
+    )
+    .toEqual(expect.arrayContaining([CANONICAL_FAVICON]));
+
+  await expect
+    .poll(
+      async () =>
+        page.locator('head link[rel*="icon" i]').evaluateAll(
+          (links, canonicalFavicon) =>
+            links.length > 0 &&
+            links.every((link) => {
+              const url = new URL((link as HTMLLinkElement).href);
+              return `${url.pathname}${url.search}` === canonicalFavicon;
+            }),
+          CANONICAL_FAVICON,
+        ),
+      { timeout: 15_000 },
+    )
+    .toBe(true);
+}
+
 async function completeMandatoryWalkthrough(page: import("@playwright/test").Page) {
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
   await expect(page).toHaveURL(/\/walkthrough(?:\?|$)/);
+  await expectCanonicalFavicon(page);
 }
 
 async function expectUnifiedCreate(page: import("@playwright/test").Page) {
@@ -14,6 +48,7 @@ async function expectUnifiedCreate(page: import("@playwright/test").Page) {
       .frameLocator('iframe[data-create-interface-frame="true"]')
       .getByRole("heading", { level: 1, name: "What do you want to improve?" }),
   ).toBeVisible();
+  await expectCanonicalFavicon(page);
 }
 
 const feedFixture = {
@@ -82,6 +117,7 @@ test.describe("Home, Trade, and Create entry routing", () => {
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/$/);
+    await expectCanonicalFavicon(page);
     await expect(page.locator('[data-create-interface-frame="true"]')).toHaveCount(0);
     const tradeEntry = page.locator('[data-page="trade"]');
     await expect(tradeEntry).toBeVisible();
@@ -136,6 +172,7 @@ test.describe("Home, Trade, and Create entry routing", () => {
     });
 
     await page.goto("/feed", { waitUntil: "domcontentloaded" });
+    await expectCanonicalFavicon(page);
 
     const card = page.locator(
       '.mt-feed-card[data-feed-item-id="feed-identity-opportunity"]',
@@ -154,5 +191,12 @@ test.describe("Home, Trade, and Create entry routing", () => {
     await expect(page.locator("[data-mt-live-trade-feed]")).toHaveCount(0);
     expect(liveNowRequests).toBe(1);
     expect(obsoleteAssetRequests).toEqual([]);
+  });
+
+  test("uses the canonical favicon on document-replacement routes", async ({ page }) => {
+    for (const route of ["/feed", "/walkthrough", "/discover"]) {
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await expectCanonicalFavicon(page);
+    }
   });
 });
