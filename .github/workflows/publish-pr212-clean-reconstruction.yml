@@ -131,6 +131,11 @@ jobs:
           cp /tmp/pr212-clean-reconstruction-expected-files.txt "$evidence/expected-files.txt"
           cp /tmp/pr212-clean-reconstruction-actual-files.txt "$evidence/actual-files.txt"
           git diff --stat > "$evidence/diff-stat.txt"
+          cp "$patch" "$evidence/pr212-clean-reconstruction.patch"
+          tar --create --gzip --file "$evidence/reconstructed-source.tar.gz" \
+            --files-from /tmp/pr212-clean-reconstruction-expected-files.txt
+          sha256sum "$evidence/pr212-clean-reconstruction.patch" "$evidence/reconstructed-source.tar.gz" \
+            > "$evidence/reconstruction-artifact-hashes.txt"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -196,4 +201,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-# Retry with untracked reconstructed source included in the exact file inventory.
+# Export the verified reconstructed source and patch for deterministic authorization-snapshot repair.
