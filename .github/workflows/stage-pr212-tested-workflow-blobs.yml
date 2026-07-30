@@ -75,3 +75,5 @@ jobs:
           git add "$destination"
           git commit -m "Stage exact tested PR 212 workflow blobs"
           git push origin "HEAD:refs/heads/${STAGING_BRANCH}"
+
+# Retry after preserving a stable staging head for the publication commit.
