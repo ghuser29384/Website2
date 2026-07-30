@@ -130,6 +130,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
+        <link href={SITE_FAVICON_PATH} rel="icon" sizes="512x512" type="image/png" />
+        <link href={SITE_FAVICON_PATH} rel="shortcut icon" sizes="512x512" type="image/png" />
+        <link href={SITE_FAVICON_PATH} rel="apple-touch-icon" sizes="512x512" />
         {/* The same static stylesheets also serve the legacy HTML shell. */}
         {/* eslint-disable-next-line @next/next/no-css-tags */}
         <link href="/moral-trade-input-assist.css" rel="stylesheet" />
