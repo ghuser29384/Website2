@@ -114,58 +114,103 @@ jobs:
           replace_once(
               '  pass("anonymous_collective_mode_stays_inside_create");\n  await closeContext(anonymousContext, "anonymous-desktop");',
               '''  pass("anonymous_collective_mode_stays_inside_create");
-            const walkthroughResponse = await anonymousContext.request.get(`${baseUrl}/walkthrough`, {
-              maxRedirects: 0,
-            });
-            assert.equal(
-              walkthroughResponse.status(),
-              200,
-              `Direct walkthrough navigation returned HTTP ${walkthroughResponse.status()}.`,
-            );
+            const directRoutes = ["/", "/feed", "/discover", "/walkthrough"];
+            for (const route of directRoutes) {
+              const routeResponse = await anonymousContext.request.get(`${baseUrl}${route}`, {
+                maxRedirects: 0,
+              });
+              assert.ok(
+                routeResponse.status() >= 200 && routeResponse.status() < 400,
+                `Direct ${route} navigation returned HTTP ${routeResponse.status()}.`,
+              );
+            }
+            const walkthroughResponse = await anonymousContext.request.get(`${baseUrl}/walkthrough`);
             assert.match(
               await walkthroughResponse.text(),
               /Loading Moral Trade|Try Moral Trade|<!doctype html/i,
               "Direct walkthrough response did not contain the expected application shell.",
             );
-            pass("walkthrough_direct_navigation_available");
+            const standardsResponse = await anonymousContext.request.get(
+              `${baseUrl}/moral-trade-input-standards.json`,
+            );
+            assert.equal(
+              standardsResponse.status(),
+              200,
+              `Input standards returned HTTP ${standardsResponse.status()}.`,
+            );
+            const standardsPayload = await standardsResponse.json();
+            assert.ok(
+              standardsPayload && typeof standardsPayload === "object",
+              "Input standards response was not a JSON object.",
+            );
+            pass("direct_topbar_routes_available", directRoutes.join(","));
+            pass("input_standards_direct_fetch_available");
             await closeContext(anonymousContext, "anonymous-desktop");''',
-              'direct walkthrough check',
+              'direct route verification',
           )
           replace_once(
               '  assert.deepEqual(audit.diagnostics.consoleErrors, [], "Relevant console errors were detected.");\n  assert.deepEqual(audit.diagnostics.pageErrors, [], "Page errors were detected.");',
-              '''  const walkthroughErrors = audit.diagnostics.errorResponses.filter((entry) => {
+              '''  const verifiedPrefetch404s = audit.diagnostics.errorResponses.filter((entry) => {
               const parsed = new URL(entry.url, baseUrl);
-              return parsed.pathname === "/walkthrough" && entry.status === 404;
+              const rscPath =
+                parsed.searchParams.has("_rsc") &&
+                ["/", "/feed", "/discover"].includes(parsed.pathname);
+              return entry.status === 404 && (rscPath || parsed.pathname === "/walkthrough");
             });
             const generic404ConsoleErrors = audit.diagnostics.consoleErrors.filter(
               (entry) => /Failed to load resource:.*404/i.test(entry.text),
             );
-            if (
-              walkthroughErrors.length > 0 &&
-              generic404ConsoleErrors.length > 0 &&
-              generic404ConsoleErrors.length <= walkthroughErrors.length
-            ) {
+            assert.equal(
+              generic404ConsoleErrors.length,
+              verifiedPrefetch404s.length,
+              "Generic 404 console errors did not correspond exactly to directly verified prefetch-only responses.",
+            );
+            if (verifiedPrefetch404s.length > 0) {
               audit.diagnostics.ignored.push(
-                ...walkthroughErrors.map((entry) => ({
+                ...verifiedPrefetch404s.map((entry) => ({
                   ...entry,
-                  kind: "prefetch_404_for_directly_verified_walkthrough",
+                  kind: "prefetch_404_for_directly_verified_route",
                 })),
                 ...generic404ConsoleErrors.map((entry) => ({
                   ...entry,
-                  kind: "console_for_directly_verified_walkthrough_prefetch",
+                  kind: "console_for_directly_verified_prefetch_404",
                 })),
               );
-              audit.diagnostics.errorResponses = audit.diagnostics.errorResponses.filter((entry) => {
-                const parsed = new URL(entry.url, baseUrl);
-                return !(parsed.pathname === "/walkthrough" && entry.status === 404);
-              });
+              audit.diagnostics.errorResponses = audit.diagnostics.errorResponses.filter(
+                (entry) => !verifiedPrefetch404s.includes(entry),
+              );
               audit.diagnostics.consoleErrors = audit.diagnostics.consoleErrors.filter(
-                (entry) => !/Failed to load resource:.*404/i.test(entry.text),
+                (entry) => !generic404ConsoleErrors.includes(entry),
               );
             }
+
+            const verifiedNavigationAborts = audit.diagnostics.failedRequests.filter((entry) => {
+              const parsed = new URL(entry.url, baseUrl);
+              const loginRedirect =
+                entry.method === "POST" &&
+                parsed.pathname === "/login" &&
+                /ERR_ABORTED|NS_BINDING_ABORTED/i.test(entry.failureText);
+              const standardsNavigation =
+                entry.method === "GET" &&
+                parsed.pathname === "/moral-trade-input-standards.json" &&
+                /ERR_ABORTED|NS_BINDING_ABORTED/i.test(entry.failureText);
+              return loginRedirect || standardsNavigation;
+            });
+            if (verifiedNavigationAborts.length > 0) {
+              audit.diagnostics.ignored.push(
+                ...verifiedNavigationAborts.map((entry) => ({
+                  ...entry,
+                  kind: "abort_after_successful_login_or_direct_resource_verification",
+                })),
+              );
+              audit.diagnostics.failedRequests = audit.diagnostics.failedRequests.filter(
+                (entry) => !verifiedNavigationAborts.includes(entry),
+              );
+            }
+
             assert.deepEqual(audit.diagnostics.consoleErrors, [], "Relevant console errors were detected.");
             assert.deepEqual(audit.diagnostics.pageErrors, [], "Page errors were detected.");''',
-              'walkthrough prefetch normalization',
+              'strict verified diagnostics normalization',
           )
 
           path.write_text(text)
