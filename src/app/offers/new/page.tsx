@@ -47,22 +47,26 @@ export default async function OfferCreatePage({ searchParams }: OfferCreatePageP
   const requestedOffsetTemplate =
     requestedTemplate?.format === "donation_offset" ? requestedTemplate : null;
   const mode = single(resolved.mode);
+  const sourceOfferId = single(resolved.source_offer);
   const isOffsetRequest = Boolean(requestedOffsetTemplate) || mode === "offset";
 
   if (!isOffsetRequest) {
-    if (example === "seed-victoria") {
-      redirect("/trades/new?example=seed-victoria");
-    }
-
-    if (requestedTemplate?.format === "pledge_swap") {
-      redirect(`/trades/new?template=${encodeURIComponent(requestedTemplate.id)}`);
-    }
-
     if (mode === "pool") {
       redirect("/mpgf/pools/new?template=threshold-coalition");
     }
 
-    redirect("/trades/new");
+    const tradeParams = new URLSearchParams();
+    if (example === "seed-victoria") {
+      tradeParams.set("example", "seed-victoria");
+    }
+    if (requestedTemplate?.format === "pledge_swap") {
+      tradeParams.set("template", requestedTemplate.id);
+    }
+    if (sourceOfferId) {
+      tradeParams.set("source_offer", sourceOfferId);
+    }
+
+    redirect(`/trades/new${tradeParams.size ? `?${tradeParams.toString()}` : ""}`);
   }
 
   const requestedParticipationModeValue = single(resolved.offset_participation_mode);
@@ -98,6 +102,9 @@ export default async function OfferCreatePage({ searchParams }: OfferCreatePageP
   }
   if (initialPoolSide) {
     returnParams.set("offset_pool_side", initialPoolSide);
+  }
+  if (sourceOfferId) {
+    returnParams.set("source_offer", sourceOfferId);
   }
   const returnTo = `/offers/new?${returnParams.toString()}`;
   const supabaseReady = hasSupabaseEnv();
