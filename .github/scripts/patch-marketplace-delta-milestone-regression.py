@@ -53,8 +53,10 @@ def main() -> None:
   confirmation := public.confirm_agreement_version_v2(owner_profile_id, agreement_id_value, version_id_value);
 '''
     count = source.count(old)
-    if count != 1:
-        raise SystemExit(f"Expected one first member-confirmation marker; found {count}.")
+    if count != 2:
+        raise SystemExit(
+            f"Expected first and duplicate owner-confirmation markers; found {count}."
+        )
     args.materializer.write_text(source.replace(old, new, 1), encoding="utf-8")
     print(f"Aligned QA confirmation regression with milestone manifests in {args.materializer}.")
 
