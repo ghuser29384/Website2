@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 
 import { saveCoreOfferAction } from "@/app/core-trade-actions";
 import { CreateInterfaceFrame } from "@/components/create/create-interface-frame";
@@ -8,7 +9,7 @@ import {
   TradeDraftWorkbench,
   type TradeDraftValues,
 } from "@/components/core-trade/trade-draft-workbench";
-import { getViewer } from "@/lib/app-data";
+import { getOfferById, getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import {
   getPledgeTemplateInitialValues,
@@ -72,16 +73,27 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
     return <ConditionalDonationCreate params={resolvedSearchParams} />;
   }
 
-  const viewer = await getViewer();
+  const sourceOfferId = valueOf(resolvedSearchParams.source_offer);
+  const [viewer, sourceOffer] = await Promise.all([
+    getViewer(),
+    sourceOfferId ? getOfferById(sourceOfferId) : Promise.resolve(null),
+  ]);
+  if (sourceOfferId && !sourceOffer) {
+    notFound();
+  }
+
   const acceptsCommandHandoff =
     valueOf(resolvedSearchParams.handoff) === "command-center";
   const returnParams = new URLSearchParams();
   if (templateId) returnParams.set("template", templateId);
   if (structure) returnParams.set("structure", structure);
   if (acceptsCommandHandoff) returnParams.set("handoff", "command-center");
+  if (sourceOfferId) returnParams.set("source_offer", sourceOfferId);
   const returnTo = `/trades/new${returnParams.size ? `?${returnParams.toString()}` : ""}`;
   const example = valueOf(resolvedSearchParams.example);
-  const useLegacyDraft = Boolean(templateId || structure || acceptsCommandHandoff || example);
+  const useLegacyDraft = Boolean(
+    templateId || structure || acceptsCommandHandoff || example || sourceOffer,
+  );
 
   if (!useLegacyDraft) {
     // CreateInterfaceFrame embeds /moral-trade-create/index.html as same-origin srcDoc.
@@ -94,7 +106,29 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   }
 
   const templateValues = getPledgeTemplateInitialValues(templateId);
-  const templateLabel = templateValues ? getTradeDraftTemplateLabel(templateId) : null;
+  const sourceValues: Partial<TradeDraftValues> | undefined = sourceOffer
+    ? {
+        offeredCause: sourceOffer.requested_cause,
+        requestedCause: sourceOffer.offered_cause,
+        proposedAction: sourceOffer.request_action,
+        requestedAction: sourceOffer.offer_action,
+        noTradeBaseline: sourceOffer.no_trade_baseline,
+        duration: sourceOffer.duration,
+        startDate: sourceOffer.start_date ?? "",
+        evidenceDueDate: sourceOffer.evidence_due_date ?? "",
+        evidenceRule: sourceOffer.verification,
+        maximumBurden: sourceOffer.maximum_burden,
+        privacyScope: sourceOffer.privacy_scope,
+        exitConditions: sourceOffer.exit_conditions,
+        notes: "",
+        voluntaryCertification: false,
+      }
+    : undefined;
+  const templateLabel = sourceOffer
+    ? `Counteroffer to ${sourceOffer.ownerProfile?.resolvedName ?? sourceOffer.owner_alias}`
+    : templateValues
+      ? getTradeDraftTemplateLabel(templateId)
+      : null;
 
   return (
     <>
@@ -102,7 +136,9 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
       <TradeDraftWorkbench
         acceptCommandHandoff={acceptsCommandHandoff}
         formMessage={getFormMessage(resolvedSearchParams)}
-        initialValues={templateValues ?? (example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined)}
+        initialValues={
+          sourceValues ?? templateValues ?? (example === "seed-victoria" ? VICTORIA_EXAMPLE : undefined)
+        }
         saveAction={saveCoreOfferAction}
         submissionKey={randomUUID()}
         templateLabel={templateLabel}
