@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const html = readFileSync("public/moral-trade-create/index.html", "utf8");
+import { integrateCommonGroundCreateSource } from "./common-ground-integration";
+
+const rawHtml = readFileSync("public/moral-trade-create/index.html", "utf8");
+const html = integrateCommonGroundCreateSource(rawHtml);
+const commonGroundScript = readFileSync(
+  "public/moral-trade-create/common-ground.js",
+  "utf8",
+);
 const route = readFileSync("src/app/api/create/publish/route.ts", "utf8");
 const page = readFileSync("src/app/trades/new/page.tsx", "utf8");
 const frame = readFileSync("src/components/create/create-interface-frame.tsx", "utf8");
@@ -17,10 +24,11 @@ const migration = readFileSync(
   "utf8",
 );
 
-test("the accepted Create interface is mounted without replacing its rendered structure", () => {
+test("the accepted Create interface is mounted with the compact Common Ground Pool", () => {
   assert.match(page, /CreateInterfaceFrame/);
   assert.match(page, /resume=\{resume === "create"\}/);
   assert.match(frame, /public[",\s]+"moral-trade-create"[",\s]+"index\.html"/);
+  assert.match(frame, /integrateCommonGroundCreateSource/);
   assert.match(frame, /srcDoc=\{getCreateInterfaceSource\(resume\)\}/);
   assert.match(frame, /The Moral Trade Create resume contract could not be located/);
   assert.doesNotMatch(frame, /src=\{src\}/);
@@ -30,10 +38,20 @@ test("the accepted Create interface is mounted without replacing its rendered st
   assert.match(html, /What do you want to improve\?/);
   assert.match(html, /Commitment/);
   assert.match(html, /Donation redirect/);
-  assert.match(html, /Dominant assurance contract pool/);
+  assert.match(html, /Common Ground Pool/);
+  assert.match(html, /data-fund-mode="commonGround"/);
+  assert.match(html, /Threshold pool/);
+  assert.match(html, /data-common-ground-create-integration-v1/);
+  assert.match(html, /moral-trade-create\/common-ground\.css/);
+  assert.match(html, /moral-trade-create\/common-ground\.js/);
   assert.match(html, /Custom mathematical formula/);
   assert.match(html, /Public exact thresholds/);
   assert.match(html, /Progress range/);
+  assert.doesNotMatch(html, /href="\/mpgf\/common-ground-pool/);
+  assert.match(commonGroundScript, /Private value estimates stay in this tab/);
+  assert.match(commonGroundScript, /privateValueEstimatesStored:\s*false/);
+  assert.match(commonGroundScript, /participantGainChecked:\s*true/);
+  assert.doesNotThrow(() => new Function(commonGroundScript));
 });
 
 test("the browser waits for a durable server receipt and contains no simulated publication", () => {
