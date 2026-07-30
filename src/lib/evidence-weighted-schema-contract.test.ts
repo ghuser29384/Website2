@@ -13,6 +13,7 @@ const migration = [
   "20260729165532_evidence_weighted_remaining_fk_indexes.sql",
   "20260729165533_evidence_weighted_privacy_authorization_cutover.sql",
   "20260729165534_evidence_weighted_post_cutover_advisor_hardening.sql",
+  "20260729165535_evidence_weighted_agreement_completion_compatibility.sql",
 ]
   .map((filename) =>
     readFileSync(join(process.cwd(), "supabase/migrations", filename), "utf8"),
