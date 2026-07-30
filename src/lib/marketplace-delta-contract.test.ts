@@ -7,6 +7,8 @@ const root = process.cwd();
 const actions = readFileSync(path.join(root, "src/app/actions.ts"), "utf8");
 const offersPage = readFileSync(path.join(root, "src/app/offers/page.tsx"), "utf8");
 const offerDetail = readFileSync(path.join(root, "src/app/offers/[offerId]/page.tsx"), "utf8");
+const offersNew = readFileSync(path.join(root, "src/app/offers/new/page.tsx"), "utf8");
+const tradesNew = readFileSync(path.join(root, "src/app/trades/new/page.tsx"), "utf8");
 const participantGroup = readFileSync(
   path.join(root, "src/components/marketplace/participant-offer-group.tsx"),
   "utf8",
@@ -67,6 +69,16 @@ test("directory groups exact proposals and exposes exact-offer actions", () => {
   assert.match(participantGroup, /These are the owner&apos;s exact published terms/);
 });
 
+test("pledge counteroffers keep the exact source id and reverse its authorized terms", () => {
+  assert.match(offersNew, /tradeParams\.set\("source_offer", sourceOfferId\)/);
+  assert.match(tradesNew, /const sourceOfferId = valueOf\(resolvedSearchParams\.source_offer\)/);
+  assert.match(tradesNew, /offeredCause: sourceOffer\.requested_cause/);
+  assert.match(tradesNew, /requestedCause: sourceOffer\.offered_cause/);
+  assert.match(tradesNew, /proposedAction: sourceOffer\.request_action/);
+  assert.match(tradesNew, /requestedAction: sourceOffer\.offer_action/);
+  assert.match(tradesNew, /Counteroffer to \$\{sourceOffer\.ownerProfile\?\.resolvedName/);
+});
+
 test("question form has pending state, explicit success type, and success reset", () => {
   assert.match(questionForm, /useFormStatus/);
   assert.match(questionForm, /Posting question…/);
@@ -77,7 +89,15 @@ test("question form has pending state, explicit success type, and success reset"
 });
 
 test("candidate keeps the canonical message and trade-agreement architecture", () => {
-  const candidateSources = [actions, offersPage, offerDetail, participantGroup, questionForm].join("\n");
+  const candidateSources = [
+    actions,
+    offersPage,
+    offerDetail,
+    offersNew,
+    tradesNew,
+    participantGroup,
+    questionForm,
+  ].join("\n");
   assert.match(participantGroup, /\/offers\/new\?mode=\$\{offer\.mode\}&source_offer=\$\{offer\.id\}/);
   assert.doesNotMatch(candidateSources, /\/deals\//);
   assert.doesNotMatch(candidateSources, /dealroom-main-sections/);
