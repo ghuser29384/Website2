@@ -53,7 +53,12 @@ jobs:
             git show "refs/remotes/origin/${PAYLOAD_BRANCH}:.github/pr212-final-payload.chunk-${index}" >> "$payload"
           done
 
-          echo "${EXPECTED_BASE64_SHA256}  ${payload}" | sha256sum --check --strict
+          actual_base64_sha256="$(sha256sum "$payload" | awk '{print $1}')"
+          echo "Reconstructed base64 SHA-256: ${actual_base64_sha256}"
+          if [[ "$actual_base64_sha256" != "$EXPECTED_BASE64_SHA256" ]]; then
+            echo "The textual base64 transport checksum differs; continuing only to verify the decoded gzip and exact patch checksums." >&2
+          fi
+
           base64 --decode "$payload" > "$gzip_file"
           echo "${EXPECTED_GZIP_SHA256}  ${gzip_file}" | sha256sum --check --strict
           gzip --decompress --stdout "$gzip_file" > "$patch"
@@ -88,7 +93,11 @@ jobs:
           mkdir -p /tmp/pr212-final-publication-evidence
           cp /tmp/expected-files.txt /tmp/pr212-final-publication-evidence/expected-files.txt
           cp /tmp/actual-files.txt /tmp/pr212-final-publication-evidence/actual-files.txt
-          sha256sum "$payload" "$gzip_file" "$patch" > /tmp/pr212-final-publication-evidence/payload-hashes.txt
+          {
+            printf 'expected_base64_sha256=%s\n' "$EXPECTED_BASE64_SHA256"
+            printf 'actual_base64_sha256=%s\n' "$actual_base64_sha256"
+            sha256sum "$gzip_file" "$patch"
+          } > /tmp/pr212-final-publication-evidence/payload-hashes.txt
           git diff --stat > /tmp/pr212-final-publication-evidence/diff-stat.txt
 
       - name: Set up Node.js
