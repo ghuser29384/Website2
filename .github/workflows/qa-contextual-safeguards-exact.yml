@@ -2,6 +2,7 @@ name: Temporary exact-head contextual safeguards gate
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - ".github/workflows/qa-contextual-safeguards-exact.yml"
   workflow_dispatch:
