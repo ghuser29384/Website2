@@ -68,14 +68,19 @@ jobs:
           normalized = bytes(byte for byte in raw if byte not in allowed_whitespace)
           invalid = [(index, byte) for index, byte in enumerate(normalized) if byte not in b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="]
           print(f"Raw base64 bytes: {len(raw)}")
-          print(f"Normalized base64 bytes: {len(normalized)}")
+          print(f"Unpadded normalized base64 bytes: {len(normalized)}")
           print(f"Raw base64 SHA-256: {hashlib.sha256(raw).hexdigest()}")
-          print(f"Normalized base64 SHA-256: {hashlib.sha256(normalized).hexdigest()}")
+          print(f"Unpadded normalized base64 SHA-256: {hashlib.sha256(normalized).hexdigest()}")
           if invalid:
               print("First invalid normalized base64 bytes:", invalid[:20])
               raise SystemExit("The reconstructed payload contains non-base64, non-whitespace bytes.")
-          if len(normalized) % 4:
-              raise SystemExit(f"Normalized base64 length is not divisible by four: {len(normalized)}")
+          remainder = len(normalized) % 4
+          if remainder == 1:
+              raise SystemExit(f"Normalized base64 length has impossible remainder one: {len(normalized)}")
+          if remainder:
+              padding = b"=" * (4 - remainder)
+              print(f"Restoring {len(padding)} omitted terminal base64 padding byte(s).")
+              normalized += padding
           first_padding = normalized.find(b"=")
           if first_padding >= 0 and any(byte != ord("=") for byte in normalized[first_padding:]):
               raise SystemExit(f"Base64 padding occurs before the end at offset {first_padding}.")
@@ -85,6 +90,8 @@ jobs:
               raise SystemExit(f"Strict base64 decoding failed: {exc}") from exc
           normalized_path.write_bytes(normalized)
           decoded_path.write_bytes(decoded)
+          print(f"Padded normalized base64 bytes: {len(normalized)}")
+          print(f"Padded normalized base64 SHA-256: {hashlib.sha256(normalized).hexdigest()}")
           print(f"Decoded gzip bytes: {len(decoded)}")
           print(f"Decoded gzip SHA-256: {hashlib.sha256(decoded).hexdigest()}")
           PY
