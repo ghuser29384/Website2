@@ -13,6 +13,7 @@ import {
   formatInstitutionalMoney,
   institutionalStatusTone,
 } from "@/components/institutions/institutional-ui";
+import { InstitutionalDealWorkspace } from "@/components/institutions/institutional-deal-workspace";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { requireViewer } from "@/lib/app-data";
@@ -191,6 +192,15 @@ export default async function IndividualInstitutionalDealPage({ params, searchPa
           <form action={runInstitutionalAction}>{base("sign_deal", dealId, returnTo)}<input name="partyId" type="hidden" value={acceptedPersonalParty?.id} /><input name="expectedTermsHash" type="hidden" value={selectedProposal?.terms_hash} /><button className={styles.primaryButton} type="submit">Sign for myself</button></form>
         </article> : null}
       </section>
+
+      <InstitutionalDealWorkspace
+        data={data}
+        mode="individual"
+        viewerProfileId={viewer.authUser.id}
+        returnTo={returnTo}
+        canManage={data.canManage}
+        canReviewEvidence={data.authorization.canReviewEvidence}
+      />
 
       <section className={styles.section}>
         <InstitutionalSectionHeader eyebrow="Traceability" title="Recent deal history" description="The append-only history identifies the actor and acting basis; it does not treat an affiliation as authority." />

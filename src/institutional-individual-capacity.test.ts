@@ -69,7 +69,7 @@ test("server actions require an explicit acting context and do not inherit organ
     /The active organization context does not match the organization being represented/i,
     /requireDealManagementActingContext/i,
     /Personal capacity may manage only a deal led by that same person/i,
-    /The active organization is not an exact party to this deal/i,
+    /The active organization\/program is not an accepted exact party to this deal/i,
   ], "acting-context guards");
 
   for (const source of [individualPage, individualDealPage]) {

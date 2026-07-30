@@ -157,6 +157,7 @@ async function createFixture() {
   const named = await createUser("named", "QA Named Grantmaker");
   const verifier = await createUser("verifier", "QA Independent Verifier");
   const outsider = await createUser("outsider", "QA Outsider");
+  const independent = await createUser("independent", "QA Independent Counterparty");
   const suffix = `${runId}-${randomUUID().slice(0, 6)}`.toLowerCase();
 
   const orgA = await insertOne("institutional_organizations", {
@@ -221,6 +222,14 @@ async function createFixture() {
     participation_roles: ["grantmaker", "researcher"],
     visibility: "private",
   });
+  await insertOne("institutional_individual_profiles", {
+    profile_id: independent.id,
+    status: "active",
+    headline: "Independent funder",
+    summary: "Synthetic independent counterparty with no organization or program in this deal.",
+    participation_roles: ["funder", "research_partner"],
+    visibility: "private",
+  });
 
   const leadGrant = await insertOne("institutional_authority_grants", {
     organization_id: orgA.id,
@@ -231,6 +240,30 @@ async function createFixture() {
     amount_limit_cents: 5_000_000,
     currency: "usd",
     authority_basis: "Synthetic exact-scope QA authority.",
+  });
+  const expiredLeadGrant = await insertOne("institutional_authority_grants", {
+    organization_id: orgA.id,
+    program_id: programA.id,
+    profile_id: lead.id,
+    granted_by: lead.id,
+    permissions: ["deal:manage", "deal:approve", "deal:sign", "finance:reserve", "evidence:review"],
+    amount_limit_cents: 5_000_000,
+    currency: "usd",
+    authority_basis: "Expired synthetic authority that must never enable rendered controls.",
+    valid_from: new Date(Date.now() - 172_800_000).toISOString(),
+    valid_until: new Date(Date.now() - 86_400_000).toISOString(),
+  });
+  const futureLeadGrant = await insertOne("institutional_authority_grants", {
+    organization_id: orgA.id,
+    program_id: programA.id,
+    profile_id: lead.id,
+    granted_by: lead.id,
+    permissions: ["deal:manage", "deal:approve", "deal:sign", "finance:reserve", "evidence:review"],
+    amount_limit_cents: 5_000_000,
+    currency: "usd",
+    authority_basis: "Future synthetic authority that must never enable rendered controls.",
+    valid_from: new Date(Date.now() + 86_400_000).toISOString(),
+    valid_until: new Date(Date.now() + 172_800_000).toISOString(),
   });
   const financeGrantA = await insertOne("institutional_authority_grants", {
     organization_id: orgA.id,
@@ -360,11 +393,31 @@ async function createFixture() {
     title: "Alternative research obligation",
     created_by: lead.id,
   });
+  const fundingObligation = await insertOne("institutional_obligations", {
+    deal_id: deal.id,
+    proposal_version_id: proposal.id,
+    obligor_party_id: partyA.id,
+    beneficiary_party_id: partyB.id,
+    resource_type: "funding",
+    title: "Confirm direct external animal-welfare transfer",
+    description: "The funder records a direct external transfer. Moral Trade does not custody or route the institutional funds.",
+    amount_cents: 1_000_000,
+    currency: "usd",
+    individual_consent_required: false,
+    created_by: lead.id,
+  });
   const milestone = await insertOne("institutional_milestones", {
     deal_id: deal.id,
     proposal_version_id: proposal.id,
     obligation_id: obligation.id,
     title: "Six-month exact-scope review",
+    created_by: lead.id,
+  });
+  const fundingMilestone = await insertOne("institutional_milestones", {
+    deal_id: deal.id,
+    proposal_version_id: proposal.id,
+    obligation_id: fundingObligation.id,
+    title: "Direct external transfer confirmation",
     created_by: lead.id,
   });
   const evidenceRequirement = await insertOne("institutional_evidence_requirements", {
@@ -378,6 +431,17 @@ async function createFixture() {
     visibility: "verifier_only",
     created_by: lead.id,
   });
+  const fundingEvidenceRequirement = await insertOne("institutional_evidence_requirements", {
+    deal_id: deal.id,
+    proposal_version_id: proposal.id,
+    obligation_id: fundingObligation.id,
+    milestone_id: fundingMilestone.id,
+    title: "Direct external transfer evidence",
+    description: "Receipt or grant confirmation from the external provider; no Moral Trade custody.",
+    evidence_type: "receipt",
+    visibility: "verifier_only",
+    created_by: lead.id,
+  });
   const verifierAssignment = await insertOne("institutional_verifier_assignments", {
     deal_id: deal.id,
     verifier_profile_id: verifier.id,
@@ -385,6 +449,14 @@ async function createFixture() {
     status: "invited",
     assigned_by: lead.id,
   });
+
+  for (const requirementId of [evidenceRequirement.id, fundingEvidenceRequirement.id]) {
+    const linked = await admin
+      .from("institutional_evidence_requirements")
+      .update({ verifier_assignment_id: verifierAssignment.id })
+      .eq("id", requirementId);
+    if (linked.error) throw linked.error;
+  }
 
   for (const approval of [
     {
@@ -567,11 +639,25 @@ async function createFixture() {
     status: "draft",
     created_by: named.id,
   });
+  const personalCounterparty = await insertOne("institutional_deal_parties", {
+    deal_id: personalDeal.id,
+    party_capacity: "individual",
+    profile_id: independent.id,
+    organization_id: null,
+    program_id: null,
+    legal_entity_id: null,
+    party_role: "independent_counterparty",
+    representative_profile_id: independent.id,
+    authority_status: "pending",
+    approval_status: "not_required",
+    consent_status: "not_required",
+    joined_at: null,
+  });
   const personalObligation = await insertOne("institutional_obligations", {
     deal_id: personalDeal.id,
     proposal_version_id: personalProposal.id,
     obligor_party_id: personalParty.id,
-    beneficiary_party_id: null,
+    beneficiary_party_id: personalCounterparty.id,
     resource_type: "research",
     title: "Complete independent research work",
     description: "Twenty hours of work controlled by the individual alone.",
@@ -581,6 +667,74 @@ async function createFixture() {
     individual_profile_id: named.id,
     created_by: named.id,
   });
+  const personalFundingObligation = await insertOne("institutional_obligations", {
+    deal_id: personalDeal.id,
+    proposal_version_id: personalProposal.id,
+    obligor_party_id: personalCounterparty.id,
+    beneficiary_party_id: personalParty.id,
+    resource_type: "funding",
+    title: "Confirm direct external cause-linked transfer",
+    description: "The independent counterparty confirms a direct external transfer; Moral Trade does not custody funds.",
+    amount_cents: 10_000,
+    currency: "usd",
+    individual_consent_required: false,
+    individual_profile_id: independent.id,
+    created_by: named.id,
+  });
+  const personalMilestone = await insertOne("institutional_milestones", {
+    deal_id: personalDeal.id,
+    proposal_version_id: personalProposal.id,
+    obligation_id: personalObligation.id,
+    title: "Independent research completion",
+    created_by: named.id,
+  });
+  const personalFundingMilestone = await insertOne("institutional_milestones", {
+    deal_id: personalDeal.id,
+    proposal_version_id: personalProposal.id,
+    obligation_id: personalFundingObligation.id,
+    title: "External transfer confirmation",
+    created_by: named.id,
+  });
+  const personalEvidenceRequirement = await insertOne("institutional_evidence_requirements", {
+    deal_id: personalDeal.id,
+    proposal_version_id: personalProposal.id,
+    obligation_id: personalObligation.id,
+    milestone_id: personalMilestone.id,
+    title: "Independent research completion evidence",
+    description: "Evidence of the individual's own completed work.",
+    evidence_type: "document",
+    visibility: "verifier_only",
+    status: "open",
+    created_by: named.id,
+  });
+  const personalFundingEvidenceRequirement = await insertOne("institutional_evidence_requirements", {
+    deal_id: personalDeal.id,
+    proposal_version_id: personalProposal.id,
+    obligation_id: personalFundingObligation.id,
+    milestone_id: personalFundingMilestone.id,
+    title: "Direct external transfer evidence",
+    description: "Receipt or grant confirmation from the external provider; no Moral Trade custody.",
+    evidence_type: "receipt",
+    visibility: "verifier_only",
+    status: "open",
+    created_by: named.id,
+  });
+  const personalVerifierAssignment = await insertOne("institutional_verifier_assignments", {
+    deal_id: personalDeal.id,
+    organization_id: null,
+    verifier_profile_id: verifier.id,
+    scope: "Review independent work and direct-transfer evidence.",
+    status: "invited",
+    assigned_by: named.id,
+  });
+
+  for (const requirementId of [personalEvidenceRequirement.id, personalFundingEvidenceRequirement.id]) {
+    const linked = await admin
+      .from("institutional_evidence_requirements")
+      .update({ verifier_assignment_id: personalVerifierAssignment.id })
+      .eq("id", requirementId);
+    if (linked.error) throw linked.error;
+  }
 
   return {
     runId,
@@ -590,12 +744,15 @@ async function createFixture() {
     named,
     verifier,
     outsider,
+    independent,
     orgA,
     orgB,
     programA,
     wrongProgramA,
     programB,
     leadGrant,
+    expiredLeadGrant,
+    futureLeadGrant,
     financeGrantA,
     namedGrant,
     financeGrantB,
@@ -605,9 +762,12 @@ async function createFixture() {
     proposal,
     alternateProposal,
     obligation,
+    fundingObligation,
     alternateObligation,
     milestone,
+    fundingMilestone,
     evidenceRequirement,
+    fundingEvidenceRequirement,
     verifierAssignment,
     poolDeal,
     poolPartyA,
@@ -618,8 +778,15 @@ async function createFixture() {
     integration,
     personalDeal,
     personalParty,
+    personalCounterparty,
     personalProposal,
     personalObligation,
+    personalFundingObligation,
+    personalMilestone,
+    personalFundingMilestone,
+    personalEvidenceRequirement,
+    personalFundingEvidenceRequirement,
+    personalVerifierAssignment,
     reservationA: null,
     reservationB: null,
     contributionA: null,
@@ -629,9 +796,89 @@ async function createFixture() {
 }
 
 async function establishAal2Clients(value) {
-  for (const role of ["lead", "finance", "named", "verifier", "outsider"]) {
+  for (const role of ["lead", "finance", "named", "verifier", "outsider", "independent"]) {
     value.clients[role] = await makeAal2Client(value[role]);
   }
+}
+
+async function authorizationSnapshotChecks(value) {
+  const leadSnapshotResult = await value.clients.lead.rpc("get_institutional_deal_authorization_snapshot", {
+    target_deal_id: value.deal.id,
+    target_organization_id: value.orgA.id,
+    target_party_id: value.partyA.id,
+  });
+  if (leadSnapshotResult.error) throw leadSnapshotResult.error;
+  const leadSnapshot = leadSnapshotResult.data;
+  assert.equal(leadSnapshot.actingCapacity, "organization");
+  assert.equal(leadSnapshot.organizationId, value.orgA.id);
+  assert.equal(leadSnapshot.programId, value.programA.id);
+  assert.equal(leadSnapshot.organizationPartyId, value.partyA.id);
+  assert.equal(leadSnapshot.organizationPartyJoined, true);
+  assert.equal(leadSnapshot.canManageDeal, true);
+  assert.equal(leadSnapshot.canApprove, true);
+  assert.equal(leadSnapshot.canSign, true);
+  assert.equal(leadSnapshot.canReviewEvidence, true);
+  assert.equal(leadSnapshot.canReserveFunds, false);
+  assert.ok(typeof leadSnapshot.asOf === "string" && leadSnapshot.asOf.length > 0);
+  assert.ok(leadSnapshot.matchingAuthorityGrantIds.includes(value.leadGrant.id));
+  assert.ok(!leadSnapshot.matchingAuthorityGrantIds.includes(value.expiredLeadGrant.id));
+  assert.ok(!leadSnapshot.matchingAuthorityGrantIds.includes(value.futureLeadGrant.id));
+  assert.deepEqual(leadSnapshot.authorityGrantIdsByPermission.dealManage, [value.leadGrant.id]);
+  assert.deepEqual(leadSnapshot.authorityGrantIdsByPermission.dealApprove, [value.leadGrant.id]);
+  assert.deepEqual(leadSnapshot.authorityGrantIdsByPermission.dealSign, [value.leadGrant.id]);
+  assert.deepEqual(leadSnapshot.authorityGrantIdsByPermission.evidenceReview, [value.leadGrant.id]);
+  assert.deepEqual(leadSnapshot.authorityGrantIdsByPermission.financeReserve, []);
+  record("Database-time authorization snapshot excludes expired and not-yet-active grants", "passed", { asOf: leadSnapshot.asOf });
+
+  const financeSnapshotResult = await value.clients.finance.rpc("get_institutional_deal_authorization_snapshot", {
+    target_deal_id: value.deal.id,
+    target_organization_id: value.orgA.id,
+    target_party_id: value.partyA.id,
+  });
+  if (financeSnapshotResult.error) throw financeSnapshotResult.error;
+  const financeSnapshot = financeSnapshotResult.data;
+  assert.equal(financeSnapshot.canManageDeal, false);
+  assert.equal(financeSnapshot.canApprove, false);
+  assert.equal(financeSnapshot.canSign, false);
+  assert.equal(financeSnapshot.canReviewEvidence, false);
+  assert.equal(financeSnapshot.canReserveFunds, true);
+  assert.deepEqual(financeSnapshot.matchingAuthorityGrantIds, [value.financeGrantA.id]);
+  assert.deepEqual(financeSnapshot.authorityGrantIdsByPermission.financeReserve, [value.financeGrantA.id]);
+  record("Authorization snapshot separates finance reservation authority from deal management", "passed");
+
+  const personalSnapshotResult = await value.clients.named.rpc("get_institutional_deal_authorization_snapshot", {
+    target_deal_id: value.personalDeal.id,
+    target_organization_id: null,
+    target_party_id: value.personalParty.id,
+  });
+  if (personalSnapshotResult.error) throw personalSnapshotResult.error;
+  const personalSnapshot = personalSnapshotResult.data;
+  assert.equal(personalSnapshot.actingCapacity, "individual");
+  assert.equal(personalSnapshot.organizationId, null);
+  assert.equal(personalSnapshot.programId, null);
+  assert.equal(personalSnapshot.partyId, value.personalParty.id);
+  assert.equal(personalSnapshot.canManageDeal, true);
+  assert.equal(personalSnapshot.canApprove, false);
+  assert.equal(personalSnapshot.canReserveFunds, false);
+  assert.deepEqual(personalSnapshot.matchingAuthorityGrantIds, []);
+  assert.deepEqual(personalSnapshot.authorityGrantIdsByPermission, {
+    dealManage: [],
+    dealApprove: [],
+    dealSign: [],
+    financeReserve: [],
+    evidenceReview: [],
+  });
+  record("Personal-capacity snapshot never inherits organizational authority", "passed");
+
+  await expectRpcFailure(
+    "Organization member cannot request another person's personal authorization snapshot",
+    () => value.clients.finance.rpc("get_institutional_deal_authorization_snapshot", {
+      target_deal_id: value.personalDeal.id,
+      target_organization_id: null,
+      target_party_id: value.personalParty.id,
+    }),
+    /exact named personal party/i,
+  );
 }
 
 async function personalCapacityChecks(value) {
@@ -700,6 +947,33 @@ async function personalCapacityChecks(value) {
     }),
     /only the personal-capacity deal lead/i,
   );
+
+  await expectRpcFailure(
+    "Outsider cannot accept another individual's party invitation",
+    () => value.clients.outsider.rpc("accept_institutional_deal_party", {
+      target_party_id: value.personalCounterparty.id,
+    }),
+    /only the named personal-capacity participant/i,
+  );
+
+  const acceptedCounterparty = await value.clients.independent.rpc("accept_institutional_deal_party", {
+    target_party_id: value.personalCounterparty.id,
+  });
+  if (acceptedCounterparty.error) throw acceptedCounterparty.error;
+  const acceptedParty = await admin
+    .from("institutional_deal_parties")
+    .select("id,party_capacity,profile_id,organization_id,program_id,authority_status,approval_status,joined_at")
+    .eq("id", value.personalCounterparty.id)
+    .single();
+  if (acceptedParty.error) throw acceptedParty.error;
+  assert.equal(acceptedParty.data.profile_id, value.independent.id);
+  assert.equal(acceptedParty.data.organization_id, null);
+  assert.equal(acceptedParty.data.program_id, null);
+  assert.equal(acceptedParty.data.authority_status, "self_authorized");
+  assert.equal(acceptedParty.data.approval_status, "not_required");
+  assert.ok(acceptedParty.data.joined_at);
+  value.personalCounterparty = { ...value.personalCounterparty, ...acceptedParty.data };
+  record("Named independent counterparty accepts without an organization or program", "passed");
 
   const selected = await value.clients.named.rpc("select_institutional_proposal_version", {
     target_deal_id: value.personalDeal.id,
@@ -1180,6 +1454,258 @@ async function browserFlow(value) {
   return consentHref;
 }
 
+async function transitionDeal(client, dealId, stage, label) {
+  const result = await client.rpc("transition_institutional_deal_stage", {
+    target_deal_id: dealId,
+    target_stage: stage,
+  });
+  if (result.error) throw result.error;
+  record(label, "passed", { dealId, stage });
+}
+
+async function updateExactStatus(client, table, id, values, label) {
+  const result = await client.from(table).update(values).eq("id", id).select("id").single();
+  if (result.error) throw result.error;
+  record(label, "passed", { table, id, ...values });
+}
+
+async function submitExactEvidence(client, values, label) {
+  const result = await client
+    .from("institutional_evidence_submissions")
+    .insert(values)
+    .select("id,status")
+    .single();
+  if (result.error) throw result.error;
+  record(label, "passed", { submissionId: result.data.id, status: result.data.status });
+  return result.data.id;
+}
+
+async function reviewExactEvidence(value, submissionId, dealId, label) {
+  const result = await value.clients.verifier.rpc("review_institutional_evidence", {
+    target_submission_id: submissionId,
+    target_deal_id: dealId,
+    target_status: "accepted",
+    target_review_note: "Exact relationship and external-transfer boundary verified in synthetic QA.",
+    target_organization_id: null,
+    target_program_id: null,
+    target_authority_grant_id: null,
+  });
+  if (result.error) throw result.error;
+  record(label, "passed", { submissionId });
+}
+
+async function completeOrganizationWorkflow(value) {
+  await transitionDeal(value.clients.lead, value.deal.id, "execution", "Organization-led deal enters execution under exact-scope authority");
+  await expectDatabaseFailure(
+    "Milestone cannot complete before required evidence is accepted",
+    () => value.clients.lead.from("institutional_milestones").update({ status: "completed" }).eq("id", value.milestone.id),
+    /evidence requirements must be satisfied/i,
+  );
+  await expectDatabaseFailure(
+    "Obligation cannot complete before milestones and evidence are accepted",
+    () => value.clients.lead.from("institutional_obligations").update({ status: "completed" }).eq("id", value.obligation.id),
+    /milestones must be verified, completed, or waived/i,
+  );
+
+  const workEvidenceId = await submitExactEvidence(value.clients.named, {
+    deal_id: value.deal.id,
+    proposal_version_id: value.proposal.id,
+    obligation_id: value.obligation.id,
+    milestone_id: value.milestone.id,
+    requirement_id: value.evidenceRequirement.id,
+    submitted_by: value.named.id,
+    evidence: {
+      type: "attestation",
+      synthetic: true,
+      completion: "Named grantmaker work completed under the selected exact terms.",
+    },
+  }, "Named participant submits exact secondment evidence");
+  const fundingEvidenceId = await submitExactEvidence(value.clients.finance, {
+    deal_id: value.deal.id,
+    proposal_version_id: value.proposal.id,
+    obligation_id: value.fundingObligation.id,
+    milestone_id: value.fundingMilestone.id,
+    requirement_id: value.fundingEvidenceRequirement.id,
+    submitted_by: value.finance.id,
+    evidence: {
+      type: "external_transfer_receipt",
+      synthetic: true,
+      provider_reference: `qa-external-transfer-org-${runId}`,
+      custody: "none",
+      statement: "Funds moved directly through the parties' existing provider; Moral Trade did not hold or route funds.",
+    },
+  }, "Finance representative submits direct external-transfer evidence");
+
+  await transitionDeal(value.clients.lead, value.deal.id, "evidence_review", "Organization-led deal enters evidence review");
+  await reviewExactEvidence(value, workEvidenceId, value.deal.id, "Independent verifier accepts exact secondment evidence");
+  await reviewExactEvidence(value, fundingEvidenceId, value.deal.id, "Independent verifier accepts direct-transfer evidence");
+  const now = new Date().toISOString();
+  await updateExactStatus(value.clients.lead, "institutional_milestones", value.milestone.id, { status: "completed", completed_at: now }, "Secondment milestone completes after evidence acceptance");
+  await updateExactStatus(value.clients.lead, "institutional_milestones", value.fundingMilestone.id, { status: "completed", completed_at: now }, "External-transfer milestone completes after evidence acceptance");
+  await updateExactStatus(value.clients.lead, "institutional_obligations", value.obligation.id, { status: "completed" }, "Named-person secondment obligation completes after milestone and evidence acceptance");
+  await updateExactStatus(value.clients.lead, "institutional_obligations", value.fundingObligation.id, { status: "completed" }, "Direct external funding obligation completes without custody after evidence acceptance");
+  await transitionDeal(value.clients.lead, value.deal.id, "completed", "Organization-led deal completes after exact evidence acceptance");
+
+  const state = await admin
+    .from("institutional_deals")
+    .select("stage,completed_at")
+    .eq("id", value.deal.id)
+    .single();
+  if (state.error) throw state.error;
+  assert.equal(state.data.stage, "completed");
+  assert.ok(state.data.completed_at);
+  const requirements = await admin
+    .from("institutional_evidence_requirements")
+    .select("id,status")
+    .in("id", [value.evidenceRequirement.id, value.fundingEvidenceRequirement.id]);
+  if (requirements.error) throw requirements.error;
+  assert.deepEqual(new Set(requirements.data.map((row) => row.status)), new Set(["satisfied"]));
+  record("Organization-led positive workflow reaches verified completion", "passed");
+}
+
+async function completeIndependentWorkflow(value) {
+  const verifierDecision = await value.clients.verifier.rpc("accept_institutional_verifier_assignment", {
+    target_assignment_id: value.personalVerifierAssignment.id,
+    target_decision: "accepted",
+    target_conflict_declaration: "No conflict for the synthetic independent workflow.",
+  });
+  if (verifierDecision.error) throw verifierDecision.error;
+  record("Independent verifier accepts the personal-capacity assignment", "passed");
+
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const independentPage = await mobileContext.newPage();
+    observePage(independentPage, "independent-mobile-signature");
+    await login(independentPage, value.independent, `/institutions/individual/deals/${value.personalDeal.id}`);
+    await ensureMfa(independentPage, value.independent);
+    await independentPage.goto(`${baseUrl}/institutions/individual/deals/${value.personalDeal.id}`);
+    const body = await independentPage.locator("body").innerText();
+    assert.match(body, /Acting as: Personal \/ independent/i);
+    assert.doesNotMatch(body, /Institutional funds|Delegated authority|Enterprise integrations/i);
+    const signForm = independentPage.locator("form").filter({ has: independentPage.getByRole("button", { name: "Sign for myself" }) }).first();
+    await signForm.getByRole("button", { name: "Sign for myself" }).click();
+    await independentPage.waitForLoadState("networkidle");
+    assert.match(await independentPage.locator("body").innerText(), /Signature recorded|Signed/i);
+    const overflow = await independentPage.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert.ok(overflow <= 1, `Independent mobile deal has horizontal overflow: ${overflow}px.`);
+    await screenshot(independentPage, "independent-counterparty-mobile-signature");
+    await mobileContext.close();
+  } finally {
+    await browser.close();
+  }
+
+  const signed = await admin.from("institutional_deals").select("stage,signed_at").eq("id", value.personalDeal.id).single();
+  if (signed.error) throw signed.error;
+  assert.equal(signed.data.stage, "signed");
+  assert.ok(signed.data.signed_at);
+  record("Both independent individuals sign the selected exact terms", "passed");
+
+  await transitionDeal(value.clients.named, value.personalDeal.id, "execution", "Independent-individual-led deal enters execution");
+
+  const workEvidenceId = await submitExactEvidence(value.clients.named, {
+    deal_id: value.personalDeal.id,
+    proposal_version_id: value.personalProposal.id,
+    obligation_id: value.personalObligation.id,
+    milestone_id: value.personalMilestone.id,
+    requirement_id: value.personalEvidenceRequirement.id,
+    submitted_by: value.named.id,
+    evidence: { type: "document", synthetic: true, work_log: "Twenty independently controlled research hours completed." },
+  }, "Independent lead submits exact work evidence");
+  const transferEvidenceId = await submitExactEvidence(value.clients.independent, {
+    deal_id: value.personalDeal.id,
+    proposal_version_id: value.personalProposal.id,
+    obligation_id: value.personalFundingObligation.id,
+    milestone_id: value.personalFundingMilestone.id,
+    requirement_id: value.personalFundingEvidenceRequirement.id,
+    submitted_by: value.independent.id,
+    evidence: {
+      type: "external_transfer_receipt",
+      synthetic: true,
+      provider_reference: `qa-external-transfer-personal-${runId}`,
+      custody: "none",
+    },
+  }, "Independent counterparty submits direct external-transfer evidence");
+
+  await transitionDeal(value.clients.named, value.personalDeal.id, "evidence_review", "Independent-individual-led deal enters evidence review");
+  await reviewExactEvidence(value, workEvidenceId, value.personalDeal.id, "Independent verifier accepts personal work evidence");
+  await reviewExactEvidence(value, transferEvidenceId, value.personalDeal.id, "Independent verifier accepts personal transfer evidence");
+  const now = new Date().toISOString();
+  await updateExactStatus(value.clients.named, "institutional_milestones", value.personalMilestone.id, { status: "completed", completed_at: now }, "Independent research milestone completes after evidence acceptance");
+  await updateExactStatus(value.clients.named, "institutional_milestones", value.personalFundingMilestone.id, { status: "completed", completed_at: now }, "Independent external-transfer milestone completes after evidence acceptance");
+  await updateExactStatus(value.clients.named, "institutional_obligations", value.personalObligation.id, { status: "completed" }, "Independent research obligation completes after milestone and evidence acceptance");
+  await updateExactStatus(value.clients.named, "institutional_obligations", value.personalFundingObligation.id, { status: "completed" }, "Independent direct-funding obligation completes after evidence acceptance");
+  await transitionDeal(value.clients.named, value.personalDeal.id, "completed", "Independent-individual-led deal completes after exact evidence acceptance");
+
+  const state = await admin.from("institutional_deals").select("stage,completed_at").eq("id", value.personalDeal.id).single();
+  if (state.error) throw state.error;
+  assert.equal(state.data.stage, "completed");
+  assert.ok(state.data.completed_at);
+  record("Independent-individual-led positive workflow reaches verified completion", "passed");
+}
+
+async function reviewCompletedWorkflows(value) {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const orgDesktop = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const orgPage = await orgDesktop.newPage();
+    observePage(orgPage, "organization-completed-desktop");
+    await login(orgPage, value.lead, `/institutions/${value.orgA.id}/deals/${value.deal.id}`);
+    await orgPage.goto(`${baseUrl}/institutions/${value.orgA.id}/deals/${value.deal.id}`);
+    const orgText = await orgPage.locator("body").innerText();
+    assert.match(orgText, /Completed/i);
+    assert.match(orgText, /direct external|does not custody|does not hold/i);
+    await screenshot(orgPage, "organization-workflow-completed-desktop");
+    await orgDesktop.close();
+
+    const orgMobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const orgMobilePage = await orgMobile.newPage();
+    observePage(orgMobilePage, "organization-completed-mobile");
+    await login(orgMobilePage, value.named, `/institutions/${value.orgB.id}/deals/${value.deal.id}`);
+    await orgMobilePage.goto(`${baseUrl}/institutions/${value.orgB.id}/deals/${value.deal.id}`);
+    assert.match(await orgMobilePage.locator("body").innerText(), /Completed/i);
+    assert.ok((await orgMobilePage.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 1);
+    await screenshot(orgMobilePage, "organization-workflow-completed-mobile");
+    await orgMobile.close();
+
+    const personalDesktop = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const personalPage = await personalDesktop.newPage();
+    observePage(personalPage, "personal-completed-desktop");
+    await login(personalPage, value.named, `/institutions/individual/deals/${value.personalDeal.id}`);
+    await personalPage.goto(`${baseUrl}/institutions/individual/deals/${value.personalDeal.id}`);
+    const personalText = await personalPage.locator("body").innerText();
+    assert.match(personalText, /Completed/i);
+    assert.match(personalText, /direct external|does not custody|does not hold/i);
+    assert.doesNotMatch(personalText, /Delegated authority|Approval committees|Enterprise integrations/i);
+    await screenshot(personalPage, "independent-workflow-completed-desktop");
+    await personalDesktop.close();
+
+    const personalMobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const personalMobilePage = await personalMobile.newPage();
+    observePage(personalMobilePage, "personal-completed-mobile");
+    await login(personalMobilePage, value.independent, `/institutions/individual/deals/${value.personalDeal.id}`);
+    await personalMobilePage.goto(`${baseUrl}/institutions/individual/deals/${value.personalDeal.id}`);
+    const personalMobileText = await personalMobilePage.locator("body").innerText();
+    assert.match(personalMobileText, /Completed/i);
+    assert.doesNotMatch(personalMobileText, /Delegated authority|Approval committees|Enterprise integrations/i);
+    assert.ok((await personalMobilePage.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)) <= 1);
+    await screenshot(personalMobilePage, "independent-workflow-completed-mobile");
+    await personalMobile.close();
+
+    const poolDesktop = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const poolPage = await poolDesktop.newPage();
+    observePage(poolPage, "collective-active-desktop");
+    await login(poolPage, value.lead, `/institutions/${value.orgA.id}/deals/${value.poolDeal.id}`);
+    await poolPage.goto(`${baseUrl}/institutions/${value.orgA.id}/deals/${value.poolDeal.id}#pool`);
+    assert.match(await poolPage.locator("body").innerText(), /Active|Anchor|Underwriting|Governance/i);
+    await screenshot(poolPage, "collective-coordination-active-desktop");
+    await poolDesktop.close();
+  } finally {
+    await browser.close();
+  }
+  record("Organization, independent, and collective interfaces pass rendered desktop/mobile review", "passed");
+}
+
 async function completeAtomicPoolFlow(value) {
   const contributionAResult = await admin
     .from("institutional_pool_contributions")
@@ -1397,15 +1923,19 @@ let failure;
 try {
   fixture = await createFixture();
   await establishAal2Clients(fixture);
+  await authorizationSnapshotChecks(fixture);
   await personalCapacityChecks(fixture);
   await relationshipAndDatabaseNegativeChecks(fixture);
   await authenticatedNegativeChecksBeforeSelection(fixture);
   await browserFlow(fixture);
   await verifyAcceptedEvidenceAccess(fixture);
-  await completeAtomicPoolFlow(fixture);
   await signedImmutabilityChecks(fixture);
+  await completeOrganizationWorkflow(fixture);
+  await completeIndependentWorkflow(fixture);
+  await completeAtomicPoolFlow(fixture);
+  await reviewCompletedWorkflows(fixture);
   assert.deepEqual(browserErrors, [], `Relevant browser errors: ${JSON.stringify(browserErrors)}`);
-  record("Institutional authenticated five-participant QA suite", "passed");
+  record("Institutional authenticated organization, independent, and collective QA suite", "passed");
 } catch (error) {
   failure = error;
   record("Institutional authenticated five-participant QA suite", "failed", {

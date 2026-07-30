@@ -9,6 +9,9 @@ const verifierPage = readFileSync("src/app/institutions/verifier-assignments/[as
 const individualPage = readFileSync("src/app/institutions/individual/page.tsx", "utf8");
 const individualDealPage = readFileSync("src/app/institutions/individual/deals/[dealId]/page.tsx", "utf8");
 const organizationPage = readFileSync("src/app/institutions/[organizationId]/page.tsx", "utf8");
+const dealWorkspace = readFileSync("src/components/institutions/institutional-deal-workspace.tsx", "utf8");
+const organizationAdministration = readFileSync("src/components/institutions/institutional-organization-administration.tsx", "utf8");
+const poolWorkspace = readFileSync("src/components/institutions/institutional-pool-workspace.tsx", "utf8");
 const data = readFileSync("src/lib/institutional-data.ts", "utf8");
 const webhooks = readFileSync("src/lib/institutional-webhooks.ts", "utf8");
 const qaWorkflow = readFileSync(".github/workflows/institutional-trade-qa.yml", "utf8");
@@ -25,12 +28,21 @@ test("deal room renders exact-scope baselines, immutable terms, consent, signatu
     /Request exact-term consent/,
     /Sign exact selected terms/,
     /expectedTermsHash/,
-    /Record independent decision/,
-    /Reserve financial capacity/,
-    /Save contribution lifecycle/,
-    /Cast exact-term vote/,
+    /InstitutionalPoolWorkspace/,
+    /Request a named exact-scope organizational approval/,
+    /Decide approvals assigned to me/,
+    /Accept this organization-party invitation under exact authority/,
     /Independent verification and evidence/,
   ], "deal room");
+  expectAll(poolWorkspace, [
+    /Record independent pool participation approval/,
+    /Reserve financial capacity/,
+    /Record contribution lifecycle/,
+    /Record an anchor commitment/,
+    /Record underwriting/,
+    /Cast an exact-term governance vote/,
+    /Run atomic activation gate/,
+  ], "pool workspace");
 });
 
 test("named-person and verifier decision surfaces use separate authenticated actions", () => {
@@ -55,6 +67,14 @@ test("server actions use atomic RPCs for critical transitions", () => {
     /save_institutional_pool_underwriting/,
     /cast_institutional_pool_vote/,
     /activate_institutional_pool/,
+    /generate_institutional_matches/,
+    /record_institutional_match_interest/,
+    /accept_institutional_organization_party/,
+    /revoke_institutional_room_access/,
+    /revoke_institutional_verifier_assignment/,
+    /review_institutional_evidence/,
+    /transition_institutional_obligation_status/,
+    /transition_institutional_milestone_status/,
   ], "atomic actions");
 });
 
@@ -91,7 +111,7 @@ test("independent participants get a reduced self-authority interface without or
     assert.doesNotMatch(individualDealPage, new RegExp(forbidden, "i"), `individual deal page must omit ${forbidden}`);
   }
   expectAll(organizationPage, [
-    /ORGANIZATION_INSTITUTIONAL_NAV/,
+    /ORGANIZATION_WORKSPACE_NAV/,
     /Switch to personal capacity/,
     /Create a commitment account/,
     /Enterprise integrations/,
@@ -112,6 +132,43 @@ test("server actions branch by acting capacity and hard-gate organization-only c
     /A personal-capacity party cannot inherit an organization, program, or legal entity/,
     /target_authority_grant_id: uuid\(formData, "authorityGrantId"\)/,
   ], "capacity branching");
+});
+
+test("complete organization and individual deal interfaces wire the reconstructed Beta 1–3 surfaces", () => {
+  expectAll(dealWorkspace, [
+    /Messages and confidential access/,
+    /Obligations, dependencies, and milestones/,
+    /Exact requirements, submissions, and independent review/,
+    /Threats, conflicts, externalities, amendments, and disputes/,
+    /Attribution, board packets, and structured reporting/,
+    /Moral Trade records commitments and evidence; it does not hold institutional funds/i,
+    /needs_revision/,
+    /pending_governance_approval/,
+    /threat_or_coercion/,
+  ], "shared deal workspace");
+  expectAll(organizationAdministration, [
+    /Legal identity, membership, delegated authority, and approval policy/,
+    /Institutional opportunities and bilateral interest/,
+    /Templates, framework agreements, track record, and Command/,
+  ], "organization administration");
+  expectAll(poolWorkspace, [
+    /Consortium and moral-public-goods pool governance/,
+    /Record independent approval/,
+    /Reserve financial capacity/,
+    /Record contribution lifecycle/,
+    /Cast an exact-term governance vote/,
+    /Activate only after every atomic gate passes/,
+    /does not hold, escrow, or transfer institutional funds/i,
+  ], "collective-coordination interface");
+  expectAll(organizationPage, [/Enterprise integrations/, /Create a signed webhook/, /does not custody institutional funds/i], "organization enterprise interface");
+  expectAll(poolWorkspace, [/does not hold, escrow, or transfer institutional funds/i, /create_pool_terms/, /save_pool_anchor/, /save_pool_underwriting/, /activate_pool/], "collective non-custody interface");
+  expectAll(data, [
+    /institutional_match_interests|institutional_matches/,
+    /acceptedVerifier/,
+    /dealMessages/,
+    /amendments/,
+    /reportSnapshots/,
+  ], "complete loaders");
 });
 
 test("integration configuration and webhook destinations are validated before insertion", () => {

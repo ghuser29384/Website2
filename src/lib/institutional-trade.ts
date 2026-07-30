@@ -115,6 +115,9 @@ export const INSTITUTIONAL_RISK_CATEGORIES = [
   "sanctions",
   "privacy_security",
   "research_integrity",
+  "financial",
+  "operational",
+  "other",
 ] as const;
 
 export const INSTITUTIONAL_RISK_SEVERITIES = ["low", "medium", "high", "critical"] as const;

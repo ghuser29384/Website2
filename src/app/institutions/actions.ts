@@ -10,7 +10,12 @@ import { requireViewer } from "@/lib/app-data";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { isInstitutionalFeatureEnabled } from "@/lib/institutional-feature-gates";
 import {
+  INSTITUTIONAL_DEAL_STAGES,
   INSTITUTIONAL_PARTY_CAPACITIES,
+  INSTITUTIONAL_PERMISSIONS,
+  INSTITUTIONAL_RESOURCE_TYPES,
+  INSTITUTIONAL_RISK_CATEGORIES,
+  INSTITUTIONAL_RISK_SEVERITIES,
   hashInstitutionalTerms,
   isPersonalInstitutionalCapacity,
   parseInstitutionalMoneyToCents,
@@ -91,6 +96,53 @@ function stringArray(formData: FormData, name: string) {
   return [...new Set((direct[0] ?? "").split(/[\n,]/).map((item) => item.trim()).filter(Boolean))];
 }
 
+function oneOf<const T extends readonly string[]>(
+  formData: FormData,
+  name: string,
+  allowed: T,
+  fallback?: T[number],
+): T[number] {
+  const candidate = value(formData, name) || fallback || "";
+  if (!allowed.includes(candidate as T[number])) {
+    throw new Error(`${name} has an unsupported value.`);
+  }
+  return candidate as T[number];
+}
+
+function allowedStringArray<const T extends readonly string[]>(formData: FormData, name: string, allowed: T) {
+  const values = stringArray(formData, name);
+  const unsupported = values.filter((item) => !allowed.includes(item as T[number]));
+  if (unsupported.length) throw new Error(`${name} contains unsupported values: ${unsupported.join(", ")}.`);
+  return values as T[number][];
+}
+
+const LEGAL_ENTITY_STATUSES = ["active", "inactive", "pending_verification"] as const;
+const MEMBERSHIP_ROLES = ["owner", "administrator", "deal_manager", "approver", "signatory", "finance", "reviewer", "auditor", "viewer", "member"] as const;
+const MEMBERSHIP_STATUSES = ["invited", "active", "suspended", "revoked"] as const;
+const APPROVAL_POLICY_STATUSES = ["draft", "active", "retired"] as const;
+const VERIFICATION_SUBJECT_TYPES = ["organization", "legal_entity", "program", "representative", "authority", "payment_account"] as const;
+const VERIFICATION_FACETS = ["domain_control", "legal_entity", "representative_identity", "authority", "payment_account", "enhanced_review"] as const;
+const MATCH_INTERESTS = ["interested", "declined", "needs_information"] as const;
+const DEAL_MESSAGE_VISIBILITIES = ["all_parties", "party_internal", "operator_only"] as const;
+const DEAL_ROOM_ACCESS_SCOPES = ["all_parties", "party_internal", "finance", "legal", "risk", "evidence", "operator"] as const;
+const PARTICIPANT_DEAL_ROOM_ACCESS_SCOPES = ["all_parties", "party_internal", "finance", "legal", "risk", "evidence"] as const;
+const OBLIGATION_DEPENDENCY_TYPES = ["must_complete_before", "activates", "blocks", "evidence_for"] as const;
+const OBLIGATION_STATUSES = ["pending", "active", "blocked", "completed", "failed", "waived", "terminated"] as const;
+const MILESTONE_STATUSES = ["pending", "in_progress", "submitted", "verified", "completed", "overdue", "waived", "failed"] as const;
+const EVIDENCE_REVIEW_STATUSES = ["accepted", "needs_revision", "rejected"] as const;
+const RISK_STATUSES = ["open", "needs_information", "mitigated", "accepted", "blocked", "closed"] as const;
+const RISK_VISIBILITIES = ["all_parties", "party_internal", "operator_only"] as const;
+const AMENDMENT_DECISIONS = ["approved", "rejected", "withdrawn"] as const;
+const ATTRIBUTION_STATUSES = ["proposed", "approved", "rejected", "withdrawn"] as const;
+const ATTRIBUTION_VISIBILITIES = ["private", "embargoed", "public", "anonymized"] as const;
+const POOL_ACTIVATION_RULES = ["threshold_only", "governance_vote_and_threshold", "unanimous", "operator_confirmed"] as const;
+const POOL_GOVERNANCE_RULES = ["one_organization_one_vote", "contribution_weighted", "unanimous", "custom"] as const;
+const POOL_TERM_EDITABLE_STATUSES = ["draft", "open", "ready"] as const;
+const TEMPLATE_STATUSES = ["draft", "active", "retired"] as const;
+const FRAMEWORK_STATUSES = ["draft", "active", "expired", "terminated"] as const;
+const INTEGRATION_TYPES = ["webhook", "api", "esignature", "payment", "registry", "storage", "other"] as const;
+const INTEGRATION_STATUSES = ["draft", "active", "disabled", "revoked"] as const;
+
 function safeReturnTo(formData: FormData) {
   const candidate = value(formData, "returnTo") || "/institutions";
   if (!SAFE_RETURN_PREFIXES.some((prefix) => candidate === prefix || candidate.startsWith(`${prefix}/`) || candidate.startsWith(`${prefix}?`) || candidate.startsWith(`${prefix}#`))) return "/institutions";
@@ -133,6 +185,20 @@ async function requireObligationInProposal(client: any, dealId: string, proposal
   return result.data;
 }
 
+async function requireObligationInDeal(client: any, dealId: string, obligationId: string) {
+  const result = await client.from("institutional_obligations").select("id,deal_id,proposal_version_id").eq("id", obligationId).eq("deal_id", dealId).maybeSingle();
+  dbError(result.error, "Could not validate obligation relationship.");
+  if (!result.data) throw new Error("Obligation must belong to the same deal.");
+  return result.data;
+}
+
+async function requireDisputeInDeal(client: any, dealId: string, disputeId: string) {
+  const result = await client.from("institutional_disputes").select("id,deal_id").eq("id", disputeId).eq("deal_id", dealId).maybeSingle();
+  dbError(result.error, "Could not validate dispute relationship.");
+  if (!result.data) throw new Error("Dispute must belong to the same deal.");
+  return result.data;
+}
+
 async function requireMilestoneInObligation(client: any, dealId: string, proposalVersionId: string, obligationId: string, milestoneId: string) {
   const result = await client.from("institutional_milestones").select("id,deal_id,proposal_version_id,obligation_id").eq("id", milestoneId).eq("deal_id", dealId).eq("proposal_version_id", proposalVersionId).eq("obligation_id", obligationId).maybeSingle();
   dbError(result.error, "Could not validate milestone relationship.");
@@ -168,9 +234,53 @@ async function requireOrganizationActingContext(
     .eq("organization_id", organizationId)
     .eq("profile_id", viewerProfileId)
     .eq("status", "active")
+    .is("revoked_at", null)
     .maybeSingle();
   dbError(membership.error, "Could not validate organization acting context.");
   if (!membership.data) throw new Error("Switch to an active organization workspace before using organization-only controls.");
+}
+
+async function requireExactOrganizationPermission(
+  client: any,
+  viewerProfileId: string,
+  organizationId: string,
+  programId: string | null,
+  requiredPermissions: readonly string[],
+  amountCents: number | null = null,
+) {
+  if (!requiredPermissions.length) return null;
+  if (programId) {
+    const program = await client
+      .from("institutional_programs")
+      .select("id")
+      .eq("id", programId)
+      .eq("organization_id", organizationId)
+      .maybeSingle();
+    dbError(program.error, "Could not validate exact organization/program scope.");
+    if (!program.data) throw new Error("The selected program does not belong to the active organization.");
+  }
+
+  const grants = await client
+    .from("institutional_authority_grants")
+    .select("id,organization_id,program_id,profile_id,permissions,amount_limit_cents,currency,authority_basis,valid_from,valid_until,revoked_at")
+    .eq("organization_id", organizationId)
+    .eq("profile_id", viewerProfileId)
+    .is("revoked_at", null);
+  dbError(grants.error, "Could not validate delegated organization authority.");
+  const now = Date.now();
+  const exactGrant = (grants.data ?? []).find((grant: any) => {
+    if ((grant.program_id ?? null) !== programId) return false;
+    if (!Array.isArray(grant.permissions) || !requiredPermissions.some((permission) => grant.permissions.includes(permission))) return false;
+    const validFrom = Date.parse(String(grant.valid_from ?? ""));
+    const validUntil = grant.valid_until ? Date.parse(String(grant.valid_until)) : Number.POSITIVE_INFINITY;
+    if (!Number.isFinite(validFrom) || validFrom > now || validUntil <= now) return false;
+    if (amountCents !== null && grant.amount_limit_cents !== null && Number(grant.amount_limit_cents) < amountCents) return false;
+    return true;
+  });
+  if (!exactGrant) {
+    throw new Error(`Exact-scope ${requiredPermissions.join(" or ")} authority is required for this organization/program action.`);
+  }
+  return exactGrant;
 }
 
 async function requireDealManagementActingContext(
@@ -178,6 +288,7 @@ async function requireDealManagementActingContext(
   viewerProfileId: string,
   dealId: string,
   formData: FormData,
+  requiredPermissions: readonly string[] = ["deal:manage", "deal:approve"],
 ) {
   const capacity = actingCapacity(formData);
   if (isPersonalInstitutionalCapacity(capacity)) {
@@ -191,22 +302,32 @@ async function requireDealManagementActingContext(
     if (!deal.data || !isPersonalInstitutionalCapacity(deal.data.lead_capacity) || deal.data.lead_profile_id !== viewerProfileId) {
       throw new Error("Personal capacity may manage only a deal led by that same person.");
     }
-    return { capacity, organizationId: null };
+    return { capacity, organizationId: null, programId: null, authorityGrant: null };
   }
 
   const organizationId = uuid(formData, "actingOrganizationId", true)!;
+  const programId = uuid(formData, "actingProgramId");
   await requireOrganizationActingContext(client, viewerProfileId, organizationId, formData);
-  const party = await client
+  let partyQuery = client
     .from("institutional_deal_parties")
-    .select("id")
+    .select("id,program_id,joined_at,left_at")
     .eq("deal_id", dealId)
     .eq("party_capacity", "organization")
     .eq("organization_id", organizationId)
-    .limit(1)
-    .maybeSingle();
+    .not("joined_at", "is", null)
+    .is("left_at", null);
+  partyQuery = programId ? partyQuery.eq("program_id", programId) : partyQuery.is("program_id", null);
+  const party = await partyQuery.limit(1).maybeSingle();
   dbError(party.error, "Could not validate organization deal-party context.");
-  if (!party.data) throw new Error("The active organization is not an exact party to this deal.");
-  return { capacity, organizationId };
+  if (!party.data) throw new Error("The active organization/program is not an accepted exact party to this deal.");
+  const authorityGrant = await requireExactOrganizationPermission(
+    client,
+    viewerProfileId,
+    organizationId,
+    programId,
+    requiredPermissions,
+  );
+  return { capacity, organizationId, programId, authorityGrant };
 }
 
 async function requirePartyActingContext(
@@ -214,6 +335,7 @@ async function requirePartyActingContext(
   viewerProfileId: string,
   party: any,
   formData: FormData,
+  requiredPermissions: readonly string[] = ["deal:manage"],
 ) {
   const capacity = actingCapacity(formData);
   if (isPersonalInstitutionalCapacity(party.party_capacity)) {
@@ -221,13 +343,25 @@ async function requirePartyActingContext(
       throw new Error("A personal-capacity party may be represented only by that same person.");
     }
     await requireActiveIndividualParticipation(client, viewerProfileId);
-    return;
+    return { capacity, organizationId: null, programId: null, authorityGrant: null };
   }
 
   if (capacity !== "organization" || !party.organization_id) {
     throw new Error("Switch to the exact organization party before representing it.");
   }
+  const actingProgramId = uuid(formData, "actingProgramId");
+  if ((party.program_id ?? null) !== actingProgramId) {
+    throw new Error("The active organization program does not match the exact deal party scope.");
+  }
   await requireOrganizationActingContext(client, viewerProfileId, party.organization_id, formData);
+  const authorityGrant = await requireExactOrganizationPermission(
+    client,
+    viewerProfileId,
+    party.organization_id,
+    actingProgramId,
+    requiredPermissions,
+  );
+  return { capacity, organizationId: party.organization_id, programId: actingProgramId, authorityGrant };
 }
 
 async function requireDealParticipationActingContext(
@@ -235,6 +369,7 @@ async function requireDealParticipationActingContext(
   viewerProfileId: string,
   dealId: string,
   formData: FormData,
+  requiredPermissions: readonly string[] = ["deal:manage"],
 ) {
   const capacity = actingCapacity(formData);
   if (isPersonalInstitutionalCapacity(capacity)) {
@@ -263,26 +398,38 @@ async function requireDealParticipationActingContext(
     dbError(acceptedVerifier.error, "Could not validate accepted verifier access.");
 
     if (!personalParty.data && !acceptedVerifier.data) {
-      throw new Error("Personal capacity may submit evidence only as an accepted named party or verifier.");
+      throw new Error("Personal capacity may act only as an accepted named party or verifier for this deal.");
     }
-    return { capacity, organizationId: null };
+    return { capacity, organizationId: null, programId: null, authorityGrant: null };
   }
 
   const organizationId = uuid(formData, "actingOrganizationId", true)!;
+  const programId = uuid(formData, "actingProgramId");
   await requireOrganizationActingContext(client, viewerProfileId, organizationId, formData);
-  const party = await client
+  let partyQuery = client
     .from("institutional_deal_parties")
-    .select("id")
+    .select("id,program_id")
     .eq("deal_id", dealId)
     .eq("party_capacity", "organization")
     .eq("organization_id", organizationId)
     .not("joined_at", "is", null)
-    .is("left_at", null)
-    .limit(1)
-    .maybeSingle();
+    .is("left_at", null);
+  partyQuery = programId ? partyQuery.eq("program_id", programId) : partyQuery.is("program_id", null);
+  const party = await partyQuery.limit(1).maybeSingle();
   dbError(party.error, "Could not validate organization deal participation.");
-  if (!party.data) throw new Error("The active organization is not an accepted party to this deal.");
-  return { capacity, organizationId };
+  if (!party.data) throw new Error("The active organization/program is not an accepted exact party to this deal.");
+
+  let authorityGrant = null;
+  if (requiredPermissions.length) {
+    authorityGrant = await requireExactOrganizationPermission(
+      client,
+      viewerProfileId,
+      organizationId,
+      programId,
+      requiredPermissions,
+    );
+  }
+  return { capacity, organizationId, programId, authorityGrant };
 }
 
 async function requireApprovalOrganization(client: any, approvalId: string) {
@@ -408,9 +555,124 @@ export async function runInstitutionalAction(formData: FormData) {
         revalidatePath("/institutions");
         redirectWith(`/institutions/${organizationId}`, "message", "Organization workspace created. Identity and authority remain fact-specific and unverified until reviewed.");
       }
+
+      case "create_legal_entity": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, null, ["organization:manage"]);
+        const result = await client.from("institutional_legal_entities").insert({
+          organization_id: organizationId,
+          legal_name: value(formData, "legalName", true),
+          entity_type: value(formData, "entityType", true),
+          jurisdiction: nullable(value(formData, "jurisdiction")),
+          registration_number: nullable(value(formData, "registrationNumber")),
+          registered_address: json(formData, "registeredAddress", {}),
+          fiscal_sponsor_organization_id: uuid(formData, "fiscalSponsorOrganizationId"),
+          status: oneOf(formData, "status", LEGAL_ENTITY_STATUSES, "pending_verification"),
+          created_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not create legal entity record.");
+        revalidatePath(`/institutions/${organizationId}`);
+        redirectWith(returnTo, "message", "Legal counterparty recorded. This does not verify the entity or authorize a representative.");
+      }
+      case "invite_membership": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, null, ["organization:manage"]);
+        const profileId = uuid(formData, "profileId", true)!;
+        const result = await client.from("institutional_memberships").upsert({
+          organization_id: organizationId,
+          profile_id: profileId,
+          role: oneOf(formData, "role", MEMBERSHIP_ROLES, "member"),
+          permissions: allowedStringArray(formData, "permissions", INSTITUTIONAL_PERMISSIONS),
+          status: oneOf(formData, "status", MEMBERSHIP_STATUSES, "invited"),
+          invited_by: viewer.authUser.id,
+          accepted_at: value(formData, "status") === "active" ? new Date().toISOString() : null,
+          revoked_at: null,
+        }, { onConflict: "organization_id,profile_id" });
+        dbError(result.error, "Could not invite organization member.");
+        revalidatePath(`/institutions/${organizationId}`);
+        redirectWith(returnTo, "message", "Membership record updated. Membership alone does not grant delegated authority.");
+      }
+      case "create_authority_grant": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, null, ["organization:manage"]);
+        const result = await client.from("institutional_authority_grants").insert({
+          organization_id: organizationId,
+          program_id: uuid(formData, "programId"),
+          profile_id: uuid(formData, "profileId", true),
+          permissions: allowedStringArray(formData, "permissions", INSTITUTIONAL_PERMISSIONS),
+          amount_limit_cents: value(formData, "amountLimit") ? parseInstitutionalMoneyToCents(formData.get("amountLimit")) : null,
+          currency: (value(formData, "currency") || "usd").toLowerCase(),
+          authority_basis: value(formData, "authorityBasis", true),
+          evidence_references: json(formData, "evidenceReferences", []),
+          valid_from: value(formData, "validFrom") || new Date().toISOString(),
+          valid_until: nullable(value(formData, "validUntil")),
+          granted_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not create scoped authority grant.");
+        revalidatePath(`/institutions/${organizationId}`);
+        redirectWith(returnTo, "message", "Exact-scope delegated authority recorded.");
+      }
+      case "create_approval_policy": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        const programId = uuid(formData, "programId");
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, programId, ["program:manage"]);
+        const result = await client.from("institutional_approval_policies").insert({
+          organization_id: organizationId,
+          program_id: programId,
+          name: value(formData, "name", true),
+          policy: json(formData, "policy", {}),
+          status: oneOf(formData, "status", APPROVAL_POLICY_STATUSES, "draft"),
+          created_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not create approval policy.");
+        revalidatePath(`/institutions/${organizationId}`);
+        redirectWith(returnTo, "message", "Approval policy recorded; it cannot substitute for named-person consent or signing authority.");
+      }
+      case "request_verification": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, null, ["organization:manage"]);
+        const result = await client.from("institutional_verification_records").insert({
+          organization_id: organizationId,
+          subject_type: oneOf(formData, "subjectType", VERIFICATION_SUBJECT_TYPES, "organization"),
+          subject_id: uuid(formData, "subjectId", true),
+          facet: oneOf(formData, "facet", VERIFICATION_FACETS),
+          method: value(formData, "method", true),
+          evidence_references: json(formData, "evidenceReferences", []),
+          requested_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not request fact-specific verification.");
+        revalidatePath(`/institutions/${organizationId}`);
+        redirectWith(returnTo, "message", "Verification request submitted. Verification will not imply endorsement.");
+      }
+      case "generate_matches": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        const result = await client.rpc("generate_institutional_matches", { target_organization_id: organizationId });
+        dbError(result.error, "Could not generate institutional matches.");
+        revalidatePath(`/institutions/${organizationId}`);
+        redirectWith(returnTo, "message", `${Number(result.data ?? 0)} compatible confidential match records generated or refreshed.`);
+      }
+      case "record_match_interest": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        const result = await client.rpc("record_institutional_match_interest", {
+          target_match_id: uuid(formData, "matchId", true),
+          target_organization_id: organizationId,
+          target_interest: oneOf(formData, "interest", MATCH_INTERESTS),
+        });
+        dbError(result.error, "Could not record match interest.");
+        revalidatePath(`/institutions/${organizationId}`);
+        redirectWith(returnTo, "message", "Confidential match interest updated.");
+      }
       case "create_program": {
         const organizationId = uuid(formData, "organizationId", true)!;
         await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, null, ["organization:manage", "program:manage"]);
         const result = await client.from("institutional_programs").insert({
           organization_id: organizationId,
           legal_entity_id: uuid(formData, "legalEntityId"),
@@ -426,8 +688,9 @@ export async function runInstitutionalAction(formData: FormData) {
       }
       case "create_mandate": {
         const organizationId = uuid(formData, "organizationId", true)!;
-        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
         const programId = uuid(formData, "programId", true)!;
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, programId, ["mandate:manage"]);
         const result = await client.from("institutional_mandates").insert({
           organization_id: organizationId,
           program_id: programId,
@@ -449,13 +712,14 @@ export async function runInstitutionalAction(formData: FormData) {
       }
       case "create_resource_profile": {
         const organizationId = uuid(formData, "organizationId", true)!;
-        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
         const programId = uuid(formData, "programId", true)!;
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, programId, ["opportunity:manage"]);
         const result = await client.from("institutional_resource_profiles").insert({
           organization_id: organizationId,
           program_id: programId,
           direction: value(formData, "direction", true),
-          resource_type: value(formData, "resourceType", true),
+          resource_type: oneOf(formData, "resourceType", INSTITUTIONAL_RESOURCE_TYPES),
           title: value(formData, "title", true),
           description: value(formData, "description"),
           quantity: value(formData, "quantity") ? Number(value(formData, "quantity")) : null,
@@ -477,10 +741,12 @@ export async function runInstitutionalAction(formData: FormData) {
       }
       case "create_opportunity": {
         const organizationId = uuid(formData, "organizationId", true)!;
+        const programId = uuid(formData, "programId", true)!;
         await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, programId, ["opportunity:manage"]);
         const result = await client.from("institutional_opportunities").insert({
           organization_id: organizationId,
-          program_id: uuid(formData, "programId", true),
+          program_id: programId,
           mandate_id: uuid(formData, "mandateId"),
           title: value(formData, "title", true),
           summary: value(formData, "summary"),
@@ -558,6 +824,7 @@ export async function runInstitutionalAction(formData: FormData) {
         const organizationId = uuid(formData, "organizationId", true)!;
         const programId = uuid(formData, "programId", true)!;
         await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, programId, ["deal:manage"]);
         const result = await client.from("institutional_deals").insert({
           lead_capacity: "organization",
           lead_profile_id: null,
@@ -742,7 +1009,7 @@ export async function runInstitutionalAction(formData: FormData) {
           proposal_version_id: proposalVersionId,
           obligor_party_id: obligorPartyId,
           beneficiary_party_id: beneficiaryPartyId,
-          resource_type: value(formData, "resourceType", true),
+          resource_type: oneOf(formData, "resourceType", INSTITUTIONAL_RESOURCE_TYPES),
           title: value(formData, "title", true),
           description: value(formData, "description"),
           amount_cents: value(formData, "amount") ? parseInstitutionalMoneyToCents(formData.get("amount")) : null,
@@ -836,7 +1103,7 @@ export async function runInstitutionalAction(formData: FormData) {
         const dealId = uuid(formData, "dealId", true)!;
         const partyId = uuid(formData, "partyId", true)!;
         const party = await requirePartyInDeal(client, dealId, partyId);
-        await requirePartyActingContext(client, viewer.authUser.id, party, formData);
+        await requirePartyActingContext(client, viewer.authUser.id, party, formData, ["deal:sign"]);
         const result = await client.rpc("sign_institutional_deal", {
           target_deal_id: dealId,
           target_party_id: partyId,
@@ -891,7 +1158,7 @@ export async function runInstitutionalAction(formData: FormData) {
           description: value(formData, "description"),
           evidence_type: value(formData, "evidenceType") || "document",
           verifier_assignment_id: verifierAssignmentId,
-          visibility: value(formData, "visibility") || "all_parties",
+          visibility: oneOf(formData, "visibility", DEAL_MESSAGE_VISIBILITIES, "all_parties"),
           created_by: viewer.authUser.id,
         });
         dbError(result.error, "Could not create evidence requirement.");
@@ -939,10 +1206,12 @@ export async function runInstitutionalAction(formData: FormData) {
       }
       case "create_budget_account": {
         const organizationId = uuid(formData, "organizationId", true)!;
+        const programId = uuid(formData, "programId");
         await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, programId, ["finance:manage"]);
         const result = await client.from("institutional_budget_accounts").insert({
           organization_id: organizationId,
-          program_id: uuid(formData, "programId"),
+          program_id: programId,
           name: value(formData, "name", true),
           currency: (value(formData, "currency") || "usd").toLowerCase(),
           authorized_cents: parseInstitutionalMoneyToCents(formData.get("authorizedAmount")),
@@ -1045,17 +1314,19 @@ export async function runInstitutionalAction(formData: FormData) {
       }
       case "create_integration": {
         const organizationId = uuid(formData, "organizationId", true)!;
+        const programId = uuid(formData, "programId");
         await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, programId, ["integration:manage"]);
         const configuration = json(formData, "configuration", {});
         assertInstitutionalIntegrationConfigHasNoSecrets(configuration);
         const result = await client.from("institutional_integrations").insert({
           organization_id: organizationId,
-          program_id: uuid(formData, "programId"),
-          integration_type: value(formData, "integrationType", true),
+          program_id: programId,
+          integration_type: oneOf(formData, "integrationType", INTEGRATION_TYPES),
           name: value(formData, "name", true),
           configuration,
           credential_reference: nullable(value(formData, "credentialReference")),
-          status: value(formData, "status") || "draft",
+          status: oneOf(formData, "status", INTEGRATION_STATUSES, "draft"),
           created_by: viewer.authUser.id,
         });
         dbError(result.error, "Could not create integration.");
@@ -1066,6 +1337,7 @@ export async function runInstitutionalAction(formData: FormData) {
         const integrationId = uuid(formData, "integrationId", true)!;
         const integration = await requireIntegrationOrganization(client, integrationId);
         await requireOrganizationActingContext(client, viewer.authUser.id, integration.organization_id, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, integration.organization_id, integration.program_id ?? null, ["integration:manage"]);
         const endpoint = await validateInstitutionalWebhookDestination(value(formData, "endpointUrl", true));
         const events = validateSupportedInstitutionalWebhookEvents(stringArray(formData, "supportedEvents"));
         const result = await client.from("institutional_webhooks").insert({
@@ -1073,12 +1345,419 @@ export async function runInstitutionalAction(formData: FormData) {
           endpoint_url: endpoint.normalizedUrl,
           supported_events: events,
           secret_reference: value(formData, "secretReference", true),
-          status: value(formData, "status") || "draft",
+          status: oneOf(formData, "status", INTEGRATION_STATUSES, "draft"),
           created_by: viewer.authUser.id,
         });
         dbError(result.error, "Could not create webhook.");
         revalidatePath(returnTo.split("?")[0]);
         redirectWith(returnTo, "message", "Webhook created with a supported event allowlist and external secret reference.");
+      }
+
+      case "accept_organization_deal_party": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        const result = await client.rpc("accept_institutional_organization_party", {
+          target_party_id: uuid(formData, "partyId", true),
+          target_organization_id: organizationId,
+          target_program_id: uuid(formData, "programId"),
+          target_authority_grant_id: uuid(formData, "authorityGrantId", true),
+        });
+        dbError(result.error, "Could not accept organization participation.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Organization participation accepted under exact-scope authority.");
+      }
+      case "post_deal_message": {
+        const dealId = uuid(formData, "dealId", true)!;
+        const participationContext = await requireDealParticipationActingContext(client, viewer.authUser.id, dealId, formData);
+        const visibility = oneOf(formData, "visibility", ["all_parties", "party_internal"] as const, "all_parties");
+        if (visibility === "party_internal" && !participationContext.organizationId) {
+          throw new Error("Personal capacity cannot post a message as an organization-internal communication.");
+        }
+        const result = await client.from("institutional_deal_messages").insert({
+          deal_id: dealId,
+          sender_profile_id: viewer.authUser.id,
+          organization_id: visibility === "party_internal" ? participationContext.organizationId : null,
+          visibility,
+          body: value(formData, "body", true),
+        });
+        dbError(result.error, "Could not post deal-room message.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Deal-room message posted to the selected visibility scope.");
+      }
+      case "grant_room_access": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const profileId = uuid(formData, "profileId", true)!;
+        const partyId = uuid(formData, "partyId");
+        const organizationId = uuid(formData, "organizationId");
+        const accessScope = oneOf(
+          formData,
+          "accessScope",
+          PARTICIPANT_DEAL_ROOM_ACCESS_SCOPES,
+          "all_parties",
+        );
+        if (partyId) {
+          const party = await requirePartyInDeal(client, dealId, partyId);
+          if (party.party_capacity === "organization") {
+            if (!organizationId || organizationId !== party.organization_id) {
+              throw new Error("Organization-scoped room access must exactly match the selected organization party.");
+            }
+            const membership = await client.from("institutional_memberships").select("id")
+              .eq("organization_id", organizationId).eq("profile_id", profileId).eq("status", "active").is("revoked_at", null).maybeSingle();
+            dbError(membership.error, "Could not validate room-access organization membership.");
+            if (!membership.data) throw new Error("The selected profile is not an active member of the exact organization party.");
+          } else if (party.profile_id !== profileId || organizationId) {
+            throw new Error("Personal-capacity room access must match the named party and cannot imply organization authority.");
+          }
+        } else if (organizationId) {
+          const [party, membership] = await Promise.all([
+            client.from("institutional_deal_parties").select("id").eq("deal_id", dealId).eq("party_capacity", "organization").eq("organization_id", organizationId).limit(1).maybeSingle(),
+            client.from("institutional_memberships").select("id").eq("organization_id", organizationId).eq("profile_id", profileId).eq("status", "active").is("revoked_at", null).maybeSingle(),
+          ]);
+          dbError(party.error, "Could not validate room-access organization party.");
+          dbError(membership.error, "Could not validate room-access organization membership.");
+          if (!party.data || !membership.data) throw new Error("Organization-scoped room access requires an exact deal party and active membership.");
+        }
+        if (accessScope === "party_internal" && !organizationId) {
+          throw new Error("Party-internal access requires an exact organization party.");
+        }
+        if (!partyId && !organizationId) {
+          const verifierAssignment = await client
+            .from("institutional_verifier_assignments")
+            .select("id,status")
+            .eq("deal_id", dealId)
+            .eq("verifier_profile_id", profileId)
+            .maybeSingle();
+          dbError(verifierAssignment.error, "Could not validate verifier access boundary.");
+          if (verifierAssignment.data) {
+            throw new Error("Independent verifier access must be created by accepting the exact assignment; generic room access cannot substitute.");
+          }
+        }
+        const result = await client.from("institutional_deal_room_members").upsert({
+          deal_id: dealId,
+          profile_id: profileId,
+          party_id: partyId,
+          organization_id: organizationId,
+          access_scope: accessScope,
+          can_post: bool(formData, "canPost"),
+          added_by: viewer.authUser.id,
+          revoked_at: null,
+        }, { onConflict: "deal_id,profile_id,access_scope" });
+        dbError(result.error, "Could not grant deal-room access.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Scoped deal-room access granted.");
+      }
+      case "revoke_room_access": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const result = await client.rpc("revoke_institutional_room_access", {
+          target_room_member_id: uuid(formData, "roomMemberId", true),
+          target_deal_id: dealId,
+        });
+        dbError(result.error, "Could not revoke deal-room access.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Deal-room access revoked without deleting the audit history.");
+      }
+      case "create_obligation_dependency": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const predecessorObligationId = uuid(formData, "predecessorObligationId", true)!;
+        const successorObligationId = uuid(formData, "successorObligationId", true)!;
+        await Promise.all([
+          requireObligationInDeal(client, dealId, predecessorObligationId),
+          requireObligationInDeal(client, dealId, successorObligationId),
+        ]);
+        const result = await client.from("institutional_obligation_dependencies").insert({
+          deal_id: dealId,
+          obligation_id: successorObligationId,
+          depends_on_obligation_id: predecessorObligationId,
+          dependency_type: oneOf(formData, "dependencyType", OBLIGATION_DEPENDENCY_TYPES, "must_complete_before"),
+          created_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not create obligation dependency.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Obligation dependency recorded; circular dependencies remain blocked by the database.");
+      }
+      case "transition_deal_stage": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const result = await client.rpc("transition_institutional_deal_stage", { target_deal_id: dealId, target_stage: oneOf(formData, "stage", INSTITUTIONAL_DEAL_STAGES) });
+        dbError(result.error, "Could not transition deal stage.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Deal stage transitioned through the fail-closed lifecycle.");
+      }
+      case "update_obligation_status": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const result = await client.rpc("transition_institutional_obligation_status", {
+          target_deal_id: dealId,
+          target_obligation_id: uuid(formData, "obligationId", true),
+          target_status: oneOf(formData, "status", OBLIGATION_STATUSES),
+        });
+        dbError(result.error, "Could not update obligation status.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Obligation status updated under the transition guard.");
+      }
+      case "update_milestone_status": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const result = await client.rpc("transition_institutional_milestone_status", {
+          target_deal_id: dealId,
+          target_milestone_id: uuid(formData, "milestoneId", true),
+          target_status: oneOf(formData, "status", MILESTONE_STATUSES),
+        });
+        dbError(result.error, "Could not update milestone status.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Milestone status updated.");
+      }
+      case "assign_verifier": {
+        const dealId = uuid(formData, "dealId", true)!;
+        const managementContext = await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const result = await client.from("institutional_verifier_assignments").insert({
+          deal_id: dealId,
+          organization_id: managementContext.organizationId,
+          verifier_profile_id: uuid(formData, "verifierProfileId", true),
+          scope: value(formData, "scope", true),
+          status: "invited",
+          assigned_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not invite independent verifier or service provider.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Verifier invited. Confidential evidence access remains closed until acceptance.");
+      }
+      case "revoke_verifier_assignment": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const result = await client.rpc("revoke_institutional_verifier_assignment", {
+          target_assignment_id: uuid(formData, "assignmentId", true),
+          target_deal_id: dealId,
+        });
+        dbError(result.error, "Could not revoke verifier assignment.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Verifier assignment and associated confidential access revoked.");
+      }
+      case "review_evidence": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealParticipationActingContext(client, viewer.authUser.id, dealId, formData, []);
+        const result = await client.rpc("review_institutional_evidence", {
+          target_submission_id: uuid(formData, "submissionId", true),
+          target_deal_id: dealId,
+          target_status: oneOf(formData, "status", EVIDENCE_REVIEW_STATUSES),
+          target_review_note: value(formData, "reviewNote"),
+          target_organization_id: uuid(formData, "actingOrganizationId"),
+          target_program_id: uuid(formData, "programId"),
+          target_authority_grant_id: uuid(formData, "authorityGrantId"),
+        });
+        dbError(result.error, "Could not review evidence.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Evidence review recorded against the exact requirement.");
+      }
+      case "create_risk_review": {
+        const dealId = uuid(formData, "dealId", true)!;
+        const context = await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData, ["risk:review"]);
+        const result = await client.from("institutional_risk_reviews").insert({
+          deal_id: dealId,
+          organization_id: context.organizationId,
+          proposal_version_id: uuid(formData, "proposalVersionId"),
+          category: oneOf(formData, "category", INSTITUTIONAL_RISK_CATEGORIES),
+          severity: oneOf(formData, "severity", INSTITUTIONAL_RISK_SEVERITIES, "medium"),
+          finding: value(formData, "finding", true),
+          mitigation: nullable(value(formData, "mitigation")),
+          nonwaivable: bool(formData, "nonwaivable"),
+          status: oneOf(formData, "status", RISK_STATUSES, "open"),
+          visibility: oneOf(formData, "visibility", RISK_VISIBILITIES, "all_parties"),
+          reviewer_profile_id: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not record integrity review.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Integrity, threat, conflict, or externality finding recorded.");
+      }
+      case "create_amendment": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const fromProposalVersionId = uuid(formData, "supersededProposalVersionId", true)!;
+        const toProposalVersionId = uuid(formData, "proposedProposalVersionId", true)!;
+        await Promise.all([
+          requireProposalInDeal(client, dealId, fromProposalVersionId),
+          requireProposalInDeal(client, dealId, toProposalVersionId),
+        ]);
+        const result = await client.from("institutional_amendments").insert({
+          deal_id: dealId,
+          from_proposal_version_id: fromProposalVersionId,
+          to_proposal_version_id: toProposalVersionId,
+          reason: value(formData, "reason", true),
+          status: "proposed",
+          created_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not propose amendment.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Amendment proposed; exact terms remain unchanged until approval and signature.");
+      }
+      case "decide_amendment": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const status = oneOf(formData, "status", AMENDMENT_DECISIONS);
+        const result = await client.from("institutional_amendments").update({
+          status,
+          approved_at: status === "approved" ? new Date().toISOString() : null,
+        }).eq("id", uuid(formData, "amendmentId", true)).eq("deal_id", dealId);
+        dbError(result.error, "Could not decide amendment.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Amendment decision recorded.");
+      }
+      case "open_dispute": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealParticipationActingContext(client, viewer.authUser.id, dealId, formData);
+        const partyId = uuid(formData, "partyId", true)!;
+        const party = await requirePartyInDeal(client, dealId, partyId);
+        await requirePartyActingContext(client, viewer.authUser.id, party, formData);
+        const result = await client.from("institutional_disputes").insert({
+          deal_id: dealId,
+          opened_by_party_id: partyId,
+          summary: value(formData, "summary", true),
+          stage: "concern_raised",
+          confidential: !bool(formData, "publicDispute"),
+          opened_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not open dispute.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Dispute opened with an append-only escalation record.");
+      }
+      case "add_dispute_event": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealParticipationActingContext(client, viewer.authUser.id, dealId, formData);
+        const disputeId = uuid(formData, "disputeId", true)!;
+        await requireDisputeInDeal(client, dealId, disputeId);
+        const result = await client.from("institutional_dispute_events").insert({
+          dispute_id: disputeId,
+          actor_profile_id: viewer.authUser.id,
+          event_type: value(formData, "eventType", true),
+          note: value(formData, "detail", true),
+          attachments: json(formData, "attachments", []),
+        });
+        dbError(result.error, "Could not add dispute event.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Dispute event appended.");
+      }
+      case "create_attribution_claim": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const organizationId = uuid(formData, "actingOrganizationId");
+        const result = await client.from("institutional_attribution_claims").insert({
+          deal_id: dealId,
+          organization_id: organizationId,
+          profile_id: organizationId ? null : viewer.authUser.id,
+          claim_type: value(formData, "claimType", true),
+          claim_text: value(formData, "claimText", true),
+          qualification: nullable(value(formData, "counterfactualQualification")),
+          status: oneOf(formData, "status", ATTRIBUTION_STATUSES, "proposed"),
+          visibility: oneOf(formData, "disclosureStatus", ATTRIBUTION_VISIBILITIES, "private"),
+          created_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not record attribution claim.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Attribution and public-claim boundary recorded.");
+      }
+      case "create_report_snapshot": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData);
+        const result = await client.from("institutional_report_snapshots").insert({
+          deal_id: dealId,
+          report_type: value(formData, "reportType", true),
+          snapshot: {
+            title: value(formData, "title", true),
+            payload: json(formData, "payload", {}),
+            generated_at: new Date().toISOString(),
+          },
+          generated_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not create structured report snapshot.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Immutable structured report snapshot created.");
+      }
+      case "create_pool_terms": {
+        const dealId = uuid(formData, "dealId", true)!;
+        await requireDealManagementActingContext(client, viewer.authUser.id, dealId, formData, ["pool:manage"]);
+        const governingTerms = {
+          threshold_amount_cents: parseInstitutionalMoneyToCents(formData.get("threshold")),
+          currency: (value(formData, "currency") || "usd").toLowerCase(),
+          minimum_contributors: Math.max(2, integer(formData, "minimumContributors", 2)),
+          contribution_deadline: value(formData, "deadline", true),
+          activation_rule: oneOf(formData, "activationRule", POOL_ACTIVATION_RULES, "governance_vote_and_threshold"),
+          contribution_cap_cents: value(formData, "contributionCap") ? parseInstitutionalMoneyToCents(formData.get("contributionCap")) : null,
+          excess_funds_rule: value(formData, "excessFundsTreatment", true),
+          failure_rule: value(formData, "failureTreatment", true),
+          withdrawal_rule: value(formData, "withdrawalRule", true),
+          governance_rule: oneOf(formData, "governanceRule", POOL_GOVERNANCE_RULES, "one_organization_one_vote"),
+          governance_config: json(formData, "governanceRules", {}),
+        };
+        const result = await client.from("institutional_pool_terms").upsert({
+          deal_id: dealId,
+          ...governingTerms,
+          terms_hash: hashInstitutionalTerms(governingTerms),
+          status: oneOf(formData, "status", POOL_TERM_EDITABLE_STATUSES, "draft"),
+          created_by: viewer.authUser.id,
+        }, { onConflict: "deal_id" });
+        dbError(result.error, "Could not create consortium or pool terms.");
+        revalidatePath(returnTo.split("?")[0]);
+        redirectWith(returnTo, "message", "Pool economics and governance terms recorded. Opening the pool freezes them.");
+      }
+      case "create_template": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        const programId = uuid(formData, "programId");
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, programId, ["deal:manage"]);
+        const result = await client.from("institutional_templates").insert({
+          organization_id: organizationId,
+          program_id: programId,
+          template_type: value(formData, "dealType", true),
+          name: value(formData, "name", true),
+          content: json(formData, "template", {}),
+          status: oneOf(formData, "status", TEMPLATE_STATUSES, "draft"),
+          created_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not create institutional template.");
+        revalidatePath(`/institutions/${organizationId}`);
+        redirectWith(returnTo, "message", "Reusable institutional trade template recorded.");
+      }
+      case "create_framework_agreement": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, null, ["deal:manage"]);
+        const organizationBId = uuid(formData, "organizationBId", true)!;
+        const terms = json(formData, "standardTerms", {});
+        const result = await client.from("institutional_framework_agreements").insert({
+          organization_a_id: organizationId,
+          organization_b_id: organizationBId,
+          title: value(formData, "title", true),
+          terms,
+          terms_hash: hashInstitutionalTerms(terms),
+          status: oneOf(formData, "status", FRAMEWORK_STATUSES, "draft"),
+          effective_from: nullable(value(formData, "effectiveFrom")),
+          effective_until: nullable(value(formData, "effectiveUntil")),
+          created_by: viewer.authUser.id,
+        });
+        dbError(result.error, "Could not create framework agreement.");
+        revalidatePath(`/institutions/${organizationId}`);
+        redirectWith(returnTo, "message", "Framework agreement recorded with exact standard terms.");
+      }
+      case "create_command_draft": {
+        const organizationId = uuid(formData, "organizationId", true)!;
+        const programId = uuid(formData, "programId");
+        await requireOrganizationActingContext(client, viewer.authUser.id, organizationId, formData);
+        await requireExactOrganizationPermission(client, viewer.authUser.id, organizationId, programId, ["deal:manage"]);
+        const result = await client.from("institutional_command_drafts").insert({
+          organization_id: organizationId,
+          program_id: programId,
+          profile_id: viewer.authUser.id,
+          command_text: value(formData, "commandText", true),
+          interpreted_action: value(formData, "interpretedAction", true),
+          payload: json(formData, "payload", {}),
+          status: "draft",
+        });
+        dbError(result.error, "Could not create Command draft.");
+        revalidatePath(`/institutions/${organizationId}`);
+        redirectWith(returnTo, "message", "Permission-aware Command draft recorded for review.");
       }
       case "operator_review_verification": {
         const { client: operator, viewer: operatorViewer } = await operatorContext();
@@ -1100,13 +1779,13 @@ export async function runInstitutionalAction(formData: FormData) {
           deal_id: uuid(formData, "dealId", true),
           organization_id: uuid(formData, "riskOrganizationId"),
           proposal_version_id: uuid(formData, "proposalVersionId"),
-          category: value(formData, "category", true),
-          severity: value(formData, "severity", true),
+          category: oneOf(formData, "category", INSTITUTIONAL_RISK_CATEGORIES),
+          severity: oneOf(formData, "severity", INSTITUTIONAL_RISK_SEVERITIES),
           finding: value(formData, "finding", true),
           mitigation: nullable(value(formData, "mitigation")),
           nonwaivable: bool(formData, "nonwaivable"),
-          status: value(formData, "status") || "open",
-          visibility: value(formData, "visibility") || "operator_only",
+          status: oneOf(formData, "status", RISK_STATUSES, "open"),
+          visibility: oneOf(formData, "visibility", RISK_VISIBILITIES, "operator_only"),
           reviewer_profile_id: operatorViewer.authUser.id,
         });
         dbError(result.error, "Could not create integrity review.");

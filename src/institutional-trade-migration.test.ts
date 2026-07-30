@@ -16,7 +16,8 @@ test("institutional schema separates people, organizations, programs, legal enti
     /create table public\.institutional_programs/i,
     /create table public\.institutional_memberships/i,
     /create table public\.institutional_authority_grants/i,
-    /create table public\.institutional_deal_parties/i,
+    /create table public\.institutional_deal_parties[\s\S]*authority_grant_id uuid references public\.institutional_authority_grants/i,
+    /Organization-party authority grant must exactly match the representative, organization, and program/i,
     /foreign key\(program_id,organization_id\) references public\.institutional_programs\(id,organization_id\)/i,
   ], "identity and authority model");
 });
@@ -81,11 +82,54 @@ test("proposal, party, obligation, milestone, verifier, and evidence relationshi
     /foreign key\(milestone_id,deal_id,obligation_id,proposal_version_id\) references public\.institutional_milestones/i,
     /foreign key\(requirement_id,deal_id,proposal_version_id,obligation_id,milestone_id\) references public\.institutional_evidence_requirements/i,
     /institutional_room_verifier_assignment_fk/i,
+    /institutional_room_member_relationship_guard/i,
+    /Independent verifier room access requires the accepted assignment for the same deal and profile/i,
+    /Personal-capacity room access must match the named party and cannot imply organization authority/i,
     /institutional_prevent_dependency_cycle/i,
     /institutional_obligation_party_relationship/i,
     /institutional_signature_party_relationship/i,
     /institutional_dispute_events_select[\s\S]*d\.id=dispute_id[\s\S]*can_read_institutional_deal\(d\.deal_id\)/i,
   ], "relationship guards");
+});
+
+test("obligation and milestone completion is transition-guarded and evidence-bound", () => {
+  expectAll([
+    /institutional_guard_obligation_status_transition/i,
+    /Invalid institutional obligation status transition/i,
+    /Required predecessor obligations must complete before this obligation/i,
+    /All obligation milestones must be verified, completed, or waived before completion/i,
+    /All obligation evidence requirements must be satisfied, waived, or closed before completion/i,
+    /Exact-term named-person consent is required before obligation completion/i,
+    /institutional_guard_milestone_status_transition/i,
+    /Invalid institutional milestone status transition/i,
+    /Milestone evidence requirements must be satisfied, waived, or closed before verification or completion/i,
+    /transition_institutional_obligation_status/i,
+    /transition_institutional_milestone_status/i,
+    /grant execute on function public\.transition_institutional_obligation_status\(uuid,uuid,text\) to authenticated/i,
+    /grant execute on function public\.transition_institutional_milestone_status\(uuid,uuid,text\) to authenticated/i,
+  ], "verified completion lifecycle");
+});
+
+test("confidential matching stores each side’s interest separately and reveals only aggregate status", () => {
+  expectAll([
+    /create table public\.institutional_match_interests/i,
+    /unique\(match_id,organization_id\)/i,
+    /Match interest organization must be one of the exact matched organizations/i,
+    /generate_institutional_matches/i,
+    /record_institutional_match_interest/i,
+    /Exact-scope opportunity or deal authority is required to record match interest/i,
+    /when offer_interest='interested' and seek_interest='interested' then 'mutual_interest'/i,
+    /institutional_match_interests_select[\s\S]*is_institutional_organization_member\(organization_id\)/i,
+  ], "confidential matching");
+});
+
+test("deal-room message visibility and organization representation are enforced in the database", () => {
+  expectAll([
+    /institutional_deal_messages_select[\s\S]*visibility='all_parties'/i,
+    /visibility='party_internal'[\s\S]*is_institutional_organization_member\(organization_id\)/i,
+    /institutional_deal_messages_insert[\s\S]*visibility='all_parties' and organization_id is null/i,
+    /Party-internal room access requires an exact represented organization/i,
+  ], "deal-room confidentiality");
 });
 
 test("selected and signed terms are immutable and signatures require the current exact hash", () => {
@@ -136,13 +180,25 @@ test("pool approval, financial reservation, contributions, anchors, underwriting
     /save_institutional_pool_underwriting/i,
     /cast_institutional_pool_vote/i,
     /activate_institutional_pool/i,
+    /grant execute on function public\.generate_institutional_matches\(uuid\) to authenticated/i,
+    /grant execute on function public\.record_institutional_match_interest\(uuid,uuid,text,text\) to authenticated/i,
+    /grant execute on function public\.accept_institutional_organization_party\(uuid,uuid,uuid,uuid\) to authenticated/i,
+    /grant execute on function public\.review_institutional_evidence\(uuid,uuid,text,text,uuid,uuid,uuid\) to authenticated/i,
     /Financial reservation cannot substitute for independent pool participation approval/i,
+    /status text not null default 'pledged' check\(status in \('pledged','committed','withdrawn','released','paid','refunded'\)\)/i,
+    /target_status not in\('pledged','committed','withdrawn','released','paid','refunded'\)/i,
     /Pool contribution reservation must belong to the exact organization\/program/i,
     /Pool vote requires valid exact-scope pool approval authority/i,
     /Required anchor commitments are incomplete/i,
     /Required underwriting commitments are incomplete/i,
     /Reservation idempotency key was already used with different exact terms or authority/i,
     /Exact-scope finance authority is required for this contribution state/i,
+    /institutional_pool_status_transition_guard/i,
+    /A pool may become active only through the atomic activation function/i,
+    /app\.institutional_pool_activation_id/i,
+    /institutional_pool_contributions_orgwide_unique/i,
+    /institutional_pool_votes_orgwide_unique/i,
+    /program_id is not distinct from target_program_id/i,
   ], "pool gates");
 });
 

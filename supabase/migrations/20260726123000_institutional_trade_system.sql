@@ -151,6 +151,38 @@ create table public.institutional_matches (
 );
 create trigger institutional_matches_updated_at before update on public.institutional_matches for each row execute function public.institutional_set_updated_at();
 
+create table public.institutional_match_interests (
+ id uuid primary key default gen_random_uuid(), match_id uuid not null references public.institutional_matches(id) on delete cascade,
+ organization_id uuid not null references public.institutional_organizations(id) on delete cascade, program_id uuid,
+ profile_id uuid not null references public.profiles(id) on delete restrict,
+ interest text not null check(interest in ('interested','declined','needs_information')), note text,
+ created_at timestamptz not null default timezone('utc',now()), updated_at timestamptz not null default timezone('utc',now()),
+ foreign key(program_id,organization_id) references public.institutional_programs(id,organization_id) on delete restrict,
+ unique(match_id,organization_id)
+);
+create trigger institutional_match_interests_updated_at before update on public.institutional_match_interests for each row execute function public.institutional_set_updated_at();
+
+create or replace function public.institutional_validate_match_interest_scope()
+returns trigger language plpgsql set search_path=pg_catalog,public as $$
+declare match_row public.institutional_matches; expected_program_id uuid;
+begin
+ select * into match_row from public.institutional_matches where id=new.match_id;
+ if not found then raise exception 'Institutional match does not exist.' using errcode='23514'; end if;
+ if new.organization_id=match_row.offer_organization_id then
+  select program_id into expected_program_id from public.institutional_resource_profiles where id=match_row.offer_resource_profile_id;
+ elsif new.organization_id=match_row.seek_organization_id then
+  select program_id into expected_program_id from public.institutional_resource_profiles where id=match_row.seek_resource_profile_id;
+ else
+  raise exception 'Match interest organization must be one of the exact matched organizations.' using errcode='23514';
+ end if;
+ if new.program_id is distinct from expected_program_id then
+  raise exception 'Match interest program must exactly match the organization resource profile.' using errcode='23514';
+ end if;
+ return new;
+end $$;
+create trigger institutional_match_interest_scope_guard before insert or update on public.institutional_match_interests
+ for each row execute function public.institutional_validate_match_interest_scope();
+
 create table public.institutional_deals (
  id uuid primary key default gen_random_uuid(),
  lead_capacity text not null default 'organization' check(lead_capacity in ('organization','individual')),
@@ -180,6 +212,7 @@ create table public.institutional_deal_parties (
  organization_id uuid references public.institutional_organizations(id) on delete restrict, program_id uuid,
  legal_entity_id uuid references public.institutional_legal_entities(id) on delete restrict, party_role text not null,
  representative_profile_id uuid references public.profiles(id) on delete set null,
+ authority_grant_id uuid references public.institutional_authority_grants(id) on delete restrict,
  authority_status text not null default 'unverified' check(authority_status in ('unverified','pending','verified_for_scope','self_authorized','revoked')),
  approval_status text not null default 'pending' check(approval_status in ('pending','approved','rejected','withdrawn','not_required')),
  consent_status text not null default 'not_required' check(consent_status in ('pending','affirmed','declined','withdrawn','not_required')),
@@ -188,9 +221,10 @@ create table public.institutional_deal_parties (
  check(
   (party_capacity='organization' and organization_id is not null and profile_id is null)
   or
-  (party_capacity in ('individual','service_provider','verifier') and profile_id is not null and organization_id is null and program_id is null and legal_entity_id is null)
+  (party_capacity in ('individual','service_provider','verifier') and profile_id is not null and organization_id is null and program_id is null and legal_entity_id is null and authority_grant_id is null)
  ),
  check(representative_profile_id is null or party_capacity='organization' or representative_profile_id=profile_id),
+ check(authority_status<>'verified_for_scope' or (party_capacity='organization' and representative_profile_id is not null and authority_grant_id is not null)),
  unique(id,deal_id)
 );
 create unique index institutional_deal_parties_org_program_unique on public.institutional_deal_parties(deal_id,organization_id,program_id)
@@ -202,14 +236,28 @@ create unique index institutional_deal_parties_profile_unique on public.institut
 create trigger institutional_deal_parties_updated_at before update on public.institutional_deal_parties for each row execute function public.institutional_set_updated_at();
 
 create or replace function public.institutional_validate_party_capacity()
-returns trigger language plpgsql set search_path=pg_catalog as $$
+returns trigger language plpgsql set search_path=pg_catalog,public as $$
 begin
  if new.party_capacity<>'organization' then
+  if new.authority_grant_id is not null then
+   raise exception 'Personal capacity cannot inherit a delegated organizational authority grant.' using errcode='23514';
+  end if;
   if new.authority_status not in('self_authorized','revoked') then
    raise exception 'A personal-capacity party uses self authority, not delegated organizational authority.' using errcode='23514';
   end if;
   if new.approval_status<>'not_required' then
    raise exception 'Organizational approval cannot be required or substituted for a personal-capacity party.' using errcode='23514';
+  end if;
+ else
+  if new.authority_grant_id is not null and not exists(
+   select 1 from public.institutional_authority_grants g
+   where g.id=new.authority_grant_id and g.profile_id=new.representative_profile_id
+    and g.organization_id=new.organization_id and g.program_id is not distinct from new.program_id
+    and g.revoked_at is null and g.valid_from<=timezone('utc',now())
+    and (g.valid_until is null or g.valid_until>timezone('utc',now()))
+    and ('deal:manage'=any(g.permissions) or 'deal:approve'=any(g.permissions))
+  ) then
+   raise exception 'Organization-party authority grant must exactly match the representative, organization, and program.' using errcode='23514';
   end if;
  end if;
  return new;
@@ -320,6 +368,7 @@ create table public.institutional_approvals (
  unique(deal_id,proposal_version_id,organization_id,program_id,approval_kind,requested_from_profile_id)
 );
 create trigger institutional_approvals_updated_at before update on public.institutional_approvals for each row execute function public.institutional_set_updated_at();
+create unique index institutional_approvals_orgwide_unique on public.institutional_approvals(deal_id,proposal_version_id,organization_id,approval_kind,requested_from_profile_id) where program_id is null;
 
 create table public.institutional_individual_consents (
  id uuid primary key default gen_random_uuid(), deal_id uuid not null references public.institutional_deals(id) on delete cascade, proposal_version_id uuid not null,
@@ -394,6 +443,63 @@ create table public.institutional_verifier_assignments (
 );
 create trigger institutional_verifier_assignments_updated_at before update on public.institutional_verifier_assignments for each row execute function public.institutional_set_updated_at();
 alter table public.institutional_deal_room_members add constraint institutional_room_verifier_assignment_fk foreign key(verifier_assignment_id) references public.institutional_verifier_assignments(id) on delete cascade;
+
+create or replace function public.institutional_validate_room_member_relationship()
+returns trigger language plpgsql set search_path=pg_catalog,public as $$
+declare party_row public.institutional_deal_parties; assignment_row public.institutional_verifier_assignments;
+begin
+ if new.party_id is not null then
+  select * into party_row from public.institutional_deal_parties where id=new.party_id and deal_id=new.deal_id;
+  if not found then raise exception 'Deal-room party must belong to the same deal.' using errcode='23514'; end if;
+  if party_row.party_capacity='organization' then
+   if new.organization_id is distinct from party_row.organization_id then
+    raise exception 'Deal-room organization must exactly match the organization party.' using errcode='23514';
+   end if;
+   if not exists(
+    select 1 from public.institutional_memberships m
+    where m.organization_id=party_row.organization_id and m.profile_id=new.profile_id
+     and m.status='active' and m.revoked_at is null
+   ) then raise exception 'Organization-scoped room access requires active membership in the exact organization party.' using errcode='23514'; end if;
+  else
+   if new.profile_id is distinct from party_row.profile_id or new.organization_id is not null then
+    raise exception 'Personal-capacity room access must match the named party and cannot imply organization authority.' using errcode='23514';
+   end if;
+  end if;
+ elsif new.organization_id is not null then
+  if not exists(
+   select 1 from public.institutional_deal_parties p
+   where p.deal_id=new.deal_id and p.party_capacity='organization' and p.organization_id=new.organization_id
+  ) then raise exception 'Deal-room organization must be an exact organization party to the same deal.' using errcode='23514'; end if;
+  if not exists(
+   select 1 from public.institutional_memberships m
+   where m.organization_id=new.organization_id and m.profile_id=new.profile_id
+    and m.status='active' and m.revoked_at is null
+  ) then raise exception 'Organization-scoped room access requires active membership in that organization.' using errcode='23514'; end if;
+ end if;
+
+ if new.verifier_assignment_id is not null then
+  select * into assignment_row from public.institutional_verifier_assignments
+  where id=new.verifier_assignment_id and deal_id=new.deal_id;
+  if not found or assignment_row.verifier_profile_id<>new.profile_id or assignment_row.status<>'accepted' then
+   raise exception 'Independent verifier room access requires the accepted assignment for the same deal and profile.' using errcode='23514';
+  end if;
+  if new.party_id is not null or new.organization_id is not null or new.access_scope<>'evidence' then
+   raise exception 'Independent verifier access is evidence-scoped and cannot imply party or organization authority.' using errcode='23514';
+  end if;
+ elsif new.party_id is null and new.organization_id is null and exists(
+  select 1 from public.institutional_verifier_assignments a
+  where a.deal_id=new.deal_id and a.verifier_profile_id=new.profile_id
+ ) then
+  raise exception 'Generic room access cannot substitute for acceptance of an independent verifier assignment.' using errcode='23514';
+ end if;
+
+ if new.access_scope='party_internal' and new.organization_id is null then
+  raise exception 'Party-internal room access requires an exact represented organization.' using errcode='23514';
+ end if;
+ return new;
+end $$;
+create trigger institutional_room_member_relationship_guard before insert or update on public.institutional_deal_room_members
+ for each row execute function public.institutional_validate_room_member_relationship();
 
 create table public.institutional_evidence_requirements (
  id uuid primary key default gen_random_uuid(), deal_id uuid not null references public.institutional_deals(id) on delete cascade,
@@ -516,7 +622,7 @@ create trigger institutional_pool_exact_hash before insert or update on public.i
 create table public.institutional_pool_contributions (
  id uuid primary key default gen_random_uuid(), deal_id uuid not null references public.institutional_deals(id) on delete cascade,
  organization_id uuid not null references public.institutional_organizations(id) on delete restrict, program_id uuid, amount_cents bigint not null check(amount_cents>0),
- status text not null default 'pledged' check(status in ('pledged','approved','committed','withdrawn','released','paid','refunded')),
+ status text not null default 'pledged' check(status in ('pledged','committed','withdrawn','released','paid','refunded')),
  approval_status text not null default 'pending' check(approval_status in ('pending','approved','rejected','withdrawn')),
  terms_hash text not null check(terms_hash ~ '^[0-9a-f]{64}$'), budget_reservation_id uuid references public.institutional_budget_reservations(id) on delete restrict,
  finance_authority_grant_id uuid references public.institutional_authority_grants(id) on delete restrict,
@@ -526,6 +632,7 @@ create table public.institutional_pool_contributions (
  unique(deal_id,organization_id,program_id)
 );
 create trigger institutional_pool_contributions_updated_at before update on public.institutional_pool_contributions for each row execute function public.institutional_set_updated_at();
+create unique index institutional_pool_contributions_orgwide_unique on public.institutional_pool_contributions(deal_id,organization_id) where program_id is null;
 
 create table public.institutional_pool_anchors (
  id uuid primary key default gen_random_uuid(), deal_id uuid not null references public.institutional_deals(id) on delete cascade,
@@ -536,6 +643,8 @@ create table public.institutional_pool_anchors (
  committed_at timestamptz, created_at timestamptz not null default timezone('utc',now()),
  foreign key(program_id,organization_id) references public.institutional_programs(id,organization_id) on delete restrict
 );
+create unique index institutional_pool_anchors_program_unique on public.institutional_pool_anchors(deal_id,organization_id,program_id,contribution_id) where program_id is not null;
+create unique index institutional_pool_anchors_orgwide_unique on public.institutional_pool_anchors(deal_id,organization_id,contribution_id) where program_id is null;
 
 create table public.institutional_pool_underwritings (
  id uuid primary key default gen_random_uuid(), deal_id uuid not null references public.institutional_deals(id) on delete cascade,
@@ -546,6 +655,8 @@ create table public.institutional_pool_underwritings (
  committed_at timestamptz, created_at timestamptz not null default timezone('utc',now()),
  foreign key(program_id,organization_id) references public.institutional_programs(id,organization_id) on delete restrict
 );
+create unique index institutional_pool_underwritings_program_unique on public.institutional_pool_underwritings(deal_id,organization_id,program_id) where program_id is not null;
+create unique index institutional_pool_underwritings_orgwide_unique on public.institutional_pool_underwritings(deal_id,organization_id) where program_id is null;
 
 create table public.institutional_pool_votes (
  id uuid primary key default gen_random_uuid(), deal_id uuid not null references public.institutional_deals(id) on delete cascade,
@@ -558,6 +669,7 @@ create table public.institutional_pool_votes (
  unique(deal_id,organization_id,program_id,proposal_key)
 );
 create trigger institutional_pool_votes_updated_at before update on public.institutional_pool_votes for each row execute function public.institutional_set_updated_at();
+create unique index institutional_pool_votes_orgwide_unique on public.institutional_pool_votes(deal_id,organization_id,proposal_key) where program_id is null;
 
 create table public.institutional_integrations (
  id uuid primary key default gen_random_uuid(), organization_id uuid not null references public.institutional_organizations(id) on delete cascade, program_id uuid,
@@ -762,6 +874,20 @@ begin
 end $$;
 create trigger institutional_pool_terms_immutable before update on public.institutional_pool_terms for each row execute function public.institutional_lock_pool_terms();
 
+create or replace function public.institutional_guard_pool_status_transition()
+returns trigger language plpgsql set search_path=pg_catalog as $$
+begin
+ if tg_op='INSERT' and new.status not in('draft','open','ready') then
+  raise exception 'A pool may become active only through the atomic activation function.' using errcode='42501';
+ end if;
+ if tg_op='UPDATE' and old.status<>'active' and new.status='active'
+    and current_setting('app.institutional_pool_activation_id',true) is distinct from new.id::text then
+  raise exception 'A pool may become active only after the atomic threshold, vote, anchor, underwriting, and deadline checks.' using errcode='42501';
+ end if;
+ return new;
+end $$;
+create trigger institutional_pool_status_transition_guard before insert or update on public.institutional_pool_terms for each row execute function public.institutional_guard_pool_status_transition();
+
 create or replace function public.institutional_lock_framework()
 returns trigger language plpgsql set search_path=pg_catalog as $$
 begin
@@ -912,6 +1038,93 @@ returns void language plpgsql stable security definer set search_path=pg_catalog
 begin
  if auth.uid() is null then raise exception 'Authentication required.' using errcode='42501'; end if;
  if coalesce(auth.jwt()->>'aal','aal1')<>'aal2' then raise exception 'AAL2 step-up authentication is required.' using errcode='42501'; end if;
+end $$;
+
+create or replace function public.generate_institutional_matches(target_organization_id uuid)
+returns integer language plpgsql security definer set search_path=pg_catalog,public as $$
+declare generated_count integer;
+begin
+ perform public.assert_institutional_aal2();
+ if not public.is_institutional_organization_member(target_organization_id) then
+  raise exception 'Active organization membership is required to generate institutional matches.' using errcode='42501';
+ end if;
+ with candidate_pairs as (
+  select offer.id offer_resource_profile_id,seek.id seek_resource_profile_id,
+         offer.organization_id offer_organization_id,seek.organization_id seek_organization_id,
+         case when offer.currency is not distinct from seek.currency then 0.9::numeric else 0.8::numeric end score,
+         jsonb_build_object('resource_type',offer.resource_type,'offer_program_id',offer.program_id,'seek_program_id',seek.program_id) score_components,
+         format('Offer of %s from %s complements a matching need from %s.',offer.resource_type,offer.organization_id,seek.organization_id) explanation
+  from public.institutional_resource_profiles offer
+  join public.institutional_resource_profiles seek
+    on offer.direction='offer' and seek.direction='seek' and offer.resource_type=seek.resource_type
+   and offer.organization_id<>seek.organization_id and offer.status='active' and seek.status='active'
+  where (
+    offer.organization_id=target_organization_id
+    and (public.has_institutional_permission(target_organization_id,offer.program_id,'opportunity:manage',null)
+      or public.has_institutional_permission(target_organization_id,offer.program_id,'deal:manage',null))
+  ) or (
+    seek.organization_id=target_organization_id
+    and (public.has_institutional_permission(target_organization_id,seek.program_id,'opportunity:manage',null)
+      or public.has_institutional_permission(target_organization_id,seek.program_id,'deal:manage',null))
+  )
+ ), inserted as (
+  insert into public.institutional_matches(
+   offer_resource_profile_id,seek_resource_profile_id,offer_organization_id,seek_organization_id,
+   classification,score,score_components,bargaining_overlap,explanation,status,generated_by
+  )
+  select offer_resource_profile_id,seek_resource_profile_id,offer_organization_id,seek_organization_id,
+         'resource_complementarity',score,score_components,true,explanation,'candidate','deterministic'
+  from candidate_pairs
+  on conflict(offer_resource_profile_id,seek_resource_profile_id) do update set
+   score=excluded.score,score_components=excluded.score_components,bargaining_overlap=excluded.bargaining_overlap,
+   explanation=excluded.explanation,generated_by=excluded.generated_by,updated_at=timezone('utc',now())
+  returning id
+ )
+ select count(*) into generated_count from inserted;
+ return generated_count;
+end $$;
+
+create or replace function public.record_institutional_match_interest(
+ target_match_id uuid,
+ target_organization_id uuid,
+ target_interest text,
+ target_note text default null
+)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
+declare match_row public.institutional_matches; target_program_id uuid; offer_interest text; seek_interest text;
+begin
+ perform public.assert_institutional_aal2();
+ if target_interest not in('interested','declined','needs_information') then
+  raise exception 'Unsupported institutional match interest.' using errcode='23514';
+ end if;
+ select * into match_row from public.institutional_matches where id=target_match_id for update;
+ if not found then raise exception 'Institutional match does not exist.' using errcode='23514'; end if;
+ if target_organization_id=match_row.offer_organization_id then
+  select program_id into target_program_id from public.institutional_resource_profiles where id=match_row.offer_resource_profile_id;
+ elsif target_organization_id=match_row.seek_organization_id then
+  select program_id into target_program_id from public.institutional_resource_profiles where id=match_row.seek_resource_profile_id;
+ else
+  raise exception 'Only an exact matched organization may record interest.' using errcode='42501';
+ end if;
+ if not public.has_institutional_permission(target_organization_id,target_program_id,'opportunity:manage',null)
+    and not public.has_institutional_permission(target_organization_id,target_program_id,'deal:manage',null) then
+  raise exception 'Exact-scope opportunity or deal authority is required to record match interest.' using errcode='42501';
+ end if;
+ insert into public.institutional_match_interests(match_id,organization_id,program_id,profile_id,interest,note)
+ values(target_match_id,target_organization_id,target_program_id,auth.uid(),target_interest,nullif(trim(target_note),''))
+ on conflict(match_id,organization_id) do update set
+  program_id=excluded.program_id,profile_id=excluded.profile_id,interest=excluded.interest,note=excluded.note,updated_at=timezone('utc',now());
+ select interest into offer_interest from public.institutional_match_interests where match_id=target_match_id and organization_id=match_row.offer_organization_id;
+ select interest into seek_interest from public.institutional_match_interests where match_id=target_match_id and organization_id=match_row.seek_organization_id;
+ update public.institutional_matches set status=case
+  when offer_interest='declined' or seek_interest='declined' then 'declined'
+  when offer_interest='interested' and seek_interest='interested' then 'mutual_interest'
+  else 'candidate'
+ end where id=target_match_id;
+ insert into public.institutional_audit_events(actor_profile_id,represented_organization_id,represented_program_id,event_type,entity_type,entity_id,authority_basis,new_state)
+ values(auth.uid(),target_organization_id,target_program_id,'match.interest_recorded','institutional_match',target_match_id,
+        'Exact-scope opportunity or deal authority',jsonb_build_object('interest',target_interest));
+ return target_match_id;
 end $$;
 
 create or replace function public.select_institutional_proposal_version(target_deal_id uuid,target_proposal_version_id uuid,target_organization_id uuid,target_program_id uuid)
@@ -1099,10 +1312,21 @@ begin
  ) then
   raise exception 'Selected proposal is not bound to the current exact pool terms.' using errcode='23514';
  end if;
- insert into public.institutional_approvals(deal_id,proposal_version_id,organization_id,program_id,approval_kind,requested_from_profile_id,requested_by,authority_grant_id,decision,decision_note,decided_by,decided_at)
- values(target_deal_id,proposal_id,target_organization_id,target_program_id,'pool_participation',auth.uid(),auth.uid(),target_authority_grant_id,target_decision,'Pool participation approval recorded separately from financial reservation.',auth.uid(),timezone('utc',now()))
- on conflict(deal_id,proposal_version_id,organization_id,program_id,approval_kind,requested_from_profile_id) do update set decision=excluded.decision,decision_note=excluded.decision_note,authority_grant_id=excluded.authority_grant_id,decided_by=excluded.decided_by,decided_at=excluded.decided_at
- returning id into approval_id;
+ select id into approval_id from public.institutional_approvals
+ where deal_id=target_deal_id and proposal_version_id=proposal_id and organization_id=target_organization_id
+   and program_id is not distinct from target_program_id and approval_kind='pool_participation'
+   and requested_from_profile_id=auth.uid()
+ for update;
+ if approval_id is null then
+  insert into public.institutional_approvals(deal_id,proposal_version_id,organization_id,program_id,approval_kind,requested_from_profile_id,requested_by,authority_grant_id,decision,decision_note,decided_by,decided_at)
+  values(target_deal_id,proposal_id,target_organization_id,target_program_id,'pool_participation',auth.uid(),auth.uid(),target_authority_grant_id,target_decision,'Pool participation approval recorded separately from financial reservation.',auth.uid(),timezone('utc',now()))
+  returning id into approval_id;
+ else
+  update public.institutional_approvals set
+   decision=target_decision,decision_note='Pool participation approval recorded separately from financial reservation.',
+   authority_grant_id=target_authority_grant_id,decided_by=auth.uid(),decided_at=timezone('utc',now())
+  where id=approval_id;
+ end if;
  return approval_id;
 end $$;
 
@@ -1148,7 +1372,7 @@ returns uuid language plpgsql security definer set search_path=pg_catalog,public
 declare pool_row public.institutional_pool_terms; contribution_id uuid;
 begin
  perform public.assert_institutional_aal2();
- if target_status not in('pledged','approved','committed','withdrawn','released','paid','refunded') then raise exception 'Unsupported contribution status.' using errcode='23514'; end if;
+ if target_status not in('pledged','committed','withdrawn','released','paid','refunded') then raise exception 'Unsupported contribution status.' using errcode='23514'; end if;
  select * into pool_row from public.institutional_pool_terms where deal_id=target_deal_id for update;
  if not found or pool_row.status not in('open','ready','active') then raise exception 'Pool is not accepting contribution updates.' using errcode='23514'; end if;
  if target_amount_cents<=0 or (pool_row.contribution_cap_cents is not null and target_amount_cents>pool_row.contribution_cap_cents) then raise exception 'Contribution amount exceeds pool rules.' using errcode='23514'; end if;
@@ -1165,10 +1389,25 @@ begin
        and not public.has_institutional_permission(target_organization_id,target_program_id,'deal:manage',null) then
   raise exception 'Exact-scope pool approval or deal management authority is required.' using errcode='42501';
  end if;
- insert into public.institutional_pool_contributions(deal_id,organization_id,program_id,amount_cents,status,approval_status,terms_hash,budget_reservation_id,finance_authority_grant_id,created_by,committed_by,committed_at)
- values(target_deal_id,target_organization_id,target_program_id,target_amount_cents,target_status,case when target_status in('committed','paid') then 'approved' else 'pending' end,pool_row.terms_hash,target_budget_reservation_id,target_finance_authority_grant_id,auth.uid(),case when target_status in('committed','paid') then auth.uid() else null end,case when target_status in('committed','paid') then timezone('utc',now()) else null end)
- on conflict(deal_id,organization_id,program_id) do update set amount_cents=excluded.amount_cents,status=excluded.status,approval_status=excluded.approval_status,terms_hash=excluded.terms_hash,budget_reservation_id=excluded.budget_reservation_id,finance_authority_grant_id=excluded.finance_authority_grant_id,committed_by=excluded.committed_by,committed_at=excluded.committed_at
- returning id into contribution_id;
+ select id into contribution_id from public.institutional_pool_contributions
+ where deal_id=target_deal_id and organization_id=target_organization_id
+   and program_id is not distinct from target_program_id
+ for update;
+ if contribution_id is null then
+  insert into public.institutional_pool_contributions(deal_id,organization_id,program_id,amount_cents,status,approval_status,terms_hash,budget_reservation_id,finance_authority_grant_id,created_by,committed_by,committed_at,withdrawn_at)
+  values(target_deal_id,target_organization_id,target_program_id,target_amount_cents,target_status,case when target_status in('committed','paid') then 'approved' when target_status='withdrawn' then 'withdrawn' else 'pending' end,pool_row.terms_hash,target_budget_reservation_id,target_finance_authority_grant_id,auth.uid(),case when target_status in('committed','paid') then auth.uid() else null end,case when target_status in('committed','paid') then timezone('utc',now()) else null end,case when target_status='withdrawn' then timezone('utc',now()) else null end)
+  returning id into contribution_id;
+ else
+  update public.institutional_pool_contributions set
+   amount_cents=target_amount_cents,status=target_status,
+   approval_status=case when target_status in('committed','paid') then 'approved' when target_status='withdrawn' then 'withdrawn' else 'pending' end,
+   terms_hash=pool_row.terms_hash,budget_reservation_id=target_budget_reservation_id,
+   finance_authority_grant_id=target_finance_authority_grant_id,
+   committed_by=case when target_status in('committed','paid') then auth.uid() else committed_by end,
+   committed_at=case when target_status in('committed','paid') then timezone('utc',now()) else committed_at end,
+   withdrawn_at=case when target_status='withdrawn' then timezone('utc',now()) else withdrawn_at end
+  where id=contribution_id;
+ end if;
  return contribution_id;
 end $$;
 
@@ -1179,13 +1418,102 @@ begin
  perform public.assert_institutional_aal2();
  select * into pool_row from public.institutional_pool_terms where deal_id=target_deal_id for update;
  if not found then raise exception 'Pool terms do not exist.' using errcode='23514'; end if;
- insert into public.institutional_pool_votes(deal_id,organization_id,program_id,proposal_key,vote,terms_hash,voter_profile_id,authority_grant_id)
- values(target_deal_id,target_organization_id,target_program_id,target_proposal_key,target_vote,pool_row.terms_hash,auth.uid(),target_authority_grant_id)
- on conflict(deal_id,organization_id,program_id,proposal_key) do update set vote=excluded.vote,terms_hash=excluded.terms_hash,voter_profile_id=excluded.voter_profile_id,authority_grant_id=excluded.authority_grant_id
- returning id into vote_id;
+ select id into vote_id from public.institutional_pool_votes
+ where deal_id=target_deal_id and organization_id=target_organization_id
+   and program_id is not distinct from target_program_id and proposal_key=target_proposal_key
+ for update;
+ if vote_id is null then
+  insert into public.institutional_pool_votes(deal_id,organization_id,program_id,proposal_key,vote,terms_hash,voter_profile_id,authority_grant_id)
+  values(target_deal_id,target_organization_id,target_program_id,target_proposal_key,target_vote,pool_row.terms_hash,auth.uid(),target_authority_grant_id)
+  returning id into vote_id;
+ else
+  update public.institutional_pool_votes set vote=target_vote,terms_hash=pool_row.terms_hash,
+   voter_profile_id=auth.uid(),authority_grant_id=target_authority_grant_id
+  where id=vote_id;
+ end if;
  return vote_id;
 end $$;
 
+
+create or replace function public.institutional_guard_obligation_status_transition()
+returns trigger language plpgsql set search_path=pg_catalog,public as $$
+declare deal_row public.institutional_deals;
+begin
+ if new.status=old.status then return new; end if;
+ if not(
+  (old.status='pending' and new.status in('active','blocked','completed','failed','waived','terminated')) or
+  (old.status='active' and new.status in('blocked','completed','failed','waived','terminated')) or
+  (old.status='blocked' and new.status in('active','completed','failed','waived','terminated')) or
+  (old.status='failed' and new.status in('active','waived','terminated'))
+ ) then
+  raise exception 'Invalid institutional obligation status transition.' using errcode='23514';
+ end if;
+ select * into deal_row from public.institutional_deals where id=new.deal_id;
+ if not found then raise exception 'Obligation deal relationship is invalid.' using errcode='23514'; end if;
+ if new.status in('active','completed') and deal_row.stage not in('signed','execution','evidence_review','disputed','amended') then
+  raise exception 'An obligation cannot become active or complete before the deal is signed.' using errcode='23514';
+ end if;
+ if new.status='completed' then
+  if exists(
+   select 1 from public.institutional_obligation_dependencies dependency
+   join public.institutional_obligations predecessor on predecessor.id=dependency.depends_on_obligation_id and predecessor.deal_id=new.deal_id
+   where dependency.deal_id=new.deal_id and dependency.obligation_id=new.id
+     and dependency.dependency_type in('must_complete_before','activates')
+     and predecessor.status not in('completed','waived')
+  ) then
+   raise exception 'Required predecessor obligations must complete before this obligation.' using errcode='23514';
+  end if;
+  if exists(select 1 from public.institutional_milestones milestone where milestone.obligation_id=new.id and milestone.deal_id=new.deal_id and milestone.status not in('verified','completed','waived')) then
+   raise exception 'All obligation milestones must be verified, completed, or waived before completion.' using errcode='23514';
+  end if;
+  if exists(select 1 from public.institutional_evidence_requirements requirement where requirement.obligation_id=new.id and requirement.deal_id=new.deal_id and requirement.status not in('satisfied','waived','closed')) then
+   raise exception 'All obligation evidence requirements must be satisfied, waived, or closed before completion.' using errcode='23514';
+  end if;
+  if new.individual_consent_required and not exists(
+   select 1 from public.institutional_individual_consents consent
+   where consent.deal_id=new.deal_id and consent.obligation_id=new.id and consent.individual_profile_id=new.individual_profile_id
+     and consent.proposal_version_id=new.proposal_version_id and consent.terms_hash=deal_row.selected_terms_hash and consent.decision='affirmed'
+  ) then
+   raise exception 'Exact-term named-person consent is required before obligation completion.' using errcode='23514';
+  end if;
+ end if;
+ return new;
+end $$;
+create trigger institutional_obligation_status_transition_guard before update of status on public.institutional_obligations
+for each row execute function public.institutional_guard_obligation_status_transition();
+
+create or replace function public.institutional_guard_milestone_status_transition()
+returns trigger language plpgsql set search_path=pg_catalog,public as $$
+declare deal_stage text;
+begin
+ if new.status=old.status then return new; end if;
+ if not(
+  (old.status='pending' and new.status in('in_progress','submitted','verified','completed','overdue','waived','failed')) or
+  (old.status='in_progress' and new.status in('submitted','verified','completed','overdue','waived','failed')) or
+  (old.status='submitted' and new.status in('in_progress','verified','completed','overdue','waived','failed')) or
+  (old.status='verified' and new.status in('completed','waived')) or
+  (old.status='overdue' and new.status in('in_progress','submitted','verified','completed','waived','failed')) or
+  (old.status='failed' and new.status in('in_progress','submitted','waived'))
+ ) then
+  raise exception 'Invalid institutional milestone status transition.' using errcode='23514';
+ end if;
+ select stage into deal_stage from public.institutional_deals where id=new.deal_id;
+ if deal_stage is null then raise exception 'Milestone deal relationship is invalid.' using errcode='23514'; end if;
+ if new.status in('in_progress','submitted','verified','completed') and deal_stage not in('signed','execution','evidence_review','disputed','amended') then
+  raise exception 'A milestone cannot progress before the deal is signed.' using errcode='23514';
+ end if;
+ if new.status in('verified','completed') and exists(
+  select 1 from public.institutional_evidence_requirements requirement
+  where requirement.milestone_id=new.id and requirement.deal_id=new.deal_id
+    and requirement.status not in('satisfied','waived','closed')
+ ) then
+  raise exception 'Milestone evidence requirements must be satisfied, waived, or closed before verification or completion.' using errcode='23514';
+ end if;
+ new.completed_at:=case when new.status='completed' then coalesce(new.completed_at,timezone('utc',now())) else new.completed_at end;
+ return new;
+end $$;
+create trigger institutional_milestone_status_transition_guard before update of status on public.institutional_milestones
+for each row execute function public.institutional_guard_milestone_status_transition();
 
 create or replace function public.transition_institutional_deal_stage(target_deal_id uuid,target_stage text)
 returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
@@ -1222,6 +1550,58 @@ begin
  ) then raise exception 'Invalid institutional deal stage transition.' using errcode='23514'; end if;
  update public.institutional_deals set stage=target_stage,completed_at=case when target_stage='completed' then timezone('utc',now()) else completed_at end,terminated_at=case when target_stage='terminated' then timezone('utc',now()) else terminated_at end where id=target_deal_id;
  return target_deal_id;
+end $$;
+
+create or replace function public.transition_institutional_obligation_status(target_deal_id uuid,target_obligation_id uuid,target_status text)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
+declare obligation_row public.institutional_obligations; represented_organization uuid; represented_program uuid;
+begin
+ perform public.assert_institutional_aal2();
+ if target_status not in('pending','active','blocked','completed','failed','waived','terminated') then
+  raise exception 'Unsupported institutional obligation status.' using errcode='23514';
+ end if;
+ select * into obligation_row from public.institutional_obligations where id=target_obligation_id and deal_id=target_deal_id for update;
+ if not found then raise exception 'Obligation must belong to the same deal.' using errcode='23514'; end if;
+ if not public.can_manage_institutional_deal(target_deal_id) then
+  raise exception 'Exact-scope deal management or personal lead authority is required to transition an obligation.' using errcode='42501';
+ end if;
+ select organization_id,program_id into represented_organization,represented_program
+ from public.institutional_deal_parties where id=obligation_row.obligor_party_id and deal_id=target_deal_id;
+ update public.institutional_obligations set status=target_status where id=target_obligation_id and deal_id=target_deal_id;
+ insert into public.institutional_audit_events(
+  deal_id,actor_profile_id,represented_organization_id,represented_program_id,event_type,entity_type,entity_id,authority_basis,previous_state,new_state
+ ) values(
+  target_deal_id,auth.uid(),represented_organization,represented_program,'obligation.status_transitioned','obligation',target_obligation_id,
+  'Exact-scope deal management or personal lead authority',jsonb_build_object('status',obligation_row.status),jsonb_build_object('status',target_status)
+ );
+ return target_obligation_id;
+end $$;
+
+create or replace function public.transition_institutional_milestone_status(target_deal_id uuid,target_milestone_id uuid,target_status text)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
+declare milestone_row public.institutional_milestones; obligation_row public.institutional_obligations; represented_organization uuid; represented_program uuid;
+begin
+ perform public.assert_institutional_aal2();
+ if target_status not in('pending','in_progress','submitted','verified','completed','overdue','waived','failed') then
+  raise exception 'Unsupported institutional milestone status.' using errcode='23514';
+ end if;
+ select * into milestone_row from public.institutional_milestones where id=target_milestone_id and deal_id=target_deal_id for update;
+ if not found then raise exception 'Milestone must belong to the same deal.' using errcode='23514'; end if;
+ if not public.can_manage_institutional_deal(target_deal_id) then
+  raise exception 'Exact-scope deal management or personal lead authority is required to transition a milestone.' using errcode='42501';
+ end if;
+ select * into obligation_row from public.institutional_obligations where id=milestone_row.obligation_id and deal_id=target_deal_id;
+ if not found then raise exception 'Milestone obligation relationship is invalid.' using errcode='23514'; end if;
+ select organization_id,program_id into represented_organization,represented_program
+ from public.institutional_deal_parties where id=obligation_row.obligor_party_id and deal_id=target_deal_id;
+ update public.institutional_milestones set status=target_status where id=target_milestone_id and deal_id=target_deal_id;
+ insert into public.institutional_audit_events(
+  deal_id,actor_profile_id,represented_organization_id,represented_program_id,event_type,entity_type,entity_id,authority_basis,previous_state,new_state
+ ) values(
+  target_deal_id,auth.uid(),represented_organization,represented_program,'milestone.status_transitioned','milestone',target_milestone_id,
+  'Exact-scope deal management or personal lead authority',jsonb_build_object('status',milestone_row.status),jsonb_build_object('status',target_status)
+ );
+ return target_milestone_id;
 end $$;
 
 create or replace view public.institutional_public_organizations with(security_invoker=true) as
@@ -1279,6 +1659,153 @@ returns boolean language sql stable security definer set search_path=pg_catalog,
   )
  )
 $$;
+
+-- A request-stable, database-owned authorization snapshot keeps the presentation
+-- layer deterministic. It is advisory for rendering only: every mutation still
+-- rechecks exact scope, time validity, AAL2, and authority in its own database
+-- function, trigger, policy, or server action.
+create or replace function public.get_institutional_deal_authorization_snapshot(
+ target_deal_id uuid,
+ target_organization_id uuid default null,
+ target_party_id uuid default null
+)
+returns jsonb language plpgsql stable security definer set search_path=pg_catalog,public as $$
+declare
+ snapshot_as_of timestamptz := now();
+ viewer_profile_id uuid := auth.uid();
+ deal_row public.institutional_deals;
+ party_row public.institutional_deal_parties;
+ matching_ids uuid[] := '{}'::uuid[];
+ manage_ids uuid[] := '{}'::uuid[];
+ approve_ids uuid[] := '{}'::uuid[];
+ sign_ids uuid[] := '{}'::uuid[];
+ reserve_ids uuid[] := '{}'::uuid[];
+ review_ids uuid[] := '{}'::uuid[];
+ party_joined boolean := false;
+ personal_can_manage boolean := false;
+ personal_can_sign boolean := false;
+ personal_can_review boolean := false;
+begin
+ if viewer_profile_id is null then
+  raise exception 'Authentication required.' using errcode='42501';
+ end if;
+
+ select * into deal_row from public.institutional_deals where id=target_deal_id;
+ if not found then
+  raise exception 'Institutional deal not found.' using errcode='P0002';
+ end if;
+
+ if target_organization_id is null then
+  if target_party_id is not null then
+   select * into party_row
+   from public.institutional_deal_parties
+   where id=target_party_id and deal_id=target_deal_id
+     and party_capacity in('individual','service_provider','verifier')
+     and profile_id=viewer_profile_id;
+   if not found then
+    raise exception 'Personal authorization snapshot requires the exact named personal party.' using errcode='42501';
+   end if;
+   party_joined:=party_row.joined_at is not null and party_row.left_at is null;
+   personal_can_sign:=party_joined and party_row.authority_status='self_authorized';
+  end if;
+
+  personal_can_manage:=deal_row.lead_capacity='individual'
+   and deal_row.lead_profile_id=viewer_profile_id
+   and exists(select 1 from public.institutional_individual_profiles i where i.profile_id=viewer_profile_id and i.status='active');
+  personal_can_review:=exists(
+   select 1 from public.institutional_verifier_assignments a
+   where a.deal_id=target_deal_id and a.verifier_profile_id=viewer_profile_id and a.status='accepted'
+  );
+
+  if not personal_can_manage and target_party_id is null and not personal_can_review then
+   raise exception 'No personal-capacity authorization exists for this deal.' using errcode='42501';
+  end if;
+
+  return jsonb_build_object(
+   'asOf',snapshot_as_of,
+   'actingCapacity','individual',
+   'organizationId',null,
+   'programId',null,
+   'partyId',case when target_party_id is null then null else party_row.id end,
+   'organizationPartyId',null,
+   'organizationPartyJoined',false,
+   'canAcceptOrganizationParty',false,
+   'canManageDeal',personal_can_manage,
+   'canApprove',false,
+   'canSign',personal_can_sign,
+   'canReserveFunds',false,
+   'canReviewEvidence',personal_can_review,
+   'matchingAuthorityGrantIds',to_jsonb('{}'::uuid[]),
+   'authorityGrantIdsByPermission',jsonb_build_object(
+    'dealManage',to_jsonb('{}'::uuid[]),
+    'dealApprove',to_jsonb('{}'::uuid[]),
+    'dealSign',to_jsonb('{}'::uuid[]),
+    'financeReserve',to_jsonb('{}'::uuid[]),
+    'evidenceReview',to_jsonb('{}'::uuid[])
+   )
+  );
+ end if;
+
+ if target_party_id is null then
+  raise exception 'Organization authorization snapshot requires an exact deal party.' using errcode='23514';
+ end if;
+ if not exists(
+  select 1 from public.institutional_memberships m
+  where m.organization_id=target_organization_id and m.profile_id=viewer_profile_id
+    and m.status='active' and m.revoked_at is null
+ ) then
+  raise exception 'Active exact-organization membership is required.' using errcode='42501';
+ end if;
+
+ select * into party_row
+ from public.institutional_deal_parties
+ where id=target_party_id and deal_id=target_deal_id
+   and party_capacity='organization' and organization_id=target_organization_id;
+ if not found then
+  raise exception 'Authorization snapshot organization and party scope must exactly match the deal.' using errcode='23514';
+ end if;
+ party_joined:=party_row.joined_at is not null and party_row.left_at is null;
+
+ select
+  coalesce(array_agg(g.id order by g.created_at) filter (where true),'{}'::uuid[]),
+  coalesce(array_agg(g.id order by g.created_at) filter (where 'deal:manage'=any(g.permissions)),'{}'::uuid[]),
+  coalesce(array_agg(g.id order by g.created_at) filter (where 'deal:approve'=any(g.permissions)),'{}'::uuid[]),
+  coalesce(array_agg(g.id order by g.created_at) filter (where 'deal:sign'=any(g.permissions)),'{}'::uuid[]),
+  coalesce(array_agg(g.id order by g.created_at) filter (where 'finance:reserve'=any(g.permissions)),'{}'::uuid[]),
+  coalesce(array_agg(g.id order by g.created_at) filter (where 'evidence:review'=any(g.permissions) or 'deal:manage'=any(g.permissions)),'{}'::uuid[])
+ into matching_ids,manage_ids,approve_ids,sign_ids,reserve_ids,review_ids
+ from public.institutional_authority_grants g
+ where g.profile_id=viewer_profile_id
+   and g.organization_id=target_organization_id
+   and g.program_id is not distinct from party_row.program_id
+   and g.revoked_at is null
+   and g.valid_from<=snapshot_as_of
+   and (g.valid_until is null or g.valid_until>snapshot_as_of);
+
+ return jsonb_build_object(
+  'asOf',snapshot_as_of,
+  'actingCapacity','organization',
+  'organizationId',target_organization_id,
+  'programId',party_row.program_id,
+  'partyId',party_row.id,
+  'organizationPartyId',party_row.id,
+  'organizationPartyJoined',party_joined,
+  'canAcceptOrganizationParty',(not party_joined and party_row.left_at is null and (cardinality(manage_ids)>0 or cardinality(approve_ids)>0)),
+  'canManageDeal',(party_joined and (cardinality(manage_ids)>0 or cardinality(approve_ids)>0)),
+  'canApprove',(party_joined and cardinality(approve_ids)>0),
+  'canSign',(party_joined and cardinality(sign_ids)>0),
+  'canReserveFunds',(party_joined and cardinality(reserve_ids)>0),
+  'canReviewEvidence',(party_joined and cardinality(review_ids)>0),
+  'matchingAuthorityGrantIds',to_jsonb(matching_ids),
+  'authorityGrantIdsByPermission',jsonb_build_object(
+   'dealManage',to_jsonb(manage_ids),
+   'dealApprove',to_jsonb(approve_ids),
+   'dealSign',to_jsonb(sign_ids),
+   'financeReserve',to_jsonb(reserve_ids),
+   'evidenceReview',to_jsonb(review_ids)
+  )
+ );
+end $$;
 
 create or replace function public.decide_institutional_approval(
  target_approval_id uuid,
@@ -1477,9 +2004,126 @@ begin
  where deal_id=target_deal_id and status='committed' and terms_hash=pool_row.terms_hash;
  if anchor_total<required_anchor_total then raise exception 'Required anchor commitments are incomplete.' using errcode='23514'; end if;
  if underwriting_total<required_underwriting_total then raise exception 'Required underwriting commitments are incomplete.' using errcode='23514'; end if;
+ perform set_config('app.institutional_pool_activation_id',pool_row.id::text,true);
  update public.institutional_pool_terms set status='active',activated_at=timezone('utc',now()) where id=pool_row.id;
  update public.institutional_deals set stage='execution' where id=target_deal_id;
  return pool_row.id;
+end $$;
+
+
+-- Atomic organization-party acceptance and revocation/review operations used by
+-- the complete institutional interfaces. These functions preserve exact scope,
+-- AAL2, immutable audit evidence, and the distinction between delegated
+-- organizational authority and an accepted independent-verifier assignment.
+create or replace function public.accept_institutional_organization_party(
+ target_party_id uuid,
+ target_organization_id uuid,
+ target_program_id uuid,
+ target_authority_grant_id uuid
+)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
+declare party_row public.institutional_deal_parties; grant_row public.institutional_authority_grants;
+begin
+ perform public.assert_institutional_aal2();
+ select * into party_row from public.institutional_deal_parties where id=target_party_id for update;
+ if not found or party_row.party_capacity<>'organization' then
+  raise exception 'Organization-party invitation does not exist.' using errcode='23514';
+ end if;
+ if party_row.organization_id<>target_organization_id or party_row.program_id is distinct from target_program_id then
+  raise exception 'Organization-party acceptance must exactly match the invited organization and program.' using errcode='23514';
+ end if;
+ select * into grant_row from public.institutional_authority_grants
+ where id=target_authority_grant_id and profile_id=auth.uid() and organization_id=target_organization_id
+  and program_id is not distinct from target_program_id and revoked_at is null
+  and valid_from<=timezone('utc',now()) and (valid_until is null or valid_until>timezone('utc',now()))
+  and ('deal:manage'=any(permissions) or 'deal:approve'=any(permissions));
+ if not found then raise exception 'Exact-scope organizational authority is required to accept this party invitation.' using errcode='42501'; end if;
+ update public.institutional_deal_parties
+ set representative_profile_id=auth.uid(), authority_grant_id=target_authority_grant_id,
+     authority_status='verified_for_scope', joined_at=coalesce(joined_at,timezone('utc',now())), left_at=null
+ where id=target_party_id;
+ insert into public.institutional_deal_room_members(deal_id,profile_id,party_id,organization_id,access_scope,can_post,added_by)
+ values(party_row.deal_id,auth.uid(),party_row.id,target_organization_id,'all_parties',true,auth.uid())
+ on conflict(deal_id,profile_id,access_scope) do update set party_id=excluded.party_id,organization_id=excluded.organization_id,revoked_at=null,can_post=true;
+ insert into public.institutional_audit_events(deal_id,actor_profile_id,represented_organization_id,represented_program_id,event_type,entity_type,entity_id,authority_basis,new_state)
+ values(party_row.deal_id,auth.uid(),target_organization_id,target_program_id,'party.organization_accepted','deal_party',party_row.id,grant_row.authority_basis,jsonb_build_object('authority_grant_id',target_authority_grant_id));
+ return target_party_id;
+end $$;
+
+create or replace function public.revoke_institutional_room_access(target_room_member_id uuid,target_deal_id uuid)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
+declare member_row public.institutional_deal_room_members;
+begin
+ perform public.assert_institutional_aal2();
+ if not public.can_manage_institutional_deal(target_deal_id) then raise exception 'Deal-management authority is required to revoke room access.' using errcode='42501'; end if;
+ select * into member_row from public.institutional_deal_room_members where id=target_room_member_id and deal_id=target_deal_id for update;
+ if not found then raise exception 'Room membership must belong to the same deal.' using errcode='23514'; end if;
+ update public.institutional_deal_room_members set revoked_at=timezone('utc',now()),can_post=false where id=target_room_member_id;
+ insert into public.institutional_audit_events(deal_id,actor_profile_id,represented_organization_id,event_type,entity_type,entity_id,authority_basis,new_state)
+ values(target_deal_id,auth.uid(),member_row.organization_id,'deal_room.access_revoked','deal_room_member',target_room_member_id,'Deal-management authority',jsonb_build_object('revoked_at',timezone('utc',now())));
+ return target_room_member_id;
+end $$;
+
+create or replace function public.revoke_institutional_verifier_assignment(target_assignment_id uuid,target_deal_id uuid)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
+declare assignment_row public.institutional_verifier_assignments;
+begin
+ perform public.assert_institutional_aal2();
+ if not public.can_manage_institutional_deal(target_deal_id) then raise exception 'Deal-management authority is required to revoke a verifier assignment.' using errcode='42501'; end if;
+ select * into assignment_row from public.institutional_verifier_assignments where id=target_assignment_id and deal_id=target_deal_id for update;
+ if not found then raise exception 'Verifier assignment must belong to the same deal.' using errcode='23514'; end if;
+ update public.institutional_verifier_assignments set status='revoked',revoked_at=timezone('utc',now()) where id=target_assignment_id;
+ update public.institutional_deal_room_members set revoked_at=timezone('utc',now()),can_post=false
+ where verifier_assignment_id=target_assignment_id and deal_id=target_deal_id and revoked_at is null;
+ insert into public.institutional_audit_events(deal_id,actor_profile_id,represented_organization_id,event_type,entity_type,entity_id,authority_basis,new_state)
+ values(target_deal_id,auth.uid(),assignment_row.organization_id,'verifier.assignment_revoked','verifier_assignment',target_assignment_id,'Deal-management authority',jsonb_build_object('status','revoked'));
+ return target_assignment_id;
+end $$;
+
+create or replace function public.review_institutional_evidence(
+ target_submission_id uuid,
+ target_deal_id uuid,
+ target_status text,
+ target_review_note text default null,
+ target_organization_id uuid default null,
+ target_program_id uuid default null,
+ target_authority_grant_id uuid default null
+)
+returns uuid language plpgsql security definer set search_path=pg_catalog,public as $$
+declare submission_row public.institutional_evidence_submissions; requirement_row public.institutional_evidence_requirements; grant_row public.institutional_authority_grants; review_basis text;
+begin
+ perform public.assert_institutional_aal2();
+ if target_status not in('accepted','needs_revision','rejected') then raise exception 'Unsupported evidence review status.' using errcode='23514'; end if;
+ select * into submission_row from public.institutional_evidence_submissions where id=target_submission_id and deal_id=target_deal_id for update;
+ if not found then raise exception 'Evidence submission must belong to the same deal.' using errcode='23514'; end if;
+ select * into requirement_row from public.institutional_evidence_requirements where id=submission_row.requirement_id and deal_id=target_deal_id;
+ if not found then raise exception 'Evidence requirement relationship is invalid.' using errcode='23514'; end if;
+ if target_organization_id is not null then
+  if target_authority_grant_id is null then raise exception 'Organization evidence review requires an exact authority grant.' using errcode='42501'; end if;
+  if not exists(select 1 from public.institutional_deal_parties p where p.deal_id=target_deal_id and p.party_capacity='organization' and p.organization_id=target_organization_id and p.program_id is not distinct from target_program_id) then
+   raise exception 'Evidence-review organization/program scope must exactly match a deal party.' using errcode='23514';
+  end if;
+  select * into grant_row from public.institutional_authority_grants
+  where id=target_authority_grant_id and profile_id=auth.uid() and organization_id=target_organization_id
+   and program_id is not distinct from target_program_id and revoked_at is null
+   and valid_from<=timezone('utc',now()) and (valid_until is null or valid_until>timezone('utc',now()))
+   and ('evidence:review'=any(permissions) or 'deal:manage'=any(permissions));
+  if not found then raise exception 'Exact-scope evidence-review authority is required.' using errcode='42501'; end if;
+  review_basis:=grant_row.authority_basis;
+ else
+  if target_program_id is not null or target_authority_grant_id is not null then raise exception 'Personal verifier review cannot inherit organization authority.' using errcode='23514'; end if;
+  if not exists(
+   select 1 from public.institutional_verifier_assignments a
+   where a.deal_id=target_deal_id and a.verifier_profile_id=auth.uid() and a.status='accepted'
+    and (requirement_row.verifier_assignment_id is null or requirement_row.verifier_assignment_id=a.id)
+  ) then raise exception 'An accepted independent-verifier assignment is required to review this evidence.' using errcode='42501'; end if;
+  review_basis:='Accepted independent-verifier assignment';
+ end if;
+ update public.institutional_evidence_submissions set status=target_status,reviewed_by=auth.uid(),review_note=target_review_note,reviewed_at=timezone('utc',now()) where id=target_submission_id;
+ update public.institutional_evidence_requirements set status=case when target_status='accepted' then 'satisfied' else 'open' end where id=requirement_row.id;
+ insert into public.institutional_audit_events(deal_id,actor_profile_id,represented_organization_id,represented_program_id,event_type,entity_type,entity_id,authority_basis,new_state)
+ values(target_deal_id,auth.uid(),target_organization_id,target_program_id,'evidence.reviewed','evidence_submission',target_submission_id,review_basis,jsonb_build_object('status',target_status,'requirement_id',requirement_row.id));
+ return target_submission_id;
 end $$;
 
 -- Row-level security is mandatory for every institutional relation. Operators
@@ -1553,6 +2197,9 @@ create policy institutional_opportunities_write on public.institutional_opportun
 create policy institutional_matches_select on public.institutional_matches for select to authenticated using(
  public.is_institutional_organization_member(offer_organization_id) or public.is_institutional_organization_member(seek_organization_id)
 );
+create policy institutional_match_interests_select on public.institutional_match_interests for select to authenticated using(
+ public.is_institutional_organization_member(organization_id)
+);
 
 -- Deal-room data is visible only through an explicit active room membership,
 -- a public deal, or the named individual/verifier’s own pending record.
@@ -1588,8 +2235,21 @@ create policy institutional_deal_parties_delete on public.institutional_deal_par
  using(public.can_manage_institutional_deal(deal_id));
 create policy institutional_deal_room_members_select on public.institutional_deal_room_members for select to authenticated using(profile_id=auth.uid() or public.can_read_institutional_deal(deal_id));
 create policy institutional_deal_room_members_write on public.institutional_deal_room_members for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
-create policy institutional_deal_messages_select on public.institutional_deal_messages for select to authenticated using(public.can_read_institutional_deal(deal_id));
-create policy institutional_deal_messages_insert on public.institutional_deal_messages for insert to authenticated with check(sender_profile_id=auth.uid() and public.can_read_institutional_deal(deal_id));
+create policy institutional_deal_messages_select on public.institutional_deal_messages for select to authenticated using(
+ (visibility='all_parties' and public.can_read_institutional_deal(deal_id))
+ or
+ (visibility='party_internal' and organization_id is not null and public.can_read_institutional_deal(deal_id)
+  and public.is_institutional_organization_member(organization_id))
+);
+create policy institutional_deal_messages_insert on public.institutional_deal_messages for insert to authenticated with check(
+ sender_profile_id=auth.uid() and public.can_read_institutional_deal(deal_id) and (
+  (visibility='all_parties' and organization_id is null)
+  or
+  (visibility='party_internal' and organization_id is not null
+   and public.is_institutional_organization_member(organization_id)
+   and exists(select 1 from public.institutional_deal_parties p where p.deal_id=deal_id and p.party_capacity='organization' and p.organization_id=organization_id))
+ )
+);
 
 -- Generate consistent read and manage policies for tables whose authorization
 -- anchor is a deal_id column.
@@ -1724,6 +2384,13 @@ revoke all on table public.institutional_public_opportunities from public,anon,a
 revoke all on table public.institutional_track_record from public,anon,authenticated;
 grant select on table public.institutional_public_organizations,public.institutional_public_programs,public.institutional_public_opportunities to anon,authenticated;
 
+revoke all on function public.get_institutional_deal_authorization_snapshot(uuid,uuid,uuid) from public;
+revoke all on function public.generate_institutional_matches(uuid) from public;
+revoke all on function public.record_institutional_match_interest(uuid,uuid,text,text) from public;
+revoke all on function public.accept_institutional_organization_party(uuid,uuid,uuid,uuid) from public;
+revoke all on function public.revoke_institutional_room_access(uuid,uuid) from public;
+revoke all on function public.revoke_institutional_verifier_assignment(uuid,uuid) from public;
+revoke all on function public.review_institutional_evidence(uuid,uuid,text,text,uuid,uuid,uuid) from public;
 revoke all on function public.decide_institutional_approval(uuid,text,uuid,text) from public;
 revoke all on function public.select_institutional_proposal_version(uuid,uuid,uuid,uuid) from public;
 revoke all on function public.accept_institutional_deal_party(uuid) from public;
@@ -1739,7 +2406,16 @@ revoke all on function public.save_institutional_pool_underwriting(uuid,uuid,uui
 revoke all on function public.cast_institutional_pool_vote(uuid,uuid,uuid,text,text,uuid) from public;
 revoke all on function public.activate_institutional_pool(uuid,uuid,uuid,uuid) from public;
 revoke all on function public.transition_institutional_deal_stage(uuid,text) from public;
+revoke all on function public.transition_institutional_obligation_status(uuid,uuid,text) from public;
+revoke all on function public.transition_institutional_milestone_status(uuid,uuid,text) from public;
 
+grant execute on function public.get_institutional_deal_authorization_snapshot(uuid,uuid,uuid) to authenticated;
+grant execute on function public.generate_institutional_matches(uuid) to authenticated;
+grant execute on function public.record_institutional_match_interest(uuid,uuid,text,text) to authenticated;
+grant execute on function public.accept_institutional_organization_party(uuid,uuid,uuid,uuid) to authenticated;
+grant execute on function public.revoke_institutional_room_access(uuid,uuid) to authenticated;
+grant execute on function public.revoke_institutional_verifier_assignment(uuid,uuid) to authenticated;
+grant execute on function public.review_institutional_evidence(uuid,uuid,text,text,uuid,uuid,uuid) to authenticated;
 grant execute on function public.decide_institutional_approval(uuid,text,uuid,text) to authenticated;
 grant execute on function public.select_institutional_proposal_version(uuid,uuid,uuid,uuid) to authenticated;
 grant execute on function public.accept_institutional_deal_party(uuid) to authenticated;
@@ -1755,6 +2431,8 @@ grant execute on function public.save_institutional_pool_underwriting(uuid,uuid,
 grant execute on function public.cast_institutional_pool_vote(uuid,uuid,uuid,text,text,uuid) to authenticated;
 grant execute on function public.activate_institutional_pool(uuid,uuid,uuid,uuid) to authenticated;
 grant execute on function public.transition_institutional_deal_stage(uuid,text) to authenticated;
+grant execute on function public.transition_institutional_obligation_status(uuid,uuid,text) to authenticated;
+grant execute on function public.transition_institutional_milestone_status(uuid,uuid,text) to authenticated;
 
 comment on table public.institutional_individual_profiles is 'Explicit opt-in for independent institutional participation; it does not grant or imply authority over any organization.';
 comment on table public.institutional_deal_parties is 'A party is either an exact organization/program scope or a named person acting only in personal capacity; the two authority paths do not inherit from each other.';
