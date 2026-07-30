@@ -31,6 +31,7 @@ jobs:
       EXPECTED_AUTHORIZATION_BASE64_SHA256: a2736fc4b4940fa9e6e16b057139432c91dc66f1780aa6136d6abf102410be52
       EXPECTED_AUTHORIZATION_GZIP_SHA256: 9bbc792a71a146b166b1f2e36f16fa5d335689a159df036d7247817a2fa106a5
       EXPECTED_AUTHORIZATION_PATCH_SHA256: 793771d842b462fb20824feda276022be6806ac7aa02d00cc84c681e32e77f34
+      EXPECTED_AUTHORIZATION_TEST_SHA256: b1ed9f60ae262e4cbea5e0b058f6a61c044594a89ab9f5e775100a5d11432024
       GH_TOKEN: ${{ github.token }}
 
     steps:
@@ -68,6 +69,7 @@ jobs:
           authorization_payload=/tmp/pr212-authorization-snapshot.patch.gz.b64
           authorization_gzip=/tmp/pr212-authorization-snapshot.patch.gz
           authorization_patch=/tmp/pr212-authorization-snapshot.patch
+          authorization_test=/tmp/institutional-authorization-snapshot.test.ts
           part_dir=/tmp/pr212-clean-reconstruction-parts
           evidence=/tmp/pr212-clean-reconstruction-publication-evidence
           rm -rf "$part_dir" "$evidence"
@@ -113,10 +115,16 @@ jobs:
           gzip --decompress --stdout "$authorization_gzip" > "$authorization_patch"
           echo "${EXPECTED_AUTHORIZATION_PATCH_SHA256}  ${authorization_patch}" | sha256sum --check --strict
 
+          git show "refs/remotes/origin/${STAGING_BRANCH}:.github/pr212-clean-reconstruction.authorization-snapshot.test.ts" \
+            > "$authorization_test"
+          echo "${EXPECTED_AUTHORIZATION_TEST_SHA256}  ${authorization_test}" | sha256sum --check --strict
+
           git apply --check --binary "$patch"
           git apply --binary "$patch"
           git apply --check --binary "$authorization_patch"
           git apply --binary "$authorization_patch"
+          test ! -e src/institutional-authorization-snapshot.test.ts
+          install -D -m 0644 "$authorization_test" src/institutional-authorization-snapshot.test.ts
           git diff --check
 
           cat > /tmp/pr212-clean-reconstruction-expected-files.txt <<'FILES'
@@ -146,18 +154,20 @@ jobs:
           cp /tmp/pr212-clean-reconstruction-parts.sha256 "$evidence/part-hashes.txt"
           sha256sum \
             "$payload" "$gzip_file" "$patch" \
-            "$authorization_payload" "$authorization_gzip" "$authorization_patch" \
+            "$authorization_payload" "$authorization_gzip" "$authorization_patch" "$authorization_test" \
             > "$evidence/payload-hashes.txt"
           cp /tmp/pr212-clean-reconstruction-expected-files.txt "$evidence/expected-files.txt"
           cp /tmp/pr212-clean-reconstruction-actual-files.txt "$evidence/actual-files.txt"
           git diff --stat > "$evidence/diff-stat.txt"
           cp "$patch" "$evidence/pr212-clean-reconstruction.patch"
           cp "$authorization_patch" "$evidence/pr212-authorization-snapshot.patch"
+          cp "$authorization_test" "$evidence/institutional-authorization-snapshot.test.ts"
           tar --create --gzip --file "$evidence/reconstructed-source.tar.gz" \
             --files-from /tmp/pr212-clean-reconstruction-expected-files.txt
           sha256sum \
             "$evidence/pr212-clean-reconstruction.patch" \
             "$evidence/pr212-authorization-snapshot.patch" \
+            "$evidence/institutional-authorization-snapshot.test.ts" \
             "$evidence/reconstructed-source.tar.gz" \
             > "$evidence/reconstruction-artifact-hashes.txt"
 
@@ -226,4 +236,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-# Apply the verified request-stable authorization-snapshot overlay before publication.
+# Materialize and verify the new authorization-snapshot contract test before publication.
