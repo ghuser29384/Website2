@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Moral Trade — decide, allocate, negotiate, and verify reciprocal commitments.">
+  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
   <title>Moral Trade — Live</title>
   <style>
     html,body{margin:0;background:#f5f2e9;color:#111;font-family:system-ui,sans-serif}
@@ -128,6 +131,11 @@
           .replace(/&/g, '\\u0026')
           .replace(/\u2028/g, '\\u2028')
           .replace(/\u2029/g, '\\u2029');
+        const faviconLinks = [
+          '<link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+        ].join('');
         const enhancementStyles = [
           '<link id="mt-inline-itinerary-editor-styles" rel="stylesheet" href="/moral-trade-live-itinerary-editor.css">',
           '<link id="mt-plan-resources-styles" rel="stylesheet" href="/moral-trade-live-plan-resources.css">',
@@ -146,7 +154,7 @@
           '<script src="/moral-trade-account-identity.js"><\/script>',
           '<script src="/moral-trade-live-account.js"><\/script>',
         ].join('');
-        const headEnhancements = `${enhancementStyles}${accountScripts}`;
+        const headEnhancements = `${faviconLinks}${enhancementStyles}${accountScripts}`;
         const accountAwareSource = source.includes('</head>')
           ? source.replace('</head>', `${headEnhancements}</head>`)
           : `${headEnhancements}${source}`;
