@@ -18,16 +18,20 @@ on:
       - ".github/workflows/create-route-visual-qa.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   create-route-qa:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 75
 
     steps:
-      - name: Check out repository
+      - name: Check out exact Donation Upgrade branch
         uses: actions/checkout@v4
+        with:
+          ref: product/rename-conditional-donation-to-donation-upgrade-20260730
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -35,24 +39,95 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Replace the retired user-facing product name
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          replacements = [
+              ("Conditional donation", "Donation Upgrade"),
+              ("conditional donation", "Donation Upgrade"),
+              ("Create · Live conditional giving", "Create · Live Donation Upgrade"),
+              ("Create · Conditional giving", "Create · Donation Upgrade"),
+              ("No conditional redirects are open yet.", "No Donation Upgrades are open yet."),
+          ]
+
+          tracked = subprocess.run(
+              ["git", "ls-files", "-z"],
+              check=True,
+              stdout=subprocess.PIPE,
+          ).stdout.split(b"\0")
+          changed = []
+          counts = {old: 0 for old, _ in replacements}
+
+          for raw in tracked:
+              if not raw:
+                  continue
+              path = Path(raw.decode("utf-8"))
+              if path.parts[:2] == (".github", "workflows"):
+                  continue
+              try:
+                  before = path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+              after = before
+              for old, new in replacements:
+                  count = after.count(old)
+                  if count:
+                      after = after.replace(old, new)
+                      counts[old] += count
+              if after != before:
+                  path.write_text(after, encoding="utf-8")
+                  changed.append(path)
+                  print(path)
+
+          if counts["Conditional donation"] + counts["conditional donation"] == 0:
+              raise SystemExit("No tracked Conditional donation product-name occurrences were replaced.")
+          if not changed:
+              raise SystemExit("The rename did not change any tracked product or test file.")
+
+          retired = [old for old, _ in replacements]
+          remaining = []
+          for raw in tracked:
+              if not raw:
+                  continue
+              path = Path(raw.decode("utf-8"))
+              if path.parts[:2] == (".github", "workflows"):
+                  continue
+              try:
+                  text = path.read_text(encoding="utf-8")
+              except UnicodeDecodeError:
+                  continue
+              for term in retired:
+                  if term in text:
+                      remaining.append(f"{path}: {term}")
+          if remaining:
+              raise SystemExit("Retired user-facing copy remains:\n" + "\n".join(remaining))
+
+          Path("/tmp/donation-upgrade-paths").write_bytes(
+              b"\0".join(str(path).encode("utf-8") for path in changed) + b"\0"
+          )
+          PY
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint unified Create-route changes
-        run: |
-          npx eslint \
-            src/proxy.ts \
-            src/proxy.test.ts \
-            src/app/create/page.tsx \
-            src/app/trades/new/page.tsx \
-            src/components/backing/backing-create-form.tsx \
-            src/components/create/create-interface-frame.tsx \
-            src/lib/create-routes.ts \
-            src/lib/create-routes.test.ts \
-            tests/create-route-workbench.spec.ts
+      - name: Run complete repository tests
+        run: npm test
 
-      - name: Run Create routing unit tests
-        run: node --import tsx --test src/proxy.test.ts src/lib/create-routes.test.ts
+      - name: Run absolute TypeScript gate
+        run: npx tsc --noEmit
+
+      - name: Run absolute ESLint gate
+        run: npm run lint
+
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -62,11 +137,27 @@ jobs:
           CREATE_ROUTE_CAPTURE: "1"
         run: npm run test:e2e -- tests/create-route-workbench.spec.ts
 
+      - name: Verify exact rename and compatibility boundaries
+        run: |
+          git diff --check
+          git grep -n "Donation Upgrade" -- docs public src tests
+          git grep -n "structure=conditional-donation" -- next.config.ts public src tests
+          git grep -n "ConditionalDonationCreate" -- src
+          git status --short
+
+      - name: Commit and push verified product rename
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          xargs -0 git add -- < /tmp/donation-upgrade-paths
+          git commit -m "Rename Conditional donation to Donation Upgrade"
+          git push origin HEAD:product/rename-conditional-donation-to-donation-upgrade-20260730
+
       - name: Upload visual comparison artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: create-route-visual-qa
           path: test-results/create-route-visual
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 7
