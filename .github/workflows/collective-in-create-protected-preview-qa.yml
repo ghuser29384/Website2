@@ -1,9 +1,12 @@
 name: Collective in Create protected Preview rendered QA
 
 on:
-  push:
+  pull_request:
     branches:
-      - qa/collective-in-create-protected-preview-20260730
+      - feature/collective-commitments-in-create-20260729
+    paths:
+      - ".github/scripts/collective-in-create-protected-preview-qa.mjs"
+      - ".github/workflows/collective-in-create-protected-preview-qa.yml"
 
 permissions:
   contents: read
@@ -14,6 +17,9 @@ concurrency:
 
 jobs:
   rendered-qa:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'qa/collective-in-create-protected-preview-20260730'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -38,7 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
-          test "$GITHUB_REF_NAME" = "$EXPECTED_QA_BRANCH"
+          test "$GITHUB_HEAD_REF" = "$EXPECTED_QA_BRANCH"
           for name in NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY VERCEL_TOKEN; do
             test -n "${!name:-}" || { echo "Missing required secret: $name" >&2; exit 1; }
           done
@@ -46,7 +52,7 @@ jobs:
       - name: Check out exact QA head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
 
       - name: Verify two-file QA-only diff and unmoved product head
