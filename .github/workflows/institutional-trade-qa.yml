@@ -114,7 +114,9 @@ jobs:
       - name: Run source-contract integrity tests before database mutation
         run: |
           node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
             src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
             src/institutional-trade-migration.test.ts \
             src/institutional-trade-wiring.test.ts \
             src/lib/institutional-trade.test.ts \
@@ -146,15 +148,23 @@ jobs:
           declare required text;
           begin
             foreach required in array array[
-              'institutional_organizations','institutional_individual_profiles','institutional_programs','institutional_authority_grants',
-              'institutional_deals','institutional_deal_parties','institutional_proposal_versions',
-              'institutional_counterfactual_baselines','institutional_obligations','institutional_obligation_dependencies',
-              'institutional_approvals','institutional_individual_consents','institutional_signatures',
-              'institutional_budget_accounts','institutional_budget_reservations','institutional_milestones',
-              'institutional_verifier_assignments','institutional_evidence_requirements','institutional_evidence_submissions',
-              'institutional_pool_terms','institutional_pool_contributions','institutional_pool_anchors',
-              'institutional_pool_underwritings','institutional_pool_votes','institutional_integrations',
-              'institutional_webhooks','institutional_audit_events'
+              'institutional_amendments','institutional_approval_policies','institutional_approvals',
+              'institutional_attribution_claims','institutional_audit_events','institutional_authority_grants',
+              'institutional_budget_accounts','institutional_budget_reservations','institutional_command_drafts',
+              'institutional_counterfactual_baselines','institutional_deal_messages','institutional_deal_parties',
+              'institutional_deal_room_members','institutional_deals','institutional_dispute_events',
+              'institutional_disputes','institutional_evidence_requirements','institutional_evidence_submissions',
+              'institutional_framework_agreements','institutional_individual_consents','institutional_individual_profiles',
+              'institutional_integrations','institutional_legal_entities','institutional_mandates',
+              'institutional_match_interests','institutional_matches','institutional_memberships',
+              'institutional_milestones','institutional_obligation_dependencies','institutional_obligations',
+              'institutional_one_time_secrets','institutional_opportunities','institutional_organizations',
+              'institutional_pool_anchors','institutional_pool_contributions','institutional_pool_terms',
+              'institutional_pool_underwritings','institutional_pool_votes','institutional_programs',
+              'institutional_proposal_versions','institutional_report_snapshots','institutional_resource_profiles',
+              'institutional_risk_reviews','institutional_signatures','institutional_templates',
+              'institutional_verification_records','institutional_verifier_assignments','institutional_webhook_deliveries',
+              'institutional_webhooks'
             ] loop
               if to_regclass('public.' || required) is null then
                 raise exception 'Missing institutional relation: %', required;
@@ -511,7 +521,7 @@ jobs:
           cat institutional-server.log >&2
           exit 1
 
-      - name: Run authenticated five-participant browser, RPC, and database suite
+      - name: Run authenticated organization and independent workflows plus negative matrix
         shell: bash
         run: node .github/scripts/institutional-trade-qa-e2e.mjs
 
