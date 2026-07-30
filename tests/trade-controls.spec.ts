@@ -1,41 +1,31 @@
 import { expect, test } from "@playwright/test";
 
-test("trade controls previews integrity and a complete multi-party circle", async ({ page }) => {
+test("the retired Control route maps users to live safeguard workflows", async ({ page }) => {
   await page.goto("/trade-controls", { waitUntil: "domcontentloaded" });
 
-  const controlsNavigation = page.getByRole("navigation", { name: "Trade controls" });
-  await expect(controlsNavigation.getByRole("button")).toHaveCount(10);
   await expect(
-    page.getByRole("heading", { name: "Counterfactual Integrity Check" }),
+    page.getByRole("heading", {
+      name: "Safeguards now live with the records they govern.",
+    }),
   ).toBeVisible();
+  await expect(page.getByText(/former Control simulator has been retired/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Where each safeguard belongs" })).toBeVisible();
 
-  for (const label of [
-    /The intention predates the offer/,
-    /There is an independent reason/,
-    /Supporting evidence can be reviewed/,
-    /The baseline was not escalated/,
-  ]) {
-    await page.getByRole("checkbox", { name: label }).check();
+  for (const [name, href] of [
+    ["Open Create", "/trades/new"],
+    ["Open commitments", "/commitments"],
+    ["Review validation rules", "/validation"],
+    ["Open pool governance", "/mpgf/governance"],
+    ["Open threshold radar", "/pools/radar"],
+    ["Edit private profile", "/complete-profile"],
+    ["Open safety rules", "/safety"],
+    ["Review authority boundary", "/team-and-governance#organizational-authority"],
+  ] as const) {
+    await expect(page.getByRole("link", { name })).toHaveAttribute("href", href);
   }
 
-  await expect(page.getByRole("heading", { name: "Ready for human review." })).toBeVisible();
-
-  await controlsNavigation.getByRole("button", { name: /Trade circles/ }).click();
-  await expect(page.getByRole("heading", { name: "Multi-party Trade Circles" })).toBeVisible();
-  await expect(page.getByText("1 of 3 confirmed")).toBeVisible();
-
-  const remainingConfirmations = page.getByRole("button", { name: "Confirm terms" });
-  await expect(remainingConfirmations).toHaveCount(2);
-  await remainingConfirmations.first().click();
-  await remainingConfirmations.first().click();
-
-  await expect(page.getByText("3 of 3 confirmed")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Confirmed" })).toHaveCount(3);
-  await page.getByRole("button", { name: "Run preview" }).click();
-  await expect(page.getByText("A complete circle is available.")).toBeVisible();
-
-  await expect(page.getByRole("link", { name: /Start from Create/ })).toHaveAttribute(
-    "href",
-    "/create",
-  );
+  await expect(page.getByRole("heading", { name: "Trade Circles" })).toBeVisible();
+  await expect(page.getByText(/does not currently offer durable multi-party Trade Circles/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Run preview" })).toHaveCount(0);
+  await expect(page.getByText("A complete circle is available.")).toHaveCount(0);
 });
