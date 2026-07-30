@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
 
 import { saveCoreOfferAction } from "@/app/core-trade-actions";
+import {
+  CollectiveCreateSignInGate,
+  CollectiveCreateWorkspace,
+} from "@/components/create/collective-create-workspace";
 import { CreateInterfaceFrame } from "@/components/create/create-interface-frame";
 import {
   TradeDraftSignInGate,
@@ -9,6 +13,18 @@ import {
   type TradeDraftValues,
 } from "@/components/core-trade/trade-draft-workbench";
 import { getViewer } from "@/lib/app-data";
+import {
+  getCollectiveCommitmentMinimumDeadlineMinutes,
+  isCollectiveCommitmentsEnabled,
+} from "@/lib/collective-commitments/config";
+import {
+  getCollectiveIdentityCredential,
+  listCollectiveCommitments,
+} from "@/lib/collective-commitments/service";
+import type {
+  CollectiveCommitmentSummary,
+  CollectiveIdentityCredential,
+} from "@/lib/collective-commitments/types";
 import { getFormMessage } from "@/lib/form-state";
 import {
   getPledgeTemplateInitialValues,
@@ -16,13 +32,15 @@ import {
 } from "@/lib/trade-template-library";
 import { ConditionalDonationCreate } from "./conditional-donation";
 
+// The default Create surface is rendered from public/moral-trade-create/index.html by
+// CreateInterfaceFrame; Threshold Sign-On is a sibling workflow within this same route.
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Create",
   description:
-    "Create a pledge-swap, donation redirect, Donation Upgrade, existing-pool contribution offer, or moral public-goods pool through one interface.",
+    "Create a pledge-swap, donation redirect, Donation Upgrade, Threshold Sign-On, existing-pool contribution offer, or moral public-goods pool through one interface.",
   robots: { index: false, follow: false },
 };
 
@@ -72,7 +90,36 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
     return <ConditionalDonationCreate params={resolvedSearchParams} />;
   }
 
-  const viewer = await getViewer();
+  const mode = valueOf(resolvedSearchParams.mode);
+  const selectedCause = valueOf(resolvedSearchParams.cause).slice(0, 120);
+  if (mode === "collective") {
+    const viewer = await getViewer();
+    const collectiveParams = new URLSearchParams({ mode: "collective" });
+    if (selectedCause) collectiveParams.set("cause", selectedCause);
+    const returnTo = `/trades/new?${collectiveParams.toString()}`;
+    if (!viewer) return <CollectiveCreateSignInGate returnTo={returnTo} />;
+
+    const enabled = isCollectiveCommitmentsEnabled();
+    let credential: CollectiveIdentityCredential | null = null;
+    let commitments: CollectiveCommitmentSummary[] = [];
+    if (enabled) {
+      [credential, commitments] = await Promise.all([
+        getCollectiveIdentityCredential(viewer.profile.id),
+        listCollectiveCommitments(),
+      ]);
+    }
+
+    return (
+      <CollectiveCreateWorkspace
+        cause={selectedCause || undefined}
+        commitments={commitments}
+        credential={credential}
+        enabled={enabled}
+        minimumDeadlineMinutes={getCollectiveCommitmentMinimumDeadlineMinutes()}
+      />
+    );
+  }
+
   const acceptsCommandHandoff =
     valueOf(resolvedSearchParams.handoff) === "command-center";
   const returnParams = new URLSearchParams();
@@ -89,6 +136,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
     return <CreateInterfaceFrame resume={resume === "create"} />;
   }
 
+  const viewer = await getViewer();
   if (!viewer) {
     return <TradeDraftSignInGate returnTo={returnTo} />;
   }
