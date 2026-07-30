@@ -1,0 +1,12 @@
+{
+  "encoded_length": 6516,
+  "encoded_sha256": "6c3ff7444f46362401504f9abae2f74494267d4b436e8e26c8b5ab5913b4d1ab",
+  "compressed_length": 4886,
+  "compressed_sha256": "2ab3eb52a6f01f7cbd5f26f028788be683efaedd8ec0b655109d4798a3816b41",
+  "compressed_prefix_hex": "1f8b0800000000000003ec5ded73db3692ffde5f41a60f69671c1f652455d634",
+  "compressed_suffix_hex": "783e257ea36453e26fe5c9a675530e7ff4e61cfceaebff03e907e9ca38ec0000",
+  "partial_length": 0,
+  "partial_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "decompression_error": "error: Error -3 while decompressing data: invalid code lengths set",
+  "expected_patch_sha256": "d0b3c68affcb27cebc0d4773d487d056e66dc500ccf99776a85b97ac051cd2f0"
+}
