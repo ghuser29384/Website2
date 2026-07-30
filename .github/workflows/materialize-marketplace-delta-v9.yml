@@ -1,0 +1,62 @@
+name: Materialize current-main marketplace delta v9
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/materialize-marketplace-delta-v9.yml"
+      - ".github/scripts/run-marketplace-delta-candidate-v9.sh"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-current-main-marketplace-delta-v9
+  cancel-in-progress: false
+
+jobs:
+  materialize-test-push:
+    if: >-
+      github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+      github.head_ref == 'ops/materialize-marketplace-delta-20260729'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      TARGET_BRANCH: agent/marketplace-delta-current-main-20260729
+      HISTORICAL_BRANCH: agent/dynamic-marketplace-clearing-rounds
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      EXPECTED_PROD_REF: jnpoxvalyjtdghnperyu
+      MIGRATION_VERSION: "20260729170000"
+      MIGRATION_NAME: marketplace_atomic_acceptance_current_core
+
+    steps:
+      - name: Check out temporary orchestration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Materialize, validate, align QA, and push candidate
+        shell: bash
+        run: bash .github/scripts/run-marketplace-delta-candidate-v9.sh
+
+      - name: Upload sanitized validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-delta-validation-v9-${{ github.run_id }}
+          path: |
+            marketplace-delta-validation.txt
+            production-rollback-result.txt
+            typescript-differential.txt
+            docs/marketplace-pr158-delta-audit.md
+          if-no-files-found: warn
+          retention-days: 14
