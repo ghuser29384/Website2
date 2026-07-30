@@ -68,7 +68,7 @@ function commonGroundPayload() {
   };
 }
 
-test("validates a compact Common Ground Pool without private value estimates", () => {
+test("validates a compact Co-Fund without private value estimates", () => {
   const result = validateCreatePayload(commonGroundPayload());
   const serializedTerms = JSON.stringify(result.poolTerms?.commonGround);
 

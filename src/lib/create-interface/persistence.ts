@@ -60,7 +60,7 @@ export async function persistCreateSubmission(input: {
     : validated.kind === "existing_pool_contribution"
       ? "Existing-pool contribution offer"
       : isCommonGround
-        ? "Common Ground Pool proposal"
+        ? "Co-Fund proposal"
         : isPool
           ? "Moral public-goods pool proposal"
           : "Pledge-swap proposal";

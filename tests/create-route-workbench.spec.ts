@@ -70,7 +70,7 @@ test.describe("Create route workbench", () => {
       "Conditional donation",
     );
     await expect(create.locator('[data-fund-mode="commonGround"]')).toContainText(
-      "Common Ground Pool",
+      "Co-Fund",
     );
     await expect(create.locator('[data-fund-mode="dac"]')).toContainText("Threshold pool");
 
