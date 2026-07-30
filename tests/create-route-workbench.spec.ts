@@ -65,11 +65,23 @@ test.describe("Create route workbench", () => {
     await create.getByRole("button", { name: "Future flourishing" }).click();
     await create.locator('[data-request-kind="fund"]').click();
 
-    await expect(create.locator("#fundModeGrid .fund-mode-choice")).toHaveCount(4);
+    await expect(create.locator("#fundModeGrid .fund-mode-choice")).toHaveCount(5);
+    await expect(create.locator('[data-fund-mode="conditional"]')).toContainText(
+      "Conditional donation",
+    );
     await expect(create.locator('[data-fund-mode="commonGround"]')).toContainText(
       "Common Ground Pool",
     );
     await expect(create.locator('[data-fund-mode="dac"]')).toContainText("Threshold pool");
+
+    await create.locator('[data-fund-mode="conditional"]').click();
+    await expect(create.locator("#conditionalDonationEntry")).toBeVisible();
+    await expect(create.getByRole("button", { name: "Set up donation →" })).toBeVisible();
+    expect(publishRequestCount).toBe(0);
+
+    if (captureVisuals) {
+      await captureFrame(create, "implementation-conditional-donation-desktop.png");
+    }
 
     await create.locator('[data-fund-mode="commonGround"]').click();
     await expect(create.locator("#commonGroundFields")).toBeVisible();
@@ -125,6 +137,33 @@ test.describe("Create route workbench", () => {
       await captureFrame(create, "implementation-common-ground-mobile.png");
       await page.setViewportSize({ width: 390, height: 2200 });
       await captureCommonGroundPanel(create, "implementation-common-ground-panel-mobile.png");
+    }
+  });
+
+  test("keeps the Conditional donation entry usable without horizontal overflow on mobile", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/create");
+    const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+
+    await create.getByRole("button", { name: "Future flourishing" }).click();
+    await create.locator('[data-request-kind="fund"]').click();
+    await create.locator('[data-fund-mode="conditional"]').click();
+    await expect(create.locator("#conditionalDonationEntry")).toBeVisible();
+    await expect(create.getByRole("button", { name: "Set up donation →" })).toBeVisible();
+
+    const frameHasHorizontalOverflow = await create.locator("html").evaluate(
+      (element) => element.scrollWidth > element.clientWidth + 1,
+    );
+    const parentHasHorizontalOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    );
+    expect(frameHasHorizontalOverflow).toBe(false);
+    expect(parentHasHorizontalOverflow).toBe(false);
+
+    if (captureVisuals) {
+      await mkdir(captureDirectory, { recursive: true });
+      await prepareForVisualCapture(page);
+      await captureFrame(create, "implementation-conditional-donation-mobile.png");
     }
   });
 
