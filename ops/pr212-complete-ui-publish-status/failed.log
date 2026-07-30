@@ -1,0 +1,89 @@
+publish	Reconstruct and apply reviewed implementation patch	﻿2026-07-30T01:34:23.2627574Z ##[group]Run set -euo pipefail
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2627996Z ^[[36;1mset -euo pipefail^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2628279Z ^[[36;1mactual_head="$(git rev-parse HEAD)"^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2628617Z ^[[36;1mif [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2629006Z ^[[36;1m  echo "PR #212 moved: expected $EXPECTED_HEAD, got $actual_head" >&2^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2629557Z ^[[36;1m  exit 1^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2629767Z ^[[36;1mfi^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2629965Z ^[[36;1m^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2630174Z ^[[36;1mgit fetch origin \^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2630591Z ^[[36;1m  refs/heads/ops/pr212-complete-ui-20260729:refs/remotes/origin/ops/pr212-complete-ui-20260729^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2631187Z ^[[36;1mgit show origin/ops/pr212-complete-ui-20260729:.github/workflows/apply-pr212-complete-ui.yml \^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2631624Z ^[[36;1m  > /tmp/apply-pr212-complete-ui.yml^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2631887Z ^[[36;1m^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2632093Z ^[[36;1mpython - <<'PY'^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2632384Z ^[[36;1mfrom __future__ import annotations^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2632644Z ^[[36;1m^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2632840Z ^[[36;1mimport base64^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2633061Z ^[[36;1mimport gzip^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2633288Z ^[[36;1mimport hashlib^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2633515Z ^[[36;1mimport re^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2633748Z ^[[36;1mfrom pathlib import Path^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2634006Z ^[[36;1m^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2634284Z ^[[36;1msource = Path("/tmp/apply-pr212-complete-ui.yml").read_text()^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2634620Z ^[[36;1mmatch = re.search(^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2634999Z ^[[36;1m    r"cat > /tmp/pr212-complete-ui\.patch\.gz\.b64 <<'PATCH'\s*\n(.*?)\n\s*PATCH\s*\n",^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2635395Z ^[[36;1m    source,^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2635612Z ^[[36;1m    flags=re.DOTALL,^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2635853Z ^[[36;1m)^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2636052Z ^[[36;1mif not match:^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2636414Z ^[[36;1m    raise SystemExit("Could not locate the reviewed patch payload in the source workflow.")^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2636799Z ^[[36;1m^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2637209Z ^[[36;1mencoded = "".join(match.group(1).split())^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2637556Z ^[[36;1mcompressed = base64.b64decode(encoded, validate=True)^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2637890Z ^[[36;1mpatch = gzip.decompress(compressed)^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2638201Z ^[[36;1mdigest = hashlib.sha256(patch).hexdigest()^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2638617Z ^[[36;1mexpected = "d0b3c68affcb27cebc0d4773d487d056e66dc500ccf99776a85b97ac051cd2f0"^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2639008Z ^[[36;1mif digest != expected:^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2639367Z ^[[36;1m    raise SystemExit(f"Patch digest mismatch: expected {expected}, got {digest}")^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2639805Z ^[[36;1mPath("/tmp/pr212-complete-ui.patch").write_bytes(patch)^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2640113Z ^[[36;1mPY^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2640318Z ^[[36;1m^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2640662Z ^[[36;1mecho "${EXPECTED_PATCH_SHA256}  /tmp/pr212-complete-ui.patch" | sha256sum --check --strict^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2641121Z ^[[36;1mgit apply --check --binary /tmp/pr212-complete-ui.patch^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2641470Z ^[[36;1mgit apply --binary /tmp/pr212-complete-ui.patch^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2641768Z ^[[36;1mgit diff --check^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2641990Z ^[[36;1m^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2642212Z ^[[36;1mcat > /tmp/expected-paths.txt <<'PATHS'^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2642549Z ^[[36;1m.github/scripts/institutional-trade-qa-e2e.mjs^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2642885Z ^[[36;1m.github/workflows/institutional-trade-qa.yml^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2643214Z ^[[36;1msrc/app/admin/institutional-deal-desk/page.tsx^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2643587Z ^[[36;1msrc/app/institutions/[organizationId]/deals/[dealId]/page.tsx^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2643978Z ^[[36;1msrc/app/institutions/[organizationId]/page.tsx^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2644282Z ^[[36;1msrc/app/institutions/actions.ts^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2644614Z ^[[36;1msrc/app/institutions/individual/deals/[dealId]/page.tsx^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2644959Z ^[[36;1msrc/app/institutions/individual/page.tsx^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2645445Z ^[[36;1msrc/app/institutions/institutions.module.css^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2645868Z ^[[36;1msrc/components/institutions/institutional-deal-workspace.tsx^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2646266Z ^[[36;1msrc/institutional-individual-capacity.test.ts^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2646625Z ^[[36;1msrc/institutional-product-completeness.test.ts^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2647250Z ^[[36;1msrc/institutional-trade-migration.test.ts^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2647578Z ^[[36;1msrc/institutional-trade-wiring.test.ts^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2647874Z ^[[36;1msrc/lib/institutional-data.ts^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2648155Z ^[[36;1msrc/lib/institutional-trade.ts^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2648505Z ^[[36;1msupabase/migrations/20260726123000_institutional_trade_system.sql^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2648848Z ^[[36;1mPATHS^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2649149Z ^[[36;1mgit status --short | sed -E 's/^.. //' | sort -u > /tmp/actual-paths.txt^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2649565Z ^[[36;1mdiff -u <(sort /tmp/expected-paths.txt) /tmp/actual-paths.txt^[[0m
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2692549Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2692898Z env:
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2693160Z   EXPECTED_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2693594Z   EXPECTED_PATCH_SHA256: d0b3c68affcb27cebc0d4773d487d056e66dc500ccf99776a85b97ac051cd2f0
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2694114Z   NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2694830Z   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ***
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2696092Z   SUPABASE_SERVICE_ROLE_KEY: ***
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2696383Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2696705Z   SITE_URL: http://127.0.0.1:3000
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2696967Z   INSTITUTIONAL_TRADES_ENABLED: true
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2697468Z   INSTITUTIONAL_POOLS_ENABLED: true
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2697751Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2698030Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2698334Z   CRON_SECRET: qa-institutional-cron-not-production
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.2698631Z ##[endgroup]
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.6724539Z Traceback (most recent call last):
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.6725094Z   File "<stdin>", line 20, in <module>
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.6725568Z   File "/usr/lib/python3.12/gzip.py", line 632, in decompress
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.6730967Z     decompressed = do.decompress(data[fp.tell():])
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.6731505Z                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.6731987Z zlib.error: Error -3 while decompressing data: invalid code lengths set
+publish	Reconstruct and apply reviewed implementation patch	2026-07-30T01:34:23.6877242Z ##[error]Process completed with exit code 1.
