@@ -48,7 +48,12 @@ test.describe("Create route workbench", () => {
     await expect(
       create.getByRole("heading", { level: 1, name: "What do you want to improve?" }),
     ).toBeVisible();
-    await expect(create.getByText("Create a trade, redirect, or pool.", { exact: true })).toBeVisible();
+    await expect(
+      create.getByText(
+        "Create a trade, conditional donation, or public-goods pool.",
+        { exact: true },
+      ),
+    ).toBeVisible();
     await expect(create.locator("#screenCause")).toBeVisible();
     expect(publishRequestCount).toBe(0);
 
