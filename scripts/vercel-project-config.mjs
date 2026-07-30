@@ -2,6 +2,8 @@ export const CANONICAL_MORAL_TRADE_PROJECT_ID = "prj_Em3j7Uj7RatX2R1ZYhla3XSHRde
 export const DUPLICATE_WEBSITE2_PROJECT_ID = "prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK";
 export const RECOMMENDATION_TRAINING_PATH = "/api/jobs/recommendation-training";
 export const RECOMMENDATION_TRAINING_SCHEDULE = "30 12 * * *";
+export const COLLECTIVE_COMMITMENT_EXPIRY_PATH = "/api/jobs/collective-commitments-expire";
+export const COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE = "*/5 * * * *";
 
 const sharedCrons = Object.freeze([
   { path: "/api/jobs/saved-searches", schedule: "0 9 * * *" },
@@ -17,16 +19,23 @@ const recommendationTrainingCron = Object.freeze({
   schedule: RECOMMENDATION_TRAINING_SCHEDULE,
 });
 
+const collectiveCommitmentExpiryCron = Object.freeze({
+  path: COLLECTIVE_COMMITMENT_EXPIRY_PATH,
+  schedule: COLLECTIVE_COMMITMENT_EXPIRY_SCHEDULE,
+});
+
 export function buildVercelProjectConfig({
   projectId = process.env.VERCEL_PROJECT_ID,
 } = {}) {
   const crons = sharedCrons.map((cron) => ({ ...cron }));
 
   // Both Vercel projects deploy the same repository. Only the canonical Moral Trade
-  // project owns A1's natural training schedule; website2 must not receive this HTTP
-  // invocation at all. The route-level ownership check remains a defense in depth.
+  // project owns scheduled state transitions; website2 must not invoke them.
   if (projectId !== DUPLICATE_WEBSITE2_PROJECT_ID) {
-    crons.push({ ...recommendationTrainingCron });
+    crons.push(
+      { ...recommendationTrainingCron },
+      { ...collectiveCommitmentExpiryCron },
+    );
   }
 
   return {
