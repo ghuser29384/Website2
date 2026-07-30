@@ -46,18 +46,15 @@ jobs:
           test "$(jq -r .conclusion "$work/run.json")" = "failure"
 
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/jobs?per_page=100" > "$work/jobs.json"
-          jq -e '
-            .jobs | length == 1 and
-            .[0].steps[] | select(.name == "Reconstruct and verify the exact reviewable source") | .conclusion == "success"
-          ' "$work/jobs.json" >/dev/null
+          jq -e '(.jobs | length == 1) and any(.jobs[0].steps[]; .name == "Reconstruct and verify the exact reviewable source" and .conclusion == "success")' "$work/jobs.json" >/dev/null
           for step in \
             "Run institutional source and domain tests" \
             "Require absolute TypeScript success" \
             "Require absolute ESLint success" \
             "Require absolute production build success"; do
-            jq -e --arg step "$step" '.jobs[0].steps[] | select(.name == $step) | .conclusion == "success"' "$work/jobs.json" >/dev/null
+            jq -e --arg step "$step" 'any(.jobs[0].steps[]; .name == $step and .conclusion == "success")' "$work/jobs.json" >/dev/null
           done
-          jq -e '.jobs[0].steps[] | select(.name == "Publish reviewable source to the clean reconstruction branch") | .conclusion == "failure"' "$work/jobs.json" >/dev/null
+          jq -e 'any(.jobs[0].steps[]; .name == "Publish reviewable source to the clean reconstruction branch" and .conclusion == "failure")' "$work/jobs.json" >/dev/null
 
           gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_ARTIFACT" --dir "$work/artifact"
           echo "${EXPECTED_SOURCE_TAR_SHA256}  $work/artifact/reconstructed-source.tar.gz" | sha256sum --check --strict
