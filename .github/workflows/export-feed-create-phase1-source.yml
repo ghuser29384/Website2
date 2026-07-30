@@ -1,0 +1,49 @@
+name: Temporary export — Feed to Create Phase 1 source
+
+on:
+  push:
+    branches:
+      - ops/export-feed-create-phase1-source-20260730
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Record source identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "a0400cc79993dc4ad2f5a6dc65d9a3b8f72f65c3"
+          git rev-parse HEAD > SOURCE_COMMIT
+          git rev-parse HEAD^{tree} > SOURCE_TREE
+
+      - name: Package repository source
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/export
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='test-results' \
+            --exclude='playwright-report' \
+            --exclude='coverage' \
+            -czf /tmp/export/Website2-feed-create-phase1-source.tar.gz .
+          sha256sum /tmp/export/Website2-feed-create-phase1-source.tar.gz > /tmp/export/SHA256SUMS
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Website2-feed-create-phase1-source
+          path: /tmp/export
+          if-no-files-found: error
+          retention-days: 3
