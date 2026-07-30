@@ -22,7 +22,7 @@ jobs:
       - name: Check out exact product candidate
         uses: actions/checkout@v4
         with:
-          ref: 78616fb05b1735006023c6be517b0b082840532c
+          ref: 53013142c0651070614dcf8ffbaaa17898b9a377
           fetch-depth: 0
 
       - name: Set up Node.js
@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          CANDIDATE_SHA=78616fb05b1735006023c6be517b0b082840532c
+          CANDIDATE_SHA=53013142c0651070614dcf8ffbaaa17898b9a377
           BASE_SHA=a0400cc79993dc4ad2f5a6dc65d9a3b8f72f65c3
 
           "$GITHUB_WORKSPACE/node_modules/.bin/tsc" --noEmit --pretty false > /tmp/candidate-tsc.txt 2>&1 || true
@@ -89,4 +89,4 @@ jobs:
           --reporter=line
 
       - name: Check exact-head whitespace
-        run: git diff --check a0400cc79993dc4ad2f5a6dc65d9a3b8f72f65c3..78616fb05b1735006023c6be517b0b082840532c
+        run: git diff --check a0400cc79993dc4ad2f5a6dc65d9a3b8f72f65c3..53013142c0651070614dcf8ffbaaa17898b9a377
