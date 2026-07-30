@@ -44,6 +44,27 @@ const governanceRows = [
   },
 ] as const;
 
+const authorityRows = [
+  {
+    title: "Current agreement flow",
+    status: "Individual-only",
+    detail:
+      "A profile may commit only in that person's own capacity. An account, affiliation, email domain, title, or employer name does not create authority to represent an organization.",
+  },
+  {
+    title: "Organizational representation",
+    status: "Fail closed",
+    detail:
+      "No current bilateral agreement may bind an organization, program, employer, or fund. Institutional activation requires a separately supported workflow rather than an informal declaration.",
+  },
+  {
+    title: "Required institutional record",
+    status: "Before any activation",
+    detail:
+      "A future institutional agreement must name the represented entity, scoped role, action and amount limits, expiry, exact terms hash, and every distinct-person approval required for that action.",
+  },
+] as const;
+
 const publicationCommitments = [
   "List named operators, advisors, and reviewers as soon as those roles are formal and consented.",
   "Publish what each role can approve, what it cannot approve, and how conflicts are handled.",
@@ -127,7 +148,44 @@ export default async function TeamPage() {
           </div>
         </section>
 
-        <section className="section section-subtle" aria-labelledby="governance-commitments-heading">
+        <section
+          className="section section-subtle"
+          id="organizational-authority"
+          aria-labelledby="organizational-authority-heading"
+        >
+          <div className="section-head">
+            <p className="eyebrow">Authority boundary</p>
+            <h2 id="organizational-authority-heading">
+              The current agreement flow does not confer organizational authority.
+            </h2>
+            <p>
+              Organizational representation is an authorization fact, not a profile setting or a
+              self-attestation. The product remains individual-only until the complete institutional
+              workflow is separately enabled and tested.
+            </p>
+          </div>
+
+          <div className="data-grid">
+            {authorityRows.map((row) => (
+              <article className="panel data-card" key={row.title}>
+                <p className="detail-kicker">{row.status}</p>
+                <h3>{row.title}</h3>
+                <p className="route-text">{row.detail}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="hero-actions">
+            <Link className="button button-primary" href="/trades/new">
+              Create in individual capacity
+            </Link>
+            <Link className="button button-secondary" href="/contact">
+              Ask an institutional question
+            </Link>
+          </div>
+        </section>
+
+        <section className="section section-white" aria-labelledby="governance-commitments-heading">
           <div className="section-head">
             <p className="eyebrow">Publication commitments</p>
             <h2 id="governance-commitments-heading">What this page will add next</h2>

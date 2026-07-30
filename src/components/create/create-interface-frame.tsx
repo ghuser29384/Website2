@@ -2,15 +2,18 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { integrateCommonGroundCreateSource } from "@/lib/create-interface/common-ground-integration";
+import { integrateCreateSafeguardsSource } from "@/lib/create-interface/safeguards-integration";
 
 interface CreateInterfaceFrameProps {
   resume?: boolean;
 }
 
-const createInterfaceSource = integrateCommonGroundCreateSource(
-  readFileSync(
-    path.join(process.cwd(), "public", "moral-trade-create", "index.html"),
-    "utf8",
+const createInterfaceSource = integrateCreateSafeguardsSource(
+  integrateCommonGroundCreateSource(
+    readFileSync(
+      path.join(process.cwd(), "public", "moral-trade-create", "index.html"),
+      "utf8",
+    ),
   ),
 );
 const resumeExpression =

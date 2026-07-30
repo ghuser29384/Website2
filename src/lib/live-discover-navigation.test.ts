@@ -16,7 +16,7 @@ test("the exact live loader injects the Discover navigation bridge", () => {
   assert.match(loader, /accountAwareSource\.replace\('<\/body>'/);
 });
 
-test("the live navigation bridge exposes Feed, Discover, Controls, and the global Evidence ledger", () => {
+test("the live navigation bridge exposes Feed, Discover, and Evidence without Control", () => {
   const bridge = readPublicFile("moral-trade-live-navigation.js");
 
   assert.match(bridge, /control\.textContent = "Feed"/);
@@ -25,15 +25,16 @@ test("the live navigation bridge exposes Feed, Discover, Controls, and the globa
   assert.match(bridge, /window\.location\.assign\("\/discover"\)/);
   assert.match(bridge, /data-mt-discover-link/);
   assert.match(bridge, /control\.textContent = "Discover"/);
-  assert.match(bridge, /window\.location\.assign\("\/trade-controls"\)/);
-  assert.match(bridge, /data-mt-controls-link/);
-  assert.match(bridge, /control\.textContent = "Controls"/);
-  assert.match(bridge, /normalizeLabel\(control\) === "controls"/);
   assert.match(bridge, /window\.location\.assign\("\/evidence"\)/);
   assert.match(bridge, /data-mt-evidence-link/);
   assert.match(bridge, /control\.textContent = "Evidence"/);
   assert.match(bridge, /normalizeLabel\(control\) === "evidence"/);
   assert.match(bridge, /label === "commitments" \|\| label === "activity"/);
+  assert.match(bridge, /function removeLegacyControls/);
+  assert.match(bridge, /normalizeLabel\(control\) === "controls"/);
+  assert.doesNotMatch(bridge, /function openControls/);
+  assert.doesNotMatch(bridge, /createControlsControl/);
+  assert.doesNotMatch(bridge, /window\.location\.assign\("\/trade-controls"\)/);
 });
 
 test("the Discover loader reconnects product navigation and value-field hover details", () => {
@@ -43,8 +44,8 @@ test("the Discover loader reconnects product navigation and value-field hover de
   assert.match(loader, /moral-trade-discover-navigation\.js/);
   assert.match(loader, /moral-trade-discover-value-hover\.js/);
   assert.match(loader, /<\/scr' \+ 'ipt>/);
-  assert.doesNotMatch(loader, /moral-trade-discover-navigation\.js"><\\\\\/script>/);
-  assert.doesNotMatch(loader, /moral-trade-discover-value-hover\.js"><\\\\\/script>/);
+  assert.doesNotMatch(loader, /moral-trade-discover-navigation\.js"><\\\/script>/);
+  assert.doesNotMatch(loader, /moral-trade-discover-value-hover\.js"><\\\/script>/);
   assert.match(navigationBridge, /\["now", "\/"\]/);
   assert.match(navigationBridge, /\["offer", "\/trades\/new"\]/);
   assert.match(navigationBridge, /\["activity", "\/commitments"\]/);
