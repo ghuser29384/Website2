@@ -69,6 +69,22 @@ function decimalToInteger(value: unknown, decimalPlaces: number, label: string, 
   return integer;
 }
 
+function exactIntegerValue(value: unknown, label: string, options?: {
+  minimum?: number;
+  maximum?: number;
+}) {
+  if (typeof value !== "number" || !Number.isSafeInteger(value)) {
+    throw new Error(`${label} must be an exact integer.`);
+  }
+  if (options?.minimum != null && value < options.minimum) {
+    throw new Error(`${label} is below the permitted minimum.`);
+  }
+  if (options?.maximum != null && value > options.maximum) {
+    throw new Error(`${label} exceeds the permitted maximum.`);
+  }
+  return value;
+}
+
 function validateOfferOption(id: CreateOfferType, raw: unknown): CreateOfferOption {
   const input = objectValue(raw, `${id} option`);
   const output: CreateOfferOption = {};
@@ -195,8 +211,112 @@ function parseDeadline(value: unknown) {
   return new Date(timestamp).toISOString();
 }
 
+function validateCommonGround(raw: unknown): NonNullable<ValidatedCreatePoolTerms["commonGround"]> {
+  const input = objectValue(raw, "Common Ground Pool terms");
+  const allowedTopLevel = new Set([
+    "targetAmountCents",
+    "calculationPolicy",
+    "privateValueEstimatesStored",
+    "participantGainChecked",
+    "baselineConfirmed",
+    "participants",
+  ]);
+  for (const key of Object.keys(input)) {
+    if (!allowedTopLevel.has(key)) {
+      throw new Error("Common Ground Pool terms contain an unsupported or private field.");
+    }
+  }
+
+  const targetAmountCents = exactIntegerValue(
+    input.targetAmountCents,
+    "Common Ground Pool target",
+    { minimum: 1 },
+  );
+  if (input.calculationPolicy !== "balanced_surplus_v1") {
+    throw new Error("Common Ground Pool calculation policy is invalid.");
+  }
+  if (input.privateValueEstimatesStored !== false) {
+    throw new Error("Private Common Ground Pool value estimates must not be submitted.");
+  }
+  if (input.participantGainChecked !== true || input.baselineConfirmed !== true) {
+    throw new Error("Common Ground Pool gain and no-pool baseline confirmations are required.");
+  }
+  if (!Array.isArray(input.participants) || input.participants.length < 2 || input.participants.length > 8) {
+    throw new Error("A Common Ground Pool requires between two and eight participants.");
+  }
+
+  const seen = new Set<string>();
+  const participants = input.participants.map((rawParticipant, index) => {
+    const participant = objectValue(rawParticipant, `Common Ground Pool participant ${index + 1}`);
+    const allowedParticipantFields = new Set([
+      "id",
+      "name",
+      "defaultProject",
+      "budgetCents",
+      "contributionCents",
+    ]);
+    for (const key of Object.keys(participant)) {
+      if (!allowedParticipantFields.has(key)) {
+        throw new Error("Common Ground Pool participant terms contain an unsupported or private field.");
+      }
+    }
+
+    const id = textValue(participant.id, `Common Ground Pool participant ${index + 1} id`, 2, 80);
+    if (!/^[A-Za-z0-9:_-]+$/.test(id)) {
+      throw new Error(`Common Ground Pool participant ${index + 1} id contains unsupported characters.`);
+    }
+    if (seen.has(id)) throw new Error("Common Ground Pool participant ids must be unique.");
+    seen.add(id);
+
+    const budgetCents = exactIntegerValue(
+      participant.budgetCents,
+      `Common Ground Pool participant ${index + 1} budget`,
+      { minimum: 1 },
+    );
+    const contributionCents = exactIntegerValue(
+      participant.contributionCents,
+      `Common Ground Pool participant ${index + 1} contribution`,
+      { minimum: 1 },
+    );
+    if (contributionCents > budgetCents) {
+      throw new Error(`Common Ground Pool participant ${index + 1} contribution exceeds their controlled budget.`);
+    }
+
+    return {
+      id,
+      name: textValue(participant.name, `Common Ground Pool participant ${index + 1} name`, 1, 80),
+      defaultProject: textValue(
+        participant.defaultProject,
+        `Common Ground Pool participant ${index + 1} no-pool default`,
+        1,
+        160,
+      ),
+      budgetCents,
+      contributionCents,
+    };
+  });
+
+  const contributionTotal = participants.reduce(
+    (sum, participant) => sum + participant.contributionCents,
+    0,
+  );
+  if (!Number.isSafeInteger(contributionTotal) || contributionTotal !== targetAmountCents) {
+    throw new Error("Common Ground Pool participant contributions must equal the target exactly.");
+  }
+
+  return {
+    targetAmountCents,
+    calculationPolicy: "balanced_surplus_v1",
+    privateValueEstimatesStored: false,
+    participantGainChecked: true,
+    baselineConfirmed: true,
+    participants,
+  };
+}
+
 function validatePool(raw: unknown): ValidatedCreatePoolTerms {
   const input = objectValue(raw, "Pool terms");
+  const commonGround = input.commonGround == null ? null : validateCommonGround(input.commonGround);
   if (!Array.isArray(input.thresholds) || input.thresholds.length < 1 || input.thresholds.length > 10) {
     throw new Error("A pool requires between one and ten thresholds.");
   }
@@ -259,13 +379,13 @@ function validatePool(raw: unknown): ValidatedCreatePoolTerms {
       failureTimingTerms = { mode: failureTimingMode, method, cutoffAt };
     } else {
       failureTimingTerms = {
-          mode: failureTimingMode,
-          method,
-          cutoffPeriodBps: decimalToInteger(input.timingCutoffPercent, 2, "Timing cutoff percentage", {
-            minimum: 1,
-            maximum: 10_000,
-          }),
-        };
+        mode: failureTimingMode,
+        method,
+        cutoffPeriodBps: decimalToInteger(input.timingCutoffPercent, 2, "Timing cutoff percentage", {
+          minimum: 1,
+          maximum: 10_000,
+        }),
+      };
     }
   } else if (failureTimingMode === "firstPercent") {
     failureTimingTerms = {
@@ -329,6 +449,16 @@ function validatePool(raw: unknown): ValidatedCreatePoolTerms {
     ["exact", "range", "threshold", "sealed"] as const,
     "Funding-progress visibility",
   );
+  const continuation = enumValue(
+    input.continuation,
+    ["stop", "continue"] as const,
+    "Post-threshold behavior",
+  );
+  const thresholdVisibility = enumValue(
+    input.thresholdVisibility,
+    ["public_exact"] as const,
+    "Threshold visibility",
+  );
 
   const moralTradeBonusShareBps = decimalToInteger(
     input.moralTradeBonusShare,
@@ -340,7 +470,26 @@ function validatePool(raw: unknown): ValidatedCreatePoolTerms {
     throw new Error("A pool without a failure bonus cannot request Moral Trade failure-bonus funding.");
   }
 
+  if (commonGround) {
+    if (thresholdAmountsCents.length !== 1 || thresholdAmountsCents[0] !== commonGround.targetAmountCents) {
+      throw new Error("A Common Ground Pool requires one threshold equal to its shared target.");
+    }
+    if (failureBonusType !== "none" || failureTimingMode !== "all") {
+      throw new Error("A Common Ground Pool cannot include a failure bonus or timing multiplier.");
+    }
+    if (continuation !== "stop") {
+      throw new Error("A Common Ground Pool must stop at its shared target.");
+    }
+    if (thresholdVisibility !== "public_exact" || progressVisibility !== "exact") {
+      throw new Error("A Common Ground Pool requires exact target and progress disclosure after approval.");
+    }
+    if (moralTradeBonusShareBps !== 0) {
+      throw new Error("A Common Ground Pool cannot request Moral Trade failure-bonus funding.");
+    }
+  }
+
   return {
+    commonGround,
     thresholdAmountsCents,
     deadlineAt,
     failureBonusType,
@@ -348,8 +497,8 @@ function validatePool(raw: unknown): ValidatedCreatePoolTerms {
     failureTimingMode,
     failureTimingTerms,
     formula,
-    continuation: enumValue(input.continuation, ["stop", "continue"] as const, "Post-threshold behavior"),
-    thresholdVisibility: enumValue(input.thresholdVisibility, ["public_exact"] as const, "Threshold visibility"),
+    continuation,
+    thresholdVisibility,
     progressVisibility: PROGRESS_VISIBILITY[progressVisibility],
     moralTradeBonusShareBps,
     activationRule: optionalText(input.activationRule, 240),

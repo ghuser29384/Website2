@@ -37,7 +37,25 @@ export interface CreateTimingBandInput {
   multiplier: string;
 }
 
+export interface CreateCommonGroundParticipantInput {
+  id: string;
+  name: string;
+  defaultProject: string;
+  budgetCents: number;
+  contributionCents: number;
+}
+
+export interface CreateCommonGroundInput {
+  targetAmountCents: number;
+  calculationPolicy: "balanced_surplus_v1";
+  privateValueEstimatesStored: false;
+  participantGainChecked: true;
+  baselineConfirmed: true;
+  participants: CreateCommonGroundParticipantInput[];
+}
+
 export interface CreatePoolInput {
+  commonGround?: CreateCommonGroundInput | null;
   thresholds: CreateThresholdInput[];
   deadline: string;
   failureBonusType: CreateFailureBonusType;
@@ -82,7 +100,10 @@ export interface ValidatedFormulaTerms {
   variables: string[];
 }
 
+export interface ValidatedCreateCommonGroundTerms extends CreateCommonGroundInput {}
+
 export interface ValidatedCreatePoolTerms {
+  commonGround: ValidatedCreateCommonGroundTerms | null;
   thresholdAmountsCents: number[];
   deadlineAt: string;
   failureBonusType: CreateFailureBonusType;

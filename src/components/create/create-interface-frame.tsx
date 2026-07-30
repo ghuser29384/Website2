@@ -1,13 +1,17 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { integrateCommonGroundCreateSource } from "@/lib/create-interface/common-ground-integration";
+
 interface CreateInterfaceFrameProps {
   resume?: boolean;
 }
 
-const createInterfaceSource = readFileSync(
-  path.join(process.cwd(), "public", "moral-trade-create", "index.html"),
-  "utf8",
+const createInterfaceSource = integrateCommonGroundCreateSource(
+  readFileSync(
+    path.join(process.cwd(), "public", "moral-trade-create", "index.html"),
+    "utf8",
+  ),
 );
 const resumeExpression =
   'const shouldResume = new URLSearchParams(window.location.search).get("resume") === "create";';
