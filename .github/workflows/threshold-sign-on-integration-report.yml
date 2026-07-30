@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - ops/threshold-sign-on-integrate-20260730
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/threshold-sign-on-integration-report.yml"
 
 permissions:
   contents: read
@@ -14,6 +19,10 @@ concurrency:
 
 jobs:
   report:
+    if: >-
+      github.event_name == 'push' ||
+      (github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
+       github.head_ref == 'ops/threshold-sign-on-integrate-20260730')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -29,11 +38,13 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
-          test "$GITHUB_REF_NAME" = "ops/threshold-sign-on-integrate-20260730"
+          branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          test "$branch" = "ops/threshold-sign-on-integrate-20260730"
 
       - name: Check out repository
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Attempt exact merge and capture conflicts
