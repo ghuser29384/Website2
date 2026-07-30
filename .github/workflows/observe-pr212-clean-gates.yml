@@ -1,0 +1,75 @@
+name: Observe PR 212 clean reconstruction gates
+
+on:
+  push:
+    branches:
+      - agent/pr212-clean-reconstruction-tree-record-20260730
+    paths:
+      - .github/workflows/observe-pr212-clean-gates.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr212-clean-reconstruction-gates.yml
+      TARGET_BRANCH: agent/pr212-clean-reconstruction-20260730
+      TARGET_HEAD: e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e
+      RECORD_BRANCH: agent/pr212-clean-reconstruction-tree-record-20260730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-clean-reconstruction-tree-record-20260730
+          fetch-depth: 0
+
+      - name: Poll and record the exact clean-gate run
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-clean-reconstruction/clean-gates
+          mkdir -p "$output"
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 250); do
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$TARGET_WORKFLOW" \
+              --branch "$TARGET_BRANCH" \
+              --limit 50 \
+              --json databaseId,headSha,status,conclusion,createdAt,url,displayTitle \
+              > /tmp/runs.json
+            run_id="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+            status="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+            conclusion="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 12
+          done
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$output/run.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$output/jobs.json"
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/failed-log.txt" 2>&1 || true
+          else
+            printf '%s\n' '{}' > "$output/run.json"
+            printf '%s\n' '{"jobs":[]}' > "$output/jobs.json"
+            printf '%s\n' 'No exact clean-gate run found.' > "$output/failed-log.txt"
+          fi
+          jq -n \
+            --arg head "$TARGET_HEAD" \
+            --arg run_id "$run_id" \
+            --arg status "$status" \
+            --arg conclusion "$conclusion" \
+            --slurpfile runs /tmp/runs.json \
+            '{head:$head,run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0]}' \
+            > "$output/report.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 clean reconstruction gate result"
+          git push origin "HEAD:refs/heads/${RECORD_BRANCH}"
