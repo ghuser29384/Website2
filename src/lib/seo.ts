@@ -163,8 +163,8 @@ export async function getPublicSitemapEntries() {
         .select("id, created_at, updated_at")
         .eq("status", "open")
         .order("updated_at", { ascending: false }),
-      supabase
-        .from("profiles")
+      (supabase as any)
+        .from("public_profile_cards_v1")
         .select("id, created_at")
         .order("created_at", { ascending: false }),
     ]);

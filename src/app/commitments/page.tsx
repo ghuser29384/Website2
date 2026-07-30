@@ -43,7 +43,9 @@ function summarizeAgreement(agreement: Awaited<ReturnType<typeof listAgreementsF
       ? `${latestPayment.status.replaceAll("_", " ")} (${latestPayment.authorization_status.replaceAll("_", " ")})`
       : "No payment record",
     counterparty: agreement.counterparty?.resolvedName ?? "Counterparty private",
-    evidenceState: latestEvidence ? (
+    evidenceState: !agreement.legacyEvidenceReviewAvailable ? (
+      "Current milestone evidence workflow"
+    ) : latestEvidence ? (
       <>
         {latestEvidence.status.replaceAll("_", " ")} submitted {formatDate(latestEvidence.created_at)}
       </>
@@ -53,7 +55,11 @@ function summarizeAgreement(agreement: Awaited<ReturnType<typeof listAgreementsF
       "No evidence item yet"
     ),
     href: `/agreements/${agreement.id}`,
-    reviewState: latestReview ? latestReview.status.replaceAll("_", " ") : "No review case",
+    reviewState: !agreement.legacyEvidenceReviewAvailable
+      ? "Current milestone review workflow"
+      : latestReview
+        ? latestReview.status.replaceAll("_", " ")
+        : "No review case",
     status,
     statusLabel: getCommitmentStatusLabel(status),
   };

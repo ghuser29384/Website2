@@ -10,17 +10,15 @@ const baseUrl = DEFAULT_BASE_URL.replace(/\/$/, "");
 const pagePaths = [
   "/paid-action-offers",
   "/what-is-moral-trade",
-  "/how-it-works",
   "/sources",
   "/faq",
-  "/offers",
+  "/offers?view=live",
 ];
 
 const requiredSitemapUrls = [
   "/",
   "/ai.txt",
   "/what-is-moral-trade",
-  "/how-it-works",
   "/sources",
   "/faq",
   "/offers",

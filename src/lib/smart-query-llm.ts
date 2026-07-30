@@ -373,7 +373,6 @@ export async function resolveSmartQueryWithLlm(
     ? errorRecord as Record<string, unknown>
     : null;
   // Operational metadata only: never log the key, query, prompt, or provider message.
-  // eslint-disable-next-line no-console
   console.warn("[smart-query-llm] openai_non_ok", {
     status: response.status,
     type: typeof error?.type === "string" ? error.type : null,
@@ -400,7 +399,6 @@ export async function resolveSmartQueryWithLlm(
       .filter((value): value is string => typeof value === "string")
       .slice(0, 8);
     // Operational metadata only: never log generated content or user input.
-    // eslint-disable-next-line no-console
     console.warn("[smart-query-llm] openai_no_output_text", {
       status: typeof responseRecord?.status === "string" ? responseRecord.status : null,
       incompleteReason: typeof incompleteRecord?.reason === "string" ? incompleteRecord.reason : null,
@@ -410,7 +408,6 @@ export async function resolveSmartQueryWithLlm(
   }
   const resolution = cleanResolution(JSON.parse(outputText) as unknown);
   if (!resolution) {
-    // eslint-disable-next-line no-console
     console.warn("[smart-query-llm] invalid_structured_resolution");
     return fallback;
   }
@@ -422,7 +419,6 @@ export async function resolveSmartQueryWithLlm(
     };
   } catch (error) {
     // Operational metadata only: never log the key, query, prompt, or provider message.
-    // eslint-disable-next-line no-console
     console.warn("[smart-query-llm] request_exception", {
       name: error instanceof Error ? error.name : "unknown",
     });
