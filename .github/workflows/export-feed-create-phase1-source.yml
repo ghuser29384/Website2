@@ -1,9 +1,9 @@
 name: Temporary export — Feed to Create Phase 1 source
 
 on:
-  push:
+  pull_request:
     branches:
-      - ops/export-feed-create-phase1-source-20260730
+      - main
   workflow_dispatch:
 
 permissions:
@@ -17,14 +17,18 @@ jobs:
       - name: Check out exact branch head
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
       - name: Record source identity
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "a0400cc79993dc4ad2f5a6dc65d9a3b8f72f65c3"
+          BASE='a0400cc79993dc4ad2f5a6dc65d9a3b8f72f65c3'
+          git merge-base --is-ancestor "$BASE" HEAD
+          test "$(git diff --name-only "$BASE"..HEAD | sort)" = '.github/workflows/export-feed-create-phase1-source.yml'
           git rev-parse HEAD > SOURCE_COMMIT
           git rev-parse HEAD^{tree} > SOURCE_TREE
+          printf '%s\n' "$BASE" > SOURCE_BASE
 
       - name: Package repository source
         run: |
