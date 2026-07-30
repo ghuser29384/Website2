@@ -140,7 +140,11 @@ begin
     update public.offers
     set
       no_trade_baseline = baseline_value,
-      updated_at = timezone('utc', now())
+      updated_at = case
+        when no_trade_baseline is distinct from baseline_value
+          then timezone('utc', now())
+        else updated_at
+      end
     where id = result_row.target_id
       and owner_id = p_actor_id;
 
