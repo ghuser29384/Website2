@@ -1,11 +1,11 @@
 const HEADER_COPY = [
-  "Create a pledge-swap, donation redirect, or public-goods pool.",
-  "Create a trade, redirect, or pool.",
+  "Create a trade, conditional donation, or public-goods pool.",
+  "Create a trade, conditional donation, or public-goods pool.",
 ] as const;
 
 const REQUEST_COPY = [
-  "Choose Commitment, Skill, or Fund. If you choose Fund, also choose whether you are creating a pledge-swap, a donation redirect, or a dominant assurance contract pool.",
-  "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, shared-project pools, and threshold pools.",
+  "Choose Commitment, Skill, or Fund. Fund includes pledge-swaps, donation redirects, conditional donations, and public-goods pools.",
+  "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, conditional donations, shared-project pools, and threshold pools.",
 ] as const;
 
 const FUND_KICKER = [
