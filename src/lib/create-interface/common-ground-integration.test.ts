@@ -22,6 +22,6 @@ test("the integration preserves the static source and adds the compact funding c
 
   const integrated = integrateCommonGroundCreateSource(source);
   assert.match(integrated, /Create a trade, redirect, or pool\./);
-  assert.match(integrated, /Common Ground Pool/);
+  assert.match(integrated, /Co-Fund/);
   assert.match(integrated, /Threshold pool/);
 });

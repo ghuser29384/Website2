@@ -21,7 +21,7 @@ const THRESHOLD_POOL_CARD = `                <button type="button" class="fund-m
 
 const COMPACT_POOL_CARDS = `                <button type="button" class="fund-mode-choice" data-fund-mode="commonGround" aria-pressed="false">
                   <span class="fund-mode-mark">Shared project</span>
-                  <strong>Common Ground Pool</strong>
+                  <strong>Co-Fund</strong>
                   <p>Split one shared project across people who value it for different reasons.</p>
                 </button>
                 <button type="button" class="fund-mode-choice" data-fund-mode="dac" aria-pressed="false">

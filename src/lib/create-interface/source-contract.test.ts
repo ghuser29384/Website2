@@ -24,7 +24,7 @@ const migration = readFileSync(
   "utf8",
 );
 
-test("the accepted Create interface is mounted with the compact Common Ground Pool", () => {
+test("the accepted Create interface is mounted with the compact Co-Fund", () => {
   assert.match(page, /CreateInterfaceFrame/);
   assert.match(page, /resume=\{resume === "create"\}/);
   assert.match(frame, /public[",\s]+"moral-trade-create"[",\s]+"index\.html"/);
@@ -38,7 +38,7 @@ test("the accepted Create interface is mounted with the compact Common Ground Po
   assert.match(html, /What do you want to improve\?/);
   assert.match(html, /Commitment/);
   assert.match(html, /Donation redirect/);
-  assert.match(html, /Common Ground Pool/);
+  assert.match(html, /Co-Fund/);
   assert.match(html, /data-fund-mode="commonGround"/);
   assert.match(html, /Threshold pool/);
   assert.match(html, /data-common-ground-create-integration-v1/);
