@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SOURCE_SCRIPT=".github/scripts/run-marketplace-delta-exact-browser-gate.sh"
+BASE_GATE_COMMIT="217b504b3e5bcb9fa3120676d509594c016051f3"
+SOURCE_SCRIPT="$RUNNER_TEMP/run-marketplace-delta-exact-browser-gate-base.sh"
 PATCHED_SCRIPT="$RUNNER_TEMP/run-marketplace-delta-exact-browser-gate-v2.sh"
+
+git show "${BASE_GATE_COMMIT}:.github/scripts/run-marketplace-delta-exact-browser-gate.sh" \
+  > "$SOURCE_SCRIPT"
 
 python3 - "$SOURCE_SCRIPT" "$PATCHED_SCRIPT" <<'PY'
 from pathlib import Path
