@@ -1,0 +1,117 @@
+name: Collective Commitments in Create exact-head QA
+
+on:
+  push:
+    branches:
+      - qa/collective-in-create-current-main-20260729
+  pull_request:
+    branches:
+      - feature/collective-commitments-in-create-20260729
+    paths:
+      - ".github/scripts/collective-in-create-browser-qa.mjs"
+      - ".github/scripts/run-collective-in-create-current-main-qa.sh"
+      - ".github/workflows/collective-in-create-current-main-qa.yml"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: collective-in-create-current-main-qa-20260730
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/qa/collective-in-create-current-main-20260729') ||
+      (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' && github.head_ref == 'qa/collective-in-create-current-main-20260729')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      EXPECTED_PRODUCT_HEAD: e33c7040d643b5af6e337c02ff3b986f7cf9b235
+      EXPECTED_MAIN: f3b61edc2b8c50ca1f6dfe881e1bee2fd7548af4
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      BROWSER_QA_BASE_URL: http://127.0.0.1:3000
+      COLLECTIVE_COMMITMENTS_ENABLED: "true"
+      COLLECTIVE_COMMITMENT_MIN_DEADLINE_MINUTES: "60"
+      VERCEL_ENV: preview
+      NEXT_PUBLIC_VERCEL_ENV: preview
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      ARTIFACT_DIR: ${{ github.workspace }}/collective-in-create-qa-artifacts
+      BROWSER_QA_ARTIFACT_DIR: ${{ github.workspace }}/collective-in-create-qa-artifacts/browser
+
+    steps:
+      - name: Check out exact QA head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Classify expected client-side navigation aborts
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/collective-in-create-browser-qa.mjs')
+          text = path.read_text()
+          old = '''function isIgnoredFailure(url, status, failureText = "") {
+            if (url.includes("/api/funnel-events") && status === 429) return true;
+            if (
+              /ERR_ABORTED|NS_BINDING_ABORTED|net::ERR_FAILED/i.test(failureText) &&
+              (url.includes("?_rsc=") || url.includes("/collective-commitments"))
+            ) {
+              return true;
+            }
+            return false;
+          }'''
+          new = '''function isIgnoredFailure(url, status, failureText = "") {
+            const aborted = /ERR_ABORTED|NS_BINDING_ABORTED/i.test(failureText);
+            if (url.includes("/api/funnel-events") && (status === 429 || aborted)) return true;
+            if (aborted) {
+              const parsed = new URL(url, baseUrl);
+              if (parsed.searchParams.has("_rsc") || parsed.pathname.startsWith("/collective-commitments")) {
+                return true;
+              }
+            }
+            return false;
+          }'''
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one diagnostics classifier; found {text.count(old)}.')
+          path.write_text(text.replace(old, new))
+          PY
+          node --check .github/scripts/collective-in-create-browser-qa.mjs
+
+      - name: Run complete exact-head integration gate
+        run: bash .github/scripts/run-collective-in-create-current-main-qa.sh
+
+      - name: Upload complete QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: collective-in-create-current-main-qa-${{ github.run_id }}
+          path: collective-in-create-qa-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report exact run to the temporary QA PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          gh pr comment 300 --repo ghuser29384/Website2 --body "Exact-head Collective-in-Create QA run \`${GITHUB_RUN_ID}\` completed with status **${RUN_STATUS}** for product \`e33c7040d643b5af6e337c02ff3b986f7cf9b235\` against main \`f3b61edc2b8c50ca1f6dfe881e1bee2fd7548af4\`. Production was not changed."
