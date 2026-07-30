@@ -1,9 +1,9 @@
-name: Threshold Sign-On latest-main integration report
+name: Threshold Sign-On latest-main integration report v2
 
 on:
   push:
     branches:
-      - ops/threshold-sign-on-integrate-20260730
+      - ops/threshold-sign-on-merge-report-v2-20260730
   pull_request:
     branches:
       - main
@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: threshold-sign-on-integration-report-20260730
+  group: threshold-sign-on-integration-report-v2-20260730
   cancel-in-progress: false
 
 jobs:
@@ -22,7 +22,7 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       (github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
-       github.head_ref == 'ops/threshold-sign-on-integrate-20260730')
+       github.head_ref == 'ops/threshold-sign-on-merge-report-v2-20260730')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -39,7 +39,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
           branch="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          test "$branch" = "ops/threshold-sign-on-integrate-20260730"
+          test "$branch" = "ops/threshold-sign-on-merge-report-v2-20260730"
 
       - name: Check out repository
         uses: actions/checkout@v4
