@@ -2,6 +2,9 @@
 name: Apply Donation Upgrade rename
 
 on:
+  push:
+    branches:
+      - "product/rename-conditional-donation-to-donation-upgrade-20260730"
   pull_request:
     branches:
       - main
