@@ -1,11 +1,21 @@
 {
-  "generated_at": "2026-07-30T10:59:44Z",
+  "generated_at": "2026-07-30T15:12:35Z",
   "publication": {
-    "head": "00f756a64100ec515f35d51289e06cb5ef7f2974",
-    "run_id": "30536690047",
+    "head": "f7a4a8d37cb787c50ec71f05caf3a0f5bd1c4802",
+    "run_id": "30555340949",
     "status": "completed",
     "conclusion": "failure",
     "runs": [
+      {
+        "conclusion": "failure",
+        "createdAt": "2026-07-30T15:10:09Z",
+        "databaseId": 30555340949,
+        "displayTitle": "Export verified PR 212 reconstruction source for repair",
+        "event": "push",
+        "headSha": "f7a4a8d37cb787c50ec71f05caf3a0f5bd1c4802",
+        "status": "completed",
+        "url": "https://github.com/ghuser29384/Website2/actions/runs/30555340949"
+      },
       {
         "conclusion": "failure",
         "createdAt": "2026-07-30T10:57:31Z",
@@ -38,25 +48,25 @@
       }
     ],
     "run": {
-      "id": 30536690047,
+      "id": 30555340949,
       "name": "Publish PR 212 clean reconstruction",
-      "node_id": "WFR_kwLOR8Oun88AAAAHHCDpfw",
+      "node_id": "WFR_kwLOR8Oun88AAAAHHT2AlQ",
       "head_branch": "agent/pr212-clean-reconstruction-staging-20260730",
-      "head_sha": "00f756a64100ec515f35d51289e06cb5ef7f2974",
+      "head_sha": "f7a4a8d37cb787c50ec71f05caf3a0f5bd1c4802",
       "path": ".github/workflows/publish-pr212-clean-reconstruction.yml",
-      "display_title": "Verify all reconstructed source files before publication",
-      "run_number": 3,
+      "display_title": "Export verified PR 212 reconstruction source for repair",
+      "run_number": 4,
       "event": "push",
       "status": "completed",
       "conclusion": "failure",
       "workflow_id": 323665179,
-      "check_suite_id": 82790829202,
-      "check_suite_node_id": "CS_kwDOR8Oun88AAAATRrfMkg",
-      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30536690047",
-      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30536690047",
+      "check_suite_id": 82846489176,
+      "check_suite_node_id": "CS_kwDOR8Oun88AAAATSgkaWA",
+      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30555340949",
+      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30555340949",
       "pull_requests": [],
-      "created_at": "2026-07-30T10:57:31Z",
-      "updated_at": "2026-07-30T10:59:36Z",
+      "created_at": "2026-07-30T15:10:09Z",
+      "updated_at": "2026-07-30T15:12:30Z",
       "actor": {
         "login": "ghuser29384",
         "id": 262476329,
@@ -80,7 +90,7 @@
       },
       "run_attempt": 1,
       "referenced_workflows": [],
-      "run_started_at": "2026-07-30T10:57:31Z",
+      "run_started_at": "2026-07-30T15:10:09Z",
       "triggering_actor": {
         "login": "ghuser29384",
         "id": 262476329,
@@ -102,19 +112,19 @@
         "user_view_type": "public",
         "site_admin": false
       },
-      "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30536690047/jobs",
-      "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30536690047/logs",
-      "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82790829202",
-      "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30536690047/artifacts",
-      "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30536690047/cancel",
-      "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30536690047/rerun",
+      "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30555340949/jobs",
+      "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30555340949/logs",
+      "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82846489176",
+      "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30555340949/artifacts",
+      "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30555340949/cancel",
+      "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30555340949/rerun",
       "previous_attempt_url": null,
       "workflow_url": "https://api.github.com/repos/ghuser29384/Website2/actions/workflows/323665179",
       "head_commit": {
-        "id": "00f756a64100ec515f35d51289e06cb5ef7f2974",
-        "tree_id": "0af8df54284ec35a9f9ec7ba0667806d7ec2680c",
-        "message": "Verify all reconstructed source files before publication",
-        "timestamp": "2026-07-30T10:57:24Z",
+        "id": "f7a4a8d37cb787c50ec71f05caf3a0f5bd1c4802",
+        "tree_id": "603bc48864680882e47d982810b819bf23fb48a8",
+        "message": "Export verified PR 212 reconstruction source for repair",
+        "timestamp": "2026-07-30T15:10:01Z",
         "author": {
           "name": "ghuser29384",
           "email": "262476329+ghuser29384@users.noreply.github.com"
@@ -263,21 +273,21 @@
     },
     "jobs": [
       {
-        "id": 90851570875,
-        "run_id": 30536690047,
+        "id": 90914241229,
+        "run_id": 30555340949,
         "workflow_name": "Publish PR 212 clean reconstruction",
         "head_branch": "agent/pr212-clean-reconstruction-staging-20260730",
-        "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30536690047",
+        "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30555340949",
         "run_attempt": 1,
-        "node_id": "CR_kwDOR8Oun88AAAAVJyz0uw",
-        "head_sha": "00f756a64100ec515f35d51289e06cb5ef7f2974",
-        "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/90851570875",
-        "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30536690047/job/90851570875",
+        "node_id": "CR_kwDOR8Oun88AAAAVKuk6zQ",
+        "head_sha": "f7a4a8d37cb787c50ec71f05caf3a0f5bd1c4802",
+        "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/90914241229",
+        "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30555340949/job/90914241229",
         "status": "completed",
         "conclusion": "failure",
-        "created_at": "2026-07-30T10:57:32Z",
-        "started_at": "2026-07-30T10:57:34Z",
-        "completed_at": "2026-07-30T10:59:35Z",
+        "created_at": "2026-07-30T15:10:10Z",
+        "started_at": "2026-07-30T15:10:11Z",
+        "completed_at": "2026-07-30T15:12:23Z",
         "name": "publish",
         "steps": [
           {
@@ -285,120 +295,120 @@
             "status": "completed",
             "conclusion": "success",
             "number": 1,
-            "started_at": "2026-07-30T10:57:35Z",
-            "completed_at": "2026-07-30T10:57:36Z"
+            "started_at": "2026-07-30T15:10:12Z",
+            "completed_at": "2026-07-30T15:10:13Z"
           },
           {
             "name": "Check out the exact PR branch head",
             "status": "completed",
             "conclusion": "success",
             "number": 2,
-            "started_at": "2026-07-30T10:57:36Z",
-            "completed_at": "2026-07-30T10:57:40Z"
+            "started_at": "2026-07-30T15:10:13Z",
+            "completed_at": "2026-07-30T15:10:15Z"
           },
           {
             "name": "Reconstruct and verify the exact reviewable patch",
             "status": "completed",
             "conclusion": "success",
             "number": 3,
-            "started_at": "2026-07-30T10:57:40Z",
-            "completed_at": "2026-07-30T10:57:42Z"
+            "started_at": "2026-07-30T15:10:15Z",
+            "completed_at": "2026-07-30T15:10:17Z"
           },
           {
             "name": "Set up Node.js",
             "status": "completed",
             "conclusion": "success",
             "number": 4,
-            "started_at": "2026-07-30T10:57:42Z",
-            "completed_at": "2026-07-30T10:57:48Z"
+            "started_at": "2026-07-30T15:10:17Z",
+            "completed_at": "2026-07-30T15:10:21Z"
           },
           {
             "name": "Install dependencies with transient-registry retry",
             "status": "completed",
             "conclusion": "success",
             "number": 5,
-            "started_at": "2026-07-30T10:57:48Z",
-            "completed_at": "2026-07-30T10:58:01Z"
+            "started_at": "2026-07-30T15:10:21Z",
+            "completed_at": "2026-07-30T15:10:36Z"
           },
           {
             "name": "Run institutional source and domain tests",
             "status": "completed",
             "conclusion": "success",
             "number": 6,
-            "started_at": "2026-07-30T10:58:01Z",
-            "completed_at": "2026-07-30T10:58:02Z"
+            "started_at": "2026-07-30T15:10:36Z",
+            "completed_at": "2026-07-30T15:10:37Z"
           },
           {
             "name": "Require absolute TypeScript success",
             "status": "completed",
             "conclusion": "success",
             "number": 7,
-            "started_at": "2026-07-30T10:58:02Z",
-            "completed_at": "2026-07-30T10:58:36Z"
+            "started_at": "2026-07-30T15:10:37Z",
+            "completed_at": "2026-07-30T15:11:18Z"
           },
           {
             "name": "Require absolute ESLint success",
             "status": "completed",
             "conclusion": "failure",
             "number": 8,
-            "started_at": "2026-07-30T10:58:36Z",
-            "completed_at": "2026-07-30T10:59:32Z"
+            "started_at": "2026-07-30T15:11:18Z",
+            "completed_at": "2026-07-30T15:12:20Z"
           },
           {
             "name": "Require absolute production build success",
             "status": "completed",
             "conclusion": "skipped",
             "number": 9,
-            "started_at": "2026-07-30T10:59:32Z",
-            "completed_at": "2026-07-30T10:59:32Z"
+            "started_at": "2026-07-30T15:12:20Z",
+            "completed_at": "2026-07-30T15:12:20Z"
           },
           {
             "name": "Publish reviewable source to the clean reconstruction branch",
             "status": "completed",
             "conclusion": "skipped",
             "number": 10,
-            "started_at": "2026-07-30T10:59:32Z",
-            "completed_at": "2026-07-30T10:59:32Z"
+            "started_at": "2026-07-30T15:12:20Z",
+            "completed_at": "2026-07-30T15:12:20Z"
           },
           {
             "name": "Upload clean reconstruction publication evidence",
             "status": "completed",
             "conclusion": "success",
             "number": 11,
-            "started_at": "2026-07-30T10:59:32Z",
-            "completed_at": "2026-07-30T10:59:33Z"
+            "started_at": "2026-07-30T15:12:20Z",
+            "completed_at": "2026-07-30T15:12:21Z"
           },
           {
             "name": "Post Set up Node.js",
             "status": "completed",
             "conclusion": "skipped",
             "number": 21,
-            "started_at": "2026-07-30T10:59:33Z",
-            "completed_at": "2026-07-30T10:59:33Z"
+            "started_at": "2026-07-30T15:12:21Z",
+            "completed_at": "2026-07-30T15:12:21Z"
           },
           {
             "name": "Post Check out the exact PR branch head",
             "status": "completed",
             "conclusion": "success",
             "number": 22,
-            "started_at": "2026-07-30T10:59:33Z",
-            "completed_at": "2026-07-30T10:59:33Z"
+            "started_at": "2026-07-30T15:12:21Z",
+            "completed_at": "2026-07-30T15:12:21Z"
           },
           {
             "name": "Complete job",
             "status": "completed",
             "conclusion": "success",
             "number": 23,
-            "started_at": "2026-07-30T10:59:33Z",
-            "completed_at": "2026-07-30T10:59:33Z"
+            "started_at": "2026-07-30T15:12:21Z",
+            "completed_at": "2026-07-30T15:12:21Z"
           }
         ],
-        "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/90851570875",
+        "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/90914241229",
         "labels": [
           "ubuntu-24.04"
         ],
-        "runner_id": 1000006219,
-        "runner_name": "GitHub Actions 1000006219",
+        "runner_id": 1000006394,
+        "runner_name": "GitHub Actions 1000006394",
         "runner_group_id": 0,
         "runner_group_name": "GitHub Actions"
       }

@@ -1,35 +1,35 @@
-publish	Require absolute ESLint success	﻿2026-07-30T10:58:36.0263272Z ##[group]Run npm run lint
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0263546Z ^[[36;1mnpm run lint^[[0m
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0301453Z shell: /usr/bin/bash -e {0}
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0301682Z env:
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0301884Z   FEATURE_BRANCH: feat/institutional-trade-system
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0302223Z   STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0302578Z   FINAL_BRANCH: agent/pr212-clean-reconstruction-20260730
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0302892Z   EXPECTED_PR_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0303302Z   EXPECTED_BASE64_SHA256: 32432ad98bffc63704336f313491f03e86070e88eb217c37e74cf255125637c7
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0303768Z   EXPECTED_GZIP_SHA256: 5e03aa5b29836c54880a607950d9651fced78c0d98d3aa27bd2fce3c2321bf49
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0304220Z   EXPECTED_PATCH_SHA256: 145589ad3cdc3f9ea4a09c7f800196c752c8d45c0139d8f618b736074f3d9ecb
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0306260Z   GH_TOKEN: ***
-publish	Require absolute ESLint success	2026-07-30T10:58:36.0306448Z ##[endgroup]
-publish	Require absolute ESLint success	2026-07-30T10:58:36.1231863Z 
-publish	Require absolute ESLint success	2026-07-30T10:58:36.1234291Z > moral-trade@0.1.0 lint
-publish	Require absolute ESLint success	2026-07-30T10:58:36.1234728Z > eslint .
-publish	Require absolute ESLint success	2026-07-30T10:58:36.1234880Z 
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7249748Z 
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7253767Z /home/runner/work/Website2/Website2/src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7254755Z   120:15  error  Error: Cannot call impure function during render
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7255532Z 
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7256923Z `Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7258012Z 
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7258530Z /home/runner/work/Website2/Website2/src/app/institutions/[organizationId]/deals/[dealId]/page.tsx:120:15
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7259453Z   118 |   const committedContributions = data.contributions.filter((row) => ["committed", "paid"].includes(row.status));
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7260595Z   119 |   const committedCents = committedContributions.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0);
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7261243Z > 120 |   const now = Date.now();
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7261604Z       |               ^^^^^^^^^^ Cannot call impure function
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7262427Z   121 |   const canManageDeal = Boolean(organizationParty?.joined_at && !organizationParty?.left_at) && activeAuthorityGrants.some((grant) => {
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7263352Z   122 |     const validFrom = Date.parse(String(grant.valid_from ?? ""));
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7264278Z   123 |     const validUntil = grant.valid_until ? Date.parse(String(grant.valid_until)) : Number.POSITIVE_INFINITY;  react-hooks/purity
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7264874Z 
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7265333Z ✖ 1 problem (1 error, 0 warnings)
-publish	Require absolute ESLint success	2026-07-30T10:59:31.7265557Z 
-publish	Require absolute ESLint success	2026-07-30T10:59:32.0701861Z ##[error]Process completed with exit code 1.
+publish	Require absolute ESLint success	﻿2026-07-30T15:11:18.4036522Z ##[group]Run npm run lint
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4036828Z ^[[36;1mnpm run lint^[[0m
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4080504Z shell: /usr/bin/bash -e {0}
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4080773Z env:
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4081018Z   FEATURE_BRANCH: feat/institutional-trade-system
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4081444Z   STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4082068Z   FINAL_BRANCH: agent/pr212-clean-reconstruction-20260730
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4082463Z   EXPECTED_PR_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4082945Z   EXPECTED_BASE64_SHA256: 32432ad98bffc63704336f313491f03e86070e88eb217c37e74cf255125637c7
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4083542Z   EXPECTED_GZIP_SHA256: 5e03aa5b29836c54880a607950d9651fced78c0d98d3aa27bd2fce3c2321bf49
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4084124Z   EXPECTED_PATCH_SHA256: 145589ad3cdc3f9ea4a09c7f800196c752c8d45c0139d8f618b736074f3d9ecb
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4086748Z   GH_TOKEN: ***
+publish	Require absolute ESLint success	2026-07-30T15:11:18.4086970Z ##[endgroup]
+publish	Require absolute ESLint success	2026-07-30T15:11:18.5150346Z 
+publish	Require absolute ESLint success	2026-07-30T15:11:18.5151003Z > moral-trade@0.1.0 lint
+publish	Require absolute ESLint success	2026-07-30T15:11:18.5151381Z > eslint .
+publish	Require absolute ESLint success	2026-07-30T15:11:18.5151619Z 
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4729502Z 
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4733803Z /home/runner/work/Website2/Website2/src/app/institutions/[organizationId]/deals/[dealId]/page.tsx
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4735246Z   120:15  error  Error: Cannot call impure function during render
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4735765Z 
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4737848Z `Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4739646Z 
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4740501Z /home/runner/work/Website2/Website2/src/app/institutions/[organizationId]/deals/[dealId]/page.tsx:120:15
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4742088Z   118 |   const committedContributions = data.contributions.filter((row) => ["committed", "paid"].includes(row.status));
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4744104Z   119 |   const committedCents = committedContributions.reduce((sum, row) => sum + Number(row.amount_cents || 0), 0);
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4745240Z > 120 |   const now = Date.now();
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4745847Z       |               ^^^^^^^^^^ Cannot call impure function
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4747196Z   121 |   const canManageDeal = Boolean(organizationParty?.joined_at && !organizationParty?.left_at) && activeAuthorityGrants.some((grant) => {
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4748904Z   122 |     const validFrom = Date.parse(String(grant.valid_from ?? ""));
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4750288Z   123 |     const validUntil = grant.valid_until ? Date.parse(String(grant.valid_until)) : Number.POSITIVE_INFINITY;  react-hooks/purity
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4751203Z 
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4751747Z ✖ 1 problem (1 error, 0 warnings)
+publish	Require absolute ESLint success	2026-07-30T15:12:20.4752071Z 
+publish	Require absolute ESLint success	2026-07-30T15:12:20.8553602Z ##[error]Process completed with exit code 1.
