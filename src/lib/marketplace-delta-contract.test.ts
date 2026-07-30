@@ -30,6 +30,16 @@ function between(source: string, start: string, end: string) {
   return source.slice(startIndex, endIndex);
 }
 
+test("email outbox writes remain server-only", () => {
+  const outbox = between(
+    actions,
+    "async function queueEmailOutbox",
+    "async function requireAdminViewer",
+  );
+  assert.match(outbox, /createServiceClient\(\)/);
+  assert.doesNotMatch(outbox, /await createClient\(\)/);
+});
+
 test("member and guest acceptance call atomic database boundaries", () => {
   const member = between(
     actions,
