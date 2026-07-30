@@ -1,0 +1,54 @@
+name: Export PR 212 payload branch
+
+on:
+  push:
+    branches:
+      - ops/pr212-final-ui-publish-20260730
+    paths:
+      - .github/workflows/export-pr212-payload-branch.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/pr212-final-ui-publish-20260730
+          fetch-depth: 0
+
+      - name: Package exact payload transport files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pr212-payload-export
+          cp .github/pr212-final-payload.chunk-* /tmp/pr212-payload-export/
+          cp .github/workflows/publish-pr212-final-ui.yml /tmp/pr212-payload-export/
+          find /tmp/pr212-payload-export -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > /tmp/pr212-payload-export/sha256.txt
+          git rev-parse HEAD > /tmp/pr212-payload-export/source-head.txt
+
+      - name: Upload exact payload transport
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-payload-branch-${{ github.run_id }}
+          path: /tmp/pr212-payload-export
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Record export run id
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-payload-export
+          printf '{"run_id":"%s","artifact":"pr212-payload-branch-%s","head":"%s"}\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ID" "$(git rev-parse HEAD)" \
+            > ops/pr212-payload-export/run.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-payload-export/run.json
+          git commit -m "Record PR 212 payload export run"
+          git push origin HEAD:ops/pr212-final-ui-publish-20260730
