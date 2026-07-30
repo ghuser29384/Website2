@@ -1,107 +1,115 @@
-publish	Reconstruct and verify the exact patch	﻿2026-07-30T08:19:53.6797135Z ##[group]Run set -euo pipefail
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6797555Z ^[[36;1mset -euo pipefail^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6797839Z ^[[36;1mactual_head="$(git rev-parse HEAD)"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6798158Z ^[[36;1mif [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6798520Z ^[[36;1m  echo "PR #212 moved: expected $EXPECTED_HEAD, got $actual_head" >&2^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6798842Z ^[[36;1m  exit 1^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6799060Z ^[[36;1mfi^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6799242Z ^[[36;1m^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6799571Z ^[[36;1mgit fetch origin "refs/heads/${PAYLOAD_BRANCH}:refs/remotes/origin/${PAYLOAD_BRANCH}"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6799977Z ^[[36;1mpayload=/tmp/pr212-final.patch.gz.b64^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6800323Z ^[[36;1mnormalized_payload=/tmp/pr212-final.patch.gz.normalized.b64^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6800656Z ^[[36;1mgzip_file=/tmp/pr212-final.patch.gz^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6800920Z ^[[36;1mpatch=/tmp/pr212-final.patch^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6801159Z ^[[36;1m: > "$payload"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6801420Z ^[[36;1mfor number in $(seq 0 10); do^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6801673Z ^[[36;1m  index="$(printf '%03d' "$number")"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6802124Z ^[[36;1m  git show "refs/remotes/origin/${PAYLOAD_BRANCH}:.github/pr212-final-payload.chunk-${index}" >> "$payload"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6802538Z ^[[36;1mdone^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6802725Z ^[[36;1m^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6802986Z ^[[36;1mpython - "$payload" "$normalized_payload" "$gzip_file" <<'PY'^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6803317Z ^[[36;1mfrom __future__ import annotations^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6803570Z ^[[36;1m^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6803754Z ^[[36;1mimport base64^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6803966Z ^[[36;1mimport hashlib^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6804207Z ^[[36;1mfrom pathlib import Path^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6804474Z ^[[36;1mimport sys^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6804672Z ^[[36;1m^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6804954Z ^[[36;1msource_path, normalized_path, decoded_path = map(Path, sys.argv[1:])^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6805311Z ^[[36;1mraw = source_path.read_bytes()^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6805588Z ^[[36;1mallowed_whitespace = b" \t\r\n\v\f"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6805934Z ^[[36;1mnormalized = bytes(byte for byte in raw if byte not in allowed_whitespace)^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6806859Z ^[[36;1minvalid = [(index, byte) for index, byte in enumerate(normalized) if byte not in b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="]^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6807432Z ^[[36;1mprint(f"Raw base64 bytes: {len(raw)}")^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6807753Z ^[[36;1mprint(f"Normalized base64 bytes: {len(normalized)}")^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6808108Z ^[[36;1mprint(f"Raw base64 SHA-256: {hashlib.sha256(raw).hexdigest()}")^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6808517Z ^[[36;1mprint(f"Normalized base64 SHA-256: {hashlib.sha256(normalized).hexdigest()}")^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6808859Z ^[[36;1mif invalid:^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6809138Z ^[[36;1m    print("First invalid normalized base64 bytes:", invalid[:20])^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6809597Z ^[[36;1m    raise SystemExit("The reconstructed payload contains non-base64, non-whitespace bytes.")^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6809992Z ^[[36;1mif len(normalized) % 4:^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6810366Z ^[[36;1m    raise SystemExit(f"Normalized base64 length is not divisible by four: {len(normalized)}")^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6810761Z ^[[36;1mfirst_padding = normalized.find(b"=")^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6811128Z ^[[36;1mif first_padding >= 0 and any(byte != ord("=") for byte in normalized[first_padding:]):^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6811802Z ^[[36;1m    raise SystemExit(f"Base64 padding occurs before the end at offset {first_padding}.")^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6812164Z ^[[36;1mtry:^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6812418Z ^[[36;1m    decoded = base64.b64decode(normalized, validate=True)^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6812716Z ^[[36;1mexcept Exception as exc:^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6813031Z ^[[36;1m    raise SystemExit(f"Strict base64 decoding failed: {exc}") from exc^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6813375Z ^[[36;1mnormalized_path.write_bytes(normalized)^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6813656Z ^[[36;1mdecoded_path.write_bytes(decoded)^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6814064Z ^[[36;1mprint(f"Decoded gzip bytes: {len(decoded)}")^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6814415Z ^[[36;1mprint(f"Decoded gzip SHA-256: {hashlib.sha256(decoded).hexdigest()}")^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6814733Z ^[[36;1mPY^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6814914Z ^[[36;1m^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6815189Z ^[[36;1mecho "${EXPECTED_GZIP_SHA256}  ${gzip_file}" | sha256sum --check --strict^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6815571Z ^[[36;1mgzip --decompress --stdout "$gzip_file" > "$patch"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6815944Z ^[[36;1mecho "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6816361Z ^[[36;1m^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6816565Z ^[[36;1mgit apply --check --binary "$patch"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6816823Z ^[[36;1mgit apply --binary "$patch"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6817067Z ^[[36;1mgit diff --check^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6817272Z ^[[36;1m^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6817491Z ^[[36;1mcat > /tmp/expected-files.txt <<'FILES'^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6817804Z ^[[36;1m.github/scripts/institutional-trade-qa-e2e.mjs^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6818122Z ^[[36;1m.github/workflows/institutional-trade-qa.yml^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6818465Z ^[[36;1msrc/app/institutions/[organizationId]/deals/[dealId]/page.tsx^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6818815Z ^[[36;1msrc/app/institutions/[organizationId]/page.tsx^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6819095Z ^[[36;1msrc/app/institutions/actions.ts^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6819398Z ^[[36;1msrc/app/institutions/individual/deals/[dealId]/page.tsx^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6819726Z ^[[36;1msrc/app/institutions/individual/page.tsx^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6820028Z ^[[36;1msrc/app/institutions/institutions.module.css^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6820373Z ^[[36;1msrc/components/institutions/institutional-deal-workspace.tsx^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6820813Z ^[[36;1msrc/components/institutions/institutional-organization-administration.tsx^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6821228Z ^[[36;1msrc/institutional-individual-capacity.test.ts^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6821558Z ^[[36;1msrc/institutional-product-completeness.test.ts^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6821879Z ^[[36;1msrc/institutional-trade-migration.test.ts^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6822176Z ^[[36;1msrc/institutional-trade-wiring.test.ts^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6822447Z ^[[36;1msrc/lib/institutional-data.ts^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6822770Z ^[[36;1msupabase/migrations/20260726123000_institutional_trade_system.sql^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6823083Z ^[[36;1mFILES^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6823321Z ^[[36;1mgit diff --name-only | sort > /tmp/actual-files.txt^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6823664Z ^[[36;1msort -o /tmp/expected-files.txt /tmp/expected-files.txt^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6824006Z ^[[36;1mdiff -u /tmp/expected-files.txt /tmp/actual-files.txt^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6824294Z ^[[36;1m^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6824519Z ^[[36;1mmkdir -p /tmp/pr212-final-publication-evidence^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6824921Z ^[[36;1mcp /tmp/expected-files.txt /tmp/pr212-final-publication-evidence/expected-files.txt^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6825413Z ^[[36;1mcp /tmp/actual-files.txt /tmp/pr212-final-publication-evidence/actual-files.txt^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6825765Z ^[[36;1m{^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6826105Z ^[[36;1m  printf 'expected_base64_sha256=%s\n' "$EXPECTED_BASE64_SHA256"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6826494Z ^[[36;1m  sha256sum "$payload" "$normalized_payload" "$gzip_file" "$patch"^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6826879Z ^[[36;1m} > /tmp/pr212-final-publication-evidence/payload-hashes.txt^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6827277Z ^[[36;1mgit diff --stat > /tmp/pr212-final-publication-evidence/diff-stat.txt^[[0m
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6870075Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6870412Z env:
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6870653Z   FEATURE_BRANCH: feat/institutional-trade-system
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6870975Z   PAYLOAD_BRANCH: ops/pr212-final-ui-publish-20260730
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6871301Z   EXPECTED_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6871706Z   EXPECTED_BASE64_SHA256: 46352b4f6e89992c17e15e0505587d98d964d218e22612f96f2615fe3f810354
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6872178Z   EXPECTED_GZIP_SHA256: 3afa3f3226a5e014c3173979aa2f50e8796ce473859ab680b6663e6d01a9fd86
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6872831Z   EXPECTED_PATCH_SHA256: 62e1fa2b4976d50a1b22897437d80d3b8581e90b0445f4524fd6e9f9ba313fae
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:53.6873244Z ##[endgroup]
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:54.0634757Z Normalized base64 length is not divisible by four: 55599
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:54.0635307Z Raw base64 bytes: 55599
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:54.0635670Z Normalized base64 bytes: 55599
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:54.0636389Z Raw base64 SHA-256: 6fb00e63d0be316e024e6744856272a902a5bf5a0fa6cbd36a40bb229cd02487
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:54.0637121Z Normalized base64 SHA-256: 6fb00e63d0be316e024e6744856272a902a5bf5a0fa6cbd36a40bb229cd02487
-publish	Reconstruct and verify the exact patch	2026-07-30T08:19:54.0682774Z ##[error]Process completed with exit code 1.
+publish	Reconstruct and verify the exact patch	﻿2026-07-30T08:23:32.6560777Z ##[group]Run set -euo pipefail
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6561269Z ^[[36;1mset -euo pipefail^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6561612Z ^[[36;1mactual_head="$(git rev-parse HEAD)"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6562007Z ^[[36;1mif [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6562477Z ^[[36;1m  echo "PR #212 moved: expected $EXPECTED_HEAD, got $actual_head" >&2^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6562888Z ^[[36;1m  exit 1^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6563143Z ^[[36;1mfi^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6563362Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6563771Z ^[[36;1mgit fetch origin "refs/heads/${PAYLOAD_BRANCH}:refs/remotes/origin/${PAYLOAD_BRANCH}"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6564317Z ^[[36;1mpayload=/tmp/pr212-final.patch.gz.b64^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6564759Z ^[[36;1mnormalized_payload=/tmp/pr212-final.patch.gz.normalized.b64^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6565502Z ^[[36;1mgzip_file=/tmp/pr212-final.patch.gz^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6565866Z ^[[36;1mpatch=/tmp/pr212-final.patch^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6566174Z ^[[36;1m: > "$payload"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6566488Z ^[[36;1mfor number in $(seq 0 10); do^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6566809Z ^[[36;1m  index="$(printf '%03d' "$number")"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6567390Z ^[[36;1m  git show "refs/remotes/origin/${PAYLOAD_BRANCH}:.github/pr212-final-payload.chunk-${index}" >> "$payload"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6567950Z ^[[36;1mdone^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6568179Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6568501Z ^[[36;1mpython - "$payload" "$normalized_payload" "$gzip_file" <<'PY'^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6568940Z ^[[36;1mfrom __future__ import annotations^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6569253Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6569494Z ^[[36;1mimport base64^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6569757Z ^[[36;1mimport hashlib^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6570028Z ^[[36;1mfrom pathlib import Path^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6570313Z ^[[36;1mimport sys^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6570546Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6570900Z ^[[36;1msource_path, normalized_path, decoded_path = map(Path, sys.argv[1:])^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6571345Z ^[[36;1mraw = source_path.read_bytes()^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6571678Z ^[[36;1mallowed_whitespace = b" \t\r\n\v\f"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6572127Z ^[[36;1mnormalized = bytes(byte for byte in raw if byte not in allowed_whitespace)^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6572996Z ^[[36;1minvalid = [(index, byte) for index, byte in enumerate(normalized) if byte not in b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/="]^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6573744Z ^[[36;1mprint(f"Raw base64 bytes: {len(raw)}")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6574168Z ^[[36;1mprint(f"Unpadded normalized base64 bytes: {len(normalized)}")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6574662Z ^[[36;1mprint(f"Raw base64 SHA-256: {hashlib.sha256(raw).hexdigest()}")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6575441Z ^[[36;1mprint(f"Unpadded normalized base64 SHA-256: {hashlib.sha256(normalized).hexdigest()}")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6575937Z ^[[36;1mif invalid:^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6576285Z ^[[36;1m    print("First invalid normalized base64 bytes:", invalid[:20])^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6576888Z ^[[36;1m    raise SystemExit("The reconstructed payload contains non-base64, non-whitespace bytes.")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6577451Z ^[[36;1mremainder = len(normalized) % 4^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6577762Z ^[[36;1mif remainder == 1:^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6578247Z ^[[36;1m    raise SystemExit(f"Normalized base64 length has impossible remainder one: {len(normalized)}")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6578762Z ^[[36;1mif remainder:^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6579048Z ^[[36;1m    padding = b"=" * (4 - remainder)^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6579710Z ^[[36;1m    print(f"Restoring {len(padding)} omitted terminal base64 padding byte(s).")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6580175Z ^[[36;1m    normalized += padding^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6580495Z ^[[36;1mfirst_padding = normalized.find(b"=")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6580989Z ^[[36;1mif first_padding >= 0 and any(byte != ord("=") for byte in normalized[first_padding:]):^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6581649Z ^[[36;1m    raise SystemExit(f"Base64 padding occurs before the end at offset {first_padding}.")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6582128Z ^[[36;1mtry:^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6582598Z ^[[36;1m    decoded = base64.b64decode(normalized, validate=True)^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6582987Z ^[[36;1mexcept Exception as exc:^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6583399Z ^[[36;1m    raise SystemExit(f"Strict base64 decoding failed: {exc}") from exc^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6583855Z ^[[36;1mnormalized_path.write_bytes(normalized)^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6584208Z ^[[36;1mdecoded_path.write_bytes(decoded)^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6584613Z ^[[36;1mprint(f"Padded normalized base64 bytes: {len(normalized)}")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6585388Z ^[[36;1mprint(f"Padded normalized base64 SHA-256: {hashlib.sha256(normalized).hexdigest()}")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6585940Z ^[[36;1mprint(f"Decoded gzip bytes: {len(decoded)}")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6586399Z ^[[36;1mprint(f"Decoded gzip SHA-256: {hashlib.sha256(decoded).hexdigest()}")^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6586811Z ^[[36;1mPY^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6587031Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6587376Z ^[[36;1mecho "${EXPECTED_GZIP_SHA256}  ${gzip_file}" | sha256sum --check --strict^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6587884Z ^[[36;1mgzip --decompress --stdout "$gzip_file" > "$patch"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6588365Z ^[[36;1mecho "${EXPECTED_PATCH_SHA256}  ${patch}" | sha256sum --check --strict^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6588772Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6589023Z ^[[36;1mgit apply --check --binary "$patch"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6589354Z ^[[36;1mgit apply --binary "$patch"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6589662Z ^[[36;1mgit diff --check^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6589920Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6590178Z ^[[36;1mcat > /tmp/expected-files.txt <<'FILES'^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6590571Z ^[[36;1m.github/scripts/institutional-trade-qa-e2e.mjs^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6590987Z ^[[36;1m.github/workflows/institutional-trade-qa.yml^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6591434Z ^[[36;1msrc/app/institutions/[organizationId]/deals/[dealId]/page.tsx^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6591893Z ^[[36;1msrc/app/institutions/[organizationId]/page.tsx^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6592261Z ^[[36;1msrc/app/institutions/actions.ts^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6592662Z ^[[36;1msrc/app/institutions/individual/deals/[dealId]/page.tsx^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6593081Z ^[[36;1msrc/app/institutions/individual/page.tsx^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6593466Z ^[[36;1msrc/app/institutions/institutions.module.css^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6593917Z ^[[36;1msrc/components/institutions/institutional-deal-workspace.tsx^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6594492Z ^[[36;1msrc/components/institutions/institutional-organization-administration.tsx^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6595030Z ^[[36;1msrc/institutional-individual-capacity.test.ts^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6595661Z ^[[36;1msrc/institutional-product-completeness.test.ts^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6596081Z ^[[36;1msrc/institutional-trade-migration.test.ts^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6596465Z ^[[36;1msrc/institutional-trade-wiring.test.ts^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6596822Z ^[[36;1msrc/lib/institutional-data.ts^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6597242Z ^[[36;1msupabase/migrations/20260726123000_institutional_trade_system.sql^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6597654Z ^[[36;1mFILES^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6597964Z ^[[36;1mgit diff --name-only | sort > /tmp/actual-files.txt^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6598410Z ^[[36;1msort -o /tmp/expected-files.txt /tmp/expected-files.txt^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6598860Z ^[[36;1mdiff -u /tmp/expected-files.txt /tmp/actual-files.txt^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6599219Z ^[[36;1m^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6599507Z ^[[36;1mmkdir -p /tmp/pr212-final-publication-evidence^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6600182Z ^[[36;1mcp /tmp/expected-files.txt /tmp/pr212-final-publication-evidence/expected-files.txt^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6600834Z ^[[36;1mcp /tmp/actual-files.txt /tmp/pr212-final-publication-evidence/actual-files.txt^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6601292Z ^[[36;1m{^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6601614Z ^[[36;1m  printf 'expected_base64_sha256=%s\n' "$EXPECTED_BASE64_SHA256"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6602127Z ^[[36;1m  sha256sum "$payload" "$normalized_payload" "$gzip_file" "$patch"^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6602633Z ^[[36;1m} > /tmp/pr212-final-publication-evidence/payload-hashes.txt^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6603283Z ^[[36;1mgit diff --stat > /tmp/pr212-final-publication-evidence/diff-stat.txt^[[0m
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6656547Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6656969Z env:
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6657251Z   FEATURE_BRANCH: feat/institutional-trade-system
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6657668Z   PAYLOAD_BRANCH: ops/pr212-final-ui-publish-20260730
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6658080Z   EXPECTED_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6658604Z   EXPECTED_BASE64_SHA256: 46352b4f6e89992c17e15e0505587d98d964d218e22612f96f2615fe3f810354
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6659242Z   EXPECTED_GZIP_SHA256: 3afa3f3226a5e014c3173979aa2f50e8796ce473859ab680b6663e6d01a9fd86
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6659882Z   EXPECTED_PATCH_SHA256: 62e1fa2b4976d50a1b22897437d80d3b8581e90b0445f4524fd6e9f9ba313fae
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:32.6660346Z ##[endgroup]
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:33.0967136Z Base64 padding occurs before the end at offset 35785.
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:33.0967819Z Raw base64 bytes: 55599
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:33.0968599Z Unpadded normalized base64 bytes: 55599
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:33.0969394Z Raw base64 SHA-256: 6fb00e63d0be316e024e6744856272a902a5bf5a0fa6cbd36a40bb229cd02487
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:33.0970309Z Unpadded normalized base64 SHA-256: 6fb00e63d0be316e024e6744856272a902a5bf5a0fa6cbd36a40bb229cd02487
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:33.0970924Z Restoring 1 omitted terminal base64 padding byte(s).
+publish	Reconstruct and verify the exact patch	2026-07-30T08:23:33.1021293Z ##[error]Process completed with exit code 1.

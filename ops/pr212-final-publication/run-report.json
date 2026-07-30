@@ -1,11 +1,21 @@
 {
-  "generated_at": "2026-07-30T08:21:15Z",
-  "target_head": "1295bd26112f64c61c50040dbd041a0d830c6dff",
-  "selected_run_id": "30526256943",
+  "generated_at": "2026-07-30T08:23:55Z",
+  "target_head": "fb531746207ab1dac425eab291d5b6e0b185bc3f",
+  "selected_run_id": "30526484073",
   "selected_run_status": "completed",
   "selected_run_conclusion": "failure",
   "current_pr_head": "9ec3bd79618a704469bc4f3547d2d8a1e4dc2730",
   "runs": [
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-30T08:23:13Z",
+      "databaseId": 30526484073,
+      "displayTitle": "Restore omitted terminal padding in PR 212 payload",
+      "event": "push",
+      "headSha": "fb531746207ab1dac425eab291d5b6e0b185bc3f",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30526484073"
+    },
     {
       "conclusion": "failure",
       "createdAt": "2026-07-30T08:19:44Z",
@@ -48,25 +58,25 @@
     }
   ],
   "run": {
-    "id": 30526256943,
+    "id": 30526484073,
     "name": "Publish PR 212 final institutional UI",
-    "node_id": "WFR_kwLOR8Oun88AAAAHG4G3Lw",
+    "node_id": "WFR_kwLOR8Oun88AAAAHG4UuaQ",
     "head_branch": "ops/pr212-final-ui-publish-20260730",
-    "head_sha": "1295bd26112f64c61c50040dbd041a0d830c6dff",
+    "head_sha": "fb531746207ab1dac425eab291d5b6e0b185bc3f",
     "path": ".github/workflows/publish-pr212-final-ui.yml",
-    "display_title": "Normalize and strictly verify PR 212 payload encoding",
-    "run_number": 4,
+    "display_title": "Restore omitted terminal padding in PR 212 payload",
+    "run_number": 5,
     "event": "push",
     "status": "completed",
     "conclusion": "failure",
     "workflow_id": 323475664,
-    "check_suite_id": 82760847478,
-    "check_suite_node_id": "CS_kwDOR8Oun88AAAATRO5Qdg",
-    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526256943",
-    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30526256943",
+    "check_suite_id": 82761491707,
+    "check_suite_node_id": "CS_kwDOR8Oun88AAAATRPgk-w",
+    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526484073",
+    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30526484073",
     "pull_requests": [],
-    "created_at": "2026-07-30T08:19:44Z",
-    "updated_at": "2026-07-30T08:19:58Z",
+    "created_at": "2026-07-30T08:23:13Z",
+    "updated_at": "2026-07-30T08:23:36Z",
     "actor": {
       "login": "ghuser29384",
       "id": 262476329,
@@ -90,7 +100,7 @@
     },
     "run_attempt": 1,
     "referenced_workflows": [],
-    "run_started_at": "2026-07-30T08:19:44Z",
+    "run_started_at": "2026-07-30T08:23:13Z",
     "triggering_actor": {
       "login": "ghuser29384",
       "id": 262476329,
@@ -112,19 +122,19 @@
       "user_view_type": "public",
       "site_admin": false
     },
-    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526256943/jobs",
-    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526256943/logs",
-    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82760847478",
-    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526256943/artifacts",
-    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526256943/cancel",
-    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526256943/rerun",
+    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526484073/jobs",
+    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526484073/logs",
+    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82761491707",
+    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526484073/artifacts",
+    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526484073/cancel",
+    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526484073/rerun",
     "previous_attempt_url": null,
     "workflow_url": "https://api.github.com/repos/ghuser29384/Website2/actions/workflows/323475664",
     "head_commit": {
-      "id": "1295bd26112f64c61c50040dbd041a0d830c6dff",
-      "tree_id": "629320aff444cff99619fb7ca855bbba28f331fd",
-      "message": "Normalize and strictly verify PR 212 payload encoding",
-      "timestamp": "2026-07-30T08:19:33Z",
+      "id": "fb531746207ab1dac425eab291d5b6e0b185bc3f",
+      "tree_id": "ea1c60e1cf171a0d643986e7d643cb74e59bce42",
+      "message": "Restore omitted terminal padding in PR 212 payload",
+      "timestamp": "2026-07-30T08:23:05Z",
       "author": {
         "name": "ghuser29384",
         "email": "262476329+ghuser29384@users.noreply.github.com"
@@ -273,21 +283,21 @@
   },
   "jobs": [
     {
-      "id": 90817747450,
-      "run_id": 30526256943,
+      "id": 90818480300,
+      "run_id": 30526484073,
       "workflow_name": "Publish PR 212 final institutional UI",
       "head_branch": "ops/pr212-final-ui-publish-20260730",
-      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526256943",
+      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30526484073",
       "run_attempt": 1,
-      "node_id": "CR_kwDOR8Oun88AAAAVJSjZ-g",
-      "head_sha": "1295bd26112f64c61c50040dbd041a0d830c6dff",
-      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/90817747450",
-      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30526256943/job/90817747450",
+      "node_id": "CR_kwDOR8Oun88AAAAVJTQIrA",
+      "head_sha": "fb531746207ab1dac425eab291d5b6e0b185bc3f",
+      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/90818480300",
+      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30526484073/job/90818480300",
       "status": "completed",
       "conclusion": "failure",
-      "created_at": "2026-07-30T08:19:45Z",
-      "started_at": "2026-07-30T08:19:47Z",
-      "completed_at": "2026-07-30T08:19:57Z",
+      "created_at": "2026-07-30T08:23:14Z",
+      "started_at": "2026-07-30T08:23:27Z",
+      "completed_at": "2026-07-30T08:23:35Z",
       "name": "publish",
       "steps": [
         {
@@ -295,112 +305,112 @@
           "status": "completed",
           "conclusion": "success",
           "number": 1,
-          "started_at": "2026-07-30T08:19:48Z",
-          "completed_at": "2026-07-30T08:19:49Z"
+          "started_at": "2026-07-30T08:23:28Z",
+          "completed_at": "2026-07-30T08:23:29Z"
         },
         {
           "name": "Check out exact feature head",
           "status": "completed",
           "conclusion": "success",
           "number": 2,
-          "started_at": "2026-07-30T08:19:49Z",
-          "completed_at": "2026-07-30T08:19:53Z"
+          "started_at": "2026-07-30T08:23:29Z",
+          "completed_at": "2026-07-30T08:23:32Z"
         },
         {
           "name": "Reconstruct and verify the exact patch",
           "status": "completed",
           "conclusion": "failure",
           "number": 3,
-          "started_at": "2026-07-30T08:19:53Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:32Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         },
         {
           "name": "Set up Node.js",
           "status": "completed",
           "conclusion": "skipped",
           "number": 4,
-          "started_at": "2026-07-30T08:19:54Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:33Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         },
         {
           "name": "Install dependencies with transient-registry retry",
           "status": "completed",
           "conclusion": "skipped",
           "number": 5,
-          "started_at": "2026-07-30T08:19:54Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:33Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         },
         {
           "name": "Run institutional source and domain tests",
           "status": "completed",
           "conclusion": "skipped",
           "number": 6,
-          "started_at": "2026-07-30T08:19:54Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:33Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         },
         {
           "name": "Require absolute TypeScript success",
           "status": "completed",
           "conclusion": "skipped",
           "number": 7,
-          "started_at": "2026-07-30T08:19:54Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:33Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         },
         {
           "name": "Require absolute ESLint success",
           "status": "completed",
           "conclusion": "skipped",
           "number": 8,
-          "started_at": "2026-07-30T08:19:54Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:33Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         },
         {
           "name": "Require absolute production build success",
           "status": "completed",
           "conclusion": "skipped",
           "number": 9,
-          "started_at": "2026-07-30T08:19:54Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:33Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         },
         {
           "name": "Commit exact implementation to PR branch",
           "status": "completed",
           "conclusion": "skipped",
           "number": 10,
-          "started_at": "2026-07-30T08:19:54Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:33Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         },
         {
           "name": "Upload publication evidence",
           "status": "completed",
           "conclusion": "success",
           "number": 11,
-          "started_at": "2026-07-30T08:19:54Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:33Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         },
         {
           "name": "Post Check out exact feature head",
           "status": "completed",
           "conclusion": "success",
           "number": 22,
-          "started_at": "2026-07-30T08:19:54Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:33Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         },
         {
           "name": "Complete job",
           "status": "completed",
           "conclusion": "success",
           "number": 23,
-          "started_at": "2026-07-30T08:19:54Z",
-          "completed_at": "2026-07-30T08:19:54Z"
+          "started_at": "2026-07-30T08:23:33Z",
+          "completed_at": "2026-07-30T08:23:33Z"
         }
       ],
-      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/90817747450",
+      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/90818480300",
       "labels": [
         "ubuntu-24.04"
       ],
-      "runner_id": 1000005650,
-      "runner_name": "GitHub Actions 1000005650",
+      "runner_id": 1000005673,
+      "runner_name": "GitHub Actions 1000005673",
       "runner_group_id": 0,
       "runner_group_name": "GitHub Actions"
     }
