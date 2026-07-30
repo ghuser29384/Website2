@@ -5,6 +5,7 @@ import test from "node:test";
 
 import { GET as getFavicon } from "../app/favicon.ico/route";
 
+// Keep every document surface on the same versioned Moral Trade mark.
 const CANONICAL_FAVICON_HREF = "/brand/moral-trade-mark.png?v=20260730";
 const CANONICAL_FAVICON_PATH = join(
   process.cwd(),
