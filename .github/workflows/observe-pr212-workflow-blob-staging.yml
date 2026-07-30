@@ -19,7 +19,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_WORKFLOW: stage-pr212-tested-workflow-blobs.yml
-      TARGET_HEAD: 3d316de1fad0ad46c81ac2b29327e608a86eb0c0
+      TARGET_HEAD: 6bd7bc9567fd72cb51d67786b6d2e6aa929ed4d7
       STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
     steps:
       - uses: actions/checkout@v4
