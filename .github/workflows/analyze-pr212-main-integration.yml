@@ -1,0 +1,99 @@
+name: Analyze PR 212 integration with current main
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-ops-20260730
+    paths:
+      - .github/workflows/analyze-pr212-main-integration.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  analyze:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLEAN_BRANCH: agent/pr212-clean-reconstruction-20260730
+      EXPECTED_CLEAN_HEAD: e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e
+      CLEAN_GATE_RUN_ID: "30560630091"
+      OPS_BRANCH: agent/pr212-main-integration-ops-20260730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-ops-20260730
+          fetch-depth: 0
+
+      - name: Verify clean gate and perform a no-push merge analysis
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-main-integration
+          artifact=/tmp/pr212-main-integration-analysis
+          rm -rf "$artifact"
+          mkdir -p "$output" "$artifact/conflicts"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CLEAN_GATE_RUN_ID}" > "$artifact/clean-gate-run.json"
+          test "$(jq -r .head_sha "$artifact/clean-gate-run.json")" = "$EXPECTED_CLEAN_HEAD"
+          test "$(jq -r .status "$artifact/clean-gate-run.json")" = "completed"
+          test "$(jq -r .conclusion "$artifact/clean-gate-run.json")" = "success"
+
+          git fetch origin \
+            "refs/heads/${CLEAN_BRANCH}:refs/remotes/origin/${CLEAN_BRANCH}" \
+            "refs/heads/main:refs/remotes/origin/main"
+          clean_head="$(git rev-parse "refs/remotes/origin/${CLEAN_BRANCH}")"
+          main_head="$(git rev-parse refs/remotes/origin/main)"
+          test "$clean_head" = "$EXPECTED_CLEAN_HEAD"
+
+          rm -rf /tmp/pr212-integration-worktree
+          git worktree add --detach /tmp/pr212-integration-worktree "$clean_head"
+          cd /tmp/pr212-integration-worktree
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          set +e
+          git merge --no-commit --no-ff "$main_head" > "$artifact/merge-stdout.txt" 2> "$artifact/merge-stderr.txt"
+          merge_status=$?
+          set -e
+
+          git status --short > "$artifact/status-short.txt"
+          git diff --name-only --diff-filter=U | sort > "$artifact/conflict-files.txt"
+          git diff --cc > "$artifact/combined-conflict.diff" || true
+          git diff --stat "$clean_head" "$main_head" > "$artifact/clean-versus-main-stat.txt" || true
+
+          while IFS= read -r path; do
+            [[ -n "$path" ]] || continue
+            safe="$(printf '%s' "$path" | tr '/' '_')"
+            git show ":1:${path}" > "$artifact/conflicts/${safe}.base" 2>/dev/null || true
+            git show ":2:${path}" > "$artifact/conflicts/${safe}.clean" 2>/dev/null || true
+            git show ":3:${path}" > "$artifact/conflicts/${safe}.main" 2>/dev/null || true
+          done < "$artifact/conflict-files.txt"
+
+          conflict_count="$(grep -c . "$artifact/conflict-files.txt" || true)"
+          {
+            echo "clean_head=${clean_head}"
+            echo "main_head=${main_head}"
+            echo "merge_status=${merge_status}"
+            echo "conflict_count=${conflict_count}"
+          } > "$artifact/summary.txt"
+
+          cd "$GITHUB_WORKSPACE"
+          cp "$artifact/summary.txt" "$artifact/conflict-files.txt" "$artifact/status-short.txt" "$output/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 current-main merge analysis"
+          git push origin "HEAD:refs/heads/${OPS_BRANCH}"
+
+      - name: Upload complete merge-analysis evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-main-integration-analysis-${{ github.run_id }}
+          path: /tmp/pr212-main-integration-analysis
+          if-no-files-found: warn
+          retention-days: 14
