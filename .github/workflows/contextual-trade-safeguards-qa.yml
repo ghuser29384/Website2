@@ -1,0 +1,90 @@
+name: Contextual trade safeguards QA
+
+on:
+  pull_request:
+    branches:
+      - agent/contextual-trade-safeguards-20260730
+  workflow_dispatch:
+
+concurrency:
+  group: contextual-trade-safeguards-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Full test, lint, type, and production build
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.4"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Check browser JavaScript syntax
+        run: |
+          node --check public/moral-trade-create/safeguards.js
+          node --check public/moral-trade-live-navigation.js
+
+      - name: Run the complete Node test suite
+        run: npm test
+
+      - name: Run repository-wide ESLint
+        run: npm run lint
+
+      - name: Run repository-wide TypeScript
+        run: npx tsc --noEmit
+
+      - name: Run the production build
+        run: npm run build
+
+  browser:
+    name: Desktop and narrow-mobile rendered workflows
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19.4"
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run contextual safeguards browser tests
+        run: npx playwright test tests/trade-controls.spec.ts
+
+      - name: Upload Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: contextual-trade-safeguards-playwright
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
