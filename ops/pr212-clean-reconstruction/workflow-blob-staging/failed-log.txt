@@ -1,57 +1,64 @@
-stage	Verify the exact tested run and stage its workflow blobs safely	﻿2026-07-30T15:56:16.7628071Z ##[group]Run set -euo pipefail
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7629690Z ^[[36;1mset -euo pipefail^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7631036Z ^[[36;1mwork=/tmp/pr212-tested-workflow-blobs^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7632705Z ^[[36;1mrm -rf "$work"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7633941Z ^[[36;1mmkdir -p "$work/artifact" "$work/source"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7635301Z ^[[36;1m^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7636899Z ^[[36;1mgh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" > "$work/run.json"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7639068Z ^[[36;1mtest "$(jq -r .head_sha "$work/run.json")" = "$SOURCE_RUN_HEAD"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7640886Z ^[[36;1mtest "$(jq -r .status "$work/run.json")" = "completed"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7642855Z ^[[36;1mtest "$(jq -r .conclusion "$work/run.json")" = "failure"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7644319Z ^[[36;1m^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7646064Z ^[[36;1mgh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/jobs?per_page=100" > "$work/jobs.json"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7648110Z ^[[36;1mjq -e '^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7649192Z ^[[36;1m  .jobs | length == 1 and^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7651177Z ^[[36;1m  .[0].steps[] | select(.name == "Reconstruct and verify the exact reviewable source") | .conclusion == "success"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7653479Z ^[[36;1m' "$work/jobs.json" >/dev/null^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7654676Z ^[[36;1mfor step in \^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7655879Z ^[[36;1m  "Run institutional source and domain tests" \^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7657375Z ^[[36;1m  "Require absolute TypeScript success" \^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7658747Z ^[[36;1m  "Require absolute ESLint success" \^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7660204Z ^[[36;1m  "Require absolute production build success"; do^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7662627Z ^[[36;1m  jq -e --arg step "$step" '.jobs[0].steps[] | select(.name == $step) | .conclusion == "success"' "$work/jobs.json" >/dev/null^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7664981Z ^[[36;1mdone^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7667424Z ^[[36;1mjq -e '.jobs[0].steps[] | select(.name == "Publish reviewable source to the clean reconstruction branch") | .conclusion == "failure"' "$work/jobs.json" >/dev/null^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7670114Z ^[[36;1m^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7671879Z ^[[36;1mgh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_ARTIFACT" --dir "$work/artifact"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7675988Z ^[[36;1mecho "${EXPECTED_SOURCE_TAR_SHA256}  $work/artifact/reconstructed-source.tar.gz" | sha256sum --check --strict^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7678619Z ^[[36;1mtar -xzf "$work/artifact/reconstructed-source.tar.gz" -C "$work/source" \^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7680472Z ^[[36;1m  .github/workflows/institutional-trade-qa.yml \^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7682216Z ^[[36;1m  .github/workflows/pr212-clean-reconstruction-gates.yml^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7684815Z ^[[36;1mecho "${EXPECTED_QA_WORKFLOW_SHA256}  $work/source/.github/workflows/institutional-trade-qa.yml" | sha256sum --check --strict^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7688408Z ^[[36;1mecho "${EXPECTED_GATE_WORKFLOW_SHA256}  $work/source/.github/workflows/pr212-clean-reconstruction-gates.yml" | sha256sum --check --strict^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7690906Z ^[[36;1m^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7692275Z ^[[36;1mdestination=ops/pr212-clean-reconstruction/workflow-blobs^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7693902Z ^[[36;1mmkdir -p "$destination"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7695954Z ^[[36;1mcp "$work/source/.github/workflows/institutional-trade-qa.yml" "$destination/institutional-trade-qa.yml"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7699189Z ^[[36;1mcp "$work/source/.github/workflows/pr212-clean-reconstruction-gates.yml" "$destination/pr212-clean-reconstruction-gates.yml"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7701899Z ^[[36;1msha256sum "$destination"/*.yml > "$destination/sha256.txt"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7703449Z ^[[36;1m^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7704860Z ^[[36;1mgit config user.name "github-actions[bot]"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7707401Z ^[[36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7709171Z ^[[36;1mgit add "$destination"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7710577Z ^[[36;1mgit commit -m "Stage exact tested PR 212 workflow blobs"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7713091Z ^[[36;1mgit push origin "HEAD:refs/heads/${STAGING_BRANCH}"^[[0m
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7748425Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7749890Z env:
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7758762Z   GH_TOKEN: ***
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7759993Z   STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7761472Z   SOURCE_RUN_ID: 30557865903
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7762787Z   SOURCE_RUN_HEAD: 7b234d234ce2a2b91dd132b4196deeed69d58378
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7764460Z   SOURCE_ARTIFACT: pr212-clean-reconstruction-publication-30557865903
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7766604Z   EXPECTED_SOURCE_TAR_SHA256: eea13b75ed938fb1e7cc4025fdac1853fad3e288579c9791ca0b375372351072
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7769177Z   EXPECTED_QA_WORKFLOW_SHA256: 0ef8f185569594b6e21ca59477e800fa20bbfa726523561125cec5608b4638fd
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7771623Z   EXPECTED_GATE_WORKFLOW_SHA256: 71b68028a6baa519f25ae76d12ed6225cdc39ea9ea971e86bc2d7be60759a959
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:16.7773606Z ##[endgroup]
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:17.7719056Z jq: error (at /tmp/pr212-tested-workflow-blobs/jobs.json:0): Cannot index boolean with string "name"
-stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T15:56:17.7732763Z ##[error]Process completed with exit code 5.
+stage	Verify the exact tested run and stage its workflow blobs safely	﻿2026-07-30T16:00:18.0476679Z ##[group]Run set -euo pipefail
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0477481Z ^[[36;1mset -euo pipefail^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0477849Z ^[[36;1mwork=/tmp/pr212-tested-workflow-blobs^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0478235Z ^[[36;1mrm -rf "$work"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0478580Z ^[[36;1mmkdir -p "$work/artifact" "$work/source"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0478930Z ^[[36;1m^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0479353Z ^[[36;1mgh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" > "$work/run.json"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0479912Z ^[[36;1mtest "$(jq -r .head_sha "$work/run.json")" = "$SOURCE_RUN_HEAD"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0480378Z ^[[36;1mtest "$(jq -r .status "$work/run.json")" = "completed"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0481087Z ^[[36;1mtest "$(jq -r .conclusion "$work/run.json")" = "failure"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0481490Z ^[[36;1m^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0481946Z ^[[36;1mgh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/jobs?per_page=100" > "$work/jobs.json"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0482904Z ^[[36;1mjq -e '(.jobs | length == 1) and any(.jobs[0].steps[]; .name == "Reconstruct and verify the exact reviewable source" and .conclusion == "success")' "$work/jobs.json" >/dev/null^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0483701Z ^[[36;1mfor step in \^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0484080Z ^[[36;1m  "Run institutional source and domain tests" \^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0484490Z ^[[36;1m  "Require absolute TypeScript success" \^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0484855Z ^[[36;1m  "Require absolute ESLint success" \^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0485242Z ^[[36;1m  "Require absolute production build success"; do^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0485868Z ^[[36;1m  jq -e --arg step "$step" 'any(.jobs[0].steps[]; .name == $step and .conclusion == "success")' "$work/jobs.json" >/dev/null^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0486422Z ^[[36;1mdone^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0487224Z ^[[36;1mjq -e 'any(.jobs[0].steps[]; .name == "Publish reviewable source to the clean reconstruction branch" and .conclusion == "failure")' "$work/jobs.json" >/dev/null^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0487932Z ^[[36;1m^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0488403Z ^[[36;1mgh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_ARTIFACT" --dir "$work/artifact"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0489230Z ^[[36;1mecho "${EXPECTED_SOURCE_TAR_SHA256}  $work/artifact/reconstructed-source.tar.gz" | sha256sum --check --strict^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0489939Z ^[[36;1mtar -xzf "$work/artifact/reconstructed-source.tar.gz" -C "$work/source" \^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0490483Z ^[[36;1m  .github/workflows/institutional-trade-qa.yml \^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0490932Z ^[[36;1m  .github/workflows/pr212-clean-reconstruction-gates.yml^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0491674Z ^[[36;1mecho "${EXPECTED_QA_WORKFLOW_SHA256}  $work/source/.github/workflows/institutional-trade-qa.yml" | sha256sum --check --strict^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0492670Z ^[[36;1mecho "${EXPECTED_GATE_WORKFLOW_SHA256}  $work/source/.github/workflows/pr212-clean-reconstruction-gates.yml" | sha256sum --check --strict^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0493321Z ^[[36;1m^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0493674Z ^[[36;1mdestination=ops/pr212-clean-reconstruction/workflow-blobs^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0494113Z ^[[36;1mmkdir -p "$destination"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0494686Z ^[[36;1mcp "$work/source/.github/workflows/institutional-trade-qa.yml" "$destination/institutional-trade-qa.yml"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0495582Z ^[[36;1mcp "$work/source/.github/workflows/pr212-clean-reconstruction-gates.yml" "$destination/pr212-clean-reconstruction-gates.yml"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0496311Z ^[[36;1msha256sum "$destination"/*.yml > "$destination/sha256.txt"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0496694Z ^[[36;1m^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0497205Z ^[[36;1mgit config user.name "github-actions[bot]"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0497719Z ^[[36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0498210Z ^[[36;1mgit add "$destination"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0498594Z ^[[36;1mgit commit -m "Stage exact tested PR 212 workflow blobs"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0499054Z ^[[36;1mgit push origin "HEAD:refs/heads/${STAGING_BRANCH}"^[[0m
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0554391Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0555146Z env:
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0558322Z   GH_TOKEN: ***
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0558735Z   STAGING_BRANCH: agent/pr212-clean-reconstruction-staging-20260730
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0559181Z   SOURCE_RUN_ID: 30557865903
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0559531Z   SOURCE_RUN_HEAD: 7b234d234ce2a2b91dd132b4196deeed69d58378
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0560019Z   SOURCE_ARTIFACT: pr212-clean-reconstruction-publication-30557865903
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0560634Z   EXPECTED_SOURCE_TAR_SHA256: eea13b75ed938fb1e7cc4025fdac1853fad3e288579c9791ca0b375372351072
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0561309Z   EXPECTED_QA_WORKFLOW_SHA256: 0ef8f185569594b6e21ca59477e800fa20bbfa726523561125cec5608b4638fd
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0562188Z   EXPECTED_GATE_WORKFLOW_SHA256: 71b68028a6baa519f25ae76d12ed6225cdc39ea9ea971e86bc2d7be60759a959
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:18.0562698Z ##[endgroup]
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:19.2131254Z /tmp/pr212-tested-workflow-blobs/artifact/reconstructed-source.tar.gz: OK
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:19.2213596Z /tmp/pr212-tested-workflow-blobs/source/.github/workflows/institutional-trade-qa.yml: OK
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:19.2231760Z /tmp/pr212-tested-workflow-blobs/source/.github/workflows/pr212-clean-reconstruction-gates.yml: OK
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:19.2545840Z [agent/pr212-clean-reconstruction-staging-20260730 179490b4] Stage exact tested PR 212 workflow blobs
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:19.2546610Z  3 files changed, 661 insertions(+)
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:19.2547469Z  create mode 100644 ops/pr212-clean-reconstruction/workflow-blobs/institutional-trade-qa.yml
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:19.2548449Z  create mode 100644 ops/pr212-clean-reconstruction/workflow-blobs/pr212-clean-reconstruction-gates.yml
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:00:19.2549425Z  create mode 100644 ops/pr212-clean-reconstruction/workflow-blobs/sha256.txt
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:05:23.5744173Z To https://github.com/ghuser29384/Website2
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:05:23.5745458Z  ! [remote rejected]   HEAD -> agent/pr212-clean-reconstruction-staging-20260730 (cannot lock ref 'refs/heads/agent/pr212-clean-reconstruction-staging-20260730': is at bd065d103e21de42419ae6509a17a1d5ffec54c7 but expected 6bd7bc9567fd72cb51d67786b6d2e6aa929ed4d7)
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:05:23.5746705Z error: failed to push some refs to 'https://github.com/ghuser29384/Website2'
+stage	Verify the exact tested run and stage its workflow blobs safely	2026-07-30T16:05:23.5772080Z ##[error]Process completed with exit code 1.
