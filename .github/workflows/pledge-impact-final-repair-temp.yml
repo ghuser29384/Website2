@@ -36,35 +36,37 @@ jobs:
                   raise SystemExit(f"Expected exactly one match in {path}; found {count}")
               target.write_text(source.replace(old, new, 1))
 
-          replace_once(
-              "src/components/pools/threshold-radar.tsx",
-              '        <strong>Make a conditional ${pledgeAmount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} pledge.</strong>',
-              '''        <strong>
-                  {`Make a conditional ${pledgeAmount.toLocaleString("en-US", {
-                    style: "currency",
-                    currency: "USD",
-                    maximumFractionDigits: 0,
-                  })} pledge.`}
-                </strong>''',
-          )
+          old_tsx = '        <strong>Make a conditional ${pledgeAmount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} pledge.</strong>'
+          new_tsx = "\n".join([
+              "        <strong>",
+              "          {`Make a conditional ${pledgeAmount.toLocaleString(\"en-US\", {",
+              "            style: \"currency\",",
+              "            currency: \"USD\",",
+              "            maximumFractionDigits: 0,",
+              "          })} pledge.`}",
+              "        </strong>",
+          ])
+          replace_once("src/components/pools/threshold-radar.tsx", old_tsx, new_tsx)
 
-          replace_once(
-              "src/components/pools/threshold-radar.module.css",
-              '''  .radar {
-                height: 700px;
-              }
-
-              .detailPanel {''',
-              '''  .radar {
-                height: 700px;
-              }
-
-              .satellite {
-                z-index: 10;
-              }
-
-              .detailPanel {''',
-          )
+          old_css = "\n".join([
+              "  .radar {",
+              "    height: 700px;",
+              "  }",
+              "",
+              "  .detailPanel {",
+          ])
+          new_css = "\n".join([
+              "  .radar {",
+              "    height: 700px;",
+              "  }",
+              "",
+              "  .satellite {",
+              "    z-index: 10;",
+              "  }",
+              "",
+              "  .detailPanel {",
+          ])
+          replace_once("src/components/pools/threshold-radar.module.css", old_css, new_css)
 
           replace_once(
               "src/lib/pledge-impact-integration-contract.test.ts",
