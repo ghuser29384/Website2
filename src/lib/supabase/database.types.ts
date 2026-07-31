@@ -25,6 +25,96 @@ type SupabaseMoralTradeOperationalUpdate = {
 export interface Database {
   public: {
     Tables: {
+      mpgf_pledge_impact_pool_campaign_map: {
+        Row: {
+          pool_public_key: string;
+          campaign_id: string;
+          mapping_version: string;
+          created_at: string;
+        };
+        Insert: {
+          pool_public_key: string;
+          campaign_id: string;
+          mapping_version?: string;
+          created_at?: string;
+        };
+        Update: {
+          pool_public_key?: string;
+          campaign_id?: string;
+          mapping_version?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      mpgf_pledge_impact_forecast_snapshots: {
+        Row: {
+          id: string;
+          pool_public_key: string;
+          campaign_id: string;
+          forecast_version: string;
+          model_version: string;
+          released_at: string;
+          expires_at: string;
+          pool_state_json: Json;
+          forecast_json: Json;
+          content_sha256: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          pool_public_key: string;
+          campaign_id: string;
+          forecast_version: string;
+          model_version: string;
+          released_at: string;
+          expires_at: string;
+          pool_state_json: Json;
+          forecast_json: Json;
+          content_sha256: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          pool_public_key?: string;
+          campaign_id?: string;
+          forecast_version?: string;
+          model_version?: string;
+          released_at?: string;
+          expires_at?: string;
+          pool_state_json?: Json;
+          forecast_json?: Json;
+          content_sha256?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      mpgf_pledge_impact_forecast_audit_events: {
+        Row: {
+          id: string;
+          snapshot_id: string;
+          event_type: "forecast_released";
+          event_payload: Json;
+          event_sha256: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          snapshot_id: string;
+          event_type: "forecast_released";
+          event_payload: Json;
+          event_sha256: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          snapshot_id?: string;
+          event_type?: "forecast_released";
+          event_payload?: Json;
+          event_sha256?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       profiles: {
         Row: {
           id: string;
@@ -11067,6 +11157,23 @@ export interface Database {
       };
     };
     Functions: {
+      mpgf_pledge_impact_contains_personalization: {
+        Args: { value: Json };
+        Returns: boolean;
+      };
+      release_mpgf_pledge_impact_forecast: {
+        Args: {
+          target_pool_public_key: string;
+          target_campaign_id: string;
+          target_forecast_version: string;
+          target_model_version: string;
+          target_released_at: string;
+          target_expires_at: string;
+          target_pool_state_json: Json;
+          target_forecast_json: Json;
+        };
+        Returns: string;
+      };
       viewer_can_access_collective: {
         Args: {
           target_collective_id: string;

@@ -26,6 +26,12 @@ import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import { MutualStepMark } from "@/components/brand/moral-trade-wordmark";
+import { PledgeImpactEstimate } from "@/components/pools/pledge-impact-estimate";
+import {
+  PLEDGE_IMPACT_REACT_CAMPAIGN_KEYS,
+  buildPledgeImpactContributionHref,
+  type PledgeImpactPoolPublicKey,
+} from "@/lib/mpgf/pledge-impact";
 
 import styles from "./threshold-radar.module.css";
 
@@ -45,6 +51,7 @@ type CampaignDetail = {
 
 type Campaign = {
   id: CampaignId;
+  poolPublicKey: PledgeImpactPoolPublicKey;
   tone: CampaignTone;
   status: string;
   title: string;
@@ -72,6 +79,7 @@ const pledgePositions = [0, 18, 34, 51, 69, 100] as const;
 const campaigns: Record<CampaignId, Campaign> = {
   priya: {
     id: "priya",
+    poolPublicKey: PLEDGE_IMPACT_REACT_CAMPAIGN_KEYS.priya,
     tone: "near",
     status: "Near threshold",
     title: "Help Priya take the biosecurity role.",
@@ -100,6 +108,7 @@ const campaigns: Record<CampaignId, Campaign> = {
   },
   wild: {
     id: "wild",
+    poolPublicKey: PLEDGE_IMPACT_REACT_CAMPAIGN_KEYS.wild,
     tone: "track",
     status: "On track",
     title: "Wild-animal suffering research pool",
@@ -110,7 +119,7 @@ const campaigns: Record<CampaignId, Campaign> = {
     remaining: "$8,200",
     remainingValue: 8200,
     contributors: 21,
-    deadline: "Jul 30",
+    deadline: "Aug 15",
     icon: Microscope,
     views: ["following"],
     cause: "animals",
@@ -128,15 +137,16 @@ const campaigns: Record<CampaignId, Campaign> = {
   },
   civic: {
     id: "civic",
+    poolPublicKey: PLEDGE_IMPACT_REACT_CAMPAIGN_KEYS.civic,
     tone: "track",
     status: "On track",
     title: "Open-source civic infrastructure",
     compactTitle: ["Open-source", "civic infrastructure"],
     amountLabel: "Remaining",
-    amount: "$12,540",
-    pledged: "$12,460",
-    remaining: "$12,540",
-    remainingValue: 12540,
+    amount: "$2,960",
+    pledged: "$12,040",
+    remaining: "$2,960",
+    remainingValue: 2960,
     contributors: 37,
     deadline: "Aug 5",
     icon: Bank,
@@ -148,7 +158,7 @@ const campaigns: Record<CampaignId, Campaign> = {
     details: [
       { kind: "administrator", label: ["Administrator"], value: ["Open Civic Fund"], verified: true },
       { kind: "evidence", label: ["Verification"], value: ["Public-benefit audit", "Complete"] },
-      { kind: "condition", label: ["Funding condition"], value: ["Release at", "$25,000"] },
+      { kind: "condition", label: ["Funding condition"], value: ["Release at", "$15,000"] },
       { kind: "release", label: ["Release schedule"], value: ["Milestone-based"] },
       { kind: "refund", label: ["Refund condition"], value: ["Milestones not", "approved"] },
     ],
@@ -156,15 +166,16 @@ const campaigns: Record<CampaignId, Campaign> = {
   },
   factory: {
     id: "factory",
+    poolPublicKey: PLEDGE_IMPACT_REACT_CAMPAIGN_KEYS.factory,
     tone: "risk",
     status: "At risk",
     title: "Reduce factory farming suffering",
     compactTitle: ["Reduce factory", "farming suffering"],
     amountLabel: "Remaining",
-    amount: "$34,800",
-    pledged: "$15,200",
-    remaining: "$34,800",
-    remainingValue: 34800,
+    amount: "$22,200",
+    pledged: "$11,800",
+    remaining: "$22,200",
+    remainingValue: 22200,
     contributors: 61,
     deadline: "Jul 18",
     icon: Barn,
@@ -176,7 +187,7 @@ const campaigns: Record<CampaignId, Campaign> = {
     details: [
       { kind: "administrator", label: ["Administrator"], value: ["Farmed Animal Fund"], verified: true },
       { kind: "evidence", label: ["Program review"], value: ["Partner evidence", "Verified"] },
-      { kind: "condition", label: ["Funding condition"], value: ["Release at", "$50,000"] },
+      { kind: "condition", label: ["Funding condition"], value: ["Release at", "$34,000"] },
       { kind: "release", label: ["Release schedule"], value: ["At program start"] },
       { kind: "refund", label: ["Refund condition"], value: ["Program not", "launched"] },
     ],
@@ -254,17 +265,13 @@ export function ThresholdRadar() {
   const pledgePosition = customPledge === null
     ? pledgePositions[pledgeIndex]
     : Math.min(100, Math.max(0, (customPledge / 250) * 100));
-  const remainingAfterPledge = Math.max(0, selected.remainingValue - pledgeAmount);
-
   const detailTitle = useMemo(() => selected.title.replace(/\.$/, ""), [selected.title]);
-  const impactRing = selected.tone === "near" ? "near-threshold" : selected.status.toLowerCase();
-
   const pledgeContents = (
     <>
       <LockSimpleOpen aria-hidden="true" size={35} weight="thin" />
       <span>
-        <strong>Pledge ${pledgeAmount} conditionally.</strong>
-        <small>No charge unless conditions are met.</small>
+        <strong>Make a conditional ${pledgeAmount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} pledge.</strong>
+        <small>Moving the slider has not saved a pledge.</small>
       </span>
     </>
   );
@@ -543,8 +550,8 @@ export function ThresholdRadar() {
 
       <section className={styles.pledgeTester} aria-labelledby="pledge-heading">
         <div className={styles.pledgeIntro}>
-          <h2 id="pledge-heading">Test your pledge.</h2>
-          <p>Move the slider to see the impact.</p>
+          <h2 id="pledge-heading">Preview your pledge impact.</h2>
+          <p>Compare the proposed amount with the latest released forecast.</p>
           <Link href="/how-it-works">How conditional pledging works <ArrowRight aria-hidden="true" size={14} /></Link>
         </div>
 
@@ -585,21 +592,21 @@ export function ThresholdRadar() {
               </span>
             ))}
           </div>
-          <div className={styles.pledgeImpact}>
-            <Info aria-hidden="true" size={25} weight="thin" />
-            <span>
-              This amount would reduce the remaining gap to <strong>${remainingAfterPledge.toLocaleString("en-US")}.</strong>
-              <small>This campaign would remain in the <em>{impactRing}</em> ring.</small>
-            </span>
-          </div>
-          <p className={styles.disclaimer}>Moral Trade is a marketplace for conditional funding. Not financial advice.</p>
+          <PledgeImpactEstimate
+            onApplyRecommendation={(amountDollars) => {
+              setCustomPledge(Math.round(amountDollars));
+              setOtherAmountDraft(String(Math.round(amountDollars)));
+            }}
+            pledgeAmountDollars={pledgeAmount}
+            poolPublicKey={selected.poolPublicKey}
+          />
         </div>
 
         <div className={styles.pledgeActions}>
           {pledgeAmount > 0 ? (
             <Link
               className={styles.pledgeButton}
-              href={`/create?mode=back&campaign=${selected.id}&amount=${pledgeAmount}`}
+              href={buildPledgeImpactContributionHref({ amountCents: pledgeAmount * 100, poolPublicKey: selected.poolPublicKey, source: "threshold-radar" })}
             >
               {pledgeContents}
             </Link>

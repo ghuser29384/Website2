@@ -1,0 +1,222 @@
+name: Pledge impact estimate gates
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/pledge-impact-estimate-gates.yml"
+      - "public/moral-trade-discover.html"
+      - "public/moral-trade-pledge-impact.css"
+      - "public/moral-trade-pledge-impact.js"
+      - "public/discover/payload/**"
+      - "scripts/pack-discover-payload.mjs"
+      - "src/app/api/mpgf/pledge-impact/**"
+      - "src/app/globals.css"
+      - "src/app/mpgf/contribute/page.tsx"
+      - "src/components/mpgf/mpgf-console.tsx"
+      - "src/components/pools/pledge-impact-estimate.tsx"
+      - "src/components/pools/threshold-radar.module.css"
+      - "src/components/pools/threshold-radar.tsx"
+      - "src/discover/moral-trade-discover.source.html"
+      - "src/lib/mpgf/pledge-impact*.ts"
+      - "src/lib/pledge-impact-integration-contract.test.ts"
+      - "src/lib/supabase/database.types.ts"
+      - "supabase/migrations/20260731120000_mpgf_pledge_impact_forecasts.sql"
+      - "supabase/schema.sql"
+      - "supabase/tests/mpgf_pledge_impact_forecasts.sql"
+      - "tests/pledge-impact-estimate.spec.ts"
+  push:
+    branches:
+      - feature/pledge-impact-estimate-20260731
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pledge-impact-estimate-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-gates:
+    name: Test, lint, build, payload, and rendered QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused pledge-impact tests
+        id: focused_tests
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          mkdir -p qa-results
+          node --import tsx --test \
+            src/lib/mpgf/pledge-impact.test.ts \
+            src/lib/mpgf/pledge-impact-contribution-prefill.test.ts \
+            src/lib/pledge-impact-integration-contract.test.ts \
+            2>&1 | tee qa-results/focused-tests.log
+
+      - name: Run complete repository tests
+        id: repository_tests
+        continue-on-error: true
+        run: npm test > qa-results/repository-tests.log 2>&1
+
+      - name: Run complete ESLint
+        id: lint
+        continue-on-error: true
+        run: npm run lint -- --quiet > qa-results/lint.log 2>&1
+
+      - name: Verify deterministic Discover payload
+        id: payload
+        continue-on-error: true
+        run: npm run verify:discover > qa-results/discover-payload.log 2>&1
+
+      - name: Build production application
+        id: build
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build > qa-results/production-build.log 2>&1
+
+      - name: Install Chromium
+        if: always()
+        run: npx playwright install --with-deps chromium
+
+      - name: Run rendered desktop and mobile Playwright gates
+        id: rendered
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npx playwright test tests/pledge-impact-estimate.spec.ts --reporter=line \
+            2>&1 | tee qa-results/rendered-playwright.log
+
+      - name: Check exact PR diff
+        id: diff
+        continue-on-error: true
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base_sha="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-$(git rev-parse HEAD^)}}"
+          git diff --check "$base_sha" "$GITHUB_SHA" > qa-results/diff-check.log 2>&1
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pledge-impact-release-evidence-${{ github.run_id }}
+          path: |
+            qa-results/**
+            test-results/pledge-impact-*.png
+            test-results/**/trace.zip
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Require every release gate
+        if: always()
+        shell: bash
+        env:
+          FOCUSED: ${{ steps.focused_tests.outcome }}
+          TESTS: ${{ steps.repository_tests.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          PAYLOAD: ${{ steps.payload.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          RENDERED: ${{ steps.rendered.outcome }}
+          DIFF: ${{ steps.diff.outcome }}
+        run: |
+          failed=0
+          report() {
+            local label="$1" outcome="$2" log="$3"
+            if [[ "$outcome" != "success" ]]; then
+              failed=1
+              echo "::error title=${label} failed::Last 180 lines follow"
+              tail -n 180 "$log" || true
+            fi
+          }
+          report "Focused pledge-impact tests" "$FOCUSED" qa-results/focused-tests.log
+          report "Repository tests" "$TESTS" qa-results/repository-tests.log
+          report "ESLint" "$LINT" qa-results/lint.log
+          report "Discover payload verification" "$PAYLOAD" qa-results/discover-payload.log
+          report "Production build" "$BUILD" qa-results/production-build.log
+          report "Rendered Playwright QA" "$RENDERED" qa-results/rendered-playwright.log
+          report "Diff check" "$DIFF" qa-results/diff-check.log
+          exit "$failed"
+
+  qa-database:
+    name: QA migration and transactional SQL regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+    steps:
+      - name: Check out exact head
+        uses: actions/checkout@v4
+
+      - name: Validate exact MoralTrade QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected = os.environ["EXPECTED_QA_REF"]
+          if expected not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL outside the exact MoralTrade QA project.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit(f"Refusing unexpected database host: {parsed.hostname}")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Apply pledge-impact migration in QA
+        run: |
+          set -o pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/migrations/20260731120000_mpgf_pledge_impact_forecasts.sql \
+            2>&1 | tee qa-migration.log
+
+      - name: Run transactional pledge-impact SQL regression
+        run: |
+          set -o pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_pledge_impact_forecasts.sql \
+            2>&1 | tee qa-sql-regression.log
+
+      - name: Upload QA database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pledge-impact-qa-database-${{ github.run_id }}
+          path: |
+            qa-migration.log
+            qa-sql-regression.log
+          if-no-files-found: warn
+          retention-days: 30

@@ -67,7 +67,10 @@ import type {
 type MpgfConsoleTab = "contribute" | "pools" | "ballot" | "summary";
 
 interface MpgfConsoleProps {
+  contributionPrefillNotice?: string;
   initialPoolProposalDeadline?: string;
+  initialPublicGoodsCampaignId?: string;
+  initialPublicGoodsPledgeAmount?: number;
   initialTab?: MpgfConsoleTab;
   participantState?: MpgfParticipantState;
   manualEvidenceReadiness?: MpgfManualEvidenceReadiness;
@@ -435,7 +438,10 @@ function donateHrefFromPayload(payload: unknown) {
 }
 
 export function MpgfConsole({
+  contributionPrefillNotice,
   initialPoolProposalDeadline = "",
+  initialPublicGoodsCampaignId = "campaign-global-health-basic-needs",
+  initialPublicGoodsPledgeAmount = 25,
   initialTab = "contribute",
   manualEvidenceReadiness,
   participantState,
@@ -450,8 +456,8 @@ export function MpgfConsole({
   >(null);
   const [oneTimePledge, setOneTimePledge] = useState(25);
   const [monthlyPledge, setMonthlyPledge] = useState(10);
-  const [publicGoodsCampaignId, setPublicGoodsCampaignId] = useState("campaign-global-health-basic-needs");
-  const [publicGoodsPledgeAmount, setPublicGoodsPledgeAmount] = useState(25);
+  const [publicGoodsCampaignId, setPublicGoodsCampaignId] = useState(initialPublicGoodsCampaignId);
+  const [publicGoodsPledgeAmount, setPublicGoodsPledgeAmount] = useState(initialPublicGoodsPledgeAmount);
   const [publicGoodsCounterpartBuckets, setPublicGoodsCounterpartBuckets] = useState(
     "animal-welfare, existential-risk, institutional-integrity",
   );
@@ -1203,6 +1209,15 @@ export function MpgfConsole({
 
       {activeTab === "contribute" ? (
         <div className="mpgf-workflow-grid">
+          {contributionPrefillNotice ? (
+            <div
+              className="status-banner mpgf-contribution-prefill"
+              data-testid="mpgf-contribution-prefill"
+              role="status"
+            >
+              {contributionPrefillNotice}
+            </div>
+          ) : null}
           <section className="mpgf-panel mpgf-panel-primary">
             <p className="eyebrow">1. Every.org fast route</p>
             <h2>Donate through webhook auto-import</h2>

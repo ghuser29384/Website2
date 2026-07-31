@@ -1,5 +1,5 @@
 {
-  "version": "ad5eb38b31088f550b45e71dbe15dcc6d460506e",
+  "version": "60dc968f0785c9959cb1abf14e787c9431021880",
   "encoding": "gzip+base64",
   "parts": [
     "0.txt",
@@ -10,7 +10,7 @@
     "5.txt",
     "6.txt"
   ],
-  "sourceBytes": 233204,
-  "gzipBytes": 51478,
-  "encodedCharacters": 68640
+  "sourceBytes": 235291,
+  "gzipBytes": 52223,
+  "encodedCharacters": 69632
 }
