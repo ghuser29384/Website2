@@ -1,4 +1,23 @@
-export function getPrimaryNavLinks(_isAuthenticated = false) {
+export interface SiteNavRouteItem {
+  href: string;
+  label: string;
+  description?: string;
+  section?: string;
+}
+
+export interface SiteNavLinkItem {
+  href?: string;
+  label: string;
+  summary?: string;
+  items?: SiteNavRouteItem[];
+}
+
+export interface SiteFooterLinkGroup {
+  title: string;
+  links: SiteNavRouteItem[];
+}
+
+export function getPrimaryNavLinks(_isAuthenticated = false): SiteNavLinkItem[] {
   return [
     { href: "/feed", label: "Feed" },
     { href: "/discover", label: "Discover" },
@@ -26,7 +45,7 @@ export function getTopbarActions(isAuthenticated = false) {
   };
 }
 
-export const FOOTER_LINK_GROUPS = [
+export const FOOTER_LINK_GROUPS: SiteFooterLinkGroup[] = [
   {
     title: "Marketplace",
     links: [
@@ -69,4 +88,4 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/terms", label: "Terms" },
     ],
   },
-] as const;
+];
