@@ -28,11 +28,10 @@ concurrency:
 
 jobs:
   exact-head-browser-gate:
-    if: >-
-      (github.event_name == 'push' && github.ref_name == 'ops/materialize-marketplace-delta-final-20260730') ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
-       github.head_ref == 'ops/materialize-marketplace-delta-final-20260730')
+    # Superseded by marketplace-delta-exact-browser-gate.yml. Keep this
+    # historical workflow inert so one PR update cannot run two writers against
+    # the same product candidate and QA fixture.
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
