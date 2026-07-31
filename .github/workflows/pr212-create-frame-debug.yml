@@ -1,0 +1,196 @@
+name: PR 212 Create iframe debug
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-ops-20260730
+    paths:
+      - .github/workflows/pr212-create-frame-debug.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr212-create-frame-debug
+  cancel-in-progress: false
+
+jobs:
+  debug:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CANDIDATE_SHA: 6e4deac3530e8f0989b457d082e6efd11b2fa34e
+      CANDIDATE_TREE: 94309dbb19b2a93d68f1728f2452262ecb4354f7
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      INSTITUTIONAL_TRADES_ENABLED: "true"
+      INSTITUTIONAL_POOLS_ENABLED: "true"
+      INSTITUTIONAL_ENTERPRISE_API_ENABLED: "true"
+      INSTITUTIONAL_WEBHOOKS_ENABLED: "true"
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pr212-create-frame-debug/screenshots
+          npm start -- --hostname 127.0.0.1 --port 3000 > pr212-create-frame-debug/server.log 2>&1 &
+          echo $! > pr212-create-frame-debug/server.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3000/walkthrough >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat pr212-create-frame-debug/server.log >&2
+          exit 1
+
+      - name: Inspect Create iframe deeply on desktop and mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .pr212-create-frame-debug.mjs <<'NODE'
+          import { chromium } from "@playwright/test";
+          import fs from "node:fs/promises";
+
+          const baseURL = "http://127.0.0.1:3000";
+          const browser = await chromium.launch({ headless: true });
+          const devices = [
+            { name: "desktop", viewport: { width: 1440, height: 1000 } },
+            { name: "mobile", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+          ];
+          const reports = [];
+
+          for (const device of devices) {
+            const context = await browser.newContext({ viewport: device.viewport, isMobile: device.isMobile, hasTouch: device.hasTouch });
+            const bootstrap = await context.newPage();
+            await bootstrap.goto(`${baseURL}/walkthrough`, { waitUntil: "networkidle" });
+            await bootstrap.close();
+
+            const page = await context.newPage();
+            const consoleMessages = [];
+            const pageErrors = [];
+            const responses = [];
+            page.on("console", (message) => consoleMessages.push({ type: message.type(), text: message.text() }));
+            page.on("pageerror", (error) => pageErrors.push(String(error)));
+            page.on("response", (response) => {
+              if (response.status() >= 400) responses.push({ status: response.status(), url: response.url() });
+            });
+
+            const response = await page.goto(`${baseURL}/trades/new`, { waitUntil: "networkidle" });
+            await page.screenshot({ path: `pr212-create-frame-debug/screenshots/${device.name}-parent.png`, fullPage: true });
+
+            const iframe = page.locator('iframe[data-create-interface-frame="true"]');
+            const iframeCount = await iframe.count();
+            const attributes = iframeCount ? await iframe.first().evaluate((node) => ({
+              title: node.getAttribute("title"),
+              src: node.getAttribute("src"),
+              srcdocLength: node.getAttribute("srcdoc")?.length ?? 0,
+              sandbox: node.getAttribute("sandbox"),
+              clientWidth: node.clientWidth,
+              clientHeight: node.clientHeight,
+              offsetParent: Boolean(node.offsetParent),
+            })) : null;
+
+            const pageFrames = page.frames().map((frame) => ({ name: frame.name(), url: frame.url() }));
+            const contentFrame = iframeCount ? await iframe.first().contentFrame() : null;
+            let frameState = null;
+            if (contentFrame) {
+              await contentFrame.waitForLoadState("domcontentloaded").catch(() => {});
+              await contentFrame.waitForTimeout(2500);
+              frameState = await contentFrame.evaluate(() => ({
+                readyState: document.readyState,
+                title: document.title,
+                documentElementLength: document.documentElement?.outerHTML.length ?? 0,
+                bodyHTMLLength: document.body?.innerHTML.length ?? 0,
+                bodyText: document.body?.innerText ?? "",
+                buttonCount: document.querySelectorAll("button").length,
+                anchorCount: document.querySelectorAll("a").length,
+                formCount: document.querySelectorAll("form").length,
+                hiddenBody: document.body ? getComputedStyle(document.body).display === "none" || getComputedStyle(document.body).visibility === "hidden" : null,
+                bodyOpacity: document.body ? getComputedStyle(document.body).opacity : null,
+                firstButtons: Array.from(document.querySelectorAll("button")).slice(0, 20).map((button) => ({
+                  text: button.textContent?.trim() ?? "",
+                  hidden: button.hidden,
+                  display: getComputedStyle(button).display,
+                  visibility: getComputedStyle(button).visibility,
+                  disabled: button.disabled,
+                })),
+                globalErrorText: document.querySelector('[role="alert"], .error, [data-error]')?.textContent?.trim() ?? null,
+              }));
+              await contentFrame.locator("body").screenshot({ path: `pr212-create-frame-debug/screenshots/${device.name}-frame-body.png` }).catch(() => {});
+            }
+
+            reports.push({
+              device: device.name,
+              responseStatus: response?.status() ?? null,
+              finalURL: page.url(),
+              iframeCount,
+              attributes,
+              pageFrames,
+              frameState,
+              consoleMessages,
+              pageErrors,
+              errorResponses: responses,
+            });
+
+            await page.close();
+            await context.close();
+          }
+
+          await fs.writeFile("pr212-create-frame-debug/report.json", `${JSON.stringify(reports, null, 2)}\n`);
+          await browser.close();
+          NODE
+          node .pr212-create-frame-debug.mjs
+          rm -f .pr212-create-frame-debug.mjs
+          cat pr212-create-frame-debug/report.json
+
+      - name: Stop exact production build
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f pr212-create-frame-debug/server.pid ]]; then kill "$(cat pr212-create-frame-debug/server.pid)" 2>/dev/null || true; fi
+          rm -f .pr212-create-frame-debug.mjs
+
+      - name: Upload Create-frame diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-create-frame-debug-${{ github.run_id }}
+          path: pr212-create-frame-debug
+          if-no-files-found: error
+          retention-days: 14
