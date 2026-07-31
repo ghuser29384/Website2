@@ -3,6 +3,8 @@ import { createServiceClient } from "@/lib/supabase/server";
 export interface ConditionalRedirectPageData {
   available: boolean;
   destinations: Array<Record<string, any>>;
+  destinationRequestsAvailable: boolean;
+  destinationRequests: Array<Record<string, any>>;
   offers: Array<Record<string, any>>;
   creatorOffers: Array<Record<string, any>>;
   viewerCandidates: Array<Record<string, any>>;
@@ -18,6 +20,8 @@ function unavailablePageData(): ConditionalRedirectPageData {
   return {
     available: false,
     destinations: [],
+    destinationRequestsAvailable: false,
+    destinationRequests: [],
     offers: [],
     creatorOffers: [],
     viewerCandidates: [],
@@ -25,9 +29,22 @@ function unavailablePageData(): ConditionalRedirectPageData {
   };
 }
 
+function isMissingDestinationRequestRelation(error: Record<string, unknown> | null | undefined) {
+  if (!error) return false;
+  const code = String(error.code ?? "");
+  const message = String(error.message ?? "").toLowerCase();
+  return (
+    code === "42P01" ||
+    code === "PGRST205" ||
+    (message.includes("conditional_payment_destination_requests") &&
+      (message.includes("does not exist") || message.includes("schema cache")))
+  );
+}
+
 export async function loadConditionalRedirectPageData(
   input: {
     livemode: boolean;
+    destinationEnvironment: "test" | "live";
     nowIso: string;
     viewerId: string;
   },
@@ -37,6 +54,7 @@ export async function loadConditionalRedirectPageData(
     const supabase = (dependencies.createClient ?? createServiceClient)() as any;
     const [
       destinationResult,
+      destinationRequestResult,
       offerResult,
       creatorOfferResult,
       viewerCandidateResult,
@@ -48,6 +66,15 @@ export async function loadConditionalRedirectPageData(
         .eq("livemode", input.livemode)
         .eq("status", "active")
         .order("display_name"),
+      supabase
+        .from("conditional_payment_destination_requests")
+        .select(
+          "id, display_name, nonprofit_slug, nonprofit_ein, website_url, status, review_notes, destination_id, created_at",
+        )
+        .eq("requester_profile_id", input.viewerId)
+        .eq("environment", input.destinationEnvironment)
+        .order("created_at", { ascending: false })
+        .limit(12),
       supabase
         .from("conditional_redirect_offers")
         .select("*, fallback:conditional_payment_destinations!fallback_destination_id(display_name), matched:conditional_payment_destinations!matched_destination_id(display_name)")
@@ -74,21 +101,44 @@ export async function loadConditionalRedirectPageData(
         .limit(24),
     ]);
 
-    const results = [
+    const coreResults = [
       destinationResult,
       offerResult,
       creatorOfferResult,
       viewerCandidateResult,
       settlementLegResult,
     ];
-    const queryError = results.find((result) => result.error)?.error;
+    const queryError = coreResults.find((result) => result.error)?.error;
     if (queryError) {
       throw new Error(`Conditional-donation data could not be read: ${queryError.message}`);
+    }
+
+    const destinationRequestError = destinationRequestResult.error as
+      | Record<string, unknown>
+      | null
+      | undefined;
+    if (
+      destinationRequestError &&
+      !isMissingDestinationRequestRelation(destinationRequestError)
+    ) {
+      throw new Error(
+        `Donation Upgrade destination requests could not be read: ${String(
+          destinationRequestError.message ?? "unknown data-access error",
+        )}`,
+      );
+    }
+    if (destinationRequestError) {
+      (dependencies.warn ?? console.warn)(
+        "[conditional-redirect] destination-review schema is unavailable",
+        { message: String(destinationRequestError.message ?? "missing relation") },
+      );
     }
 
     return {
       available: true,
       destinations: destinationResult.data ?? [],
+      destinationRequestsAvailable: !destinationRequestError,
+      destinationRequests: destinationRequestResult.data ?? [],
       offers: offerResult.data ?? [],
       creatorOffers: creatorOfferResult.data ?? [],
       viewerCandidates: viewerCandidateResult.data ?? [],

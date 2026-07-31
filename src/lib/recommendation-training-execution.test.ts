@@ -19,7 +19,7 @@ test("a natural 12:30 UTC invocation receives a stable daily idempotency slot", 
   const context = buildRecommendationTrainingExecutionContext(
     request,
     canonicalRuntime,
-    { VERCEL_DEPLOYMENT_ID: "dpl_canonical" },
+    { NODE_ENV: "test", VERCEL_DEPLOYMENT_ID: "dpl_canonical" },
     new Date("2026-07-30T12:30:48.000Z"),
   );
 
@@ -37,7 +37,7 @@ test("manual authorized execution is not assigned a natural cron slot", () => {
   const context = buildRecommendationTrainingExecutionContext(
     request,
     canonicalRuntime,
-    {},
+    { NODE_ENV: "test" },
     new Date("2026-07-30T15:00:00.000Z"),
   );
 
@@ -53,7 +53,7 @@ test("an unrelated cron schedule cannot collide with the daily A1 slot", () => {
   const context = buildRecommendationTrainingExecutionContext(
     request,
     canonicalRuntime,
-    {},
+    { NODE_ENV: "test" },
     new Date("2026-07-30T12:30:00.000Z"),
   );
 

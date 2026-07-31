@@ -1,0 +1,133 @@
+name: Pooled donation settlement gates
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .env.example
+      - docs/trade-donation-pooled-settlement-runbook.md
+      - docs/donation-upgrade-live-*.md
+      - src/app/admin/trade-donation-pools/**
+      - src/app/api/connectors/every-org/**
+      - src/app/api/donation-upgrade/**
+      - src/app/api/stripe/webhook/route.ts
+      - src/app/donation-offsets/conditional/actions.ts
+      - src/app/trade-donation-actions-base.ts
+      - src/app/trade-donation-pool-actions.ts
+      - src/app/trades/new/**
+      - src/components/core-trade/trade-agreement-stage.tsx
+      - src/components/core-trade/trade-donation-agreement-stage.tsx
+      - src/components/core-trade/trade-donation-pool-agreement-stage.tsx
+      - src/lib/every-org-nonprofit*.ts
+      - src/lib/payments/conditional-redirect-page-data.ts
+      - src/lib/payments/donation-upgrade-*.ts
+      - src/lib/payments/trade-donation-pool-webhook.ts
+      - src/lib/trade-donation-pool*.ts
+      - supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
+      - supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+      - supabase/migrations/20260731123000_donation_upgrade_public_provider_conformance_gates.sql
+      - .github/workflows/donation-upgrade-final-gates.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pooled-donation-settlement-gates-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  export-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Package exact source for release inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee /tmp/donation-upgrade-source.ref
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.next \
+            --exclude=output \
+            -czf /tmp/donation-upgrade-source.tar.gz .
+          sha256sum /tmp/donation-upgrade-source.tar.gz | tee /tmp/donation-upgrade-source.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: donation-upgrade-source-${{ github.run_id }}
+          path: |
+            /tmp/donation-upgrade-source.tar.gz
+            /tmp/donation-upgrade-source.ref
+            /tmp/donation-upgrade-source.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Focused Donation Upgrade and pooled-settlement tests
+        run: |
+          node --import tsx --test \
+            src/lib/every-org-nonprofit.test.ts \
+            src/lib/payments/donation-upgrade-destination-environment.test.ts \
+            src/lib/payments/donation-upgrade-fallback-source-contract.test.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts
+
+      - name: Complete repository tests
+        run: npm test
+
+      - name: Absolute TypeScript gate
+        run: npx tsc --noEmit
+
+      - name: Absolute ESLint gate
+        run: npm run lint
+
+      - name: Production build with money movement disabled
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+        run: npm run build
+
+      - name: Migration integrity and exact diff hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination_migration="supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql"
+          gate_migration="supabase/migrations/20260731123000_donation_upgrade_public_provider_conformance_gates.sql"
+
+          test "$(grep -cF 'create or replace function public.submit_conditional_payment_destination_request(' "$destination_migration")" = "1"
+          test "$(grep -cF 'create or replace function public.review_trade_donation_pool_gate(' "$destination_migration")" = "1"
+          ! grep -F 'conditional-payment-destination-_at' "$destination_migration"
+          ! grep -F 'p_environm,' "$destination_migration"
+
+          grep -F "'every_org_live_flow_verified'" "$gate_migration" >/dev/null
+          grep -F "'stripe_live_account_ready'" "$gate_migration" >/dev/null
+          grep -F "'every_org_written_approval'" "$gate_migration" >/dev/null
+          grep -F "'stripe_account_and_product_review'" "$gate_migration" >/dev/null
+          grep -F "'externalWrittenConfirmationRequired', false" "$gate_migration" >/dev/null
+
+          git fetch origin main
+          git diff --check "$(git merge-base origin/main HEAD)"...HEAD

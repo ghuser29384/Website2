@@ -1,9 +1,14 @@
 import { getViewer } from "@/lib/app-data";
+import {
+  isPooledTradeDonationTerm,
+  loadTradeDonationPoolAgreementContext,
+} from "@/lib/trade-donation-pool";
 import { loadTradeDonationAgreementContext } from "@/lib/trade-donation";
 
 import pageStyles from "./trade-agreement-page-visibility.module.css";
 import { TradeAgreementStage as BaseTradeAgreementStage } from "./trade-agreement-stage-base";
 import { TradeDonationAgreementStage } from "./trade-donation-agreement-stage";
+import { TradeDonationPoolAgreementStage } from "./trade-donation-pool-agreement-stage";
 import { TradeOutcomeFeedback } from "./trade-outcome-feedback";
 
 type TradeAgreementStageProps = Parameters<typeof BaseTradeAgreementStage>[0];
@@ -13,16 +18,29 @@ export async function TradeAgreementStage(props: TradeAgreementStageProps) {
     loadTradeDonationAgreementContext(props.agreementId),
     getViewer(),
   ]);
+  const poolContext =
+    context?.term && isPooledTradeDonationTerm(context.term)
+      ? await loadTradeDonationPoolAgreementContext(props.agreementId)
+      : null;
   const stage = context ? (
-    <TradeDonationAgreementStage
-      baseProps={props}
-      context={
-        !context.term && !context.provider.ready
-          ? { ...context, eligible: false }
-          : context
-      }
-      viewerUserId={viewer?.authUser.id ?? ""}
-    />
+    poolContext ? (
+      <TradeDonationPoolAgreementStage
+        baseProps={props}
+        context={context}
+        poolContext={poolContext}
+        viewerUserId={viewer?.authUser.id ?? ""}
+      />
+    ) : (
+      <TradeDonationAgreementStage
+        baseProps={props}
+        context={
+          !context.term && !context.provider.ready
+            ? { ...context, eligible: false }
+            : context
+        }
+        viewerUserId={viewer?.authUser.id ?? ""}
+      />
+    )
   ) : (
     <BaseTradeAgreementStage {...props} />
   );

@@ -5,12 +5,17 @@ import {
   createConditionalRedirectOfferAction,
   joinConditionalRedirectOfferAction,
   reauthorizeConditionalRedirectAction,
+  requestConditionalPaymentDestinationAction,
   withdrawConditionalRedirectCandidateAction,
 } from "@/app/donation-offsets/conditional/actions";
 import {
   DeadlineField,
   LocalDateTime,
 } from "@/app/donation-offsets/conditional/deadline-field";
+import {
+  DonationUpgradeFallbackSearch,
+  type DonationUpgradeDestinationRequest,
+} from "@/app/trades/new/donation-upgrade-fallback-search";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { Breadcrumbs, PageHero, SectionHeader } from "@/components/ui/page-primitives";
 import { requireViewer } from "@/lib/app-data";
@@ -21,6 +26,7 @@ import {
 } from "@/lib/payments/conditional-redirect";
 import { loadConditionalRedirectPageData } from "@/lib/payments/conditional-redirect-page-data";
 import { getConditionalPaymentReadiness } from "@/lib/payments/conditional-readiness";
+import { getDonationUpgradeDestinationEnvironment } from "@/lib/payments/donation-upgrade-destination-environment";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
 function money(cents: number) {
@@ -39,6 +45,13 @@ async function loadRequestTime() {
   return Date.now();
 }
 
+function findGiveWellDestinationId(destinations: Array<Record<string, any>>) {
+  const exact = destinations.find((destination) =>
+    /givewell.*top charities|top charities fund/i.test(String(destination.display_name ?? "")),
+  );
+  return exact ? String(exact.id) : "";
+}
+
 export async function ConditionalDonationCreate({
   params,
 }: {
@@ -48,11 +61,14 @@ export async function ConditionalDonationCreate({
   const error = queryValue(params.error);
   const setup = queryValue(params.setup);
   const change = queryValue(params.change);
+  const destinationRequest = queryValue(params.destination_request);
   const readiness = await getConditionalPaymentReadiness();
+  const destinationEnvironment = getDonationUpgradeDestinationEnvironment();
   const now = await loadRequestTime();
   const nowIso = new Date(now).toISOString();
   const pageData = await loadConditionalRedirectPageData({
     livemode: readiness.livemode,
+    destinationEnvironment,
     nowIso,
     viewerId: viewer.authUser.id,
   });
@@ -60,6 +76,7 @@ export async function ConditionalDonationCreate({
   const offerRows = pageData.offers;
   const creatorOfferRows = pageData.creatorOffers;
   const candidateRows = pageData.viewerCandidates;
+  const defaultMatchedDestinationId = findGiveWellDestinationId(destinationRows);
   const candidateByOfferId = new Map(
     candidateRows.map((candidate) => [String(candidate.offer_id), candidate]),
   );
@@ -136,6 +153,12 @@ export async function ConditionalDonationCreate({
           </div>
         ) : null}
         {error ? <div className="status-banner status-banner-error">{error}</div> : null}
+        {destinationRequest === "submitted" ? (
+          <div className="status-banner" role="status">
+            Charity review requested. No payment authorization was created. Once approved,
+            the charity will appear in the destination selectors.
+          </div>
+        ) : null}
         {setup === "success" ? (
           <div className="status-banner">
             Authorization received. The signed Stripe webhook will confirm and publish the offer.
@@ -151,6 +174,29 @@ export async function ConditionalDonationCreate({
           <div className="status-banner">Your matcher authorization was withdrawn before settlement.</div>
         ) : null}
 
+        <section className="section section-subtle" aria-labelledby="request-charity-heading">
+          <SectionHeader
+            eyebrow="Charities"
+            id="request-charity-heading"
+            title="Use an eligible charity that is not listed yet"
+          >
+            Search the Every.org directory and request review. Moral Trade freezes the exact
+            provider identity and an operator approves or rejects it before it can be selected.
+            Requesting review never creates a mandate, charge, or donation.
+          </SectionHeader>
+          {pageData.destinationRequestsAvailable ? (
+            <DonationUpgradeFallbackSearch
+              action={requestConditionalPaymentDestinationAction}
+              requests={pageData.destinationRequests as DonationUpgradeDestinationRequest[]}
+            />
+          ) : (
+            <div className="status-banner status-banner-error" role="status">
+              Charity review requests are temporarily unavailable. Existing approved destinations
+              may still be used when payment authorization is enabled.
+            </div>
+          )}
+        </section>
+
         <section className="section section-white" aria-labelledby="create-conditional-heading">
           <SectionHeader
             eyebrow="Create"
@@ -165,7 +211,7 @@ export async function ConditionalDonationCreate({
               </label>
               <label>
                 Amount someone adds
-                <input name="matcher_amount" type="number" min="0.50" step="0.01" defaultValue="5.00" required />
+                <input name="matcher_amount" type="number" min="0.50" step="0.01" defaultValue="10.00" required />
               </label>
               <label>
                 If nobody matches
@@ -178,7 +224,11 @@ export async function ConditionalDonationCreate({
               </label>
               <label>
                 If someone matches
-                <select name="matched_destination_id" required defaultValue="">
+                <select
+                  name="matched_destination_id"
+                  required
+                  defaultValue={defaultMatchedDestinationId}
+                >
                   <option value="" disabled>Choose the matched charity</option>
                   {destinationRows.map((destination) => (
                     <option key={destination.id} value={destination.id}>{destination.display_name}</option>
