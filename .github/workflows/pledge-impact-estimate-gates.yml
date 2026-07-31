@@ -230,7 +230,7 @@ jobs:
         with:
           name: pledge-impact-qa-database-${{ github.run_id }}
           path: |
-            qa-pled-impact-transaction.sql
+            qa-pledge-impact-transaction.sql
             qa-sql-regression.log
           if-no-files-found: warn
           retention-days: 30
