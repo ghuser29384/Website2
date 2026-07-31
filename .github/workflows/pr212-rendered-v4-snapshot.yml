@@ -1,0 +1,37 @@
+name: PR 212 rendered v4 snapshot
+
+on:
+  push:
+    branches:
+      - agent/pr212-rendered-v4-snapshot-20260731
+    paths:
+      - .github/workflows/pr212-rendered-v4-snapshot.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HEAD: ed7faad2442f6b2582874665cf8d5cb806ea022b
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record current exact-run state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-rendered-v4-snapshot
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow pr212-integrated-rendered-final-v4.yml --branch agent/pr212-main-integration-ops-20260730 --limit 80 --json databaseId,headSha,status,conclusion,createdAt,url,event > /tmp/runs.json
+          jq --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0] // {}' /tmp/runs.json > ops/pr212-rendered-v4-snapshot/status.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-rendered-v4-snapshot/status.json
+          git commit -m "Snapshot PR 212 rendered-v4 run"
+          git push origin HEAD:agent/pr212-rendered-v4-snapshot-20260731
