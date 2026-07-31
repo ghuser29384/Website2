@@ -141,6 +141,9 @@ jobs:
               assert.equal(response.status(), 200, `${variant.name}: login did not return 200`);
               assert.match(await page.title(), /Moral Trade/i, `${variant.name}: wrong page title`);
 
+              const appleButton = page.getByRole("button", { name: "Continue with Apple" });
+              await appleButton.waitFor({ state: "visible" });
+
               const bodyText = await page.locator("body").innerText();
               assert.match(bodyText, /Continue with Apple/);
               assert.doesNotMatch(
@@ -153,8 +156,6 @@ jobs:
                 `${variant.name}: framework error overlay rendered`,
               );
 
-              const appleButton = page.getByRole("button", { name: "Continue with Apple" });
-              await appleButton.waitFor({ state: "visible" });
               await page.waitForFunction(() => {
                 const button = Array.from(document.querySelectorAll("button")).find((candidate) =>
                   candidate.textContent?.includes("Continue with Apple"),
