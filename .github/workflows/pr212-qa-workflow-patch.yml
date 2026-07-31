@@ -55,20 +55,25 @@ jobs:
           text = text.replace(syntax_marker, syntax_replacement)
 
           runtime_pattern = re.compile(
-              r"^(?P<indent>\s*)node \.github/scripts/institutional-trade-qa-e2e\.mjs\s*$",
+              r"^(?P<indent>\s*)run:\s*node \.github/scripts/institutional-trade-qa-e2e\.mjs\s*$",
               re.MULTILINE,
           )
           runtime_matches = list(runtime_pattern.finditer(text))
           if len(runtime_matches) != 1:
               raise SystemExit(
-                  f"Expected exactly one institutional E2E runtime command, found {len(runtime_matches)}"
+                  f"Expected exactly one institutional E2E runtime step, found {len(runtime_matches)}"
               )
 
           match = runtime_matches[0]
-          indent = match.group("indent")
+          run_indent = match.group("indent")
+          if len(run_indent) < 2:
+              raise SystemExit("Unexpected YAML indentation for institutional E2E runtime step")
+          step_indent = run_indent[:-2]
           runtime_replacement = (
-              f"{indent}node .github/scripts/institutional-trade-qa-e2e.mjs\n"
-              f"{indent}node .github/scripts/pr212-targeted-regression-qa.mjs"
+              f"{run_indent}run: node .github/scripts/institutional-trade-qa-e2e.mjs\n\n"
+              f"{step_indent}- name: Run targeted post-main application regression smoke\n"
+              f"{run_indent}shell: bash\n"
+              f"{run_indent}run: node .github/scripts/pr212-targeted-regression-qa.mjs"
           )
           text = text[: match.start()] + runtime_replacement + text[match.end() :]
 
