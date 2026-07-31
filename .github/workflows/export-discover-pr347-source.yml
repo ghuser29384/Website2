@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ops/export-discover-pr347-source-20260731
+  pull_request:
+    branches:
+      - feat/discover-two-sided-exchange-20260731
 
 permissions:
   contents: read
@@ -20,28 +23,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "f39cb3dd4b6ef527cfee47b0d3d03e5e8226db24"
+          expected="f39cb3dd4b6ef527cfee47b0d3d03e5e8226db24"
+          git merge-base --is-ancestor "$expected" HEAD
+          paths=(
+            .github/workflows/smart-query-qa.yml
+            package.json
+            public/discover/payload/0.txt
+            public/discover/payload/1.txt
+            public/discover/payload/2.txt
+            public/discover/payload/3.txt
+            public/discover/payload/4.txt
+            public/discover/payload/5.txt
+            public/discover/payload/6.txt
+            scripts/discover-two-sided-contract.test.mjs
+            scripts/pack-discover-payload.mjs
+            src/discover/moral-trade-discover.source.html
+            tests/discover-query-audit.spec.ts
+          )
+          git diff --quiet "$expected" HEAD -- "${paths[@]}"
           mkdir -p export
-          while IFS= read -r path; do
+          for path in "${paths[@]}"; do
             test -f "$path"
             mkdir -p "export/$(dirname "$path")"
             cp "$path" "export/$path"
-          done <<'EOF'
-          .github/workflows/smart-query-qa.yml
-          package.json
-          public/discover/payload/0.txt
-          public/discover/payload/1.txt
-          public/discover/payload/2.txt
-          public/discover/payload/3.txt
-          public/discover/payload/4.txt
-          public/discover/payload/5.txt
-          public/discover/payload/6.txt
-          scripts/discover-two-sided-contract.test.mjs
-          scripts/pack-discover-payload.mjs
-          src/discover/moral-trade-discover.source.html
-          tests/discover-query-audit.spec.ts
-          EOF
-          printf '%s\n' "$(git rev-parse HEAD^)" > export/EXPORTED_SOURCE_SHA
+          done
+          printf '%s\n' "$expected" > export/EXPORTED_SOURCE_SHA
           tar -czf discover-pr347-source.tgz -C export .
 
       - name: Upload exact source surface
