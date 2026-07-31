@@ -1,0 +1,4 @@
+Authorized release gate trigger for Threshold Sign-On.
+Expected main: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+Source integration head before trigger: 0069625800ad441d0011a79a74a1fa48fe1ffe69
+Triggered: 2026-07-31
