@@ -1,0 +1,186 @@
+name: Route PR 212 current-main delta v2
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/route-pr212-current-main-delta-v2.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: route-pr212-current-main-delta-v2
+  cancel-in-progress: false
+
+jobs:
+  route:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: integrate-pr212-current-main-delta-v2.yml
+      OPS_BRANCH: agent/pr212-main-integration-ops-20260730
+      INSPECTOR_BRANCH: agent/pr212-main-integration-inspector-20260730
+      FEATURE_BRANCH: feat/institutional-trade-system
+      DELTA_BRANCH: agent/pr212-current-main-delta-20260731
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+
+      - name: Wait for and preserve the exact delta-integration result
+        id: route
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-current-main-delta-v2
+          rm -rf "$output" /tmp/pr212-current-main-delta-v2-artifact
+          mkdir -p "$output" /tmp/pr212-current-main-delta-v2-artifact
+
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 1800); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$OPS_BRANCH" --limit 50 --json databaseId,headSha,status,conclusion,createdAt,url,displayTitle > /tmp/delta-runs.json
+            run_id="$(jq -r 'sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/delta-runs.json)"
+            status="$(jq -r 'sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/delta-runs.json)"
+            conclusion="$(jq -r 'sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/delta-runs.json)"
+            if [[ -n "$run_id" && "$status" == completed ]]; then break; fi
+            sleep 10
+          done
+          test -n "$run_id"
+          test "$status" = completed
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$output/run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$output/jobs.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" > "$output/artifacts.json"
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/failed-log.txt" 2>&1 || true
+
+          artifact_name="pr212-current-main-delta-v2-${run_id}"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir /tmp/pr212-current-main-delta-v2-artifact
+          result="$(find /tmp/pr212-current-main-delta-v2-artifact -name result.json | head -1)"
+          test -n "$result"
+          cp "$result" "$output/result.json"
+          find /tmp/pr212-current-main-delta-v2-artifact -type f -printf '%P\n' | sort > "$output/artifact-files.txt"
+          find /tmp/pr212-current-main-delta-v2-artifact -type f -print0 | sort -z | xargs -0 sha256sum > "$output/artifact-files.sha256"
+
+          action="$(jq -r .action "$output/result.json")"
+          jq -n --arg run_id "$run_id" --arg status "$status" --arg conclusion "$conclusion" --arg action "$action" '{run_id:$run_id,status:$status,conclusion:$conclusion,action:$action}' > "$output/route.json"
+          {
+            echo "run_id=$run_id"
+            echo "conclusion=$conclusion"
+            echo "action=$action"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install PostgreSQL client for guarded QA reset
+        if: steps.route.outputs.conclusion == 'success' && steps.route.outputs.action == 'integrated'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client jq
+
+      - name: Verify and fast-forward the feature branch to the validated delta commit
+        if: steps.route.outputs.conclusion == 'success' && steps.route.outputs.action == 'integrated'
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-current-main-delta-v2
+          feature_head="$(jq -r .feature_head "$output/result.json")"
+          current_main="$(jq -r .current_main "$output/result.json")"
+          integrated_head="$(jq -r .integrated_head "$output/result.json")"
+
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .head.sha)" = "$feature_head"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .state)" = open
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .draft)" = true
+          test "$(git ls-remote --heads origin refs/heads/main | awk '{print $1}')" = "$current_main"
+          test "$(git ls-remote --heads origin "refs/heads/${DELTA_BRANCH}" | awk '{print $1}')" = "$integrated_head"
+
+          git fetch origin "$feature_head" "$current_main" "$integrated_head"
+          git merge-base --is-ancestor "$feature_head" "$integrated_head"
+          git merge-base --is-ancestor "$current_main" "$integrated_head"
+
+          test -n "$QA_SUPABASE_DB_URL"
+          [[ "$QA_SUPABASE_DB_URL" == *"hvmxfjjbdcgjjudmthdz"* ]]
+          [[ "$QA_SUPABASE_DB_URL" != *"jnpoxvalyjtdghnperyu"* ]]
+
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          do $$
+          declare
+            target record;
+            row_total bigint;
+            synthetic_auth bigint;
+            synthetic_profiles bigint;
+          begin
+            select count(*) into synthetic_auth from auth.users where lower(email) like 'institutional-%@example.test';
+            select count(*) into synthetic_profiles from public.profiles where lower(email) like 'institutional-%@example.test';
+            if synthetic_auth <> 0 or synthetic_profiles <> 0 then
+              raise exception 'Refusing QA reset: synthetic auth users=% profiles=%',synthetic_auth,synthetic_profiles;
+            end if;
+            for target in
+              select n.nspname schema_name,c.relname relation_name
+              from pg_class c join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public' and c.relkind in ('r','p') and c.relname like 'institutional_%'
+            loop
+              execute format('select count(*) from %I.%I',target.schema_name,target.relation_name) into row_total;
+              if row_total <> 0 then
+                raise exception 'Refusing QA reset: %.% contains % rows',target.schema_name,target.relation_name,row_total;
+              end if;
+            end loop;
+            for target in
+              select n.nspname schema_name,c.relname relation_name,case c.relkind when 'm' then 'materialized view' else 'view' end relation_kind
+              from pg_class c join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public' and c.relkind in ('v','m') and c.relname like 'institutional_%'
+            loop
+              execute format('drop %s if exists %I.%I cascade',target.relation_kind,target.schema_name,target.relation_name);
+            end loop;
+            for target in
+              select n.nspname schema_name,c.relname relation_name
+              from pg_class c join pg_namespace n on n.oid=c.relnamespace
+              where n.nspname='public' and c.relkind in ('r','p') and c.relname like 'institutional_%'
+            loop
+              execute format('drop table if exists %I.%I cascade',target.schema_name,target.relation_name);
+            end loop;
+            for target in
+              select n.nspname schema_name,p.proname function_name,pg_get_function_identity_arguments(p.oid) identity_arguments
+              from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+              where n.nspname='public' and p.proname like '%institutional%'
+            loop
+              execute format('drop function if exists %I.%I(%s) cascade',target.schema_name,target.function_name,target.identity_arguments);
+            end loop;
+          end
+          $$;
+          SQL
+
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/git/refs/heads/${FEATURE_BRANCH}" -f sha="$integrated_head" -F force=false >/dev/null
+          test "$(git ls-remote --heads origin "refs/heads/${FEATURE_BRANCH}" | awk '{print $1}')" = "$integrated_head"
+
+          jq -n --arg previous_head "$feature_head" --arg integrated_head "$integrated_head" --arg current_main "$current_main" '{promoted:true,previous_head:$previous_head,integrated_head:$integrated_head,current_main:$current_main,qa_schema_reset:true}' > "$output/promoted.json"
+
+      - name: Record no-op or blocker truthfully
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-current-main-delta-v2
+          conclusion="${{ steps.route.outputs.conclusion }}"
+          action="${{ steps.route.outputs.action }}"
+          if [[ "$conclusion" == success && "$action" == none ]]; then
+            cp "$output/result.json" "$output/noop.json"
+          elif [[ "$conclusion" != success || "$action" == blocked ]]; then
+            jq -n --arg conclusion "$conclusion" --arg action "$action" --slurpfile result "$output/result.json" '{blocked:true,conclusion:$conclusion,action:$action,result:$result[0]}' > "$output/blocker.json"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Route PR 212 current-main delta result"
+          git push origin "HEAD:refs/heads/${INSPECTOR_BRANCH}"
+
+          if [[ "$conclusion" != success || "$action" == blocked ]]; then exit 1; fi
