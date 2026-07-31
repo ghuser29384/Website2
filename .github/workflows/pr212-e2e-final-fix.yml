@@ -143,3 +143,5 @@ jobs:
           git add .github/scripts/institutional-trade-qa-e2e.mjs
           git commit -m "Fix institutional personal fixture and residue checks"
           git push origin HEAD:"$CANDIDATE_BRANCH"
+
+# Trigger exact candidate preparation after workflow registration.
