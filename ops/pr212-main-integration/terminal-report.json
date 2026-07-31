@@ -1,9 +1,18 @@
 {
-  "observed_at": "2026-07-31T00:45:44Z",
-  "run_id": "30594349781",
+  "observed_at": "2026-07-31T00:50:59Z",
+  "run_id": "30594525948",
   "status": "completed",
-  "conclusion": "failure",
+  "conclusion": "success",
   "runs": [
+    {
+      "conclusion": "success",
+      "createdAt": "2026-07-31T00:46:58Z",
+      "databaseId": 30594525948,
+      "event": "push",
+      "headSha": "4049dbc8b5da9dd9efc77a43f4e968eca3122216",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30594525948"
+    },
     {
       "conclusion": "failure",
       "createdAt": "2026-07-31T00:43:21Z",
@@ -24,25 +33,25 @@
     }
   ],
   "run": {
-    "id": 30594349781,
+    "id": 30594525948,
     "name": "PR 212 integrate pinned main and gate",
-    "node_id": "WFR_kwLOR8Oun88AAAAHH5C61Q",
+    "node_id": "WFR_kwLOR8Oun88AAAAHH5Nq_A",
     "head_branch": "agent/pr212-main-integration-ops-20260730",
-    "head_sha": "c36b6a7960764294dfa7488e76624aebddfeb3b6",
+    "head_sha": "4049dbc8b5da9dd9efc77a43f4e968eca3122216",
     "path": ".github/workflows/pr212-integrate-main-and-gate.yml",
-    "display_title": "Retain only main-compatible absolute-gate repairs during PR 212 integ…",
-    "run_number": 2,
+    "display_title": "Finish current-main navigation typing for PR 212 integration",
+    "run_number": 3,
     "event": "push",
     "status": "completed",
-    "conclusion": "failure",
+    "conclusion": "success",
     "workflow_id": 324123510,
-    "check_suite_id": 82961986685,
-    "check_suite_node_id": "CS_kwDOR8Oun88AAAATUOt0fQ",
-    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594349781",
-    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30594349781",
+    "check_suite_id": 82962457335,
+    "check_suite_node_id": "CS_kwDOR8Oun88AAAATUPKi9w",
+    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594525948",
+    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30594525948",
     "pull_requests": [],
-    "created_at": "2026-07-31T00:43:21Z",
-    "updated_at": "2026-07-31T00:45:31Z",
+    "created_at": "2026-07-31T00:46:58Z",
+    "updated_at": "2026-07-31T00:50:53Z",
     "actor": {
       "login": "ghuser29384",
       "id": 262476329,
@@ -66,7 +75,7 @@
     },
     "run_attempt": 1,
     "referenced_workflows": [],
-    "run_started_at": "2026-07-31T00:43:21Z",
+    "run_started_at": "2026-07-31T00:46:58Z",
     "triggering_actor": {
       "login": "ghuser29384",
       "id": 262476329,
@@ -88,19 +97,19 @@
       "user_view_type": "public",
       "site_admin": false
     },
-    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594349781/jobs",
-    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594349781/logs",
-    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82961986685",
-    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594349781/artifacts",
-    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594349781/cancel",
-    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594349781/rerun",
+    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594525948/jobs",
+    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594525948/logs",
+    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82962457335",
+    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594525948/artifacts",
+    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594525948/cancel",
+    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594525948/rerun",
     "previous_attempt_url": null,
     "workflow_url": "https://api.github.com/repos/ghuser29384/Website2/actions/workflows/324123510",
     "head_commit": {
-      "id": "c36b6a7960764294dfa7488e76624aebddfeb3b6",
-      "tree_id": "848f1025e327ad9a0f60c20cd95c5ad14b64d817",
-      "message": "Retain only main-compatible absolute-gate repairs during PR 212 integration",
-      "timestamp": "2026-07-31T00:43:18Z",
+      "id": "4049dbc8b5da9dd9efc77a43f4e968eca3122216",
+      "tree_id": "2e48cc6b1dfa3a1afa0bfc0ed39c875ae14d552e",
+      "message": "Finish current-main navigation typing for PR 212 integration",
+      "timestamp": "2026-07-31T00:46:56Z",
       "author": {
         "name": "ghuser29384",
         "email": "262476329+ghuser29384@users.noreply.github.com"
@@ -249,21 +258,21 @@
   },
   "jobs": [
     {
-      "id": 91043348216,
-      "run_id": 30594349781,
+      "id": 91043884601,
+      "run_id": 30594525948,
       "workflow_name": "PR 212 integrate pinned main and gate",
       "head_branch": "agent/pr212-main-integration-ops-20260730",
-      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594349781",
+      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30594525948",
       "run_attempt": 1,
-      "node_id": "CR_kwDOR8Oun88AAAAVMps--A",
-      "head_sha": "c36b6a7960764294dfa7488e76624aebddfeb3b6",
-      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/91043348216",
-      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30594349781/job/91043348216",
+      "node_id": "CR_kwDOR8Oun88AAAAVMqNuOQ",
+      "head_sha": "4049dbc8b5da9dd9efc77a43f4e968eca3122216",
+      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/91043884601",
+      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30594525948/job/91043884601",
       "status": "completed",
-      "conclusion": "failure",
-      "created_at": "2026-07-31T00:43:21Z",
-      "started_at": "2026-07-31T00:44:26Z",
-      "completed_at": "2026-07-31T00:45:30Z",
+      "conclusion": "success",
+      "created_at": "2026-07-31T00:46:58Z",
+      "started_at": "2026-07-31T00:47:05Z",
+      "completed_at": "2026-07-31T00:50:52Z",
       "name": "integrate",
       "steps": [
         {
@@ -271,167 +280,167 @@
           "status": "completed",
           "conclusion": "success",
           "number": 1,
-          "started_at": "2026-07-31T00:44:26Z",
-          "completed_at": "2026-07-31T00:44:27Z"
+          "started_at": "2026-07-31T00:47:06Z",
+          "completed_at": "2026-07-31T00:47:07Z"
         },
         {
           "name": "Check out exact clean reconstruction on integration branch",
           "status": "completed",
           "conclusion": "success",
           "number": 2,
-          "started_at": "2026-07-31T00:44:27Z",
-          "completed_at": "2026-07-31T00:44:30Z"
+          "started_at": "2026-07-31T00:47:07Z",
+          "completed_at": "2026-07-31T00:47:10Z"
         },
         {
           "name": "Verify immutable integration inputs",
           "status": "completed",
           "conclusion": "success",
           "number": 3,
-          "started_at": "2026-07-31T00:44:30Z",
-          "completed_at": "2026-07-31T00:44:30Z"
+          "started_at": "2026-07-31T00:47:10Z",
+          "completed_at": "2026-07-31T00:47:11Z"
         },
         {
           "name": "Merge pinned main and resolve only the reviewed conflicts",
           "status": "completed",
           "conclusion": "success",
           "number": 4,
-          "started_at": "2026-07-31T00:44:30Z",
-          "completed_at": "2026-07-31T00:44:30Z"
+          "started_at": "2026-07-31T00:47:11Z",
+          "completed_at": "2026-07-31T00:47:11Z"
         },
         {
           "name": "Apply narrow current-main TypeScript corrections required by the absolute gate",
           "status": "completed",
           "conclusion": "success",
           "number": 5,
-          "started_at": "2026-07-31T00:44:30Z",
-          "completed_at": "2026-07-31T00:44:30Z"
+          "started_at": "2026-07-31T00:47:11Z",
+          "completed_at": "2026-07-31T00:47:11Z"
         },
         {
           "name": "Enforce reviewed post-audit diff inventory",
           "status": "completed",
           "conclusion": "success",
           "number": 6,
-          "started_at": "2026-07-31T00:44:30Z",
-          "completed_at": "2026-07-31T00:44:30Z"
+          "started_at": "2026-07-31T00:47:11Z",
+          "completed_at": "2026-07-31T00:47:11Z"
         },
         {
           "name": "Set up Node.js",
           "status": "completed",
           "conclusion": "success",
           "number": 7,
-          "started_at": "2026-07-31T00:44:30Z",
-          "completed_at": "2026-07-31T00:44:32Z"
+          "started_at": "2026-07-31T00:47:11Z",
+          "completed_at": "2026-07-31T00:47:14Z"
         },
         {
           "name": "Install dependencies with transient-registry retry",
           "status": "completed",
           "conclusion": "success",
           "number": 8,
-          "started_at": "2026-07-31T00:44:32Z",
-          "completed_at": "2026-07-31T00:44:45Z"
+          "started_at": "2026-07-31T00:47:14Z",
+          "completed_at": "2026-07-31T00:47:25Z"
         },
         {
           "name": "Run institutional and conflict-adjacent source contracts",
           "status": "completed",
           "conclusion": "success",
           "number": 9,
-          "started_at": "2026-07-31T00:44:45Z",
-          "completed_at": "2026-07-31T00:44:47Z"
+          "started_at": "2026-07-31T00:47:25Z",
+          "completed_at": "2026-07-31T00:47:27Z"
         },
         {
           "name": "Require absolute TypeScript success",
           "status": "completed",
-          "conclusion": "failure",
+          "conclusion": "success",
           "number": 10,
-          "started_at": "2026-07-31T00:44:47Z",
-          "completed_at": "2026-07-31T00:45:28Z"
+          "started_at": "2026-07-31T00:47:27Z",
+          "completed_at": "2026-07-31T00:48:01Z"
         },
         {
           "name": "Require absolute ESLint success",
           "status": "completed",
-          "conclusion": "skipped",
+          "conclusion": "success",
           "number": 11,
-          "started_at": "2026-07-31T00:45:28Z",
-          "completed_at": "2026-07-31T00:45:28Z"
+          "started_at": "2026-07-31T00:48:01Z",
+          "completed_at": "2026-07-31T00:48:53Z"
         },
         {
           "name": "Require absolute production build success",
           "status": "completed",
-          "conclusion": "skipped",
+          "conclusion": "success",
           "number": 12,
-          "started_at": "2026-07-31T00:45:28Z",
-          "completed_at": "2026-07-31T00:45:28Z"
+          "started_at": "2026-07-31T00:48:53Z",
+          "completed_at": "2026-07-31T00:50:48Z"
         },
         {
           "name": "Commit and publish the integrated branch",
           "status": "completed",
-          "conclusion": "skipped",
+          "conclusion": "success",
           "number": 13,
-          "started_at": "2026-07-31T00:45:28Z",
-          "completed_at": "2026-07-31T00:45:28Z"
+          "started_at": "2026-07-31T00:50:48Z",
+          "completed_at": "2026-07-31T00:50:49Z"
         },
         {
           "name": "Upload merge and gate evidence",
           "status": "completed",
           "conclusion": "success",
           "number": 14,
-          "started_at": "2026-07-31T00:45:28Z",
-          "completed_at": "2026-07-31T00:45:29Z"
+          "started_at": "2026-07-31T00:50:49Z",
+          "completed_at": "2026-07-31T00:50:50Z"
         },
         {
           "name": "Post Set up Node.js",
           "status": "completed",
-          "conclusion": "skipped",
+          "conclusion": "success",
           "number": 27,
-          "started_at": "2026-07-31T00:45:29Z",
-          "completed_at": "2026-07-31T00:45:29Z"
+          "started_at": "2026-07-31T00:50:50Z",
+          "completed_at": "2026-07-31T00:50:50Z"
         },
         {
           "name": "Post Check out exact clean reconstruction on integration branch",
           "status": "completed",
           "conclusion": "success",
           "number": 28,
-          "started_at": "2026-07-31T00:45:29Z",
-          "completed_at": "2026-07-31T00:45:29Z"
+          "started_at": "2026-07-31T00:50:50Z",
+          "completed_at": "2026-07-31T00:50:50Z"
         },
         {
           "name": "Complete job",
           "status": "completed",
           "conclusion": "success",
           "number": 29,
-          "started_at": "2026-07-31T00:45:29Z",
-          "completed_at": "2026-07-31T00:45:29Z"
+          "started_at": "2026-07-31T00:50:50Z",
+          "completed_at": "2026-07-31T00:50:50Z"
         }
       ],
-      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/91043348216",
+      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/91043884601",
       "labels": [
         "ubuntu-24.04"
       ],
-      "runner_id": 1000006740,
-      "runner_name": "GitHub Actions 1000006740",
+      "runner_id": 1000006749,
+      "runner_name": "GitHub Actions 1000006749",
       "runner_group_id": 0,
       "runner_group_name": "GitHub Actions"
     }
   ],
   "artifacts": [
     {
-      "id": 8779557405,
-      "node_id": "MDg6QXJ0aWZhY3Q4Nzc5NTU3NDA1",
-      "name": "pr212-main-integrated-30594349781",
-      "size_in_bytes": 141876,
-      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/artifacts/8779557405",
-      "archive_download_url": "https://api.github.com/repos/ghuser29384/Website2/actions/artifacts/8779557405/zip",
+      "id": 8779649160,
+      "node_id": "MDg6QXJ0aWZhY3Q4Nzc5NjQ5MTYw",
+      "name": "pr212-main-integrated-30594525948",
+      "size_in_bytes": 142305,
+      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/artifacts/8779649160",
+      "archive_download_url": "https://api.github.com/repos/ghuser29384/Website2/actions/artifacts/8779649160/zip",
       "expired": false,
-      "digest": "sha256:ffb1f4d95f1b756165eea0221e423824f55fc76405cfc8c3404850e929fc966d",
-      "created_at": "2026-07-31T00:45:28Z",
-      "updated_at": "2026-07-31T00:45:28Z",
-      "expires_at": "2026-08-14T00:45:28Z",
+      "digest": "sha256:ca3efc731115c30cfd483ff6d439690849a3a73dbd0c740dc2920b4f97e44756",
+      "created_at": "2026-07-31T00:50:50Z",
+      "updated_at": "2026-07-31T00:50:50Z",
+      "expires_at": "2026-08-14T00:50:49Z",
       "workflow_run": {
-        "id": 30594349781,
+        "id": 30594525948,
         "repository_id": 1204006559,
         "head_repository_id": 1204006559,
         "head_branch": "agent/pr212-main-integration-ops-20260730",
-        "head_sha": "c36b6a7960764294dfa7488e76624aebddfeb3b6"
+        "head_sha": "4049dbc8b5da9dd9efc77a43f4e968eca3122216"
       }
     }
   ]
