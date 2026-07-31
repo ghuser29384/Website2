@@ -1,0 +1,46 @@
+name: Classify PR 212 terminal status
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/classify-pr212-terminal-status.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  classify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+      - name: Emit one terminal classification marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          source=ops/pr212-terminal-project-status/status.json
+          test -s "$source"
+          classification="$(jq -r .terminal_reason "$source")"
+          feature_head="$(jq -r .feature_head "$source")"
+          qa_conclusion="$(jq -r '.qa.conclusion // ""' "$source")"
+          preview_conclusion="$(jq -r '.preview_review.conclusion // ""' "$source")"
+          main_is_ancestor="$(jq -r .main_is_ancestor "$source")"
+          output=ops/pr212-terminal-project-status/classification
+          rm -rf "$output"
+          mkdir -p "$output"
+          safe="$(printf '%s' "$classification" | tr -cs 'A-Za-z0-9._-' '_')"
+          touch "$output/$safe"
+          printf 'classification=%s\nfeature_head=%s\nqa=%s\npreview=%s\nmain_is_ancestor=%s\n' \
+            "$classification" "$feature_head" "$qa_conclusion" "$preview_conclusion" "$main_is_ancestor" \
+            > "$output/summary.txt"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Classify PR 212 terminal status"
+          git push origin HEAD:refs/heads/agent/pr212-main-integration-inspector-20260730
