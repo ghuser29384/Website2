@@ -1,0 +1,202 @@
+name: Materialize one-person-one-account candidate
+
+on:
+  push:
+    branches:
+      - feature/one-person-one-account-20260731
+    paths:
+      - .github/one-person-bootstrap/READY
+      - .github/workflows/materialize-one-person-account.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: one-person-account-materialization
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: github.repository == 'ghuser29384/Website2' && github.ref_name == 'feature/one-person-one-account-20260731'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out exact trigger commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Verify branch, ready marker, and base ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REPOSITORY}" = "ghuser29384/Website2"
+          test "${GITHUB_REF_NAME}" = "feature/one-person-one-account-20260731"
+          test -f .github/one-person-bootstrap/READY
+          git fetch origin main feature/one-person-one-account-20260731
+          git merge-base --is-ancestor 8181eed1c0cf075f01ebd22c88d4a8cce441c19d HEAD
+          echo "TRIGGER_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          if ! git merge-base --is-ancestor origin/main HEAD; then
+            git config user.name moraltrade-automation
+            git config user.email github-actions[bot]@users.noreply.github.com
+            git merge --no-edit origin/main
+          fi
+
+      - name: Reassemble and verify candidate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          echo "WORK_DIR=$work" >> "$GITHUB_ENV"
+          candidate_parts=(
+            .github/one-person-bootstrap/candidate.part-000
+            .github/one-person-bootstrap/candidate.part-001
+            .github/one-person-bootstrap/candidate.part-002
+            .github/one-person-bootstrap/candidate.part-003
+            .github/one-person-bootstrap/candidate.part-004
+            .github/one-person-bootstrap/candidate.part-005
+            .github/one-person-bootstrap/candidate.part-006
+            .github/one-person-bootstrap/candidate.part-007
+            .github/one-person-bootstrap/candidate.part-008
+            .github/one-person-bootstrap/candidate.part-009
+            .github/one-person-bootstrap/candidate.part-010
+            .github/one-person-bootstrap/candidate.part-011
+          )
+          for part in "${candidate_parts[@]}"; do test -s "$part"; done
+          cat "${candidate_parts[@]}" | tr -d '\r\n\t ' > "$work/candidate.b64"
+          test "$(wc -c < "$work/candidate.b64")" -eq 69276
+          base64 --decode "$work/candidate.b64" > "$work/candidate.tar.xz"
+          echo '0f273e48aaa14c351b58ce45afdad951735533bf912836a82c731659073fce53  candidate.tar.xz' > "$work/candidate.sha256"
+          (cd "$work" && sha256sum --check candidate.sha256)
+          xz --test "$work/candidate.tar.xz"
+
+      - name: Verify exact archive inventory and extract safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .github/one-person-bootstrap/candidate
+          python3 - <<'PY'
+          import tarfile
+          from pathlib import Path, PurePosixPath
+
+          archive = Path(__import__('os').environ['WORK_DIR']) / 'candidate.tar.xz'
+          destination = Path('.github/one-person-bootstrap/candidate')
+          expected = {
+              '.github/workflows/one-person-account-qa-auth-config.yml',
+              '.github/workflows/one-person-account-qa.yml',
+              'docs/one-person-one-account.md',
+              'scripts/test-one-person-concurrency.sh',
+              'src/app/account/identity/page.tsx',
+              'src/app/admin/identity/page.tsx',
+              'src/app/api/identity/provider/route.ts',
+              'src/app/api/identity/qa/complete/route.ts',
+              'src/app/identity/actions.ts',
+              'src/app/identity/identity.module.css',
+              'src/app/identity/page.tsx',
+              'src/app/identity/recovery/page.tsx',
+              'src/app/identity/status/page.tsx',
+              'src/lib/identity/one-person-account.test.ts',
+              'src/lib/identity/one-person-account.ts',
+              'src/lib/identity/server.ts',
+              'supabase/migrations/20260731072000_one_person_one_account.sql',
+              'supabase/tests/one_person_one_account.sql',
+              'tests/one-person-account-authenticated.spec.ts',
+          }
+          with tarfile.open(archive, 'r:xz') as tf:
+              members = tf.getmembers()
+              names = set()
+              for member in members:
+                  path = PurePosixPath(member.name)
+                  if path.is_absolute() or '..' in path.parts or not member.isfile():
+                      raise SystemExit(f'unsafe or non-regular archive member: {member.name}')
+                  names.add(member.name)
+              if names != expected:
+                  raise SystemExit(f'archive inventory mismatch: missing={sorted(expected-names)} unexpected={sorted(names-expected)}')
+              tf.extractall(destination, filter='data')
+          PY
+
+      - name: Reassemble and verify deterministic materializer
+        shell: bash
+        run: |
+          set -euo pipefail
+          materializer_parts=(
+            .github/one-person-bootstrap/materializer.part-000
+            .github/one-person-bootstrap/materializer.part-001
+            .github/one-person-bootstrap/materializer.part-002
+            .github/one-person-bootstrap/materializer.part-003
+            .github/one-person-bootstrap/materializer.part-004-correct
+            .github/one-person-bootstrap/materializer.part-005
+          )
+          for part in "${materializer_parts[@]}"; do test -s "$part"; done
+          cat "${materializer_parts[@]}" | tr -d '\r\n\t ' > "$WORK_DIR/materializer.b64"
+          test "$(wc -c < "$WORK_DIR/materializer.b64")" -eq 18600
+          base64 --decode "$WORK_DIR/materializer.b64" > "$WORK_DIR/materialize.py"
+          echo '9c464773b1f581449214dd085537a12637582c36cc5724fba0261675b52e3832  materialize.py' > "$WORK_DIR/materializer.sha256"
+          (cd "$WORK_DIR" && sha256sum --check materializer.sha256)
+          python3 -m py_compile "$WORK_DIR/materialize.py"
+
+      - name: Materialize the exact feature tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$WORK_DIR/materialize.py"
+          rm -rf .github/one-person-bootstrap
+          rm -f .github/workflows/materialize-one-person-account.yml
+          git diff --check
+
+      - name: Verify exact final feature diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$WORK_DIR/expected-paths.txt" <<'EOF'
+          .env.example
+          .github/workflows/one-person-account-qa-auth-config.yml
+          .github/workflows/one-person-account-qa.yml
+          docs/one-person-one-account.md
+          package.json
+          scripts/test-one-person-concurrency.sh
+          src/app/account/identity/page.tsx
+          src/app/actions.ts
+          src/app/admin/identity/page.tsx
+          src/app/api/identity/provider/route.ts
+          src/app/api/identity/qa/complete/route.ts
+          src/app/auth/confirm/route.ts
+          src/app/identity/actions.ts
+          src/app/identity/identity.module.css
+          src/app/identity/page.tsx
+          src/app/identity/recovery/page.tsx
+          src/app/identity/status/page.tsx
+          src/app/signup/page.tsx
+          src/components/auth/auth-card.tsx
+          src/components/dashboard/dashboard-provider.tsx
+          src/lib/identity/one-person-account.test.ts
+          src/lib/identity/one-person-account.ts
+          src/lib/identity/server.ts
+          supabase/migrations/20260731072000_one_person_one_account.sql
+          supabase/tests/one_person_one_account.sql
+          tests/one-person-account-authenticated.spec.ts
+          EOF
+          sed -i 's/^          //' "$WORK_DIR/expected-paths.txt"
+          sort -u "$WORK_DIR/expected-paths.txt" -o "$WORK_DIR/expected-paths.txt"
+          git diff --name-only origin/main | sort -u > "$WORK_DIR/actual-paths.txt"
+          if ! diff -u "$WORK_DIR/expected-paths.txt" "$WORK_DIR/actual-paths.txt"; then
+            echo 'Final feature diff is not the exact approved path inventory.' >&2
+            exit 1
+          fi
+          test ! -e .github/one-person-bootstrap
+          test ! -e .github/workflows/materialize-one-person-account.yml
+
+      - name: Commit and push only if the trigger head is still current
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_head="$(git ls-remote origin refs/heads/feature/one-person-one-account-20260731 | awk '{print $1}')"
+          test "$remote_head" = "$TRIGGER_HEAD"
+          git add -A
+          git diff --cached --check
+          git config user.name moraltrade-automation
+          git config user.email github-actions[bot]@users.noreply.github.com
+          git commit -m 'Materialize one-person-one-account identity authority'
+          git push origin HEAD:feature/one-person-one-account-20260731
