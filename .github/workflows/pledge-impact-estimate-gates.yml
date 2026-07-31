@@ -35,56 +35,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  repair-mobile-sheet:
-    name: One-time mobile inspector repair
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    permissions:
-      contents: write
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Check out the exact feature branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-
-      - name: Repair the hidden mobile inspector
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          source_path = Path("src/discover/moral-trade-discover.source.html")
-          source = source_path.read_text()
-          old_css = "  .mobile-sheet {\n    position: fixed;"
-          new_css = "  .mobile-sheet {\n    display: block;\n    position: fixed;"
-
-          if new_css in source:
-              print("Mobile inspector repair is already present.")
-              raise SystemExit(0)
-          if source.count(old_css) != 1:
-              raise SystemExit(
-                  f"Expected exactly one mobile-sheet rule; found {source.count(old_css)}."
-              )
-
-          source_path.write_text(source.replace(old_css, new_css, 1))
-          PY
-
-          node scripts/pack-discover-payload.mjs
-          npm run verify:discover
-          git diff --check
-
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            src/discover/moral-trade-discover.source.html \
-            public/moral-trade-discover.html \
-            public/discover/payload
-          git commit -m "Show the selected pool inspector on mobile"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-
   release-gates:
     name: Test, lint, build, payload, and rendered QA
     runs-on: ubuntu-latest
