@@ -1,0 +1,31 @@
+name: Sync Complete Profile fix with main
+
+on:
+  push:
+    branches:
+      - qa/sync-complete-profile-main-20260731
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact product branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/complete-profile-returning-users-20260731
+          fetch-depth: 0
+
+      - name: Merge current main and publish
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "29e827355a6091ad78a875b5077b5a4d9b933ca5"
+          git fetch origin main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-edit origin/main
+          git diff --check origin/main...HEAD
+          git push origin HEAD:refs/heads/fix/complete-profile-returning-users-20260731
