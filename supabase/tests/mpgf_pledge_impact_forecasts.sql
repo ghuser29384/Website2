@@ -7,7 +7,8 @@ create temporary table pledge_impact_test_state (
   pool_state jsonb,
   forecast jsonb
 ) on commit drop;
-grant select on pledge_impact_test_state to anon, authenticated, service_role;
+grant all on pledge_impact_test_state to service_role;
+grant select on pledge_impact_test_state to anon, authenticated;
 
 set local role service_role;
 
