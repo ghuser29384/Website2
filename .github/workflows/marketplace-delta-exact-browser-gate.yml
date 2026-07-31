@@ -6,61 +6,93 @@ on:
       - main
     paths:
       - ".github/workflows/marketplace-delta-exact-browser-gate.yml"
-      - ".github/scripts/run-marketplace-delta-exact-browser-gate.sh"
-      - ".github/scripts/run-marketplace-delta-exact-browser-gate-v2.sh"
-      - ".github/scripts/marketplace-delta-exact-browser-qa.mjs"
+      - ".github/scripts/audit-marketplace-delta-final-evidence.py"
+      - ".github/scripts/publish-marketplace-delta-final-decision.py"
 
 permissions:
-  contents: write
+  actions: read
+  contents: read
+  pull-requests: write
 
 concurrency:
-  group: marketplace-delta-exact-head-browser-gate-terminal-v8
-  cancel-in-progress: true
+  group: marketplace-delta-evidence-finalizer
+  cancel-in-progress: false
 
 jobs:
-  exact-head-browser-gate:
+  finalize-evidence:
     if: >-
       github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
       github.head_ref == 'ops/materialize-marketplace-delta-final-20260730'
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 75
     env:
+      GH_TOKEN: ${{ github.token }}
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
-      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
-      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
-      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
     steps:
-      - name: Check out temporary orchestration branch
+      - name: Check out temporary finalizer branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
-      - name: Set up Node.js
+      - name: Set up Node.js for Vercel log inspection
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
 
-      - name: Run exact-head environment, browser, and cleanup gate
+      - name: Install media and database inspection tools
         shell: bash
-        run: bash .github/scripts/run-marketplace-delta-exact-browser-gate-v2.sh
+        run: |
+          set -euo pipefail
+          sudo apt-get update >/dev/null
+          sudo apt-get install --yes ffmpeg postgresql-client python3-pil unzip >/dev/null
 
-      - name: Upload rendered browser evidence
+      - name: Audit terminal workflow, artifacts, media, runtime logs, QA residue, and review threads
+        shell: bash
+        run: python3 .github/scripts/audit-marketplace-delta-final-evidence.py
+
+      - name: Upload the independent evidence audit
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: marketplace-delta-browser-evidence-${{ github.run_id }}
-          path: marketplace-delta-browser-artifacts
-          if-no-files-found: warn
-          retention-days: 14
+          name: marketplace-delta-independent-final-audit-${{ github.run_id }}
+          path: |
+            marketplace-delta-final-audit/*.md
+            marketplace-delta-final-audit/*.json
+            marketplace-delta-final-audit/*.txt
+            marketplace-delta-final-audit/media-inspection/video-frames/**/*.png
+            !marketplace-delta-final-audit/vercel-logs-help.txt
+          if-no-files-found: error
+          retention-days: 30
 
-      - name: Upload exact-head and clean-state proof
+      - name: Publish the evidence-backed decision and close temporary PRs without merging
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f marketplace-delta-final-audit/review-body.md
+          test -f marketplace-delta-final-audit/decision.txt
+          python3 .github/scripts/publish-marketplace-delta-final-decision.py
+
+      - name: Upload publication and closure receipts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: marketplace-delta-final-proof-${{ github.run_id }}
-          path: marketplace-delta-final-proof
-          if-no-files-found: warn
-          retention-days: 14
+          name: marketplace-delta-final-publication-${{ github.run_id }}
+          path: |
+            marketplace-delta-final-audit/publication.json
+            marketplace-delta-final-audit/temporary-pr-closures.json
+            marketplace-delta-final-audit/decision.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce the evidence-backed release decision
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          decision="$(tr -d '[:space:]' < marketplace-delta-final-audit/decision.txt)"
+          echo "Final marketplace decision: $decision"
+          test "$decision" = "GO"
