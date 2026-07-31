@@ -1,0 +1,35 @@
+verify	Run authenticated organization and independent workflows plus negative matrix	﻿2026-07-31T05:22:44.6092210Z ##[group]Run node .github/scripts/institutional-trade-qa-e2e.mjs
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6092962Z ^[[36;1mnode .github/scripts/institutional-trade-qa-e2e.mjs^[[0m
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6129035Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6129430Z env:
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6129682Z   QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6130673Z   QA_SUPABASE_DB_URL: ***
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6131180Z   NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6131966Z   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ***
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6133873Z   SUPABASE_SERVICE_ROLE_KEY: ***
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6134375Z   QA_TEST_PASSWORD: ***
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6134650Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6134954Z   SITE_URL: http://127.0.0.1:3000
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6135236Z   INSTITUTIONAL_TRADES_ENABLED: true
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6135516Z   INSTITUTIONAL_POOLS_ENABLED: true
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6135806Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6136145Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6136460Z   INSTITUTIONAL_E2E_BASE_URL: http://127.0.0.1:3000
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6136821Z   INSTITUTIONAL_E2E_OUTPUT_DIR: institutional-e2e-evidence
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6137190Z   CRON_SECRET: qa-institutional-cron-not-production
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6137525Z   SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:44.6137809Z ##[endgroup]
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:48.1647575Z FAIL: Institutional authenticated five-participant QA suite
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4226974Z FAIL: Synthetic QA cleanup
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4240755Z node:internal/modules/run_main:107
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4241239Z     triggerUncaughtException(
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4241529Z     ^
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4241645Z 
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4242212Z Error: institutional_deal_parties: new row for relation "institutional_deal_parties" violates check constraint "institutional_deal_parties_check2"
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4243082Z     at insertOne (file:///home/runner/work/Website2/Website2/.github/scripts/institutional-trade-qa-e2e.mjs:103:27)
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4243759Z     at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4244459Z     at async createFixture (file:///home/runner/work/Website2/Website2/.github/scripts/institutional-trade-qa-e2e.mjs:311:18)
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4245196Z     at async file:///home/runner/work/Website2/Website2/.github/scripts/institutional-trade-qa-e2e.mjs:1924:13
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4245568Z 
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4245674Z Node.js v24.18.0
+verify	Run authenticated organization and independent workflows plus negative matrix	2026-07-31T05:22:52.4337967Z ##[error]Process completed with exit code 1.
