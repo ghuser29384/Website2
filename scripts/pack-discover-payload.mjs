@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { gzipSync, gunzipSync } from "node:zlib";
 import path from "node:path";
@@ -6,6 +7,7 @@ import process from "node:process";
 const root = process.cwd();
 const sourcePath = path.join(root, "src/discover/moral-trade-discover.source.html");
 const payloadDirectory = path.join(root, "public/discover/payload");
+const manifestPath = path.join(payloadDirectory, "manifest.json");
 const partCount = 7;
 const checkOnly = process.argv.includes("--check");
 
@@ -27,6 +29,20 @@ if (!roundTrip.equals(source)) {
   throw new Error("Packed Discover payload does not round-trip to the canonical source.");
 }
 
+const sourceVersion = createHash("sha1")
+  .update(Buffer.from(`blob ${source.length}\0`))
+  .update(source)
+  .digest("hex");
+const manifest = {
+  version: sourceVersion,
+  encoding: "gzip+base64",
+  parts: parts.map((_, index) => `${index}.txt`),
+  sourceBytes: source.length,
+  gzipBytes: compressed.length,
+  encodedCharacters: encoded.length,
+};
+const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
+
 await mkdir(payloadDirectory, { recursive: true });
 
 if (checkOnly) {
@@ -42,21 +58,33 @@ if (checkOnly) {
     }
     if (current !== parts[index]) mismatches.push(`${index}.txt`);
   }
+
+  let currentManifest = null;
+  try {
+    currentManifest = await readFile(manifestPath, "utf8");
+  } catch {
+    mismatches.push("manifest.json (missing)");
+  }
+  if (currentManifest !== null && currentManifest !== manifestText) {
+    mismatches.push("manifest.json");
+  }
+
   if (mismatches.length) {
     throw new Error(
       `Discover payload is stale: ${mismatches.join(", ")}. Run npm run discover:pack.`,
     );
   }
   console.log(
-    `Discover payload verified: ${source.length} source bytes, ${compressed.length} gzip bytes, ${encoded.length} base64 characters across ${partCount} parts.`,
+    `Discover payload verified: ${source.length} source bytes, ${compressed.length} gzip bytes, ${encoded.length} base64 characters across ${partCount} parts; version ${sourceVersion}.`,
   );
 } else {
-  await Promise.all(
-    parts.map((part, index) =>
+  await Promise.all([
+    ...parts.map((part, index) =>
       writeFile(path.join(payloadDirectory, `${index}.txt`), part, "utf8"),
     ),
-  );
+    writeFile(manifestPath, manifestText, "utf8"),
+  ]);
   console.log(
-    `Packed Discover: ${source.length} source bytes, ${compressed.length} gzip bytes, ${encoded.length} base64 characters across ${partCount} parts.`,
+    `Packed Discover: ${source.length} source bytes, ${compressed.length} gzip bytes, ${encoded.length} base64 characters across ${partCount} parts; version ${sourceVersion}.`,
   );
 }
