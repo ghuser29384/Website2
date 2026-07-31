@@ -26,7 +26,10 @@ export function getTopbarActions(isAuthenticated = false) {
   };
 }
 
-export const FOOTER_LINK_GROUPS = [
+export const FOOTER_LINK_GROUPS: ReadonlyArray<{
+  title: string;
+  links: ReadonlyArray<{ href: string; label: string }>;
+}> = [
   {
     title: "Marketplace",
     links: [
@@ -69,4 +72,4 @@ export const FOOTER_LINK_GROUPS = [
       { href: "/terms", label: "Terms" },
     ],
   },
-] as const;
+];
