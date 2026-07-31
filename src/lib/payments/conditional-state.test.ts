@@ -192,7 +192,7 @@ test("Stripe test mode is available in preview and blocked on the production sit
   const previewSandbox = getConditionalPaymentsEnvironment({
     VERCEL_ENV: "preview",
     STRIPE_SECRET_KEY: "sk_test_example",
-  } as NodeJS.ProcessEnv);
+  } as unknown as NodeJS.ProcessEnv);
   assert.equal(previewSandbox.enabled, true);
   assert.equal(previewSandbox.mode, "test");
   assert.equal(previewSandbox.livemode, false);
@@ -201,7 +201,7 @@ test("Stripe test mode is available in preview and blocked on the production sit
     CONDITIONAL_PAYMENTS_MODE: "test",
     VERCEL_ENV: "production",
     STRIPE_SECRET_KEY: "sk_test_example",
-  } as NodeJS.ProcessEnv);
+  } as unknown as NodeJS.ProcessEnv);
   assert.equal(productionSandbox.enabled, false);
   assert.equal(productionSandbox.mode, "disabled");
   assert.equal(productionSandbox.livemode, false);
@@ -212,14 +212,14 @@ test("explicit disable wins and live mode requires a live key", () => {
   const disabled = getConditionalPaymentsEnvironment({
     CONDITIONAL_PAYMENTS_MODE: "disabled",
     STRIPE_SECRET_KEY: "sk_test_example",
-  } as NodeJS.ProcessEnv);
+  } as unknown as NodeJS.ProcessEnv);
   assert.equal(disabled.enabled, false);
   assert.equal(disabled.mode, "disabled");
 
   const invalidLive = getConditionalPaymentsEnvironment({
     CONDITIONAL_PAYMENTS_MODE: "live",
     STRIPE_SECRET_KEY: "sk_test_example",
-  } as NodeJS.ProcessEnv);
+  } as unknown as NodeJS.ProcessEnv);
   assert.equal(invalidLive.enabled, false);
   assert.equal(invalidLive.livemode, true);
 });

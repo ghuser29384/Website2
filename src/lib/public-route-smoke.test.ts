@@ -37,14 +37,8 @@ function readRepoFile(path: string) {
   return readFileSync(join(process.cwd(), path), "utf8");
 }
 
-function flattenPrimaryNavHrefs() {
-  return getPrimaryNavLinks(false).flatMap((link) =>
-    "items" in link && link.items
-      ? link.items.map((item) => item.href)
-      : "href" in link && link.href
-        ? [link.href]
-        : [],
-  );
+function flattenPrimaryNavHrefs(): string[] {
+  return getPrimaryNavLinks(false).map((link) => String(link.href));
 }
 
 test("public navigation exposes professional marketplace routes", () => {

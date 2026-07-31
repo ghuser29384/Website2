@@ -24,8 +24,8 @@ function validRow() {
     requestedMaximumFundingDollars: "30000.00",
     verifiedSupporterMinimum: 25,
   });
-  assert.equal(result.ok, true);
   if (!result.ok) throw new Error(result.errors.join(" "));
+  assert.equal(result.ok, true);
 
   return {
     id: "11111111-1111-4111-8111-111111111111",

@@ -21,7 +21,7 @@ const readyEnv = {
   X_PROFILE_CONNECTOR_ENABLED: "true",
   X_OAUTH_CLIENT_ID: "client-id",
   X_OAUTH_CLIENT_SECRET: "client-secret",
-} as NodeJS.ProcessEnv;
+} as unknown as NodeJS.ProcessEnv;
 
 const readyConfig = {
   clientId: "client-id",
@@ -34,7 +34,7 @@ const readyConfig = {
 test("the X connector fails closed until every production gate is ready", () => {
   assert.deepEqual(
     getXProfileConnectorAvailability({
-      env: {},
+      env: { NODE_ENV: "test" },
       secureStorageReady: true,
       siteUrl: "https://www.moraltrade.org",
       supabaseReady: true,

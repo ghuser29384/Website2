@@ -117,7 +117,13 @@ export async function startTradeDonationPoolFundingAction(formData: FormData) {
     );
   }
   const agreement = context.agreement as Record<string, unknown>;
-  const payerUserId = payerUserIdForRole(agreement, context.term.payer_role);
+  const payerUserId = payerUserIdForRole(
+    {
+      proposer_id: agreement.proposer_id,
+      responder_id: agreement.responder_id,
+    },
+    context.term.payer_role,
+  );
   if (payerUserId !== viewer.authUser.id) {
     redirectWithMessage(returnTo, "error", "Only the designated payer can fund this obligation.");
   }
