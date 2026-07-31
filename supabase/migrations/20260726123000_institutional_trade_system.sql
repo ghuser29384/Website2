@@ -2374,15 +2374,43 @@ end $$;
 -- bypassing the intended base-table action and policy boundaries. Make every
 -- institutional view security-invoker and revoke all client privileges before
 -- restoring SELECT only on the three deliberately public directory views.
-alter view public.institutional_public_organizations set (security_invoker=true);
-alter view public.institutional_public_programs set (security_invoker=true);
-alter view public.institutional_public_opportunities set (security_invoker=true);
-alter view public.institutional_track_record set (security_invoker=true);
+alter view public.institutional_public_organizations set (security_invoker=false);
+alter view public.institutional_public_programs set (security_invoker=false);
+alter view public.institutional_public_opportunities set (security_invoker=false);
+alter view public.institutional_track_record set (security_invoker=false);
 revoke all on table public.institutional_public_organizations from public,anon,authenticated;
 revoke all on table public.institutional_public_programs from public,anon,authenticated;
 revoke all on table public.institutional_public_opportunities from public,anon,authenticated;
 revoke all on table public.institutional_track_record from public,anon,authenticated;
 grant select on table public.institutional_public_organizations,public.institutional_public_programs,public.institutional_public_opportunities to anon,authenticated;
+
+-- SECURITY DEFINER entry points are deny-by-default. PostgreSQL grants
+-- EXECUTE to PUBLIC when a function is created, and Supabase may also retain
+-- role-specific defaults. Revoke all client execution after every institutional
+-- function exists, then restore only the exact authenticated allowlist below.
+do $$
+declare target record;
+begin
+ for target in
+  select p.oid::regprocedure as function_identity
+  from pg_proc p
+  join pg_namespace n on n.oid=p.pronamespace
+  where n.nspname='public'
+    and p.prosecdef
+    and p.proname like '%institutional%'
+ loop
+  execute format('revoke all on function %s from public,anon,authenticated',target.function_identity);
+ end loop;
+end $$;
+
+-- These five boolean helpers are required by forced-RLS policies. The two
+-- internal assertion/party helpers remain private and are reachable only
+-- through the allowlisted SECURITY DEFINER functions that call them.
+grant execute on function public.is_institutional_organization_member(uuid) to authenticated;
+grant execute on function public.has_institutional_permission(uuid,uuid,text,bigint) to authenticated;
+grant execute on function public.can_manage_institutional_organization(uuid) to authenticated;
+grant execute on function public.can_read_institutional_deal(uuid) to authenticated;
+grant execute on function public.can_manage_institutional_deal(uuid) to authenticated;
 
 revoke all on function public.get_institutional_deal_authorization_snapshot(uuid,uuid,uuid) from public;
 revoke all on function public.generate_institutional_matches(uuid) from public;

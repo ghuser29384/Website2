@@ -314,6 +314,7 @@ async function createFixture() {
     program_id: programA.id,
     party_role: "lead",
     representative_profile_id: lead.id,
+    authority_grant_id: leadGrant.id,
     authority_status: "verified_for_scope",
     approval_status: "approved",
     consent_status: "not_required",
@@ -325,6 +326,7 @@ async function createFixture() {
     program_id: programB.id,
     party_role: "employer",
     representative_profile_id: named.id,
+    authority_grant_id: namedGrant.id,
     authority_status: "verified_for_scope",
     approval_status: "approved",
     consent_status: "not_required",
@@ -519,6 +521,7 @@ async function createFixture() {
     program_id: programA.id,
     party_role: "contributor",
     representative_profile_id: lead.id,
+    authority_grant_id: leadGrant.id,
     authority_status: "verified_for_scope",
     joined_at: new Date().toISOString(),
   });
@@ -528,6 +531,7 @@ async function createFixture() {
     program_id: programB.id,
     party_role: "contributor",
     representative_profile_id: named.id,
+    authority_grant_id: namedGrant.id,
     authority_status: "verified_for_scope",
     joined_at: new Date().toISOString(),
   });
@@ -1848,7 +1852,6 @@ const dealScopedTables = [
   "institutional_risk_reviews",
   "institutional_amendments",
   "institutional_disputes",
-  "institutional_dispute_events",
   "institutional_attribution_claims",
   "institutional_report_snapshots",
   "institutional_command_drafts",
@@ -1907,6 +1910,11 @@ async function verifyZeroSyntheticResidue() {
       residue[table] = await countByIds(table, "deal_id", createdDealIds);
     }
   }
+  residue["institutional_dispute_events.actor_profile_id"] = await countByIds(
+    "institutional_dispute_events",
+    "actor_profile_id",
+    createdUserIds,
+  );
   const authResidue = [];
   for (const id of createdUserIds) {
     const result = await admin.auth.admin.getUserById(id);

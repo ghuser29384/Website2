@@ -217,6 +217,65 @@ test("integration configuration rejects embedded secrets and webhooks use an eve
   ], "integration security");
 });
 
+test("institutional SECURITY DEFINER execution is deny-by-default and exactly allowlisted", () => {
+  expectAll([
+    /p\.prosecdef[\s\S]*p\.proname like '%institutional%'/i,
+    /revoke all on function %s from public,anon,authenticated/i,
+    /grant execute on function public\.is_institutional_organization_member\(uuid\) to authenticated/i,
+    /grant execute on function public\.has_institutional_permission\(uuid,uuid,text,bigint\) to authenticated/i,
+    /grant execute on function public\.can_manage_institutional_organization\(uuid\) to authenticated/i,
+    /grant execute on function public\.can_read_institutional_deal\(uuid\) to authenticated/i,
+    /grant execute on function public\.can_manage_institutional_deal\(uuid\) to authenticated/i,
+  ], "institutional function execute grants");
+
+  const observed = Array.from(
+    migration.matchAll(/grant execute on function public\.([a-z0-9_]+\([^;]*\)) to authenticated;/gi),
+    (match) => match[1].replace(/\s+/g, ""),
+  ).sort();
+  const expected = [
+    "accept_institutional_deal_party(uuid)",
+    "accept_institutional_organization_party(uuid,uuid,uuid,uuid)",
+    "accept_institutional_verifier_assignment(uuid,text,text)",
+    "activate_institutional_pool(uuid,uuid,uuid,uuid)",
+    "can_manage_institutional_deal(uuid)",
+    "can_manage_institutional_organization(uuid)",
+    "can_read_institutional_deal(uuid)",
+    "cast_institutional_pool_vote(uuid,uuid,uuid,text,text,uuid)",
+    "decide_institutional_approval(uuid,text,uuid,text)",
+    "decide_institutional_individual_consent(uuid,text,text)",
+    "generate_institutional_matches(uuid)",
+    "get_institutional_deal_authorization_snapshot(uuid,uuid,uuid)",
+    "has_institutional_permission(uuid,uuid,text,bigint)",
+    "is_institutional_organization_member(uuid)",
+    "record_institutional_match_interest(uuid,uuid,text,text)",
+    "record_institutional_pool_approval(uuid,uuid,uuid,uuid,text)",
+    "request_institutional_individual_consent(uuid,uuid)",
+    "reserve_institutional_budget(uuid,uuid,bigint,uuid,text)",
+    "review_institutional_evidence(uuid,uuid,text,text,uuid,uuid,uuid)",
+    "revoke_institutional_room_access(uuid,uuid)",
+    "revoke_institutional_verifier_assignment(uuid,uuid)",
+    "save_institutional_pool_anchor(uuid,uuid,uuid,uuid,bigint,text,uuid)",
+    "save_institutional_pool_contribution(uuid,uuid,uuid,bigint,text,uuid,uuid)",
+    "save_institutional_pool_underwriting(uuid,uuid,uuid,bigint,text,uuid,uuid)",
+    "select_institutional_proposal_version(uuid,uuid,uuid,uuid)",
+    "sign_institutional_deal(uuid,uuid,uuid,text)",
+    "transition_institutional_deal_stage(uuid,text)",
+    "transition_institutional_milestone_status(uuid,uuid,text)",
+    "transition_institutional_obligation_status(uuid,uuid,text)",
+  ].sort();
+  assert.deepEqual(observed, expected, "authenticated institutional execution must equal the exact 29-function allowlist");
+  assert.doesNotMatch(
+    migration,
+    /grant execute on function public\.[^;]*institutional[^;]* to anon/i,
+    "anonymous callers must never execute institutional SECURITY DEFINER functions",
+  );
+  assert.doesNotMatch(
+    migration,
+    /grant execute on function public\.(?:assert_institutional_aal2|can_act_for_institutional_party)\([^;]*\) to authenticated/i,
+    "internal authorization helpers must remain private",
+  );
+});
+
 test("all institutional base tables use forced RLS, generated FK indexes, and restricted grants", () => {
   expectAll([
     /c\.relname like 'institutional_%'[\s\S]*alter table %I\.%I enable row level security/i,
@@ -226,10 +285,10 @@ test("all institutional base tables use forced RLS, generated FK indexes, and re
     /create index if not exists %I on %I\.%I/i,
     /revoke all on table %I\.%I from anon/i,
     /grant select,insert,update,delete on table %I\.%I to authenticated/i,
-    /alter view public\.institutional_public_organizations set \(security_invoker=true\)/i,
-    /alter view public\.institutional_public_programs set \(security_invoker=true\)/i,
-    /alter view public\.institutional_public_opportunities set \(security_invoker=true\)/i,
-    /alter view public\.institutional_track_record set \(security_invoker=true\)/i,
+    /alter view public\.institutional_public_organizations set \(security_invoker=false\)/i,
+    /alter view public\.institutional_public_programs set \(security_invoker=false\)/i,
+    /alter view public\.institutional_public_opportunities set \(security_invoker=false\)/i,
+    /alter view public\.institutional_track_record set \(security_invoker=false\)/i,
     /revoke all on table public\.institutional_public_organizations from public,anon,authenticated/i,
     /revoke all on table public\.institutional_public_programs from public,anon,authenticated/i,
     /revoke all on table public\.institutional_public_opportunities from public,anon,authenticated/i,
