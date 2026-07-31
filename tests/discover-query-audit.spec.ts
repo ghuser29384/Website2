@@ -3,6 +3,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 
 test("inspect the rendered Discover query controls", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
   await page.goto("/discover", { waitUntil: "networkidle" });
   await expect(page.locator("body")).not.toContainText("Loading Discover…");
   await expect
@@ -69,13 +70,57 @@ test("inspect the rendered Discover query controls", async ({ page }) => {
       textLength: script.textContent?.length ?? 0,
     }));
 
+    function closestOfferRow(control: Element) {
+      let current = control.parentElement;
+      for (let depth = 0; current && depth < 14; depth += 1) {
+        const text = (current.textContent || "").replace(/\s+/g, " ").trim();
+        if (
+          /REQUESTED BY/i.test(text) &&
+          /MECHANISM/i.test(text) &&
+          /DEADLINE/i.test(text) &&
+          /TERMS/i.test(text)
+        ) {
+          return current;
+        }
+        current = current.parentElement;
+      }
+      return null;
+    }
+
+    const rowElements = [...document.querySelectorAll("button, a")]
+      .filter((element) => /^Offer(?:\s*→)?$/i.test((element.textContent || "").trim()))
+      .map(closestOfferRow)
+      .filter((element): element is HTMLElement => Boolean(element));
+    const uniqueRows = [...new Set(rowElements)];
+    const offerRows = uniqueRows.map((element, index) => ({
+      index,
+      tag: element.tagName.toLowerCase(),
+      id: element.id,
+      className: element.className,
+      text: (element.textContent || "").replace(/\s+/g, " ").trim(),
+      html: element.outerHTML,
+    }));
+
     return {
-      audit: { controls, textMatches, globals, scripts, title: document.title, url: location.href },
+      audit: {
+        controls,
+        textMatches,
+        globals,
+        scripts,
+        title: document.title,
+        url: location.href,
+        offerRows: offerRows.map(({ html, ...row }) => row),
+      },
       inlineSources,
+      dom: document.documentElement.outerHTML,
+      offerRows,
     };
   });
 
   await mkdir("test-results", { recursive: true });
+  await page.screenshot({ path: "test-results/discover-desktop.png", fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({ path: "test-results/discover-mobile.png", fullPage: true });
   await Promise.all([
     writeFile(
       "test-results/discover-query-audit.json",
@@ -85,6 +130,12 @@ test("inspect the rendered Discover query controls", async ({ page }) => {
     writeFile(
       "test-results/discover-inline-source.js",
       audit.inlineSources.join("\n\n/* --- INLINE SCRIPT BOUNDARY --- */\n\n"),
+      "utf8",
+    ),
+    writeFile("test-results/discover-dom.html", audit.dom, "utf8"),
+    writeFile(
+      "test-results/discover-offer-rows.json",
+      `${JSON.stringify(audit.offerRows, null, 2)}\n`,
       "utf8",
     ),
   ]);
