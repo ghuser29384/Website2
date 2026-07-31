@@ -168,84 +168,6 @@ begin
   end if;
 
   normalized_identity := jsonb_build_object(
-    'schemaVersion', 'conditional-payment-destination-_at <> old.created_at then
-    raise exception 'Destination request identity is immutable.';
-  end if;
-  if old.status <> 'pending' and (
-    new.status <> old.status
-    or new.reviewed_by is distinct from old.reviewed_by
-    or new.reviewed_at is distinct from old.reviewed_at
-    or new.review_notes <> old.review_notes
-    or new.destination_id is distinct from old.destination_id
-  ) then
-    raise exception 'A reviewed destination request is immutable.';
-  end if;
-  return new;
-end;
-$$;
-
-drop trigger if exists guard_conditional_destination_request_identity_trigger
-  on public.conditional_payment_destination_requests;
-create trigger guard_conditional_destination_request_identity_trigger
-before update or delete on public.conditional_payment_destination_requests
-for each row execute function public.guard_conditional_destination_request_identity();
-
-create or replace function public.prevent_conditional_destination_review_event_mutation()
-returns trigger
-language plpgsql
-set search_path = pg_catalog
-as $$
-begin
-  raise exception 'Destination review events are immutable.';
-end;
-$$;
-
-drop trigger if exists prevent_conditional_destination_review_event_mutation_trigger
-  on public.conditional_payment_destination_review_events;
-create trigger prevent_conditional_destination_review_event_mutation_trigger
-before update or delete on public.conditional_payment_destination_review_events
-for each row execute function public.prevent_conditional_destination_review_event_mutation();
-
-create or replace function public.submit_conditional_payment_destination_request(
-  p_requester_profile_id uuid,
-  p_environment text,
-  p_provider_nonprofit_id text,
-  p_nonprofit_slug text,
-  p_display_name text,
-  p_nonprofit_ein text,
-  p_country_code text,
-  p_website_url text,
-  p_identity_snapshot jsonb
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = pg_catalog
-as $$
-declare
-  normalized_identity jsonb;
-  identity_hash_value text;
-  request_row public.conditional_payment_destination_requests%rowtype;
-begin
-  if p_environment not in ('test', 'live') then
-    raise exception 'Invalid destination-request environment.';
-  end if;
-  if not exists (select 1 from public.profiles where id = p_requester_profile_id) then
-    raise exception 'The requesting profile does not exist.';
-  end if;
-  if length(trim(coalesce(p_provider_nonprofit_id, ''))) < 2
-     or length(trim(coalesce(p_nonprofit_slug, ''))) < 2
-     or length(trim(coalesce(p_display_name, ''))) < 2 then
-    raise exception 'Provider ID, nonprofit slug, and display name are required.';
-  end if;
-  if trim(coalesce(p_website_url, '')) !~ '^https://' then
-    raise exception 'An HTTPS nonprofit profile or official website is required.';
-  end if;
-  if p_identity_snapshot is null or jsonb_typeof(p_identity_snapshot) <> 'object' then
-    raise exception 'A structured identity snapshot is required.';
-  end if;
-
-  normalized_identity := jsonb_build_object(
     'schemaVersion', 'conditional-payment-destination-identity-v1',
     'provider', 'every_org',
     'providerNonprofitId', lower(trim(p_provider_nonprofit_id)),
@@ -518,7 +440,7 @@ begin
     'gate',
     null,
     jsonb_build_object(
-      'environment', p_environm,
+      'environment', p_environment,
       'gateKey', p_gate_key,
       'status', p_status,
       'evidenceSha256', case when p_status = 'passed' then lower(trim(p_evidence_sha256)) else null end
