@@ -1,0 +1,27 @@
+prepare	Commit exact final candidate after every gate passes	﻿2026-07-31T07:04:41.9348092Z ##[group]Run set -euo pipefail
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9348437Z ^[[36;1mset -euo pipefail^[[0m
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9348770Z ^[[36;1mtest "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_HEAD"^[[0m
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9349159Z ^[[36;1mgit config user.name "github-actions[bot]"^[[0m
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9349604Z ^[[36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"^[[0m
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9350113Z ^[[36;1mgit add .github/scripts/institutional-trade-qa-e2e.mjs^[[0m
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9350568Z ^[[36;1mgit commit -m "Fix institutional personal fixture and residue checks"^[[0m
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9350983Z ^[[36;1mgit push origin HEAD:"$CANDIDATE_BRANCH"^[[0m
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9399724Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9400086Z env:
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9400377Z   EXPECTED_SOURCE_HEAD: e15797b2caeb2a9d4ae39913326d11a5ca668095
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9400860Z   SOURCE_BRANCH: agent/pr212-public-view-security-fix-v4-candidate-20260731
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9401393Z   CANDIDATE_BRANCH: agent/pr212-final-security-e2e-candidate-20260731
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9401882Z   NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9402191Z   VERCEL: 1
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9402389Z   VERCEL_ENV: preview
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9402610Z ##[endgroup]
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9681595Z [agent/pr212-public-view-security-fix-v4-candidate-20260731 cfe85f2d] Fix institutional personal fixture and residue checks
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:41.9682976Z  1 file changed, 11 insertions(+), 2 deletions(-)
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:42.4199054Z To https://github.com/ghuser29384/Website2
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:42.4200070Z  ! [rejected]          HEAD -> agent/pr212-final-security-e2e-candidate-20260731 (non-fast-forward)
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:42.4201121Z error: failed to push some refs to 'https://github.com/ghuser29384/Website2'
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:42.4227762Z hint: Updates were rejected because a pushed branch tip is behind its remote
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:42.4228659Z hint: counterpart. If you want to integrate the remote changes, use 'git pull'
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:42.4229312Z hint: before pushing again.
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:42.4229955Z hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+prepare	Commit exact final candidate after every gate passes	2026-07-31T07:04:42.4245245Z ##[error]Process completed with exit code 1.
