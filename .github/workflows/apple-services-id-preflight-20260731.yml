@@ -11,7 +11,7 @@ permissions:
 jobs:
   preflight:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out diagnostic branch
         uses: actions/checkout@v4
@@ -30,7 +30,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Probe registered Apple return URLs without entering credentials
+      - name: Probe plausible registered Apple return URLs without entering credentials
         shell: bash
         run: |
           set -euo pipefail
@@ -40,98 +40,108 @@ jobs:
           import { writeFile } from "node:fs/promises";
 
           const clientId = "org.moraltrade.web";
-          const candidates = [
-            {
-              name: "supabase-callback",
-              redirectUri: "https://jnpoxvalyjtdghnperyu.supabase.co/auth/v1/callback",
-            },
-            {
-              name: "production-confirm",
-              redirectUri: "https://www.moraltrade.org/auth/confirm",
-            },
-            {
-              name: "production-apple-callback",
-              redirectUri: "https://www.moraltrade.org/auth/apple/callback",
-            },
+          const redirectUris = [
+            "https://jnpoxvalyjtdghnperyu.supabase.co/auth/v1/callback",
+            "https://www.moraltrade.org/auth/confirm",
+            "https://moraltrade.org/auth/confirm",
+            "https://www.moraltrade.org/auth/callback",
+            "https://moraltrade.org/auth/callback",
+            "https://www.moraltrade.org/auth/apple/callback",
+            "https://moraltrade.org/auth/apple/callback",
+            "https://www.moraltrade.org/login",
+            "https://moraltrade.org/login",
           ];
+          const responseTypes = ["code", "code id_token"];
           const invalidPattern =
             /invalid[_ -]?(request|client)|invalid web redirect|sign up not completed|unauthorized[_ -]?client/i;
           const browser = await chromium.launch();
           const results = [];
 
           try {
-            for (const candidate of candidates) {
-              const context = await browser.newContext({
-                viewport: { width: 1280, height: 900 },
-              });
-              const page = await context.newPage();
-              const url = new URL("https://appleid.apple.com/auth/authorize");
-              url.searchParams.set("client_id", clientId);
-              url.searchParams.set("redirect_uri", candidate.redirectUri);
-              url.searchParams.set("response_type", "code id_token");
-              url.searchParams.set("response_mode", "form_post");
-              url.searchParams.set("scope", "name email");
-              url.searchParams.set("state", `preflight-${candidate.name}`);
-              url.searchParams.set("nonce", `preflight-${candidate.name}`);
-
-              let navigationError = null;
-              let responseStatus = null;
-              try {
-                const response = await page.goto(url.toString(), {
-                  waitUntil: "domcontentloaded",
-                  timeout: 30_000,
+            for (const redirectUri of redirectUris) {
+              for (const responseType of responseTypes) {
+                const parsedRedirect = new URL(redirectUri);
+                const name = `${parsedRedirect.hostname.replace(/[^a-z0-9]+/gi, "-")}-${parsedRedirect.pathname
+                  .replace(/^\/+|\/+$/g, "")
+                  .replace(/[^a-z0-9]+/gi, "-") || "root"}-${responseType.replace(/\s+/g, "-")}`;
+                const context = await browser.newContext({
+                  viewport: { width: 1280, height: 900 },
                 });
-                responseStatus = response?.status() ?? null;
-                await page.waitForTimeout(8_000);
-              } catch (error) {
-                navigationError = error instanceof Error ? error.message : String(error);
+                const page = await context.newPage();
+                const url = new URL("https://appleid.apple.com/auth/authorize");
+                url.searchParams.set("client_id", clientId);
+                url.searchParams.set("redirect_uri", redirectUri);
+                url.searchParams.set("response_type", responseType);
+                url.searchParams.set("response_mode", "form_post");
+                url.searchParams.set("scope", "name email");
+                url.searchParams.set("state", `preflight-${name}`);
+                if (responseType.includes("id_token")) {
+                  url.searchParams.set("nonce", `preflight-${name}`);
+                }
+
+                let navigationError = null;
+                let responseStatus = null;
+                try {
+                  const response = await page.goto(url.toString(), {
+                    waitUntil: "domcontentloaded",
+                    timeout: 30_000,
+                  });
+                  responseStatus = response?.status() ?? null;
+                  await page.waitForTimeout(3_000);
+                } catch (error) {
+                  navigationError = error instanceof Error ? error.message : String(error);
+                }
+
+                const title = await page.title().catch(() => "");
+                const bodyText = await page
+                  .locator("body")
+                  .innerText({ timeout: 5_000 })
+                  .catch(() => "");
+                const frames = page.frames().map((frame) => {
+                  try {
+                    const frameUrl = new URL(frame.url());
+                    return `${frameUrl.hostname}${frameUrl.pathname}`;
+                  } catch {
+                    return "unparseable-frame";
+                  }
+                });
+                const finalUrl = (() => {
+                  try {
+                    const parsed = new URL(page.url());
+                    return `${parsed.hostname}${parsed.pathname}`;
+                  } catch {
+                    return "unparseable-url";
+                  }
+                })();
+                const hasPasswordInput =
+                  (await page.locator('input[type="password"]').count()) > 0;
+                const hasEmailInput =
+                  (await page.locator('input[type="email"], input[name*="accountName" i]').count()) > 0;
+                const invalid = invalidPattern.test(
+                  `${title}\n${bodyText}\n${navigationError ?? ""}`,
+                );
+
+                await page.screenshot({
+                  path: `artifacts/apple-services-id/${name}.png`,
+                  fullPage: false,
+                });
+
+                results.push({
+                  name,
+                  responseType,
+                  redirectHostAndPath: parsedRedirect.host + parsedRedirect.pathname,
+                  responseStatus,
+                  finalUrl,
+                  title,
+                  invalid,
+                  hasEmailInput,
+                  hasPasswordInput,
+                  frames,
+                  navigationError,
+                  bodyExcerpt: bodyText.replace(/\s+/g, " ").slice(0, 500),
+                });
+                await context.close();
               }
-
-              const title = await page.title().catch(() => "");
-              const bodyText = await page
-                .locator("body")
-                .innerText({ timeout: 5_000 })
-                .catch(() => "");
-              const frames = page.frames().map((frame) => {
-                try {
-                  const frameUrl = new URL(frame.url());
-                  return `${frameUrl.hostname}${frameUrl.pathname}`;
-                } catch {
-                  return "unparseable-frame";
-                }
-              });
-              const finalUrl = (() => {
-                try {
-                  const parsed = new URL(page.url());
-                  return `${parsed.hostname}${parsed.pathname}`;
-                } catch {
-                  return "unparseable-url";
-                }
-              })();
-              const hasPasswordInput = (await page.locator('input[type="password"]').count()) > 0;
-              const hasEmailInput =
-                (await page.locator('input[type="email"], input[name*="accountName" i]').count()) > 0;
-              const invalid = invalidPattern.test(`${title}\n${bodyText}\n${navigationError ?? ""}`);
-
-              await page.screenshot({
-                path: `artifacts/apple-services-id/${candidate.name}.png`,
-                fullPage: false,
-              });
-
-              results.push({
-                name: candidate.name,
-                redirectHostAndPath: new URL(candidate.redirectUri).host + new URL(candidate.redirectUri).pathname,
-                responseStatus,
-                finalUrl,
-                title,
-                invalid,
-                hasEmailInput,
-                hasPasswordInput,
-                frames,
-                navigationError,
-                bodyExcerpt: bodyText.replace(/\s+/g, " ").slice(0, 500),
-              });
-              await context.close();
             }
           } finally {
             await browser.close();
