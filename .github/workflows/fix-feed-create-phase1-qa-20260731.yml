@@ -1,0 +1,73 @@
+name: Temporary repair — Feed-to-Create QA fixtures
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/fix-feed-create-phase1-qa-20260731.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-feed-create-phase1-qa-20260731
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact product branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/feed-create-phase1-20260730
+          fetch-depth: 0
+
+      - name: Verify and repair only the two QA files
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED_HEAD='5dad5c63ab147dc40a2e501c1ae3e177d2c1fc6e'
+          PRODUCT_BRANCH='feature/feed-create-phase1-20260730'
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          regression = Path('supabase/tests/feed_create_phase1.sql')
+          text = regression.read_text(encoding='utf-8')
+          old = """    '', 'One week', 2, '', '', 'open', 'published',
+              'feed-create-incomplete', repeat('6', 64), 'Baseline.', 'Exit.', 'Limit.',
+              'Participants and operator only', now(), 1
+          """
+          new = """    '', 'One week', 2, '', '', 'paused', 'draft',
+              'feed-create-incomplete', repeat('6', 64), 'Baseline.', 'Exit.', 'Limit.',
+              'Participants and operator only', null, 1
+          """
+          if text.count(old) != 1:
+              raise SystemExit('Expected exactly one impossible published-incomplete fixture.')
+          text = text.replace(old, new)
+          old_message = "if not failure_observed then raise exception 'An incomplete source entered Feed-to-Create Phase 1.'; end if;"
+          new_message = "if not failure_observed then raise exception 'An incomplete unpublished source entered Feed-to-Create Phase 1.'; end if;"
+          if text.count(old_message) != 1:
+              raise SystemExit('Expected exactly one incomplete-source assertion.')
+          regression.write_text(text.replace(old_message, new_message), encoding='utf-8')
+
+          cleanup = Path('supabase/tests/feed_create_phase1_browser_cleanup.sql')
+          text = cleanup.read_text(encoding='utf-8')
+          if text.count('select jsonb_build_object(\n') != 1:
+              raise SystemExit('Expected exactly one unordered JSONB residue report.')
+          cleanup.write_text(text.replace('select jsonb_build_object(\n', 'select json_build_object(\n'), encoding='utf-8')
+          PY
+
+          git diff --check
+          test "$(git diff --name-only | LC_ALL=C sort)" = $'supabase/tests/feed_create_phase1.sql\nsupabase/tests/feed_create_phase1_browser_cleanup.sql'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- supabase/tests/feed_create_phase1.sql supabase/tests/feed_create_phase1_browser_cleanup.sql
+          git commit -m 'Repair Feed-to-Create QA fixtures'
+          git push origin "HEAD:$PRODUCT_BRANCH"
