@@ -1,0 +1,34 @@
+name: PR 212 post-cleanup status snapshot
+
+on:
+  push:
+    branches:
+      - agent/pr212-postcleanup-status-20260731
+    paths:
+      - .github/workflows/pr212-postcleanup-status-snapshot.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record target workflow status
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-integrated-postcleanup-snapshot
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow pr212-integrated-postcleanup-gate.yml --branch agent/pr212-main-integration-ops-20260730 --limit 30 --json databaseId,headSha,status,conclusion,createdAt,url > ops/pr212-integrated-postcleanup-snapshot/runs.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-integrated-postcleanup-snapshot/runs.json
+          git commit -m "Snapshot PR 212 post-cleanup gate status"
+          git push origin HEAD:agent/pr212-postcleanup-status-20260731
