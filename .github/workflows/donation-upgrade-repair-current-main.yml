@@ -44,7 +44,7 @@ jobs:
           done
           cat "${chunks[@]}" | base64 --decode > supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
           sha256sum supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
-          echo "eaafc865fccdd20d307b9959828804a3777eb6ba8fb020a78916688b49e6c243  supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql" | sha256sum --check --strict
+          echo "8e247964358c43c24d76927306756fd92cff4fa9684bc543ab3e9b3c24bfe54f  supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql" | sha256sum --check --strict
           grep -F "create table if not exists public.conditional_payment_destination_requests" supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
           grep -F "create or replace function public.review_trade_donation_pool_gate" supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
           git diff --check
