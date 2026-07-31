@@ -20,6 +20,8 @@
   <main><p id="loading">Loading Discover…</p></main>
   <script src="/moral-trade-discover-local-time.js"></script>
   <script>
+    window.__MT_DISCOVER_INITIAL_URL__ = window.location.href;
+    window.__MT_DISCOVER_LOADER_VERSION__ = "20260731-live-search-v4";
     (async () => {
       try {
         const accountPromise = fetch("/api/live-account", {
@@ -101,7 +103,8 @@
           '<script src="/moral-trade-brand.js"></scr' + 'ipt>',
           '<script src="/moral-trade-requester-identity.js"></scr' + 'ipt>',
           '<script src="/moral-trade-input-assist.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-smart-query.js"></scr' + 'ipt>',
+          `<script src="/moral-trade-discover-search-preflight.js?v=${encodeURIComponent(window.__MT_DISCOVER_LOADER_VERSION__)}"></scr` + 'ipt>',
+          `<script src="/moral-trade-discover-search.js?v=${encodeURIComponent(window.__MT_DISCOVER_LOADER_VERSION__)}"></scr` + 'ipt>',
         ].join("");
         const enhancedSource = replacementSource.includes("</body>")
           ? replacementSource.replace("</body>", `${enhancementScripts}</body>`)

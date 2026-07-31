@@ -20,8 +20,9 @@
     "test": "node --import tsx --test src/**/*.test.ts",
     "test:e2e": "playwright test",
     "discover:pack": "node scripts/pack-discover-payload.mjs",
-    "verify:discover": "node scripts/pack-discover-payload.mjs --check && node --test scripts/discover-two-sided-contract.test.mjs scripts/discover-cofund-contract.test.mjs",
-    "test:discover-cofund": "node --test scripts/discover-cofund-contract.test.mjs"
+    "verify:discover": "node scripts/pack-discover-payload.mjs --check && node --test scripts/discover-two-sided-contract.test.mjs scripts/discover-cofund-contract.test.mjs scripts/discover-live-search-loader-contract.test.mjs && node --import tsx --test src/lib/discover-search.test.ts && node --check public/moral-trade-smart-query.js && node --check public/moral-trade-discover-search-preflight.js && node --check public/moral-trade-discover-search.js",
+    "test:discover-cofund": "node --test scripts/discover-cofund-contract.test.mjs",
+    "test:discover-live-search": "node --test scripts/discover-live-search-loader-contract.test.mjs && node --import tsx --test src/lib/discover-search.test.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
