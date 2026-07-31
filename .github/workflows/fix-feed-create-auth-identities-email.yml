@@ -1,0 +1,207 @@
+name: Temporary repair — Feed-to-Create Auth fixture
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/fix-feed-create-auth-identities-email.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-feed-create-auth-identities-email-20260731
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      PRODUCT_BRANCH: feature/feed-create-phase1-20260730
+      EXPECTED_PRODUCT_HEAD: 209fb73138ee88775afb4ca68a6671294321fc1b
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out the exact product branch
+        uses: actions/checkout@v4
+        with:
+          repository: ghuser29384/Website2
+          ref: feature/feed-create-phase1-20260730
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Verify exact branch and isolated-QA database target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_PRODUCT_HEAD"
+          test "$(git rev-list --count HEAD^..HEAD)" = "1"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
+          PY
+
+      - name: Repair only the authenticated browser fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("supabase/tests/feed_create_phase1_browser_fixture.sql")
+          text = path.read_text(encoding="utf-8")
+
+          replacements = [
+              (
+                  """insert into auth.identities (\n  provider_id, user_id, identity_data, provider, email,\n  last_sign_in_at, created_at, updated_at\n)""",
+                  """insert into auth.identities (\n  provider_id, user_id, identity_data, provider,\n  last_sign_in_at, created_at, updated_at\n)""",
+              ),
+              (
+                  """  'email', actor.email, now(), now(), now()""",
+                  """  'email', now(), now(), now()""",
+              ),
+              (
+                  """set user_id = excluded.user_id,\n    identity_data = excluded.identity_data,\n    email = excluded.email,\n    updated_at = now();""",
+                  """set user_id = excluded.user_id,\n    identity_data = excluded.identity_data,\n    updated_at = now();""",
+              ),
+              (
+                  """   '', '', 'open', 'published', 'feed-create-browser-incomplete', repeat('f', 64),""",
+                  """   '', '', 'paused', 'draft', 'feed-create-browser-incomplete', repeat('f', 64),""",
+              ),
+          ]
+
+          for before, after in replacements:
+              count = text.count(before)
+              if count != 1:
+                  raise SystemExit(f"Expected one fixture fragment, found {count}: {before[:80]!r}")
+              text = text.replace(before, after)
+
+          if "provider, email," in text or "email = excluded.email" in text:
+              raise SystemExit("A write to generated auth.identities.email remains.")
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          test "$(git diff --name-only)" = "supabase/tests/feed_create_phase1_browser_fixture.sql"
+          git diff --check
+
+      - name: Create and verify authenticated browser fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export FEED_CREATE_QA_PASSWORD="$qa_password"
+          printf 'FEED_CREATE_QA_PASSWORD=%s\n' "$qa_password" >> "$GITHUB_ENV"
+
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/feed_create_phase1_browser_fixture.sql \
+            | tee feed-create-fixture-repair.log
+
+          generated_emails="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from auth.identities where user_id::text like 'fa100000-%' or user_id::text like 'fa200000-%' and email like 'feed-create-%@qa.invalid';" \
+            | tr -d '[:space:]')"
+          test "$generated_emails" = "5"
+
+          node --input-type=module <<'NODE' | tee feed-create-auth-repair.log
+          const emails = [
+            "feed-create-viewer-a@qa.invalid",
+            "feed-create-viewer-b@qa.invalid",
+            "feed-create-zero@qa.invalid",
+          ];
+          for (const email of emails) {
+            const response = await fetch(
+              `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/token?grant_type=password`,
+              {
+                method: "POST",
+                headers: {
+                  apikey: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+                  Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ email, password: process.env.FEED_CREATE_QA_PASSWORD }),
+              },
+            );
+            if (!response.ok) {
+              throw new Error(`${email}: ${response.status} ${await response.text()}`);
+            }
+            const payload = await response.json();
+            if (!payload.access_token || payload.user?.email !== email) {
+              throw new Error(`${email}: incomplete Auth response`);
+            }
+          }
+          console.log("Verified the three isolated-QA Feed-to-Create browser identities.");
+          NODE
+
+      - name: Remove all browser fixtures and prove zero residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --file supabase/tests/feed_create_phase1_browser_cleanup.sql \
+            | tee feed-create-cleanup-repair.log
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          lines = [line.strip() for line in Path("feed-create-cleanup-repair.log").read_text().splitlines() if line.strip()]
+          residue = json.loads(lines[-1])
+          expected = {"offers": 0, "exposures": 0, "profiles": 0, "authUsers": 0}
+          if residue != expected:
+              raise SystemExit(f"Unexpected isolated-QA residue: {residue}")
+          print(json.dumps(residue, sort_keys=True))
+          PY
+
+      - name: Amend, rebase to current main, and force-push the one-commit candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/tests/feed_create_phase1_browser_fixture.sql
+          git commit --amend --no-edit
+
+          git fetch origin main
+          git rebase origin/main
+          test "$(git merge-base origin/main HEAD)" = "$(git rev-parse origin/main)"
+          test "$(git rev-list --count origin/main..HEAD)" = "1"
+          test "$(git diff --name-only origin/main...HEAD | wc -l | tr -d '[:space:]')" = "21"
+          git diff --check origin/main...HEAD
+
+          git push \
+            --force-with-lease="refs/heads/${PRODUCT_BRANCH}:${EXPECTED_PRODUCT_HEAD}" \
+            origin "HEAD:refs/heads/${PRODUCT_BRANCH}"
+
+          printf 'base=%s\n' "$(git rev-parse origin/main)"
+          printf 'head=%s\n' "$(git rev-parse HEAD)"
+          printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
