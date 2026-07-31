@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { oauthSignInAction, signInAction, signUpAction } from "@/app/actions";
+import { AppleSignInButton } from "@/components/auth/apple-sign-in-button";
 import { AuthSubmitButton } from "@/components/auth/auth-submit-button";
 import {
   buildAuthPath,
@@ -292,6 +293,10 @@ function ProviderButton({
   provider: OAuthProvider;
   returnTo: string;
 }) {
+  if (provider === "apple") {
+    return <AppleSignInButton mode={mode} returnTo={returnTo} />;
+  }
+
   const copy = getProviderCopy(provider);
 
   return (
