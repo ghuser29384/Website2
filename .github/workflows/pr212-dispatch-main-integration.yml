@@ -1,4 +1,4 @@
-name: Dispatch PR 212 integrated rendered regressions
+name: Dispatch PR 212 integrated rendered regressions v2
 
 on:
   push:
@@ -18,5 +18,5 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Dispatch exact rendered-regression workflow
-        run: gh workflow run pr212-integrated-rendered-regressions.yml --repo "$GITHUB_REPOSITORY" --ref agent/pr212-main-integration-ops-20260730
+      - name: Dispatch exact rendered-regression v2 workflow
+        run: gh workflow run pr212-integrated-rendered-regressions-v2.yml --repo "$GITHUB_REPOSITORY" --ref agent/pr212-main-integration-ops-20260730
