@@ -6,6 +6,10 @@ const migration = readFileSync(
   "supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql",
   "utf8",
 );
+const gatePolicyMigration = readFileSync(
+  "supabase/migrations/20260731123000_donation_upgrade_public_provider_conformance_gates.sql",
+  "utf8",
+);
 const poolLibrary = readFileSync("src/lib/trade-donation-pool.ts", "utf8");
 const poolActions = readFileSync("src/app/trade-donation-pool-actions.ts", "utf8");
 const poolStripeWebhook = readFileSync(
@@ -145,10 +149,22 @@ test("participant and operator surfaces disclose custody and donor-of-record bou
   assert.match(poolStage, /Refund before bundle freeze/);
   assert.match(poolStage, /After freeze/);
   assert.match(runbook, /double-entry/i);
-  assert.match(runbook, /Every\.org approval/i);
+  assert.match(runbook, /No external provider approval letter is required/i);
   assert.match(runbook, /chargeback/i);
   assert.match(runbook, /Four users fund \$2\.50 each/i);
   assert.match(runbook, /Any mismatch activates zero components/i);
+});
+
+test("external provider letters are retired in favor of exact technical readiness", () => {
+  assert.match(gatePolicyMigration, /'every_org_live_flow_verified'/);
+  assert.match(gatePolicyMigration, /'stripe_live_account_ready'/);
+  assert.match(gatePolicyMigration, /externalWrittenConfirmationRequired', false/);
+  assert.match(
+    gatePolicyMigration,
+    /delete from public\.trade_donation_pool_gate_status[\s\S]*?'every_org_written_approval'[\s\S]*?'stripe_account_and_product_review'/i,
+  );
+  assert.doesNotMatch(runbook, /written Every\.org approval/i);
+  assert.doesNotMatch(runbook, /Stripe live account and product review/i);
 });
 
 test("feature mode is separately fail-closed in production configuration", () => {
