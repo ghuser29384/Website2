@@ -1,0 +1,247 @@
+name: Production Discover Co-Fund final smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/production-discover-cofund-final-smoke.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-discover-cofund-final-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify remaining production search and mobile paths
+        env:
+          BASE_URL: https://www.moraltrade.org
+          EXPECTED_PAYLOAD_VERSION: a84dabdc58b8c576b7cdd88f67e959629c2fd4ce
+        run: |
+          mkdir -p production-final-smoke
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { writeFile } from "node:fs/promises";
+          import { chromium } from "@playwright/test";
+
+          const baseUrl = process.env.BASE_URL;
+          const expectedPayloadVersion = process.env.EXPECTED_PAYLOAD_VERSION;
+          const report = {
+            baseUrl,
+            expectedPayloadVersion,
+            checkedAt: new Date().toISOString(),
+            checks: {},
+          };
+
+          function monitor(page) {
+            const failures = { consoleErrors: [], pageErrors: [], failedRequests: [] };
+            page.on("console", (message) => {
+              if (message.type() === "error") failures.consoleErrors.push(message.text());
+            });
+            page.on("pageerror", (error) => failures.pageErrors.push(error.message));
+            page.on("requestfailed", (request) => {
+              const error = request.failure()?.errorText || "failed";
+              if (error.includes("ERR_ABORTED")) return;
+              failures.failedRequests.push({ method: request.method(), url: request.url(), error });
+            });
+            return failures;
+          }
+
+          function assertHealthy(failures, label) {
+            assert.deepEqual(failures.consoleErrors, [], `${label}: console errors`);
+            assert.deepEqual(failures.pageErrors, [], `${label}: page errors`);
+            assert.deepEqual(failures.failedRequests, [], `${label}: failed requests`);
+          }
+
+          async function waitForDiscover(page) {
+            await page.waitForFunction(
+              () => Boolean(document.body) && !document.body.innerText.includes("Loading Discover…"),
+              null,
+              { timeout: 120_000 },
+            );
+            await page.waitForFunction(
+              () => Boolean(window.__moralTradeSmartQueryLoaded),
+              null,
+              { timeout: 120_000 },
+            );
+          }
+
+          async function createContext(browser, viewport) {
+            const context = await browser.newContext({ viewport });
+            await context.addCookies([
+              {
+                name: "mt_walkthrough_seen",
+                value: "1",
+                domain: "www.moraltrade.org",
+                path: "/",
+                httpOnly: true,
+                secure: true,
+                sameSite: "Lax",
+              },
+            ]);
+            return context;
+          }
+
+          async function openDiscover(page, path) {
+            const response = await page.goto(`${baseUrl}${path}`, {
+              waitUntil: "networkidle",
+              timeout: 120_000,
+            });
+            assert.equal(response?.status(), 200, `${path} must return 200`);
+            await waitForDiscover(page);
+            return response;
+          }
+
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const context = await createContext(browser, { width: 1600, height: 1000 });
+
+            const groupBuying = await context.newPage();
+            const groupFailures = monitor(groupBuying);
+            await openDiscover(groupBuying, "/discover?domain=offers&view=list#discover");
+            const groupForm = groupBuying.locator("#command-form");
+            await groupForm.locator("#command-input").fill("group buying a moral trade");
+            await groupForm.getByRole("button", { name: /Run search/i }).click();
+            await groupBuying.waitForURL(/offerKind=co-fund/, { timeout: 30_000 });
+            await waitForDiscover(groupBuying);
+            assert.match(groupBuying.url(), /domain=offers/);
+            assert.match(groupBuying.url(), /view=list/);
+            assert.equal(
+              await groupBuying.locator('.offer-transaction-row[data-offer-kind="co-fund"]').count(),
+              2,
+            );
+            assert.equal(
+              await groupBuying
+                .getByRole("group", { name: "Offer listing type" })
+                .first()
+                .getByRole("button", { name: "Co-Funds" })
+                .getAttribute("aria-pressed"),
+              "true",
+            );
+            const groupPayloadVersion = await groupBuying.evaluate(
+              () => window.__MT_DISCOVER_PAYLOAD_VERSION__ || "",
+            );
+            assert.equal(groupPayloadVersion, expectedPayloadVersion);
+            await groupBuying.screenshot({
+              path: "production-final-smoke/group-buying-search.png",
+              fullPage: true,
+            });
+            assertHealthy(groupFailures, "group-buying search");
+            report.checks.groupBuyingSearch = {
+              url: groupBuying.url(),
+              coFundCount: 2,
+              payloadVersion: groupPayloadVersion,
+              failures: groupFailures,
+            };
+
+            const assurance = await context.newPage();
+            const assuranceFailures = monitor(assurance);
+            await openDiscover(assurance, "/discover?domain=offers&view=list#discover");
+            const assuranceForm = assurance.locator("#command-form");
+            await assuranceForm.locator("#command-input").fill("dominant assurance contracts");
+            await assuranceForm.getByRole("button", { name: /Run search/i }).click();
+            await assurance.waitForURL(/domain=pools/, { timeout: 30_000 });
+            await waitForDiscover(assurance);
+            assert.doesNotMatch(assurance.url(), /offerKind=co-fund/);
+            assert.equal(
+              await assurance.locator('.offer-transaction-row[data-offer-kind="co-fund"]').count(),
+              0,
+            );
+            await assurance.screenshot({
+              path: "production-final-smoke/dominant-assurance-search.png",
+              fullPage: true,
+            });
+            assertHealthy(assuranceFailures, "dominant-assurance search");
+            report.checks.assuranceSearch = {
+              url: assurance.url(),
+              coFundCount: 0,
+              failures: assuranceFailures,
+            };
+
+            await context.close();
+
+            for (const { width, height, label } of [
+              { width: 390, height: 844, label: "390x844" },
+              { width: 320, height: 568, label: "320x568" },
+            ]) {
+              const mobileContext = await createContext(browser, { width, height });
+              const mobile = await mobileContext.newPage();
+              const failures = monitor(mobile);
+              const response = await openDiscover(
+                mobile,
+                "/discover?domain=offers&view=list&offerKind=co-fund#discover",
+              );
+              const rows = mobile.locator('.offer-transaction-row[data-offer-kind="co-fund"]');
+              assert.equal(await rows.count(), 2);
+              const row = mobile.locator('[data-row-id="cofund-bio-salary"]');
+              await row.waitFor({ state: "visible" });
+              const offerBox = await row.locator('[data-exchange-side="offer"]').boundingBox();
+              const returnBox = await row.locator('[data-exchange-side="return"]').boundingBox();
+              assert.ok(offerBox && returnBox);
+              assert.ok(returnBox.y >= offerBox.y + offerBox.height - 1, `${label}: sides must stack`);
+              const overflow = await mobile.evaluate(() => ({
+                documentWidth: document.documentElement.scrollWidth,
+                bodyWidth: document.body.scrollWidth,
+                viewportWidth: window.innerWidth,
+              }));
+              assert.ok(overflow.documentWidth <= overflow.viewportWidth + 1, `${label}: document overflow`);
+              assert.ok(overflow.bodyWidth <= overflow.viewportWidth + 1, `${label}: body overflow`);
+              await mobile.screenshot({
+                path: `production-final-smoke/mobile-${label}.png`,
+                fullPage: true,
+              });
+              assertHealthy(failures, `mobile ${label}`);
+              report.checks[`mobile-${label}`] = {
+                routeStatus: response?.status(),
+                coFundCount: 2,
+                stacked: true,
+                overflow,
+                failures,
+              };
+              await mobileContext.close();
+            }
+
+            report.pass = true;
+          } catch (error) {
+            report.pass = false;
+            report.error = error instanceof Error ? `${error.stack || error.message}` : String(error);
+            throw error;
+          } finally {
+            await writeFile(
+              "production-final-smoke/report.json",
+              `${JSON.stringify(report, null, 2)}\n`,
+            );
+            await browser.close();
+          }
+          NODE
+
+      - name: Upload production smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-discover-cofund-final-smoke
+          path: production-final-smoke
+          if-no-files-found: error
+          retention-days: 7
