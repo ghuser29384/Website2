@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ops/rebuild-complete-profile-pr-20260731-v2
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
