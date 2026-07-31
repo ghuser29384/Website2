@@ -1,0 +1,82 @@
+name: PR 212 final v3 isolated observer
+
+on:
+  push:
+    branches:
+      - agent/pr212-final-v3-observer-20260731
+    paths:
+      - .github/workflows/pr212-final-v3-isolated-observer.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr212-integrated-final-gate-v3.yml
+      TARGET_BRANCH: agent/pr212-main-integration-ops-20260730
+      TARGET_HEAD: 2af308c0a616f54e42067e7bfb2c87352d0cf193
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Poll exact corrected final-v3 run
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-final-v3-isolated
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 560); do
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$TARGET_WORKFLOW" \
+              --branch "$TARGET_BRANCH" \
+              --limit 80 \
+              --json databaseId,headSha,status,conclusion,createdAt,url,event \
+              > /tmp/runs.json
+            run_id="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+            status="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+            conclusion="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 10
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "No exact corrected final-v3 run found." >&2
+            exit 1
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > /tmp/run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/jobs.json
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" > /tmp/artifacts.json
+
+          jq -n \
+            --arg observed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg target_head "$TARGET_HEAD" \
+            --arg run_id "$run_id" \
+            --arg status "$status" \
+            --arg conclusion "$conclusion" \
+            --slurpfile runs /tmp/runs.json \
+            --slurpfile run /tmp/run.json \
+            --slurpfile jobs /tmp/jobs.json \
+            --slurpfile artifacts /tmp/artifacts.json \
+            '{observed_at:$observed_at,target_head:$target_head,run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0],run:$run[0],jobs:$jobs[0].jobs,artifacts:$artifacts[0].artifacts}' \
+            > ops/pr212-final-v3-isolated/status.json
+          tail -n 2000 /tmp/failed.log > ops/pr212-final-v3-isolated/failed-log.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-final-v3-isolated
+          git commit -m "Record exact corrected PR 212 final-v3 result"
+          git push origin HEAD:agent/pr212-final-v3-observer-20260731
+
+          test "$status" = "completed"
