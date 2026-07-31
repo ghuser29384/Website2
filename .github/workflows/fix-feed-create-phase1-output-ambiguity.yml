@@ -1,4 +1,4 @@
-name: Temporary repair — Feed-to-Create output ambiguity
+name: Temporary repair — rebase Feed-to-Create onto current main
 
 on:
   pull_request:
@@ -11,21 +11,19 @@ permissions:
   contents: write
 
 concurrency:
-  group: fix-feed-create-phase1-output-ambiguity
+  group: fix-feed-create-phase1-current-main
   cancel-in-progress: false
 
 jobs:
-  repair:
+  rebase:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     env:
       PRODUCT_BRANCH: feature/feed-create-phase1-20260730
-      EXPECTED_PRODUCT_HEAD: c181e0eb4d2c708a49713f061e2619fddf85ffd3
-      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
-      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
-      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_PRODUCT_HEAD: 21fec04c6ea6c3911e14e1cedb4bf57b54aa758e
+      EXPECTED_MAIN_HEAD: 0a26b17d75c9590f92c73663ea19fe1b0e8aa6c4
     steps:
-      - name: Check out the exact product branch
+      - name: Check out the exact repaired product branch
         uses: actions/checkout@v4
         with:
           repository: ghuser29384/Website2
@@ -33,118 +31,28 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
-      - name: Install PostgreSQL client
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install --yes postgresql-client > /dev/null
-
-      - name: Verify isolated-QA database target
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${QA_SUPABASE_DB_URL:-}"
-          python3 - <<'PY'
-          import os
-          from urllib.parse import parse_qs, urlparse
-
-          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
-          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
-          valid = (
-              parsed.scheme in {"postgres", "postgresql"}
-              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
-              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
-              and parsed.port == 5432
-              and parsed.path == "/postgres"
-              and ssl_modes == ["require"]
-              and bool(parsed.password)
-          )
-          if not valid:
-              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
-          PY
-
-      - name: Repair, prove, amend, and force-push the one-commit candidate
+      - name: Rebase the one product commit onto exact current main
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_PRODUCT_HEAD"
-          test "$(git merge-base 36650b48f9e664ea6d67c0840cf6a803060e8d7c HEAD)" = "36650b48f9e664ea6d67c0840cf6a803060e8d7c"
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("supabase/migrations/20260730150000_feed_create_phase1.sql")
-          text = path.read_text(encoding="utf-8")
-          before = """    select * into existing_link
-              from public.moral_trade_feed_create_links
-              where derived_offer_id = existing_offer.id
-                and creator_profile_id = p_actor_id
-                and source_exposure_id = exposure_row.id
-                and source_offer_id = source_row.id
-                and source_terms_version = p_source_terms_version
-              limit 1;"""
-          after = """    select * into existing_link
-              from public.moral_trade_feed_create_links as existing_feed_link
-              where existing_feed_link.derived_offer_id = existing_offer.id
-                and existing_feed_link.creator_profile_id = p_actor_id
-                and existing_feed_link.source_exposure_id = exposure_row.id
-                and existing_feed_link.source_offer_id = source_row.id
-                and existing_feed_link.source_terms_version = p_source_terms_version
-              limit 1;"""
-          if text.count(before) != 1:
-              raise SystemExit(f"Expected exactly one ambiguous existing-link lookup; found {text.count(before)}")
-          repaired = text.replace(before, after)
-          if repaired.count("where derived_offer_id = existing_offer.id") != 0:
-              raise SystemExit("The ambiguous output-column reference remains.")
-          path.write_text(repaired, encoding="utf-8")
-
-          start_marker = "create or replace function public.moral_trade_feed_create_save_service("
-          start = repaired.index(start_marker)
-          end_marker = "\n$function$;"
-          end = repaired.index(end_marker, start) + len(end_marker)
-          Path("/tmp/feed-create-save-service.sql").write_text(repaired[start:end] + "\n", encoding="utf-8")
-          PY
-
-          test "$(git diff --name-only)" = "supabase/migrations/20260730150000_feed_create_phase1.sql"
-          git diff --check
-
-          psql "$QA_SUPABASE_DB_URL" \
-            --no-psqlrc --set ON_ERROR_STOP=1 \
-            --file /tmp/feed-create-save-service.sql
-
-          psql "$QA_SUPABASE_DB_URL" \
-            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
-            --command "select (pg_get_functiondef('public.moral_trade_feed_create_save_service(uuid,text,text,text,uuid,uuid,integer,jsonb,boolean,text,text,text,text,text,text,date,date,text,text,text,text,text)'::regprocedure) like '%from public.moral_trade_feed_create_links as existing_feed_link%') and not (pg_get_functiondef('public.moral_trade_feed_create_save_service(uuid,text,text,text,uuid,uuid,integer,jsonb,boolean,text,text,text,text,text,text,date,date,text,text,text,text,text)'::regprocedure) like '%where derived_offer_id = existing_offer.id%');" \
-            | grep -qx 't'
-
-          psql "$QA_SUPABASE_DB_URL" \
-            --no-psqlrc --set ON_ERROR_STOP=1 \
-            --file supabase/tests/feed_create_phase1.sql \
-            | tee feed-create-database-repair.log
-
-          psql "$QA_SUPABASE_DB_URL" \
-            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
-            --file supabase/tests/feed_create_phase1_browser_cleanup.sql \
-            | tee feed-create-cleanup-repair.log
-
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          lines = [line.strip() for line in Path("feed-create-cleanup-repair.log").read_text().splitlines() if line.strip()]
-          residue = json.loads(lines[-1])
-          expected = {"offers": 0, "exposures": 0, "profiles": 0, "authUsers": 0}
-          if residue != expected:
-              raise SystemExit(f"Unexpected QA residue: {residue}")
-          PY
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_HEAD"
+          test "$(git rev-list --count 36650b48f9e664ea6d67c0840cf6a803060e8d7c..HEAD)" = "1"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add supabase/migrations/20260730150000_feed_create_phase1.sql
-          git commit --amend --no-edit
-          test "$(git rev-list --count 36650b48f9e664ea6d67c0840cf6a803060e8d7c..HEAD)" = "1"
+          git rebase origin/main
+
+          test "$(git merge-base origin/main HEAD)" = "$EXPECTED_MAIN_HEAD"
+          test "$(git rev-list --count origin/main..HEAD)" = "1"
+          test "$(git diff --name-only origin/main...HEAD | wc -l | tr -d '[:space:]')" = "21"
+          git diff --check origin/main...HEAD
+
           git push \
             --force-with-lease="refs/heads/${PRODUCT_BRANCH}:${EXPECTED_PRODUCT_HEAD}" \
             origin "HEAD:refs/heads/${PRODUCT_BRANCH}"
 
+          printf 'base=%s\n' "$(git rev-parse origin/main)"
           printf 'head=%s\n' "$(git rev-parse HEAD)"
           printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
