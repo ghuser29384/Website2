@@ -1,0 +1,118 @@
+name: Smoke Complete Profile preview
+
+on:
+  push:
+    branches:
+      - qa/smoke-complete-profile-preview-20260731
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPECTED_SHA: 7b8ab3c9e7cf952d14c5207e67963c1efdbe1eac
+      PREVIEW_ORIGIN: https://moraltrade-site-le4idhdrx-ellen-s.vercel.app
+      SHARE_TOKEN: g6b6uRtZceo8PZFKyrmUMuzLsPUrDDMw
+      STATUS_CONTEXT: QA / Complete Profile preview smoke
+    steps:
+      - name: Mark preview smoke pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state=pending \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="Testing first-time and returning-user preview routes" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Check out exact product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: fix/complete-profile-returning-users-20260731
+          fetch-depth: 0
+
+      - name: Verify exact candidate
+        run: test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Exercise both preview states
+        run: |
+          cat > /tmp/preview-smoke.mjs <<'JS'
+          import assert from "node:assert/strict";
+          import { chromium } from "@playwright/test";
+
+          const origin = process.env.PREVIEW_ORIGIN;
+          const token = process.env.SHARE_TOKEN;
+          const host = new URL(origin).hostname;
+          const target = `${origin}/complete-profile?_vercel_share=${encodeURIComponent(token)}`;
+          const browser = await chromium.launch({ headless: true });
+
+          try {
+            const firstTime = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+            const firstPage = await firstTime.newPage();
+            await firstPage.goto(target, { waitUntil: "networkidle" });
+            assert.equal(new URL(firstPage.url()).pathname, "/walkthrough");
+            const firstCookies = await firstTime.cookies(origin);
+            assert.equal(firstCookies.find((cookie) => cookie.name === "mt_walkthrough_seen")?.value, "1");
+            await firstTime.close();
+
+            const returning = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+            await returning.addCookies([{ name: "mt_walkthrough_seen", value: "1", domain: host, path: "/", secure: true, httpOnly: true, sameSite: "Lax" }]);
+            const returningPage = await returning.newPage();
+            await returningPage.goto(target, { waitUntil: "networkidle" });
+            assert.equal(new URL(returningPage.url()).pathname, "/complete-profile");
+            await returningPage.getByRole("heading", { name: "Spend 100 sparks of attention." }).waitFor();
+            await returningPage.getByLabel("Profile setup: priorities").waitFor();
+            assert.equal(await returningPage.getByLabel("Walkthrough progress: final step").count(), 0);
+            await returning.close();
+
+            const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
+            await mobile.addCookies([{ name: "mt_walkthrough_seen", value: "1", domain: host, path: "/", secure: true, httpOnly: true, sameSite: "Lax" }]);
+            const mobilePage = await mobile.newPage();
+            await mobilePage.goto(target, { waitUntil: "networkidle" });
+            await mobilePage.getByLabel("80 of 100 attention points assigned").waitFor();
+            const dimensions = await mobilePage.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, innerWidth: window.innerWidth }));
+            assert.ok(dimensions.scrollWidth <= dimensions.innerWidth, JSON.stringify(dimensions));
+            await mobile.close();
+
+            console.log(JSON.stringify({ firstTime: "walkthrough", returning: "complete-profile", mobile: "complete-profile", preview: origin }, null, 2));
+          } finally {
+            await browser.close();
+          }
+          JS
+          node /tmp/preview-smoke.mjs
+
+      - name: Publish preview smoke success
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state=success \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="First-time, returning desktop, and returning mobile preview checks passed" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Publish preview smoke failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state=failure \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="Preview smoke failed" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
