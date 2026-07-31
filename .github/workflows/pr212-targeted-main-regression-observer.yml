@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 100
     env:
       GH_TOKEN: ${{ github.token }}
-      TARGET_WORKFLOW: pr212-targeted-main-regression.yml
+      TARGET_WORKFLOW: pr212-targeted-main-regression-v2.yml
       TARGET_BRANCH: agent/pr212-main-integration-ops-20260730
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ops/pr212-targeted-main-regression
+          mkdir -p ops/pr212-targeted-main-regression-v2
           run_id=""
           status=""
           conclusion=""
@@ -71,13 +71,15 @@ jobs:
             --slurpfile jobs /tmp/jobs.json \
             --slurpfile artifacts /tmp/artifacts.json \
             '{observed_at:$observed_at,run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0],run:$run[0],jobs:$jobs[0].jobs,artifacts:$artifacts[0].artifacts}' \
-            > ops/pr212-targeted-main-regression/terminal-report.json
-          tail -n 1200 /tmp/failed.log > ops/pr212-targeted-main-regression/failed-log.txt
+            > ops/pr212-targeted-main-regression-v2/terminal-report.json
+          tail -n 1600 /tmp/failed.log > ops/pr212-targeted-main-regression-v2/failed-log.txt
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ops/pr212-targeted-main-regression/terminal-report.json ops/pr212-targeted-main-regression/failed-log.txt
-          git commit -m "Record PR 212 targeted main-regression result"
+          git add ops/pr212-targeted-main-regression-v2/terminal-report.json ops/pr212-targeted-main-regression-v2/failed-log.txt
+          git commit -m "Record PR 212 targeted main-regression v2 result"
           git push origin HEAD:agent/pr212-main-integration-ops-20260730
 
           test "$status" = "completed"
+
+# Observe the evidence-free integrated candidate.
