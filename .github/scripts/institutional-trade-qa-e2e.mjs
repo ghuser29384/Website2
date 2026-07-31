@@ -1017,7 +1017,7 @@ async function relationshipAndDatabaseNegativeChecks(value) {
       status: "draft",
       created_by: value.lead.id,
     }),
-    /baseline organization\/program scope must exactly match/i,
+    /baseline profile or organization\/program scope must exactly match the deal party/i,
   );
 
   await expectDatabaseFailure(
