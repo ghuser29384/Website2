@@ -94,6 +94,18 @@ if source.count(old_calls) != 1:
     raise SystemExit(f"Expected one sequential deployment caller block, found {source.count(old_calls)}")
 source = source.replace(old_calls, new_calls, 1)
 
+harness_write = '''text = text.replace(bypass_cookie_line, "", 1)
+path.write_text(text, encoding="utf-8")'''
+harness_write_with_baseline = '''text = text.replace(bypass_cookie_line, "", 1)
+baseline_protection = "    protectedPreview: false,\\n"
+if text.count(baseline_protection) != 1:
+    raise SystemExit(f"Expected exactly one unprotected baseline session; found {text.count(baseline_protection)}.")
+text = text.replace(baseline_protection, "    protectedPreview: true,\\n", 1)
+path.write_text(text, encoding="utf-8")'''
+if source.count(harness_write) != 2:
+    raise SystemExit(f"Expected two member-harness patch sites; found {source.count(harness_write)}")
+source = source.replace(harness_write, harness_write_with_baseline)
+
 Path(sys.argv[2]).write_text(source, encoding="utf-8")
 PY
 
