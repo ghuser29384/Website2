@@ -253,10 +253,11 @@ test("React and static Discover pledge-impact surfaces remain usable on mobile",
     { waitUntil: "networkidle" },
   );
   await expect(page.locator("body")).not.toContainText("Loading Discover…");
-  await expect(page.locator('[data-pledge-impact-root][data-pool-key="pool-wild-research"]').first()).toHaveAttribute(
-    "data-impact-status",
-    "available",
-  );
+  const mobileSheet = page.locator(".mobile-sheet");
+  await expect(mobileSheet).toBeVisible();
+  await expect(
+    mobileSheet.locator('[data-pledge-impact-root][data-pool-key="pool-wild-research"]'),
+  ).toHaveAttribute("data-impact-status", "available");
   const overflow = await page.evaluate(() => ({
     documentWidth: document.documentElement.scrollWidth,
     viewportWidth: window.innerWidth,
