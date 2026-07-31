@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - ".github/workflows/apply-assurance-query-hotfix-pr.yml"
+      - "scripts/apply-assurance-query-hotfix.py"
 
 permissions:
   contents: write
