@@ -1,0 +1,257 @@
+name: PR 212 public-directory security repair v3
+
+on:
+  push:
+    branches:
+      - agent/pr212-public-view-security-fix-ops-20260731
+    paths:
+      - .github/workflows/pr212-public-view-security-fix-v3.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-public-directory-security-repair-v3
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EXPECTED_FEATURE_HEAD: 46524afa6c37977b9ce431087117472180590712
+      FEATURE_BRANCH: feat/institutional-trade-system
+      CANDIDATE_BRANCH: agent/pr212-public-view-security-fix-v3-candidate-20260731
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Refuse stale or unexpected source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+          test "$(git rev-parse 'HEAD:supabase/migrations/20260726123000_institutional_trade_system.sql')" = "8b9b8291e881a25952f0a95bbc825aff162a2ba1"
+          test "$(git rev-parse 'HEAD:src/institutional-trade-migration.test.ts')" = "cadbccb08bff5004800be6b11a0f675c462bd061"
+
+      - name: Apply public-directory and exact deal-message scope repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          migration_path = Path("supabase/migrations/20260726123000_institutional_trade_system.sql")
+          migration = migration_path.read_text()
+
+          replacements = {
+          """create policy institutional_organizations_select on public.institutional_organizations for select using(
+           (status='active' and public_profile_enabled) or public.is_institutional_organization_member(id)
+          );""": """create policy institutional_organizations_public_select on public.institutional_organizations
+          for select to anon using(status='active' and public_profile_enabled);
+          create policy institutional_organizations_member_select on public.institutional_organizations
+          for select to authenticated using(
+           (status='active' and public_profile_enabled) or public.is_institutional_organization_member(id)
+          );""",
+          """create policy institutional_programs_select on public.institutional_programs for select using(
+           (status='active' and public_profile_enabled and exists(select 1 from public.institutional_organizations o where o.id=organization_id and o.status='active' and o.public_profile_enabled))
+           or public.is_institutional_organization_member(organization_id)
+          );""": """create policy institutional_programs_public_select on public.institutional_programs
+          for select to anon using(
+           status='active' and public_profile_enabled
+           and exists(
+            select 1 from public.institutional_organizations o
+            where o.id=institutional_programs.organization_id and o.status='active' and o.public_profile_enabled
+           )
+          );
+          create policy institutional_programs_member_select on public.institutional_programs
+          for select to authenticated using(
+           (status='active' and public_profile_enabled and exists(select 1 from public.institutional_organizations o where o.id=institutional_programs.organization_id and o.status='active' and o.public_profile_enabled))
+           or public.is_institutional_organization_member(organization_id)
+          );""",
+          """create policy institutional_opportunities_select on public.institutional_opportunities for select using(
+           (visibility='public' and status='published') or public.is_institutional_organization_member(organization_id)
+          );""": """create policy institutional_opportunities_public_select on public.institutional_opportunities
+          for select to anon using(visibility='public' and status='published');
+          create policy institutional_opportunities_member_select on public.institutional_opportunities
+          for select to authenticated using(
+           (visibility='public' and status='published') or public.is_institutional_organization_member(organization_id)
+          );""",
+          """and exists(select 1 from public.institutional_deal_parties p where p.deal_id=deal_id and p.party_capacity='organization' and p.organization_id=organization_id)""": """and exists(
+           select 1 from public.institutional_deal_parties p
+           where p.deal_id=institutional_deal_messages.deal_id
+            and p.party_capacity='organization'
+            and p.organization_id=institutional_deal_messages.organization_id
+          )""",
+          }
+          for old, new in replacements.items():
+              if migration.count(old) != 1:
+                  raise SystemExit(f"Expected one exact replacement target, found {migration.count(old)}: {old.splitlines()[0]}")
+              migration = migration.replace(old, new)
+
+          for view in (
+              "institutional_public_organizations",
+              "institutional_public_programs",
+              "institutional_public_opportunities",
+              "institutional_track_record",
+          ):
+              old = f"alter view public.{view} set (security_invoker=false);"
+              new = f"alter view public.{view} set (security_invoker=true);"
+              if migration.count(old) != 1:
+                  raise SystemExit(f"Expected one security-definer setting for {view}, found {migration.count(old)}")
+              migration = migration.replace(old, new)
+
+          view_grant = "grant select on table public.institutional_public_organizations,public.institutional_public_programs,public.institutional_public_opportunities to anon,authenticated;"
+          least_privilege_grants = """grant select on table public.institutional_public_organizations,public.institutional_public_programs,public.institutional_public_opportunities to anon,authenticated;
+          -- Security-invoker views require caller privileges on their base relations.
+          -- Anonymous callers receive only view-visible columns plus the columns
+          -- required by the public-only RLS predicates; no private or write access.
+          grant select (
+           id,slug,display_name,organization_type,summary,website_url,official_domain,
+           jurisdiction,verification_status,created_at,updated_at,status,public_profile_enabled
+          ) on table public.institutional_organizations to anon;
+          grant select (
+           id,organization_id,slug,name,summary,mandate_summary,status,created_at,updated_at,
+           public_profile_enabled
+          ) on table public.institutional_programs to anon;
+          grant select (
+           id,organization_id,program_id,title,summary,moral_difference_statement,
+           no_trade_summary,status,published_at,created_at,updated_at,visibility
+          ) on table public.institutional_opportunities to anon;"""
+          if migration.count(view_grant) != 1:
+              raise SystemExit(f"Expected one public-view grant marker, found {migration.count(view_grant)}")
+          migration_path.write_text(migration.replace(view_grant, least_privilege_grants))
+
+          test_path = Path("src/institutional-trade-migration.test.ts")
+          test_text = test_path.read_text()
+          for view in (
+              "institutional_public_organizations",
+              "institutional_public_programs",
+              "institutional_public_opportunities",
+              "institutional_track_record",
+          ):
+              old = rf"/alter view public\.{view} set \(security_invoker=false\)/i"
+              new = rf"/alter view public\.{view} set \(security_invoker=true\)/i"
+              if test_text.count(old) != 1:
+                  raise SystemExit(f"Expected one view contract for {view}, found {test_text.count(old)}")
+              test_text = test_text.replace(old, new)
+
+          deal_room_marker = r'''    /Party-internal room access requires an exact represented organization/i,
+          '''
+          deal_room_replacement = r'''    /Party-internal room access requires an exact represented organization/i,
+              /p\.deal_id=institutional_deal_messages\.deal_id/i,
+              /p\.organization_id=institutional_deal_messages\.organization_id/i,
+          '''
+          if test_text.count(deal_room_marker) != 1:
+              raise SystemExit(f"Expected one deal-room relationship marker, found {test_text.count(deal_room_marker)}")
+          test_text = test_text.replace(deal_room_marker, deal_room_replacement)
+
+          grant_marker = r'''    /grant select on table public\.institutional_public_organizations,public\.institutional_public_programs,public\.institutional_public_opportunities to anon,authenticated/i,
+          '''
+          grant_replacement = r'''    /grant select on table public\.institutional_public_organizations,public\.institutional_public_programs,public\.institutional_public_opportunities to anon,authenticated/i,
+              /grant select \([\s\S]*public_profile_enabled[\s\S]*\) on table public\.institutional_organizations to anon/i,
+              /grant select \([\s\S]*mandate_summary[\s\S]*\) on table public\.institutional_programs to anon/i,
+              /grant select \([\s\S]*moral_difference_statement[\s\S]*visibility[\s\S]*\) on table public\.institutional_opportunities to anon/i,
+              /institutional_organizations_public_select[\s\S]*for select to anon[\s\S]*status='active' and public_profile_enabled/i,
+              /institutional_organizations_member_select[\s\S]*for select to authenticated[\s\S]*is_institutional_organization_member\(id\)/i,
+              /institutional_programs_public_select[\s\S]*for select to anon[\s\S]*public_profile_enabled/i,
+              /institutional_programs_member_select[\s\S]*for select to authenticated[\s\S]*is_institutional_organization_member\(organization_id\)/i,
+              /institutional_opportunities_public_select[\s\S]*for select to anon[\s\S]*visibility='public' and status='published'/i,
+              /institutional_opportunities_member_select[\s\S]*for select to authenticated[\s\S]*is_institutional_organization_member\(organization_id\)/i,
+          '''
+          if test_text.count(grant_marker) != 1:
+              raise SystemExit(f"Expected one public-view contract marker, found {test_text.count(grant_marker)}")
+          test_text = test_text.replace(grant_marker, grant_replacement)
+
+          test_tail = r'''  assert.doesNotMatch(
+              migration,
+              /grant\s+[^;]*(?:all|insert|update|delete|truncate|references|trigger)[^;]*\s+on\s+table\s+[^;]*institutional_(?:public_organizations|public_programs|public_opportunities|track_record)[^;]*\s+to\s+(?:public|anon|authenticated)/i,
+              "institutional views must never receive direct client write grants",
+            );
+          });'''
+          guarded_tail = r'''  assert.doesNotMatch(
+              migration,
+              /grant\s+[^;]*(?:all|insert|update|delete|truncate|references|trigger)[^;]*\s+on\s+table\s+[^;]*institutional_(?:public_organizations|public_programs|public_opportunities|track_record)[^;]*\s+to\s+(?:public|anon|authenticated)/i,
+              "institutional views must never receive direct client write grants",
+            );
+            assert.doesNotMatch(
+              migration,
+              /grant\s+select\s+on\s+table\s+public\.institutional_(?:organizations|programs|opportunities)\s+to\s+anon/i,
+              "anonymous directory access must remain column-scoped rather than whole-table",
+            );
+            assert.doesNotMatch(
+              migration,
+              /create policy institutional_[a-z_]+_public_select[^;]*to anon[^;]*is_institutional_organization_member/i,
+              "anonymous public-directory policies must not invoke private membership helpers",
+            );
+            assert.doesNotMatch(
+              migration,
+              /p\.deal_id=p\.deal_id|p\.organization_id=p\.organization_id/i,
+              "deal-message party scope must never collapse into a tautology",
+            );
+          });'''
+          if test_text.count(test_tail) != 1:
+              raise SystemExit(f"Expected one RLS-test tail, found {test_text.count(test_tail)}")
+          test_path.write_text(test_text.replace(test_tail, guarded_tail))
+          PY
+
+          git diff --check
+          changed="$(git status --short | cut -c4- | sort)"
+          expected="$(printf '%s\n' \
+            'src/institutional-trade-migration.test.ts' \
+            'supabase/migrations/20260726123000_institutional_trade_system.sql' | sort)"
+          test "$changed" = "$expected"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run institutional and migration contracts
+        run: |
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          node --check .github/scripts/pr212-targeted-regression-qa.mjs
+
+      - name: Run complete repository tests absolutely
+        run: npm test
+
+      - name: Run TypeScript absolutely
+        run: npx tsc --noEmit
+
+      - name: Run ESLint absolutely
+        run: npm run lint
+
+      - name: Build production application absolutely
+        run: npm run build
+
+      - name: Commit exact candidate after every gate passes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/institutional-trade-migration.test.ts \
+            supabase/migrations/20260726123000_institutional_trade_system.sql
+          git commit -m "Harden public directories and exact room scope"
+          git push origin HEAD:"$CANDIDATE_BRANCH"
