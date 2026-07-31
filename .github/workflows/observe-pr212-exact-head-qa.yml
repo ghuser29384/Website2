@@ -1,0 +1,77 @@
+name: Observe PR 212 exact-head institutional QA
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/observe-pr212-exact-head-qa.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 420
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_BRANCH: feat/institutional-trade-system
+      FINAL_BRANCH: agent/pr212-main-final-20260731
+      QA_WORKFLOW: institutional-trade-qa.yml
+      OLD_FEATURE_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+
+      - name: Wait for exact workflow-restored PR head and QA terminal state
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-main-integration/exact-head-qa
+          mkdir -p "$output"
+          feature_head="" final_head=""
+          for attempt in $(seq 1 1600); do
+            feature_head="$(git ls-remote --heads origin refs/heads/${FEATURE_BRANCH} | awk '{print $1}')"
+            final_head="$(git ls-remote --heads origin refs/heads/${FINAL_BRANCH} | awk '{print $1}')"
+            if [[ -n "$feature_head" && "$feature_head" != "$OLD_FEATURE_HEAD" && "$feature_head" == "$final_head" ]]; then break; fi
+            sleep 12
+          done
+          if [[ -z "$feature_head" || "$feature_head" == "$OLD_FEATURE_HEAD" || "$feature_head" != "$final_head" ]]; then
+            echo "Feature branch did not reach the exact final workflow-restored head." >&2
+            exit 1
+          fi
+
+          run_id="" status="" conclusion=""
+          for attempt in $(seq 1 1700); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$QA_WORKFLOW" --branch "$FEATURE_BRANCH" --limit 100 --json databaseId,headSha,status,conclusion,createdAt,url,displayTitle,event > /tmp/qa-runs.json
+            run_id="$(jq -r --arg head "$feature_head" '[.[]|select(.headSha==$head)]|sort_by(.createdAt)|reverse|.[0].databaseId // empty' /tmp/qa-runs.json)"
+            status="$(jq -r --arg head "$feature_head" '[.[]|select(.headSha==$head)]|sort_by(.createdAt)|reverse|.[0].status // empty' /tmp/qa-runs.json)"
+            conclusion="$(jq -r --arg head "$feature_head" '[.[]|select(.headSha==$head)]|sort_by(.createdAt)|reverse|.[0].conclusion // empty' /tmp/qa-runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 12
+          done
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$output/run.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$output/jobs.json"
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/failed-log.txt" 2>&1 || true
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" > "$output/artifacts.json"
+          else
+            printf '%s\n' '{}' > "$output/run.json"
+            printf '%s\n' '{"jobs":[]}' > "$output/jobs.json"
+            printf '%s\n' '{"artifacts":[]}' > "$output/artifacts.json"
+            printf '%s\n' 'No exact-head QA run found.' > "$output/failed-log.txt"
+          fi
+          jq -n --arg feature_head "$feature_head" --arg final_head "$final_head" --arg run_id "$run_id" --arg status "$status" --arg conclusion "$conclusion" --slurpfile runs /tmp/qa-runs.json '{feature_head:$feature_head,final_head:$final_head,run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0]}' > "$output/report.json"
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/212" > "$output/pr.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 exact-head institutional QA"
+          git push origin HEAD:agent/pr212-main-integration-inspector-20260730
+          if [[ "$status" != "completed" || "$conclusion" != "success" ]]; then exit 1; fi
