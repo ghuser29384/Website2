@@ -1,0 +1,133 @@
+name: Converge PR 212 full QA
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/converge-pr212-full-qa.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: converge-pr212-full-qa
+  cancel-in-progress: false
+
+jobs:
+  converge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: institutional-trade-qa.yml
+      FEATURE_BRANCH: feat/institutional-trade-system
+      INSPECTOR_BRANCH: agent/pr212-main-integration-inspector-20260730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+
+      - name: Follow exact heads, commit generated types once if necessary, and stop at a truthful terminal state
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-full-qa-convergence
+          rm -rf "$output"
+          mkdir -p "$output" /tmp/convergence-artifacts
+          result=failure
+
+          for cycle in 1 2 3; do
+            feature_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .head.sha)"
+            cycle_dir="$output/cycle-${cycle}-${feature_head}"
+            mkdir -p "$cycle_dir"
+
+            run_id=""
+            status=""
+            conclusion=""
+            for attempt in $(seq 1 1200); do
+              gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$FEATURE_BRANCH" --limit 100 --json databaseId,headSha,status,conclusion,createdAt,url > /tmp/runs.json
+              run_id="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+              status="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+              conclusion="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+              if [[ -n "$run_id" && "$status" == completed ]]; then break; fi
+              sleep 10
+            done
+
+            test -n "$run_id"
+            test "$status" = completed
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$cycle_dir/run.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$cycle_dir/jobs.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" > "$cycle_dir/artifacts.json"
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$cycle_dir/failed-log.txt" 2>&1 || true
+
+            failed_steps="$(jq -r '[.jobs[].steps[] | select(.conclusion == "failure") | .name] | unique | .[]' "$cycle_dir/jobs.json")"
+            jq -n --arg cycle "$cycle" --arg feature_head "$feature_head" --arg run_id "$run_id" --arg conclusion "$conclusion" --arg failed_steps "$failed_steps" '{cycle:($cycle|tonumber),feature_head:$feature_head,run_id:$run_id,conclusion:$conclusion,failed_steps:($failed_steps|split("\n")|map(select(length>0)))}' > "$cycle_dir/summary.json"
+
+            if [[ "$conclusion" == success ]]; then
+              result=success
+              cp "$cycle_dir/summary.json" "$output/final.json"
+              break
+            fi
+
+            if [[ "$failed_steps" != "Require exact generated database types to be committed" ]]; then
+              cp "$cycle_dir/summary.json" "$output/final.json"
+              break
+            fi
+
+            if (( cycle == 3 )); then
+              cp "$cycle_dir/summary.json" "$output/final.json"
+              break
+            fi
+
+            for required in \
+              "Run source-contract integrity tests before database mutation" \
+              "Compile and atomically apply the amended original migration to isolated QA" \
+              "Generate exact isolated-QA database types" \
+              "Require no new or institutional Supabase lint findings" \
+              "Run forced-RLS, grants, foreign-key-index, and non-custody inventories" \
+              "Run exact-base differential complete test suite" \
+              "Require absolute TypeScript success against generated QA schema" \
+              "Require absolute ESLint success" \
+              "Require absolute production build success" \
+              "Run organization-led and independent-individual authenticated workflows plus negative matrix" \
+              "Run targeted current-main desktop and mobile regression smoke" \
+              "Confirm complete synthetic identity and institutional-record cleanup"; do
+              jq -e --arg required "$required" '.jobs[].steps[] | select(.name == $required) | .conclusion == "success"' "$cycle_dir/jobs.json" >/dev/null
+            done
+
+            artifact_name="institutional-trade-qa-${feature_head}-${run_id}"
+            rm -rf /tmp/convergence-artifacts/*
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir /tmp/convergence-artifacts
+            generated="$(find /tmp/convergence-artifacts -name database.types.ts -path '*institutional-qa-artifacts*' | head -1)"
+            test -n "$generated"
+            test -s "$generated"
+
+            git fetch origin "refs/heads/${FEATURE_BRANCH}:refs/remotes/origin/${FEATURE_BRANCH}"
+            test "$(git rev-parse "refs/remotes/origin/${FEATURE_BRANCH}")" = "$feature_head"
+            rm -rf /tmp/pr212-feature
+            git worktree add --detach /tmp/pr212-feature "$feature_head"
+            cp "$generated" /tmp/pr212-feature/src/lib/supabase/database.types.ts
+            cd /tmp/pr212-feature
+            git diff --check
+            test -n "$(git status --short src/lib/supabase/database.types.ts)"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/lib/supabase/database.types.ts
+            git commit -m "Commit exact PR 212 isolated-QA database types"
+            git push origin "HEAD:refs/heads/${FEATURE_BRANCH}"
+            git rev-parse HEAD > "$GITHUB_WORKSPACE/$cycle_dir/generated-types-commit.txt"
+            cd "$GITHUB_WORKSPACE"
+            git worktree remove --force /tmp/pr212-feature
+          done
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 full-QA convergence"
+          git push origin "HEAD:refs/heads/${INSPECTOR_BRANCH}"
+          test "$result" = success
