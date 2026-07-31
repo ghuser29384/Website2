@@ -26,13 +26,26 @@ import sys
 
 path = Path(sys.argv[1])
 text = path.read_text(encoding="utf-8")
+
 old_locator = r"page.getByText(/1 participant across 1 exact proposal/)"
 new_locator = r"page.getByText(/1 participant\\s*across 1 exact proposal/)"
 if text.count(old_locator) != 1:
     raise SystemExit(
         f"Expected exactly one participant-count locator; found {text.count(old_locator)}."
     )
-path.write_text(text.replace(old_locator, new_locator, 1), encoding="utf-8")
+text = text.replace(old_locator, new_locator, 1)
+
+# Every protected Preview request already carries the current bypass secret.
+# Asking Vercel to set a bypass cookie as well can create an alias/cookie redirect
+# loop on an immutable deployment URL, so omit only that optional header.
+bypass_cookie_line = '          "x-vercel-set-bypass-cookie": "true",\\n'
+if text.count(bypass_cookie_line) != 1:
+    raise SystemExit(
+        f"Expected exactly one Vercel bypass-cookie header; found {text.count(bypass_cookie_line)}."
+    )
+text = text.replace(bypass_cookie_line, "", 1)
+
+path.write_text(text, encoding="utf-8")
 PY_HARNESS
 
 npm ci
