@@ -1,0 +1,33 @@
+name: Temporary push materializer — Feed to Create Phase 1
+
+on:
+  push:
+    branches:
+      - ops/materialize-feed-create-phase1-v2-20260731
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-feed-create-phase1-push
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - name: Check out the guarded operations branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Materialize, validate, and publish the clean product branch
+        run: bash .github/scripts/materialize-feed-create-phase1.sh
