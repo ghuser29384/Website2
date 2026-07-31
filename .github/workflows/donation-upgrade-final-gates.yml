@@ -1,0 +1,73 @@
+name: Donation Upgrade final engineering gates
+
+on:
+  push:
+    branches:
+      - feature/donation-upgrade-approved-fallbacks-20260731
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .env.example
+      - docs/trade-donation-pooled-settlement-runbook.md
+      - src/app/admin/**
+      - src/app/api/connectors/every-org/**
+      - src/app/api/stripe/webhook/route.ts
+      - src/app/trade-donation-actions-base.ts
+      - src/app/trade-donation-pool-actions.ts
+      - src/components/core-trade/trade-agreement-stage.tsx
+      - src/components/core-trade/trade-donation-agreement-stage.tsx
+      - src/components/core-trade/trade-donation-pool-agreement-stage.tsx
+      - src/lib/payments/trade-donation-pool-webhook.ts
+      - src/lib/trade-donation-pool*.ts
+      - supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
+      - .github/workflows/donation-upgrade-final-gates.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: donation-upgrade-final-gates-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Focused pooled-settlement tests
+        run: node --import tsx --test src/lib/trade-donation-pool.test.ts src/lib/trade-donation-pool-source-contract.test.ts
+
+      - name: Complete repository tests
+        run: npm test
+
+      - name: Absolute TypeScript gate
+        run: npx tsc --noEmit
+
+      - name: Absolute ESLint gate
+        run: npm run lint
+
+      - name: Production build
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+        run: npm run build
+
+      - name: Exact diff hygiene
+        run: git diff --check
