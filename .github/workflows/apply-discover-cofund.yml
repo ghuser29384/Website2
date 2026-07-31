@@ -51,8 +51,11 @@ jobs:
           npm run verify:discover
           git diff --check
 
+          # The Actions token cannot create, update, or delete workflow files. Preserve
+          # the current Smart Query workflow here and leave this temporary workflow for
+          # the authenticated GitHub connector to retire after the product commit lands.
+          git checkout "$expected_base" -- .github/workflows/smart-query-qa.yml
           rm -f .github/patches/discover-cofund.patch.b64.*
-          rm -f .github/workflows/apply-discover-cofund.yml
           rmdir .github/patches 2>/dev/null || true
 
           git config user.name "github-actions[bot]"
