@@ -1,0 +1,183 @@
+name: Materialize returning-user Complete Profile fix
+
+on:
+  push:
+    branches:
+      - fix/direct-complete-profile-100-sparks-final-20260731
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-returning-complete-profile
+  cancel-in-progress: false
+
+jobs:
+  materialize-test-publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out patch carrier
+        uses: actions/checkout@v4
+        with:
+          ref: fix/direct-complete-profile-100-sparks-final-20260731
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Reconstruct product candidate on current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/direct-complete-profile-v3
+          cp .github/patches/direct-complete-profile-v3/part-* /tmp/direct-complete-profile-v3/
+          cat /tmp/direct-complete-profile-v3/part-* | tr -d '\n\r ' | base64 --decode > /tmp/direct-complete-profile.patch
+          test -s /tmp/direct-complete-profile.patch
+
+          git fetch origin main
+          git checkout --detach origin/main
+          git apply --check /tmp/direct-complete-profile.patch
+          git apply /tmp/direct-complete-profile.patch
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_when_present(path_name: str, old: str, new: str) -> None:
+              path = Path(path_name)
+              text = path.read_text(encoding="utf-8")
+              if old in text:
+                  path.write_text(text.replace(old, new), encoding="utf-8")
+
+          replace_when_present(
+              "scripts/verify-collective-create-e2e.ts",
+              ".filter((membership): membership is InstitutionMembershipRow => Boolean(membership));",
+              ".filter((membership): membership is NonNullable<typeof membership> => Boolean(membership));",
+          )
+
+          dashboard = Path("src/components/core-trade/institutional-admin-dashboard.tsx")
+          dashboard_text = dashboard.read_text(encoding="utf-8")
+          dashboard_text = dashboard_text.replace(
+              'import { useEffect, useMemo, useState, type PropsWithChildren } from "react";',
+              'import { useEffect, useMemo, useState, type ReactNode } from "react";',
+          )
+          dashboard_text = re.sub(
+              r"interface InlineHintProps extends PropsWithChildren \{\n  text: string;\n\}",
+              "type InlineHintProps = {\n  children: ReactNode;\n  text: string;\n};",
+              dashboard_text,
+          )
+          dashboard.write_text(dashboard_text, encoding="utf-8")
+
+          replace_when_present(
+              "src/lib/discover-offer-action.ts",
+              "MOCK_TRADES.some((candidate) => candidate.id === offerId)",
+              "MOCK_TRADES.some((candidate) => String(candidate.id) === offerId)",
+          )
+          PY
+
+          python - <<'PY'
+          import subprocess
+
+          required = {
+              "src/app/complete-profile/actions.ts",
+              "src/app/complete-profile/page.tsx",
+              "src/complete-profile-direct-route.test.ts",
+              "src/components/profile/complete-profile-review.tsx",
+              "src/lib/complete-profile-private-preferences.ts",
+              "src/lib/complete-profile.test.ts",
+              "src/lib/complete-profile.ts",
+              "src/lib/walkthrough-profile.test.ts",
+              "src/lib/walkthrough-profile.ts",
+              "tests/complete-profile-review.spec.ts",
+          }
+          allowed = required | {
+              "scripts/verify-collective-create-e2e.ts",
+              "src/components/core-trade/institutional-admin-dashboard.tsx",
+              "src/lib/discover-offer-action.ts",
+          }
+          changed = set(
+              subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
+          )
+          if not required.issubset(changed):
+              raise SystemExit(f"Missing required candidate paths: {sorted(required - changed)}")
+          if not changed.issubset(allowed):
+              raise SystemExit(f"Unexpected candidate paths: {sorted(changed - allowed)}")
+          print("Candidate paths:")
+          for path in sorted(changed):
+              print(path)
+          PY
+
+          git diff --check
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run complete unit and source suite
+        run: npm test
+
+      - name: Run absolute TypeScript gate
+        run: npx tsc --noEmit
+
+      - name: Run absolute ESLint gate
+        run: npm run lint
+
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run rendered Complete Profile gates
+        run: npx playwright test tests/complete-profile-review.spec.ts --reporter=line
+
+      - name: Upload rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: returning-complete-profile-rendered-evidence
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Publish clean verified product branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            src/app/complete-profile/actions.ts \
+            src/app/complete-profile/page.tsx \
+            src/complete-profile-direct-route.test.ts \
+            src/components/profile/complete-profile-review.tsx \
+            src/lib/complete-profile-private-preferences.ts \
+            src/lib/complete-profile.test.ts \
+            src/lib/complete-profile.ts \
+            src/lib/walkthrough-profile.test.ts \
+            src/lib/walkthrough-profile.ts \
+            tests/complete-profile-review.spec.ts
+
+          for path in \
+            scripts/verify-collective-create-e2e.ts \
+            src/components/core-trade/institutional-admin-dashboard.tsx \
+            src/lib/discover-offer-action.ts
+          do
+            if ! git diff --quiet -- "$path"; then
+              git add -- "$path"
+            fi
+          done
+
+          git commit -m "Fix Complete Profile for returning users"
+          git push --force origin HEAD:refs/heads/fix/complete-profile-returning-users-20260731
