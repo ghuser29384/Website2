@@ -1,0 +1,108 @@
+name: Route PR 212 full QA result
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/route-pr212-full-qa-result.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  route:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: institutional-trade-qa.yml
+      FEATURE_BRANCH: feat/institutional-trade-system
+      INSPECTOR_BRANCH: agent/pr212-main-integration-inspector-20260730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+
+      - name: Diagnose exact-head result and publish generated types only when that is the sole remaining gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-full-qa-routing
+          rm -rf "$output"
+          mkdir -p "$output" /tmp/artifacts
+
+          feature_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .head.sha)"
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$FEATURE_BRANCH" --limit 50 --json databaseId,headSha,status,conclusion,createdAt,url > /tmp/runs.json
+          run_id="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+          test -n "$run_id"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$output/run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$output/jobs.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" > "$output/artifacts.json"
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/failed-log.txt" 2>&1 || true
+
+          status="$(jq -r '.status' "$output/run.json")"
+          conclusion="$(jq -r '.conclusion' "$output/run.json")"
+          test "$status" = completed
+
+          failed_steps="$(jq -r '[.jobs[].steps[] | select(.conclusion == "failure") | .name] | unique | .[]' "$output/jobs.json")"
+          jq -n --arg feature_head "$feature_head" --arg run_id "$run_id" --arg conclusion "$conclusion" --arg failed_steps "$failed_steps" '{feature_head:$feature_head,run_id:$run_id,conclusion:$conclusion,failed_steps:($failed_steps|split("\n")|map(select(length>0)))}' > "$output/diagnosis.json"
+
+          if [[ "$conclusion" == success ]]; then
+            touch "$output/success"
+          elif [[ "$failed_steps" == "Require exact generated database types to be committed" ]]; then
+            # Every prior gate must have succeeded before a generated-type commit is permitted.
+            for required in \
+              "Run source-contract integrity tests before database mutation" \
+              "Compile and atomically apply the amended original migration to isolated QA" \
+              "Generate exact isolated-QA database types" \
+              "Require no new or institutional Supabase lint findings" \
+              "Run forced-RLS, grants, foreign-key-index, and non-custody inventories" \
+              "Run exact-base differential complete test suite" \
+              "Require absolute TypeScript success against generated QA schema" \
+              "Require absolute ESLint success" \
+              "Require absolute production build success" \
+              "Run organization-led and independent-individual authenticated workflows plus negative matrix" \
+              "Run targeted current-main desktop and mobile regression smoke" \
+              "Confirm complete synthetic identity and institutional-record cleanup"; do
+              jq -e --arg required "$required" '.jobs[].steps[] | select(.name == $required) | .conclusion == "success"' "$output/jobs.json" >/dev/null
+            done
+
+            artifact_name="institutional-trade-qa-${feature_head}-${run_id}"
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir /tmp/artifacts
+            generated="$(find /tmp/artifacts -path '*/institutional-qa-artifacts/database.types.ts' -o -path '/tmp/artifacts/institutional-qa-artifacts/database.types.ts' | head -1)"
+            test -n "$generated"
+            test -s "$generated"
+
+            git fetch origin "refs/heads/${FEATURE_BRANCH}:refs/remotes/origin/${FEATURE_BRANCH}"
+            test "$(git rev-parse "refs/remotes/origin/${FEATURE_BRANCH}")" = "$feature_head"
+            rm -rf /tmp/pr212-feature
+            git worktree add --detach /tmp/pr212-feature "$feature_head"
+            cp "$generated" /tmp/pr212-feature/src/lib/supabase/database.types.ts
+            cd /tmp/pr212-feature
+            git diff --check
+            test -n "$(git status --short src/lib/supabase/database.types.ts)"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add src/lib/supabase/database.types.ts
+            git commit -m "Commit exact PR 212 isolated-QA database types"
+            git push origin "HEAD:refs/heads/${FEATURE_BRANCH}"
+            git rev-parse HEAD > "$GITHUB_WORKSPACE/$output/generated-types-commit.txt"
+          else
+            echo "Full QA failed before the generated-types-only gate; no feature code was changed." >&2
+          fi
+
+          cd "$GITHUB_WORKSPACE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record and route PR 212 full QA result"
+          git push origin "HEAD:refs/heads/${INSPECTOR_BRANCH}"
+
+          if [[ "$conclusion" != success && "$failed_steps" != "Require exact generated database types to be committed" ]]; then
+            exit 1
+          fi
