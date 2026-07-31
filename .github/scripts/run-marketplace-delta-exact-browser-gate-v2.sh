@@ -123,22 +123,20 @@ new_wait = r'''wait_deployment() {
       "https://api.vercel.com/v6/deployments?projectId=${project_id}&limit=100&teamId=${VERCEL_TEAM_ID}" \
       --output "$response"
 
-    local row
-    row="$(jq -r --arg sha "$EXACT_HEAD_SHA" --arg ref "$CANDIDATE_BRANCH" '
+    local id url state
+    id="$(jq -r --arg sha "$EXACT_HEAD_SHA" --arg ref "$CANDIDATE_BRANCH" '
       [.deployments[] | select(.meta.githubCommitSha == $sha and .meta.githubCommitRef == $ref)]
-      | sort_by(.created // .createdAt // 0) | reverse | .[0]
-      | if . == null then "" else [.id, .url] | @tsv end
+      | sort_by(.created // .createdAt // 0) | reverse | .[0].id // ""
     ' "$response")"
 
-    if [[ -n "$row" ]]; then
-      local id url state
-      IFS=$'\t' read -r id url <<< "$row"
+    if [[ -n "$id" ]]; then
       curl --fail-with-body --silent --show-error \
         --header "Authorization: Bearer $VERCEL_TOKEN" \
         "https://api.vercel.com/v13/deployments/${id}?teamId=${VERCEL_TEAM_ID}" \
         --output "$detail"
+      url="$(jq -r '.url // ""' "$detail")"
       state="$(jq -r '(.readyState // .state // .status // "UNKNOWN") | ascii_upcase' "$detail")"
-      if [[ "$state" == "READY" ]]; then
+      if [[ "$state" == "READY" && -n "$url" ]]; then
         printf '%s\t%s\t%s\n' "$id" "$url" "$state"
         return 0
       fi
