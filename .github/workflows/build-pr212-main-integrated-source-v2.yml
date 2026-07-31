@@ -1,0 +1,268 @@
+name: Build PR 212 main-integrated source
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-ops-20260730
+    paths:
+      - .github/workflows/build-pr212-main-integrated-source-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: build-pr212-main-integrated-source-v2
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      PINNED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+      CLEAN_COMMIT: e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e
+      INTEGRATION_BRANCH: agent/pr212-main-integrated-36650b-20260731
+      CLEAN_GATE_RUN: "30560630091"
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out pinned-main integration branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integrated-36650b-20260731
+          fetch-depth: 0
+
+      - name: Verify exact inputs and clean-branch gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PINNED_MAIN"
+          git fetch origin "$CLEAN_COMMIT" "$PINNED_MAIN"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${CLEAN_GATE_RUN}" > /tmp/clean-gate-run.json
+          test "$(jq -r .head_sha /tmp/clean-gate-run.json)" = "$CLEAN_COMMIT"
+          test "$(jq -r .status /tmp/clean-gate-run.json)" = completed
+          test "$(jq -r .conclusion /tmp/clean-gate-run.json)" = success
+
+      - name: Merge clean reconstruction and resolve only the reviewed conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pr212-main-integration-evidence
+
+          set +e
+          git merge --no-ff --no-commit "$CLEAN_COMMIT" > /tmp/pr212-main-integration-evidence/merge-output.txt 2>&1
+          merge_status=$?
+          set -e
+          echo "$merge_status" > /tmp/pr212-main-integration-evidence/merge-status.txt
+
+          if [[ "$merge_status" != "1" ]]; then
+            echo "Expected a conflict-bearing merge with status 1; got $merge_status." >&2
+            cat /tmp/pr212-main-integration-evidence/merge-output.txt >&2
+            exit 1
+          fi
+
+          git diff --name-only --diff-filter=U | sort > /tmp/pr212-main-integration-evidence/conflicts.txt
+          cat > /tmp/pr212-main-integration-evidence/expected-conflicts.txt <<'FILES'
+          src/app/offers/offer-visual-directory-mount.tsx
+          src/components/profile/complete-profile-connections.tsx
+          src/lib/crawlability.test.ts
+          src/lib/public-route-smoke.test.ts
+          FILES
+          sort -o /tmp/pr212-main-integration-evidence/expected-conflicts.txt /tmp/pr212-main-integration-evidence/expected-conflicts.txt
+          diff -u /tmp/pr212-main-integration-evidence/expected-conflicts.txt /tmp/pr212-main-integration-evidence/conflicts.txt
+
+          # Decisions 1A and 2A: preserve the exact current-main implementation for all four conflicts.
+          while IFS= read -r path; do
+            git checkout --ours -- "$path"
+            git add "$path"
+          done < /tmp/pr212-main-integration-evidence/expected-conflicts.txt
+
+          test -z "$(git diff --name-only --diff-filter=U)"
+
+      - name: Audit every non-institutional difference and restore current-main behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Decision 3A: only the explicit institutional surface may differ from pinned main.
+          # All legacy repository-wide fixes from the old branch are restored to current main.
+          git diff --name-only -z "$PINNED_MAIN" | while IFS= read -r -d '' path; do
+            case "$path" in
+              .env.example|\
+              .github/scripts/institutional-*|\
+              src/app/admin/institutional-deal-desk/*|\
+              src/app/admin/page.tsx|\
+              src/app/how-it-works/page.tsx|\
+              src/app/institutions/*|\
+              src/components/institutions/*|\
+              src/institutional-*.test.ts|\
+              src/lib/institutional-*|\
+              supabase/migrations/20260726123000_institutional_trade_system.sql)
+                ;;
+              *)
+                if git cat-file -e "$PINNED_MAIN:$path" 2>/dev/null; then
+                  git checkout "$PINNED_MAIN" -- "$path"
+                else
+                  rm -rf -- "$path"
+                  git add -A -- "$path"
+                fi
+                ;;
+            esac
+          done
+
+          # The exact current-main runtime files and tests must remain byte-for-byte identical.
+          for path in \
+            src/app/complete-profile/page.tsx \
+            src/app/offers/offer-plane-inline-mount.tsx \
+            src/app/offers/offer-visual-directory-mount.tsx \
+            src/components/profile/complete-profile-connections.tsx \
+            src/lib/crawlability.test.ts \
+            src/lib/public-route-smoke.test.ts; do
+            git diff --exit-code "$PINNED_MAIN" -- "$path"
+          done
+
+          # Workflow files are added later through the repository connector, because the
+          # ephemeral Actions token is intentionally not permitted to modify workflows.
+          git checkout "$PINNED_MAIN" -- .github/workflows 2>/dev/null || true
+          git add -A
+
+      - name: Add focused main-preservation and regression contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > src/pr212-main-integration-regression.test.ts <<'TEST'
+          import assert from "node:assert/strict";
+          import { existsSync, readFileSync } from "node:fs";
+          import test from "node:test";
+
+          const read = (path: string) => readFileSync(path, "utf8");
+
+          test("Offers keeps current-main asynchronous cleanup protection", () => {
+            const source = read("src/app/offers/offer-visual-directory-mount.tsx");
+            assert.match(source, /\bdisposed\b/);
+            assert.match(source, /disposed\s*=\s*true/);
+            assert.match(source, /if\s*\(\s*disposed\s*\)\s*return/);
+          });
+
+          test("Complete Profile keeps current-main deferred initial-open synchronization", () => {
+            const component = read("src/components/profile/complete-profile-connections.tsx");
+            const page = read("src/app/complete-profile/page.tsx");
+            assert.match(component, /setOpen\(initialOpen\)/);
+            assert.match(component, /startTransition|queueMicrotask|requestAnimationFrame|setTimeout/);
+            assert.doesNotMatch(page, /key=\{initialConnectionsOpen\s*\?/);
+          });
+
+          test("institutional routes remain additive to current-main product surfaces", () => {
+            for (const path of [
+              "src/app/institutions/page.tsx",
+              "src/app/institutions/individual/page.tsx",
+              "src/app/admin/institutional-deal-desk/page.tsx",
+              "src/app/trades/new/page.tsx",
+              "src/app/feed/page.tsx",
+              "src/app/walkthrough/page.tsx",
+              "src/app/evidence/[[...recordId]]/page.tsx",
+              "src/app/admin/page.tsx",
+              "src/proxy.ts",
+            ]) {
+              assert.equal(existsSync(path), true, `missing regression surface: ${path}`);
+            }
+          });
+
+          test("independent capacity remains free of organization-only administration", () => {
+            const individualPage = read("src/app/institutions/individual/page.tsx");
+            assert.doesNotMatch(individualPage, /Delegated authority|Institutional budgets|Enterprise integrations/);
+          });
+          TEST
+          git add src/pr212-main-integration-regression.test.ts
+
+      - name: Verify exact post-audit file boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only "$PINNED_MAIN" | sort > /tmp/pr212-main-integration-evidence/post-audit-files.txt
+
+          unexpected=0
+          while IFS= read -r path; do
+            case "$path" in
+              .env.example|\
+              .github/scripts/institutional-*|\
+              src/app/admin/institutional-deal-desk/*|\
+              src/app/admin/page.tsx|\
+              src/app/how-it-works/page.tsx|\
+              src/app/institutions/*|\
+              src/components/institutions/*|\
+              src/institutional-*.test.ts|\
+              src/lib/institutional-*|\
+              src/pr212-main-integration-regression.test.ts|\
+              supabase/migrations/20260726123000_institutional_trade_system.sql)
+                ;;
+              *)
+                echo "Unexpected non-institutional difference: $path" >&2
+                unexpected=1
+                ;;
+            esac
+          done < /tmp/pr212-main-integration-evidence/post-audit-files.txt
+          test "$unexpected" = 0
+          git diff --check "$PINNED_MAIN"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run source contracts that do not depend on the deferred workflow files
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts \
+            src/pr212-main-integration-regression.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Require absolute TypeScript success
+        run: npx tsc --noEmit --pretty false
+
+      - name: Require absolute ESLint success
+        run: npm run lint
+
+      - name: Require absolute production build success
+        run: npm run build
+
+      - name: Commit and publish the audited merge source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Integrate PR 212 reconstruction with main at 36650b"
+          git rev-parse HEAD | tee /tmp/pr212-main-integration-evidence/integrated-source-commit.txt
+          git rev-parse HEAD^{tree} | tee /tmp/pr212-main-integration-evidence/integrated-source-tree.txt
+          git push origin "HEAD:refs/heads/${INTEGRATION_BRANCH}"
+
+      - name: Upload integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-main-integrated-source-${{ github.run_id }}
+          path: /tmp/pr212-main-integration-evidence
+          if-no-files-found: warn
+          retention-days: 14
