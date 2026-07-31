@@ -1,0 +1,39 @@
+name: Temporary final materializer — Feed to Create Phase 1
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/feed-create-phase1-payload/**"
+      - ".github/scripts/materialize-feed-create-phase1.sh"
+      - ".github/workflows/materialize-feed-create-phase1-final.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-feed-create-phase1-final
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    steps:
+      - name: Check out the exact guarded operations head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Materialize, validate, and publish one clean product commit
+        run: bash .github/scripts/materialize-feed-create-phase1.sh
