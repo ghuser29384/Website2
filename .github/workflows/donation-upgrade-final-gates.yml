@@ -25,6 +25,7 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: donation-upgrade-final-gates-${{ github.event.pull_request.number || github.ref }}
@@ -34,6 +35,8 @@ jobs:
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -92,3 +95,21 @@ jobs:
             donation-upgrade-candidate.ref
           if-no-files-found: error
           retention-days: 7
+
+      - name: Post run locator
+        if: always() && github.event_name == 'push'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/run.md <<EOF
+          Exact Donation Upgrade engineering-gate run.
+
+          - Run: $GITHUB_RUN_ID
+          - Commit: $GITHUB_SHA
+          - Job status before reporting: ${{ job.status }}
+          - Artifact: donation-upgrade-candidate-$GITHUB_RUN_ID
+          EOF
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Donation Upgrade engineering gates — run $GITHUB_RUN_ID" \
+            --body-file /tmp/run.md
