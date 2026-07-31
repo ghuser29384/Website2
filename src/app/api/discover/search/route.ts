@@ -131,7 +131,7 @@ async function listAllLiveOfferListings(): Promise<PublicOfferListing[]> {
   );
 }
 
-export function selectDiscoverOfferItems(
+function selectDiscoverOfferItems(
   individualOffers: readonly DiscoverOfferSearchItem[],
   coFunds: readonly DiscoverOfferSearchItem[],
   offerKind: DiscoverSearchOfferKind,
