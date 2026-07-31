@@ -1,0 +1,66 @@
+name: Observe PR 212 full QA
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/observe-pr212-full-qa.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: institutional-trade-qa.yml
+      TARGET_BRANCH: feat/institutional-trade-system
+      INSPECTOR_BRANCH: agent/pr212-main-integration-inspector-20260730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+
+      - name: Poll exact current PR head to terminal state and preserve diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-full-qa
+          rm -rf "$output"
+          mkdir -p "$output"
+          feature_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .head.sha)"
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 1000); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 50 --json databaseId,headSha,status,conclusion,createdAt,url,displayTitle > /tmp/runs.json
+            run_id="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+            status="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+            conclusion="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+            if [[ -n "$run_id" && "$status" == completed ]]; then break; fi
+            sleep 10
+          done
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$output/run.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$output/jobs.json"
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/failed-log.txt" 2>&1 || true
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" > "$output/artifacts.json"
+          else
+            printf '%s\n' '{}' > "$output/run.json"
+            printf '%s\n' '{"jobs":[]}' > "$output/jobs.json"
+            printf '%s\n' 'No exact-head run found.' > "$output/failed-log.txt"
+            printf '%s\n' '{"artifacts":[]}' > "$output/artifacts.json"
+          fi
+          jq -n --arg feature_head "$feature_head" --arg run_id "$run_id" --arg status "$status" --arg conclusion "$conclusion" --slurpfile runs /tmp/runs.json '{feature_head:$feature_head,run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0]}' > "$output/report.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 full isolated-QA result"
+          git push origin "HEAD:refs/heads/${INSPECTOR_BRANCH}"
