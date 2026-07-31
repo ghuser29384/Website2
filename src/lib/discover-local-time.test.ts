@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { gunzipSync } from "node:zlib";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import vm from "node:vm";
 import test from "node:test";
+import vm from "node:vm";
+import { gunzipSync } from "node:zlib";
 
 const projectRoot = process.cwd();
 const runtimeSource = readFileSync(
@@ -24,6 +24,64 @@ function readDiscoverPayload() {
     readFileSync(join(projectRoot, "public", "discover", "payload", `${index}.txt`), "utf8"),
   ).join("");
   return gunzipSync(Buffer.from(encoded, "base64")).toString("utf8");
+}
+
+function extractInlineLoader(html: string) {
+  const openingTag = "<script>";
+  const closingTag = "</script>";
+  const openingIndex = html.indexOf(openingTag);
+  assert.notEqual(openingIndex, -1, "Discover should contain an inline loader.");
+  const contentStart = openingIndex + openingTag.length;
+  const closingIndex = html.indexOf(closingTag, contentStart);
+  assert.notEqual(closingIndex, -1, "Discover should close its inline loader.");
+  return html.slice(contentStart, closingIndex);
+}
+
+function extractNamedFunction(source: string, name: string) {
+  const functionStart = source.indexOf(`function ${name}(`);
+  assert.notEqual(functionStart, -1, `${name} should be defined in the Discover loader.`);
+
+  const asyncStart = source.lastIndexOf("async ", functionStart);
+  const declarationStart =
+    asyncStart >= 0 && asyncStart + "async ".length === functionStart ? asyncStart : functionStart;
+  const bodyStart = source.indexOf("{", functionStart);
+  assert.notEqual(bodyStart, -1, `${name} should have a function body.`);
+
+  let depth = 0;
+  let quote: "'" | '"' | "`" | null = null;
+  let escaped = false;
+
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const character = source[index];
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (character === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (character === quote) quote = null;
+      continue;
+    }
+
+    if (character === "'" || character === '"' || character === "`") {
+      quote = character;
+      continue;
+    }
+    if (character === "{") {
+      depth += 1;
+      continue;
+    }
+    if (character === "}") {
+      depth -= 1;
+      if (depth === 0) return source.slice(declarationStart, index + 1);
+    }
+  }
+
+  assert.fail(`${name} should have a complete function body.`);
 }
 
 function withTimeZone<T>(timeZone: string, run: () => T) {
@@ -140,15 +198,117 @@ function createRuntimeHarness(initialInstant = "2026-07-20T12:00:00.000Z") {
   };
 }
 
-test("the loader transforms the compressed Discover source and reinjects the local-time helper", () => {
+test("the loader transforms the compressed Discover source and reinjects the local-time helper", async () => {
   const loader = readFileSync(join(projectRoot, "public", "moral-trade-discover.html"), "utf8");
-  const firstRuntime = loader.indexOf('<script src="/moral-trade-discover-local-time.js"></script>');
-  const loaderStart = loader.indexOf("(async () =>");
+  const inlineLoader = extractInlineLoader(loader);
+  const loadOrder: string[] = [];
+  let writtenDocument = "";
 
-  assert.ok(firstRuntime >= 0 && firstRuntime < loaderStart);
-  assert.match(loader, /localTimeRuntime\.transformSource\(source\)/);
-  assert.match(loader, /localizedSource\.replace\("<\/head>"/);
-  assert.match(loader, /moral-trade-discover-local-time\.js"><\/scr' \+ 'ipt>/);
+  const loadDiscover = vm.runInNewContext(
+    `(${extractNamedFunction(inlineLoader, "loadDiscover")})`,
+    {
+      MANIFEST_PATH: "/discover/payload/manifest.json",
+      composeDocument: (
+        _source: string,
+        _manifest: unknown,
+        _liveAccount: unknown,
+        _reloadToken: string,
+        localTimeAvailable: boolean,
+      ) => {
+        loadOrder.push(`compose:${localTimeAvailable}`);
+        return "<html><head></head><body>enhanced</body></html>";
+      },
+      decodePayload: async () => {
+        loadOrder.push("decode");
+        return "<html><head></head><body>payload</body></html>";
+      },
+      document: {
+        close: () => loadOrder.push("document-close"),
+        open: () => loadOrder.push("document-open"),
+        write: (source: string) => {
+          writtenDocument = source;
+          loadOrder.push("document-write");
+        },
+      },
+      fetchJson: async () => ({ version: "a".repeat(40) }),
+      loadAccount: async () => ({ authenticated: false }),
+      loadRuntime: async (path: string) => loadOrder.push(`runtime:${path}`),
+      validateManifest: (manifest: unknown) => manifest,
+      verifyPayload: async () => loadOrder.push("verify"),
+      window: {
+        MoralTradeDiscoverLocalTime: { transformSource: (source: string) => source },
+      },
+    },
+  ) as (reloadToken?: string) => Promise<void>;
+
+  await loadDiscover();
+
+  assert.deepEqual(loadOrder, [
+    "runtime:/moral-trade-discover-local-time.js",
+    "decode",
+    "verify",
+    "compose:true",
+    "document-open",
+    "document-write",
+    "document-close",
+  ]);
+  assert.match(writtenDocument, /<body>enhanced<\/body>/);
+
+  const composeDocument = vm.runInNewContext(
+    `(() => {
+      ${extractNamedFunction(inlineLoader, "buildAssetUrl")}
+      ${extractNamedFunction(inlineLoader, "localizeSource")}
+      ${extractNamedFunction(inlineLoader, "escapeBootstrap")}
+      ${extractNamedFunction(inlineLoader, "scriptTag")}
+      ${extractNamedFunction(inlineLoader, "stylesheetTag")}
+      ${extractNamedFunction(inlineLoader, "composeDocument")}
+      return composeDocument;
+    })()`,
+    {
+      URL,
+      VERSIONED_BODY_ASSETS: ["/moral-trade-discover-navigation.js"],
+      VERSIONED_HEAD_ASSETS: [
+        "/moral-trade-discover-local-time.js",
+        "/moral-trade-account-identity.js",
+      ],
+      window: {
+        location: { origin: "https://moraltrade.org" },
+        MoralTradeDiscoverLocalTime: {
+          transformSource: (source: string) => source.replace("<body>", '<body data-localized="true">'),
+        },
+      },
+    },
+  ) as (
+    source: string,
+    manifest: { version: string },
+    liveAccount: { authenticated: boolean },
+    reloadToken?: string,
+    localTimeAvailable?: boolean,
+  ) => string;
+
+  const version = "b".repeat(40);
+  const enhancedSource = composeDocument(
+    "<html><head></head><body></body></html>",
+    { version },
+    { authenticated: false },
+    "",
+    true,
+  );
+  const localTimeTag = `<script src="/moral-trade-discover-local-time.js?v=${version}"></script>`;
+
+  assert.match(enhancedSource, /<body data-localized="true">/);
+  assert.equal(enhancedSource.includes(localTimeTag), true);
+  assert.equal(enhancedSource.split("/moral-trade-discover-local-time.js").length - 1, 1);
+  assert.ok(enhancedSource.indexOf(localTimeTag) < enhancedSource.indexOf("</head>"));
+
+  const withoutRuntimeReinjection = composeDocument(
+    "<html><head></head><body></body></html>",
+    { version },
+    { authenticated: false },
+    "",
+    false,
+  );
+  assert.equal(withoutRuntimeReinjection.includes("/moral-trade-discover-local-time.js"), false);
 });
 
 test("the payload transform removes every fixed date dependency and fails closed on drift", () => {

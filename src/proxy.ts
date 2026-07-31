@@ -1,7 +1,9 @@
 import type { NextRequest } from "next/server";
 import { NextResponse, userAgent } from "next/server";
 
-export const WALKTHROUGH_SEEN_COOKIE = "mt_walkthrough_seen";
+import { WALKTHROUGH_SEEN_COOKIE_NAME } from "@/lib/walkthrough-state";
+
+export const WALKTHROUGH_SEEN_COOKIE = WALKTHROUGH_SEEN_COOKIE_NAME;
 
 const WALKTHROUGH_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 

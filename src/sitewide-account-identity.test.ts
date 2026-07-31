@@ -37,7 +37,7 @@ test("account identity remains profile-derived and private", () => {
   assert.match(accountRoute, /getViewer\(\)/u);
   assert.match(accountRoute, /getDisplayNameParts\(displayName\)/u);
   assert.match(accountRoute, /displayName[\s\S]*firstName[\s\S]*initials/u);
-  assert.match(accountRoute, /Cache-Control.*private, no-store/su);
+  assert.match(accountRoute, /Cache-Control[\s\S]*private, no-store/u);
   assert.doesNotMatch(accountRoute, /Alex Johnson/u);
   assert.doesNotMatch(liveAccountBridge, /const visibleValue = "AJ"/u);
 });
