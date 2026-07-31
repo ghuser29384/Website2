@@ -196,6 +196,17 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .command-compact { display: none; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); padding: 10px 0; align-items: center; justify-content: space-between; gap: 12px; }
 .command-compact span { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .command-compact button { border: 0; background: transparent; color: var(--blue); cursor: pointer; font-weight: 650; }
+.offer-kind-switcher {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 10px 0 1px;
+}
+.offer-kind-switcher-label {
+  margin-right: 2px; color: var(--muted); font: 800 9px/1.2 var(--ui); letter-spacing: .1em; text-transform: uppercase;
+}
+.offer-kind-switcher button {
+  min-height: 31px; border: 1px solid var(--line-dark); background: rgba(255,255,252,.64); color: var(--ink); padding: 6px 10px; cursor: pointer; font: 700 10px/1.2 var(--ui);
+}
+.offer-kind-switcher button[aria-pressed="true"] { border-color: var(--blue); background: var(--blue); color: #fff; }
+.offer-kind-switcher button:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .parsed-wrap { padding: 8px 0 2px; }
 .parsed-wrap summary { list-style: none; cursor: pointer; color: var(--muted); font: 10px var(--ui); text-transform: uppercase; letter-spacing: .08em; display: inline-flex; gap: 8px; align-items: center; }
 .parsed-wrap summary::-webkit-details-marker { display: none; }
@@ -287,6 +298,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .value-point.action .mark { transform: rotate(45deg); background: var(--violet); box-shadow: 0 0 0 1px var(--violet); }
 .value-point.redirect .mark { transform: rotate(45deg); background: var(--orange); box-shadow: 0 0 0 1px var(--orange); }
 .value-point.trade .mark { border-radius: 50%; }
+.value-point.co-fund .mark { border-radius: 50%; background: var(--paper-strong); box-shadow: 0 0 0 3px var(--blue), inset 0 0 0 3px var(--paper-strong); }
 .value-point.selected .mark { width: 21px; height: 21px; box-shadow: 0 0 0 6px rgba(18,63,241,.15), 0 0 0 1px var(--blue); }
 .value-point .point-title { display: inline; background: rgba(247,245,240,.90); box-decoration-break: clone; -webkit-box-decoration-break: clone; font: 11px/1.35 var(--sans); padding: 1px 2px; }
 .value-point .point-meta { display: block; color: var(--muted); font: 10.5px/1.35 var(--ui); margin-top: 2px; }
@@ -521,6 +533,18 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   line-height: 1.35;
 }
 .offer-context .match-reason { margin: 0; text-align: right; max-width: 230px; }
+.cofund-badge {
+  display: inline-flex; align-items: center; min-height: 18px; margin-left: 4px; border: 1px solid var(--blue); background: var(--blue-soft); color: var(--blue); padding: 2px 5px; font: 800 8px/1 var(--ui); letter-spacing: .09em; text-transform: uppercase;
+}
+.cofund-funding { margin-top: 10px; max-width: 640px; }
+.cofund-progress-track { height: 6px; border: 1px solid var(--line-dark); background: #fff; overflow: hidden; }
+.cofund-progress-fill { display: block; height: 100%; background: var(--blue); }
+.cofund-funding-stats { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 5px; color: var(--muted); font: 9px/1.35 var(--ui); }
+.cofund-funding-stats strong { color: var(--ink); }
+.cofund-inspector-progress { margin: 14px 0 0; border: 1px solid var(--line); padding: 11px; background: rgba(229,235,255,.36); }
+.cofund-inspector-progress .cofund-progress-track { height: 8px; }
+.offer-transaction-row[data-offer-kind="co-fund"] { box-shadow: inset 3px 0 0 var(--blue); }
+.offer-transaction-row[data-offer-kind="co-fund"] .exchange-side[data-exchange-side="offer"] { background: rgba(229,235,255,.22); }
 .offer-transaction-row .row-actions {
   align-content: start;
   gap: 7px;
@@ -580,6 +604,8 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
 .inspector-exchange.compact .exchange-side { padding: 9px; }
 .inspector-exchange.compact .exchange-obligations li { font-size: 10px; }
 .inspector-exchange.compact .exchange-obligations li:first-child { font-size: 14px; }
+.inspector-exchange.cofund-inspector-exchange { grid-template-columns: minmax(0, 1fr); }
+.inspector-exchange.cofund-inspector-exchange .exchange-arrow { min-height: 30px; border-left: 0; border-right: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .response-intent-note { margin: 14px 0 4px; padding: 10px 12px; border-left: 2px solid var(--blue); background: #eef1fc; font: 11px/1.45 var(--ui); }
 .response-intent-note strong { color: var(--ink); }
 .why-list, .integrity-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
@@ -747,8 +773,9 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
     grid-row: 1;
     padding: 0 !important;
   }
-  .offer-row-meta { padding: 11px 8px 8px 3px; align-items: flex-start; }
-  .offer-row-deadline { font-size: 9px; max-width: 104px; }
+  .offer-row-meta { display: grid; grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 11px 8px 8px 3px; align-items: start; }
+  .offer-row-meta .eyebrow { flex-wrap: wrap; }
+  .offer-row-deadline { font-size: 9px; max-width: none; text-align: left; }
   .exchange-grid { display: block; min-height: 0; }
   .exchange-side { padding: 12px 8px 12px 3px; }
   .exchange-side[data-exchange-side="return"] {
@@ -1241,6 +1268,100 @@ const offers = [
     recommendationFacts: ['Opportunity has expired'],
     recommendationEstimates: ['Impact is weakly evidenced'],
     tags: ['facilitation', 'future', 'community']
+  },
+  {
+    id: 'cofund-bio-salary',
+    listingKind: 'co-fund',
+    title: 'Co-Fund a verified biosecurity salary gap',
+    causeId: 'biosecurity',
+    mechanism: 'trade',
+    requester: 'Global Health Careers',
+    role: 'Verified career-transition administrator',
+    counterparty: 'Verified biosecurity candidate',
+    description: 'Contributors jointly close a verified salary gap; the candidate accepts the eligible role only if the full collective threshold is met.',
+    give: '$10–$250 conditional contribution toward a $25,000 threshold',
+    receive: 'The verified candidate accepts the eligible biosecurity role and starts after employment confirmation',
+    commitmentLabel: '$10–$250',
+    moneyCost: 10,
+    timeMinutes: 0,
+    behaviorFriction: 0.3,
+    verificationBurden: 1.8,
+    impactEstimate: 4.7,
+    evidenceConfidence: 0.94,
+    valueAlignment: 0.92,
+    deadline: '2026-07-22',
+    verified: true,
+    evidenceLevel: 'Independent employment verification',
+    status: 'active',
+    activity: '54 contributors',
+    proof: 'Employment contract, competing offers, and start confirmation',
+    trustRoute: 'You and other contributors → Global Health Careers → verified candidate and hiring organization',
+    reliability: 'Employment and competing-offer evidence required before release',
+    additionality: 'High — the contribution releases only if the full verified salary gap is covered.',
+    baseline: 'The candidate does not enter the eligible role through this funding arrangement unless the collective threshold is met.',
+    thirdParties: 'The candidate and hiring organization are directly affected; employment terms and start confirmation are verified before release.',
+    adverseIncentives: 'Competing offers and the employment contract are reviewed to reduce salary-gap inflation and self-dealing risk.',
+    disputeTerms: 'No contributor is charged if the threshold is missed. Authorizations expire July 23; funds release only after employment-start verification.',
+    recommendationFacts: ['$23,640 of $25,000 is conditionally committed', '54 contributors', 'Employment contract and start confirmation are required'],
+    recommendationEstimates: ['Impact and value alignment remain model-assisted estimates'],
+    tags: ['biosecurity', 'career transition', 'co-fund', 'threshold'],
+    coFund: {
+      threshold: 25000,
+      funded: 23640,
+      contributors: 54,
+      minimumContribution: 10,
+      maximumContribution: 250,
+      authorizationExpires: '2026-07-23',
+      failure: 'No contributor is charged; authorizations expire on July 23.',
+      activation: 'If activated, the candidate accepts the eligible role and funds release at employment start.'
+    }
+  },
+  {
+    id: 'cofund-factory-transition',
+    listingKind: 'co-fund',
+    title: 'Co-Fund a verified supplier welfare transition',
+    causeId: 'factory-farming',
+    mechanism: 'trade',
+    requester: 'Food Systems Transition Lab',
+    role: 'Verified transition administrator',
+    counterparty: 'Participating supplier',
+    description: 'Contributors collectively cover transition costs; the supplier signs and begins the verified welfare transition only at full participation.',
+    give: '$25–$2,500 conditional contribution toward a $34,000 threshold',
+    receive: 'The participating supplier signs and begins the verified welfare transition',
+    commitmentLabel: '$25–$2,500',
+    moneyCost: 25,
+    timeMinutes: 0,
+    behaviorFriction: 0.4,
+    verificationBurden: 2.0,
+    impactEstimate: 4.4,
+    evidenceConfidence: 0.86,
+    valueAlignment: 0.91,
+    deadline: '2026-07-18',
+    verified: true,
+    evidenceLevel: 'Contract and implementation review',
+    status: 'at-risk',
+    activity: '61 contributors',
+    proof: 'Supplier contract, procurement audit, and implementation review',
+    trustRoute: 'You and other contributors → Food Systems Transition Lab → participating supplier',
+    reliability: 'Supplier contract and implementation review required before release',
+    additionality: 'High — transition costs are covered only if the full collective threshold is committed.',
+    baseline: 'Without activation, the supplier keeps the existing production arrangement.',
+    thirdParties: 'Animals, workers, buyers, and the supplier are affected; procurement and implementation evidence are reviewed.',
+    adverseIncentives: 'Contract and procurement review reduce the risk of overstated transition costs or relabelled existing improvements.',
+    disputeTerms: 'No contributor is charged if the threshold is missed; the supplier keeps the existing arrangement.',
+    recommendationFacts: ['$11,800 of $34,000 is conditionally committed', '61 contributors', 'Supplier contract and implementation review are required'],
+    recommendationEstimates: ['Expected animal-welfare value remains model-assisted'],
+    tags: ['factory farming', 'supplier transition', 'co-fund', 'threshold'],
+    coFund: {
+      threshold: 34000,
+      funded: 11800,
+      contributors: 61,
+      minimumContribution: 25,
+      maximumContribution: 2500,
+      authorizationExpires: '2026-07-19',
+      failure: 'No charge; the supplier keeps the existing production arrangement.',
+      activation: 'The supplier signs and begins the verified welfare transition.'
+    }
   }
 ];
 
@@ -1548,6 +1669,58 @@ const exchangeProfiles = {
     },
     acceptanceMode: 'approval',
     counteroffersAllowed: false
+  },
+  'cofund-bio-salary': {
+    offer: {
+      flexibility: 'fixed',
+      types: ['fund'],
+      amount: 10,
+      recipient: 'Global Health Careers-administered salary-gap funding',
+      alternatives: [[
+        '$10–$250 conditional contribution',
+        'Counts toward the $25,000 collective threshold',
+        'No charge if the threshold or employment verification fails'
+      ]]
+    },
+    return: {
+      flexibility: 'fixed',
+      types: ['service', 'public-good'],
+      amount: 0,
+      recipient: 'Verified biosecurity role and its beneficiaries',
+      alternatives: [[
+        'Verified candidate accepts the eligible biosecurity role',
+        'Funds release only at employment start',
+        'Employment contract, competing offers, and start confirmation verify performance'
+      ]]
+    },
+    acceptanceMode: 'automatic',
+    counteroffersAllowed: false
+  },
+  'cofund-factory-transition': {
+    offer: {
+      flexibility: 'fixed',
+      types: ['fund'],
+      amount: 25,
+      recipient: 'Food Systems Transition Lab-administered transition funding',
+      alternatives: [[
+        '$25–$2,500 conditional contribution',
+        'Counts toward the $34,000 collective threshold',
+        'No charge if the threshold or verification conditions fail'
+      ]]
+    },
+    return: {
+      flexibility: 'fixed',
+      types: ['service', 'public-good'],
+      amount: 0,
+      recipient: 'Verified supplier welfare transition',
+      alternatives: [[
+        'Participating supplier signs the transition agreement',
+        'Supplier begins the verified welfare transition',
+        'Supplier contract, procurement audit, and implementation review verify performance'
+      ]]
+    },
+    acceptanceMode: 'automatic',
+    counteroffersAllowed: false
   }
 };
 
@@ -1605,37 +1778,28 @@ function validateOfferExchange(item) {
   if (!['automatic', 'approval'].includes(exchange?.acceptanceMode)) blockers.push('missing exact-match acceptance mode');
   if (!item.deadline) blockers.push('missing deadline');
   if (!item.proof || !item.evidenceLevel) blockers.push('missing evidence or verification conditions');
+  if (item.listingKind === 'co-fund') {
+    const funding = item.coFund;
+    if (!item.verified) blockers.push('Co-Fund must pass verification before public discovery');
+    if (!item.counterparty) blockers.push('missing Co-Fund counterparty');
+    if (!funding || !Number.isFinite(funding.threshold) || funding.threshold <= 0) blockers.push('missing valid Co-Fund threshold');
+    if (!funding || !Number.isFinite(funding.funded) || funding.funded < 0 || funding.funded > funding.threshold) blockers.push('missing valid Co-Fund funding state');
+    if (!funding || !Number.isFinite(funding.contributors) || funding.contributors < 1) blockers.push('missing Co-Fund contributor count');
+    if (!funding || !Number.isFinite(funding.minimumContribution) || funding.minimumContribution <= 0) blockers.push('missing Co-Fund minimum contribution');
+    if (!funding || !Number.isFinite(funding.maximumContribution) || funding.maximumContribution < funding.minimumContribution) blockers.push('missing valid Co-Fund maximum contribution');
+    if (!funding?.failure || !funding?.activation || !funding?.authorizationExpires) blockers.push('missing Co-Fund activation or failure terms');
+  }
   return blockers;
 }
 
 for (const offer of offers) {
+  offer.listingKind = offer.listingKind || 'individual';
   offer.exchange = exchangeProfiles[offer.id] || null;
   offer.publicationBlockers = validateOfferExchange(offer);
 }
 
 
 const pools = [
-  {
-    id: 'pool-bio-salary',
-    title: 'Verified biosecurity salary-gap pool',
-    causeId: 'biosecurity',
-    threshold: 25000,
-    funded: 23640,
-    deadline: '2026-07-22',
-    contributors: 54,
-    verified: true,
-    status: 'active',
-    requester: 'Global Health Careers',
-    commitmentLabel: '$10–$250',
-    description: 'Close a verified salary gap for a more impactful biosecurity role.',
-    proof: 'Employment contract, competing offers, and start confirmation',
-    failure: 'No contributor is charged; authorizations expire on July 23.',
-    changes: 'If activated, the candidate accepts the eligible role and funds release at employment start.',
-    authorizationExpires: '2026-07-23',
-    impactEstimate: 4.7,
-    evidenceConfidence: 0.94,
-    valueAlignment: 0.92
-  },
   {
     id: 'pool-wild-research',
     title: 'Wild-animal-suffering priority research pool',
@@ -1679,27 +1843,6 @@ const pools = [
     valueAlignment: 0.87
   },
   {
-    id: 'pool-factory-transition',
-    title: 'Factory-farming supplier transition assurance pool',
-    causeId: 'factory-farming',
-    threshold: 34000,
-    funded: 11800,
-    deadline: '2026-07-18',
-    contributors: 61,
-    verified: true,
-    status: 'at-risk',
-    requester: 'Food Systems Transition Lab',
-    commitmentLabel: '$25–$2,500',
-    description: 'Assure a supplier that transition costs will be covered only at full participation.',
-    proof: 'Supplier contract, procurement audit, and implementation review',
-    failure: 'No charge; supplier keeps existing production arrangement.',
-    changes: 'Supplier signs and begins the verified welfare transition.',
-    authorizationExpires: '2026-07-19',
-    impactEstimate: 4.4,
-    evidenceConfidence: 0.86,
-    valueAlignment: 0.91
-  },
-  {
     id: 'pool-global-nets',
     title: 'Bed-net distribution verification pool',
     causeId: 'global-poverty',
@@ -1733,7 +1876,7 @@ const people = [
 ];
 
 const savedSearches = [
-  { id: 'saved-near-threshold', label: 'Near-threshold salary-gap pools', query: 'near-threshold verified salary gap pools', newCount: 12 },
+  { id: 'saved-near-threshold', label: 'Near-threshold salary-gap Co-Funds', query: 'near-threshold verified salary gap co-funds', newCount: 12 },
   { id: 'saved-ai-under-100', label: 'AI-safety research under $100', query: 'verified AI safety offers under $100', newCount: 5 },
   { id: 'saved-civic', label: 'Civic-infrastructure helpers', query: 'verified civic infrastructure people available', newCount: 3 },
   { id: 'saved-bio-people', label: 'Trusted biosecurity people', query: 'verified biosecurity people', newCount: 4 },
@@ -1746,6 +1889,25 @@ const userPreferences = {
   preferredMechanisms: ['trade', 'redirect'],
   preferredTags: ['transit', 'open source', 'verification']
 };
+
+const legacyDiscoverItemMap = {
+  'pool-bio-salary': { type: 'offer', id: 'cofund-bio-salary' },
+  'pool-factory-transition': { type: 'offer', id: 'cofund-factory-transition' }
+};
+
+function migrateLegacyDiscoverId(id) {
+  return legacyDiscoverItemMap[id]?.id || id;
+}
+
+function migrateLegacyDiscoverIds(ids) {
+  return [...new Set((Array.isArray(ids) ? ids : []).map(migrateLegacyDiscoverId))];
+}
+
+function migrateLegacyPledgeAmounts(amounts) {
+  return Object.fromEntries(
+    Object.entries(amounts && typeof amounts === 'object' ? amounts : {}).map(([id, value]) => [migrateLegacyDiscoverId(id), value])
+  );
+}
 
 const today = new Date('2026-07-17T12:00:00-07:00');
 
@@ -1763,6 +1925,7 @@ const defaultViewByDomain = () => ({
 
 const baseConstraints = () => ({
   causes: [],
+  offerKind: 'all',
   verifiedOnly: false,
   maximumCommitment: 250,
   offerTypes: [],
@@ -1792,18 +1955,24 @@ function parseCsv(value) {
 
 function readUrlState() {
   const params = new URLSearchParams(window.location.search);
-  const hasDiscoverState = [...params.keys()].some((key) => ['domain','view','cause','verified','max','offerType','returnType','minReturn','recipient','evidence','flexibility','query','selected','compare','sort','mechanisms','deadline'].includes(key));
+  const hasDiscoverState = [...params.keys()].some((key) => ['domain','view','cause','causeFilter','causes','verified','max','offerKind','offerType','returnType','minReturn','recipient','evidence','flexibility','query','q','selected','compare','sort','mechanisms','deadline','terms','smart'].includes(key));
   if (!hasDiscoverState) return null;
-  const domain = ['offers','pools','people'].includes(params.get('domain')) ? params.get('domain') : 'offers';
+  const requestedDomain = ['offers','pools','people'].includes(params.get('domain')) ? params.get('domain') : 'offers';
+  const rawSelectedId = params.get('selected');
+  const migratedSelection = rawSelectedId ? legacyDiscoverItemMap[rawSelectedId] : null;
+  const domain = migratedSelection ? 'offers' : requestedDomain;
+  const requestedOfferKind = params.get('offerKind');
+  const offerKind = ['all','individual','co-fund'].includes(requestedOfferKind) ? requestedOfferKind : 'all';
   return {
     domain,
-    explicitView: params.get('view') || '',
+    explicitView: migratedSelection ? 'list' : (params.get('view') || ''),
     selectedCause: params.get('cause') || null,
-    selectedItem: params.get('selected') ? { type: params.get('selectedType') || domain.slice(0, -1), id: params.get('selected') } : null,
-    query: params.get('query') || '',
-    compareIds: parseCsv(params.get('compare')),
+    selectedItem: rawSelectedId ? (migratedSelection || { type: params.get('selectedType') || domain.slice(0, -1), id: rawSelectedId }) : null,
+    query: params.get('query') || params.get('q') || '',
+    compareIds: parseCsv(params.get('compare')).map((id) => legacyDiscoverItemMap[id]?.id || id),
     constraints: {
-      causes: parseCsv(params.get('causeFilter')),
+      causes: parseCsv(params.get('causeFilter') || params.get('causes')),
+      offerKind: migratedSelection ? 'co-fund' : offerKind,
       verifiedOnly: params.get('verified') === '1',
       maximumCommitment: Number(params.get('max') || 250),
       offerTypes: parseCsv(params.get('offerType')),
@@ -1816,7 +1985,7 @@ function readUrlState() {
       mechanisms: parseCsv(params.get('mechanisms')),
       availability: params.get('availability') || '',
       sort: params.get('sort') || 'best-fit',
-      terms: parseCsv(params.get('terms'))
+      terms: parseCsv(params.get('terms')).flatMap((term) => term.split(/\s+/)).filter(Boolean)
     }
   };
 }
@@ -1827,6 +1996,7 @@ function createInitialState() {
   const viewByDomain = { ...defaultViewByDomain(), ...(stored.viewByDomain || {}) };
   if (url?.explicitView) viewByDomain[url.domain] = url.explicitView;
   const constraints = { ...baseConstraints(), ...(stored.constraints || {}), ...(url?.constraints || {}) };
+  if (!['all','individual','co-fund'].includes(constraints.offerKind)) constraints.offerKind = 'all';
   // Mobile always starts in List unless a URL explicitly requests a graphic.
   if (isMobileViewport() && !url?.explicitView) {
     viewByDomain.offers = 'list';
@@ -1853,9 +2023,9 @@ function createInitialState() {
     railCollapsed: Boolean(stored.railCollapsed),
     compactDrawer: null,
     commandCollapsed: false,
-    bookmarked: stored.bookmarked || [],
+    bookmarked: migrateLegacyDiscoverIds(stored.bookmarked),
     scrollPositions: {},
-    pledgeAmounts: stored.pledgeAmounts || {},
+    pledgeAmounts: migrateLegacyPledgeAmounts(stored.pledgeAmounts),
     systemStatus: new URLSearchParams(window.location.search).get('status') || 'ready'
   };
 }
@@ -1866,6 +2036,7 @@ function serializeToUrl(state) {
   params.set('view', state.viewByDomain[state.domain]);
   if (state.selectedCause) params.set('cause', state.selectedCause);
   if (state.constraints.causes.length) params.set('causeFilter', state.constraints.causes.join(','));
+  if (state.constraints.offerKind !== 'all') params.set('offerKind', state.constraints.offerKind);
   if (state.constraints.verifiedOnly) params.set('verified', '1');
   if (state.constraints.maximumCommitment !== 250) params.set('max', String(state.constraints.maximumCommitment));
   if (state.constraints.offerTypes.length) params.set('offerType', state.constraints.offerTypes.join(','));
@@ -1895,6 +2066,7 @@ function persistPreferences(state) {
       domain: state.domain,
       viewByDomain: state.viewByDomain,
       constraints: {
+        offerKind: state.constraints.offerKind,
         verifiedOnly: state.constraints.verifiedOnly,
         maximumCommitment: state.constraints.maximumCommitment,
         offerTypes: state.constraints.offerTypes,
@@ -2028,7 +2200,7 @@ function parseDatePhrase(text) {
 }
 
 function extractTerms(text) {
-  const stop = new Set(['find','show','me','a','an','the','for','with','and','or','under','below','before','by','verified','people','person','offers','offer','pools','pool','near','threshold','available','trade','trades','opportunities','opportunity','within','of','to','in']);
+  const stop = new Set(['find','show','me','a','an','the','for','with','and','or','under','below','before','by','verified','people','person','offers','offer','pools','pool','co-fund','co-funds','cofund','cofunds','group-buying','group','buying','collective','collectively','fund','funding','moral','near','threshold','available','trade','trades','opportunities','opportunity','within','of','to','in']);
   return text.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter((word) => word.length > 2 && !stop.has(word) && !/^\d+$/.test(word)).slice(0, 8);
 }
 
@@ -2036,6 +2208,7 @@ function parseCommand(text, currentConstraints) {
   const lower = text.toLowerCase().trim();
   const constraints = {
     causes: [],
+    offerKind: 'all',
     verifiedOnly: /\bverified\b/.test(lower),
     maximumCommitment: currentConstraints.maximumCommitment ?? 250,
     offerTypes: [],
@@ -2051,9 +2224,13 @@ function parseCommand(text, currentConstraints) {
     terms: []
   };
 
+  const asksForCoFund = /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(lower);
+  const asksForIndividualOffers = /\bindividual offers?\b|\bone[- ]to[- ]one offers?\b/.test(lower);
   let domain = 'offers';
-  if (/\bpeople\b|\bperson\b|\bwho\b|\bmember\b|\bresearcher\b|\bengineer\b/.test(lower)) domain = 'people';
-  if (/\bpool\b|\bpools\b|\bthreshold\b|\bpledge\b|\bnear[- ]activation\b|\bnear[- ]threshold\b/.test(lower)) domain = 'pools';
+  if (asksForCoFund) constraints.offerKind = 'co-fund';
+  else if (asksForIndividualOffers) constraints.offerKind = 'individual';
+  if (!asksForCoFund && /\bpeople\b|\bperson\b|\bwho\b|\bmember\b|\bresearcher\b|\bengineer\b/.test(lower)) domain = 'people';
+  if (!asksForCoFund && /\bpool\b|\bpools\b|\bthreshold pool\b|\bstandalone threshold\b|\bdominant assurance contract\b|\bnear[- ]activation\b|\bnear[- ]threshold\b/.test(lower)) domain = 'pools';
 
   for (const [phrase, id] of causeAliases.entries()) {
     if (lower.includes(phrase) && !constraints.causes.includes(id)) constraints.causes.push(id);
@@ -2107,6 +2284,7 @@ function parseCommand(text, currentConstraints) {
 
   const exactConstraintCount = [
     constraints.causes.length > 0,
+    constraints.offerKind !== 'all',
     constraints.verifiedOnly,
     constraints.maximumCommitment < 250,
     constraints.offerTypes.length > 0,
@@ -2120,14 +2298,18 @@ function parseCommand(text, currentConstraints) {
     Boolean(constraints.availability)
   ].filter(Boolean).length;
 
-  const view = domain === 'people' ? 'trust' : domain === 'pools' ? 'threshold' : exactConstraintCount >= 2 ? 'list' : 'value';
+  const view = domain === 'people' ? 'trust' : domain === 'pools' ? 'threshold' : constraints.offerKind !== 'all' || exactConstraintCount >= 2 ? 'list' : 'value';
   const routeReason = domain === 'people'
     ? 'Opened Trust network because the query is looking for a person or relationship.'
     : domain === 'pools'
-      ? 'Opened Threshold because the query concerns pooled activation or pledging.'
-      : exactConstraintCount >= 2
-        ? `Opened List because this query contains ${exactConstraintCount} exact constraints across the exchange.`
-        : 'Opened Value field because this is a broad opportunity search.';
+      ? 'Opened Threshold because the query concerns a standalone threshold-funded moral public good.'
+      : constraints.offerKind === 'co-fund'
+        ? 'Opened Offers because Co-Funds are collective fulfillment of one side of a reciprocal moral trade.'
+        : constraints.offerKind === 'individual'
+          ? 'Opened Offers because the query asks for individual reciprocal opportunities.'
+          : exactConstraintCount >= 2
+            ? `Opened List because this query contains ${exactConstraintCount} exact constraints across the exchange.`
+            : 'Opened Value field because this is a broad opportunity search.';
 
   const parserConfidence = lower.length < 4 ? 'low' : constraints.causes.length || constraints.terms.length ? 'high' : 'medium';
   return { domain, view, constraints, exactConstraintCount, routeReason, parserConfidence };
@@ -2137,6 +2319,8 @@ function constraintTokens(constraints, domain) {
   const tokens = [];
   if (domain !== 'offers') tokens.push({ key: 'domain', label: domain[0].toUpperCase() + domain.slice(1) });
   constraints.causes.forEach((id) => tokens.push({ key: `cause:${id}`, label: causeAreas.find((cause) => cause.id === id)?.name || id }));
+  if (constraints.offerKind === 'co-fund') tokens.push({ key: 'offerKind', label: 'Co-Funds' });
+  if (constraints.offerKind === 'individual') tokens.push({ key: 'offerKind', label: 'Individual offers' });
   if (constraints.verifiedOnly) tokens.push({ key: 'verified', label: 'Verified only' });
   if (constraints.maximumCommitment < 250) tokens.push({ key: 'max', label: `You offer ≤ $${constraints.maximumCommitment}` });
   constraints.offerTypes.forEach((value) => tokens.push({ key: `offerType:${value}`, label: `You offer · ${offerTypeLabels[value] || value}` }));
@@ -2154,7 +2338,8 @@ function constraintTokens(constraints, domain) {
 
 function removeConstraintToken(constraints, key) {
   const next = structuredClone(constraints);
-  if (key === 'verified') next.verifiedOnly = false;
+  if (key === 'offerKind') next.offerKind = 'all';
+  else if (key === 'verified') next.verifiedOnly = false;
   else if (key === 'max') next.maximumCommitment = 250;
   else if (key === 'minReturn') next.minimumReturnAmount = 0;
   else if (key === 'recipient') next.recipient = '';
@@ -2233,6 +2418,9 @@ function offerMatch(offer, constraints) {
   const exchange = offer.exchange;
   let score = 20;
   if (!exchange) return { include: false, score: 0, reasons: [] };
+  if (constraints.offerKind !== 'all' && offer.listingKind !== constraints.offerKind) return { include: false, score: 0, reasons: [] };
+  if (constraints.offerKind === 'co-fund') reasons.push('Co-Fund');
+  if (constraints.offerKind === 'individual') reasons.push('individual offer');
   if (constraints.causes.length) {
     if (!constraints.causes.includes(offer.causeId)) return { include: false, score: 0, reasons: [] };
     score += 30;
@@ -2334,7 +2522,7 @@ function sortResults(items, domain, sort) {
     'strongest-evidence': (a, b) => b.item.evidenceConfidence - a.item.evidenceConfidence,
     'deadline': compareDate,
     'highest-value': (a, b) => b.match.metrics.expectedValue - a.match.metrics.expectedValue,
-    'newest': (a, b) => new Date(b.item.created) - new Date(a.item.created)
+    'newest': (a, b) => new Date(b.item.created || b.item.deadline || 0) - new Date(a.item.created || a.item.deadline || 0)
   };
   const poolSorters = {
     'best-fit': (a, b) => b.match.score - a.match.score,
@@ -2358,6 +2546,7 @@ function sortResults(items, domain, sort) {
 
 function activeFilterCount(constraints) {
   return constraints.causes.length
+    + Number(constraints.offerKind !== 'all')
     + Number(constraints.verifiedOnly)
     + Number(constraints.maximumCommitment < 250)
     + constraints.offerTypes.length
@@ -2482,7 +2671,9 @@ function buildCommandSummary(state) {
   const tokens = constraintTokens(state.constraints, state.domain).map((token) => token.label);
   if (tokens.length) return tokens.join(' · ');
   if (state.domain === 'people') return 'People · All trusted routes';
-  if (state.domain === 'pools') return 'Pools · All activation states';
+  if (state.domain === 'pools') return 'Pools · Standalone threshold campaigns';
+  if (state.constraints.offerKind === 'co-fund') return 'Offers · Co-Funds';
+  if (state.constraints.offerKind === 'individual') return 'Offers · Individual offers';
   return 'Offers · All current opportunities';
 }
 
@@ -2491,7 +2682,9 @@ function buildNaturalCommand(domain, constraints) {
   if (constraints.verifiedOnly) parts.push('verified');
   if (constraints.causes.length) parts.push(constraints.causes.map(causeName).join(' or '));
   if (domain === 'people') parts.push('people');
-  else if (domain === 'pools') parts.push('pools');
+  else if (domain === 'pools') parts.push('standalone threshold pools');
+  else if (constraints.offerKind === 'co-fund') parts.push('Co-Funds');
+  else if (constraints.offerKind === 'individual') parts.push('individual offers');
   else parts.push('offers');
   if (constraints.offerTypes.length) parts.push(`where you offer ${constraints.offerTypes.map((type) => offerTypeLabels[type] || type).join(' or ')}`);
   if (constraints.returnTypes.length) parts.push(`and get ${constraints.returnTypes.map((type) => returnTypeLabels[type] || type).join(' or ')}`);
@@ -2510,9 +2703,18 @@ function buildNaturalCommand(domain, constraints) {
 function contextualResultCount(state, results) {
   const view = currentView(state);
   if (state.domain === 'offers' && view === 'constellation' && !hasActiveConstraints(state) && !state.selectedCause) {
-    return '<strong>9 cause areas</strong> · 12 current routes · 4 new signals';
+    const currentRoutes = offers.filter((item) => item.status !== 'expired' && item.publicationBlockers.length === 0).length;
+    return `<strong>9 cause areas</strong> · ${currentRoutes} current routes · 4 new signals`;
   }
-  const noun = state.domain === 'people' ? (results.length === 1 ? 'person' : 'people') : state.domain === 'pools' ? (results.length === 1 ? 'pool' : 'pools') : (results.length === 1 ? 'offer' : 'offers');
+  const noun = state.domain === 'people'
+    ? (results.length === 1 ? 'person' : 'people')
+    : state.domain === 'pools'
+      ? (results.length === 1 ? 'standalone pool' : 'standalone pools')
+      : state.constraints.offerKind === 'co-fund'
+        ? (results.length === 1 ? 'Co-Fund' : 'Co-Funds')
+        : state.constraints.offerKind === 'individual'
+          ? (results.length === 1 ? 'individual offer' : 'individual offers')
+          : (results.length === 1 ? 'offer' : 'offers');
   const cause = state.constraints.causes.length === 1 ? ` in ${causeName(state.constraints.causes[0])}` : '';
   return `<strong>${results.length}</strong> matching ${noun}${escapeHtml(cause)}`;
 }
@@ -2554,6 +2756,16 @@ function renderViewTabs(state, className = 'rail-tabs') {
   </div>`;
 }
 
+function renderOfferKindSwitcher(state) {
+  if (state.domain !== 'offers') return '';
+  const options = [
+    ['all', 'All offers'],
+    ['individual', 'Individual offers'],
+    ['co-fund', 'Co-Funds']
+  ];
+  return `<div class="offer-kind-switcher" role="group" aria-label="Offer listing type"><span class="offer-kind-switcher-label">Offer type</span>${options.map(([value, label]) => `<button type="button" data-action="set-offer-kind" data-offer-kind="${value}" aria-pressed="${state.constraints.offerKind === value}">${label}</button>`).join('')}</div>`;
+}
+
 function renderFilters(state) {
   const causeChecks = causeAreas.map((cause) => `
     <label class="check-row"><input type="checkbox" data-filter="cause" value="${cause.id}" ${state.constraints.causes.includes(cause.id) ? 'checked' : ''} /> <span>${cause.name}</span></label>
@@ -2566,6 +2778,11 @@ function renderFilters(state) {
   const availability = state.domain === 'people' ? `
     <label class="check-row"><input type="checkbox" data-filter="availability" ${state.constraints.availability ? 'checked' : ''} /> <span>Available now</span></label>` : '';
   const exchangeFilters = state.domain === 'offers' ? `
+    <div class="filter-group">
+      <label class="group-title">Offer listing type</label>
+      ${[['all','All offers'],['individual','Individual offers'],['co-fund','Co-Funds']].map(([value, label]) => `<label class="check-row"><input type="radio" name="offer-kind" data-filter="offer-kind" value="${value}" ${state.constraints.offerKind === value ? 'checked' : ''} /> <span>${label}</span></label>`).join('')}
+      <span class="filter-hint">Co-Funds are reciprocal trades whose contribution side is filled collectively. Standalone moral-public-good campaigns remain under Pools.</span>
+    </div>
     <div class="filter-group">
       <label class="group-title">What you offer</label>
       ${Object.entries(offerTypeLabels).map(([value, label]) => `<label class="check-row"><input type="checkbox" data-filter="offer-type" value="${value}" ${state.constraints.offerTypes.includes(value) ? 'checked' : ''} /> <span>${label}</span></label>`).join('')}
@@ -2678,6 +2895,7 @@ function renderCommandArea(state, results) {
         <button type="submit">Run search →</button>
       </form>
       <div class="command-compact"><span>${escapeHtml(buildCommandSummary(state))}</span><button data-action="edit-search">Edit search</button></div>
+      ${renderOfferKindSwitcher(state)}
       ${state.queryActive || hasActiveConstraints(state) ? `
         <details class="parsed-wrap">
           <summary>Parsed constraints · ${tokens.length}</summary>
@@ -2756,7 +2974,7 @@ function renderValueField(state) {
     const left = 6 + metrics.burden * .86;
     const bottom = 6 + metrics.expectedValue * .82;
     const selected = state.compareIds.includes(item.id);
-    const mechanism = state.domain === 'pools' ? 'trade' : item.mechanism;
+    const mechanism = state.domain === 'pools' ? 'trade' : isCoFund(item) ? 'co-fund' : item.mechanism;
     const pointTitle = state.domain === 'offers' ? exchangeGlanceText(item) : item.title;
     const pointMeta = state.domain === 'offers' ? `${item.title} · ${metrics.burdenLabel} · ${metrics.valueLabel}` : `${metrics.burdenLabel} · ${metrics.valueLabel}`;
     return `<button id="trigger-${item.id}" class="value-point ${mechanism} ${selected ? 'selected' : ''} graph-node" style="left:${left}%;bottom:${bottom}%" data-point-id="${item.id}" data-graph-node data-node-type="${state.domain === 'pools' ? 'pool' : 'offer'}" data-node-id="${item.id}" data-x="${left}" data-y="${100-bottom}" tabindex="-1" aria-pressed="${selected}" aria-label="${escapeHtml(pointTitle)}. ${metrics.burdenLabel}. ${metrics.valueLabel}.">
@@ -2813,7 +3031,7 @@ function renderThreshold(state) {
     </button>`;
   }).join('');
   return `<section class="view-stage" id="discover-view" role="tabpanel" aria-labelledby="view-tab-threshold">
-    ${renderViewHead('Threshold radar', 'Distance from activation, deadline urgency, pool scale, and risk state are all derived from current pool terms.', `<button class="quiet-btn" data-action="open-method" data-method="threshold">How this is calculated</button>${graphAccessibleListButton()}`)}
+    ${renderViewHead('Standalone threshold radar', 'These are moral-public-good campaigns without a reciprocal trade counterparty. Distance from activation, deadline urgency, pool scale, and risk state are derived from current terms.', `<button class="quiet-btn" data-action="open-method" data-method="threshold">How this is calculated</button>${graphAccessibleListButton()}`)}
     <div class="threshold-layout">
       <div class="threshold-canvas">
         <div class="radar-inner">
@@ -2859,7 +3077,12 @@ function matchReasonText(match) {
   return match.reasons.length ? `Matches ${match.reasons.join(', ')}` : 'Ranked by current fit, evidence, and burden';
 }
 
+function isCoFund(item) {
+  return item?.listingKind === 'co-fund' && Boolean(item.coFund);
+}
+
 function statusLabel(item) {
+  if (isCoFund(item)) return derivePoolMetrics({ ...item.coFund, deadline: item.deadline, status: item.status }).statusLabel;
   if (item.status === 'stale') return 'Stale terms';
   if (item.status === 'expired') return 'Expired';
   if (item.status === 'verification-unavailable') return 'Verification unavailable';
@@ -2876,17 +3099,37 @@ function firstExchangeTerm(item, sideName) {
 }
 
 function exchangeGlanceText(item) {
-  return `You offer: ${firstExchangeTerm(item, 'offer')} · You get: ${firstExchangeTerm(item, 'return')}`;
+  const offerLabel = isCoFund(item) ? 'Contributor group provides' : 'You offer';
+  const returnLabel = isCoFund(item) ? 'Counterparty provides' : 'You get';
+  return `${offerLabel}: ${firstExchangeTerm(item, 'offer')} · ${returnLabel}: ${firstExchangeTerm(item, 'return')}`;
 }
 
 function renderExchangeSide(item, sideName) {
   const side = item.exchange[sideName];
-  const label = sideName === 'offer' ? 'You offer' : 'You get';
+  const label = isCoFund(item)
+    ? (sideName === 'offer' ? 'You + contributors provide' : 'Counterparty provides')
+    : (sideName === 'offer' ? 'You offer' : 'You get');
+  const provider = isCoFund(item)
+    ? (sideName === 'offer'
+      ? `<div class="exchange-provider"><strong>${item.coFund.contributors} contributors</strong> · minimum ${formatMoney(item.coFund.minimumContribution)}</div>`
+      : `<div class="exchange-provider">Counterparty <strong>${escapeHtml(item.counterparty)}</strong> · administered by ${escapeHtml(item.requester)}</div>`)
+    : (sideName === 'return' ? `<div class="exchange-provider">Provided by <strong>${escapeHtml(item.requester)}</strong> · ${escapeHtml(item.role)}</div>` : '');
   return `<section class="exchange-side" data-exchange-side="${sideName}" aria-label="${label}">
     <div class="exchange-side-head"><span class="exchange-label">${label}</span><span class="exchange-flexibility">${exchangeFlexibilityLabels[side.flexibility]}</span></div>
     ${renderExchangeAlternatives(side.alternatives)}
-    ${sideName === 'return' ? `<div class="exchange-provider">Provided by <strong>${escapeHtml(item.requester)}</strong> · ${escapeHtml(item.role)}</div>` : ''}
+    ${provider}
   </section>`;
+}
+
+function coFundMetrics(item) {
+  return derivePoolMetrics({ ...item.coFund, deadline: item.deadline, status: item.status });
+}
+
+function renderCoFundProgress(item, compact = false) {
+  if (!isCoFund(item)) return '';
+  const metrics = coFundMetrics(item);
+  const percent = clamp(Math.round((item.coFund.funded / item.coFund.threshold) * 100), 0, 100);
+  return `<div class="cofund-funding ${compact ? 'compact' : ''}" data-cofund-progress data-funded="${item.coFund.funded}" data-threshold="${item.coFund.threshold}" data-contributors="${item.coFund.contributors}" data-minimum-contribution="${item.coFund.minimumContribution}" aria-label="${percent}% funded; ${formatMoney(metrics.gap)} remains"><div class="cofund-progress-track"><span class="cofund-progress-fill" style="width:${percent}%"></span></div><div class="cofund-funding-stats"><span><strong>${formatMoney(item.coFund.funded)}</strong> of ${formatMoney(item.coFund.threshold)}</span><span><strong>${item.coFund.contributors}</strong> contributors</span><span>Minimum <strong>${formatMoney(item.coFund.minimumContribution)}</strong></span><span><strong>${formatMoney(metrics.gap)}</strong> remains</span></div></div>`;
 }
 
 function exactMatchLabel(item) {
@@ -2898,17 +3141,24 @@ function renderOfferRow(state, result) {
   const { item, match } = result;
   const selected = state.compareIds.includes(item.id);
   const unavailable = item.status === 'expired';
-  return `<article class="transaction-row offer-transaction-row" data-row-id="${item.id}" data-offer-publication="valid">
+  const coFund = isCoFund(item);
+  const primary = coFund
+    ? `<button id="trigger-${item.id}" class="primary-btn" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="join-cofund" data-response-intent="join-cofund" ${unavailable ? 'disabled' : ''}>Join Co-Fund →</button>`
+    : `<button id="trigger-${item.id}" class="primary-btn" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="exact-match" data-response-intent="exact" ${unavailable ? 'disabled' : ''}>${exactMatchLabel(item)} →</button>`;
+  const secondary = coFund
+    ? `<button class="outline-btn" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="full-terms" data-response-intent="join-cofund">Terms</button>`
+    : `<button class="outline-btn" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="counteroffer" data-response-intent="counteroffer" ${!item.exchange.counteroffersAllowed || unavailable ? 'disabled' : ''}>Counteroffer</button>`;
+  return `<article class="transaction-row offer-transaction-row" data-row-id="${item.id}" data-offer-kind="${item.listingKind}" data-offer-publication="valid">
     <div class="compare-cell"><input type="checkbox" data-action="toggle-compare" data-id="${item.id}" ${selected ? 'checked' : ''} aria-label="Add ${escapeHtml(item.title)} to comparison" /></div>
     <div class="offer-row-content" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="list" role="button" tabindex="0" aria-label="Open full terms for ${escapeHtml(item.title)}">
-      <div class="offer-row-meta"><div class="eyebrow"><span class="status-dot ${item.status}"></span>${causeName(item.causeId)} · ${statusLabel(item)} · ${item.mechanism}</div><div class="offer-row-deadline">Complete by ${formatDate(item.deadline)}<br>${daysUntil(item.deadline)} days · ${escapeHtml(item.activity)}</div></div>
+      <div class="offer-row-meta"><div class="eyebrow"><span class="status-dot ${item.status}"></span>${causeName(item.causeId)} · ${statusLabel(item)} · ${item.mechanism}${coFund ? '<span class="cofund-badge">Co-Fund</span>' : ''}</div><div class="offer-row-deadline">${coFund ? 'Funding closes' : 'Complete by'} ${formatDate(item.deadline)}<br>${daysUntil(item.deadline)} days · ${escapeHtml(item.activity)}</div></div>
       <div class="exchange-grid">${renderExchangeSide(item, 'offer')}<div class="exchange-arrow" aria-hidden="true">↔</div>${renderExchangeSide(item, 'return')}</div>
-      <div class="offer-context"><div class="offer-context-copy"><h3 class="offer-context-title">${escapeHtml(item.title)}</h3><p class="offer-context-description">${escapeHtml(item.description)}</p></div><div class="match-reason">${escapeHtml(matchReasonText(match))}</div></div>
+      <div class="offer-context"><div class="offer-context-copy"><h3 class="offer-context-title">${escapeHtml(item.title)}</h3><p class="offer-context-description">${escapeHtml(item.description)}</p>${renderCoFundProgress(item)}</div><div class="match-reason">${escapeHtml(matchReasonText(match))}</div></div>
     </div>
     <div class="row-actions">
-      <button id="trigger-${item.id}" class="primary-btn" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="exact-match" data-response-intent="exact" ${unavailable ? 'disabled' : ''}>${exactMatchLabel(item)} →</button>
-      <button class="outline-btn" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="counteroffer" data-response-intent="counteroffer" ${!item.exchange.counteroffersAllowed || unavailable ? 'disabled' : ''}>Counteroffer</button>
-      <button class="quiet-btn" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="full-terms">Full terms →</button>
+      ${primary}
+      ${secondary}
+      ${coFund ? '' : `<button class="quiet-btn" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="full-terms">Full terms →</button>`}
       <div class="row-action-line"><span class="cell-secondary">${escapeHtml(item.evidenceLevel)}</span><button class="bookmark-btn ${state.bookmarked.includes(item.id) ? 'saved' : ''}" data-action="bookmark" data-id="${item.id}" aria-label="${state.bookmarked.includes(item.id) ? 'Remove saved opportunity' : 'Save opportunity'}">${state.bookmarked.includes(item.id) ? '◆' : '◇'}</button></div>
     </div>
   </article>`;
@@ -2945,7 +3195,7 @@ function renderList(state) {
   if (!results.length) return renderEmptyState(state);
   const rows = state.domain === 'offers' ? results.map((result) => renderOfferRow(state, result)).join('') : state.domain === 'pools' ? results.map((result) => renderPoolRow(state, result)).join('') : results.map((result) => renderPersonRow(state, result)).join('');
   return `<section class="view-stage list-stage" id="discover-view" role="tabpanel" aria-labelledby="view-tab-list">
-    ${renderViewHead(state.domain === 'people' ? 'People you can reach' : state.domain === 'pools' ? 'Conditional pools' : 'Current opportunities', state.domain === 'offers' ? 'Compare what you offer and what you get—including verification, release conditions, provider, deadline, and negotiability—without opening the offer.' : 'Exact terms, evidence, deadline, activity, and action in one scan-efficient list.')}
+    ${renderViewHead(state.domain === 'people' ? 'People you can reach' : state.domain === 'pools' ? 'Standalone threshold pools' : state.constraints.offerKind === 'co-fund' ? 'Current Co-Funds' : state.constraints.offerKind === 'individual' ? 'Current individual offers' : 'Current opportunities', state.domain === 'offers' ? 'Compare what contributors provide and what the counterparty provides—including threshold state, verification, release conditions, deadline, and negotiability—without opening the offer.' : state.domain === 'pools' ? 'Standalone moral-public-good campaigns with no reciprocal counterparty obligation.' : 'Exact terms, evidence, availability, and trust route in one scan-efficient list.')}
     <div class="transaction-list">${rows}</div>
     ${renderCompareDock(state)}
   </section>`;
@@ -2963,7 +3213,15 @@ function renderEmptyState(state) {
   const cause = state.constraints.causes.length === 1 ? causeName(state.constraints.causes[0]) : '';
   const verified = state.constraints.verifiedOnly ? 'verified ' : '';
   const max = state.constraints.maximumCommitment < 250 ? ` under $${state.constraints.maximumCommitment}` : '';
-  const noun = state.domain === 'people' ? 'people' : state.domain === 'pools' ? 'pools' : 'trades';
+  const noun = state.domain === 'people'
+    ? 'people'
+    : state.domain === 'pools'
+      ? 'standalone pools'
+      : state.constraints.offerKind === 'co-fund'
+        ? 'Co-Funds'
+        : state.constraints.offerKind === 'individual'
+          ? 'individual offers'
+          : 'offers';
   let nearCount = 0;
   let unverifiedCount = 0;
   if (state.domain === 'offers') {
@@ -3023,13 +3281,18 @@ function renderCauseInspector(state, cause) {
   const recommended = results[0];
   const verifiedCount = results.filter(({ item }) => item.verified).length;
   const mechanisms = new Set(results.map(({ item }) => item.mechanism)).size;
+  const recommendationAction = recommended && isCoFund(recommended.item) ? 'Join Co-Fund' : 'Full terms';
   return `
     <div class="inspector-kicker">Cause area</div><h2>${escapeHtml(cause.name)}</h2><p class="inspector-subtitle">${results.length} match your current filters · ${cause.totalOffers} total marketplace offers · ${verifiedCount} verified · ${mechanisms} mechanisms</p>
     ${recommended ? `<section class="inspector-section"><h3>Recommended route · ranked by ${escapeHtml(sortOptions.offers.find(([id]) => id === validSortForDomain(state, 'offers'))?.[1] || 'Best fit')}</h3>
-      <div class="recommendation-card"><div class="route-title">${escapeHtml(recommended.item.title)}</div><div class="inspector-exchange compact">${renderExchangeSide(recommended.item, 'offer')}<div class="exchange-arrow" aria-hidden="true">↔</div>${renderExchangeSide(recommended.item, 'return')}</div><button class="primary-btn" style="width:100%;margin-top:12px" data-action="select-item" data-type="offer" data-id="${recommended.item.id}" data-origin="cause">Full terms →</button></div>
+      <div class="recommendation-card"><div class="route-title">${escapeHtml(recommended.item.title)}</div><div class="inspector-exchange compact ${isCoFund(recommended.item) ? 'cofund-inspector-exchange' : ''}">${renderExchangeSide(recommended.item, 'offer')}<div class="exchange-arrow" aria-hidden="true">${isCoFund(recommended.item) ? '↕' : '↔'}</div>${renderExchangeSide(recommended.item, 'return')}</div>${renderCoFundProgress(recommended.item, true)}<button class="primary-btn" style="width:100%;margin-top:12px" data-action="select-item" data-type="offer" data-id="${recommended.item.id}" data-origin="cause" ${isCoFund(recommended.item) ? 'data-response-intent="join-cofund"' : ''}>${recommendationAction} →</button></div>
     </section>
     <section class="inspector-section"><h3>Why this route</h3><ul class="why-list">${recommendationWhy(recommended, state).map((reason) => `<li>${escapeHtml(reason)}</li>`).join('')}</ul></section>` : ''}
-    <section class="inspector-section"><h3>Complete cause inventory</h3><div class="cause-inventory">${results.length ? results.map(({ item, match }) => `<div class="inventory-item"><button data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="cause"><strong>${escapeHtml(item.title)}</strong><small><b>You offer:</b> ${escapeHtml(firstExchangeTerm(item, 'offer'))}<br><b>You get:</b> ${escapeHtml(firstExchangeTerm(item, 'return'))}<br>${formatDate(item.deadline)} · ${statusLabel(item)} · ${escapeHtml(matchReasonText(match))}</small></button><button class="mini-action" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="cause">Open →</button></div>`).join('') : '<p class="inspector-subtitle">No current trades match the active filters.</p>'}</div></section>
+    <section class="inspector-section"><h3>Complete cause inventory</h3><div class="cause-inventory">${results.length ? results.map(({ item, match }) => {
+      const offerLabel = isCoFund(item) ? 'Contributor group provides' : 'You offer';
+      const returnLabel = isCoFund(item) ? 'Counterparty provides' : 'You get';
+      return `<div class="inventory-item"><button data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="cause" ${isCoFund(item) ? 'data-response-intent="join-cofund"' : ''}><strong>${escapeHtml(item.title)}</strong><small><b>${offerLabel}:</b> ${escapeHtml(firstExchangeTerm(item, 'offer'))}<br><b>${returnLabel}:</b> ${escapeHtml(firstExchangeTerm(item, 'return'))}<br>${formatDate(item.deadline)} · ${statusLabel(item)} · ${escapeHtml(matchReasonText(match))}</small></button><button class="mini-action" data-action="select-item" data-type="offer" data-id="${item.id}" data-origin="cause" ${isCoFund(item) ? 'data-response-intent="join-cofund"' : ''}>${isCoFund(item) ? 'Join' : 'Open'} →</button></div>`;
+    }).join('') : '<p class="inspector-subtitle">No current offers match the active filters.</p>'}</div></section>
     <div class="inspector-actions"><button class="primary-btn wide" data-action="view-cause-list" data-cause="${cause.id}">View all ${results.length} in List →</button></div>`;
 }
 
@@ -3045,7 +3308,27 @@ function renderIntegrity(item) {
   <section class="inspector-section"><h3>Recommendation basis</h3><div class="fact-estimate"><div><b>Facts</b><span>${escapeHtml(item.recommendationFacts.join(' · '))}</span></div><div><b>Estimates</b><span>${escapeHtml(item.recommendationEstimates.join(' · '))}</span></div></div></section>`;
 }
 
+function renderCoFundInspector(state, item) {
+  const metrics = coFundMetrics(item);
+  const minimum = item.coFund.minimumContribution;
+  const maximum = Math.max(minimum, Math.min(item.coFund.maximumContribution, metrics.gap));
+  const contribution = clamp(state.pledgeAmounts[item.id] ?? minimum, minimum, maximum);
+  const afterGap = Math.max(0, metrics.gap - contribution);
+  const pivotalShare = metrics.gap > 0 ? contribution / metrics.gap : 1;
+  const intentNote = state.responseIntent === 'join-cofund'
+    ? '<div class="response-intent-note"><strong>Join Co-Fund selected.</strong> Your contribution remains conditional; this interface does not charge or create a payment authorization.</div>'
+    : '';
+  return `<div class="inspector-kicker">CO-FUND · ${causeName(item.causeId)} · ${metrics.statusLabel}</div><h2>${escapeHtml(item.title)}</h2><p class="inspector-subtitle">${escapeHtml(item.counterparty)} · administered by ${escapeHtml(item.requester)} · ${item.coFund.contributors} contributors</p>${intentNote}
+    <div class="cofund-inspector-progress">${renderCoFundProgress(item, true)}</div>
+    <section class="inspector-section"><h3>The reciprocal trade</h3><div class="inspector-exchange cofund-inspector-exchange">${renderExchangeSide(item, 'offer')}<div class="exchange-arrow" aria-hidden="true">↕</div>${renderExchangeSide(item, 'return')}</div></section>
+    <section class="inspector-section"><h3>Test your contribution</h3><div class="pool-pledge-box"><div class="detail-grid"><div class="detail-stat"><b>${formatMoney(contribution)}</b><span>Your conditional contribution</span></div><div class="detail-stat"><b>${formatMoney(afterGap)}</b><span>Remaining after your contribution</span></div></div><input type="range" min="${minimum}" max="${maximum}" step="5" value="${contribution}" data-pledge-range data-pool-id="${item.id}" aria-label="Conditional contribution amount for ${escapeHtml(item.title)}" /><div class="pledge-result"><span>${Math.round(pivotalShare * 100)}% of the current gap</span><span>${formatMoney(minimum)} minimum · ${formatMoney(item.coFund.maximumContribution)} maximum</span></div></div></section>
+    <section class="inspector-section"><h3>Threshold and release conditions</h3><dl class="integrity-list"><div class="integrity-row"><dt>What activates</dt><dd>${escapeHtml(item.coFund.activation)}</dd></div><div class="integrity-row"><dt>Current funding</dt><dd>${formatMoney(item.coFund.funded)} of ${formatMoney(item.coFund.threshold)} · ${item.coFund.contributors} contributors · ${formatMoney(metrics.gap)} remains</dd></div><div class="integrity-row"><dt>If the threshold is missed</dt><dd>${escapeHtml(item.coFund.failure)}</dd></div><div class="integrity-row"><dt>Authorization expiry</dt><dd>${formatDate(item.coFund.authorizationExpires)}. Renewed consent is required after expiry.</dd></div><div class="integrity-row"><dt>Verification</dt><dd>${escapeHtml(item.proof)}</dd></div></dl></section>
+    ${renderIntegrity(item)}
+    <div class="inspector-actions"><button class="primary-btn wide" data-action="join-cofund" data-id="${item.id}">Join Co-Fund with ${formatMoney(contribution)} →</button><button class="outline-btn" data-action="toggle-compare" data-id="${item.id}">${state.compareIds.includes(item.id) ? 'Remove compare' : 'Add compare'}</button><button class="outline-btn" data-action="bookmark" data-id="${item.id}">${state.bookmarked.includes(item.id) ? 'Saved ◆' : 'Save ◇'}</button></div>`;
+}
+
 function renderOfferInspector(state, item) {
+  if (isCoFund(item)) return renderCoFundInspector(state, item);
   const metrics = deriveOfferMetrics(item);
   const intentNote = state.responseIntent === 'exact'
     ? '<div class="response-intent-note"><strong>Exact terms selected.</strong> The creator must approve before an agreement forms.</div>'
@@ -3133,15 +3416,17 @@ function renderCompareModal(state) {
     ['If threshold is missed', (item) => item.failure],
     ['Authorization expires', (item) => formatDate(item.authorizationExpires)]
   ] : [
-    ['You contribute', (item) => item.give],
-    ['What activates', (item) => item.receive],
-    ['Financial burden', (item) => item.moneyCost ? formatMoney(item.moneyCost) : 'No direct payment'],
-    ['Time / behavior burden', (item) => `${item.timeMinutes} min · ${deriveOfferMetrics(item).burdenLabel}`],
+    ['Listing type', (item) => isCoFund(item) ? 'Co-Fund — collective fulfillment of one side of a reciprocal trade' : 'Individual offer'],
+    ['You / contributor group provide', (item) => item.give],
+    ['Counterparty provides', (item) => item.receive],
+    ['Funding state', (item) => isCoFund(item) ? `${formatMoney(item.coFund.funded)} of ${formatMoney(item.coFund.threshold)} · ${item.coFund.contributors} contributors` : 'Not threshold-funded'],
+    ['Minimum contribution', (item) => isCoFund(item) ? formatMoney(item.coFund.minimumContribution) : (item.moneyCost ? formatMoney(item.moneyCost) : 'No direct payment')],
+    ['Time / behavior burden', (item) => isCoFund(item) ? `No contributor action time listed · ${deriveOfferMetrics(item).burdenLabel}` : `${item.timeMinutes} min · ${deriveOfferMetrics(item).burdenLabel}`],
     ['Verification burden', (item) => item.proof],
     ['Additionality', (item) => item.additionality],
-    ['Counterparty reliability', (item) => item.reliability],
+    ['Counterparty / administrator', (item) => isCoFund(item) ? `${item.counterparty} · ${item.requester}` : `${item.requester} · ${item.reliability}`],
     ['Deadline', (item) => formatDate(item.deadline)],
-    ['Failure / refund', (item) => item.disputeTerms]
+    ['Failure / refund', (item) => isCoFund(item) ? item.coFund.failure : item.disputeTerms]
   ];
   return `<div class="overlay-scrim" data-action="close-overlay"></div><section class="modal compare-modal dialog-surface" role="dialog" aria-modal="true" aria-labelledby="compare-title"><div class="modal-head"><div><h2 id="compare-title">Compare exact terms</h2><p>Comparison does not alter either offer. Review integrity, burden, evidence, and failure conditions side by side.</p></div><button class="modal-close" data-action="close-overlay" aria-label="Close comparison">×</button></div><table class="compare-table"><thead><tr><th>Term</th>${items.map((item) => `<th>${escapeHtml(item.title)}</th>`).join('')}</tr></thead><tbody>${fields.map(([label, value]) => `<tr><td>${label}</td>${items.map((item) => `<td>${escapeHtml(value(item))}</td>`).join('')}</tr>`).join('')}</tbody></table></section>`;
 }
@@ -3221,6 +3506,7 @@ function updateQueryFromState(draft) {
 function setDomain(domain) {
   store.update((draft) => {
     draft.domain = domain;
+    if (domain !== 'offers') draft.constraints.offerKind = 'all';
     if (!domainViews[domain].some((view) => view.id === draft.viewByDomain[domain])) draft.viewByDomain[domain] = domainViews[domain][0].id;
     if (isMobileViewport() && !draft.queryActive && domain !== 'pools') draft.viewByDomain[domain] = 'list';
     if (!sortOptions[domain].some(([id]) => id === draft.constraints.sort)) draft.constraints.sort = 'best-fit';
@@ -3231,6 +3517,29 @@ function setDomain(domain) {
     draft.compareIds = [];
     draft.compactDrawer = null;
     updateQueryFromState(draft);
+    return draft;
+  }, { history: 'push' });
+}
+
+function setOfferKind(offerKind) {
+  if (!['all','individual','co-fund'].includes(offerKind)) return;
+  store.update((draft) => {
+    draft.domain = 'offers';
+    draft.constraints.offerKind = offerKind;
+    draft.viewByDomain.offers = 'list';
+    draft.constraints.sort = validSortForDomain(draft, 'offers');
+    draft.selectedCause = null;
+    draft.selectedItem = null;
+    draft.responseIntent = null;
+    draft.inspectorOpen = false;
+    draft.compareIds = [];
+    draft.compactDrawer = null;
+    updateQueryFromState(draft);
+    draft.routeNote = offerKind === 'co-fund'
+      ? { text: 'Opened Offers because Co-Funds are collective fulfillment of reciprocal moral trades.', alternative: 'value' }
+      : offerKind === 'individual'
+        ? { text: 'Opened Offers because individual offers have one direct contribution side.', alternative: 'value' }
+        : null;
     return draft;
   }, { history: 'push' });
 }
@@ -3337,6 +3646,7 @@ function handleClick(event) {
   if (!actionTarget) return;
   const action = actionTarget.dataset.action;
   if (action === 'set-domain') setDomain(actionTarget.dataset.domain);
+  else if (action === 'set-offer-kind') setOfferKind(actionTarget.dataset.offerKind);
   else if (action === 'set-view') setView(actionTarget.dataset.view);
   else if (action === 'remove-token') {
     store.update((draft) => {
@@ -3375,6 +3685,7 @@ function handleClick(event) {
     store.update((draft) => { draft.bookmarked = draft.bookmarked.includes(actionTarget.dataset.id) ? draft.bookmarked.filter((id) => id !== actionTarget.dataset.id) : [...draft.bookmarked, actionTarget.dataset.id]; return draft; }, { history: 'replace' });
   }
   else if (action === 'pledge') showToast('Conditional pledge reserved. No charge occurs unless the threshold and verification conditions are met.');
+  else if (action === 'join-cofund') showToast('Co-Fund contribution staged for review. No charge or payment authorization was created.');
   else if (action === 'toast') showToast(actionTarget.dataset.message || 'Action opened.');
   else if (action === 'accessible-list') setView('list');
   else if (action === 'toggle-lasso') store.update((draft) => { draft.lassoMode = !draft.lassoMode; return draft; }, { history: 'replace' });
@@ -3408,6 +3719,8 @@ function handleChange(event) {
   };
   if (target.dataset.filter === 'cause') {
     toggleArrayFilter('causes');
+  } else if (target.dataset.filter === 'offer-kind') {
+    setOfferKind(target.value);
   } else if (target.dataset.filter === 'offer-type') {
     toggleArrayFilter('offerTypes');
   } else if (target.dataset.filter === 'return-type') {

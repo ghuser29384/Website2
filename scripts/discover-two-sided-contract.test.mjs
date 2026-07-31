@@ -89,7 +89,7 @@ test("the Discover loader content-versions every payload request", () => {
 });
 
 test("every published Discover offer has a concrete two-sided exchange", () => {
-  assert.equal(contract.offers.length, 12);
+  assert.equal(contract.offers.length, 14);
   const blockers = Array.from(contract.offers, (offer) =>
     Array.from(offer.publicationBlockers, (blocker) => `${offer.id}: ${blocker}`),
   ).flat();
