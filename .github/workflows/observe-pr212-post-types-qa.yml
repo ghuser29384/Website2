@@ -1,0 +1,84 @@
+name: Observe PR 212 post-types exact-head QA
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/observe-pr212-post-types-qa.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 600
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TYPES_WORKFLOW: publish-pr212-generated-qa-types.yml
+      TYPES_BRANCH: agent/pr212-generated-types-runner-20260731
+      QA_WORKFLOW: institutional-trade-qa.yml
+      FEATURE_BRANCH: feat/institutional-trade-system
+      OLD_FEATURE_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+      - name: Wait for generated types and final exact-head QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-main-integration/post-types-qa
+          mkdir -p "$output"
+          types_run_id="" types_status="" types_conclusion=""
+          for attempt in $(seq 1 2300); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TYPES_WORKFLOW" --branch "$TYPES_BRANCH" --limit 20 --json databaseId,status,conclusion,createdAt,headSha,url > /tmp/types-runs.json
+            types_run_id="$(jq -r 'sort_by(.createdAt)|reverse|.[0].databaseId // empty' /tmp/types-runs.json)"
+            types_status="$(jq -r 'sort_by(.createdAt)|reverse|.[0].status // empty' /tmp/types-runs.json)"
+            types_conclusion="$(jq -r 'sort_by(.createdAt)|reverse|.[0].conclusion // empty' /tmp/types-runs.json)"
+            if [[ -n "$types_run_id" && "$types_status" == "completed" ]]; then break; fi
+            sleep 12
+          done
+          if [[ "$types_status" != "completed" || "$types_conclusion" != "success" ]]; then
+            echo "Generated-type publication did not succeed." >&2
+            exit 1
+          fi
+
+          feature_head="$(git ls-remote --heads origin refs/heads/${FEATURE_BRANCH} | awk '{print $1}')"
+          if [[ -z "$feature_head" || "$feature_head" == "$OLD_FEATURE_HEAD" ]]; then
+            echo "Feature branch did not reach the promoted institutional implementation." >&2
+            exit 1
+          fi
+          qa_run_id="" qa_status="" qa_conclusion=""
+          for attempt in $(seq 1 2300); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$QA_WORKFLOW" --branch "$FEATURE_BRANCH" --limit 100 --json databaseId,headSha,status,conclusion,createdAt,url,event,displayTitle > /tmp/qa-runs.json
+            qa_run_id="$(jq -r --arg head "$feature_head" '[.[]|select(.headSha==$head)]|sort_by(.createdAt)|reverse|.[0].databaseId // empty' /tmp/qa-runs.json)"
+            qa_status="$(jq -r --arg head "$feature_head" '[.[]|select(.headSha==$head)]|sort_by(.createdAt)|reverse|.[0].status // empty' /tmp/qa-runs.json)"
+            qa_conclusion="$(jq -r --arg head "$feature_head" '[.[]|select(.headSha==$head)]|sort_by(.createdAt)|reverse|.[0].conclusion // empty' /tmp/qa-runs.json)"
+            if [[ -n "$qa_run_id" && "$qa_status" == "completed" ]]; then break; fi
+            sleep 12
+          done
+          if [[ -n "$qa_run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${qa_run_id}" > "$output/run.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${qa_run_id}/jobs?per_page=100" > "$output/jobs.json"
+            gh run view "$qa_run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/failed-log.txt" 2>&1 || true
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${qa_run_id}/artifacts?per_page=100" > "$output/artifacts.json"
+          else
+            printf '%s\n' '{}' > "$output/run.json"
+            printf '%s\n' '{"jobs":[]}' > "$output/jobs.json"
+            printf '%s\n' '{"artifacts":[]}' > "$output/artifacts.json"
+            printf '%s\n' 'No exact post-types QA run found.' > "$output/failed-log.txt"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/212" > "$output/pr.json"
+          jq -n --arg types_run_id "$types_run_id" --arg feature_head "$feature_head" --arg qa_run_id "$qa_run_id" --arg qa_status "$qa_status" --arg qa_conclusion "$qa_conclusion" --slurpfile types_runs /tmp/types-runs.json --slurpfile qa_runs /tmp/qa-runs.json '{types_run_id:$types_run_id,feature_head:$feature_head,qa_run_id:$qa_run_id,qa_status:$qa_status,qa_conclusion:$qa_conclusion,types_runs:$types_runs[0],qa_runs:$qa_runs[0]}' > "$output/report.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 post-types exact-head QA"
+          git push origin HEAD:agent/pr212-main-integration-inspector-20260730
+          if [[ "$qa_status" != "completed" || "$qa_conclusion" != "success" ]]; then exit 1; fi
