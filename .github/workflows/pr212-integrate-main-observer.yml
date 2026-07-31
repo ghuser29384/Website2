@@ -83,4 +83,4 @@ jobs:
 
           test "$status" = "completed"
 
-# Observe the main-compatible absolute-gate repair run.
+# Observe the final current-main navigation typing repair run.
