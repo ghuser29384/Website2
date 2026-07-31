@@ -20,6 +20,7 @@ on:
       - src/lib/trade-donation-pool*.ts
       - supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
       - supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+      - supabase/migrations/20260731121500_donation_upgrade_technical_readiness.sql
       - .github/workflows/donation-upgrade-final-gates.yml
   workflow_dispatch:
 
@@ -77,6 +78,9 @@ jobs:
           test "$(grep -cF 'create or replace function public.review_trade_donation_pool_gate(' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql)" = "1"
           ! grep -F 'conditional-payment-destination-_at' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
           ! grep -F 'p_environm,' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+          if [ -f supabase/migrations/20260731121500_donation_upgrade_technical_readiness.sql ]; then
+            grep -F 'donation_upgrade_technical_readiness' supabase/migrations/20260731121500_donation_upgrade_technical_readiness.sql >/dev/null
+          fi
           git fetch origin main
           git diff --check "$(git merge-base origin/main HEAD)"...HEAD
 
@@ -84,21 +88,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rev-parse HEAD | tee donation-upgrade-source.ref
+          git rev-parse HEAD | tee /tmp/donation-upgrade-source.ref
           tar \
             --exclude=.git \
             --exclude=node_modules \
             --exclude=.next \
             --exclude=output \
-            -czf donation-upgrade-source.tar.gz .
-          sha256sum donation-upgrade-source.tar.gz | tee donation-upgrade-source.sha256
+            -czf /tmp/donation-upgrade-source.tar.gz .
+          sha256sum /tmp/donation-upgrade-source.tar.gz | tee /tmp/donation-upgrade-source.sha256
 
       - uses: actions/upload-artifact@v4
         with:
           name: donation-upgrade-source-${{ github.run_id }}
           path: |
-            donation-upgrade-source.tar.gz
-            donation-upgrade-source.ref
-            donation-upgrade-source.sha256
+            /tmp/donation-upgrade-source.tar.gz
+            /tmp/donation-upgrade-source.ref
+            /tmp/donation-upgrade-source.sha256
           if-no-files-found: error
           retention-days: 1
