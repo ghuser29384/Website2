@@ -21,8 +21,8 @@ jobs:
     timeout-minutes: 15
     env:
       PRODUCT_BRANCH: agent/marketplace-delta-current-main-20260729
-      EXPECTED_PRODUCT_HEAD: 8b66c3d290e8a7779139a85080bedaa90c53e358
-      EXPECTED_MAIN_HEAD: 349b44c89d2602a4195fd115f1632b307664adab
+      EXPECTED_PRODUCT_HEAD: 16e126b8bdc1669393794d57447c6f69ba854f97
+      EXPECTED_MAIN_HEAD: f005a51a18f01ed0a93b986c044658d6c9dd8d49
     steps:
       - name: Check out QA controller branch
         uses: actions/checkout@v4
