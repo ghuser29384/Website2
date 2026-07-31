@@ -32,3 +32,5 @@ jobs:
           git add ops/pr212-create-frame-debug-snapshot/runs.json
           git commit -m "Snapshot PR 212 Create-frame debug run"
           git push origin HEAD:agent/pr212-final-status-20260731
+
+# Refresh after ElementHandle.contentFrame() correction.
