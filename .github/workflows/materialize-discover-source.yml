@@ -1,0 +1,56 @@
+name: Materialize Discover source
+
+on:
+  push:
+    branches:
+      - feat/discover-two-sided-exchange-20260731
+    paths:
+      - ".github/materialize-discover-source"
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/discover-two-sided-exchange-20260731
+          fetch-depth: 0
+
+      - name: Reconstruct and verify canonical Discover source
+        run: |
+          node <<'NODE'
+          const { createHash } = require('node:crypto');
+          const { mkdirSync, readFileSync, writeFileSync } = require('node:fs');
+          const { gunzipSync } = require('node:zlib');
+
+          const parts = Array.from({ length: 7 }, (_, index) =>
+            readFileSync(`public/discover/payload/${index}.txt`, 'utf8'),
+          );
+          const source = gunzipSync(Buffer.from(parts.join(''), 'base64'));
+          const digest = createHash('sha256').update(source).digest('hex');
+          if (source.length !== 209161) {
+            throw new Error(`Unexpected source size: ${source.length}`);
+          }
+          if (digest !== '169a06e5d833bf8034faece78ee5dcc3b024ade6843f880e40358c9b6cc12328') {
+            throw new Error(`Unexpected source digest: ${digest}`);
+          }
+          mkdirSync('src/discover', { recursive: true });
+          writeFileSync('src/discover/moral-trade-discover.source.html', source);
+          console.log(`Materialized ${source.length} source bytes with SHA-256 ${digest}`);
+          NODE
+
+      - name: Commit canonical source and retire the one-time workflow
+        env:
+          BRANCH: feat/discover-two-sided-exchange-20260731
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/discover/moral-trade-discover.source.html
+          git rm .github/materialize-discover-source .github/workflows/materialize-discover-source.yml
+          git commit -m "Materialize canonical two-sided Discover source"
+          git push origin "HEAD:${BRANCH}"
