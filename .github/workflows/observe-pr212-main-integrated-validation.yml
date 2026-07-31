@@ -1,0 +1,69 @@
+name: Observe PR 212 main-integrated validation
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/observe-pr212-main-integrated-validation.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: validate-pr212-main-integrated.yml
+      TARGET_BRANCH: agent/pr212-main-integrated-validator-20260731
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+
+      - name: Record exact validation terminal state
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-main-integration/validation
+          mkdir -p "$output"
+          run_id=""
+          status=""
+          conclusion=""
+          head=""
+          for attempt in $(seq 1 700); do
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$TARGET_WORKFLOW" \
+              --branch "$TARGET_BRANCH" \
+              --limit 20 \
+              --json databaseId,headSha,status,conclusion,createdAt,url,displayTitle \
+              > /tmp/runs.json
+            run_id="$(jq -r 'sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+            status="$(jq -r 'sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+            conclusion="$(jq -r 'sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+            head="$(jq -r 'sort_by(.createdAt) | reverse | .[0].headSha // empty' /tmp/runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 12
+          done
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$output/run.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$output/jobs.json"
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/failed-log.txt" 2>&1 || true
+          else
+            printf '%s\n' '{}' > "$output/run.json"
+            printf '%s\n' '{"jobs":[]}' > "$output/jobs.json"
+            printf '%s\n' 'No validation run found.' > "$output/failed-log.txt"
+          fi
+          jq -n --arg run_id "$run_id" --arg head "$head" --arg status "$status" --arg conclusion "$conclusion" --slurpfile runs /tmp/runs.json '{run_id:$run_id,head:$head,status:$status,conclusion:$conclusion,runs:$runs[0]}' > "$output/report.json"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 main-integrated validation result"
+          git push origin HEAD:agent/pr212-main-integration-inspector-20260730
+          if [[ "$status" != "completed" || "$conclusion" != "success" ]]; then exit 1; fi
