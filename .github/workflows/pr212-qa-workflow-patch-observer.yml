@@ -1,0 +1,62 @@
+name: Observe PR 212 targeted-regression QA workflow patch
+
+on:
+  push:
+    branches:
+      - agent/pr212-qa-workflow-patch-observer-20260731
+    paths:
+      - .github/workflows/pr212-qa-workflow-patch-observer.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: agent/pr212-qa-workflow-patch-20260731
+      TARGET_WORKFLOW: pr212-qa-workflow-patch.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record terminal preparation result
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-qa-workflow-patch
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 60); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 10 --json databaseId,status,conclusion,createdAt,headSha,url,event > /tmp/runs.json
+            run_id="$(jq -r 'sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+            status="$(jq -r 'sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+            conclusion="$(jq -r 'sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 5
+          done
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > /tmp/run.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/jobs.json
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" > /tmp/artifacts.json
+          else
+            printf '%s\n' '{}' > /tmp/run.json
+            printf '%s\n' '{"jobs":[]}' > /tmp/jobs.json
+            printf '%s\n' '{"artifacts":[]}' > /tmp/artifacts.json
+            printf '%s\n' 'No workflow run found.' > /tmp/failed.log
+          fi
+          jq -n --arg run_id "$run_id" --arg status "$status" --arg conclusion "$conclusion" --slurpfile runs /tmp/runs.json --slurpfile run /tmp/run.json --slurpfile jobs /tmp/jobs.json --slurpfile artifacts /tmp/artifacts.json '{run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0],run:$run[0],jobs:$jobs[0].jobs,artifacts:$artifacts[0].artifacts}' > ops/pr212-qa-workflow-patch/report.json
+          tail -n 300 /tmp/failed.log > ops/pr212-qa-workflow-patch/failed-log.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-qa-workflow-patch
+          git commit -m "Record PR 212 QA workflow patch result"
+          git push origin HEAD:agent/pr212-qa-workflow-patch-observer-20260731
+          [[ "$status" == "completed" ]]
