@@ -6,6 +6,7 @@ import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { getViewer } from "@/lib/app-data";
 import { MPGF_COPY } from "@/lib/mpgf/data";
 import { loadMpgfParticipantState } from "@/lib/mpgf/persistence";
+import { resolvePledgeImpactContributionPrefill } from "@/lib/mpgf/pledge-impact-contribution-prefill";
 import { loadMpgfManualEvidenceReadiness, loadMpgfRealMoneyReadiness } from "@/lib/mpgf/real-money";
 import { getAbsoluteUrl } from "@/lib/seo";
 
@@ -25,8 +26,13 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function MpgfContributePage() {
-  const viewer = await getViewer();
+interface MpgfContributePageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+export default async function MpgfContributePage({ searchParams }: MpgfContributePageProps) {
+  const [viewer, resolvedSearchParams] = await Promise.all([getViewer(), searchParams]);
+  const pledgeImpactPrefill = resolvePledgeImpactContributionPrefill(resolvedSearchParams);
   const participantState = await loadMpgfParticipantState({
     userId: viewer?.authUser.id,
     displayName: viewer?.displayName,
@@ -50,6 +56,9 @@ export default async function MpgfContributePage() {
     >
       <section className="section section-white">
         <MpgfConsole
+          initialPublicGoodsCampaignId={pledgeImpactPrefill?.campaignId}
+          initialPublicGoodsPledgeAmount={pledgeImpactPrefill?.amountDollars}
+          contributionPrefillNotice={pledgeImpactPrefill?.notice}
           initialTab="contribute"
           manualEvidenceReadiness={manualEvidenceReadiness}
           participantState={participantState}

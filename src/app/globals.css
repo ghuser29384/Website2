@@ -263,6 +263,11 @@ body.font-accessible {
   align-items: stretch;
 }
 
+.mpgf-contribution-prefill {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 .mpgf-hero-copy {
   display: grid;
   align-content: center;

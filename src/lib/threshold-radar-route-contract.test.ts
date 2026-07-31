@@ -23,10 +23,13 @@ test("the threshold radar route preserves the supplied campaign copy", () => {
     "$23,640",
     "$1,360",
     "No charge unless the threshold",
-    "Pledge ${pledgeAmount} conditionally.",
+    "Moving the slider has not saved a pledge.",
   ]) {
     assert.match(componentSource, new RegExp(copy.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
+
+  assert.match(componentSource, /\{`Make a conditional \$\{pledgeAmount\.toLocaleString/);
+  assert.doesNotMatch(componentSource, /Pledge \$\{pledgeAmount\} conditionally\./);
 
   assert.match(pageSource, /canonical: "\/pools\/radar"/);
   assert.match(pageSource, /robots:\s*\{/);
