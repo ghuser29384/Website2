@@ -1,11 +1,22 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 
-const source = await readFile(
+const sourceBuffer = await readFile(
   new URL("../src/discover/moral-trade-discover.source.html", import.meta.url),
+);
+const source = sourceBuffer.toString("utf8");
+const loader = await readFile(
+  new URL("../public/moral-trade-discover.html", import.meta.url),
   "utf8",
+);
+const payloadManifest = JSON.parse(
+  await readFile(
+    new URL("../public/discover/payload/manifest.json", import.meta.url),
+    "utf8",
+  ),
 );
 
 function evaluateOfferContract() {
@@ -37,6 +48,45 @@ function functionBody(name) {
   const next = source.indexOf("\nfunction ", start + 10);
   return source.slice(start, next === -1 ? source.length : next);
 }
+
+test("the Discover loader content-versions every payload request", () => {
+  const expectedVersion = createHash("sha1")
+    .update(Buffer.from(`blob ${sourceBuffer.length}\0`))
+    .update(sourceBuffer)
+    .digest("hex");
+
+  assert.equal(payloadManifest.version, expectedVersion);
+  assert.equal(payloadManifest.encoding, "gzip+base64");
+  assert.deepEqual(payloadManifest.parts, [
+    "0.txt",
+    "1.txt",
+    "2.txt",
+    "3.txt",
+    "4.txt",
+    "5.txt",
+    "6.txt",
+  ]);
+  assert.equal(payloadManifest.sourceBytes, sourceBuffer.length);
+  assert.ok(loader.includes('fetch("/discover/payload/manifest.json", {'));
+  assert.ok(loader.includes('cache: "no-store"'));
+  assert.ok(
+    loader.includes(
+      '/discover/payload/${part}?v=${encodeURIComponent(manifest.version)}',
+    ),
+  );
+  assert.ok(
+    loader.includes(
+      "window.__MT_DISCOVER_PAYLOAD_VERSION__ = manifest.version;",
+    ),
+  );
+  assert.ok(loader.includes('fetch(path, { cache: "force-cache" })'));
+  assert.ok(
+    !loader.includes(
+      'const paths = [\n          "/discover/payload/0.txt"',
+    ),
+    "the loader must not fetch unversioned payload parts",
+  );
+});
 
 test("every published Discover offer has a concrete two-sided exchange", () => {
   assert.equal(contract.offers.length, 12);
