@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/direct-complete-profile-100-sparks-final-20260731
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -181,5 +184,3 @@ jobs:
 
           git commit -m "Fix Complete Profile for returning users"
           git push --force origin HEAD:refs/heads/fix/complete-profile-returning-users-20260731
-
-      # This final comment exists only to make the materializer's trigger a separate push.
