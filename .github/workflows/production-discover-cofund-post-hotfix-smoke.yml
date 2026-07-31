@@ -1,0 +1,289 @@
+name: Production Discover Co-Fund post-hotfix smoke
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/production-discover-cofund-post-hotfix-smoke.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-discover-cofund-post-hotfix-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run direct production Chromium smoke
+        env:
+          BASE_URL: https://www.moraltrade.org
+          EXPECTED_PAYLOAD_VERSION: ad5eb38b31088f550b45e71dbe15dcc6d460506e
+        run: |
+          mkdir -p production-cofund-post-hotfix
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import { writeFile } from "node:fs/promises";
+          import { chromium } from "@playwright/test";
+
+          const baseUrl = process.env.BASE_URL;
+          const expectedPayloadVersion = process.env.EXPECTED_PAYLOAD_VERSION;
+          const report = {
+            baseUrl,
+            expectedPayloadVersion,
+            checkedAt: new Date().toISOString(),
+            checks: {},
+          };
+
+          function monitor(page) {
+            const failures = { consoleErrors: [], pageErrors: [], failedRequests: [] };
+            page.on("console", (message) => {
+              if (message.type() === "error") failures.consoleErrors.push(message.text());
+            });
+            page.on("pageerror", (error) => failures.pageErrors.push(error.message));
+            page.on("requestfailed", (request) => {
+              const error = request.failure()?.errorText || "failed";
+              if (error.includes("ERR_ABORTED")) return;
+              failures.failedRequests.push({ method: request.method(), url: request.url(), error });
+            });
+            return failures;
+          }
+
+          function assertHealthy(failures, label) {
+            assert.deepEqual(failures.consoleErrors, [], `${label}: console errors`);
+            assert.deepEqual(failures.pageErrors, [], `${label}: page errors`);
+            assert.deepEqual(failures.failedRequests, [], `${label}: failed requests`);
+          }
+
+          async function contextFor(browser, viewport) {
+            const context = await browser.newContext({ viewport });
+            await context.addCookies([
+              {
+                name: "mt_walkthrough_seen",
+                value: "1",
+                domain: "www.moraltrade.org",
+                path: "/",
+                httpOnly: true,
+                secure: true,
+                sameSite: "Lax",
+              },
+            ]);
+            return context;
+          }
+
+          async function waitForDiscover(page) {
+            await page.waitForFunction(
+              () => Boolean(document.body) && !document.body.innerText.includes("Loading Discover…"),
+              null,
+              { timeout: 120_000 },
+            );
+            await page.waitForFunction(
+              () => Boolean(window.__moralTradeSmartQueryLoaded),
+              null,
+              { timeout: 120_000 },
+            );
+          }
+
+          async function openDiscover(page, path) {
+            const response = await page.goto(`${baseUrl}${path}`, {
+              waitUntil: "networkidle",
+              timeout: 120_000,
+            });
+            assert.equal(response?.status(), 200, `${path} returned ${response?.status()}`);
+            await waitForDiscover(page);
+            const version = await page.evaluate(
+              () => window.__MT_DISCOVER_PAYLOAD_VERSION__ || "",
+            );
+            assert.equal(version, expectedPayloadVersion);
+            return response;
+          }
+
+          async function submitQuery(page, query) {
+            const form = page.locator("#command-form");
+            await form.locator("#command-input").fill(query);
+            await form.getByRole("button", { name: /Run search/i }).click();
+          }
+
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const desktopContext = await contextFor(browser, { width: 1600, height: 1000 });
+
+            const direct = await desktopContext.newPage();
+            const directFailures = monitor(direct);
+            const requests = [];
+            direct.on("request", (request) => {
+              requests.push({ method: request.method(), url: request.url() });
+            });
+            await openDiscover(
+              direct,
+              "/discover?domain=offers&view=list&offerKind=co-fund#discover",
+            );
+            const directRows = direct.locator(
+              '.offer-transaction-row[data-offer-kind="co-fund"]',
+            );
+            assert.equal(await directRows.count(), 2);
+            const bioSalary = direct.locator('[data-row-id="cofund-bio-salary"]');
+            await bioSalary.getByRole("button", { name: "Join Co-Fund" }).click();
+            const inspector = direct
+              .locator(".inspector")
+              .filter({ hasText: "Co-Fund a verified biosecurity salary gap" });
+            await inspector.waitFor({ state: "visible" });
+            assert.match(
+              (await inspector.innerText()).replace(/\s+/g, " "),
+              /does not charge or create a payment authorization/i,
+            );
+            const finalJoin = inspector.getByRole("button", {
+              name: /Join Co-Fund with \$10/i,
+            });
+            const requestStart = requests.length;
+            await finalJoin.click();
+            await direct.waitForTimeout(800);
+            const paymentRequests = requests.slice(requestStart).filter(({ url }) =>
+              /(stripe|payment[-_]?intent|checkout|payment-authorization|authorize-payment|\/api\/.{0,40}payment)/i.test(url),
+            );
+            assert.deepEqual(paymentRequests, []);
+            const toastText = (await direct.locator(".toast").innerText()).replace(/\s+/g, " ");
+            assert.match(toastText, /no charge/i);
+            assert.match(toastText, /payment authorization/i);
+            await direct.screenshot({
+              path: "production-cofund-post-hotfix/direct-cofund-inspector.png",
+              fullPage: true,
+            });
+            assertHealthy(directFailures, "direct Co-Fund and no-charge Join");
+            report.checks.directCoFund = {
+              coFundCount: await directRows.count(),
+              url: direct.url(),
+              toastText,
+              paymentRequests,
+              failures: directFailures,
+            };
+
+            const groupBuying = await desktopContext.newPage();
+            const groupFailures = monitor(groupBuying);
+            await openDiscover(groupBuying, "/discover?domain=offers&view=list#discover");
+            await submitQuery(groupBuying, "group buying a moral trade");
+            await groupBuying.waitForURL(/offerKind=co-fund/, { timeout: 30_000 });
+            await waitForDiscover(groupBuying);
+            assert.match(groupBuying.url(), /domain=offers/);
+            assert.match(groupBuying.url(), /view=list/);
+            assert.equal(
+              await groupBuying.locator('.offer-transaction-row[data-offer-kind="co-fund"]').count(),
+              2,
+            );
+            await groupBuying.screenshot({
+              path: "production-cofund-post-hotfix/group-buying-search.png",
+              fullPage: true,
+            });
+            assertHealthy(groupFailures, "group-buying routing");
+            report.checks.groupBuying = { url: groupBuying.url(), failures: groupFailures };
+
+            const assurance = await desktopContext.newPage();
+            const assuranceFailures = monitor(assurance);
+            await openDiscover(assurance, "/discover?domain=offers&view=list#discover");
+            await submitQuery(assurance, "dominant assurance contracts");
+            await assurance.waitForURL(/domain=pools/, { timeout: 30_000 });
+            await waitForDiscover(assurance);
+            assert.match(assurance.url(), /view=list/);
+            assert.doesNotMatch(assurance.url(), /offerKind=co-fund/);
+            assert.equal(
+              await assurance.getByRole("heading", { name: "Standalone threshold pools" }).isVisible(),
+              true,
+            );
+            assert.equal(
+              await assurance.locator('.offer-transaction-row[data-offer-kind="co-fund"]').count(),
+              0,
+            );
+            await assurance.screenshot({
+              path: "production-cofund-post-hotfix/dominant-assurance-search.png",
+              fullPage: true,
+            });
+            assertHealthy(assuranceFailures, "dominant-assurance routing");
+            report.checks.dominantAssurance = {
+              url: assurance.url(),
+              coFundCount: 0,
+              failures: assuranceFailures,
+            };
+
+            await desktopContext.close();
+
+            for (const { width, height, label } of [
+              { width: 390, height: 844, label: "390x844" },
+              { width: 320, height: 568, label: "320x568" },
+            ]) {
+              const context = await contextFor(browser, { width, height });
+              const page = await context.newPage();
+              const failures = monitor(page);
+              await openDiscover(
+                page,
+                "/discover?domain=offers&view=list&offerKind=co-fund#discover",
+              );
+              const rows = page.locator('.offer-transaction-row[data-offer-kind="co-fund"]');
+              assert.equal(await rows.count(), 2);
+              const row = page.locator('[data-row-id="cofund-bio-salary"]');
+              const offerBox = await row.locator('[data-exchange-side="offer"]').boundingBox();
+              const returnBox = await row.locator('[data-exchange-side="return"]').boundingBox();
+              assert.ok(offerBox && returnBox);
+              assert.ok(returnBox.y >= offerBox.y + offerBox.height - 1, `${label}: sides not stacked`);
+              const overflow = await page.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                documentWidth: document.documentElement.scrollWidth,
+                bodyWidth: document.body.scrollWidth,
+              }));
+              assert.ok(overflow.documentWidth <= overflow.viewportWidth + 1, `${label}: document overflow`);
+              assert.ok(overflow.bodyWidth <= overflow.viewportWidth + 1, `${label}: body overflow`);
+              await page.screenshot({
+                path: `production-cofund-post-hotfix/mobile-${label}.png`,
+                fullPage: true,
+              });
+              assertHealthy(failures, `mobile ${label}`);
+              report.checks[`mobile-${label}`] = {
+                coFundCount: 2,
+                stacked: true,
+                overflow,
+                failures,
+              };
+              await context.close();
+            }
+
+            report.pass = true;
+          } catch (error) {
+            report.pass = false;
+            report.error = error instanceof Error ? error.stack || error.message : String(error);
+            throw error;
+          } finally {
+            await writeFile(
+              "production-cofund-post-hotfix/report.json",
+              `${JSON.stringify(report, null, 2)}\n`,
+            );
+            await browser.close();
+          }
+          NODE
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-discover-cofund-post-hotfix
+          path: production-cofund-post-hotfix
+          if-no-files-found: error
+          retention-days: 7
