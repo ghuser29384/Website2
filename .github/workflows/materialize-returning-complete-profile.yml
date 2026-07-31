@@ -51,47 +51,142 @@ jobs:
 
           python - <<'PY'
           from pathlib import Path
-          import re
 
-          def replace_when_present(path_name: str, old: str, new: str) -> None:
+          def replace_exact(path_name: str, old: str, new: str, expected: int = 1) -> None:
               path = Path(path_name)
-              if not path.exists():
-                  return
               text = path.read_text(encoding="utf-8")
-              if old in text:
-                  path.write_text(text.replace(old, new), encoding="utf-8")
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(
+                      f"Expected {expected} matches in {path_name}, found {count}: {old!r}"
+                  )
+              path.write_text(text.replace(old, new), encoding="utf-8")
 
-          replace_when_present(
-              "scripts/verify-collective-create-e2e.ts",
-              ".filter((membership): membership is InstitutionMembershipRow => Boolean(membership));",
-              ".filter((membership): membership is NonNullable<typeof membership> => Boolean(membership));",
+          # Keep required identifiers after override spreads so the fixtures remain typed.
+          replace_exact(
+              "src/lib/discovery-ranking.test.ts",
+              '  return {\n    id: overrides.id,\n    mode: "pledge",',
+              '  return {\n    mode: "pledge",',
+          )
+          replace_exact(
+              "src/lib/discovery-ranking.test.ts",
+              '    donationOffset: null,\n    ...overrides,\n  };\n}\n\nfunction profile(',
+              '    donationOffset: null,\n    ...overrides,\n    id: overrides.id,\n  };\n}\n\nfunction profile(',
+          )
+          replace_exact(
+              "src/lib/discovery-ranking.test.ts",
+              '  return {\n    id: overrides.id,\n    resolvedName: overrides.resolvedName,\n    display_name: overrides.resolvedName,',
+              '  return {\n    display_name: overrides.resolvedName,',
+          )
+          replace_exact(
+              "src/lib/discovery-ranking.test.ts",
+              '    created_at: "2026-07-01T00:00:00.000Z",\n    ...overrides,\n  };\n}\n\ntest("credit filters',
+              '    created_at: "2026-07-01T00:00:00.000Z",\n    ...overrides,\n    id: overrides.id,\n    resolvedName: overrides.resolvedName,\n  };\n}\n\ntest("credit filters',
           )
 
-          dashboard = Path("src/components/core-trade/institutional-admin-dashboard.tsx")
-          if dashboard.exists():
-              dashboard_text = dashboard.read_text(encoding="utf-8")
-              dashboard_text = dashboard_text.replace(
-                  'import { useEffect, useMemo, useState, type PropsWithChildren } from "react";',
-                  'import { useEffect, useMemo, useState, type ReactNode } from "react";',
-              )
-              dashboard_text = re.sub(
-                  r"interface InlineHintProps extends PropsWithChildren \{\n  text: string;\n\}",
-                  "type InlineHintProps = {\n  children: ReactNode;\n  text: string;\n};",
-                  dashboard_text,
-              )
-              dashboard.write_text(dashboard_text, encoding="utf-8")
+          # The repository's ProcessEnv contract requires an explicit NODE_ENV in fixtures.
+          replace_exact(
+              "src/lib/funding.test.ts",
+              'getMoralTradeFundingReadiness({} as NodeJS.ProcessEnv)',
+              'getMoralTradeFundingReadiness({ NODE_ENV: "test" } as NodeJS.ProcessEnv)',
+          )
+          replace_exact(
+              "src/lib/funding.test.ts",
+              'getMoralTradeFundingReadiness({\n',
+              'getMoralTradeFundingReadiness({\n    NODE_ENV: "test",\n',
+              expected=3,
+          )
+          replace_exact(
+              "src/lib/payments/conditional-state.test.ts",
+              'getConditionalPaymentsEnvironment({\n',
+              'getConditionalPaymentsEnvironment({\n    NODE_ENV: "test",\n',
+              expected=4,
+          )
+          replace_exact(
+              "src/lib/recommendation-training-execution.test.ts",
+              '{ VERCEL_DEPLOYMENT_ID: "dpl_canonical" },',
+              '{ NODE_ENV: "test", VERCEL_DEPLOYMENT_ID: "dpl_canonical" },',
+          )
+          replace_exact(
+              "src/lib/recommendation-training-execution.test.ts",
+              '    {},\n    new Date(',
+              '    { NODE_ENV: "test" },\n    new Date(',
+              expected=2,
+          )
+          replace_exact(
+              "src/lib/x-profile-connector.test.ts",
+              'const readyEnv = {\n',
+              'const readyEnv = {\n  NODE_ENV: "test",\n',
+          )
+          replace_exact(
+              "src/lib/x-profile-connector.test.ts",
+              '      env: {},',
+              '      env: { NODE_ENV: "test" },',
+          )
 
-          replace_when_present(
-              "src/lib/discover-offer-action.ts",
-              "MOCK_TRADES.some((candidate) => candidate.id === offerId)",
-              "MOCK_TRADES.some((candidate) => String(candidate.id) === offerId)",
+          # Narrow the failure-bonus result before accessing the successful quote.
+          replace_exact(
+              "src/lib/mpgf/failure-bonus-operator.test.ts",
+              '  assert.equal(result.ok, true);\n  if (!result.ok) throw new Error(result.errors.join(" "));',
+              '  if (!result.ok) throw new Error(result.errors.join(" "));',
+          )
+
+          # Preserve the navigation test's future dropdown support without unknown-array access.
+          replace_exact(
+              "src/lib/public-route-smoke.test.ts",
+              '''function flattenPrimaryNavHrefs() {
+  return getPrimaryNavLinks(false).flatMap((link) =>
+    "items" in link && link.items
+      ? link.items.map((item) => item.href)
+      : "href" in link && link.href
+        ? [link.href]
+        : [],
+  );
+}''',
+              '''function flattenPrimaryNavHrefs(): string[] {
+  return getPrimaryNavLinks(false).flatMap((link) => {
+    if ("items" in link && Array.isArray(link.items)) {
+      return link.items.flatMap((item: unknown) => {
+        if (
+          typeof item === "object" &&
+          item !== null &&
+          "href" in item &&
+          typeof item.href === "string"
+        ) {
+          return [item.href];
+        }
+
+        return [];
+      });
+    }
+
+    return "href" in link && typeof link.href === "string" ? [link.href] : [];
+  });
+}''',
+          )
+          replace_exact(
+              "src/lib/public-route-smoke.test.ts",
+              '  const footerHrefs = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));',
+              '  const footerHrefs: string[] = FOOTER_LINK_GROUPS.flatMap((group) =>\n    group.links.map((link) => link.href),\n  );',
+          )
+
+          # Avoid dotAll regex flags under the repository's test compilation target.
+          replace_exact(
+              "src/live-account-data.test.ts",
+              '/Cache-Control.*private, no-store/s',
+              '/Cache-Control[\\s\\S]*private, no-store/',
+          )
+          replace_exact(
+              "src/sitewide-account-identity.test.ts",
+              '/Cache-Control.*private, no-store/su',
+              '/Cache-Control[\\s\\S]*private, no-store/u',
           )
           PY
 
           python - <<'PY'
           import subprocess
 
-          required = {
+          product_required = {
               "src/app/complete-profile/actions.ts",
               "src/app/complete-profile/page.tsx",
               "src/components/profile/complete-profile-review.tsx",
@@ -102,16 +197,25 @@ jobs:
               "src/lib/walkthrough-profile.ts",
               "tests/complete-profile-review.spec.ts",
           }
-          allowed = required | {
-              "scripts/verify-collective-create-e2e.ts",
-              "src/components/core-trade/institutional-admin-dashboard.tsx",
-              "src/lib/discover-offer-action.ts",
+          gate_repairs = {
+              "src/lib/discovery-ranking.test.ts",
+              "src/lib/funding.test.ts",
+              "src/lib/mpgf/failure-bonus-operator.test.ts",
+              "src/lib/payments/conditional-state.test.ts",
+              "src/lib/public-route-smoke.test.ts",
+              "src/lib/recommendation-training-execution.test.ts",
+              "src/lib/x-profile-connector.test.ts",
+              "src/live-account-data.test.ts",
+              "src/sitewide-account-identity.test.ts",
           }
           changed = set(
               subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines()
           )
-          if not required.issubset(changed):
-              raise SystemExit(f"Missing required candidate paths: {sorted(required - changed)}")
+          if not product_required.issubset(changed):
+              raise SystemExit(
+                  f"Missing required candidate paths: {sorted(product_required - changed)}"
+              )
+          allowed = product_required | gate_repairs
           if not changed.issubset(allowed):
               raise SystemExit(f"Unexpected candidate paths: {sorted(changed - allowed)}")
           print("Candidate paths:")
@@ -120,6 +224,34 @@ jobs:
           PY
 
           git diff --check
+
+      - name: Commit and publish exact candidate for review
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            src/app/complete-profile/actions.ts \
+            src/app/complete-profile/page.tsx \
+            src/components/profile/complete-profile-review.tsx \
+            src/lib/complete-profile-private-preferences.ts \
+            src/lib/complete-profile.test.ts \
+            src/lib/complete-profile.ts \
+            src/lib/discovery-ranking.test.ts \
+            src/lib/funding.test.ts \
+            src/lib/mpgf/failure-bonus-operator.test.ts \
+            src/lib/payments/conditional-state.test.ts \
+            src/lib/public-route-smoke.test.ts \
+            src/lib/recommendation-training-execution.test.ts \
+            src/lib/walkthrough-profile.test.ts \
+            src/lib/walkthrough-profile.ts \
+            src/lib/x-profile-connector.test.ts \
+            src/live-account-data.test.ts \
+            src/sitewide-account-identity.test.ts \
+            tests/complete-profile-review.spec.ts
+          git commit -m "Fix Complete Profile for returning users"
+          git push --force origin HEAD:refs/heads/fix/complete-profile-returning-users-20260731
 
       - name: Install dependencies
         run: npm ci
@@ -156,34 +288,3 @@ jobs:
             playwright-report
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Publish clean verified product branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -- \
-            src/app/complete-profile/actions.ts \
-            src/app/complete-profile/page.tsx \
-            src/components/profile/complete-profile-review.tsx \
-            src/lib/complete-profile-private-preferences.ts \
-            src/lib/complete-profile.test.ts \
-            src/lib/complete-profile.ts \
-            src/lib/walkthrough-profile.test.ts \
-            src/lib/walkthrough-profile.ts \
-            tests/complete-profile-review.spec.ts
-
-          for path in \
-            scripts/verify-collective-create-e2e.ts \
-            src/components/core-trade/institutional-admin-dashboard.tsx \
-            src/lib/discover-offer-action.ts
-          do
-            if test -e "$path" && ! git diff --quiet -- "$path"; then
-              git add -- "$path"
-            fi
-          done
-
-          git commit -m "Fix Complete Profile for returning users"
-          git push --force origin HEAD:refs/heads/fix/complete-profile-returning-users-20260731
