@@ -11,6 +11,7 @@ on:
       - "src/app/trades/new/page.tsx"
       - "src/components/create/**"
       - "src/lib/create-interface/**"
+      - "src/lib/live-discover-navigation.test.ts"
       - "src/lib/public-route-smoke.test.ts"
       - "supabase/migrations/2026072704*.sql"
       - "supabase/tests/moral_trade_create_interface_adapter.sql"
@@ -28,7 +29,7 @@ concurrency:
 
 jobs:
   release-gates:
-    name: Unit, lint, build, and diff
+    name: Unit, lint, typecheck, build, and diff
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -56,11 +57,12 @@ jobs:
           new Function(match[1]);
           NODE
 
-      - name: Run focused Create adapter tests
+      - name: Run focused Create adapter and Discover loader tests
         run: >-
           node --import tsx --test
           src/lib/create-interface/*.test.ts
           src/lib/command-center-handoff.test.ts
+          src/lib/live-discover-navigation.test.ts
           src/live-template-system.test.ts
           src/lib/public-route-smoke.test.ts
 
@@ -73,6 +75,11 @@ jobs:
         id: lint
         continue-on-error: true
         run: npm run lint -- --quiet > repository-lint.log 2>&1
+
+      - name: Run TypeScript check
+        id: typecheck
+        continue-on-error: true
+        run: npx tsc --noEmit > repository-typecheck.log 2>&1
 
       - name: Build production application
         id: build
@@ -96,6 +103,7 @@ jobs:
           path: |
             repository-tests.log
             repository-lint.log
+            repository-typecheck.log
             production-build.log
             diff-check.log
           if-no-files-found: warn
@@ -107,6 +115,7 @@ jobs:
         env:
           TESTS: ${{ steps.tests.outcome }}
           LINT: ${{ steps.lint.outcome }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
           BUILD: ${{ steps.build.outcome }}
           DIFF: ${{ steps.diff.outcome }}
         run: |
@@ -121,6 +130,7 @@ jobs:
           }
           report "Repository tests" "$TESTS" repository-tests.log
           report "Repository lint" "$LINT" repository-lint.log
+          report "Repository typecheck" "$TYPECHECK" repository-typecheck.log
           report "Production build" "$BUILD" production-build.log
           report "Diff check" "$DIFF" diff-check.log
           exit "$failed"

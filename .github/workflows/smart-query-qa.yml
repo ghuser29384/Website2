@@ -8,6 +8,7 @@ on:
       - "src/lib/smart-evidence-ranking*"
       - "src/lib/smart-people-ranking.ts"
       - "src/lib/site-search-smart.ts"
+      - "src/lib/live-discover-navigation.test.ts"
       - "src/discover/**"
       - "src/app/api/query/**"
       - "src/app/layout.tsx"
@@ -90,6 +91,7 @@ jobs:
             src/lib/smart-evidence-ranking.test.ts \
             src/lib/smart-people-ranking.ts \
             src/lib/site-search-smart.ts \
+            src/lib/live-discover-navigation.test.ts \
             src/app/api/query/interpret/route.ts \
             src/app/layout.tsx \
             src/app/offers/page.tsx \
@@ -105,7 +107,7 @@ jobs:
             tests/discover-payload-cache.spec.ts \
             tests/discover-cofund.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
 
-      - name: Test deterministic and semantic query interpretation
+      - name: Test deterministic query interpretation and Discover loader semantics
         run: |
           set -o pipefail
           node --import tsx --test \
@@ -113,7 +115,8 @@ jobs:
             src/lib/smart-query-llm-gate.test.ts \
             src/lib/smart-query-llm-timeout.test.ts \
             src/lib/smart-query-llm-generation.test.ts \
-            src/lib/smart-evidence-ranking.test.ts 2>&1 | tee qa-results/smart-query-test.txt
+            src/lib/smart-evidence-ranking.test.ts \
+            src/lib/live-discover-navigation.test.ts 2>&1 | tee qa-results/smart-query-test.txt
 
       - name: Verify canonical Discover payload and Co-Fund contracts
         run: |
