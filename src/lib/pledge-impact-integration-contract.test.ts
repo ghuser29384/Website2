@@ -41,6 +41,7 @@ test("both rendered radar surfaces use pledge-impact estimates and exact MPGF co
   assert.match(radar, /Preview your pledge impact/);
   assert.match(radar, /<PledgeImpactEstimate/);
   assert.match(radar, /buildPledgeImpactContributionHref/);
+  assert.match(radar, /data-testid={`threshold-campaign-\${id}`}/);
   assert.match(radar, /Make a conditional/);
   assert.doesNotMatch(radar, /Low pivotality|How likely am I to be pivotal/);
 
