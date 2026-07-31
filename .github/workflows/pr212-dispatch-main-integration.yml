@@ -1,11 +1,11 @@
-name: Dispatch PR 212 pinned-main integration
+name: Dispatch PR 212 Create iframe debug
 
 on:
   push:
     branches:
       - agent/pr212-main-integration-ops-20260730
     paths:
-      - .github/pr212-main-integration.trigger
+      - .github/workflows/pr212-dispatch-main-integration.yml
   workflow_dispatch:
 
 permissions:
@@ -18,5 +18,5 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Dispatch exact integration workflow on this operations branch
-        run: gh workflow run pr212-integrate-main-and-validate.yml --repo "$GITHUB_REPOSITORY" --ref agent/pr212-main-integration-ops-20260730
+      - name: Dispatch exact Create-frame debug workflow
+        run: gh workflow run pr212-create-frame-debug.yml --repo "$GITHUB_REPOSITORY" --ref agent/pr212-main-integration-ops-20260730
