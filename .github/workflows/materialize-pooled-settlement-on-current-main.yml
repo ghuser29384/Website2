@@ -1,4 +1,4 @@
-name: Validate pooled settlement on exact current main
+name: Validate repaired pooled settlement on exact current main
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
-      - name: Reconstruct reviewed PR 208 payload
+      - name: Reconstruct reviewed PR 208 payload and current-main repair
         shell: bash
         run: |
           set -euo pipefail
@@ -52,16 +52,23 @@ jobs:
           cat "${chunks[@]}" | base64 --decode > /tmp/pooled-settlement-payload.tgz
           echo 'a39d6e2a4e0205dd9cc2d10a050ffc87d0db3b806ead2c1991d74fbf94b81d4f  /tmp/pooled-settlement-payload.tgz' | sha256sum --check --strict
           tar -tzf /tmp/pooled-settlement-payload.tgz > "$OUTPUT_DIR/payload-manifest.txt"
-          cp /tmp/pooled-settlement-payload.tgz "$OUTPUT_DIR/candidate-source.tgz"
-          sha256sum "$OUTPUT_DIR/candidate-source.tgz" > "$OUTPUT_DIR/candidate-source.sha256"
 
-      - name: Apply payload to exact current main
+          mapfile -t repair_parts < <(find .github/pooled-settlement-current-main-repair -maxdepth 1 -type f -name 'part-*' | sort)
+          test "${#repair_parts[@]}" -eq 7
+          cat "${repair_parts[@]}" | base64 --decode > /tmp/current-main-repair.patch
+          echo '6f3817f37c2784d1216392653a6b128895bcb36aa1aa0897a0e96acb899f66d4  /tmp/current-main-repair.patch' | sha256sum --check --strict
+          sha256sum /tmp/pooled-settlement-payload.tgz /tmp/current-main-repair.patch \
+            > "$OUTPUT_DIR/input-digests.txt"
+
+      - name: Apply payload and repair to exact current main
         shell: bash
         run: |
           set -euo pipefail
           exact_main="$(git rev-parse refs/remotes/origin/exact-main)"
           git worktree add --detach /tmp/integration "$exact_main"
           tar -xzf /tmp/pooled-settlement-payload.tgz -C /tmp/integration
+          git -C /tmp/integration apply --check /tmp/current-main-repair.patch
+          git -C /tmp/integration apply /tmp/current-main-repair.patch
 
           test -f /tmp/integration/supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
           test -f /tmp/integration/src/lib/trade-donation-pool.ts
@@ -78,6 +85,10 @@ jobs:
             "$exact_main" "$candidate_sha" "$candidate_tree" > "$OUTPUT_DIR/refs.txt"
           git -C /tmp/integration show --stat --oneline --decorate --no-renames HEAD \
             > "$OUTPUT_DIR/commit-stat.txt"
+          git -C /tmp/integration archive --format=tar.gz \
+            --output="$GITHUB_WORKSPACE/$OUTPUT_DIR/repaired-candidate-source.tgz" HEAD
+          sha256sum "$OUTPUT_DIR/repaired-candidate-source.tgz" \
+            > "$OUTPUT_DIR/repaired-candidate-source.sha256"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -150,18 +161,14 @@ jobs:
             --arg build '${{ steps.build.outcome }}' \
             '{focused_tests:$focused,complete_tests:$tests,typescript:$typescript,eslint:$lint,production_build:$build,all_passed:([$focused,$tests,$typescript,$lint,$build] | all(. == "success"))}' \
             > "$OUTPUT_DIR/validation-summary.json"
-          if [[ -d /tmp/integration/.git ]]; then
-            git -C /tmp/integration status --short > "$OUTPUT_DIR/worktree-status-after-validation.txt"
-          else
-            echo 'integration worktree was not created' > "$OUTPUT_DIR/worktree-status-after-validation.txt"
-          fi
+          git -C /tmp/integration status --short > "$OUTPUT_DIR/worktree-status-after-validation.txt" || true
           cat "$OUTPUT_DIR/validation-summary.json"
 
-      - name: Upload validation evidence and exact source payload
+      - name: Upload validation evidence and exact repaired source
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pooled-settlement-current-main-validation-${{ github.run_id }}
+          name: pooled-settlement-repaired-current-main-${{ github.run_id }}
           path: pooled-settlement-materialization
           if-no-files-found: error
           retention-days: 14
@@ -172,11 +179,11 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo '### Pooled-settlement validation against exact current main'
+            echo '### Repaired pooled-settlement validation against exact current main'
             echo
             echo "- run: $GITHUB_RUN_ID"
             echo "- operator commit: \`$GITHUB_SHA\`"
-            for file in refs.txt candidate-source.sha256 validation-summary.json commit-stat.txt worktree-status-after-validation.txt; do
+            for file in refs.txt input-digests.txt repaired-candidate-source.sha256 validation-summary.json commit-stat.txt worktree-status-after-validation.txt; do
               echo; echo "#### $file"; echo '```'
               if [[ -f "$OUTPUT_DIR/$file" ]]; then cat "$OUTPUT_DIR/$file"; else echo 'not produced'; fi
               echo '```'
