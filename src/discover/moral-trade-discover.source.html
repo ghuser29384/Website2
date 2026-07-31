@@ -2200,7 +2200,7 @@ function parseDatePhrase(text) {
 }
 
 function extractTerms(text) {
-  const stop = new Set(['find','show','me','a','an','the','for','with','and','or','under','below','before','by','verified','people','person','offers','offer','pools','pool','co-fund','co-funds','cofund','cofunds','group-buying','group','buying','collective','collectively','fund','funding','moral','near','threshold','available','trade','trades','opportunities','opportunity','within','of','to','in']);
+  const stop = new Set(['find','show','me','a','an','the','for','with','and','or','under','below','before','by','verified','people','person','offers','offer','pools','pool','co-fund','co-funds','cofund','cofunds','group-buying','group','buying','collective','collectively','fund','funding','moral','dominant','assurance','contract','contracts','near','threshold','available','trade','trades','opportunities','opportunity','within','of','to','in']);
   return text.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter((word) => word.length > 2 && !stop.has(word) && !/^\d+$/.test(word)).slice(0, 8);
 }
 
@@ -2230,7 +2230,7 @@ function parseCommand(text, currentConstraints) {
   if (asksForCoFund) constraints.offerKind = 'co-fund';
   else if (asksForIndividualOffers) constraints.offerKind = 'individual';
   if (!asksForCoFund && /\bpeople\b|\bperson\b|\bwho\b|\bmember\b|\bresearcher\b|\bengineer\b/.test(lower)) domain = 'people';
-  if (!asksForCoFund && /\bpool\b|\bpools\b|\bthreshold pool\b|\bstandalone threshold\b|\bdominant assurance contract\b|\bnear[- ]activation\b|\bnear[- ]threshold\b/.test(lower)) domain = 'pools';
+  if (!asksForCoFund && /\bpool\b|\bpools\b|\bthreshold pool\b|\bstandalone threshold\b|\bdominant[- ]assurance contracts?\b|\bassurance contracts?\b|\bnear[- ]activation\b|\bnear[- ]threshold\b/.test(lower)) domain = 'pools';
 
   for (const [phrase, id] of causeAliases.entries()) {
     if (lower.includes(phrase) && !constraints.causes.includes(id)) constraints.causes.push(id);

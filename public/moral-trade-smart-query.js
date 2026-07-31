@@ -153,6 +153,10 @@
     return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(String(query || "").toLowerCase());
   }
 
+  function isStandalonePoolQuery(query) {
+    return /\b(pool|pools|threshold|conditional funding)\b|\b(?:dominant[- ]assurance(?: contracts?)?|assurance contracts?)\b/.test(String(query || "").toLowerCase());
+  }
+
   function inferDiscoverDomain(interpretation, target) {
     const targetUrl = new URL(target, location.origin);
     const fromTarget = targetUrl.searchParams.get("domain");
@@ -160,7 +164,7 @@
     const facets = interpretation.facets || {};
     if (isCoFundQuery(query)) return "offers";
     if (Array.isArray(facets.actionTypes) && facets.actionTypes.includes("pool")) return "pools";
-    if (/\b(pool|pools|threshold|conditional funding)\b/.test(query)) {
+    if (isStandalonePoolQuery(query)) {
       return "pools";
     }
     if (
