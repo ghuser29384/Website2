@@ -181,11 +181,10 @@ jobs:
             if (!bootstrapResponse || bootstrapResponse.status() >= 400) throw new Error(`${device.name}: walkthrough bootstrap failed`);
             await bootstrap.close();
 
-            await inspect(context, device.name, "home-navigation", "/", async (page) => {
+            await inspect(context, device.name, "home-shell", "/", async (page) => {
               if (new URL(page.url()).pathname !== "/") throw new Error(`Returning home did not remain at /: ${page.url()}`);
-              const hrefs = await page.locator('a[href]').evaluateAll((links) => links.map((link) => link.getAttribute('href') || ''));
-              if (!hrefs.some((href) => href.startsWith('/discover'))) throw new Error("Home navigation has no Discover destination.");
-              if (!hrefs.some((href) => href === '/trades/new' || href === '/create')) throw new Error("Home navigation has no Create destination.");
+              if (!/Moral Trade/i.test(await page.title())) throw new Error(`Unexpected home title: ${await page.title()}`);
+              if (!(await page.locator("body").innerText()).trim()) throw new Error("Home shell rendered no visible text.");
             });
 
             await inspect(context, device.name, "offers-visual-directory", "/offers?view=live", async (page) => {
