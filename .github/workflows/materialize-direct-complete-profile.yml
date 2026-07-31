@@ -29,11 +29,12 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Materialize the clean product diff
+      - name: Integrate current main and materialize the clean product diff
         run: |
           set -euxo pipefail
           git fetch origin main
-          test "$(git rev-parse origin/main)" = "36650b48f9e664ea6d67c0840cf6a803060e8d7c"
+          test "$(git rev-parse origin/main)" = "0a26b17d75c9590f92c73663ea19fe1b0e8aa6c4"
+          git rebase origin/main
           python - <<'PY'
           import base64
           import gzip
@@ -98,9 +99,9 @@ jobs:
         run: |
           set -euxo pipefail
           git fetch origin main
-          test "$(git rev-parse origin/main)" = "36650b48f9e664ea6d67c0840cf6a803060e8d7c"
+          test "$(git rev-parse origin/main)" = "0a26b17d75c9590f92c73663ea19fe1b0e8aa6c4"
           git diff --cached --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Fix direct Complete Profile routing"
-          git push origin HEAD:fix/direct-complete-profile-100-sparks-20260731
+          git push --force-with-lease origin HEAD:fix/direct-complete-profile-100-sparks-20260731
