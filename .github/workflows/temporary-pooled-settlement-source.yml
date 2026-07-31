@@ -1,3 +1,4 @@
+# Triggered for final reconstruction on 2026-07-31.
 name: Apply pooled-settlement release payload
 
 on:
