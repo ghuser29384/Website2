@@ -61,4 +61,4 @@ jobs:
           git push origin HEAD:agent/pr212-qa-workflow-patch-observer-20260731
           [[ "$status" == "completed" ]]
 
-# Observe the exact run-step matcher repair.
+# Observe the exact artifact export for connector publication.
