@@ -11,9 +11,22 @@ function readPublicFile(filename: string) {
 }
 
 function extractInlineLoader(html: string) {
-  const match = html.match(/<script>([\s\S]*?)<\/script>\s*<\/body>/);
-  assert.ok(match, "Discover should contain one inline loader before the closing body tag.");
-  return match[1];
+  const openingTag = "<script>";
+  const closingTag = "</script>";
+  const openingIndex = html.indexOf(openingTag);
+  assert.notEqual(openingIndex, -1, "Discover should contain an inline loader.");
+
+  const closingTagCount = html.split(closingTag).length - 1;
+  assert.equal(
+    closingTagCount,
+    1,
+    "The loader document must contain only its structural closing script tag.",
+  );
+
+  const contentStart = openingIndex + openingTag.length;
+  const closingIndex = html.indexOf(closingTag, contentStart);
+  assert.notEqual(closingIndex, -1, "Discover should close its inline loader.");
+  return html.slice(contentStart, closingIndex);
 }
 
 function extractNamedFunction(source: string, name: string) {
