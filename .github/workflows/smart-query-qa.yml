@@ -125,8 +125,7 @@ jobs:
         with:
           name: smart-query-audit
           path: |
-            test-results/discover-query-audit.json
-            test-results/discover-inline-source.js
+            test-results/discover-*
             qa-results/query-surface-audit.txt
             qa-results/smart-query-lint.txt
             qa-results/smart-query-test.txt
