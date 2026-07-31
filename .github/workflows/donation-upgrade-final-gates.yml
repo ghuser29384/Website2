@@ -71,3 +71,24 @@ jobs:
 
       - name: Exact diff hygiene
         run: git diff --check
+
+      - name: Package exact candidate tree
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=tar.gz --prefix=Website2/ HEAD > donation-upgrade-candidate.tar.gz
+          sha256sum donation-upgrade-candidate.tar.gz > donation-upgrade-candidate.sha256
+          git rev-parse HEAD > donation-upgrade-candidate.ref
+
+      - name: Upload exact candidate tree
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: donation-upgrade-candidate-${{ github.run_id }}
+          path: |
+            donation-upgrade-candidate.tar.gz
+            donation-upgrade-candidate.sha256
+            donation-upgrade-candidate.ref
+          if-no-files-found: error
+          retention-days: 7
