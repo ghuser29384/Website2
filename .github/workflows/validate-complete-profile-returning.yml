@@ -9,6 +9,10 @@ permissions:
   contents: read
   statuses: write
 
+concurrency:
+  group: validate-returning-user-complete-profile
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -24,7 +28,8 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
             -f state=pending \
             -f context="${STATUS_CONTEXT}" \
-            -f description="Running test, typecheck, lint, build, and rendered gates"
+            -f description="Running test, typecheck, lint, build, and rendered gates" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Check out exact product candidate
         uses: actions/checkout@v4
@@ -120,7 +125,7 @@ jobs:
             -f state="${state}" \
             -f context="${STATUS_CONTEXT}" \
             -f description="${description}" \
-            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions"
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           printf 'install=%s\ntest=%s\ntypecheck=%s\nlint=%s\nbuild=%s\nbrowser=%s\nrendered=%s\n' \
             "${INSTALL_OUTCOME}" "${TEST_OUTCOME}" "${TYPECHECK_OUTCOME}" "${LINT_OUTCOME}" \
