@@ -1,4 +1,4 @@
-name: PR 212 v3 gate status snapshot
+name: PR 212 Create-frame debug status snapshot
 
 on:
   push:
@@ -21,14 +21,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Snapshot v3 run
+      - name: Snapshot Create-frame debug run
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p ops/pr212-v3-snapshot
-          gh run list --repo "$GITHUB_REPOSITORY" --workflow pr212-integrated-final-gate-v3.yml --branch agent/pr212-main-integration-ops-20260730 --limit 50 --json databaseId,headSha,status,conclusion,createdAt,url > ops/pr212-v3-snapshot/runs.json
+          mkdir -p ops/pr212-create-frame-debug-snapshot
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow pr212-create-frame-debug.yml --branch agent/pr212-main-integration-ops-20260730 --limit 50 --json databaseId,headSha,status,conclusion,createdAt,url > ops/pr212-create-frame-debug-snapshot/runs.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add ops/pr212-v3-snapshot/runs.json
-          git commit -m "Snapshot PR 212 v3 gate"
+          git add ops/pr212-create-frame-debug-snapshot/runs.json
+          git commit -m "Snapshot PR 212 Create-frame debug run"
           git push origin HEAD:agent/pr212-final-status-20260731
