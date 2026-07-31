@@ -32,11 +32,11 @@ function replaceRequired(
   return source.split(search).join(replacement);
 }
 
-function integrateCollectiveCommitmentMode(source: string) {
+function integrateThresholdSignOnMode(source: string) {
   let integrated = replaceRequired(
     source,
-    "Create a trade, redirect, or pool.",
-    "Create a trade, collective commitment, redirect, or pool.",
+    "Create a trade, Donation Upgrade, or public-goods pool.",
+    "Create a trade, Donation Upgrade, Threshold Sign-On, or public-goods pool.",
     "subtitle",
   );
   integrated = replaceRequired(
@@ -51,8 +51,8 @@ function integrateCollectiveCommitmentMode(source: string) {
   );
   integrated = replaceRequired(
     integrated,
-    "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, shared-project pools, and threshold pools.",
-    "Choose Commitment, Skill, Fund, or Collective commitment. Fund includes swaps, redirects, Common Ground Pools, and threshold pools.",
+    "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, Donation Upgrades, shared-project pools, and threshold pools.",
+    "Choose Commitment, Skill, Fund, or Threshold Sign-On. Fund includes swaps, redirects, Donation Upgrades, Co-Fund, and threshold pools.",
     "request introduction",
     2,
   );
@@ -64,20 +64,20 @@ function integrateCollectiveCommitmentMode(source: string) {
               <p>A monetary contribution to a specified organization, project, fund, or cause.</p>
               <span class="request-example">Examples: donate $50 to GiveDirectly; fund one month of hosting for Moral Trade.</span>
             </button>`;
-  const collectiveCard = `${fundCard}
+  const thresholdSignOnCard = `${fundCard}
 
             <button type="button" class="request-choice" data-request-kind="collective" aria-pressed="false">
               <span class="request-check" aria-hidden="true">✓</span>
               <span class="request-mark">◎</span>
-              <strong>Collective commitment</strong>
+              <strong>Threshold Sign-On</strong>
               <p>Gather verified people around one frozen proposition and exact threshold.</p>
               <span class="request-example">Names stay private until the threshold is reached, then the complete verified set is revealed together.</span>
             </button>`;
   integrated = replaceRequired(
     integrated,
     fundCard,
-    collectiveCard,
-    "Collective Commitment request card",
+    thresholdSignOnCard,
+    "Threshold Sign-On request card",
   );
 
   integrated = replaceRequired(
@@ -94,7 +94,7 @@ function integrateCollectiveCommitmentMode(source: string) {
         placeholder: "e.g. Donate $50 to GiveDirectly"
       },
       collective: {
-        label: "Collective commitment",
+        label: "Threshold Sign-On",
         fieldLabel: "Create a verified identity-threshold proposition",
         placeholder: ""
       }
@@ -118,13 +118,13 @@ function integrateCollectiveCommitmentMode(source: string) {
         return;
       }
       const kindChanged = state.requestKind !== nextKind;`,
-    "Collective Commitment routing",
+    "Threshold Sign-On routing",
   );
 
   return integrated;
 }
 
-const integratedCreateInterfaceSource = integrateCollectiveCommitmentMode(createInterfaceSource);
+const integratedCreateInterfaceSource = integrateThresholdSignOnMode(createInterfaceSource);
 
 function getCreateInterfaceSource(resume: boolean) {
   if (!resume) return integratedCreateInterfaceSource;
