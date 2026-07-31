@@ -1,11 +1,11 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test("inspect the rendered Discover query controls", async ({ page }) => {
-  await page.setViewportSize({ width: 1600, height: 1000 });
-  await page.goto("/discover", { waitUntil: "networkidle" });
+async function openDiscoverList(page: Page) {
+  await page.goto("/discover?domain=offers&view=list", { waitUntil: "networkidle" });
   await expect(page.locator("body")).not.toContainText("Loading Discover…");
+  await expect(page.locator(".offer-transaction-row").first()).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() =>
@@ -16,129 +16,185 @@ test("inspect the rendered Discover query controls", async ({ page }) => {
       ),
     )
     .toBe(true);
-  await expect(page.locator('script[src$="/moral-trade-smart-query.js"]')).toHaveCount(1);
+}
 
-  const audit = await page.evaluate(() => {
-    const controls = [...document.querySelectorAll("input, textarea, select, button, form")]
-      .map((element) => {
-        const htmlElement = element as HTMLElement;
-        const input = element as HTMLInputElement;
-        const select = element as HTMLSelectElement;
-        return {
-          tag: element.tagName.toLowerCase(),
-          type: input.type || "",
-          name: input.name || "",
-          id: htmlElement.id || "",
-          className: htmlElement.className || "",
-          text: (htmlElement.textContent || "").replace(/\s+/g, " ").trim().slice(0, 180),
-          placeholder: input.placeholder || "",
-          value: input.value || select.value || "",
-          action: element instanceof HTMLFormElement ? element.action : "",
-          data: { ...htmlElement.dataset },
-        };
-      })
-      .filter((entry) =>
-        /search|query|filter|sort|constraint|value|cause|domain|deadline|verified|budget/i.test(
-          JSON.stringify(entry),
-        ),
-      );
+function monitorBrowserFailures(page: Page) {
+  const consoleErrors: string[] = [];
+  const pageErrors: string[] = [];
+  const failedRequests: string[] = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("requestfailed", (request) => {
+    failedRequests.push(
+      `${request.method()} ${request.url()}: ${request.failure()?.errorText ?? "failed"}`,
+    );
+  });
+  return { consoleErrors, pageErrors, failedRequests };
+}
 
-    const textMatches = [...document.querySelectorAll("body *")]
-      .filter((element) =>
-        /parsed constraints|search interpretation|run search|opened value field/i.test(
-          (element.textContent || "").replace(/\s+/g, " "),
-        ),
-      )
-      .slice(0, 30)
-      .map((element) => ({
-        tag: element.tagName.toLowerCase(),
-        id: (element as HTMLElement).id,
-        className: (element as HTMLElement).className,
-        text: (element.textContent || "").replace(/\s+/g, " ").trim().slice(0, 500),
-        html: element.outerHTML.slice(0, 1_500),
-      }));
+test("Discover shows the complete two-sided exchange at a glance on desktop", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  const failures = monitorBrowserFailures(page);
+  await openDiscoverList(page);
 
-    const globals = Object.keys(window)
-      .filter((key) => /search|query|filter|constraint|discover/i.test(key))
-      .sort();
+  const rows = page.locator(".offer-transaction-row");
+  expect(await rows.count()).toBeGreaterThan(0);
+  const row = rows.first();
+  const offerSide = row.locator('[data-exchange-side="offer"]');
+  const returnSide = row.locator('[data-exchange-side="return"]');
 
-    const inlineSources = [...document.scripts]
-      .filter((script) => !script.src && (script.textContent?.length ?? 0) > 1_000)
-      .map((script) => script.textContent ?? "");
-    const scripts = [...document.scripts].map((script) => ({
-      src: script.src,
-      textLength: script.textContent?.length ?? 0,
-    }));
+  await expect(offerSide).toContainText("You offer");
+  await expect(returnSide).toContainText("You get");
+  await expect(offerSide.locator(".exchange-obligations li").first()).not.toBeEmpty();
+  await expect(returnSide.locator(".exchange-obligations li").first()).not.toBeEmpty();
+  await expect(returnSide.locator(".exchange-provider")).toContainText("Provided by");
+  await expect(offerSide.locator(".exchange-flexibility")).toBeVisible();
+  await expect(returnSide.locator(".exchange-flexibility")).toBeVisible();
 
-    function closestOfferRow(control: Element) {
-      let current = control.parentElement;
-      for (let depth = 0; current && depth < 14; depth += 1) {
-        const text = (current.textContent || "").replace(/\s+/g, " ").trim();
-        if (
-          /REQUESTED BY/i.test(text) &&
-          /MECHANISM/i.test(text) &&
-          /DEADLINE/i.test(text) &&
-          /TERMS/i.test(text)
-        ) {
-          return current;
-        }
-        current = current.parentElement;
-      }
-      return null;
-    }
+  await expect(row.locator(".requester-cell, .mechanism-cell, .deadline-cell")).toHaveCount(0);
+  await expect(row.getByRole("button", { name: /Request exact match|Accept & match/ })).toBeVisible();
+  await expect(row.getByRole("button", { name: "Counteroffer" })).toBeVisible();
+  await expect(row.getByRole("button", { name: /Full terms/ })).toBeVisible();
 
-    const rowElements = [...document.querySelectorAll("button, a")]
-      .filter((element) => /^Offer(?:\s*→)?$/i.test((element.textContent || "").trim()))
-      .map(closestOfferRow)
-      .filter((element): element is HTMLElement => Boolean(element));
-    const uniqueRows = [...new Set(rowElements)];
-    const offerRows = uniqueRows.map((element, index) => ({
-      index,
-      tag: element.tagName.toLowerCase(),
-      id: element.id,
-      className: element.className,
-      text: (element.textContent || "").replace(/\s+/g, " ").trim(),
-      html: element.outerHTML,
-    }));
-
+  const hierarchy = await row.evaluate((element) => {
+    const primary = element.querySelector<HTMLElement>(".exchange-obligations li:first-child");
+    const secondary = element.querySelector<HTMLElement>(".offer-context-title");
+    if (!primary || !secondary) throw new Error("Missing exchange hierarchy elements");
     return {
-      audit: {
-        controls,
-        textMatches,
-        globals,
-        scripts,
-        title: document.title,
-        url: location.href,
-        offerRows: offerRows.map(({ html, ...row }) => row),
-      },
-      inlineSources,
-      dom: document.documentElement.outerHTML,
-      offerRows,
+      primary: Number.parseFloat(getComputedStyle(primary).fontSize),
+      secondary: Number.parseFloat(getComputedStyle(secondary).fontSize),
     };
   });
+  expect(hierarchy.primary).toBeGreaterThan(hierarchy.secondary);
 
   await mkdir("test-results", { recursive: true });
-  await page.screenshot({ path: "test-results/discover-desktop.png", fullPage: true });
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.screenshot({ path: "test-results/discover-mobile.png", fullPage: true });
-  await Promise.all([
-    writeFile(
-      "test-results/discover-query-audit.json",
-      `${JSON.stringify(audit.audit, null, 2)}\n`,
-      "utf8",
-    ),
-    writeFile(
-      "test-results/discover-inline-source.js",
-      audit.inlineSources.join("\n\n/* --- INLINE SCRIPT BOUNDARY --- */\n\n"),
-      "utf8",
-    ),
-    writeFile("test-results/discover-dom.html", audit.dom, "utf8"),
-    writeFile(
-      "test-results/discover-offer-rows.json",
-      `${JSON.stringify(audit.offerRows, null, 2)}\n`,
-      "utf8",
-    ),
-  ]);
+  await page.screenshot({
+    path: "test-results/discover-two-sided-desktop.png",
+    fullPage: true,
+  });
+
+  await row.getByRole("button", { name: /Request exact match|Accept & match/ }).click();
+  await expect(page.locator(".response-intent-note")).toContainText("Exact terms selected");
+  await expect(page.locator(".response-intent-note")).toContainText(
+    "must approve before an agreement forms",
+  );
+
+  await page.goBack();
+  await expect(page.locator(".response-intent-note")).toHaveCount(0);
+  const refreshedRow = page.locator(".offer-transaction-row").first();
+  await refreshedRow.getByRole("button", { name: "Counteroffer" }).click();
+  await expect(page.locator(".response-intent-note")).toContainText("Counteroffer selected");
+  await expect(page.locator(".response-intent-note")).toContainText("changes to either side");
+
+  await page.goBack();
+  const rowControl = page.locator(".offer-row-content").first();
+  await rowControl.focus();
+  await rowControl.press("Enter");
+  await expect(page.locator(".inspector")).toContainText("The exchange");
+  await expect(page.locator(".response-intent-note")).toHaveCount(0);
+
+  expect(failures.consoleErrors).toEqual([]);
+  expect(failures.pageErrors).toEqual([]);
+  expect(failures.failedRequests).toEqual([]);
+});
+
+for (const viewport of [
+  { width: 390, height: 844 },
+  { width: 320, height: 568 },
+]) {
+  test(`Discover stacks both exchange sides without horizontal overflow at ${viewport.width}×${viewport.height}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    const failures = monitorBrowserFailures(page);
+    await openDiscoverList(page);
+
+    const row = page.locator(".offer-transaction-row").first();
+    const offerSide = row.locator('[data-exchange-side="offer"]');
+    const returnSide = row.locator('[data-exchange-side="return"]');
+    await expect(offerSide).toContainText("You offer");
+    await expect(returnSide).toContainText("You get");
+
+    const [offerBox, returnBox] = await Promise.all([
+      offerSide.boundingBox(),
+      returnSide.boundingBox(),
+    ]);
+    expect(offerBox).not.toBeNull();
+    expect(returnBox).not.toBeNull();
+    expect(returnBox!.y).toBeGreaterThanOrEqual(offerBox!.y + offerBox!.height - 1);
+
+    const overflow = await page.evaluate(() => ({
+      documentWidth: document.documentElement.scrollWidth,
+      bodyWidth: document.body.scrollWidth,
+      viewportWidth: window.innerWidth,
+    }));
+    expect(overflow.documentWidth).toBeLessThanOrEqual(overflow.viewportWidth + 1);
+    expect(overflow.bodyWidth).toBeLessThanOrEqual(overflow.viewportWidth + 1);
+
+    await mkdir("test-results", { recursive: true });
+    await page.screenshot({
+      path: `test-results/discover-two-sided-${viewport.width}x${viewport.height}.png`,
+      fullPage: true,
+    });
+
+    expect(failures.consoleErrors).toEqual([]);
+    expect(failures.pageErrors).toEqual([]);
+    expect(failures.failedRequests).toEqual([]);
+  });
+}
+
+test("Discover filters and indexes the two exchange sides separately", async ({ page }) => {
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await openDiscoverList(page);
+
+  const filters = page.locator('[data-details="filters"]');
+  await filters.locator("summary").click();
+  await filters.locator('[data-filter="return-type"][value="payment"]').check();
+  await expect(filters).toHaveAttribute("open", "");
+
+  let rows = page.locator(".offer-transaction-row");
+  await expect(rows).toHaveCount(3);
+  const monetaryReturns = await rows
+    .locator('[data-exchange-side="return"] .exchange-obligations li:first-child')
+    .allTextContents();
+  for (const value of monetaryReturns) expect(value).toMatch(/paid to you|stipend/i);
+
+  await filters.locator('[data-filter="min-return"]').evaluate((element) => {
+    const input = element as HTMLInputElement;
+    input.value = "100";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await expect(rows).toHaveCount(1);
+  await expect(
+    rows.locator('[data-exchange-side="return"] .exchange-obligations li:first-child'),
+  ).toContainText("$180");
+  await expect(filters).toHaveAttribute("open", "");
+
+  await page.goto(
+    "/discover?domain=offers&view=list&recipient=You&evidence=audit",
+    { waitUntil: "networkidle" },
+  );
+  rows = page.locator(".offer-transaction-row");
+  await expect(rows).toHaveCount(2);
+  const resultIds = await rows.evaluateAll((elements) =>
+    elements.map((element) => element.getAttribute("data-row-id")),
+  );
+  expect(resultIds.sort()).toEqual(["offer-civic-audit", "offer-global-audit"]);
+
+  await page.goto(
+    "/discover?domain=offers&view=list&offerType=skill&returnType=credit&minReturn=50",
+    { waitUntil: "networkidle" },
+  );
+  rows = page.locator(".offer-transaction-row");
+  await expect(rows).toHaveCount(2);
+  for (const side of await rows.locator('[data-exchange-side="offer"]').allTextContents()) {
+    expect(side).toMatch(/review/i);
+  }
+  for (const side of await rows.locator('[data-exchange-side="return"]').allTextContents()) {
+    expect(side).toMatch(/credit/i);
+  }
 });
 
 test("Discover sends natural-language queries through the shared interpreter", async ({ page }) => {
