@@ -1,0 +1,152 @@
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	﻿2026-07-31T00:42:19.6680673Z ##[group]Run set -euo pipefail
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6681400Z ^[[36;1mset -euo pipefail^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6681680Z ^[[36;1mgit config user.name "github-actions[bot]"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6682134Z ^[[36;1mgit config user.email "41898282+github-actions[bot]@users.noreply.github.com"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6682597Z ^[[36;1mgit checkout -B "$OUTPUT_BRANCH" "$CLEAN_SHA"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6682883Z ^[[36;1m^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6683073Z ^[[36;1mset +e^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6683596Z ^[[36;1mgit merge --no-ff --no-commit "$MAIN_SHA" > integration-evidence/merge-stdout.txt 2> integration-evidence/merge-stderr.txt^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6684142Z ^[[36;1mmerge_status=$?^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6684372Z ^[[36;1mset -e^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6684696Z ^[[36;1mprintf '%s\n' "$merge_status" > integration-evidence/merge-status.txt^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6685355Z ^[[36;1m^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6685672Z ^[[36;1mmapfile -t conflicts < <(git diff --name-only --diff-filter=U | sort)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6686069Z ^[[36;1mexpected_conflicts=(^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6686419Z ^[[36;1m  src/app/offers/offer-visual-directory-mount.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6686843Z ^[[36;1m  src/components/profile/complete-profile-connections.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6687221Z ^[[36;1m  src/lib/crawlability.test.ts^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6687528Z ^[[36;1m  src/lib/public-route-smoke.test.ts^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6687807Z ^[[36;1m)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6688134Z ^[[36;1mprintf '%s\n' "${conflicts[@]}" > integration-evidence/conflicts-observed.txt^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6688684Z ^[[36;1mprintf '%s\n' "${expected_conflicts[@]}" > integration-evidence/conflicts-expected.txt^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6689178Z ^[[36;1m[[ "${conflicts[*]}" == "${expected_conflicts[*]}" ]] || {^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6689645Z ^[[36;1m  echo "Conflict inventory changed from the reviewed four-file analysis." >&2^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6690340Z ^[[36;1m  diff -u integration-evidence/conflicts-expected.txt integration-evidence/conflicts-observed.txt >&2 || true^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6690858Z ^[[36;1m  exit 1^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6691061Z ^[[36;1m}^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6691241Z ^[[36;1m^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6691597Z ^[[36;1m# Decisions 1A and 2A: preserve current-main runtime and test implementations.^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6692056Z ^[[36;1mfor path in "${expected_conflicts[@]}"; do^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6692391Z ^[[36;1m  git checkout "$MAIN_SHA" -- "$path"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6692706Z ^[[36;1mdone^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6692907Z ^[[36;1m^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6693226Z ^[[36;1m# Decision 3A: remove every reviewed clean-only change that is unrelated to^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6693748Z ^[[36;1m# institutional functionality or no longer needed for an absolute gate.^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6694138Z ^[[36;1mrevert_to_main=(^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6694398Z ^[[36;1m  src/app/complete-profile/page.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6694697Z ^[[36;1m  src/app/how-it-works/page.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6695252Z ^[[36;1m  src/app/offers/offer-plane-inline-mount.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6695646Z ^[[36;1m  src/app/offers/offer-visual-directory-mount.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6696051Z ^[[36;1m  src/components/profile/complete-profile-connections.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6696413Z ^[[36;1m  src/lib/crawlability.test.ts^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6696703Z ^[[36;1m  src/lib/discovery-ranking.test.ts^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6696988Z ^[[36;1m  src/lib/funding.test.ts^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6697280Z ^[[36;1m  src/lib/payments/conditional-state.test.ts^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6697809Z ^[[36;1m  src/lib/public-route-smoke.test.ts^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6698120Z ^[[36;1m  src/lib/x-profile-connector.test.ts^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6698401Z ^[[36;1m  tsconfig.json^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6698622Z ^[[36;1m)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6698875Z ^[[36;1mgit checkout "$MAIN_SHA" -- "${revert_to_main[@]}"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6699180Z ^[[36;1m^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6699503Z ^[[36;1m# This workflow is reconstruction-only evidence, not part of the product PR.^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6700014Z ^[[36;1mgit rm -f .github/workflows/pr212-clean-reconstruction-gates.yml^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6700549Z ^[[36;1mgit add -A^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6700761Z ^[[36;1m^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6701031Z ^[[36;1mif git diff --name-only --diff-filter=U | grep -q .; then^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6701419Z ^[[36;1m  echo "Unresolved merge conflicts remain." >&2^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6701756Z ^[[36;1m  git diff --name-only --diff-filter=U >&2^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6702039Z ^[[36;1m  exit 1^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6702243Z ^[[36;1mfi^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6702521Z ^[[36;1mif git grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- ':!package-lock.json'; then^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6702915Z ^[[36;1m  echo "Conflict markers remain." >&2^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6703196Z ^[[36;1m  exit 1^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6703391Z ^[[36;1mfi^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6703572Z ^[[36;1m^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6703915Z ^[[36;1m# The two reviewed runtime resolutions must be byte-identical to pinned main,^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6704415Z ^[[36;1m# and the obsolete server-page remount key must be gone.^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6704785Z ^[[36;1mfor path in "${revert_to_main[@]}"; do^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6705426Z ^[[36;1m  git diff --quiet "$MAIN_SHA" -- "$path" || {^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6705825Z ^[[36;1m    echo "$path is not identical to pinned main after audit." >&2^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6706182Z ^[[36;1m    exit 1^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6706393Z ^[[36;1m  }^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6706589Z ^[[36;1mdone^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6707088Z ^[[36;1m! grep -F 'key={initialConnectionsOpen ? "connections-open" : "connections-closed"}' src/app/complete-profile/page.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6707783Z ^[[36;1mgrep -F 'let disposed = false;' src/app/offers/offer-visual-directory-mount.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6708345Z ^[[36;1mgrep -F 'if (disposed) return;' src/app/offers/offer-visual-directory-mount.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6709010Z ^[[36;1mgrep -F 'window.requestAnimationFrame(() => setOpen(true))' src/components/profile/complete-profile-connections.tsx^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6709533Z ^[[36;1m^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6709894Z ^[[36;1mmapfile -t clean_changed < <(git diff --name-only "$MERGE_BASE_SHA" "$CLEAN_SHA" | sort)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6710491Z ^[[36;1mprintf 'path\tclassification\n' > integration-evidence/non-institutional-audit.tsv^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6710925Z ^[[36;1munknown=0^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6711160Z ^[[36;1mfor path in "${clean_changed[@]}"; do^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6711455Z ^[[36;1m  classification=""^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6711703Z ^[[36;1m  case "$path" in^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6711969Z ^[[36;1m    .env.example|src/app/admin/page.tsx)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6712384Z ^[[36;1m      classification="retained: shared institutional entry/configuration"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6712763Z ^[[36;1m      ;;^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6713820Z ^[[36;1m    .github/scripts/institutional-*|.github/workflows/institutional-trade-qa.yml|src/app/admin/institutional-deal-desk/*|src/app/institutions/*|src/components/institutions/*|src/institutional-*|src/lib/institutional-*|supabase/migrations/20260726123000_institutional_trade_system.sql)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6715223Z ^[[36;1m      classification="retained: institutional implementation/test"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6715587Z ^[[36;1m      ;;^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6715874Z ^[[36;1m    .github/workflows/pr212-clean-reconstruction-gates.yml)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6716316Z ^[[36;1m      classification="removed: temporary reconstruction workflow"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6716674Z ^[[36;1m      ;;^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6718394Z ^[[36;1m    src/app/complete-profile/page.tsx|src/app/how-it-works/page.tsx|src/app/offers/offer-plane-inline-mount.tsx|src/app/offers/offer-visual-directory-mount.tsx|src/components/profile/complete-profile-connections.tsx|src/lib/crawlability.test.ts|src/lib/discovery-ranking.test.ts|src/lib/funding.test.ts|src/lib/payments/conditional-state.test.ts|src/lib/public-route-smoke.test.ts|src/lib/x-profile-connector.test.ts|tsconfig.json)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6720078Z ^[[36;1m      classification="reverted: pinned main is authoritative"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6720547Z ^[[36;1m      ;;^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6720735Z ^[[36;1m    *)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6720951Z ^[[36;1m      classification="UNKNOWN"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6721219Z ^[[36;1m      unknown=$((unknown + 1))^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6721457Z ^[[36;1m      ;;^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6721645Z ^[[36;1m  esac^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6722044Z ^[[36;1m  printf '%s\t%s\n' "$path" "$classification" >> integration-evidence/non-institutional-audit.tsv^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6722491Z ^[[36;1mdone^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6722697Z ^[[36;1m[[ "$unknown" == "0" ]] || {^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6723075Z ^[[36;1m  echo "$unknown clean-only files were not deliberately classified." >&2^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6723545Z ^[[36;1m  cat integration-evidence/non-institutional-audit.tsv >&2^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6723887Z ^[[36;1m  exit 1^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6724083Z ^[[36;1m}^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6724270Z ^[[36;1m^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6724601Z ^[[36;1m# Fail if the resulting candidate differs from main outside the exact retained^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6725225Z ^[[36;1m# institutional/shared allowlist.^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6725639Z ^[[36;1mmapfile -t candidate_delta < <(git diff --name-only "$MAIN_SHA" | sort)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6726214Z ^[[36;1mprintf '%s\n' "${candidate_delta[@]}" > integration-evidence/candidate-versus-main-files.txt^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6726674Z ^[[36;1munexpected=0^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6726930Z ^[[36;1mfor path in "${candidate_delta[@]}"; do^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6727231Z ^[[36;1m  case "$path" in^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6728433Z ^[[36;1m    .env.example|src/app/admin/page.tsx|.github/scripts/institutional-*|.github/workflows/institutional-trade-qa.yml|src/app/admin/institutional-deal-desk/*|src/app/institutions/*|src/components/institutions/*|src/institutional-*|src/lib/institutional-*|supabase/migrations/20260726123000_institutional_trade_system.sql)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6729625Z ^[[36;1m      ;;^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6729822Z ^[[36;1m    *)^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6730144Z ^[[36;1m      echo "Unexpected non-institutional delta after audit: $path" >&2^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6730542Z ^[[36;1m      unexpected=$((unexpected + 1))^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6730812Z ^[[36;1m      ;;^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6731005Z ^[[36;1m  esac^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6731197Z ^[[36;1mdone^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6731418Z ^[[36;1m[[ "$unexpected" == "0" ]] || exit 1^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6731689Z ^[[36;1m^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6731893Z ^[[36;1mgit diff --cached --check^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6732262Z ^[[36;1mgit status --short > integration-evidence/precommit-status.txt^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6732735Z ^[[36;1mgit diff --cached --stat > integration-evidence/precommit-stat.txt^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6733226Z ^[[36;1mgit commit -m "Integrate institutional trade system with pinned main"^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6733715Z ^[[36;1mgit rev-parse HEAD | tee integration-evidence/integrated-commit.txt^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6734317Z ^[[36;1mgit show --stat --oneline --decorate --no-renames HEAD > integration-evidence/integrated-commit-stat.txt^[[0m
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6784640Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6785262Z env:
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6785534Z   CLEAN_SHA: e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6785892Z   MAIN_SHA: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6786244Z   MERGE_BASE_SHA: bb32b5c5a58442f97bef642be58ed01a57f0d91b
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6786603Z   OUTPUT_BRANCH: agent/pr212-main-integrated-20260731
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6789318Z   GH_TOKEN: ***
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.6789547Z ##[endgroup]
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:19.8397875Z Switched to a new branch 'agent/pr212-main-integrated-20260731'
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.0365875Z rm '.github/workflows/pr212-clean-reconstruction-gates.yml'
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1441618Z     let disposed = false;
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1455292Z       if (disposed) return;
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1469051Z     const frame = window.requestAnimationFrame(() => setOpen(true));
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1630390Z Unexpected non-institutional delta after audit: integration-evidence/clean-gate-run.json
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1631322Z Unexpected non-institutional delta after audit: integration-evidence/conflicts-expected.txt
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1635914Z Unexpected non-institutional delta after audit: integration-evidence/conflicts-observed.txt
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1636953Z Unexpected non-institutional delta after audit: integration-evidence/merge-status.txt
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1637929Z Unexpected non-institutional delta after audit: integration-evidence/merge-stderr.txt
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1638889Z Unexpected non-institutional delta after audit: integration-evidence/merge-stdout.txt
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1639640Z Unexpected non-institutional delta after audit: integration-evidence/pinned-refs.txt
+integrate	Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change	2026-07-31T00:42:20.1649678Z ##[error]Process completed with exit code 1.
