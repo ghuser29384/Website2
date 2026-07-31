@@ -138,3 +138,113 @@ jobs:
           path: apple-auth-credential-presence.txt
           if-no-files-found: error
           retention-days: 1
+
+  apple-provider-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: https://jnpoxvalyjtdghnperyu.supabase.co
+      SUPABASE_PUBLISHABLE_KEY: sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT
+    steps:
+      - name: Probe Apple OAuth and ID-token paths without authenticating a user
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > apple-provider-probe.txt
+
+          settings_status=$(curl --silent --show-error \
+            --output /tmp/settings.json \
+            --write-out '%{http_code}' \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H "authorization: Bearer $SUPABASE_PUBLISHABLE_KEY" \
+            "$SUPABASE_URL/auth/v1/settings")
+          python3 - "$settings_status" <<'PY' >> apple-provider-probe.txt
+          import json
+          import sys
+          from pathlib import Path
+
+          status = sys.argv[1]
+          payload = json.loads(Path('/tmp/settings.json').read_text(encoding='utf-8'))
+          print(f'settings_status={status}')
+          print(f'settings_external_apple={payload.get("external", {}).get("apple") is True}')
+          PY
+
+          oauth_status=$(curl --silent --show-error \
+            --output /tmp/oauth-body.txt \
+            --write-out '%{http_code}' \
+            --max-redirs 0 \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H "authorization: Bearer $SUPABASE_PUBLISHABLE_KEY" \
+            "$SUPABASE_URL/auth/v1/authorize?provider=apple&redirect_to=https%3A%2F%2Fwww.moraltrade.org%2Fauth%2Fconfirm%3Fnext%3D%252Fdashboard%26mode%3Dlogin" \
+            || true)
+          printf 'oauth_authorize_status=%s\n' "$oauth_status" >> apple-provider-probe.txt
+          python3 - <<'PY' >> apple-provider-probe.txt
+          import json
+          from pathlib import Path
+
+          text = Path('/tmp/oauth-body.txt').read_text(encoding='utf-8', errors='replace').strip()
+          try:
+              payload = json.loads(text)
+          except json.JSONDecodeError:
+              payload = {}
+          print(f'oauth_authorize_error_code={payload.get("error_code", "") or "none"}')
+          print(f'oauth_authorize_message={payload.get("msg", payload.get("message", "")) or "none"}')
+          PY
+
+          probe_token=$(python3 - <<'PY'
+          import base64
+          import json
+          import time
+
+          def encode(value):
+              raw = json.dumps(value, separators=(',', ':')).encode()
+              return base64.urlsafe_b64encode(raw).decode().rstrip('=')
+
+          now = int(time.time())
+          print('.'.join([
+              encode({'alg': 'RS256', 'kid': 'PROBEKEY01'}),
+              encode({
+                  'iss': 'https://appleid.apple.com',
+                  'aud': 'org.moraltrade.web',
+                  'sub': 'apple-provider-probe',
+                  'iat': now,
+                  'exp': now + 300,
+                  'nonce': 'apple-provider-probe',
+              }),
+              'invalid-signature',
+          ]))
+          PY
+          )
+
+          id_token_status=$(curl --silent --show-error \
+            --output /tmp/id-token-body.txt \
+            --write-out '%{http_code}' \
+            -X POST \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -H "authorization: Bearer $SUPABASE_PUBLISHABLE_KEY" \
+            -H 'content-type: application/json' \
+            --data "{\"provider\":\"apple\",\"id_token\":\"$probe_token\",\"nonce\":\"apple-provider-probe\"}" \
+            "$SUPABASE_URL/auth/v1/token?grant_type=id_token")
+          printf 'id_token_status=%s\n' "$id_token_status" >> apple-provider-probe.txt
+          python3 - <<'PY' >> apple-provider-probe.txt
+          import json
+          from pathlib import Path
+
+          text = Path('/tmp/id-token-body.txt').read_text(encoding='utf-8', errors='replace').strip()
+          try:
+              payload = json.loads(text)
+          except json.JSONDecodeError:
+              payload = {}
+          print(f'id_token_error_code={payload.get("error_code", payload.get("code", "")) or "none"}')
+          print(f'id_token_message={payload.get("msg", payload.get("message", payload.get("error_description", ""))) or "none"}')
+          PY
+
+          cat apple-provider-probe.txt
+
+      - name: Upload Apple provider probe report
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-provider-probe
+          path: apple-provider-probe.txt
+          if-no-files-found: error
+          retention-days: 1
