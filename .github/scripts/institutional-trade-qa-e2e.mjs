@@ -652,7 +652,7 @@ async function createFixture() {
     legal_entity_id: null,
     party_role: "independent_counterparty",
     representative_profile_id: independent.id,
-    authority_status: "pending",
+    authority_status: "self_authorized",
     approval_status: "not_required",
     consent_status: "not_required",
     joined_at: null,
@@ -1854,7 +1854,6 @@ const dealScopedTables = [
   "institutional_disputes",
   "institutional_attribution_claims",
   "institutional_report_snapshots",
-  "institutional_command_drafts",
   "institutional_pool_terms",
   "institutional_pool_contributions",
   "institutional_pool_anchors",
@@ -1914,6 +1913,16 @@ async function verifyZeroSyntheticResidue() {
     "institutional_dispute_events",
     "actor_profile_id",
     createdUserIds,
+  );
+  residue["institutional_command_drafts.profile_id"] = await countByIds(
+    "institutional_command_drafts",
+    "profile_id",
+    createdUserIds,
+  );
+  residue["institutional_command_drafts.organization_id"] = await countByIds(
+    "institutional_command_drafts",
+    "organization_id",
+    createdOrganizationIds,
   );
   const authResidue = [];
   for (const id of createdUserIds) {
