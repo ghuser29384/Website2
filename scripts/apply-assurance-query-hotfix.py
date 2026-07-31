@@ -15,13 +15,13 @@ def replace_once(path: str, old: str, new: str) -> None:
 smart_query = "src/lib/smart-query.ts"
 replace_once(
     smart_query,
-    """function isCoFundQuery(query: string) {
+    r"""function isCoFundQuery(query: string) {
   const normalized = normalizeSmartQueryText(query);
   return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(normalized);
 }
 
 function inferIntent(query: string, surface: SmartQuerySurface): SmartQueryIntent {""",
-    """function isCoFundQuery(query: string) {
+    r"""function isCoFundQuery(query: string) {
   const normalized = normalizeSmartQueryText(query);
   return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(normalized);
 }
@@ -35,18 +35,18 @@ function inferIntent(query: string, surface: SmartQuerySurface): SmartQueryInten
 )
 replace_once(
     smart_query,
-    """  if (/\b(pool|pools|threshold|conditional funding)\b/.test(query)) {
-    return \"pools\";
+    r"""  if (/\b(pool|pools|threshold|conditional funding)\b/.test(query)) {
+    return "pools";
   }""",
-    """  if (isStandalonePoolQuery(query)) {
-    return \"pools\";
+    r"""  if (isStandalonePoolQuery(query)) {
+    return "pools";
   }""",
 )
 replace_once(
     smart_query,
-    """    [\"pool\", /\b(pool|pools|threshold pool|conditional funding)\b/i],""",
-    """    [
-      \"pool\",
+    r"""    ["pool", /\b(pool|pools|threshold pool|conditional funding)\b/i],""",
+    r"""    [
+      "pool",
       /\b(pool|pools|threshold pool|conditional funding|(?:dominant[- ]assurance(?: contracts?)?|assurance contracts?))\b/i,
     ],""",
 )
@@ -54,65 +54,65 @@ replace_once(
 smart_query_test = "src/lib/smart-query.test.ts"
 replace_once(
     smart_query_test,
-    """  assert.equal(parseSmartQuery(\"conditional pools for public health\", { surface: \"global\" }).intent, \"pools\");
-  assert.equal(parseSmartQuery(\"group-buying a moral trade\", { surface: \"global\" }).intent, \"offers\");""",
-    """  assert.equal(parseSmartQuery(\"conditional pools for public health\", { surface: \"global\" }).intent, \"pools\");
-  assert.equal(parseSmartQuery(\"dominant assurance contracts\", { surface: \"global\" }).intent, \"pools\");
-  assert.equal(parseSmartQuery(\"group-buying a moral trade\", { surface: \"global\" }).intent, \"offers\");""",
+    """  assert.equal(parseSmartQuery("conditional pools for public health", { surface: "global" }).intent, "pools");
+  assert.equal(parseSmartQuery("group-buying a moral trade", { surface: "global" }).intent, "offers");""",
+    """  assert.equal(parseSmartQuery("conditional pools for public health", { surface: "global" }).intent, "pools");
+  assert.equal(parseSmartQuery("dominant assurance contracts", { surface: "global" }).intent, "pools");
+  assert.equal(parseSmartQuery("group-buying a moral trade", { surface: "global" }).intent, "offers");""",
 )
 replace_once(
     smart_query_test,
-    """test(\"serializes a smart target and parses the facets back\", () => {""",
-    """test(\"routes assurance-contract terminology to standalone Pools\", () => {
+    """test("serializes a smart target and parses the facets back", () => {""",
+    """test("routes assurance-contract terminology to standalone Pools", () => {
   for (const query of [
-    \"dominant assurance contracts\",
-    \"dominant-assurance contract\",
-    \"assurance contracts\",
+    "dominant assurance contracts",
+    "dominant-assurance contract",
+    "assurance contracts",
   ]) {
-    const interpretation = parseSmartQuery(query, { surface: \"discover\" });
+    const interpretation = parseSmartQuery(query, { surface: "discover" });
     const target = buildSmartQueryTarget(interpretation);
-    const url = new URL(target, \"https://moraltrade.org\");
+    const url = new URL(target, "https://moraltrade.org");
 
-    assert.ok(interpretation.facets.actionTypes.includes(\"pool\"), query);
-    assert.equal(url.searchParams.get(\"domain\"), \"pools\", query);
-    assert.equal(url.searchParams.get(\"offerKind\"), null, query);
+    assert.ok(interpretation.facets.actionTypes.includes("pool"), query);
+    assert.equal(url.searchParams.get("domain"), "pools", query);
+    assert.equal(url.searchParams.get("offerKind"), null, query);
     assert.ok(
       !interpretation.residualTerms.some((term) =>
-        [\"dominant\", \"assurance\", \"contract\", \"contracts\"].includes(term),
+        ["dominant", "assurance", "contract", "contracts"].includes(term),
       ),
       query,
     );
   }
 });
 
-test(\"serializes a smart target and parses the facets back\", () => {""",
+test("serializes a smart target and parses the facets back", () => {""",
 )
 
 browser_helper = "public/moral-trade-smart-query.js"
 replace_once(
     browser_helper,
-    """  function isCoFundQuery(query) {
-    return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(String(query || \"\").toLowerCase());
+    r"""  function isCoFundQuery(query) {
+    return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(String(query || "").toLowerCase());
   }
 
   function inferDiscoverDomain(interpretation, target) {""",
-    """  function isCoFundQuery(query) {
-    return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(String(query || \"\").toLowerCase());
+    r"""  function isCoFundQuery(query) {
+    return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(String(query || "").toLowerCase());
   }
 
   function isStandalonePoolQuery(query) {
-    return /\b(pool|pools|threshold|conditional funding)\b|\b(?:dominant[- ]assurance(?: contracts?)?|assurance contracts?)\b/.test(String(query || \"\").toLowerCase());
+    return /\b(pool|pools|threshold|conditional funding)\b|\b(?:dominant[- ]assurance(?: contracts?)?|assurance contracts?)\b/.test(String(query || "").toLowerCase());
   }
 
   function inferDiscoverDomain(interpretation, target) {""",
 )
 replace_once(
     browser_helper,
-    """    if (/\b(pool|pools|threshold|conditional funding)\b/.test(query)) {
-      return \"pools\";
+    r"""    if (/\b(pool|pools|threshold|conditional funding)\b/.test(query)) {
+      return "pools";
     }""",
-    """    if (isStandalonePoolQuery(query)) {
-      return \"pools\";
+    r"""    if (isStandalonePoolQuery(query)) {
+      return "pools";
     }""",
 )
 
