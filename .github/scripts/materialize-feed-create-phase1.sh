@@ -243,11 +243,22 @@ git worktree remove --force "$base_dir"
 
 npm run build
 git diff --check
-xargs -d '\n' git add -- < /tmp/feed-create-phase1-manifest.txt
+
+# GitHub's Actions token cannot create workflow files. Publish the exact
+# already-gated product tree without that one file, then the repository
+# connector will add the verified workflow and squash to one clean commit.
+printf '%s  %s\n' \
+  '9d784e214690f2a5f059df423755255077db461eb206667cdaed4bdf43f81b67' \
+  .github/workflows/feed-create-phase1-release-qa.yml \
+  | sha256sum --check --strict
+grep -v '^\.github/workflows/feed-create-phase1-release-qa\.yml$' \
+  /tmp/feed-create-phase1-manifest.txt > /tmp/feed-create-phase1-publish-manifest.txt
+xargs -d '\n' git add -- < /tmp/feed-create-phase1-publish-manifest.txt
 unexpected="$(git status --porcelain=v1 | grep -v '^A  \|^M  ' || true)"
-test -z "$unexpected"
+test "$unexpected" = '?? .github/workflows/feed-create-phase1-release-qa.yml'
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-git commit -m "Add authenticated Feed-to-Create Phase 1"
+git commit -m "Add authenticated Feed-to-Create Phase 1 product files"
 test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+test "$(git status --porcelain=v1)" = '?? .github/workflows/feed-create-phase1-release-qa.yml'
 git push origin "HEAD:$PRODUCT_BRANCH"
