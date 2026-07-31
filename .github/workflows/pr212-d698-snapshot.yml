@@ -1,0 +1,45 @@
+name: Snapshot PR 212 d698 QA
+
+on:
+  push:
+    branches:
+      - agent/pr212-d698-snapshot-20260731
+    paths:
+      - .github/workflows/pr212-d698-snapshot.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HEAD: d698d8a07905ab2b9323493e149f202823dd1d56
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Save current exact-head QA status
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-d698-snapshot
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow institutional-trade-qa.yml --branch feat/institutional-trade-system --limit 50 --json databaseId,headSha,status,conclusion,createdAt,event,url,displayTitle > /tmp/runs.json
+          run_id="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > /tmp/run.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/jobs.json
+          else
+            printf '%s\n' '{}' > /tmp/run.json
+            printf '%s\n' '{"jobs":[]}' > /tmp/jobs.json
+          fi
+          jq -n --arg observed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg target_head "$TARGET_HEAD" --arg run_id "$run_id" --slurpfile runs /tmp/runs.json --slurpfile run /tmp/run.json --slurpfile jobs /tmp/jobs.json '{observed_at:$observed_at,target_head:$target_head,run_id:$run_id,runs:$runs[0],run:$run[0],jobs:$jobs[0].jobs}' > ops/pr212-d698-snapshot/status.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-d698-snapshot/status.json
+          git commit -m "Snapshot PR 212 d698 QA status"
+          git push origin HEAD:agent/pr212-d698-snapshot-20260731
