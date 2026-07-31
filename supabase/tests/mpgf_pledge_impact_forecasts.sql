@@ -122,17 +122,17 @@ begin
     update public.mpgf_pledge_impact_forecast_snapshots
     set model_version = 'mutated'
     where id = first_id;
-    raise exception 'Expected released snapshot update to fail.';
+    raise exception 'Expected direct service-role snapshot update to fail.';
   exception
-    when check_violation then null;
+    when insufficient_privilege then null;
   end;
 
   begin
     delete from public.mpgf_pledge_impact_forecast_audit_events
     where snapshot_id = first_id;
-    raise exception 'Expected audit deletion to fail.';
+    raise exception 'Expected direct service-role audit deletion to fail.';
   exception
-    when check_violation then null;
+    when insufficient_privilege then null;
   end;
 
   begin
@@ -186,6 +186,29 @@ end;
 $test$;
 
 reset role;
+
+do $test$
+declare
+  target_id uuid := (select snapshot_id from pledge_impact_test_state limit 1);
+begin
+  begin
+    update public.mpgf_pledge_impact_forecast_snapshots
+    set model_version = 'mutated'
+    where id = target_id;
+    raise exception 'Expected the immutable snapshot trigger to reject updates.';
+  exception
+    when check_violation then null;
+  end;
+
+  begin
+    delete from public.mpgf_pledge_impact_forecast_audit_events
+    where snapshot_id = target_id;
+    raise exception 'Expected the immutable audit trigger to reject deletions.';
+  exception
+    when check_violation then null;
+  end;
+end;
+$test$;
 
 set local role authenticated;
 
