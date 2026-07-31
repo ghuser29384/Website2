@@ -1,5 +1,5 @@
-# Temporary isolated-QA workflow. Remove before merge.
-name: Donation Upgrade isolated database QA
+# One-use release-candidate cleanup. This workflow removes itself.
+name: Finalize Donation Upgrade release-candidate hygiene
 
 on:
   push:
@@ -7,369 +7,159 @@ on:
       - feature/donation-upgrade-approved-fallbacks-20260731
     paths:
       - .github/workflows/donation-upgrade-repair-current-main.yml
-  pull_request:
-    branches:
-      - main
-    paths:
-      - .github/workflows/donation-upgrade-repair-current-main.yml
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: donation-upgrade-isolated-database-qa
+  group: donation-upgrade-release-candidate-hygiene
   cancel-in-progress: false
 
 jobs:
-  qa:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    env:
-      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
-      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
-      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
-      FIRST_MIGRATION: supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
-      SECOND_MIGRATION: supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
-
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/donation-upgrade-approved-fallbacks-20260731
           fetch-depth: 0
 
-      - name: Install PostgreSQL client
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install --yes postgresql-client > /dev/null
-
-      - name: Verify exact isolated-QA target and migration sources
+      - name: Verify current-main integration and materialized migrations
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${QA_SUPABASE_DB_URL:-}"
-          python3 - <<'PY'
-          import os
-          from urllib.parse import parse_qs, urlparse
+          git fetch origin main
+          test "$(git merge-base origin/main HEAD)" = "$(git rev-parse origin/main)"
+          test "$(git hash-object supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql)" = "c3900dfa480da614a18e8b1b4f298b15780c3377"
+          test "$(git hash-object supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql)" = "ba97544e190b533473d0d12f2e276b3f81fe38c8"
+          test "$(grep -cF 'create or replace function public.submit_conditional_payment_destination_request(' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql)" = "1"
+          test "$(grep -cF 'create or replace function public.review_trade_donation_pool_gate(' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql)" = "1"
 
-          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
-          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
-          valid = (
-              parsed.scheme in {"postgres", "postgresql"}
-              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
-              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
-              and parsed.port == 5432
-              and parsed.path == "/postgres"
-              and ssl_modes == ["require"]
-              and bool(parsed.password)
-          )
-          if not valid:
-              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
-          PY
+      - name: Install permanent pooled-settlement PR gate and remove one-use infrastructure
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .github/workflows/donation-upgrade-final-gates.yml <<'YAML'
+          name: Pooled donation settlement gates
 
-          test "$(git hash-object "$FIRST_MIGRATION")" = "c3900dfa480da614a18e8b1b4f298b15780c3377"
-          test "$(git hash-object "$SECOND_MIGRATION")" = "ba97544e190b533473d0d12f2e276b3f81fe38c8"
-          test "$(grep -cF 'create or replace function public.submit_conditional_payment_destination_request(' "$SECOND_MIGRATION")" = "1"
-          test "$(grep -cF 'create or replace function public.review_trade_donation_pool_gate(' "$SECOND_MIGRATION")" = "1"
-          ! grep -F 'conditional-payment-destination-_at' "$SECOND_MIGRATION"
-          ! grep -F 'p_environm,' "$SECOND_MIGRATION"
+          on:
+            pull_request:
+              branches:
+                - main
+              paths:
+                - .env.example
+                - docs/trade-donation-pooled-settlement-runbook.md
+                - src/app/admin/trade-donation-pools/**
+                - src/app/api/connectors/every-org/**
+                - src/app/api/stripe/webhook/route.ts
+                - src/app/trade-donation-actions-base.ts
+                - src/app/trade-donation-pool-actions.ts
+                - src/components/core-trade/trade-agreement-stage.tsx
+                - src/components/core-trade/trade-donation-agreement-stage.tsx
+                - src/components/core-trade/trade-donation-pool-agreement-stage.tsx
+                - src/lib/payments/trade-donation-pool-webhook.ts
+                - src/lib/trade-donation-pool*.ts
+                - supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
+                - supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+                - .github/workflows/donation-upgrade-final-gates.yml
+            workflow_dispatch:
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: pooled-donation-settlement-gates-${{ github.event.pull_request.number || github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            validate:
+              runs-on: ubuntu-24.04
+              timeout-minutes: 90
+              steps:
+                - uses: actions/checkout@v4
+                  with:
+                    fetch-depth: 0
+
+                - uses: actions/setup-node@v4
+                  with:
+                    node-version: 24
+                    cache: npm
+
+                - name: Install exact dependencies
+                  run: npm ci
+
+                - name: Focused pooled-settlement tests
+                  run: node --import tsx --test src/lib/trade-donation-pool.test.ts src/lib/trade-donation-pool-source-contract.test.ts
+
+                - name: Complete repository tests
+                  run: npm test
+
+                - name: Absolute TypeScript gate
+                  run: npx tsc --noEmit
+
+                - name: Absolute ESLint gate
+                  run: npm run lint
+
+                - name: Production build with money movement disabled
+                  env:
+                    NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+                    VERCEL: "1"
+                    VERCEL_ENV: preview
+                    CONDITIONAL_PAYMENTS_MODE: disabled
+                    TRADE_DONATION_POOL_MODE: disabled
+                    TRADE_DONATION_POOL_ENABLED: "false"
+                  run: npm run build
+
+                - name: Migration integrity and exact diff hygiene
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    test "$(grep -cF 'create or replace function public.submit_conditional_payment_destination_request(' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql)" = "1"
+                    test "$(grep -cF 'create or replace function public.review_trade_donation_pool_gate(' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql)" = "1"
+                    ! grep -F 'conditional-payment-destination-_at' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+                    ! grep -F 'p_environm,' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+                    git fetch origin main
+                    git diff --check "$(git merge-base origin/main HEAD)"...HEAD
+          YAML
+
+          git rm -f \
+            .github/donation-upgrade-final-gate-trigger.txt \
+            .github/donation-upgrade-followup-payload/chunk-00 \
+            .github/donation-upgrade-followup-payload/chunk-01 \
+            .github/donation-upgrade-followup-payload/chunk-02 \
+            .github/donation-upgrade-followup-payload/chunk-03 \
+            .github/donation-upgrade-followup-payload/chunk-04 \
+            .github/workflows/donation-upgrade-materialize-current-main.yml \
+            .github/workflows/export-donation-upgrade-candidate.yml \
+            .github/workflows/donation-upgrade-repair-current-main.yml
+
+          git add .github/workflows/donation-upgrade-final-gates.yml
           git diff --check
 
-      - name: Apply or verify both migrations on MoralTrade QA
+          remaining="$(git diff --cached --name-only | sort)"
+          expected="$(cat <<'FILES' | sort
+          .github/donation-upgrade-final-gate-trigger.txt
+          .github/donation-upgrade-followup-payload/chunk-00
+          .github/donation-upgrade-followup-payload/chunk-01
+          .github/donation-upgrade-followup-payload/chunk-02
+          .github/donation-upgrade-followup-payload/chunk-03
+          .github/donation-upgrade-followup-payload/chunk-04
+          .github/workflows/donation-upgrade-final-gates.yml
+          .github/workflows/donation-upgrade-materialize-current-main.yml
+          .github/workflows/donation-upgrade-repair-current-main.yml
+          .github/workflows/export-donation-upgrade-candidate.yml
+          FILES
+          )"
+          test "$remaining" = "$expected"
+
+      - name: Commit final hygiene delta
         shell: bash
         run: |
           set -euo pipefail
-
-          apply_migration() {
-            local version="$1"
-            local name="$2"
-            local file="$3"
-            local source_hash="$4"
-            local already
-            already="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
-              --command "select count(*) from supabase_migrations.schema_migrations where version = '${version}';" \
-              | tr -d '[:space:]')"
-            if [ "$already" = "0" ]; then
-              psql "$QA_SUPABASE_DB_URL" \
-                --no-psqlrc --set ON_ERROR_STOP=1 --single-transaction \
-                --file "$file" \
-                --command "insert into supabase_migrations.schema_migrations(version, statements, name, created_by) values ('${version}', array['source-git-blob:${source_hash}'], '${name}', 'github-actions:donation-upgrade-isolated-qa');"
-            elif [ "$already" != "1" ]; then
-              echo "Unexpected migration-history count for ${version}: ${already}" >&2
-              exit 1
-            fi
-          }
-
-          apply_migration \
-            20260725152000 \
-            cross_user_pooled_trade_donations \
-            "$FIRST_MIGRATION" \
-            c3900dfa480da614a18e8b1b4f298b15780c3377
-
-          apply_migration \
-            20260731084000 \
-            donation_upgrade_destination_review_and_gate_evidence \
-            "$SECOND_MIGRATION" \
-            ba97544e190b533473d0d12f2e276b3f81fe38c8
-
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL'
-          do $$
-          declare
-            missing text[];
-          begin
-            select array_agg(required.object_name order by required.object_name)
-            into missing
-            from (values
-              ('table:trade_donation_pool_gate_status', to_regclass('public.trade_donation_pool_gate_status') is not null),
-              ('table:trade_donation_pool_obligations', to_regclass('public.trade_donation_pool_obligations') is not null),
-              ('table:trade_donation_pool_bundles', to_regclass('public.trade_donation_pool_bundles') is not null),
-              ('table:conditional_payment_destination_requests', to_regclass('public.conditional_payment_destination_requests') is not null),
-              ('table:conditional_payment_destination_review_events', to_regclass('public.conditional_payment_destination_review_events') is not null),
-              ('function:create_trade_donation_pool_obligation', to_regprocedure('public.create_trade_donation_pool_obligation(uuid,uuid,uuid,text,text,text,boolean)') is not null),
-              ('function:complete_every_org_trade_donation_pool_bundle', to_regprocedure('public.complete_every_org_trade_donation_pool_bundle(uuid,text,text,text,integer,text,text,text,timestamptz,text,boolean,text,text)') is not null),
-              ('function:submit_conditional_payment_destination_request', to_regprocedure('public.submit_conditional_payment_destination_request(uuid,text,text,text,text,text,text,text,jsonb)') is not null),
-              ('function:review_trade_donation_pool_gate', to_regprocedure('public.review_trade_donation_pool_gate(uuid,text,text,text,text,text,text,text,text,text)') is not null)
-            ) required(object_name, present)
-            where not required.present;
-
-            if missing is not null then
-              raise exception 'Missing Donation Upgrade schema objects: %', missing;
-            end if;
-          end;
-          $$;
-          SQL
-
-      - name: Run rollback-only destination and gate regressions
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > /tmp/donation-upgrade-regression.sql <<'SQL'
-          begin;
-
-          do $$
-          declare
-            actor_id uuid;
-            approved_request jsonb;
-            approved_request_id uuid;
-            approved_destination_id uuid;
-            rejected_request jsonb;
-            rejected_request_id uuid;
-            live_request jsonb;
-            live_request_id uuid;
-            mutation_blocked boolean := false;
-            event_mutation_blocked boolean := false;
-            missing_evidence_blocked boolean := false;
-            live_destination_blocked boolean := false;
-            destination_count integer;
-            review_event_count integer;
-            live_passed_count integer;
-          begin
-            select id into actor_id from public.profiles order by created_at, id limit 1;
-            if actor_id is null then
-              raise exception 'MoralTrade QA has no profile available for rollback-only review attribution.';
-            end if;
-
-            approved_request := public.submit_conditional_payment_destination_request(
-              actor_id,
-              'test',
-              'qa-donation-upgrade-approved',
-              'qa-donation-upgrade-approved',
-              'QA Donation Upgrade Approved Charity',
-              '12-3456789',
-              'US',
-              'https://example.invalid/qa-approved',
-              jsonb_build_object('source', 'isolated-qa', 'providerVerified', true)
-            );
-            approved_request_id := (approved_request->>'id')::uuid;
-
-            begin
-              update public.conditional_payment_destination_requests
-              set display_name = 'Mutated name'
-              where id = approved_request_id;
-            exception when others then
-              mutation_blocked := true;
-            end;
-            if not mutation_blocked then
-              raise exception 'Frozen destination identity was mutable.';
-            end if;
-
-            approved_request := public.review_conditional_payment_destination_request(
-              actor_id,
-              approved_request_id,
-              'approved',
-              'Rollback-only QA approval.',
-              'acct_qa_donation_upgrade_approved',
-              jsonb_build_object(
-                'chargesEnabled', true,
-                'payoutsEnabled', true,
-                'detailsSubmitted', true,
-                'environment', 'test'
-              )
-            );
-            approved_destination_id := (approved_request->>'destination_id')::uuid;
-
-            select count(*) into destination_count
-            from public.conditional_payment_destinations
-            where id = approved_destination_id
-              and test_only
-              and not livemode
-              and status = 'active';
-            if destination_count <> 1 then
-              raise exception 'Approved test request did not create exactly one test-only destination.';
-            end if;
-
-            rejected_request := public.submit_conditional_payment_destination_request(
-              actor_id,
-              'test',
-              'qa-donation-upgrade-rejected',
-              'qa-donation-upgrade-rejected',
-              'QA Donation Upgrade Rejected Charity',
-              '',
-              'US',
-              'https://example.invalid/qa-rejected',
-              jsonb_build_object('source', 'isolated-qa', 'providerVerified', true)
-            );
-            rejected_request_id := (rejected_request->>'id')::uuid;
-            rejected_request := public.review_conditional_payment_destination_request(
-              actor_id,
-              rejected_request_id,
-              'rejected',
-              'Rollback-only QA rejection.',
-              '',
-              '{}'::jsonb
-            );
-            if rejected_request->>'destination_id' is not null then
-              raise exception 'Rejected destination request created a destination.';
-            end if;
-
-            select count(*) into review_event_count
-            from public.conditional_payment_destination_review_events
-            where request_id in (approved_request_id, rejected_request_id);
-            if review_event_count <> 4 then
-              raise exception 'Expected four immutable review events, found %.', review_event_count;
-            end if;
-
-            begin
-              update public.conditional_payment_destination_review_events
-              set notes = 'mutated'
-              where request_id = approved_request_id;
-            exception when others then
-              event_mutation_blocked := true;
-            end;
-            if not event_mutation_blocked then
-              raise exception 'Destination review history was mutable.';
-            end if;
-
-            begin
-              perform public.review_trade_donation_pool_gate(
-                actor_id,
-                'test',
-                'stripe_test_account',
-                'passed',
-                'Missing evidence must fail.',
-                '', '', '', '', ''
-              );
-            exception when others then
-              missing_evidence_blocked := true;
-            end;
-            if not missing_evidence_blocked then
-              raise exception 'A payment gate passed without named ownership and evidence.';
-            end if;
-
-            perform public.review_trade_donation_pool_gate(
-              actor_id,
-              'test',
-              'stripe_test_account',
-              'passed',
-              'Rollback-only QA evidence binding.',
-              'Moral Trade QA Operator',
-              'Payments QA Operator',
-              'payments-qa@example.invalid',
-              'https://example.invalid/evidence/donation-upgrade-qa',
-              repeat('a', 64)
-            );
-
-            live_request := public.submit_conditional_payment_destination_request(
-              actor_id,
-              'live',
-              'qa-donation-upgrade-live-blocked',
-              'qa-donation-upgrade-live-blocked',
-              'QA Live Destination Must Remain Blocked',
-              '',
-              'US',
-              'https://example.invalid/qa-live-blocked',
-              jsonb_build_object('source', 'isolated-qa', 'providerVerified', true)
-            );
-            live_request_id := (live_request->>'id')::uuid;
-            begin
-              perform public.review_conditional_payment_destination_request(
-                actor_id,
-                live_request_id,
-                'approved',
-                'False capabilities must fail.',
-                'acct_qa_live_blocked',
-                jsonb_build_object(
-                  'chargesEnabled', false,
-                  'payoutsEnabled', false,
-                  'detailsSubmitted', false,
-                  'environment', 'live'
-                )
-              );
-            exception when others then
-              live_destination_blocked := true;
-            end;
-            if not live_destination_blocked then
-              raise exception 'A live destination was approved without verified capabilities.';
-            end if;
-
-            select count(*) into live_passed_count
-            from public.trade_donation_pool_gate_status
-            where environment = 'live' and status = 'passed';
-            if live_passed_count <> 0 then
-              raise exception 'Rollback-only QA found or created a passed live payment gate.';
-            end if;
-          end;
-          $$;
-
-          rollback;
-          SQL
-
-          psql "$QA_SUPABASE_DB_URL" \
-            --no-psqlrc --set ON_ERROR_STOP=1 \
-            --file /tmp/donation-upgrade-regression.sql
-
-      - name: Prove persistent QA state is clean and live gates remain closed
-        shell: bash
-        run: |
-          set -euo pipefail
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' | tee /tmp/donation-upgrade-qa-state.txt
-          select jsonb_build_object(
-            'migration1', (select count(*) from supabase_migrations.schema_migrations where version = '20260725152000'),
-            'migration2', (select count(*) from supabase_migrations.schema_migrations where version = '20260731084000'),
-            'qaRequests', (select count(*) from public.conditional_payment_destination_requests where provider_nonprofit_id like 'qa-donation-upgrade-%'),
-            'qaDestinations', (select count(*) from public.conditional_payment_destinations where stripe_connected_account_id like 'acct_qa_donation_upgrade_%'),
-            'livePassedGates', (select count(*) from public.trade_donation_pool_gate_status where environment = 'live' and status = 'passed'),
-            'poolObligations', (select count(*) from public.trade_donation_pool_obligations),
-            'poolBundles', (select count(*) from public.trade_donation_pool_bundles)
-          );
-          SQL
-
-          python3 - <<'PY'
-          import json
-          from pathlib import Path
-
-          rows = [line.strip() for line in Path('/tmp/donation-upgrade-qa-state.txt').read_text().splitlines() if line.strip()]
-          state = json.loads(rows[-1])
-          expected = {
-              'migration1': 1,
-              'migration2': 1,
-              'qaRequests': 0,
-              'qaDestinations': 0,
-              'livePassedGates': 0,
-              'poolObligations': 0,
-              'poolBundles': 0,
-          }
-          if state != expected:
-              raise SystemExit(f'Unexpected persistent QA state: {state}')
-          print(json.dumps(state, sort_keys=True))
-          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Finalize Donation Upgrade release-candidate hygiene"
+          git push origin HEAD:feature/donation-upgrade-approved-fallbacks-20260731
