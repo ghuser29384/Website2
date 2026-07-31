@@ -1,3 +1,4 @@
 dispatch=2026-07-31T00:31:46Z
+retry=1
 clean=e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e
 main=36650b48f9e664ea6d67c0840cf6a803060e8d7c
