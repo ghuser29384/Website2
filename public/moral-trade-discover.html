@@ -22,31 +22,50 @@
   <script>
     (async () => {
       try {
-        const paths = [
-          "/discover/payload/0.txt",
-          "/discover/payload/1.txt",
-          "/discover/payload/2.txt",
-          "/discover/payload/3.txt",
-          "/discover/payload/4.txt",
-          "/discover/payload/5.txt",
-          "/discover/payload/6.txt",
-        ];
         const accountPromise = fetch("/api/live-account", {
           credentials: "same-origin",
           headers: { Accept: "application/json" },
         })
           .then((response) => (response.ok ? response.json() : { authenticated: false }))
           .catch(() => ({ authenticated: false }));
-        const [parts, liveAccount] = await Promise.all([
-          Promise.all(
-            paths.map(async (path) => {
-              const response = await fetch(path, { cache: "force-cache" });
-              if (!response.ok) throw new Error(`Discover payload ${path} returned ${response.status}`);
-              return response.text();
-            }),
-          ),
+        const manifestPromise = fetch("/discover/payload/manifest.json", {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }).then(async (response) => {
+          if (!response.ok) {
+            throw new Error(`Discover payload manifest returned ${response.status}`);
+          }
+          const manifest = await response.json();
+          if (
+            !manifest ||
+            typeof manifest.version !== "string" ||
+            !/^[a-f0-9]{40}$/.test(manifest.version) ||
+            !Array.isArray(manifest.parts) ||
+            manifest.parts.length !== 7 ||
+            manifest.parts.some(
+              (part) => typeof part !== "string" || !/^\d+\.txt$/.test(part),
+            )
+          ) {
+            throw new Error("Discover payload manifest is invalid");
+          }
+          return manifest;
+        });
+        const [manifest, liveAccount] = await Promise.all([
+          manifestPromise,
           accountPromise,
         ]);
+        const paths = manifest.parts.map(
+          (part) =>
+            `/discover/payload/${part}?v=${encodeURIComponent(manifest.version)}`,
+        );
+        window.__MT_DISCOVER_PAYLOAD_VERSION__ = manifest.version;
+        const parts = await Promise.all(
+          paths.map(async (path) => {
+            const response = await fetch(path, { cache: "force-cache" });
+            if (!response.ok) throw new Error(`Discover payload ${path} returned ${response.status}`);
+            return response.text();
+          }),
+        );
         const bytes = Uint8Array.from(atob(parts.join("")), (character) => character.charCodeAt(0));
         const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
         const source = await new Response(stream).text();

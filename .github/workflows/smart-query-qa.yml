@@ -8,6 +8,7 @@ on:
       - "src/lib/smart-evidence-ranking*"
       - "src/lib/smart-people-ranking.ts"
       - "src/lib/site-search-smart.ts"
+      - "src/discover/**"
       - "src/app/api/query/**"
       - "src/app/layout.tsx"
       - "src/app/offers/**"
@@ -18,10 +19,15 @@ on:
       - "src/app/mpgf/pools/**"
       - "src/components/layout/site-topbar.tsx"
       - "src/components/search/**"
+      - "public/discover/payload/**"
       - "public/moral-trade-smart-query.js"
       - "public/moral-trade-discover.html"
+      - "scripts/pack-discover-payload.mjs"
+      - "scripts/discover-two-sided-contract.test.mjs"
       - "tests/smart-query*.spec.ts"
       - "tests/discover-query-audit.spec.ts"
+      - "tests/discover-payload-cache.spec.ts"
+      - "package.json"
       - ".github/workflows/smart-query-qa.yml"
   push:
     branches:
@@ -93,7 +99,8 @@ jobs:
             src/components/layout/site-topbar.tsx \
             src/components/search/smart-query-auto-enhancer.tsx \
             src/components/search/smart-query-form.tsx \
-            tests/discover-query-audit.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
+            tests/discover-query-audit.spec.ts \
+            tests/discover-payload-cache.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
 
       - name: Test deterministic and semantic query interpretation
         run: |
@@ -105,6 +112,11 @@ jobs:
             src/lib/smart-query-llm-generation.test.ts \
             src/lib/smart-evidence-ranking.test.ts 2>&1 | tee qa-results/smart-query-test.txt
 
+      - name: Verify canonical Discover payload and two-sided exchange contract
+        run: |
+          set -o pipefail
+          npm run verify:discover 2>&1 | tee qa-results/discover-two-sided-contract.txt
+
       - name: Build production application
         run: |
           set -o pipefail
@@ -113,23 +125,25 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Audit rendered Discover query controls
+      - name: Run rendered Discover desktop, mobile, and cache-version QA
         run: |
           set -o pipefail
-          npx playwright test tests/discover-query-audit.spec.ts --reporter=line 2>&1 | \
-            tee qa-results/smart-query-e2e.txt
+          npx playwright test \
+            tests/discover-query-audit.spec.ts \
+            tests/discover-payload-cache.spec.ts \
+            --reporter=line 2>&1 | tee qa-results/smart-query-e2e.txt
 
-      - name: Upload query audit evidence
+      - name: Upload Discover QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-query-audit
+          name: discover-two-sided-qa
           path: |
-            test-results/discover-query-audit.json
-            test-results/discover-inline-source.js
+            test-results/discover-*
             qa-results/query-surface-audit.txt
             qa-results/smart-query-lint.txt
             qa-results/smart-query-test.txt
+            qa-results/discover-two-sided-contract.txt
             qa-results/smart-query-build.txt
             qa-results/smart-query-e2e.txt
           if-no-files-found: warn

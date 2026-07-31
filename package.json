@@ -8,7 +8,7 @@
   "scripts": {
     "predev": "node scripts/ensure-next-swc.mjs",
     "dev": "bash scripts/dev.sh",
-    "prebuild": "npm run verify:pareto && node scripts/ensure-next-swc.mjs",
+    "prebuild": "npm run verify:pareto && npm run verify:discover && node scripts/ensure-next-swc.mjs",
     "build": "next build --webpack",
     "prestart": "node scripts/ensure-next-swc.mjs",
     "start": "next start",
@@ -18,7 +18,9 @@
     "verify:crawlability": "node scripts/verify-crawlability.mjs",
     "verify:pareto": "node --import tsx --test src/lib/pareto-recommendation-model.test.ts src/lib/recommendation-training-runtime.test.ts src/lib/recommendation-training-execution.test.ts src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && node --test scripts/vercel-project-config.test.mjs && eslint vercel.ts src/lib/pareto-recommendation-model.ts src/lib/pareto-recommendation-model.test.ts src/lib/pareto-feed-runtime.ts src/lib/recommendation-training.ts src/lib/recommendation-training-runtime.ts src/lib/recommendation-training-runtime.test.ts src/lib/recommendation-training-execution.ts src/lib/recommendation-training-execution.test.ts src/app/api/live-now-a1/route.ts src/app/api/jobs/recommendation-training/route.ts src/app/recommendation-outcome-actions.ts src/components/core-trade/trade-agreement-stage.tsx src/components/core-trade/trade-outcome-feedback.tsx src/pareto-recommendation-wiring.test.ts src/trade-agreement-feedback-visibility.test.ts && node --import tsx --eval \"import('./vercel.ts')\" && node --check scripts/vercel-project-config.mjs && node --check scripts/vercel-project-config.test.mjs && node --check public/moral-trade-live-learning-diagnostics.js",
     "test": "node --import tsx --test src/**/*.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "discover:pack": "node scripts/pack-discover-payload.mjs",
+    "verify:discover": "node scripts/pack-discover-payload.mjs --check && node --test scripts/discover-two-sided-contract.test.mjs"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
