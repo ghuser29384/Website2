@@ -4,32 +4,44 @@ on:
   pull_request:
     paths:
       - ".github/workflows/private-field-encryption-checks.yml"
-      - "src/app/complete-profile/actions.ts"
-      - "src/lib/background-field-encryption.ts"
-      - "src/lib/background-field-encryption.test.ts"
-      - "src/lib/complete-profile-private-preferences.ts"
-      - "src/lib/complete-profile-private-preferences.test.ts"
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/private-field-encryption-checks.yml"
-      - "src/app/complete-profile/actions.ts"
-      - "src/lib/background-field-encryption.ts"
-      - "src/lib/background-field-encryption.test.ts"
-      - "src/lib/complete-profile-private-preferences.ts"
-      - "src/lib/complete-profile-private-preferences.test.ts"
 
 permissions:
   contents: read
+  statuses: write
+
+concurrency:
+  group: complete-profile-exact-head-41994c4a
+  cancel-in-progress: false
 
 jobs:
-  focused-checks:
+  exact-head-release-gate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 60
+    env:
+      EXPECTED_SHA: 41994c4a11203cbe7a79e9bb262b938011051379
+      STATUS_CONTEXT: QA / returning-user Complete Profile
     steps:
-      - name: Check out repository
+      - name: Mark exact-head gate pending
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state=pending \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="Running test, typecheck, lint, build, and rendered gates" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Check out exact candidate
         uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate and diff hygiene
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+          git diff --check
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -40,17 +52,54 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run private-field encryption tests
-        run: >-
-          node --import tsx --test
-          src/lib/background-field-encryption.test.ts
-          src/lib/complete-profile-private-preferences.test.ts
+      - name: Run complete unit and source suite
+        run: npm test
 
-      - name: Lint private-field encryption files
-        run: >-
-          npx eslint
-          src/app/complete-profile/actions.ts
-          src/lib/background-field-encryption.ts
-          src/lib/background-field-encryption.test.ts
-          src/lib/complete-profile-private-preferences.ts
-          src/lib/complete-profile-private-preferences.test.ts
+      - name: Run absolute TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Run absolute ESLint check
+        run: npm run lint
+
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: 1
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run rendered Complete Profile regressions
+        run: npx playwright test tests/complete-profile-review.spec.ts --reporter=line,html
+
+      - name: Upload rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-profile-returning-rendered-evidence-41994c4a
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Publish exact-head gate result
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ "$JOB_STATUS" = "success" ]; then
+            state=success
+            description="Unit, typecheck, lint, build, and rendered gates passed"
+          else
+            state=failure
+            description="Exact-head release gate failed; inspect workflow evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state="$state" \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
