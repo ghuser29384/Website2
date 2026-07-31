@@ -1,0 +1,64 @@
+name: Repair Donation Upgrade current-main integration
+
+on:
+  push:
+    branches:
+      - feature/donation-upgrade-approved-fallbacks-20260731
+    paths:
+      - .github/workflows/donation-upgrade-repair-current-main.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: donation-upgrade-repair-current-main
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/donation-upgrade-approved-fallbacks-20260731
+          fetch-depth: 0
+
+      - name: Restore current admin behavior and add pooled-settlement entry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git show origin/main:src/app/admin/page.tsx > src/app/admin/page.tsx
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/app/admin/page.tsx')
+          text = path.read_text()
+          anchor = '''              <Link className="button button-secondary" href="/admin/growth">
+                View growth dashboard
+              </Link>
+'''
+          addition = anchor + '''              <Link className="button button-secondary" href="/admin/trade-donation-pools">
+                Pooled donation settlement
+              </Link>
+'''
+          if text.count(anchor) != 1:
+              raise SystemExit(f'Expected one growth-dashboard anchor, found {text.count(anchor)}')
+          path.write_text(text.replace(anchor, addition, 1))
+          PY
+          git diff --check
+          grep -F 'agreementReviewCasesUnavailable ? null : agreementReviewCases.error' src/app/admin/page.tsx
+          grep -F 'href="/admin/trade-donation-pools"' src/app/admin/page.tsx
+
+      - name: Commit repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add src/app/admin/page.tsx
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Preserve current admin legacy-read guards"
+          git push origin HEAD:feature/donation-upgrade-approved-fallbacks-20260731
