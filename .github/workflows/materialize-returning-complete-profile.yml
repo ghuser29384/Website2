@@ -37,13 +37,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : > /tmp/direct-complete-profile.patch
-          for part in .github/patches/direct-complete-profile-v3/part-*; do
-            tr -d '\n\r ' < "$part" | base64 --decode >> /tmp/direct-complete-profile.patch
-          done
-          test -s /tmp/direct-complete-profile.patch
+          git fetch origin main fix/direct-complete-profile-100-sparks-20260731
+          git show origin/fix/direct-complete-profile-100-sparks-20260731:.github/patches/direct-complete-profile.patch.gz.b64 \
+            | tr -d '\n\r ' \
+            | base64 --decode > /tmp/direct-complete-profile.patch.gz
+          gzip -t /tmp/direct-complete-profile.patch.gz
+          gzip -dc /tmp/direct-complete-profile.patch.gz > /tmp/direct-complete-profile.patch
+          echo "f7d0cb216401fc1da0b4ffffa514af6cfe6cc7676ad96838e543436e6372d33d  /tmp/direct-complete-profile.patch" | sha256sum --check -
 
-          git fetch origin main
           git checkout --detach origin/main
           git apply --check /tmp/direct-complete-profile.patch
           git apply /tmp/direct-complete-profile.patch
