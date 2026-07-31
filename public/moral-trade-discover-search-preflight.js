@@ -7,6 +7,7 @@
   const nativeFetch = window.fetch.bind(window);
   const nativePushState = history.pushState.bind(history);
   const nativeReplaceState = history.replaceState.bind(history);
+  const rememberedControlValues = new Map();
   const SUPPORTED_DOMAINS = new Set(["offers", "pools", "people"]);
   const SUPPORTED_SORTS = new Set([
     "best-fit",
@@ -29,6 +30,28 @@
     return visible.length ? visible : elements;
   }
 
+  function rememberControlValue(event) {
+    const target = event.target;
+    if (
+      !(target instanceof HTMLInputElement) &&
+      !(target instanceof HTMLSelectElement)
+    ) {
+      return;
+    }
+    const filter = target.dataset.filter;
+    if (!filter) return;
+    if (
+      target instanceof HTMLInputElement &&
+      (target.type === "checkbox" || target.type === "radio")
+    ) {
+      return;
+    }
+    rememberedControlValues.set(filter, target.value);
+  }
+
+  document.addEventListener("input", rememberControlValue, true);
+  document.addEventListener("change", rememberControlValue, true);
+
   function checkedValues(filter) {
     return unique(
       preferredElements(`input[data-filter="${filter}"]`)
@@ -40,6 +63,9 @@
   }
 
   function firstControlValue(filter) {
+    if (rememberedControlValues.has(filter)) {
+      return rememberedControlValues.get(filter) ?? "";
+    }
     const controls = preferredElements(`[data-filter="${filter}"]`).filter(
       (element) =>
         element instanceof HTMLInputElement ||
