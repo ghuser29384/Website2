@@ -1,0 +1,37 @@
+name: PR 212 exact QA snapshot
+
+on:
+  push:
+    branches:
+      - agent/pr212-qa-snapshot-20260731
+    paths:
+      - .github/workflows/pr212-qa-snapshot.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_HEAD: 6e4deac3530e8f0989b457d082e6efd11b2fa34e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record current exact QA state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-qa-snapshot
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow institutional-trade-qa.yml --branch feat/institutional-trade-system --limit 80 --json databaseId,headSha,status,conclusion,createdAt,url,event,displayTitle > /tmp/runs.json
+          jq --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0] // {}' /tmp/runs.json > ops/pr212-qa-snapshot/status.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-qa-snapshot/status.json
+          git commit -m "Snapshot exact PR 212 QA run"
+          git push origin HEAD:agent/pr212-qa-snapshot-20260731
