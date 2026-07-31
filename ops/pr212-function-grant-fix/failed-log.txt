@@ -1,0 +1,143 @@
+prepare	Make SECURITY DEFINER execution deny-by-default	﻿2026-07-31T05:26:55.2977977Z ##[group]Run set -euo pipefail
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2979169Z ^[[36;1mset -euo pipefail^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2979490Z ^[[36;1mpython - <<'PY'^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2979787Z ^[[36;1mfrom pathlib import Path^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2980092Z ^[[36;1mimport re^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2980338Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2980774Z ^[[36;1mmigration_path = Path("supabase/migrations/20260726123000_institutional_trade_system.sql")^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2981328Z ^[[36;1mmigration = migration_path.read_text()^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2981660Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2981915Z ^[[36;1mdynamic_pattern = re.compile(^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2982487Z ^[[36;1m    r"execute\s+format\(\s*'revoke all on function %s from public'\s*,\s*f\.function_identity\s*\);",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2983045Z ^[[36;1m    re.IGNORECASE,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2983320Z ^[[36;1m)^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2983616Z ^[[36;1mmigration, dynamic_count = dynamic_pattern.subn(^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2984217Z ^[[36;1m    "execute format('revoke all on function %s from public,anon,authenticated', f.function_identity);",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2984784Z ^[[36;1m    migration,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2985041Z ^[[36;1m)^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2985280Z ^[[36;1mif dynamic_count != 1:^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2986065Z ^[[36;1m    raise SystemExit(f"Expected one dynamic SECURITY DEFINER revoke, found {dynamic_count}")^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2986573Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2986822Z ^[[36;1mexplicit_pattern = re.compile(^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2987216Z ^[[36;1m    r"(revoke all on function public\.[^;\n]+) from public;",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2987610Z ^[[36;1m    re.IGNORECASE,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2987888Z ^[[36;1m)^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2988185Z ^[[36;1mmigration, explicit_count = explicit_pattern.subn(^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2988596Z ^[[36;1m    r"\1 from public,anon,authenticated;",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2988943Z ^[[36;1m    migration,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2989205Z ^[[36;1m)^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2989446Z ^[[36;1mif explicit_count != 24:^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2989933Z ^[[36;1m    raise SystemExit(f"Expected 24 explicit client-RPC revokes, found {explicit_count}")^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2990411Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2990645Z ^[[36;1mfirst_client_grant = (^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2991226Z ^[[36;1m    "grant execute on function public.get_institutional_deal_authorization_snapshot(uuid,uuid,uuid) to authenticated;"^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2991828Z ^[[36;1m)^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2992269Z ^[[36;1mhelper_grants = """-- RLS evaluates these five narrowly scoped boolean helpers as the authenticated^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2992942Z ^[[36;1m-- caller. Every other institutional SECURITY DEFINER function remains private^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2993513Z ^[[36;1m-- unless it appears in the explicit client-RPC allowlist below.^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2994129Z ^[[36;1mgrant execute on function public.is_institutional_organization_member(uuid) to authenticated;^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2994899Z ^[[36;1mgrant execute on function public.has_institutional_permission(uuid,uuid,text,bigint) to authenticated;^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2995955Z ^[[36;1mgrant execute on function public.can_manage_institutional_organization(uuid) to authenticated;^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2996686Z ^[[36;1mgrant execute on function public.can_read_institutional_deal(uuid) to authenticated;^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2997343Z ^[[36;1mgrant execute on function public.can_manage_institutional_deal(uuid) to authenticated;^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2997822Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2998048Z ^[[36;1m"""^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2998331Z ^[[36;1mif migration.count(first_client_grant) != 1:^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2998887Z ^[[36;1m    raise SystemExit(^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2999381Z ^[[36;1m        f"Expected one first client-RPC grant marker, found {migration.count(first_client_grant)}"^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.2999880Z ^[[36;1m    )^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3000391Z ^[[36;1mif "grant execute on function public.is_institutional_organization_member(uuid) to authenticated;" in migration:^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3001248Z ^[[36;1m    raise SystemExit("RLS helper grants already exist unexpectedly")^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3001846Z ^[[36;1mmigration = migration.replace(first_client_grant, helper_grants + first_client_grant)^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3002360Z ^[[36;1mmigration_path.write_text(migration)^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3002675Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3003009Z ^[[36;1mtest_path = Path("src/institutional-trade-migration.test.ts")^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3003445Z ^[[36;1mtest_text = test_path.read_text()^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3004063Z ^[[36;1minsertion_marker = 'test("all institutional base tables use forced RLS, generated FK indexes, and restricted grants", () => {'^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3004724Z ^[[36;1mif test_text.count(insertion_marker) != 1:^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3005069Z ^[[36;1m    raise SystemExit(^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3005759Z ^[[36;1m        f"Expected one RLS/grants test marker, found {test_text.count(insertion_marker)}"^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3006250Z ^[[36;1m    )^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3006481Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3007008Z ^[[36;1msecurity_test = r'''test("institutional SECURITY DEFINER execution is deny-by-default and exactly allowlisted", () => {^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3007603Z ^[[36;1m  expectAll([^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3007972Z ^[[36;1m    /revoke all on function %s from public,anon,authenticated/i,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3008616Z ^[[36;1m    /grant execute on function public\.is_institutional_organization_member\(uuid\) to authenticated/i,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3009406Z ^[[36;1m    /grant execute on function public\.has_institutional_permission\(uuid,uuid,text,bigint\) to authenticated/i,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3010210Z ^[[36;1m    /grant execute on function public\.can_manage_institutional_organization\(uuid\) to authenticated/i,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3010936Z ^[[36;1m    /grant execute on function public\.can_read_institutional_deal\(uuid\) to authenticated/i,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3011626Z ^[[36;1m    /grant execute on function public\.can_manage_institutional_deal\(uuid\) to authenticated/i,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3012186Z ^[[36;1m  ], "institutional function execute grants");^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3012544Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3012793Z ^[[36;1m  const observed = Array.from(^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3013327Z ^[[36;1m    migration.matchAll(/grant execute on function public\.([a-z0-9_]+\([^;]*\)) to authenticated;/gi),^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3013907Z ^[[36;1m    (match) => match[1].replace(/\s+/g, ""),^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3014238Z ^[[36;1m  ).sort();^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3014503Z ^[[36;1m  const expected = [^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3014825Z ^[[36;1m    "accept_institutional_deal_party(uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3015284Z ^[[36;1m    "accept_institutional_organization_party(uuid,uuid,uuid,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3016153Z ^[[36;1m    "accept_institutional_verifier_assignment(uuid,text,text)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3016653Z ^[[36;1m    "activate_institutional_pool(uuid,uuid,uuid,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3017090Z ^[[36;1m    "can_manage_institutional_deal(uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3017500Z ^[[36;1m    "can_manage_institutional_organization(uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3017896Z ^[[36;1m    "can_read_institutional_deal(uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3018353Z ^[[36;1m    "cast_institutional_pool_vote(uuid,uuid,uuid,text,text,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3018863Z ^[[36;1m    "decide_institutional_approval(uuid,text,uuid,text)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3019342Z ^[[36;1m    "decide_institutional_individual_consent(uuid,text,text)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3019785Z ^[[36;1m    "generate_institutional_matches(uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3020247Z ^[[36;1m    "get_institutional_deal_authorization_snapshot(uuid,uuid,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3020912Z ^[[36;1m    "has_institutional_permission(uuid,uuid,text,bigint)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3021357Z ^[[36;1m    "is_institutional_organization_member(uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3021804Z ^[[36;1m    "record_institutional_match_interest(uuid,uuid,text,text)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3022322Z ^[[36;1m    "record_institutional_pool_approval(uuid,uuid,uuid,uuid,text)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3022961Z ^[[36;1m    "request_institutional_individual_consent(uuid,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3023448Z ^[[36;1m    "reserve_institutional_budget(uuid,uuid,bigint,uuid,text)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3023983Z ^[[36;1m    "review_institutional_evidence(uuid,uuid,text,text,uuid,uuid,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3024478Z ^[[36;1m    "revoke_institutional_room_access(uuid,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3024909Z ^[[36;1m    "revoke_institutional_verifier_assignment(uuid,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3025424Z ^[[36;1m    "save_institutional_pool_anchor(uuid,uuid,uuid,uuid,bigint,text,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3026346Z ^[[36;1m    "save_institutional_pool_contribution(uuid,uuid,uuid,bigint,text,uuid,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3026987Z ^[[36;1m    "save_institutional_pool_underwriting(uuid,uuid,uuid,bigint,text,uuid,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3027562Z ^[[36;1m    "select_institutional_proposal_version(uuid,uuid,uuid,uuid)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3028040Z ^[[36;1m    "sign_institutional_deal(uuid,uuid,uuid,text)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3028463Z ^[[36;1m    "transition_institutional_deal_stage(uuid,text)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3028930Z ^[[36;1m    "transition_institutional_milestone_status(uuid,uuid,text)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3029438Z ^[[36;1m    "transition_institutional_obligation_status(uuid,uuid,text)",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3029846Z ^[[36;1m  ].sort();^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3030099Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3030368Z ^[[36;1m  assert.deepEqual(observed, expected);^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3030720Z ^[[36;1m  assert.doesNotMatch(^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3031022Z ^[[36;1m    migration,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3031412Z ^[[36;1m    /grant execute on function public\.[^;]*institutional[^;]* to anon/i,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3032001Z ^[[36;1m    "anonymous callers must never execute institutional SECURITY DEFINER functions",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3032475Z ^[[36;1m  );^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3032734Z ^[[36;1m  assert.doesNotMatch(^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3033033Z ^[[36;1m    migration,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3033605Z ^[[36;1m    /grant execute on function public\.(?:assert_institutional_aal2|can_act_for_institutional_party)\([^;]*\) to authenticated/i,^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3034412Z ^[[36;1m    "internal authorization helpers must not be directly executable by authenticated callers",^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3034909Z ^[[36;1m  );^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3035139Z ^[[36;1m});^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3035365Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3035816Z ^[[36;1m'''^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3036266Z ^[[36;1mtest_path.write_text(test_text.replace(insertion_marker, security_test + insertion_marker))^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3036782Z ^[[36;1mPY^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3037010Z ^[[36;1m^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3037244Z ^[[36;1mgit diff --check^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3037857Z ^[[36;1mgrep -F "revoke all on function %s from public,anon,authenticated" supabase/migrations/20260726123000_institutional_trade_system.sql^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3038862Z ^[[36;1m! grep -E "grant execute on function public\..*institutional.* to anon" supabase/migrations/20260726123000_institutional_trade_system.sql^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3039587Z ^[[36;1mchanged="$(git status --short | cut -c4- | sort)"^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3039973Z ^[[36;1mexpected="$(printf '%s\n' \^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3040351Z ^[[36;1m  src/institutional-trade-migration.test.ts \^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3040854Z ^[[36;1m  supabase/migrations/20260726123000_institutional_trade_system.sql | sort)"^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3041328Z ^[[36;1mtest "$changed" = "$expected"^[[0m
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3083961Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3084360Z env:
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3084683Z   EXPECTED_FEATURE_HEAD: d698d8a07905ab2b9323493e149f202823dd1d56
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3085128Z   FEATURE_BRANCH: feat/institutional-trade-system
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3085814Z   CANDIDATE_BRANCH: agent/pr212-function-grant-fix-candidate-20260731
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3086318Z   NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3086855Z   VERCEL: 1
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3087095Z   VERCEL_ENV: preview
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3087355Z ##[endgroup]
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3389464Z Expected one dynamic SECURITY DEFINER revoke, found 0
+prepare	Make SECURITY DEFINER execution deny-by-default	2026-07-31T05:26:55.3439219Z ##[error]Process completed with exit code 1.
