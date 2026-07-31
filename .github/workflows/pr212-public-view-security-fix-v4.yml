@@ -1,0 +1,155 @@
+name: PR 212 institutional RLS init-plan repair v4
+
+on:
+  push:
+    branches:
+      - agent/pr212-public-view-security-fix-ops-20260731
+    paths:
+      - .github/workflows/pr212-public-view-security-fix-v4.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-institutional-rls-init-plan-repair-v4
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EXPECTED_SOURCE_HEAD: dee23009e0f4fcb3a1ab940a3051ce5ad10f0dd9
+      SOURCE_BRANCH: agent/pr212-public-view-security-fix-v3-candidate-20260731
+      CANDIDATE_BRANCH: agent/pr212-public-view-security-fix-v4-candidate-20260731
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out exact v3 security candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Refuse stale or unexpected source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_HEAD"
+          test "$(git rev-parse 'HEAD:supabase/migrations/20260726123000_institutional_trade_system.sql')" = "7c27af85d23d52e513ae9176c86dc43e9dca9612"
+          test "$(git rev-parse 'HEAD:src/institutional-trade-migration.test.ts')" = "71a1b5930cb07bc0c192e7abad8cfff0290c4f6e"
+
+      - name: Initialize auth.uid once per institutional RLS statement
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          migration_path = Path("supabase/migrations/20260726123000_institutional_trade_system.sql")
+          migration = migration_path.read_text()
+          start_marker = "-- Independent participation is self-managed and opt-in."
+          end_marker = "-- Every foreign-key column sequence receives a covering index."
+          if migration.count(start_marker) != 1 or migration.count(end_marker) != 1:
+              raise SystemExit("Institutional RLS policy boundaries are not unique")
+          start = migration.index(start_marker)
+          end = migration.index(end_marker)
+          policy_section = migration[start:end]
+          direct_count = policy_section.count("auth.uid()")
+          if direct_count < 20:
+              raise SystemExit(f"Unexpectedly few institutional RLS auth.uid() calls: {direct_count}")
+          if "(select auth.uid())" in policy_section:
+              raise SystemExit("Institutional RLS policy section is already partially rewritten")
+          policy_section = policy_section.replace("auth.uid()", "(select auth.uid())")
+          migration_path.write_text(migration[:start] + policy_section + migration[end:])
+
+          test_path = Path("src/institutional-trade-migration.test.ts")
+          test_text = test_path.read_text()
+          old_personal_pattern = r'''    /create policy institutional_deal_parties_insert[\s\S]*lead_capacity='individual' and party_capacity='individual'[\s\S]*lead_profile_id=profile_id and profile_id=auth\.uid\(\)/i,
+          '''
+          new_personal_pattern = r'''    /create policy institutional_deal_parties_insert[\s\S]*lead_capacity='individual' and party_capacity='individual'[\s\S]*lead_profile_id=profile_id and profile_id=\(select auth\.uid\(\)\)/i,
+          '''
+          if test_text.count(old_personal_pattern) != 1:
+              raise SystemExit(f"Expected one personal-capacity policy pattern, found {test_text.count(old_personal_pattern)}")
+          test_text = test_text.replace(old_personal_pattern, new_personal_pattern)
+
+          old_tail = r'''  assert.doesNotMatch(
+              migration,
+              /p\.deal_id=p\.deal_id|p\.organization_id=p\.organization_id/i,
+              "deal-message party scope must never collapse into a tautology",
+            );
+          });'''
+          new_tail = r'''  assert.doesNotMatch(
+              migration,
+              /p\.deal_id=p\.deal_id|p\.organization_id=p\.organization_id/i,
+              "deal-message party scope must never collapse into a tautology",
+            );
+            const policyStart = migration.indexOf("-- Independent participation is self-managed and opt-in.");
+            const policyEnd = migration.indexOf("-- Every foreign-key column sequence receives a covering index.");
+            const policySection = migration.slice(policyStart, policyEnd);
+            assert.doesNotMatch(
+              policySection.replaceAll("(select auth.uid())", ""),
+              /auth\.uid\(\)/i,
+              "institutional RLS policies must initialize auth.uid once rather than once per row",
+            );
+          });'''
+          if test_text.count(old_tail) != 1:
+              raise SystemExit(f"Expected one v3 RLS-test tail, found {test_text.count(old_tail)}")
+          test_path.write_text(test_text.replace(old_tail, new_tail))
+          PY
+
+          git diff --check
+          changed="$(git status --short | cut -c4- | sort)"
+          expected="$(printf '%s\n' \
+            'src/institutional-trade-migration.test.ts' \
+            'supabase/migrations/20260726123000_institutional_trade_system.sql' | sort)"
+          test "$changed" = "$expected"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run institutional and migration contracts
+        run: |
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          node --check .github/scripts/pr212-targeted-regression-qa.mjs
+
+      - name: Run complete repository tests absolutely
+        run: npm test
+
+      - name: Run TypeScript absolutely
+        run: npx tsc --noEmit
+
+      - name: Run ESLint absolutely
+        run: npm run lint
+
+      - name: Build production application absolutely
+        run: npm run build
+
+      - name: Commit exact v4 candidate after every gate passes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_HEAD"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/institutional-trade-migration.test.ts \
+            supabase/migrations/20260726123000_institutional_trade_system.sql
+          git commit -m "Optimize institutional RLS auth initialization"
+          git push origin HEAD:"$CANDIDATE_BRANCH"
