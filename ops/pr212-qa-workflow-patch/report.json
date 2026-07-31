@@ -1,8 +1,17 @@
 {
-  "run_id": "30604470196",
+  "run_id": "30604586608",
   "status": "completed",
-  "conclusion": "failure",
+  "conclusion": "success",
   "runs": [
+    {
+      "conclusion": "success",
+      "createdAt": "2026-07-31T04:36:22Z",
+      "databaseId": 30604586608,
+      "event": "push",
+      "headSha": "67064244c6dab99c24b0ab307fdceb93c9af8423",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30604586608"
+    },
     {
       "conclusion": "failure",
       "createdAt": "2026-07-31T04:33:39Z",
@@ -14,25 +23,25 @@
     }
   ],
   "run": {
-    "id": 30604470196,
+    "id": 30604586608,
     "name": "Prepare PR 212 targeted-regression QA workflow patch",
-    "node_id": "WFR_kwLOR8Oun88AAAAHICsntA",
+    "node_id": "WFR_kwLOR8Oun88AAAAHICzucA",
     "head_branch": "agent/pr212-qa-workflow-patch-20260731",
-    "head_sha": "8d83aba9c102dd7aeca13748156d668fd447447f",
+    "head_sha": "67064244c6dab99c24b0ab307fdceb93c9af8423",
     "path": ".github/workflows/pr212-qa-workflow-patch.yml",
-    "display_title": "Prepare exact PR 212 targeted-regression QA workflow patch",
-    "run_number": 1,
+    "display_title": "Match the exact institutional E2E runtime step",
+    "run_number": 2,
     "event": "push",
     "status": "completed",
-    "conclusion": "failure",
+    "conclusion": "success",
     "workflow_id": 324206390,
-    "check_suite_id": 82989440731,
-    "check_suite_node_id": "CS_kwDOR8Oun88AAAATUo5e2w",
-    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604470196",
-    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30604470196",
+    "check_suite_id": 82989755818,
+    "check_suite_node_id": "CS_kwDOR8Oun88AAAATUpMtqg",
+    "url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604586608",
+    "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30604586608",
     "pull_requests": [],
-    "created_at": "2026-07-31T04:33:39Z",
-    "updated_at": "2026-07-31T04:33:50Z",
+    "created_at": "2026-07-31T04:36:22Z",
+    "updated_at": "2026-07-31T04:36:36Z",
     "actor": {
       "login": "ghuser29384",
       "id": 262476329,
@@ -56,7 +65,7 @@
     },
     "run_attempt": 1,
     "referenced_workflows": [],
-    "run_started_at": "2026-07-31T04:33:39Z",
+    "run_started_at": "2026-07-31T04:36:22Z",
     "triggering_actor": {
       "login": "ghuser29384",
       "id": 262476329,
@@ -78,19 +87,19 @@
       "user_view_type": "public",
       "site_admin": false
     },
-    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604470196/jobs",
-    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604470196/logs",
-    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82989440731",
-    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604470196/artifacts",
-    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604470196/cancel",
-    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604470196/rerun",
+    "jobs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604586608/jobs",
+    "logs_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604586608/logs",
+    "check_suite_url": "https://api.github.com/repos/ghuser29384/Website2/check-suites/82989755818",
+    "artifacts_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604586608/artifacts",
+    "cancel_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604586608/cancel",
+    "rerun_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604586608/rerun",
     "previous_attempt_url": null,
     "workflow_url": "https://api.github.com/repos/ghuser29384/Website2/actions/workflows/324206390",
     "head_commit": {
-      "id": "8d83aba9c102dd7aeca13748156d668fd447447f",
-      "tree_id": "63940f557197048656e38c1107052a0303a322f2",
-      "message": "Prepare exact PR 212 targeted-regression QA workflow patch",
-      "timestamp": "2026-07-31T04:33:36Z",
+      "id": "67064244c6dab99c24b0ab307fdceb93c9af8423",
+      "tree_id": "7405108f5d1d55fe0f0a40a9696db67c2f8730a5",
+      "message": "Match the exact institutional E2E runtime step",
+      "timestamp": "2026-07-31T04:36:20Z",
       "author": {
         "name": "ghuser29384",
         "email": "262476329+ghuser29384@users.noreply.github.com"
@@ -239,21 +248,21 @@
   },
   "jobs": [
     {
-      "id": 91073797345,
-      "run_id": 30604470196,
+      "id": 91074134068,
+      "run_id": 30604586608,
       "workflow_name": "Prepare PR 212 targeted-regression QA workflow patch",
       "head_branch": "agent/pr212-qa-workflow-patch-20260731",
-      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604470196",
+      "run_url": "https://api.github.com/repos/ghuser29384/Website2/actions/runs/30604586608",
       "run_attempt": 1,
-      "node_id": "CR_kwDOR8Oun88AAAAVNGvc4Q",
-      "head_sha": "8d83aba9c102dd7aeca13748156d668fd447447f",
-      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/91073797345",
-      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30604470196/job/91073797345",
+      "node_id": "CR_kwDOR8Oun88AAAAVNHEANA",
+      "head_sha": "67064244c6dab99c24b0ab307fdceb93c9af8423",
+      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/jobs/91074134068",
+      "html_url": "https://github.com/ghuser29384/Website2/actions/runs/30604586608/job/91074134068",
       "status": "completed",
-      "conclusion": "failure",
-      "created_at": "2026-07-31T04:33:39Z",
-      "started_at": "2026-07-31T04:33:41Z",
-      "completed_at": "2026-07-31T04:33:49Z",
+      "conclusion": "success",
+      "created_at": "2026-07-31T04:36:22Z",
+      "started_at": "2026-07-31T04:36:24Z",
+      "completed_at": "2026-07-31T04:36:36Z",
       "name": "prepare",
       "steps": [
         {
@@ -261,59 +270,80 @@
           "status": "completed",
           "conclusion": "success",
           "number": 1,
-          "started_at": "2026-07-31T04:33:42Z",
-          "completed_at": "2026-07-31T04:33:43Z"
+          "started_at": "2026-07-31T04:36:25Z",
+          "completed_at": "2026-07-31T04:36:27Z"
         },
         {
           "name": "Check out exact PR branch",
           "status": "completed",
           "conclusion": "success",
           "number": 2,
-          "started_at": "2026-07-31T04:33:43Z",
-          "completed_at": "2026-07-31T04:33:46Z"
+          "started_at": "2026-07-31T04:36:27Z",
+          "completed_at": "2026-07-31T04:36:32Z"
         },
         {
           "name": "Add targeted desktop and mobile regression smoke to exact-head QA",
           "status": "completed",
-          "conclusion": "failure",
+          "conclusion": "success",
           "number": 3,
-          "started_at": "2026-07-31T04:33:46Z",
-          "completed_at": "2026-07-31T04:33:46Z"
+          "started_at": "2026-07-31T04:36:32Z",
+          "completed_at": "2026-07-31T04:36:32Z"
         },
         {
           "name": "Upload exact patched workflow",
           "status": "completed",
-          "conclusion": "skipped",
+          "conclusion": "success",
           "number": 4,
-          "started_at": "2026-07-31T04:33:46Z",
-          "completed_at": "2026-07-31T04:33:46Z"
+          "started_at": "2026-07-31T04:36:32Z",
+          "completed_at": "2026-07-31T04:36:33Z"
         },
         {
           "name": "Post Check out exact PR branch",
           "status": "completed",
           "conclusion": "success",
           "number": 8,
-          "started_at": "2026-07-31T04:33:46Z",
-          "completed_at": "2026-07-31T04:33:47Z"
+          "started_at": "2026-07-31T04:36:33Z",
+          "completed_at": "2026-07-31T04:36:34Z"
         },
         {
           "name": "Complete job",
           "status": "completed",
           "conclusion": "success",
           "number": 9,
-          "started_at": "2026-07-31T04:33:47Z",
-          "completed_at": "2026-07-31T04:33:47Z"
+          "started_at": "2026-07-31T04:36:34Z",
+          "completed_at": "2026-07-31T04:36:34Z"
         }
       ],
-      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/91073797345",
+      "check_run_url": "https://api.github.com/repos/ghuser29384/Website2/check-runs/91074134068",
       "labels": [
         "ubuntu-24.04"
       ],
-      "runner_id": 1000006964,
-      "runner_name": "GitHub Actions 1000006964",
+      "runner_id": 1000006966,
+      "runner_name": "GitHub Actions 1000006966",
       "runner_group_id": 0,
       "runner_group_name": "GitHub Actions"
     }
   ],
-  "artifacts": []
+  "artifacts": [
+    {
+      "id": 8783130884,
+      "node_id": "MDg6QXJ0aWZhY3Q4NzgzMTMwODg0",
+      "name": "pr212-targeted-regression-qa-workflow-30604586608",
+      "size_in_bytes": 825,
+      "url": "https://api.github.com/repos/ghuser29384/Website2/actions/artifacts/8783130884",
+      "archive_download_url": "https://api.github.com/repos/ghuser29384/Website2/actions/artifacts/8783130884/zip",
+      "expired": false,
+      "digest": "sha256:918c6d8ec0d9db8a0e6bb6943ed5681a52bc0dde84c879bd256683893efe2cbb",
+      "created_at": "2026-07-31T04:36:33Z",
+      "updated_at": "2026-07-31T04:36:33Z",
+      "expires_at": "2026-08-03T04:36:33Z",
+      "workflow_run": {
+        "id": 30604586608,
+        "repository_id": 1204006559,
+        "head_repository_id": 1204006559,
+        "head_branch": "agent/pr212-qa-workflow-patch-20260731",
+        "head_sha": "67064244c6dab99c24b0ab307fdceb93c9af8423"
+      }
+    }
+  ]
 }
