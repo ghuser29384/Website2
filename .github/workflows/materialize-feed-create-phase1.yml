@@ -1,0 +1,116 @@
+name: Temporary materialize — Feed to Create Phase 1
+
+on:
+  push:
+    branches:
+      - ops/materialize-feed-create-phase1-20260730
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-feed-create-phase1
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      EXPECTED_MAIN_SHA: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+      EXPECTED_PATCH_SHA256: cb9d85bf2917a3f3385357477d120a2ab2322af4a69e0a7184c29fd34bcf433a
+      EXPECTED_MANIFEST_SHA256: 401228e539612ecbf81dfd4bd7d998e2e229aee96df9a62e1e45072f27684645
+      PRODUCT_BRANCH: feature/feed-create-phase1-20260730
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+    steps:
+      - name: Check out the guarded materializer
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact current main and absent product branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --no-tags
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
+          test "$(git merge-base origin/main HEAD)" = "$EXPECTED_MAIN_SHA"
+          if git ls-remote --exit-code --heads origin "$PRODUCT_BRANCH" >/dev/null 2>&1; then
+            echo "Refusing to overwrite the existing product branch." >&2
+            exit 1
+          fi
+
+      - name: Reconstruct and verify the immutable patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload_dir=.github/feed-create-phase1-payload
+          cat "$payload_dir"/part-*.b64 | base64 --decode > /tmp/feed-create-phase1.patch.gz
+          printf '%s  %s\n' "$EXPECTED_PATCH_SHA256" /tmp/feed-create-phase1.patch.gz | sha256sum --check --strict
+          printf '%s  %s\n' "$EXPECTED_MANIFEST_SHA256" "$payload_dir/manifest.txt" | sha256sum --check --strict
+          gzip --decompress --stdout /tmp/feed-create-phase1.patch.gz > /tmp/feed-create-phase1.patch
+          cp "$payload_dir/manifest.txt" /tmp/feed-create-phase1-manifest.txt
+
+      - name: Materialize only the reviewed product patch on exact main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git switch --detach "$EXPECTED_MAIN_SHA"
+          git switch -c "$PRODUCT_BRANCH"
+          git apply --check /tmp/feed-create-phase1.patch
+          git apply /tmp/feed-create-phase1.patch
+          git diff --check
+          git status --porcelain=v1 | sed -E 's/^.. //' | LC_ALL=C sort > /tmp/actual-paths.txt
+          LC_ALL=C sort /tmp/feed-create-phase1-manifest.txt > /tmp/expected-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused source and syntax gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check public/moral-trade-live-feed-create.js
+          node --import tsx --test \
+            src/lib/feed-create/phase1.test.ts \
+            src/feed-create-phase1-wiring.test.ts
+          npx eslint \
+            public/moral-trade-live-feed-create.js \
+            src/app/api/feed-create/events/route.ts \
+            src/app/api/live-now/route.ts \
+            src/app/core-trade-actions-base.ts \
+            src/app/feed-create-actions.ts \
+            'src/app/trades/[offerId]/manage/page.tsx' \
+            src/app/trades/new/page.tsx \
+            src/components/core-trade/trade-draft-workbench.tsx \
+            src/feed-create-phase1-wiring.test.ts \
+            src/lib/feed-create/phase1.test.ts \
+            src/lib/feed-create/phase1.ts \
+            src/lib/live-now-recommendations.ts \
+            tests/feed-create-phase1-authenticated.spec.ts
+          npx tsc --noEmit
+
+      - name: Build the production application
+        run: npm run build
+
+      - name: Commit and publish one clean product commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          xargs -d '\n' git add -- < /tmp/feed-create-phase1-manifest.txt
+          unexpected="$(git status --porcelain=v1 | grep -v '^A  \|^M  ' || true)"
+          test -z "$unexpected"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Add authenticated Feed-to-Create Phase 1"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          git push origin "HEAD:$PRODUCT_BRANCH"
