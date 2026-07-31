@@ -127,7 +127,8 @@ jobs:
             })) : null;
 
             const pageFrames = page.frames().map((frame) => ({ name: frame.name(), url: frame.url() }));
-            const contentFrame = iframeCount ? await iframe.first().contentFrame() : null;
+            const iframeHandle = iframeCount ? await iframe.first().elementHandle() : null;
+            const contentFrame = iframeHandle ? await iframeHandle.contentFrame() : null;
             let frameState = null;
             if (contentFrame) {
               await contentFrame.waitForLoadState("domcontentloaded").catch(() => {});
@@ -195,4 +196,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-# Retriggered after workflow registration on the operations branch.
+# Uses ElementHandle.contentFrame() so the diagnostic receives a real Frame.
