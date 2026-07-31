@@ -136,8 +136,10 @@ function monitorBrowserFailures(page: Page) {
 }
 
 async function selectWildCampaign(page: Page) {
-  await page.getByRole("button", { name: /Wild-animal-suffering priority research pool/i }).click();
-  await expect(page.getByRole("heading", { name: /Wild-animal-suffering priority research pool/i })).toBeVisible();
+  await page.getByTestId("threshold-campaign-wild").click();
+  await expect(
+    page.getByRole("heading", { name: /Wild-animal suffering research pool/i }),
+  ).toBeVisible();
 }
 
 test("React radar shows available estimates, slider recalculation, recommendation, disclosure, and exact CTA", async ({ page }) => {

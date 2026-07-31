@@ -19,14 +19,12 @@ on:
       - "src/discover/moral-trade-discover.source.html"
       - "src/lib/mpgf/pledge-impact*.ts"
       - "src/lib/pledge-impact-integration-contract.test.ts"
+      - "src/lib/threshold-radar-route-contract.test.ts"
       - "src/lib/supabase/database.types.ts"
       - "supabase/migrations/20260731120000_mpgf_pledge_impact_forecasts.sql"
       - "supabase/schema.sql"
       - "supabase/tests/mpgf_pledge_impact_forecasts.sql"
       - "tests/pledge-impact-estimate.spec.ts"
-  push:
-    branches:
-      - feature/pledge-impact-estimate-20260731
   workflow_dispatch:
 
 permissions:
@@ -192,22 +190,38 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install --yes postgresql-client > /dev/null
 
-      - name: Apply pledge-impact migration in QA
+      - name: Run migration and regression in an isolated QA transaction
+        shell: bash
         run: |
-          set -o pipefail
-          psql "$QA_SUPABASE_DB_URL" \
-            --no-psqlrc \
-            --set ON_ERROR_STOP=1 \
-            --file supabase/migrations/20260731120000_mpgf_pledge_impact_forecasts.sql \
-            2>&1 | tee qa-migration.log
+          set -euo pipefail
+          {
+            cat <<'SQL'
+          \set ON_ERROR_STOP on
+          begin;
+          do $setup$
+          begin
+            if to_regclass('public.mpgf_public_goods_campaigns') is null then
+              create table public.mpgf_public_goods_campaigns (
+                id text primary key
+              );
+              insert into public.mpgf_public_goods_campaigns (id)
+              values
+                ('campaign-existential-risk-resilience'),
+                ('campaign-animal-welfare-transition'),
+                ('campaign-public-interest-knowledge');
+            end if;
+          end;
+          $setup$;
+          \i supabase/migrations/20260731120000_mpgf_pledge_impact_forecasts.sql
+          SQL
+            tail -n +2 supabase/tests/mpgf_pledge_impact_forecasts.sql | sed '$d'
+            printf '%s\n' 'rollback;'
+          } > qa-pledge-impact-transaction.sql
 
-      - name: Run transactional pledge-impact SQL regression
-        run: |
-          set -o pipefail
           psql "$QA_SUPABASE_DB_URL" \
             --no-psqlrc \
             --set ON_ERROR_STOP=1 \
-            --file supabase/tests/mpgf_pledge_impact_forecasts.sql \
+            --file qa-pledge-impact-transaction.sql \
             2>&1 | tee qa-sql-regression.log
 
       - name: Upload QA database evidence
@@ -216,7 +230,7 @@ jobs:
         with:
           name: pledge-impact-qa-database-${{ github.run_id }}
           path: |
-            qa-migration.log
+            qa-pledge-impact-transaction.sql
             qa-sql-regression.log
           if-no-files-found: warn
           retention-days: 30

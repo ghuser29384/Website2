@@ -438,6 +438,7 @@ export function ThresholdRadar() {
               <button
                 aria-pressed={effectiveSelectedId === id}
                 className={`${styles.satellite} ${styles[campaign.tone]} ${className}`}
+                data-testid={`threshold-campaign-${id}`}
                 key={id}
                 onClick={() => setSelectedId(id)}
                 type="button"

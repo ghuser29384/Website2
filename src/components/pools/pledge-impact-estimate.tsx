@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowRight, Info, X } from "@phosphor-icons/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   MPGF_PLEDGE_IMPACT_EXPERIMENT_LABEL,
@@ -129,16 +129,17 @@ export function PledgeImpactEstimate({
   pledgeAmountDollars,
   poolPublicKey,
 }: PledgeImpactEstimateProps) {
-  const [response, setResponse] = useState<PledgeImpactApiResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [calculationOpen, setCalculationOpen] = useState(false);
   const campaignId = getPledgeImpactCampaignId(poolPublicKey);
   const pledgeCents = Math.max(0, Math.round(pledgeAmountDollars * 100));
+  const requestKey = `${poolPublicKey}:${campaignId}:${pledgeCents}`;
+  const [result, setResult] = useState<{
+    requestKey: string;
+    response: PledgeImpactApiResponse;
+  } | null>(null);
+  const [calculationRequestKey, setCalculationRequestKey] = useState<string | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
-    setCalculationOpen(false);
     const params = new URLSearchParams({
       pool: poolPublicKey,
       campaign: campaignId,
@@ -152,32 +153,37 @@ export function PledgeImpactEstimate({
         if (!request.ok) throw new Error(`Forecast request returned ${request.status}`);
         return request.json() as Promise<PledgeImpactApiResponse>;
       })
-      .then((payload) => setResponse(payload))
+      .then((payload) => setResult({ requestKey, response: payload }))
       .catch((error: unknown) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
-        setResponse({
-          status: "unavailable",
-          experimental: true,
-          poolPublicKey,
-          campaignId,
-          pledgeCents,
-          reason: "service_unavailable",
-          message:
-            "The forecast service is temporarily unavailable. Only the mechanical gap change is shown.",
-          mechanicalEffect: calculatePledgeImpactMechanicalEffect(
-            getPledgeImpactPoolState(poolPublicKey),
+        setResult({
+          requestKey,
+          response: {
+            status: "unavailable",
+            experimental: true,
+            poolPublicKey,
+            campaignId,
             pledgeCents,
-          ),
+            reason: "service_unavailable",
+            message:
+              "The forecast service is temporarily unavailable. Only the mechanical gap change is shown.",
+            mechanicalEffect: calculatePledgeImpactMechanicalEffect(
+              getPledgeImpactPoolState(poolPublicKey),
+              pledgeCents,
+            ),
+          },
         });
-      })
-      .finally(() => setLoading(false));
+      });
     return () => controller.abort();
-  }, [campaignId, pledgeCents, poolPublicKey]);
+  }, [campaignId, pledgeCents, poolPublicKey, requestKey]);
 
+  const response = result?.requestKey === requestKey ? result.response : null;
+  const loading = response === null;
   const available = response?.status === "available" ? response : null;
-  const recommendationIsDifferent = useMemo(
-    () => Boolean(available?.recommendation && available.recommendation.pledgeCents !== pledgeCents),
-    [available, pledgeCents],
+  const unavailable = response?.status === "unavailable" ? response : null;
+  const recommendation = available?.recommendation ?? null;
+  const recommendationIsDifferent = Boolean(
+    recommendation && recommendation.pledgeCents !== pledgeCents,
   );
 
   return (
@@ -245,28 +251,28 @@ export function PledgeImpactEstimate({
           <div className={styles.impactEstimateActions}>
             <button
               data-testid="pledge-impact-method-button"
-              onClick={() => setCalculationOpen(true)}
+              onClick={() => setCalculationRequestKey(requestKey)}
               type="button"
             >
               <Info aria-hidden="true" size={17} /> How this is calculated
             </button>
-            {recommendationIsDifferent && available.recommendation ? (
+            {recommendationIsDifferent && recommendation ? (
               <button
                 data-testid="pledge-impact-recommendation"
-                onClick={() => onApplyRecommendation(available.recommendation!.pledgeCents / 100)}
+                onClick={() => onApplyRecommendation(recommendation.pledgeCents / 100)}
                 type="button"
               >
-                Use suggested {formatDollars(available.recommendation.pledgeCents)} <ArrowRight aria-hidden="true" size={15} />
+                Use suggested {formatDollars(recommendation.pledgeCents)} <ArrowRight aria-hidden="true" size={15} />
               </button>
             ) : null}
           </div>
         </>
-      ) : response ? (
-        <div className={styles.impactUnavailable} data-testid={`pledge-impact-unavailable-${response.reason}`}>
+      ) : unavailable ? (
+        <div className={styles.impactUnavailable} data-testid={`pledge-impact-unavailable-${unavailable.reason}`}>
           <strong>Forecast unavailable</strong>
-          <p>{response.message}</p>
+          <p>{unavailable.message}</p>
           <span>
-            Mechanical effect: {formatDollars(response.mechanicalEffect.remainingAfterPledgeCents)} would remain, and this pledge closes {(response.mechanicalEffect.shareOfCurrentGapBps / 100).toFixed(2)}% of the current gap.
+            Mechanical effect: {formatDollars(unavailable.mechanicalEffect.remainingAfterPledgeCents)} would remain, and this pledge closes {(unavailable.mechanicalEffect.shareOfCurrentGapBps / 100).toFixed(2)}% of the current gap.
           </span>
         </div>
       ) : null}
@@ -275,8 +281,11 @@ export function PledgeImpactEstimate({
         The causal estimate may overlap with other contributors’ estimates. Moving the slider does not save a pledge or authorize payment.
       </p>
 
-      {calculationOpen && available ? (
-        <PledgeImpactCalculationDialog estimate={available} onClose={() => setCalculationOpen(false)} />
+      {calculationRequestKey === requestKey && available ? (
+        <PledgeImpactCalculationDialog
+          estimate={available}
+          onClose={() => setCalculationRequestKey(null)}
+        />
       ) : null}
     </section>
   );

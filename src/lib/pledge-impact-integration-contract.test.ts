@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const root = new URL("../../", import.meta.url);
-const read = (path: string) => readFile(new URL(path, root), "utf8");
+const read = (path: string) => readFileSync(new URL(path, root), "utf8");
 
 const [
   route,
@@ -16,7 +16,7 @@ const [
   migration,
   schema,
   types,
-] = await Promise.all([
+] = [
   read("src/app/api/mpgf/pledge-impact/route.ts"),
   read("src/app/mpgf/contribute/page.tsx"),
   read("src/components/mpgf/mpgf-console.tsx"),
@@ -27,7 +27,7 @@ const [
   read("supabase/migrations/20260731120000_mpgf_pledge_impact_forecasts.sql"),
   read("supabase/schema.sql"),
   read("src/lib/supabase/database.types.ts"),
-]);
+];
 
 test("the API is read-only, no-store, and evaluates a server-loaded released forecast", () => {
   assert.match(route, /export async function GET/);
