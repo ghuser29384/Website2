@@ -1,0 +1,161 @@
+{
+  "feature_head": "71f28543df87fb13005e07582603410e5cef7255",
+  "run_id": "30598511737",
+  "status": "completed",
+  "conclusion": "failure",
+  "runs": [
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-31T02:15:40Z",
+      "databaseId": 30598511737,
+      "displayTitle": "Add targeted PR 212 post-main regression browser smoke",
+      "headSha": "71f28543df87fb13005e07582603410e5cef7255",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30598511737"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-31T01:50:06Z",
+      "databaseId": 30597382257,
+      "displayTitle": "Remove temporary PR 212 merge stdout artifact",
+      "headSha": "6e4deac3530e8f0989b457d082e6efd11b2fa34e",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30597382257"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-28T08:44:28Z",
+      "databaseId": 30343611814,
+      "displayTitle": "Cancel obsolete institutional QA runs",
+      "headSha": "9ad919bc281a9f701d4a5adfb518055c864393b3",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30343611814"
+    },
+    {
+      "conclusion": "cancelled",
+      "createdAt": "2026-07-28T08:40:00Z",
+      "databaseId": 30343301676,
+      "displayTitle": "Differentiate generated-schema typecheck from application typecheck",
+      "headSha": "45a27b46fdc1d0a0ec12056bb4bd3552a28032fc",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30343301676"
+    },
+    {
+      "conclusion": "cancelled",
+      "createdAt": "2026-07-28T08:34:29Z",
+      "databaseId": 30342934865,
+      "displayTitle": "Add exact-base generated-schema typecheck gate",
+      "headSha": "88b0d44e99c95873247252b7a7737f74e1d35b7b",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30342934865"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-28T07:57:28Z",
+      "databaseId": 30340410388,
+      "displayTitle": "Fix differential test result parsing",
+      "headSha": "fa1175ff30e1ccdcba0cb140aeccea3acabee6f6",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30340410388"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-28T07:52:09Z",
+      "databaseId": 30340060069,
+      "displayTitle": "Gate institutional full tests against exact PR base",
+      "headSha": "80716ea5b87b40e06ee5644d82db6580deb5fa96",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30340060069"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T13:24:07Z",
+      "databaseId": 30270105060,
+      "displayTitle": "Strengthen read-only institutional view contract test",
+      "headSha": "2e45845ed5b2c880f1c956f5a75ef578bcc591bf",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30270105060"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T12:56:55Z",
+      "databaseId": 30268047525,
+      "displayTitle": "Gate institutional lint against exact QA baseline",
+      "headSha": "4991fa8f01dfd120d845e8bf5debe09a579df2da",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30268047525"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T12:54:04Z",
+      "databaseId": 30267842072,
+      "displayTitle": "Remove temporary institutional lint repair workflow",
+      "headSha": "c83d9119673a94b516309fdfafd4a5c83a37ac25",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30267842072"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T12:52:29Z",
+      "databaseId": 30267729446,
+      "displayTitle": "Prepare exact institutional lint repair",
+      "headSha": "101bb28ad1130c5a431662194662583445847386",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30267729446"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T10:05:34Z",
+      "databaseId": 30256659202,
+      "displayTitle": "Retry individual-capacity institutional QA on clean isolated schema",
+      "headSha": "b70e3af8415c6ffa1c88055c308e3442cdbb4035",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256659202"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T09:58:24Z",
+      "databaseId": 30256160223,
+      "displayTitle": "Remove temporary individual-capacity importer",
+      "headSha": "87f5e368fd997adc327a274da5d4761b53bfcb10",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256160223"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T09:58:07Z",
+      "databaseId": 30256140756,
+      "displayTitle": "Add individual-capacity institutional QA gates",
+      "headSha": "492977650ac8ac0d21d4395e65697d8e284717ca",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256140756"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T09:56:04Z",
+      "databaseId": 30256001850,
+      "displayTitle": "Import individual-capacity correction into PR 212",
+      "headSha": "5df88758dd747be2a48c4280aa8b20ad0b720643",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30256001850"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T08:02:28Z",
+      "databaseId": 30248340750,
+      "displayTitle": "Run exact institutional implementation importer",
+      "headSha": "f2a2e0a49392269df09c97ba4b7b410ff8580ee4",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30248340750"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2026-07-27T07:17:28Z",
+      "databaseId": 30245614588,
+      "displayTitle": "Implement institutional trade system integrity and QA",
+      "headSha": "0fa43a320f767ab407e08f1410796098969e03a2",
+      "status": "completed",
+      "url": "https://github.com/ghuser29384/Website2/actions/runs/30245614588"
+    }
+  ]
+}
