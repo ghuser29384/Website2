@@ -120,7 +120,12 @@ jobs:
           '''
           if text.count(old) != 1:
               raise SystemExit(f"Expected one current-main nav flattener, found {text.count(old)}")
-          public_route.write_text(text.replace(old, new))
+          text = text.replace(old, new)
+          old_footer = '  const footerHrefs = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));\n'
+          new_footer = '  const footerHrefs: string[] = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));\n'
+          if text.count(old_footer) != 1:
+              raise SystemExit(f"Expected one current-main footer href declaration, found {text.count(old_footer)}")
+          public_route.write_text(text.replace(old_footer, new_footer))
 
           failure_bonus = Path("src/lib/mpgf/failure-bonus-operator.test.ts")
           text = failure_bonus.read_text()
