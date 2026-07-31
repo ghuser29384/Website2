@@ -2151,7 +2151,10 @@ create policy institutional_individual_profiles_update on public.institutional_i
 create policy institutional_individual_profiles_delete on public.institutional_individual_profiles for delete to authenticated using(profile_id=auth.uid());
 
 -- Public directory and member-scoped organization records.
-create policy institutional_organizations_select on public.institutional_organizations for select using(
+create policy institutional_organizations_public_select on public.institutional_organizations
+for select to anon using(status='active' and public_profile_enabled);
+create policy institutional_organizations_member_select on public.institutional_organizations
+for select to authenticated using(
  (status='active' and public_profile_enabled) or public.is_institutional_organization_member(id)
 );
 create policy institutional_organizations_insert on public.institutional_organizations for insert to authenticated with check(created_by=auth.uid());
@@ -2164,8 +2167,17 @@ create policy institutional_memberships_insert on public.institutional_membershi
 );
 create policy institutional_memberships_update on public.institutional_memberships for update to authenticated using(public.can_manage_institutional_organization(organization_id)) with check(public.can_manage_institutional_organization(organization_id));
 
-create policy institutional_programs_select on public.institutional_programs for select using(
- (status='active' and public_profile_enabled and exists(select 1 from public.institutional_organizations o where o.id=organization_id and o.status='active' and o.public_profile_enabled))
+create policy institutional_programs_public_select on public.institutional_programs
+for select to anon using(
+ status='active' and public_profile_enabled
+ and exists(
+  select 1 from public.institutional_organizations o
+  where o.id=institutional_programs.organization_id and o.status='active' and o.public_profile_enabled
+ )
+);
+create policy institutional_programs_member_select on public.institutional_programs
+for select to authenticated using(
+ (status='active' and public_profile_enabled and exists(select 1 from public.institutional_organizations o where o.id=institutional_programs.organization_id and o.status='active' and o.public_profile_enabled))
  or public.is_institutional_organization_member(organization_id)
 );
 create policy institutional_programs_write on public.institutional_programs for all to authenticated using(
@@ -2190,7 +2202,10 @@ create policy institutional_mandates_select on public.institutional_mandates for
 create policy institutional_mandates_write on public.institutional_mandates for all to authenticated using(public.has_institutional_permission(organization_id,program_id,'mandate:manage',null)) with check(public.has_institutional_permission(organization_id,program_id,'mandate:manage',null));
 create policy institutional_resource_profiles_select on public.institutional_resource_profiles for select to authenticated using(confidentiality='public' or public.is_institutional_organization_member(organization_id));
 create policy institutional_resource_profiles_write on public.institutional_resource_profiles for all to authenticated using(public.has_institutional_permission(organization_id,program_id,'opportunity:manage',null)) with check(public.has_institutional_permission(organization_id,program_id,'opportunity:manage',null));
-create policy institutional_opportunities_select on public.institutional_opportunities for select using(
+create policy institutional_opportunities_public_select on public.institutional_opportunities
+for select to anon using(visibility='public' and status='published');
+create policy institutional_opportunities_member_select on public.institutional_opportunities
+for select to authenticated using(
  (visibility='public' and status='published') or public.is_institutional_organization_member(organization_id)
 );
 create policy institutional_opportunities_write on public.institutional_opportunities for all to authenticated using(public.has_institutional_permission(organization_id,program_id,'opportunity:manage',null)) with check(public.has_institutional_permission(organization_id,program_id,'opportunity:manage',null));
@@ -2247,7 +2262,12 @@ create policy institutional_deal_messages_insert on public.institutional_deal_me
   or
   (visibility='party_internal' and organization_id is not null
    and public.is_institutional_organization_member(organization_id)
-   and exists(select 1 from public.institutional_deal_parties p where p.deal_id=deal_id and p.party_capacity='organization' and p.organization_id=organization_id))
+   and exists(
+ select 1 from public.institutional_deal_parties p
+ where p.deal_id=institutional_deal_messages.deal_id
+  and p.party_capacity='organization'
+  and p.organization_id=institutional_deal_messages.organization_id
+))
  )
 );
 
@@ -2374,15 +2394,30 @@ end $$;
 -- bypassing the intended base-table action and policy boundaries. Make every
 -- institutional view security-invoker and revoke all client privileges before
 -- restoring SELECT only on the three deliberately public directory views.
-alter view public.institutional_public_organizations set (security_invoker=false);
-alter view public.institutional_public_programs set (security_invoker=false);
-alter view public.institutional_public_opportunities set (security_invoker=false);
-alter view public.institutional_track_record set (security_invoker=false);
+alter view public.institutional_public_organizations set (security_invoker=true);
+alter view public.institutional_public_programs set (security_invoker=true);
+alter view public.institutional_public_opportunities set (security_invoker=true);
+alter view public.institutional_track_record set (security_invoker=true);
 revoke all on table public.institutional_public_organizations from public,anon,authenticated;
 revoke all on table public.institutional_public_programs from public,anon,authenticated;
 revoke all on table public.institutional_public_opportunities from public,anon,authenticated;
 revoke all on table public.institutional_track_record from public,anon,authenticated;
 grant select on table public.institutional_public_organizations,public.institutional_public_programs,public.institutional_public_opportunities to anon,authenticated;
+-- Security-invoker views require caller privileges on their base relations.
+-- Anonymous callers receive only view-visible columns plus the columns
+-- required by the public-only RLS predicates; no private or write access.
+grant select (
+ id,slug,display_name,organization_type,summary,website_url,official_domain,
+ jurisdiction,verification_status,created_at,updated_at,status,public_profile_enabled
+) on table public.institutional_organizations to anon;
+grant select (
+ id,organization_id,slug,name,summary,mandate_summary,status,created_at,updated_at,
+ public_profile_enabled
+) on table public.institutional_programs to anon;
+grant select (
+ id,organization_id,program_id,title,summary,moral_difference_statement,
+ no_trade_summary,status,published_at,created_at,updated_at,visibility
+) on table public.institutional_opportunities to anon;
 
 -- SECURITY DEFINER entry points are deny-by-default. PostgreSQL grants
 -- EXECUTE to PUBLIC when a function is created, and Supabase may also retain

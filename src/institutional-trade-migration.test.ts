@@ -129,6 +129,8 @@ test("deal-room message visibility and organization representation are enforced 
     /visibility='party_internal'[\s\S]*is_institutional_organization_member\(organization_id\)/i,
     /institutional_deal_messages_insert[\s\S]*visibility='all_parties' and organization_id is null/i,
     /Party-internal room access requires an exact represented organization/i,
+    /p\.deal_id=institutional_deal_messages\.deal_id/i,
+    /p\.organization_id=institutional_deal_messages\.organization_id/i,
   ], "deal-room confidentiality");
 });
 
@@ -285,15 +287,24 @@ test("all institutional base tables use forced RLS, generated FK indexes, and re
     /create index if not exists %I on %I\.%I/i,
     /revoke all on table %I\.%I from anon/i,
     /grant select,insert,update,delete on table %I\.%I to authenticated/i,
-    /alter view public\.institutional_public_organizations set \(security_invoker=false\)/i,
-    /alter view public\.institutional_public_programs set \(security_invoker=false\)/i,
-    /alter view public\.institutional_public_opportunities set \(security_invoker=false\)/i,
-    /alter view public\.institutional_track_record set \(security_invoker=false\)/i,
+    /alter view public\.institutional_public_organizations set \(security_invoker=true\)/i,
+    /alter view public\.institutional_public_programs set \(security_invoker=true\)/i,
+    /alter view public\.institutional_public_opportunities set \(security_invoker=true\)/i,
+    /alter view public\.institutional_track_record set \(security_invoker=true\)/i,
     /revoke all on table public\.institutional_public_organizations from public,anon,authenticated/i,
     /revoke all on table public\.institutional_public_programs from public,anon,authenticated/i,
     /revoke all on table public\.institutional_public_opportunities from public,anon,authenticated/i,
     /revoke all on table public\.institutional_track_record from public,anon,authenticated/i,
     /grant select on table public\.institutional_public_organizations,public\.institutional_public_programs,public\.institutional_public_opportunities to anon,authenticated/i,
+    /grant select \([\s\S]*public_profile_enabled[\s\S]*\) on table public\.institutional_organizations to anon/i,
+    /grant select \([\s\S]*mandate_summary[\s\S]*\) on table public\.institutional_programs to anon/i,
+    /grant select \([\s\S]*moral_difference_statement[\s\S]*visibility[\s\S]*\) on table public\.institutional_opportunities to anon/i,
+    /institutional_organizations_public_select[\s\S]*for select to anon[\s\S]*status='active' and public_profile_enabled/i,
+    /institutional_organizations_member_select[\s\S]*for select to authenticated[\s\S]*is_institutional_organization_member\(id\)/i,
+    /institutional_programs_public_select[\s\S]*for select to anon[\s\S]*public_profile_enabled/i,
+    /institutional_programs_member_select[\s\S]*for select to authenticated[\s\S]*is_institutional_organization_member\(organization_id\)/i,
+    /institutional_opportunities_public_select[\s\S]*for select to anon[\s\S]*visibility='public' and status='published'/i,
+    /institutional_opportunities_member_select[\s\S]*for select to authenticated[\s\S]*is_institutional_organization_member\(organization_id\)/i,
     /revoke all on function public\.sign_institutional_deal/i,
     /grant execute on function public\.sign_institutional_deal/i,
   ], "RLS and grants");
@@ -306,5 +317,20 @@ test("all institutional base tables use forced RLS, generated FK indexes, and re
     migration,
     /grant\s+[^;]*(?:all|insert|update|delete|truncate|references|trigger)[^;]*\s+on\s+table\s+[^;]*institutional_(?:public_organizations|public_programs|public_opportunities|track_record)[^;]*\s+to\s+(?:public|anon|authenticated)/i,
     "institutional views must never receive direct client write grants",
+  );
+  assert.doesNotMatch(
+    migration,
+    /grant\s+select\s+on\s+table\s+public\.institutional_(?:organizations|programs|opportunities)\s+to\s+anon/i,
+    "anonymous directory access must remain column-scoped rather than whole-table",
+  );
+  assert.doesNotMatch(
+    migration,
+    /create policy institutional_[a-z_]+_public_select[^;]*to anon[^;]*is_institutional_organization_member/i,
+    "anonymous public-directory policies must not invoke private membership helpers",
+  );
+  assert.doesNotMatch(
+    migration,
+    /p\.deal_id=p\.deal_id|p\.organization_id=p\.organization_id/i,
+    "deal-message party scope must never collapse into a tautology",
   );
 });
