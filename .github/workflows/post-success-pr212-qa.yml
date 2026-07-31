@@ -1,0 +1,102 @@
+name: Post-success PR 212 QA verification
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/post-success-pr212-qa.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_BRANCH: feat/institutional-trade-system
+      INSPECTOR_BRANCH: agent/pr212-main-integration-inspector-20260730
+      PINNED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+
+      - name: Require a truthful successful convergence and record main movement
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-post-success
+          rm -rf "$output"
+          mkdir -p "$output"
+          final=ops/pr212-full-qa-convergence-v2/final.json
+          test -s "$final"
+          test "$(jq -r .conclusion "$final")" = success
+          feature_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .head.sha)"
+          test "$feature_head" = "$(jq -r .feature_head "$final")"
+          current_main="$(git ls-remote --heads origin refs/heads/main | awk '{print $1}')"
+          main_moved=false
+          if [[ "$current_main" != "$PINNED_MAIN" ]]; then main_moved=true; fi
+          jq -n --arg feature_head "$feature_head" --arg pinned_main "$PINNED_MAIN" --arg current_main "$current_main" --argjson main_moved "$main_moved" '{qa_success:true,feature_head:$feature_head,pinned_main:$pinned_main,current_main:$current_main,main_moved:$main_moved}' > "$output/status.json"
+
+          if [[ "$main_moved" == true ]]; then
+            git fetch origin "$current_main" "$feature_head"
+            git diff --name-status "$PINNED_MAIN" "$current_main" > "$output/main-delta-files.txt"
+            git diff --stat "$PINNED_MAIN" "$current_main" > "$output/main-delta-stat.txt"
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 post-QA main status"
+          git push origin "HEAD:refs/heads/${INSPECTOR_BRANCH}"
+
+          if [[ "$main_moved" == true ]]; then
+            echo "Current main moved after the pinned integration; delta integration is required before preview." >&2
+            exit 1
+          fi
+
+      - name: Verify isolated-QA cleanup and security state after successful run
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$QA_SUPABASE_DB_URL"
+          [[ "$QA_SUPABASE_DB_URL" == *"hvmxfjjbdcgjjudmthdz"* ]]
+          [[ "$QA_SUPABASE_DB_URL" != *"jnpoxvalyjtdghnperyu"* ]]
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off <<'SQL' > /tmp/post-success-db.txt
+          select count(*) as synthetic_auth_users from auth.users where lower(email) like 'institutional-%@example.test';
+          select count(*) as synthetic_profiles from public.profiles where lower(email) like 'institutional-%@example.test';
+          select count(*) as tables_without_forced_rls
+          from pg_class c join pg_namespace n on n.oid=c.relnamespace
+          where n.nspname='public' and c.relkind in ('r','p') and c.relname like 'institutional_%'
+            and (not c.relrowsecurity or not c.relforcerowsecurity);
+          select count(*) as anon_write_grants
+          from information_schema.role_table_grants
+          where table_schema='public' and table_name like 'institutional_%' and grantee='anon'
+            and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE','TRIGGER','REFERENCES');
+          SQL
+          synthetic_auth="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select count(*) from auth.users where lower(email) like 'institutional-%@example.test'")"
+          synthetic_profiles="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select count(*) from public.profiles where lower(email) like 'institutional-%@example.test'")"
+          missing_rls="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p') and c.relname like 'institutional_%' and (not c.relrowsecurity or not c.relforcerowsecurity)")"
+          anon_writes="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select count(*) from information_schema.role_table_grants where table_schema='public' and table_name like 'institutional_%' and grantee='anon' and privilege_type in ('INSERT','UPDATE','DELETE','TRUNCATE','TRIGGER','REFERENCES')")"
+          test "$synthetic_auth" = 0
+          test "$synthetic_profiles" = 0
+          test "$missing_rls" = 0
+          test "$anon_writes" = 0
+
+      - name: Confirm PR remains open and draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .state)" = open
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .draft)" = true
