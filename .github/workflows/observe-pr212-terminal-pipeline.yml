@@ -1,0 +1,207 @@
+name: Observe PR 212 terminal pipeline
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/observe-pr212-terminal-pipeline.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  deployments: read
+  pull-requests: write
+
+concurrency:
+  group: observe-pr212-terminal-pipeline
+  cancel-in-progress: false
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      INSPECTOR_BRANCH: agent/pr212-main-integration-inspector-20260730
+      FEATURE_BRANCH: feat/institutional-trade-system
+      QA_WORKFLOW: institutional-trade-qa.yml
+      PREVIEW_WORKFLOW: pr212-invite-only-preview-review.yml
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+
+      - name: Wait for one stable PR head, current-main ancestry, exact-head QA, and protected-preview review
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-terminal-project-status
+          rm -rf "$output"
+          mkdir -p "$output"
+
+          stable_head=""
+          stable_count=0
+          qa_run_id=""
+          qa_status=""
+          qa_conclusion=""
+          preview_run_id=""
+          preview_status=""
+          preview_conclusion=""
+          current_main=""
+          main_is_ancestor=false
+          terminal_reason=timeout
+
+          for attempt in $(seq 1 2100); do
+            pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212")"
+            feature_head="$(jq -r .head.sha <<<"$pr_json")"
+            pr_state="$(jq -r .state <<<"$pr_json")"
+            pr_draft="$(jq -r .draft <<<"$pr_json")"
+            current_main="$(git ls-remote --heads origin refs/heads/main | awk '{print $1}')"
+
+            if [[ "$feature_head" == "$stable_head" ]]; then
+              stable_count=$((stable_count + 1))
+            else
+              stable_head="$feature_head"
+              stable_count=0
+              qa_run_id=""
+              qa_status=""
+              qa_conclusion=""
+            fi
+
+            if [[ "$pr_state" != open || "$pr_draft" != true ]]; then
+              terminal_reason=pr_state_changed
+              break
+            fi
+
+            git fetch --quiet origin "$feature_head" "$current_main"
+            if git merge-base --is-ancestor "$current_main" "$feature_head"; then
+              main_is_ancestor=true
+            else
+              main_is_ancestor=false
+            fi
+
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$QA_WORKFLOW" \
+              --branch "$FEATURE_BRANCH" \
+              --limit 100 \
+              --json databaseId,headSha,status,conclusion,createdAt,url,displayTitle \
+              > /tmp/qa-runs.json
+            qa_run_id="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/qa-runs.json)"
+            qa_status="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/qa-runs.json)"
+            qa_conclusion="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/qa-runs.json)"
+
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$PREVIEW_WORKFLOW" \
+              --branch "$INSPECTOR_BRANCH" \
+              --limit 50 \
+              --json databaseId,status,conclusion,createdAt,url,displayTitle \
+              > /tmp/preview-runs.json
+            preview_run_id="$(jq -r 'sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/preview-runs.json)"
+            preview_status="$(jq -r 'sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/preview-runs.json)"
+            preview_conclusion="$(jq -r 'sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/preview-runs.json)"
+
+            if [[ "$stable_count" -ge 3 && "$main_is_ancestor" == true && "$qa_status" == completed && "$qa_conclusion" == success && "$preview_status" == completed ]]; then
+              if [[ "$preview_conclusion" == success ]]; then
+                terminal_reason=success
+              else
+                terminal_reason=preview_failed
+              fi
+              break
+            fi
+
+            if [[ "$stable_count" -ge 6 && "$qa_status" == completed && "$qa_conclusion" != success ]]; then
+              terminal_reason=qa_failed
+              break
+            fi
+
+            sleep 10
+          done
+
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212")"
+          feature_head="$(jq -r .head.sha <<<"$pr_json")"
+          pr_state="$(jq -r .state <<<"$pr_json")"
+          pr_draft="$(jq -r .draft <<<"$pr_json")"
+          current_main="$(git ls-remote --heads origin refs/heads/main | awk '{print $1}')"
+
+          if [[ -n "$qa_run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${qa_run_id}" > "$output/qa-run.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${qa_run_id}/jobs?per_page=100" > "$output/qa-jobs.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${qa_run_id}/artifacts" > "$output/qa-artifacts.json"
+            gh run view "$qa_run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/qa-failed-log.txt" 2>&1 || true
+          else
+            printf '%s\n' '{}' > "$output/qa-run.json"
+            printf '%s\n' '{"jobs":[]}' > "$output/qa-jobs.json"
+            printf '%s\n' '{"artifacts":[]}' > "$output/qa-artifacts.json"
+            printf '%s\n' 'No exact-head QA run found.' > "$output/qa-failed-log.txt"
+          fi
+
+          if [[ -n "$preview_run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${preview_run_id}" > "$output/preview-run.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${preview_run_id}/jobs?per_page=100" > "$output/preview-jobs.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${preview_run_id}/artifacts" > "$output/preview-artifacts.json"
+            gh run view "$preview_run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/preview-failed-log.txt" 2>&1 || true
+          else
+            printf '%s\n' '{}' > "$output/preview-run.json"
+            printf '%s\n' '{"jobs":[]}' > "$output/preview-jobs.json"
+            printf '%s\n' '{"artifacts":[]}' > "$output/preview-artifacts.json"
+            printf '%s\n' 'No preview-review run found.' > "$output/preview-failed-log.txt"
+          fi
+
+          qa_failed_steps="$(jq -r '[.jobs[].steps[] | select(.conclusion == "failure") | .name] | unique | join(", ")' "$output/qa-jobs.json")"
+          preview_failed_steps="$(jq -r '[.jobs[].steps[] | select(.conclusion == "failure") | .name] | unique | join(", ")' "$output/preview-jobs.json")"
+
+          jq -n \
+            --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg terminal_reason "$terminal_reason" \
+            --arg feature_head "$feature_head" \
+            --arg current_main "$current_main" \
+            --arg pr_state "$pr_state" \
+            --arg pr_draft "$pr_draft" \
+            --arg main_is_ancestor "$main_is_ancestor" \
+            --arg qa_run_id "$qa_run_id" \
+            --arg qa_status "$qa_status" \
+            --arg qa_conclusion "$qa_conclusion" \
+            --arg qa_failed_steps "$qa_failed_steps" \
+            --arg preview_run_id "$preview_run_id" \
+            --arg preview_status "$preview_status" \
+            --arg preview_conclusion "$preview_conclusion" \
+            --arg preview_failed_steps "$preview_failed_steps" \
+            '{generated_at:$generated_at,terminal_reason:$terminal_reason,feature_head:$feature_head,current_main:$current_main,pr:{state:$pr_state,draft:($pr_draft=="true")},main_is_ancestor:($main_is_ancestor=="true"),qa:{run_id:$qa_run_id,status:$qa_status,conclusion:$qa_conclusion,failed_steps:($qa_failed_steps|split(", ")|map(select(length>0)))},preview_review:{run_id:$preview_run_id,status:$preview_status,conclusion:$preview_conclusion,failed_steps:($preview_failed_steps|split(", ")|map(select(length>0)))},ready_for_human_feature_review:($terminal_reason=="success"),production_changed:false,custody_enabled:false}' \
+            > "$output/status.json"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 terminal project status"
+          git push origin "HEAD:refs/heads/${INSPECTOR_BRANCH}"
+
+          marker='<!-- pr212-terminal-project-status -->'
+          body=$(cat <<EOF
+          $marker
+          ## PR #212 terminal project status
+
+          - Feature head: \`$feature_head\`
+          - Current main: \`$current_main\`
+          - Main is ancestor of feature head: **$main_is_ancestor**
+          - Exact-head QA: **${qa_conclusion:-not found}** ([run ${qa_run_id:-none}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${qa_run_id:-0}))
+          - Protected-preview review: **${preview_conclusion:-not found}** ([run ${preview_run_id:-none}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${preview_run_id:-0}))
+          - Terminal classification: **$terminal_reason**
+          - PR remains draft. Production, institutional custody, and live payment activation remain disabled.
+          EOF
+          )
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/212/comments?per_page=100" --jq '.[] | select(.body | contains("<!-- pr212-terminal-project-status -->")) | .id' | tail -1)"
+          if [[ -n "$existing" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/212/comments" -f body="$body" >/dev/null
+          fi
+
+          test "$pr_state" = open
+          test "$pr_draft" = true
+          test "$terminal_reason" = success
