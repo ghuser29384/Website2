@@ -1,0 +1,86 @@
+name: Verify PR 212 workflow restoration readiness
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/verify-pr212-workflow-restoration-ready.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PROMOTION_WORKFLOW: promote-pr212-final-source.yml
+      PROMOTION_BRANCH: agent/pr212-promotion-runner-20260731
+      FINAL_BRANCH: agent/pr212-main-final-20260731
+      FEATURE_BRANCH: feat/institutional-trade-system
+      WORKFLOW_PATH: .github/workflows/institutional-trade-qa.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+      - name: Verify final branch is one exact workflow-restoration commit ahead
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-main-integration/workflow-restoration-ready
+          mkdir -p "$output"
+          run_id="" status="" conclusion=""
+          for attempt in $(seq 1 1400); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$PROMOTION_WORKFLOW" --branch "$PROMOTION_BRANCH" --limit 20 --json databaseId,status,conclusion,createdAt,headSha,url > /tmp/promotion-runs.json
+            run_id="$(jq -r 'sort_by(.createdAt)|reverse|.[0].databaseId // empty' /tmp/promotion-runs.json)"
+            status="$(jq -r 'sort_by(.createdAt)|reverse|.[0].status // empty' /tmp/promotion-runs.json)"
+            conclusion="$(jq -r 'sort_by(.createdAt)|reverse|.[0].conclusion // empty' /tmp/promotion-runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 12
+          done
+          if [[ "$status" != "completed" || "$conclusion" != "success" ]]; then
+            echo "Source promotion did not succeed." >&2
+            exit 1
+          fi
+          git fetch origin \
+            "refs/heads/${FINAL_BRANCH}:refs/remotes/origin/${FINAL_BRANCH}" \
+            "refs/heads/${FEATURE_BRANCH}:refs/remotes/origin/${FEATURE_BRANCH}" \
+            "refs/heads/main:refs/remotes/origin/main"
+          final_head="$(git rev-parse refs/remotes/origin/${FINAL_BRANCH})"
+          feature_head="$(git rev-parse refs/remotes/origin/${FEATURE_BRANCH})"
+          current_main="$(git rev-parse refs/remotes/origin/main)"
+          parents="$(git show -s --format='%P' "$final_head")"
+          if [[ "$parents" != "$feature_head" ]]; then
+            echo "Final workflow-restoration commit is not a direct child of the source-promoted feature head." >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "$current_main" "$final_head"
+          changed="$(git diff --name-only "$feature_head" "$final_head")"
+          if [[ "$changed" != "$WORKFLOW_PATH" ]]; then
+            echo "The restoration commit changes more than the exact QA workflow." >&2
+            printf '%s\n' "$changed" >&2
+            exit 1
+          fi
+          final_workflow_sha="$(git show "${final_head}:${WORKFLOW_PATH}" | sha256sum | awk '{print $1}')"
+          feature_workflow_sha="$(git show "${feature_head}:${WORKFLOW_PATH}" | sha256sum | awk '{print $1}')"
+          {
+            echo "promotion_run_id=$run_id"
+            echo "feature_head=$feature_head"
+            echo "final_head=$final_head"
+            echo "current_main=$current_main"
+            echo "final_parent=$parents"
+            echo "changed_path=$changed"
+            echo "feature_workflow_sha256=$feature_workflow_sha"
+            echo "final_workflow_sha256=$final_workflow_sha"
+            echo "ready=true"
+          } > "$output/readiness.txt"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output/readiness.txt"
+          git commit -m "Record PR 212 workflow-restoration readiness"
+          git push origin HEAD:agent/pr212-main-integration-inspector-20260730
