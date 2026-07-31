@@ -56,6 +56,16 @@ test("the accepted Create interface is mounted with Donation Upgrade and compact
   assert.match(html, /Public exact thresholds/);
   assert.match(html, /Progress range/);
   assert.doesNotMatch(html, /href="\/mpgf\/common-ground-pool/);
+  assert.match(
+    html,
+    /If this Co-Fund does not happen, where would you otherwise use this money\?/,
+  );
+  assert.match(
+    html,
+    /These are the projects we would honestly fund if this Co-Fund did not happen\./,
+  );
+  assert.match(commonGroundScript, /What would you fund instead\?/);
+  assert.doesNotMatch(commonGroundScript, /Without pool|no-pool/);
   assert.match(commonGroundScript, /Private value estimates stay in this tab/);
   assert.match(commonGroundScript, /privateValueEstimatesStored:\s*false/);
   assert.match(commonGroundScript, /participantGainChecked:\s*true/);
