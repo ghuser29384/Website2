@@ -1,46 +1,37 @@
 name: Commitments live portfolio bootstrap gate
 
 on:
-  pull_request:
-    branches:
-      - main
+  issue_comment:
     types:
-      - opened
-      - reopened
-      - synchronize
-    paths:
-      - ".github/commitments-live-portfolio-payload/**"
-      - ".github/workflows/commitments-live-portfolio-materialize.yml"
-      - ".github/workflows/commitments-live-portfolio-pr.yml"
-      - "src/app/commitments/**"
-      - "src/components/commitments/**"
-      - "src/lib/commitments-portfolio.ts"
-      - "src/commitments-portfolio-wiring.test.ts"
+      - created
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 concurrency:
-  group: commitments-live-portfolio-bootstrap-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: commitments-live-portfolio-bootstrap-pr-395
+  cancel-in-progress: false
 
 jobs:
   verify-materialize:
     if: >-
       github.repository == 'ghuser29384/Website2' &&
-      github.event.pull_request.number == 395 &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'feature/commitments-live-portfolio-20260731'
+      github.event.issue.pull_request &&
+      github.event.issue.number == 395 &&
+      github.event.comment.body == '/materialize-commitments b85cef92a6ed884aa05bf0672c4dff4957f37444'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
-      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
-      HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+      EXPECTED_HEAD: b85cef92a6ed884aa05bf0672c4dff4957f37444
+      HEAD_BRANCH: feature/commitments-live-portfolio-20260731
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check out exact pull request head
+      - name: Check out exact feature branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: feature/commitments-live-portfolio-20260731
           fetch-depth: 0
           persist-credentials: true
 
@@ -49,221 +40,12 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
-          test "$HEAD_BRANCH" = "feature/commitments-live-portfolio-20260731"
+          test "$(git branch --show-current)" = "$HEAD_BRANCH"
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          gh pr comment 395 --body "Commitments bootstrap started for exact head \`$EXPECTED_HEAD\`. Production is unchanged."
 
-      - name: Detect staged payload
-        id: staged
-        shell: bash
-        run: |
-          set -euo pipefail
-          count="$(find .github/commitments-live-portfolio-payload -maxdepth 1 -type f -name 'part-*' 2>/dev/null | wc -l | tr -d ' ')"
-          if [[ "$count" == "5" ]]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          elif [[ "$count" == "0" ]]; then
-            echo "present=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Expected zero or five payload parts, found $count" >&2
-            exit 1
-          fi
-
-      - name: Reconstruct and validate reviewed product payload
-        if: steps.staged.outputs.present == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t parts < <(find .github/commitments-live-portfolio-payload -maxdepth 1 -type f -name 'part-*' | sort)
-          cat "${parts[@]}" | tr -d '\r\n' > /tmp/commitments-live-portfolio.b64
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('/tmp/commitments-live-portfolio.b64')
-          payload = path.read_text()
-          if len(payload) != 25_532:
-              raise SystemExit(f'unexpected payload length: {len(payload)}')
-          if payload[9745] != 's':
-              raise SystemExit(f'unexpected staged character at 9745: {payload[9745]!r}')
-          payload = payload[:9745] + 'k' + payload[9746:]
-          path.write_text(payload)
-          PY
-          base64 --decode /tmp/commitments-live-portfolio.b64 > /tmp/commitments-live-portfolio.tar.gz
-          echo "a8425f53cc465562a2ddf6c39edc395a3f8417bbc98a876d4e5352ea489a8be8  /tmp/commitments-live-portfolio.tar.gz" | sha256sum --check
-          gzip --test /tmp/commitments-live-portfolio.tar.gz
-          tar -tzf /tmp/commitments-live-portfolio.tar.gz | sort > /tmp/payload-members.txt
-          cat > /tmp/expected-members.txt <<'EOF'
-          src/app/commitments/commitments.module.css
-          src/app/commitments/page.tsx
-          src/components/commitments/commitments-local-greeting.tsx
-          src/components/commitments/impact-share-button.tsx
-          src/lib/commitments-portfolio.ts
-          EOF
-          diff -u /tmp/expected-members.txt /tmp/payload-members.txt
-          while IFS= read -r member; do
-            case "$member" in
-              /*|*..*) echo "Unsafe archive member: $member" >&2; exit 1 ;;
-            esac
-          done < /tmp/payload-members.txt
-          tar -xzf /tmp/commitments-live-portfolio.tar.gz -C .
-
-      - name: Repair deterministic and visitor-local date rendering
-        if: steps.staged.outputs.present == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path('src/app/commitments/page.tsx')
-          text = path.read_text()
-
-          def replace_once(old: str, new: str) -> None:
-              global text
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'expected one source match, found {count}: {old[:100]!r}')
-              text = text.replace(old, new)
-
-          replace_once(
-              'import { SiteTopbar } from "@/components/layout/site-topbar";\n',
-              'import { SiteTopbar } from "@/components/layout/site-topbar";\n'
-              'import { LocalDateTime } from "@/components/ui/local-date-time";\n',
-          )
-          replace_once(
-              '<time dateTime={event.at}>{new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(event.at))}</time>',
-              '<LocalDateTime value={event.at} fallback="Date unavailable" options={{ dateStyle: "medium", timeStyle: "short" }} />',
-          )
-          replace_once(
-              '''          {items.map((item) => {
-            const date = new Date(item.at);
-            return (
-              <li key={item.id} data-action={item.requiresUserAction ? "true" : "false"}>
-                <time dateTime={item.at}><strong>{new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(date)}</strong><span>{new Intl.DateTimeFormat(undefined, { year: "numeric" }).format(date)}</span></time>
-                <div><strong>{item.label}</strong><p>{item.detail}</p></div>
-                <Link href={item.href}>View →</Link>
-              </li>
-            );
-          })}''',
-              '''          {items.map((item) => (
-            <li key={item.id} data-action={item.requiresUserAction ? "true" : "false"}>
-              <LocalDateTime
-                value={item.at}
-                fallback="Date unavailable"
-                options={{ month: "short", day: "numeric", year: "numeric" }}
-              />
-              <div><strong>{item.label}</strong><p>{item.detail}</p></div>
-              <Link href={item.href}>View →</Link>
-            </li>
-          ))}''',
-          )
-          replace_once(
-              '''  const activatedThisMonth = activeRecords.filter((record) => {
-    const created = new Date(record.createdAt);
-    const now = new Date(data?.generatedAt ?? Date.now());
-    return record.lifecycle !== "conditional" && created.getUTCFullYear() === now.getUTCFullYear() && created.getUTCMonth() === now.getUTCMonth();
-  });''',
-              '''  const generatedAt = data ? new Date(data.generatedAt) : null;
-  const activatedThisMonth = generatedAt
-    ? activeRecords.filter((record) => {
-        const created = new Date(record.createdAt);
-        return (
-          record.lifecycle !== "conditional" &&
-          created.getUTCFullYear() === generatedAt.getUTCFullYear() &&
-          created.getUTCMonth() === generatedAt.getUTCMonth()
-        );
-      })
-    : [];''',
-          )
-          replace_once(
-              '<time dateTime={event.at}>{new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(event.at))}</time>',
-              '''<LocalDateTime
-                              value={event.at}
-                              fallback="Date unavailable"
-                              options={{ month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }}
-                            />''',
-          )
-
-          if 'Date.now()' in text:
-              raise SystemExit('Date.now remained in the Commitments Server Component')
-          if 'Intl.DateTimeFormat' in text:
-              raise SystemExit('server-side visitor date formatting remained in Commitments')
-          if text.count('LocalDateTime') != 4:
-              raise SystemExit(f'unexpected LocalDateTime occurrence count: {text.count("LocalDateTime")}')
-
-          path.write_text(text)
-          PY
-
-      - name: Write focused source and accounting contracts
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > src/commitments-portfolio-wiring.test.ts <<'EOF'
-          import assert from "node:assert/strict";
-          import { readFileSync } from "node:fs";
-          import test from "node:test";
-
-          const page = readFileSync("src/app/commitments/page.tsx", "utf8");
-          const model = readFileSync("src/lib/commitments-portfolio.ts", "utf8");
-          const share = readFileSync("src/components/commitments/impact-share-button.tsx", "utf8");
-
-          test("Commitments renders a live, cross-mechanism portfolio instead of the visual fixture", () => {
-            for (const required of [
-              "Additional resources you caused.",
-              "Portfolio",
-              "Ledger",
-              "Completed",
-              "Calendar",
-              "If everything succeeds",
-              "You committed",
-              "Total coordinated",
-              "Additional resources attributed",
-            ]) {
-              assert.ok(page.includes(required), `missing required production label: ${required}`);
-            }
-
-            for (const synthetic of [
-              "$540",
-              "$18,760",
-              "Counteroffer received",
-              "Salary-gap pool at 81%",
-              "Factory-farming redirect",
-            ]) {
-              assert.equal(page.includes(synthetic), false, `visual-fixture value leaked into production source: ${synthetic}`);
-            }
-          });
-
-          test("Commitments data is participant-scoped, real-record based, and noncustodial", () => {
-            for (const required of [
-              "listAgreementsForUser",
-              "listCartItems",
-              "listProfileOffers",
-              "loadMpgfParticipantState",
-              "donation_offset_matches",
-              "attributedAdditionalResources",
-              "expectedMarginalEffect",
-            ]) {
-              assert.ok(model.includes(required), `missing canonical data/accounting integration: ${required}`);
-            }
-
-            for (const forbidden of [
-              "createServiceClient",
-              "SUPABASE_SERVICE_ROLE_KEY",
-              "5% wallet bonus",
-              "wallet_balance",
-              "demo commitments",
-            ]) {
-              assert.equal(model.includes(forbidden), false, `forbidden production dependency or synthetic fallback: ${forbidden}`);
-            }
-
-            assert.ok(share.includes("navigator.share"));
-            assert.ok(share.includes("navigator.clipboard"));
-          });
-
-          test("Commitments dates are deterministic on the server and local to the visitor", () => {
-            assert.ok(page.includes("LocalDateTime"));
-            assert.equal(page.includes("Intl.DateTimeFormat"), false);
-            assert.equal(page.includes("Date.now()"), false);
-          });
-          EOF
+      - name: Materialize and validate reviewed source
+        run: node scripts/materialize-commitments-portfolio.mjs
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -328,14 +110,30 @@ jobs:
           ! grep -R --line-number -E '\$18,760|Counteroffer received|Salary-gap pool at 81%|Factory-farming redirect' \
             src/app/commitments src/components/commitments src/lib/commitments-portfolio.ts
 
-      - name: Publish verified product source and remove staging machinery
-        if: steps.staged.outputs.present == 'true'
+      - name: Upload gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-live-portfolio-bootstrap-${{ github.run_id }}
+          path: |
+            commitments-focused-tests.log
+            commitments-focused-lint.log
+            repository-tests.log
+            repository-lint.log
+            repository-typecheck.log
+            production-build.log
+            diff-check.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish verified product source only
         shell: bash
         run: |
           set -euo pipefail
           rm -rf .github/commitments-live-portfolio-payload
           rm -f .github/workflows/commitments-live-portfolio-materialize.yml
           rm -f .github/workflows/commitments-live-portfolio-pr.yml
+          rm -f scripts/materialize-commitments-portfolio.mjs
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
@@ -348,12 +146,14 @@ jobs:
           git add -A -- \
             .github/commitments-live-portfolio-payload \
             .github/workflows/commitments-live-portfolio-materialize.yml \
-            .github/workflows/commitments-live-portfolio-pr.yml
+            .github/workflows/commitments-live-portfolio-pr.yml \
+            scripts/materialize-commitments-portfolio.mjs
           while IFS= read -r staged; do
             case "$staged" in
               .github/commitments-live-portfolio-payload/*|\
               .github/workflows/commitments-live-portfolio-materialize.yml|\
               .github/workflows/commitments-live-portfolio-pr.yml|\
+              scripts/materialize-commitments-portfolio.mjs|\
               src/app/commitments/commitments.module.css|\
               src/app/commitments/page.tsx|\
               src/components/commitments/commitments-local-greeting.tsx|\
@@ -368,3 +168,11 @@ jobs:
           git diff --cached --check
           git commit -m "Build live Commitments portfolio and impact ledger"
           git push origin HEAD:"$HEAD_BRANCH"
+          new_head="$(git rev-parse HEAD)"
+          gh pr comment 395 --body "Commitments source materialized and pushed as \`$new_head\`. Focused contracts, complete tests, complete lint, TypeScript, production build, and diff checks passed in this run. This is not a production-deployment claim."
+
+      - name: Report bootstrap failure
+        if: failure()
+        shell: bash
+        run: |
+          gh pr comment 395 --body "Commitments bootstrap failed for exact head \`$EXPECTED_HEAD\`. No product source was published by this run, and production is unchanged. Inspect run \`${{ github.run_id }}\` before retrying."
