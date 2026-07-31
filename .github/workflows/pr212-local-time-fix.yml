@@ -1,0 +1,176 @@
+name: PR 212 local-time regression repair
+
+on:
+  push:
+    branches:
+      - agent/pr212-local-time-fix-20260731
+    paths:
+      - .github/workflows/pr212-local-time-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-local-time-regression-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_FEATURE_HEAD: 71f28543df87fb13005e07582603410e5cef7255
+      TARGET_BRANCH: feat/institutional-trade-system
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Refuse a stale repair target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+          test "$(git rev-parse 'HEAD:src/components/institutions/institutional-ui.tsx')" = "657765cc7cff482f4129f89b3dd48c41c93672bd"
+          test "$(git rev-parse 'HEAD:src/app/institutions/verifier-assignments/[assignmentId]/page.tsx')" = "f3b13b1c47113f20081e5ce755d93f4201402fd1"
+
+      - name: Route institutional timestamps through LocalDateTime
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          ui_path = Path("src/components/institutions/institutional-ui.tsx")
+          ui = ui_path.read_text()
+          import_marker = 'import type { ReactNode } from "react";\n\n'
+          import_replacement = 'import type { ReactNode } from "react";\n\nimport { LocalDateTime } from "@/components/ui/local-date-time";\n'
+          if ui.count(import_marker) != 1:
+              raise SystemExit(f"Expected one institutional UI import marker, found {ui.count(import_marker)}")
+          ui = ui.replace(import_marker, import_replacement)
+
+          old_date = '''export function InstitutionalDate({ value }: { value: unknown }) {
+            const date = value ? new Date(String(value)) : null;
+            if (!date || Number.isNaN(date.getTime())) return <span>Not set</span>;
+            return <time dateTime={date.toISOString()}>{new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date)}</time>;
+          }
+          '''
+          new_date = '''export function InstitutionalDate({ value }: { value: unknown }) {
+            const normalized =
+              value instanceof Date
+                ? value.toISOString()
+                : typeof value === "string" || typeof value === "number"
+                  ? value
+                  : null;
+
+            return (
+              <LocalDateTime
+                value={normalized}
+                fallback="Not set"
+                options={{ dateStyle: "medium", timeStyle: "short" }}
+              />
+            );
+          }
+          '''
+          if ui.count(old_date) != 1:
+              raise SystemExit(f"Expected one server-formatted InstitutionalDate block, found {ui.count(old_date)}")
+          ui_path.write_text(ui.replace(old_date, new_date))
+
+          deal_path = Path("src/app/institutions/[organizationId]/deals/[dealId]/page.tsx")
+          deal = deal_path.read_text()
+          old_note = 'note={data.deal.signed_at ? `Signed ${new Date(data.deal.signed_at).toLocaleString()}` : "No signed-stage timestamp"}'
+          new_note = '''note={
+                    data.deal.signed_at ? (
+                      <>Signed <InstitutionalDate value={data.deal.signed_at} /></>
+                    ) : (
+                      "No signed-stage timestamp"
+                    )
+                  }'''
+          if deal.count(old_note) != 1:
+              raise SystemExit(f"Expected one server-formatted deal signature note, found {deal.count(old_note)}")
+          deal_path.write_text(deal.replace(old_note, new_note))
+
+          verifier_path = Path("src/app/institutions/verifier-assignments/[assignmentId]/page.tsx")
+          verifier = verifier_path.read_text()
+          import_old = 'InstitutionalKeyValue, InstitutionalSectionHeader, InstitutionalStatus'
+          import_new = 'InstitutionalDate, InstitutionalKeyValue, InstitutionalSectionHeader, InstitutionalStatus'
+          if verifier.count(import_old) != 1:
+              raise SystemExit(f"Expected one verifier UI import sequence, found {verifier.count(import_old)}")
+          verifier = verifier.replace(import_old, import_new)
+
+          assigned_old = '["Assigned", new Date(assignment.created_at).toLocaleString()]'
+          assigned_new = '["Assigned", <InstitutionalDate value={assignment.created_at} />]'
+          accepted_old = '["Accepted", assignment.accepted_at ? new Date(assignment.accepted_at).toLocaleString() : "Not accepted"]'
+          accepted_new = '["Accepted", assignment.accepted_at ? <InstitutionalDate value={assignment.accepted_at} /> : "Not accepted"]'
+          if verifier.count(assigned_old) != 1:
+              raise SystemExit(f"Expected one server-formatted assigned timestamp, found {verifier.count(assigned_old)}")
+          if verifier.count(accepted_old) != 1:
+              raise SystemExit(f"Expected one server-formatted accepted timestamp, found {verifier.count(accepted_old)}")
+          verifier_path.write_text(
+              verifier.replace(assigned_old, assigned_new).replace(accepted_old, accepted_new)
+          )
+          PY
+
+          git diff --check
+          changed="$(git status --short | cut -c4- | sort)"
+          expected="$(printf '%s\n' \
+            'src/app/institutions/[organizationId]/deals/[dealId]/page.tsx' \
+            'src/app/institutions/verifier-assignments/[assignmentId]/page.tsx' \
+            'src/components/institutions/institutional-ui.tsx' | sort)"
+          test "$changed" = "$expected"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run timezone and institutional contract tests
+        run: |
+          node --import tsx --test \
+            src/lib/local-date-time-coverage.test.ts \
+            src/components/ui/local-date-time.test.ts \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          node --check .github/scripts/pr212-targeted-regression-qa.mjs
+
+      - name: Run complete repository tests absolutely
+        run: npm test
+
+      - name: Run TypeScript absolutely
+        run: npx tsc --noEmit
+
+      - name: Run ESLint absolutely
+        run: npm run lint
+
+      - name: Build production application absolutely
+        run: npm run build
+
+      - name: Commit and publish the exact repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            'src/app/institutions/[organizationId]/deals/[dealId]/page.tsx' \
+            'src/app/institutions/verifier-assignments/[assignmentId]/page.tsx' \
+            src/components/institutions/institutional-ui.tsx
+          git commit -m "Render institutional timestamps in the visitor time zone"
+          git push origin HEAD:"$TARGET_BRANCH"
