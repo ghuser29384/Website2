@@ -1,0 +1,113 @@
+name: Attest Discover offer flow candidate
+
+on:
+  push:
+    branches:
+      - agent/fix-discover-offer-flow-20260731
+    paths:
+      - .github/workflows/attest-discover-offer-flow.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: discover-offer-flow-implementation
+  cancel-in-progress: false
+
+jobs:
+  attest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/fix-discover-offer-flow-20260731
+
+      - name: Require successful code, rendered, and rolled-back database gates
+        id: runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs=$(gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            '/repos/ghuser29384/Website2/actions/runs?branch=agent%2Ffix-discover-offer-flow-20260731&per_page=100')
+          code=$(printf '%s' "$runs" | jq -c '[.workflow_runs[] | select((.name == "Recover Discover offer flow implementation" or .name == "Finalize Discover offer flow" or .name == "Apply and validate Discover offer flow") and .status == "completed" and .conclusion == "success")][0]')
+          database=$(printf '%s' "$runs" | jq -c '[.workflow_runs[] | select(.name == "QA Discover offer flow database" and .status == "completed" and .conclusion == "success")][0]')
+          if [[ "$code" == null || "$database" == null ]]; then
+            echo 'A successful code/rendered gate and a successful MoralTrade QA database gate are both required.' >&2
+            exit 1
+          fi
+          echo "code_id=$(printf '%s' "$code" | jq -r .id)" >> "$GITHUB_OUTPUT"
+          echo "code_url=$(printf '%s' "$code" | jq -r .html_url)" >> "$GITHUB_OUTPUT"
+          echo "database_id=$(printf '%s' "$database" | jq -r .id)" >> "$GITHUB_OUTPUT"
+          echo "database_url=$(printf '%s' "$database" | jq -r .html_url)" >> "$GITHUB_OUTPUT"
+
+      - name: Verify the clean product tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f src/app/api/marketplace/responses/route.ts
+          test -f src/app/activity/offers/page.tsx
+          test -f src/app/activity/offers/offer-activity-client.tsx
+          test -f public/discover/offer-composer.js
+          test -f public/discover/offer-composer.css
+          test -f supabase/migrations/20260731120000_discover_offer_responses.sql
+          test -f supabase/tests/marketplace_offer_responses_contract.sql
+          node --check public/discover/offer-composer.js
+          python3 -m py_compile scripts/apply-discover-offer-flow.py
+          for temporary in \
+            .github/workflows/inspect-discover-offer-flow.yml \
+            .github/workflows/apply-discover-offer-bundle.yml \
+            .github/workflows/finalize-discover-offer-flow.yml \
+            .github/workflows/recover-discover-offer-flow.yml \
+            .github/workflows/qa-discover-offer-flow-database.yml; do
+            test ! -e "$temporary"
+          done
+          git diff --check
+
+      - name: Commit the evidence-backed attestation and remove this temporary workflow
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs
+          pre_attestation_sha=$(git rev-parse HEAD)
+          cat > docs/discover-offer-flow-validation.md <<EOF
+          # Discover offer-flow validation
+
+          The actionable Discover response flow was validated before review.
+
+          - Product candidate before this documentation-only attestation: \`$pre_attestation_sha\`
+          - Code, complete-test, lint, TypeScript differential, production-build, and rendered desktop/mobile gate: [run ${{ steps.runs.outputs.code_id }}](${{ steps.runs.outputs.code_url }})
+          - Protected MoralTrade QA migration and pgTAP contract, executed inside one rolled-back transaction: [run ${{ steps.runs.outputs.database_id }}](${{ steps.runs.outputs.database_url }})
+          - Production deployment: not performed
+          - Production migration: not applied
+          - Temporary implementation workflows: removed
+          EOF
+          rm -f .github/workflows/attest-discover-offer-flow.yml
+          git add -A
+          git diff --cached --check
+          git config user.name 'Moral Trade release automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git commit -m 'Document validated Discover offer response candidate'
+          git push origin HEAD:agent/fix-discover-offer-flow-20260731
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Mark PR ready and publish exact-head status
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr ready 344 --repo ghuser29384/Website2 || true
+          gh pr comment 344 --repo ghuser29384/Website2 --body "Final attestation passed. Exact review head: \`${{ steps.commit.outputs.sha }}\`. The clean product tree has successful complete code/rendered gates and a successful rolled-back MoralTrade QA migration/security-contract gate. All temporary implementation workflows are removed. Production remains unchanged."
+
+      - name: Keep the PR draft when attestation fails
+        if: failure()
+        shell: bash
+        run: |
+          gh pr comment 344 --repo ghuser29384/Website2 --body 'Final attestation did not pass. PR #344 remains draft; it must not be merged or promoted. Inspect this workflow and the prior code/database gate evidence.' || true
