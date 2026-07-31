@@ -1,0 +1,392 @@
+name: Integrate PR 212 clean reconstruction with pinned main
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-ops-20260730
+    paths:
+      - .github/workflows/pr212-integrate-main-and-validate.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: pr212-integrate-pinned-main
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      CLEAN_SHA: e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e
+      MAIN_SHA: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+      MERGE_BASE_SHA: bb32b5c5a58442f97bef642be58ed01a57f0d91b
+      OUTPUT_BRANCH: agent/pr212-main-integrated-20260731
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Check out exact clean reconstruction
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CLEAN_SHA }}
+          fetch-depth: 0
+
+      - name: Verify pinned refs and clean validation provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          remote_clean="$(git ls-remote origin refs/heads/agent/pr212-clean-reconstruction-20260730 | awk '{print $1}')"
+          [[ "$remote_main" == "$MAIN_SHA" ]] || {
+            echo "main moved from pinned commit $MAIN_SHA to $remote_main; refusing to integrate." >&2
+            exit 1
+          }
+          [[ "$remote_clean" == "$CLEAN_SHA" ]] || {
+            echo "Clean reconstruction moved from $CLEAN_SHA to $remote_clean; refusing to integrate." >&2
+            exit 1
+          }
+          [[ "$(git merge-base "$CLEAN_SHA" "$MAIN_SHA")" == "$MERGE_BASE_SHA" ]] || {
+            echo "Unexpected merge base; refusing to use stale conflict analysis." >&2
+            exit 1
+          }
+
+          clean_run="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow pr212-clean-reconstruction-gates.yml --branch agent/pr212-clean-reconstruction-20260730 --limit 20 --json databaseId,headSha,status,conclusion,createdAt,url --jq '[.[] | select(.headSha == env.CLEAN_SHA and .status == "completed" and .conclusion == "success")] | sort_by(.createdAt) | reverse | .[0]')"
+          [[ "$clean_run" != "null" && -n "$clean_run" ]] || {
+            echo "No successful exact-head clean-reconstruction gate found for $CLEAN_SHA." >&2
+            exit 1
+          }
+          mkdir -p integration-evidence
+          printf '%s\n' "$clean_run" > integration-evidence/clean-gate-run.json
+          printf 'clean_sha=%s\nmain_sha=%s\nmerge_base_sha=%s\n' "$CLEAN_SHA" "$MAIN_SHA" "$MERGE_BASE_SHA" > integration-evidence/pinned-refs.txt
+
+      - name: Merge pinned main, resolve exact conflicts, and audit every clean-only non-institutional change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$OUTPUT_BRANCH" "$CLEAN_SHA"
+
+          set +e
+          git merge --no-ff --no-commit "$MAIN_SHA" > integration-evidence/merge-stdout.txt 2> integration-evidence/merge-stderr.txt
+          merge_status=$?
+          set -e
+          printf '%s\n' "$merge_status" > integration-evidence/merge-status.txt
+
+          mapfile -t conflicts < <(git diff --name-only --diff-filter=U | sort)
+          expected_conflicts=(
+            src/app/offers/offer-visual-directory-mount.tsx
+            src/components/profile/complete-profile-connections.tsx
+            src/lib/crawlability.test.ts
+            src/lib/public-route-smoke.test.ts
+          )
+          printf '%s\n' "${conflicts[@]}" > integration-evidence/conflicts-observed.txt
+          printf '%s\n' "${expected_conflicts[@]}" > integration-evidence/conflicts-expected.txt
+          [[ "${conflicts[*]}" == "${expected_conflicts[*]}" ]] || {
+            echo "Conflict inventory changed from the reviewed four-file analysis." >&2
+            diff -u integration-evidence/conflicts-expected.txt integration-evidence/conflicts-observed.txt >&2 || true
+            exit 1
+          }
+
+          # Decisions 1A and 2A: preserve current-main runtime and test implementations.
+          for path in "${expected_conflicts[@]}"; do
+            git checkout "$MAIN_SHA" -- "$path"
+          done
+
+          # Decision 3A: remove every reviewed clean-only change that is unrelated to
+          # institutional functionality or no longer needed for an absolute gate.
+          revert_to_main=(
+            src/app/complete-profile/page.tsx
+            src/app/how-it-works/page.tsx
+            src/app/offers/offer-plane-inline-mount.tsx
+            src/app/offers/offer-visual-directory-mount.tsx
+            src/components/profile/complete-profile-connections.tsx
+            src/lib/crawlability.test.ts
+            src/lib/discovery-ranking.test.ts
+            src/lib/funding.test.ts
+            src/lib/payments/conditional-state.test.ts
+            src/lib/public-route-smoke.test.ts
+            src/lib/x-profile-connector.test.ts
+            tsconfig.json
+          )
+          git checkout "$MAIN_SHA" -- "${revert_to_main[@]}"
+
+          # This workflow is reconstruction-only evidence, not part of the product PR.
+          git rm -f .github/workflows/pr212-clean-reconstruction-gates.yml
+          git add -A
+
+          if git diff --name-only --diff-filter=U | grep -q .; then
+            echo "Unresolved merge conflicts remain." >&2
+            git diff --name-only --diff-filter=U >&2
+            exit 1
+          fi
+          if git grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- ':!package-lock.json'; then
+            echo "Conflict markers remain." >&2
+            exit 1
+          fi
+
+          # The two reviewed runtime resolutions must be byte-identical to pinned main,
+          # and the obsolete server-page remount key must be gone.
+          for path in "${revert_to_main[@]}"; do
+            git diff --quiet "$MAIN_SHA" -- "$path" || {
+              echo "$path is not identical to pinned main after audit." >&2
+              exit 1
+            }
+          done
+          ! grep -F 'key={initialConnectionsOpen ? "connections-open" : "connections-closed"}' src/app/complete-profile/page.tsx
+          grep -F 'let disposed = false;' src/app/offers/offer-visual-directory-mount.tsx
+          grep -F 'if (disposed) return;' src/app/offers/offer-visual-directory-mount.tsx
+          grep -F 'window.requestAnimationFrame(() => setOpen(true))' src/components/profile/complete-profile-connections.tsx
+
+          mapfile -t clean_changed < <(git diff --name-only "$MERGE_BASE_SHA" "$CLEAN_SHA" | sort)
+          printf 'path\tclassification\n' > integration-evidence/non-institutional-audit.tsv
+          unknown=0
+          for path in "${clean_changed[@]}"; do
+            classification=""
+            case "$path" in
+              .env.example|src/app/admin/page.tsx)
+                classification="retained: shared institutional entry/configuration"
+                ;;
+              .github/scripts/institutional-*|.github/workflows/institutional-trade-qa.yml|src/app/admin/institutional-deal-desk/*|src/app/institutions/*|src/components/institutions/*|src/institutional-*|src/lib/institutional-*|supabase/migrations/20260726123000_institutional_trade_system.sql)
+                classification="retained: institutional implementation/test"
+                ;;
+              .github/workflows/pr212-clean-reconstruction-gates.yml)
+                classification="removed: temporary reconstruction workflow"
+                ;;
+              src/app/complete-profile/page.tsx|src/app/how-it-works/page.tsx|src/app/offers/offer-plane-inline-mount.tsx|src/app/offers/offer-visual-directory-mount.tsx|src/components/profile/complete-profile-connections.tsx|src/lib/crawlability.test.ts|src/lib/discovery-ranking.test.ts|src/lib/funding.test.ts|src/lib/payments/conditional-state.test.ts|src/lib/public-route-smoke.test.ts|src/lib/x-profile-connector.test.ts|tsconfig.json)
+                classification="reverted: pinned main is authoritative"
+                ;;
+              *)
+                classification="UNKNOWN"
+                unknown=$((unknown + 1))
+                ;;
+            esac
+            printf '%s\t%s\n' "$path" "$classification" >> integration-evidence/non-institutional-audit.tsv
+          done
+          [[ "$unknown" == "0" ]] || {
+            echo "$unknown clean-only files were not deliberately classified." >&2
+            cat integration-evidence/non-institutional-audit.tsv >&2
+            exit 1
+          }
+
+          # Fail if the resulting candidate differs from main outside the exact retained
+          # institutional/shared allowlist.
+          mapfile -t candidate_delta < <(git diff --name-only "$MAIN_SHA" | sort)
+          printf '%s\n' "${candidate_delta[@]}" > integration-evidence/candidate-versus-main-files.txt
+          unexpected=0
+          for path in "${candidate_delta[@]}"; do
+            case "$path" in
+              .env.example|src/app/admin/page.tsx|.github/scripts/institutional-*|.github/workflows/institutional-trade-qa.yml|src/app/admin/institutional-deal-desk/*|src/app/institutions/*|src/components/institutions/*|src/institutional-*|src/lib/institutional-*|supabase/migrations/20260726123000_institutional_trade_system.sql)
+                ;;
+              *)
+                echo "Unexpected non-institutional delta after audit: $path" >&2
+                unexpected=$((unexpected + 1))
+                ;;
+            esac
+          done
+          [[ "$unexpected" == "0" ]] || exit 1
+
+          git diff --cached --check
+          git status --short > integration-evidence/precommit-status.txt
+          git diff --cached --stat > integration-evidence/precommit-stat.txt
+          git commit -m "Integrate institutional trade system with pinned main"
+          git rev-parse HEAD | tee integration-evidence/integrated-commit.txt
+          git show --stat --oneline --decorate --no-renames HEAD > integration-evidence/integrated-commit-stat.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Install Chromium
+        shell: bash
+        run: npx playwright install --with-deps chromium
+
+      - name: Run institutional and conflict-regression source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts \
+            src/lib/crawlability.test.ts \
+            src/lib/public-route-smoke.test.ts \
+            src/proxy.test.ts \
+            src/walkthrough-production-shell.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Require absolute TypeScript success
+        run: npx tsc --noEmit
+
+      - name: Require absolute ESLint success
+        run: npm run lint
+
+      - name: Require absolute production build success
+        run: npm run build
+
+      - name: Start integrated production server
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm start -- --hostname 127.0.0.1 --port 3000 > integration-evidence/server.log 2>&1 &
+          echo $! > integration-evidence/server.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat integration-evidence/server.log >&2
+          exit 1
+
+      - name: Run targeted rendered regressions for conflict and major-site surfaces
+        shell: bash
+        env:
+          BASE_URL: http://127.0.0.1:3000
+        run: |
+          set -euo pipefail
+          mkdir -p integration-evidence/screenshots
+          cat > /tmp/pr212-regression-smoke.mjs <<'NODE'
+          import { chromium } from "@playwright/test";
+          import fs from "node:fs/promises";
+
+          const baseURL = process.env.BASE_URL;
+          const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+          const report = [];
+
+          async function inspect(name, path, assertion) {
+            const page = await context.newPage();
+            const consoleErrors = [];
+            const pageErrors = [];
+            const serverErrors = [];
+            page.on("console", (message) => {
+              if (message.type() === "error") {
+                const text = message.text();
+                if (!/Failed to load resource: the server responded with a status of (401|403|404)/i.test(text)) {
+                  consoleErrors.push(text);
+                }
+              }
+            });
+            page.on("pageerror", (error) => pageErrors.push(String(error)));
+            page.on("response", (response) => {
+              if (response.status() >= 500) serverErrors.push(`${response.status()} ${response.url()}`);
+            });
+            const response = await page.goto(`${baseURL}${path}`, { waitUntil: "networkidle" });
+            if (!response || response.status() >= 500) throw new Error(`${name}: initial response failed`);
+            await assertion(page);
+            await page.screenshot({ path: `integration-evidence/screenshots/${name}.png`, fullPage: true });
+            if (consoleErrors.length || pageErrors.length || serverErrors.length) {
+              throw new Error(`${name}: console=${JSON.stringify(consoleErrors)} page=${JSON.stringify(pageErrors)} server=${JSON.stringify(serverErrors)}`);
+            }
+            report.push({ name, path, finalURL: page.url(), status: response.status() });
+            await page.close();
+          }
+
+          await inspect("offers-visual-directory", "/offers?view=live", async (page) => {
+            await page.locator("body").waitFor({ state: "visible" });
+            await page.waitForTimeout(1200);
+            const visual = page.locator('[data-visual-offer-grid="true"]');
+            const fallback = page.locator(".mt-directory-view .mt-market-grid");
+            if (!(await visual.count()) && !(await fallback.count())) throw new Error("Offers directory rendered neither visual nor server fallback grid.");
+          });
+
+          const completeBase = "/complete-profile?source=walkthrough&cause_area=Animal%20welfare&walkthrough_cause=Factory%20farming&offer_type=Money&match_name=Animal%20welfare&match_get=More%20animal%20welfare%20funding&match_give=Research%20time";
+          await inspect("complete-profile-connections", completeBase, async (page) => {
+            await page.getByRole("button", { name: /Sources/i }).waitFor();
+            if (await page.getByRole("dialog").count()) throw new Error("Connections dialog opened without the query request.");
+            await page.goto(`${baseURL}${completeBase}&panel=connections`, { waitUntil: "networkidle" });
+            await page.getByRole("dialog").waitFor({ state: "visible" });
+            await page.getByRole("button", { name: /Close account sources/i }).click();
+            await page.getByRole("dialog").waitFor({ state: "hidden" });
+          });
+
+          await inspect("create", "/trades/new", async (page) => {
+            await page.locator("main, body").first().waitFor({ state: "visible" });
+            const text = await page.locator("body").innerText();
+            if (!/Create|Fund|Commit|Skill|Donation Upgrade/i.test(text)) throw new Error("Create surface did not render its primary modes.");
+            if (/Delegated authority|Institutional budgets|Enterprise integrations/i.test(text)) throw new Error("Organization-only controls leaked into ordinary Create.");
+          });
+
+          await inspect("feed", "/feed", async (page) => {
+            await page.locator("body").waitFor({ state: "visible" });
+            if (!/\/feed|\/login/.test(new URL(page.url()).pathname)) throw new Error(`Unexpected Feed destination: ${page.url()}`);
+          });
+
+          await inspect("walkthrough", "/walkthrough", async (page) => {
+            await page.locator("body").waitFor({ state: "visible" });
+            const text = await page.locator("body").innerText();
+            if (/Skip walkthrough|Skip for now/i.test(text)) throw new Error("First-time walkthrough exposes a skip control.");
+          });
+
+          await inspect("evidence", "/evidence", async (page) => {
+            await page.locator("body").waitFor({ state: "visible" });
+            if (!/\/evidence|\/login/.test(new URL(page.url()).pathname)) throw new Error(`Unexpected Evidence destination: ${page.url()}`);
+          });
+
+          await inspect("admin-redirect", "/admin", async (page) => {
+            await page.locator("body").waitFor({ state: "visible" });
+            const pathname = new URL(page.url()).pathname;
+            if (!/\/admin|\/login/.test(pathname)) throw new Error(`Unexpected Admin destination: ${page.url()}`);
+          });
+
+          await inspect("login-return", "/login?returnTo=%2Fadmin", async (page) => {
+            await page.locator("body").waitFor({ state: "visible" });
+            if (new URL(page.url()).pathname !== "/login") throw new Error(`Login redirect loop: ${page.url()}`);
+          });
+
+          await fs.writeFile("integration-evidence/rendered-regression-report.json", `${JSON.stringify(report, null, 2)}\n`);
+          await browser.close();
+          NODE
+          node /tmp/pr212-regression-smoke.mjs
+
+      - name: Stop integrated server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f integration-evidence/server.pid ]]; then
+            kill "$(cat integration-evidence/server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Publish exact validated integrated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          [[ "$current_main" == "$MAIN_SHA" ]] || {
+            echo "main moved during validation; refusing to publish a stale integration." >&2
+            exit 1
+          }
+          git status --short > integration-evidence/final-status.txt
+          [[ -z "$(git status --porcelain)" ]] || {
+            echo "Validation left the candidate worktree dirty." >&2
+            cat integration-evidence/final-status.txt >&2
+            exit 1
+          }
+          git push origin "HEAD:refs/heads/$OUTPUT_BRANCH"
+
+      - name: Upload integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-pinned-main-integration-${{ github.run_id }}
+          path: integration-evidence
+          if-no-files-found: error
+          retention-days: 14
