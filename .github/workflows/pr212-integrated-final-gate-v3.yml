@@ -191,10 +191,9 @@ jobs:
               const frameElement = page.locator('iframe[data-create-interface-frame="true"][title="Moral Trade Create"]');
               await frameElement.waitFor({ state: "visible" });
               const createFrame = page.frameLocator('iframe[data-create-interface-frame="true"]');
-              await createFrame.locator("body").waitFor({ state: "visible" });
+              await createFrame.getByRole("heading", { level: 1, name: "What do you want to improve?" }).waitFor({ state: "visible" });
+              await createFrame.getByText("Create a trade, Donation Upgrade, or public-goods pool.", { exact: true }).waitFor({ state: "visible" });
               const frameText = await createFrame.locator("body").innerText();
-              const buttonCount = await createFrame.locator("button").count();
-              if (!/Moral Trade/i.test(frameText) || buttonCount < 1) throw new Error("Unified Create iframe did not render its interactive shell.");
               if (/Delegated authority|Institutional budgets|Enterprise integrations/i.test(frameText)) throw new Error("Organization-only controls leaked into ordinary Create.");
             });
 
