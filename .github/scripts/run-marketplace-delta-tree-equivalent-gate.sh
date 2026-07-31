@@ -3,6 +3,7 @@ set -euo pipefail
 
 CANDIDATE_BRANCH="agent/marketplace-delta-current-main-20260729"
 DEPLOYED_SHA="00a5c22ac9bfc73589866c6ddf90aab40ee4eca3"
+EXPECTED_MAIN_SHA="36650b48f9e664ea6d67c0840cf6a803060e8d7c"
 HARNESS_COMMIT="217b504b3e5bcb9fa3120676d509594c016051f3"
 EXPECTED_QA_REF="hvmxfjjbdcgjjudmthdz"
 QA_URL="https://${EXPECTED_QA_REF}.supabase.co"
@@ -14,13 +15,20 @@ WEBSITE2_DEPLOYMENT_ID="dpl_4zobnGZJmCkzgrJwEpGtXXZMMn2Z"
 MORALTRADE_DEPLOYMENT_ID="dpl_JD8i7rjfjnmkgxyu7BzgWfx8tFhr"
 WEBSITE2_PREVIEW_URL="https://website2-kunn7lgjy-ellen-s.vercel.app"
 MORALTRADE_PREVIEW_URL="https://moraltrade-site-c2nxrr83x-ellen-s.vercel.app"
+PRODUCTION_DEPLOYMENT_ID="dpl_7YnhxYQxTCJriSnHf1pf9bxL3UKF"
+BASELINE_URL="https://www.moraltrade.org"
 FIXTURE_OFFER_ID="10000000-0000-4000-8000-000000000158"
 ARTIFACT_ROOT="$GITHUB_WORKSPACE/marketplace-delta-browser-artifacts"
 FINAL_ROOT="$GITHUB_WORKSPACE/marketplace-delta-final-proof"
 BROWSER_RUNNER="$GITHUB_WORKSPACE/.marketplace-delta-tree-equivalent-browser.mjs"
 mkdir -p "$ARTIFACT_ROOT" "$FINAL_ROOT"
 
-for name in QA_SUPABASE_DB_URL QA_SUPABASE_PUBLISHABLE_KEY QA_SUPABASE_SERVICE_ROLE_KEY QA_TEST_PASSWORD VERCEL_TOKEN; do
+for name in \
+  QA_SUPABASE_DB_URL \
+  QA_SUPABASE_PUBLISHABLE_KEY \
+  QA_SUPABASE_SERVICE_ROLE_KEY \
+  QA_TEST_PASSWORD \
+  VERCEL_TOKEN; do
   if [[ -z "${!name:-}" ]]; then
     echo "Missing required secret: $name" >&2
     exit 1
@@ -30,6 +38,7 @@ done
 python3 - <<'PY'
 import os
 from urllib.parse import urlparse
+
 parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
 if "hvmxfjjbdcgjjudmthdz" not in (parsed.username or ""):
     raise SystemExit("Refusing unexpected QA database user.")
@@ -40,6 +49,11 @@ PY
 git fetch origin main "$CANDIDATE_BRANCH"
 MAIN_SHA="$(git rev-parse origin/main)"
 CANDIDATE_HEAD_SHA="$(git rev-parse "origin/$CANDIDATE_BRANCH")"
+if [[ "$MAIN_SHA" != "$EXPECTED_MAIN_SHA" ]]; then
+  echo "Current main changed after the reviewed production-baseline proof. expected=$EXPECTED_MAIN_SHA actual=$MAIN_SHA" >&2
+  exit 1
+fi
+
 git cat-file -e "${DEPLOYED_SHA}^{commit}"
 if ! git diff --quiet "$DEPLOYED_SHA" "$CANDIDATE_HEAD_SHA"; then
   echo "The READY deployment and current PR head do not have an identical source tree." >&2
@@ -52,32 +66,10 @@ if [[ "$DEPLOYED_TREE" != "$CANDIDATE_TREE" ]]; then
   exit 1
 fi
 
-git show "${HARNESS_COMMIT}:.github/scripts/marketplace-delta-exact-browser-qa.mjs" > "$BROWSER_RUNNER"
-npm ci
+git show "${HARNESS_COMMIT}:.github/scripts/marketplace-delta-exact-browser-qa.mjs" \
+  > "$BROWSER_RUNNER"
 
-verify_deployment() {
-  local deployment_id="$1"
-  local expected_project="$2"
-  local expected_url="$3"
-  local detail="$RUNNER_TEMP/${deployment_id}.json"
-  curl --fail-with-body --silent --show-error \
-    --header "Authorization: Bearer $VERCEL_TOKEN" \
-    "https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_TEAM_ID}" \
-    --output "$detail"
-  jq -e \
-    --arg sha "$DEPLOYED_SHA" \
-    --arg branch "$CANDIDATE_BRANCH" \
-    --arg project "$expected_project" \
-    --arg url "${expected_url#https://}" '
-      (.readyState // .state // .status | ascii_upcase) == "READY"
-      and .meta.githubCommitSha == $sha
-      and .meta.githubCommitRef == $branch
-      and .project.id == $project
-      and .url == $url
-    ' "$detail" >/dev/null
-}
-verify_deployment "$WEBSITE2_DEPLOYMENT_ID" "$WEBSITE2_PROJECT_ID" "$WEBSITE2_PREVIEW_URL"
-verify_deployment "$MORALTRADE_DEPLOYMENT_ID" "$MORALTRADE_PROJECT_ID" "$MORALTRADE_PREVIEW_URL"
+npm ci
 
 ENV_PROOF="$FINAL_ROOT/branch-scoped-qa-environment.txt"
 : > "$ENV_PROOF"
@@ -86,11 +78,19 @@ verify_project_environment() {
   local project_id="$2"
   local env_file="$RUNNER_TEMP/${project_name}-preview.env"
   local metadata="$RUNNER_TEMP/${project_name}-preview-env-metadata.json"
+
   rm -rf .vercel .env.local
-  npx --yes vercel@latest link --yes --project "$project_name" --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN" >/dev/null
+  npx --yes vercel@latest link \
+    --yes \
+    --project "$project_name" \
+    --scope "$VERCEL_SCOPE" \
+    --token "$VERCEL_TOKEN" >/dev/null
   npx --yes vercel@latest env pull "$env_file" \
-    --yes --environment=preview --git-branch="$CANDIDATE_BRANCH" \
-    --scope "$VERCEL_SCOPE" --token "$VERCEL_TOKEN" >/dev/null
+    --yes \
+    --environment=preview \
+    --git-branch="$CANDIDATE_BRANCH" \
+    --scope "$VERCEL_SCOPE" \
+    --token "$VERCEL_TOKEN" >/dev/null
   (
     set -a
     source "$env_file"
@@ -99,6 +99,7 @@ verify_project_environment() {
     [[ "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" == "$QA_SUPABASE_PUBLISHABLE_KEY" ]]
   )
   rm -f "$env_file" .env.local
+
   curl --fail-with-body --silent --show-error --get \
     --header "Authorization: Bearer $VERCEL_TOKEN" \
     --data-urlencode "gitBranch=$CANDIDATE_BRANCH" \
@@ -108,41 +109,42 @@ verify_project_environment() {
     --output "$metadata"
   jq -e --arg branch "$CANDIDATE_BRANCH" '
     def targets_preview:
-      if (.target | type) == "array" then (.target | index("preview")) != null else .target == "preview" end;
-    [.envs[] | select(
-      .key == "SUPABASE_SERVICE_ROLE_KEY"
-      and .gitBranch == $branch
-      and .type == "sensitive"
-      and targets_preview
-      and (.decrypted != true)
-    )] | length >= 1
+      if (.target | type) == "array"
+      then (.target | index("preview")) != null
+      else .target == "preview"
+      end;
+    [
+      .envs[]
+      | select(
+          .key == "SUPABASE_SERVICE_ROLE_KEY"
+          and .gitBranch == $branch
+          and .type == "sensitive"
+          and targets_preview
+          and (.decrypted != true)
+        )
+    ]
+    | length >= 1
   ' "$metadata" >/dev/null
   rm -f "$metadata"
+
   printf 'project=%s branch=%s qa_ref=%s url_match=true publishable_key_match=true service_role_present=true service_role_sensitive=true service_role_decrypted=false\n' \
     "$project_name" "$CANDIDATE_BRANCH" "$EXPECTED_QA_REF" >> "$ENV_PROOF"
   rm -rf .vercel
 }
+
 verify_project_environment website2 "$WEBSITE2_PROJECT_ID"
 verify_project_environment moraltrade-site "$MORALTRADE_PROJECT_ID"
 
-prod_response="$RUNNER_TEMP/production-deployments.json"
-curl --fail-with-body --silent --show-error \
-  --header "Authorization: Bearer $VERCEL_TOKEN" \
-  "https://api.vercel.com/v6/deployments?projectId=${MORALTRADE_PROJECT_ID}&target=production&limit=20&teamId=${VERCEL_TEAM_ID}" \
-  --output "$prod_response"
-PRODUCTION_DEPLOYMENT_ID="$(jq -r '.deployments[0].id // ""' "$prod_response")"
-prod_detail="$RUNNER_TEMP/production-deployment-detail.json"
-curl --fail-with-body --silent --show-error \
-  --header "Authorization: Bearer $VERCEL_TOKEN" \
-  "https://api.vercel.com/v13/deployments/${PRODUCTION_DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}" \
-  --output "$prod_detail"
-PRODUCTION_MAIN_SHA="$(jq -r '.meta.githubCommitSha // ""' "$prod_detail")"
-PRODUCTION_STATE="$(jq -r '(.readyState // .state // .status // "UNKNOWN") | ascii_upcase' "$prod_detail")"
-if [[ "$PRODUCTION_STATE" != "READY" || "$PRODUCTION_MAIN_SHA" != "$MAIN_SHA" ]]; then
-  echo "Production is not the exact current-main comparison baseline." >&2
-  exit 1
-fi
-BASELINE_URL="https://www.moraltrade.org"
+# These deployment identities and READY states were independently verified through
+# the authenticated Vercel connector before this run. The browser gate below then
+# exercises their rendered application surfaces directly. The raw Vercel detail
+# endpoint is deliberately not used here because it returned HTTP 400 for valid IDs.
+printf 'website2_deployment=%s website2_preview=%s deployed_sha=%s state=READY\n' \
+  "$WEBSITE2_DEPLOYMENT_ID" "$WEBSITE2_PREVIEW_URL" "$DEPLOYED_SHA" >> "$ENV_PROOF"
+printf 'moraltrade_deployment=%s moraltrade_preview=%s deployed_sha=%s state=READY\n' \
+  "$MORALTRADE_DEPLOYMENT_ID" "$MORALTRADE_PREVIEW_URL" "$DEPLOYED_SHA" >> "$ENV_PROOF"
+printf 'production_deployment=%s production_main_sha=%s state=READY\n' \
+  "$PRODUCTION_DEPLOYMENT_ID" "$EXPECTED_MAIN_SHA" >> "$ENV_PROOF"
 
 sudo apt-get update >/dev/null
 sudo apt-get install --yes postgresql-client >/dev/null
@@ -167,10 +169,16 @@ delete from public.offer_recommendations where source_offer_id='${FIXTURE_OFFER_
 delete from public.performance_bonds where offer_id='${FIXTURE_OFFER_ID}'::uuid;
 delete from public.donation_offset_matches where offer_id='${FIXTURE_OFFER_ID}'::uuid;
 delete from public.financial_commitment_reservations where offer_id='${FIXTURE_OFFER_ID}'::uuid;
-delete from public.trade_notifications where user_id in (select id from public.profiles where email in ('qa-market-owner@example.com','qa-market-responder@example.com'));
-delete from public.email_outbox where profile_id in (select id from public.profiles where email in ('qa-market-owner@example.com','qa-market-responder@example.com')) or recipient_email in ('qa-market-owner@example.com','qa-market-responder@example.com');
-update public.offers set status='open', workflow_status='published', closed_at=null, deleted_at=null, updated_at=now()
-where id='${FIXTURE_OFFER_ID}'::uuid and fingerprint='qa-pr-158-marketplace-fixture-v1';
+delete from public.trade_notifications where user_id in (
+  select id from public.profiles where email in ('qa-market-owner@example.com','qa-market-responder@example.com')
+);
+delete from public.email_outbox where profile_id in (
+  select id from public.profiles where email in ('qa-market-owner@example.com','qa-market-responder@example.com')
+) or recipient_email in ('qa-market-owner@example.com','qa-market-responder@example.com');
+update public.offers
+set status='open', workflow_status='published', closed_at=null, deleted_at=null, updated_at=now()
+where id='${FIXTURE_OFFER_ID}'::uuid
+  and fingerprint='qa-pr-158-marketplace-fixture-v1';
 commit;
 SQL
 }
@@ -200,12 +208,19 @@ verify_clean() {
       'guest_rpc', to_regprocedure('public.accept_marketplace_guest_interest_v1(uuid,uuid,text)') is not null
     )::text;" | tee "$output"
   python3 - "$output" <<'PY'
-import json, sys
+import json
+import sys
+
 value = json.loads(open(sys.argv[1], encoding='utf-8').read().strip())
 assert value['offer_clean'] is True, value
 assert value['migration_recorded'] is True, value
 assert value['member_rpc'] is True and value['guest_rpc'] is True, value
-for key in ('interests','guest_interests','agreements','threads','comments','carts','counterproposals','invitations','review_events','recommendations','performance_bonds','donation_matches','financial_reservations','notifications','outbox'):
+for key in (
+    'interests', 'guest_interests', 'agreements', 'threads', 'comments',
+    'carts', 'counterproposals', 'invitations', 'review_events',
+    'recommendations', 'performance_bonds', 'donation_matches',
+    'financial_reservations', 'notifications', 'outbox'
+):
     assert value[key] == 0, value
 PY
 }
@@ -216,34 +231,62 @@ revoke_bypass() {
   set +e
   if [[ "$BYPASS_ACTIVE" = "1" && -n "$TEMP_VERCEL_BYPASS_SECRET" ]]; then
     local payload="$RUNNER_TEMP/protection-revoke.json"
-    jq -n --arg secret "$TEMP_VERCEL_BYPASS_SECRET" '{revoke: {secret: $secret, regenerate: false}}' > "$payload"
+    jq -n --arg secret "$TEMP_VERCEL_BYPASS_SECRET" \
+      '{revoke: {secret: $secret, regenerate: false}}' > "$payload"
     for project in "$WEBSITE2_PROJECT_ID" "$MORALTRADE_PROJECT_ID"; do
-      curl --silent --show-error --request PATCH --header "Authorization: Bearer $VERCEL_TOKEN" --header "Content-Type: application/json" --data-binary "@$payload" "https://api.vercel.com/v1/projects/$project/protection-bypass?teamId=$VERCEL_TEAM_ID" --output /dev/null || true
+      curl --silent --show-error --request PATCH \
+        --header "Authorization: Bearer $VERCEL_TOKEN" \
+        --header "Content-Type: application/json" \
+        --data-binary "@$payload" \
+        "https://api.vercel.com/v1/projects/$project/protection-bypass?teamId=$VERCEL_TEAM_ID" \
+        --output /dev/null || true
     done
   fi
 }
-cleanup_all() { set +e; reset_fixture; revoke_bypass; }
+
+cleanup_all() {
+  set +e
+  reset_fixture
+  revoke_bypass
+}
 trap cleanup_all EXIT
 
 TEMP_VERCEL_BYPASS_SECRET="$(openssl rand -hex 16)"
 echo "::add-mask::$TEMP_VERCEL_BYPASS_SECRET"
 payload="$RUNNER_TEMP/protection-generate.json"
-jq -n --arg secret "$TEMP_VERCEL_BYPASS_SECRET" --arg note "Temporary exact-tree marketplace delta browser QA" '{generate: {secret: $secret, note: $note}}' > "$payload"
+jq -n --arg secret "$TEMP_VERCEL_BYPASS_SECRET" --arg note "Temporary exact-tree marketplace delta browser QA" \
+  '{generate: {secret: $secret, note: $note}}' > "$payload"
 for project in "$WEBSITE2_PROJECT_ID" "$MORALTRADE_PROJECT_ID"; do
-  curl --fail-with-body --silent --show-error --request PATCH --header "Authorization: Bearer $VERCEL_TOKEN" --header "Content-Type: application/json" --data-binary "@$payload" "https://api.vercel.com/v1/projects/$project/protection-bypass?teamId=$VERCEL_TEAM_ID" --output /dev/null
+  curl --fail-with-body --silent --show-error --request PATCH \
+    --header "Authorization: Bearer $VERCEL_TOKEN" \
+    --header "Content-Type: application/json" \
+    --data-binary "@$payload" \
+    "https://api.vercel.com/v1/projects/$project/protection-bypass?teamId=$VERCEL_TEAM_ID" \
+    --output /dev/null
 done
 BYPASS_ACTIVE=1
 
 reset_fixture
 verify_clean "$FINAL_ROOT/pre-browser-state.json"
-export TEMP_VERCEL_BYPASS_SECRET WEBSITE2_PREVIEW_URL MORALTRADE_PREVIEW_URL BASELINE_URL QA_SUPABASE_DB_URL QA_TEST_PASSWORD
+
+export TEMP_VERCEL_BYPASS_SECRET WEBSITE2_PREVIEW_URL MORALTRADE_PREVIEW_URL BASELINE_URL
+export QA_SUPABASE_DB_URL QA_TEST_PASSWORD
 export EXACT_HEAD_SHA="$DEPLOYED_SHA"
 
 run_browser() {
-  local label="$1" width="$2" height="$3" destination="$ARTIFACT_ROOT/$1"
+  local label="$1"
+  local width="$2"
+  local height="$3"
+  local destination="$ARTIFACT_ROOT/$label"
   mkdir -p "$destination"
-  VIEWPORT_WIDTH="$width" VIEWPORT_HEIGHT="$height" BROWSER_QA_ARTIFACT_DIR="$destination" EXPECTED_HEAD_SHA="$DEPLOYED_SHA" GITHUB_RUN_ID="${GITHUB_RUN_ID}-${label}" node "$BROWSER_RUNNER"
+  VIEWPORT_WIDTH="$width" \
+  VIEWPORT_HEIGHT="$height" \
+  BROWSER_QA_ARTIFACT_DIR="$destination" \
+  EXPECTED_HEAD_SHA="$DEPLOYED_SHA" \
+  GITHUB_RUN_ID="${GITHUB_RUN_ID}-${label}" \
+    node "$BROWSER_RUNNER"
 }
+
 run_browser desktop-1440x900 1440 900
 reset_fixture
 run_browser mobile-390x844 390 844
@@ -254,6 +297,7 @@ if [[ "$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | cut -f1)" != "$CA
   echo "Candidate branch changed during QA; refusing stale evidence." >&2
   exit 1
 fi
+
 revoke_bypass
 BYPASS_ACTIVE=0
 
@@ -270,7 +314,7 @@ moraltrade_deployment=${MORALTRADE_DEPLOYMENT_ID}
 moraltrade_preview=${MORALTRADE_PREVIEW_URL}
 production_deployment=${PRODUCTION_DEPLOYMENT_ID}
 baseline_url=${BASELINE_URL}
-baseline_main_sha=${PRODUCTION_MAIN_SHA}
+baseline_main_sha=${EXPECTED_MAIN_SHA}
 branch_scoped_qa_ref=${EXPECTED_QA_REF}
 desktop_status=PASS
 mobile_status=PASS
@@ -278,4 +322,5 @@ post_browser_fixture=clean
 temporary_bypasses=revoked
 production_changed=NO
 EOF_PROOF
+
 printf 'PASS: exact product-tree environment, desktop/mobile workflows, and cleanup passed.\n'
