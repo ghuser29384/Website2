@@ -8,7 +8,7 @@ Link the issue, specification, user decision, incident, failing run, or other ex
 
 ## Release classification
 
-Select **exactly one**. See [`docs/release-policy.md`](../docs/release-policy.md).
+Select **exactly one**. See the [release classification and production evidence policy](https://github.com/ghuser29384/Website2/blob/main/docs/release-policy.md).
 
 - [ ] **Runtime-affecting** — can change what production builds, serves, stores, authorizes, charges, displays, or executes
 - [ ] **Repository-only** — proven not to change the production artifact or runtime state
