@@ -242,34 +242,52 @@ test("Co-Funds remain scan-efficient and overflow-free on mobile", async ({ page
 });
 
 test("natural-language group-buying searches route to Offers → Co-Funds", async ({ page }) => {
-  await page.route("**/api/query/interpret", async (route) => {
+  await page.route("**/api/discover/search", async (route) => {
+    const request = route.request().postDataJSON() as { query: string };
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        interpretation: {
-          originalQuery: "group buying a moral trade",
-          normalizedQuery: "group buying a moral trade",
-          parsedConstraintCount: 0,
-          confidence: 0.99,
-          reasonCodes: [],
-          needsClarification: false,
-          clarification: null,
-          facets: {
-            causes: [],
-            verified: null,
-            maxAmountCents: null,
-            maxAmountInclusive: true,
-            deadlineBefore: null,
-            deadlineBeforeInclusive: true,
-            actionTypes: [],
-            participantKinds: [],
-            sort: null,
+        ok: true,
+        checkedAt: "2026-07-31T16:30:00.000Z",
+        query: request.query,
+        normalizedQuery: request.query,
+        domain: "offers",
+        offerKind: "co-fund",
+        sort: "best-fit",
+        requiresSharedInterpretation: false,
+        clarification: null,
+        constraints: [
+          { key: "domain", label: "Domain: Offers", source: "query" },
+          { key: "offer-kind", label: "Offer type: Co-Fund", source: "query" },
+        ],
+        counts: { offers: 1, pools: 0, people: 0 },
+        total: 1,
+        truncated: false,
+        sourceStatus: { offers: "live", pools: "unavailable", people: "live" },
+        items: [
+          {
+            kind: "offer",
+            offerKind: "co-fund",
+            id: "live-cofund-1",
+            title: "Co-Fund a verified biosecurity salary guarantee",
+            cause: "Biosecurity",
+            status: "Open for contributors",
+            youOffer: ["Contribute from $25", "No charge if the threshold is missed"],
+            youGet: ["Fund one verified salary-guarantee trade"],
+            offerFlexibility: "Threshold terms",
+            returnFlexibility: "Fixed",
+            providerName: "Biosecurity project",
+            providerRole: "Co-Fund counterparty",
+            evidenceLabel: "Reviewed milestone plan",
+            completionLabel: "Funding closes 2026-08-20",
+            href: "/moral-goods-group-buying?pool=live-cofund-1",
+            exactMatchLabel: "Join Co-Fund",
+            counteroffersAllowed: false,
+            createdAt: "2026-07-31T16:00:00.000Z",
+            score: 100,
           },
-          residualTerms: [],
-        },
-        target: "/discover?smart=1&domain=offers",
-        usedLlm: false,
+        ],
       }),
     });
   });
@@ -283,41 +301,55 @@ test("natural-language group-buying searches route to Offers → Co-Funds", asyn
   await expect(page).toHaveURL(/domain=offers/);
   await expect(page).toHaveURL(/offerKind=co-fund/);
   await expect(page).toHaveURL(/view=list/);
-  await expect(page.locator('.offer-transaction-row[data-offer-kind="co-fund"]')).toHaveCount(2);
+  const row = page.locator('.offer-transaction-row[data-offer-kind="co-fund"]');
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText("Co-Fund a verified biosecurity salary guarantee");
+  await expect(row.getByRole("link", { name: /Join Co-Fund/ })).toBeVisible();
+  await expect(row.getByRole("link", { name: "Counteroffer" })).toHaveCount(0);
+  expect(await page.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(1);
 });
 
 
 test("dominant-assurance searches route to standalone Pools even without a server routing hint", async ({
   page,
 }) => {
-  await page.route("**/api/query/interpret", async (route) => {
+  await page.route("**/api/discover/search", async (route) => {
+    const request = route.request().postDataJSON() as { query: string };
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        interpretation: {
-          originalQuery: "dominant assurance contracts",
-          normalizedQuery: "dominant assurance contracts",
-          parsedConstraintCount: 0,
-          confidence: 0.99,
-          reasonCodes: [],
-          needsClarification: false,
-          clarification: null,
-          facets: {
-            causes: [],
-            verified: null,
-            maxAmountCents: null,
-            maxAmountInclusive: true,
-            deadlineBefore: null,
-            deadlineBeforeInclusive: true,
-            actionTypes: [],
-            participantKinds: [],
-            sort: null,
+        ok: true,
+        checkedAt: "2026-07-31T16:30:00.000Z",
+        query: request.query,
+        normalizedQuery: request.query,
+        domain: "pools",
+        offerKind: "all",
+        sort: "best-fit",
+        requiresSharedInterpretation: false,
+        clarification: null,
+        constraints: [{ key: "domain", label: "Domain: Pools", source: "query" }],
+        counts: { offers: 0, pools: 1, people: 0 },
+        total: 1,
+        truncated: false,
+        sourceStatus: { offers: "live", pools: "live", people: "live" },
+        items: [
+          {
+            kind: "pool",
+            id: "standalone-pool-1",
+            title: "Wild-animal welfare dominant-assurance pool",
+            cause: "Wild animal suffering",
+            status: "Near threshold",
+            youOffer: ["Make a conditional pledge from $10"],
+            youGet: ["Fund one standalone research tranche"],
+            providerName: "Wild Animal Initiative",
+            evidenceLabel: "Reviewed milestone plan",
+            completionLabel: "Deadline 2026-08-15",
+            href: "/pools/standalone-pool-1",
+            targetFundingCents: 100000,
+            score: 100,
           },
-          residualTerms: [],
-        },
-        target: "/discover?smart=1&domain=offers",
-        usedLlm: false,
+        ],
       }),
     });
   });
@@ -332,5 +364,9 @@ test("dominant-assurance searches route to standalone Pools even without a serve
   await expect(page).toHaveURL(/view=list/);
   expect(page.url()).not.toContain("offerKind=co-fund");
   await expect(page.getByRole("heading", { name: "Standalone threshold pools" })).toBeVisible();
+  await expect(page.locator(".transaction-list")).toContainText(
+    "Wild-animal welfare dominant-assurance pool",
+  );
   await expect(page.locator('.offer-transaction-row[data-offer-kind="co-fund"]')).toHaveCount(0);
+  expect(await page.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(1);
 });

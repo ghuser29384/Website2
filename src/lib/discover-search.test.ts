@@ -3,8 +3,8 @@ import test from "node:test";
 
 import type { PublicProfileSummary } from "@/lib/app-data";
 import {
+  filterAndRankDiscoverCoFunds,
   filterAndRankDiscoverPeople,
-  filterAndRankDiscoverPools,
   parseDiscoverExchangeIntent,
 } from "@/lib/discover-search";
 import {
@@ -63,10 +63,33 @@ const exampleOffer = offer({
   isWorkedExample: true,
 });
 
+const coFundRoute = {
+  id: "cofund-1",
+  publicKey: "cofund-1",
+  title: "Co-Fund a wild-animal welfare research trade",
+  summary: "A live reciprocal trade fulfilled by a contributor group.",
+  causeArea: "Wild animal suffering",
+  recipientName: "Wild Animal Initiative",
+  intervention: "Fund one verified research tranche",
+  verificationSummary: "Reviewed milestone plan",
+  expectedEffect: "Research begins after the threshold activates",
+  timeline: "30 days",
+  statusLabel: "Near threshold",
+  statusSentence: "The Co-Fund is near threshold.",
+  fundingMode: "pledge_only",
+  currency: "USD",
+  minimumFundingCents: 500,
+  targetFundingCents: 100_000,
+  deadlineAt: "2026-08-15T23:59:59Z",
+  failureBehavior: "No charge if the threshold is missed.",
+  href: "/moral-goods-group-buying?pool=cofund-1",
+} satisfies LiveGroupBuyingRoute;
+
 test("a recognized cause is a hard filter rather than a ranking hint", () => {
   const plan = buildDiscoverSearchPlan({ query: "Wild animal suffering", domain: "offers" });
   const results = filterAndRankDiscoverOffers([wildOffer, aiOffer, exampleOffer], plan);
   assert.deepEqual(results.map((result) => result.id), ["wild"]);
+  assert.equal(results[0].offerKind, "individual");
   assert.equal(results[0].youOffer[0], "Donate $100 to Wild Animal Initiative.");
   assert.equal(results[0].youGet[0], "Read one paper and produce a summary.");
 });
@@ -96,15 +119,33 @@ test("mixed exchange language parses You offer and You get separately", () => {
   );
 });
 
-test("domain language switches the active live directory", () => {
-  assert.equal(
-    buildDiscoverSearchPlan({ query: "Pools near threshold for animal welfare" }).domain,
-    "pools",
-  );
+test("domain and Offer-subtype language follow the canonical boundary", () => {
+  const coFundPlan = buildDiscoverSearchPlan({ query: "group buying a moral trade" });
+  assert.equal(coFundPlan.domain, "offers");
+  assert.equal(coFundPlan.offerKind, "co-fund");
+  assert.deepEqual(coFundPlan.exchange.residualTerms, []);
+
+  const poolPlan = buildDiscoverSearchPlan({ query: "dominant assurance contracts" });
+  assert.equal(poolPlan.domain, "pools");
+  assert.equal(poolPlan.offerKind, "all");
+  assert.deepEqual(poolPlan.exchange.residualTerms, []);
+
   assert.equal(
     buildDiscoverSearchPlan({ query: "People who can review biosecurity protocols" }).domain,
     "people",
   );
+});
+
+test("live group-buying routes render as Co-Fund Offers", () => {
+  const plan = buildDiscoverSearchPlan({
+    query: "group buying a moral trade for wild animal suffering",
+  });
+  const results = filterAndRankDiscoverCoFunds([coFundRoute], plan);
+  assert.deepEqual(results.map((result) => result.id), ["cofund-1"]);
+  assert.equal(results[0].kind, "offer");
+  assert.equal(results[0].offerKind, "co-fund");
+  assert.equal(results[0].exactMatchLabel, "Join Co-Fund");
+  assert.equal(results[0].counteroffersAllowed, false);
 });
 
 test("standalone amounts surface one material clarification", () => {
@@ -113,31 +154,7 @@ test("standalone amounts surface one material clarification", () => {
   assert.equal(plan.interpretation.clarification?.field, "amount");
 });
 
-test("pool and people search never substitute hard-coded examples", () => {
-  const pool = {
-    id: "pool-1",
-    publicKey: "pool-1",
-    title: "Wild-animal welfare research pool",
-    summary: "Near threshold",
-    causeArea: "Wild animal suffering",
-    recipientName: "Wild Animal Initiative",
-    intervention: "Fund one research tranche",
-    verificationSummary: "Reviewed milestone plan",
-    expectedEffect: "Research begins after activation",
-    timeline: "30 days",
-    statusLabel: "Near threshold",
-    statusSentence: "The pool is near threshold.",
-    fundingMode: "pledge_only",
-    currency: "USD",
-    minimumFundingCents: 500,
-    targetFundingCents: 100_000,
-    deadlineAt: "2026-08-15T23:59:59Z",
-    failureBehavior: "No charge if the threshold is missed.",
-    href: "/pools/pool-1",
-  } satisfies LiveGroupBuyingRoute;
-  const poolPlan = buildDiscoverSearchPlan({ query: "Pools near threshold for wild animal suffering" });
-  assert.deepEqual(filterAndRankDiscoverPools([pool], poolPlan).map((result) => result.id), ["pool-1"]);
-
+test("people search never substitutes hard-coded examples", () => {
   const person = {
     id: "person-1",
     resolvedName: "Sasha",
@@ -152,6 +169,11 @@ test("pool and people search never substitute hard-coded examples", () => {
     verificationBadges: [{ id: "badge-1" }],
     offerCount: 2,
   } as unknown as PublicProfileSummary;
-  const peoplePlan = buildDiscoverSearchPlan({ query: "People who can review biosecurity protocols" });
-  assert.deepEqual(filterAndRankDiscoverPeople([person], peoplePlan).map((result) => result.id), ["person-1"]);
+  const peoplePlan = buildDiscoverSearchPlan({
+    query: "People who can review biosecurity protocols",
+  });
+  assert.deepEqual(
+    filterAndRankDiscoverPeople([person], peoplePlan).map((result) => result.id),
+    ["person-1"],
+  );
 });

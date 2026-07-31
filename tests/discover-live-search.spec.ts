@@ -12,6 +12,7 @@ interface SearchRequest {
 function liveOffer(id: string, cause: string, title = "Wild-animal welfare exchange") {
   return {
     kind: "offer",
+    offerKind: "individual",
     id,
     title,
     cause,
@@ -67,6 +68,7 @@ function searchResponse({
     query,
     normalizedQuery: query,
     domain,
+    offerKind: "all",
     sort: "best-fit",
     requiresSharedInterpretation: false,
     clarification: null,

@@ -7,6 +7,7 @@
 
   const STORAGE_PREFIX = "moral-trade:discover-live-search:v3";
   const SUPPORTED_DOMAINS = new Set(["offers", "pools", "people"]);
+  const SUPPORTED_OFFER_KINDS = new Set(["all", "individual", "co-fund"]);
   const SUPPORTED_SORTS = new Set([
     "best-fit",
     "newest",
@@ -19,6 +20,7 @@
     query: "",
     normalizedQuery: "",
     domain: "offers",
+    offerKind: "all",
     sort: "best-fit",
     manual: emptyManualFilters(),
     excludedConstraints: [],
@@ -126,6 +128,9 @@
       query: (read("q") || read("query") || "").trim(),
       normalizedQuery: (read("nq") || "").trim(),
       domain: SUPPORTED_DOMAINS.has(rawDomain) ? rawDomain : "offers",
+      offerKind: SUPPORTED_OFFER_KINDS.has(read("offerKind"))
+        ? read("offerKind")
+        : "all",
       sort,
       excludedConstraints: parseCsv(read("exclude")),
       manual: {
@@ -370,6 +375,7 @@
       query: state.query,
       normalizedQuery: state.normalizedQuery,
       domain: state.domain,
+      offerKind: state.offerKind,
       sort: state.sort,
       manual: structuredClone(state.manual),
       excludedConstraints: [...state.excludedConstraints],
@@ -380,6 +386,9 @@
     const params = new URLSearchParams();
     params.set("domain", state.domain);
     params.set("view", "list");
+    if (state.domain === "offers" && state.offerKind !== "all") {
+      params.set("offerKind", state.offerKind);
+    }
     if (state.query) params.set("q", state.query);
     if (state.normalizedQuery && state.normalizedQuery !== state.query) {
       params.set("nq", state.normalizedQuery);
@@ -482,7 +491,12 @@
   }
 
   function renderOfferRow(item) {
-    return `<article class="transaction-row offer-transaction-row discover-live-result" data-row-id="${escapeHtml(item.id)}" data-live-record="true">
+    const offerKind = item.offerKind === "co-fund" ? "co-fund" : "individual";
+    const intent = offerKind === "co-fund" ? "join-cofund" : "exact-match";
+    const counteroffer = item.counteroffersAllowed
+      ? `<a class="outline-btn" href="${escapeHtml(appendIntent(item.href, "counteroffer"))}" data-discover-result-link="true">Counteroffer</a>`
+      : "";
+    return `<article class="transaction-row offer-transaction-row discover-live-result" data-row-id="${escapeHtml(item.id)}" data-offer-kind="${offerKind}" data-live-record="true">
       <div class="compare-cell" aria-hidden="true"></div>
       <a class="offer-row-content" href="${escapeHtml(item.href)}" data-discover-result-link="true" aria-label="Open full terms for ${escapeHtml(item.title)}">
         <div class="offer-row-meta"><div class="eyebrow"><span class="status-dot"></span>${escapeHtml(item.cause)} · ${escapeHtml(item.status)}</div><div class="offer-row-deadline">${escapeHtml(item.completionLabel)}</div></div>
@@ -494,8 +508,8 @@
         <div class="offer-context"><div class="offer-context-copy"><h3 class="offer-context-title">${escapeHtml(item.title)}</h3></div></div>
       </a>
       <div class="row-actions">
-        <a class="primary-btn" href="${escapeHtml(appendIntent(item.href, "exact-match"))}" data-discover-result-link="true">${escapeHtml(item.exactMatchLabel)} →</a>
-        <a class="outline-btn" href="${escapeHtml(appendIntent(item.href, "counteroffer"))}" data-discover-result-link="true">Counteroffer</a>
+        <a class="primary-btn" href="${escapeHtml(appendIntent(item.href, intent))}" data-discover-result-link="true">${escapeHtml(item.exactMatchLabel)} →</a>
+        ${counteroffer}
         <a class="quiet-btn" href="${escapeHtml(item.href)}" data-discover-result-link="true">Full terms →</a>
         <div class="cell-secondary">${escapeHtml(item.evidenceLabel)}</div>
       </div>
@@ -575,14 +589,18 @@
       state.domain === "people"
         ? "People you can reach"
         : state.domain === "pools"
-          ? "Conditional pools"
-          : "Current opportunities";
+          ? "Standalone threshold pools"
+          : state.offerKind === "co-fund"
+            ? "Live Co-Funds"
+            : "Current opportunities";
     const descriptionText =
-      state.domain === "offers"
-        ? "Compare what you offer and what you get from live, publishable offers."
-        : state.domain === "pools"
-          ? "Live conditional pools matching the active query and hard constraints."
-          : "Reviewed public members matching the active query and hard constraints.";
+      state.domain === "offers" && state.offerKind === "co-fund"
+        ? "Live reciprocal trades whose contribution side is fulfilled by a contributor group."
+        : state.domain === "offers"
+          ? "Compare what you offer and what you get from live, publishable offers."
+          : state.domain === "pools"
+            ? "Live standalone threshold-funded moral public goods matching the active hard constraints."
+            : "Reviewed public members matching the active query and hard constraints.";
     setText(title, titleText);
     setText(description, descriptionText);
   }
@@ -609,6 +627,20 @@
     return null;
   }
 
+  function ensureLiveListSurface(response) {
+    const existing = document.querySelector(".transaction-list");
+    if (existing) return existing;
+    const scroll = document.getElementById("view-scroll");
+    if (!scroll) return null;
+    const section = document.createElement("section");
+    section.className = "view-stage list-stage";
+    section.id = "discover-view";
+    section.setAttribute("role", "tabpanel");
+    section.innerHTML = `<div class="view-head"><div class="view-title"><h2></h2><p></p></div></div><div class="transaction-list"></div>`;
+    scroll.replaceChildren(section);
+    return section.querySelector(".transaction-list");
+  }
+
   function sourceClick(element) {
     if (!(element instanceof HTMLElement)) return false;
     state.sourcePassThrough = true;
@@ -620,7 +652,8 @@
     return true;
   }
 
-  async function prepareListSurface(domain, sequence, controller) {
+  async function prepareListSurface(response, sequence, controller) {
+    const domain = response.domain;
     let sourceNavigated = false;
     const selectedDomain = visibleElement(
       `[data-action="set-domain"][data-domain="${domain}"][aria-selected="true"]`,
@@ -635,6 +668,21 @@
     if (!currentRequest(sequence, controller)) {
       return { list: null, sourceNavigated };
     }
+    if (domain === "offers") {
+      const selectedOfferKind = visibleElement(
+        `[data-action="set-offer-kind"][data-offer-kind="${state.offerKind}"][aria-selected="true"]`,
+      );
+      if (!selectedOfferKind) {
+        const offerKindControl = visibleElement(
+          `[data-action="set-offer-kind"][data-offer-kind="${state.offerKind}"]`,
+        );
+        sourceNavigated = sourceClick(offerKindControl) || sourceNavigated;
+        await nextFrame();
+      }
+    }
+    if (!currentRequest(sequence, controller)) {
+      return { list: null, sourceNavigated };
+    }
     const selectedList = visibleElement(
       '[data-action="set-view"][data-view="list"][aria-selected="true"]',
     );
@@ -645,14 +693,17 @@
       sourceNavigated = sourceClick(listTab) || sourceNavigated;
       await nextFrame();
     }
-    const list = await waitForListSurface(sequence, controller);
+    let list = await waitForListSurface(sequence, controller);
+    if (!list && currentRequest(sequence, controller)) {
+      list = ensureLiveListSurface(response);
+    }
     return { list, sourceNavigated };
   }
 
   async function renderResults(response, sequence, controller) {
     if (!currentRequest(sequence, controller)) return false;
     const { list, sourceNavigated } = await prepareListSurface(
-      response.domain,
+      response,
       sequence,
       controller,
     );
@@ -770,6 +821,7 @@
         query: state.query,
         normalizedQuery: state.normalizedQuery || undefined,
         domain: state.domain,
+        offerKind: state.offerKind,
         sort: state.sort,
         manual: state.manual,
         excludedConstraints: state.excludedConstraints,
@@ -896,6 +948,10 @@
       if (!currentRequest(sequence, controller)) return;
       state.response = payload;
       state.domain = payload.domain;
+      state.offerKind =
+        payload.domain === "offers" && SUPPORTED_OFFER_KINDS.has(payload.offerKind)
+          ? payload.offerKind
+          : "all";
       state.sort = payload.sort;
       state.error = null;
       const sourceNavigated = await renderResults(
@@ -936,6 +992,14 @@
   function setDomain(domain) {
     if (!SUPPORTED_DOMAINS.has(domain)) return;
     state.domain = domain;
+    if (domain !== "offers") state.offerKind = "all";
+    executeSearch({ historyMode: "push" });
+  }
+
+  function setOfferKind(offerKind) {
+    if (!SUPPORTED_OFFER_KINDS.has(offerKind)) return;
+    state.domain = "offers";
+    state.offerKind = offerKind;
     executeSearch({ historyMode: "push" });
   }
 
@@ -948,6 +1012,10 @@
   function handleManualChange(target) {
     const filter = target.dataset.filter;
     if (!filter) return false;
+    if (filter === "offer-kind") {
+      setOfferKind(target.value);
+      return true;
+    }
     if (filter === "cause") {
       state.manual.causes = toggleArray(
         state.manual.causes,
@@ -1068,6 +1136,7 @@
     state.query = "";
     state.normalizedQuery = "";
     state.domain = "offers";
+    state.offerKind = "all";
     state.sort = "best-fit";
     state.response = null;
     state.error = null;
@@ -1165,6 +1234,16 @@
           ? event.target.closest("button,a,[data-action]")
           : null;
       if (!target) return;
+
+      const offerKindControl = target.closest(
+        '[data-action="set-offer-kind"][data-offer-kind]',
+      );
+      if (offerKindControl && !state.sourcePassThrough && activeSearch()) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        setOfferKind(offerKindControl.dataset.offerKind);
+        return;
+      }
 
       const domainTab = target.closest(
         '[data-action="set-domain"][data-domain]',

@@ -10,6 +10,7 @@ import {
 } from "@/lib/smart-query";
 
 export type DiscoverSearchDomain = "offers" | "pools" | "people";
+export type DiscoverSearchOfferKind = "all" | "individual" | "co-fund";
 export type DiscoverSearchSort =
   | "best-fit"
   | "newest"
@@ -34,6 +35,7 @@ export interface DiscoverSearchInput {
   query: string;
   normalizedQuery?: string;
   domain?: DiscoverSearchDomain;
+  offerKind?: DiscoverSearchOfferKind;
   sort?: DiscoverSearchSort;
   manual?: Partial<DiscoverSearchManualFilters>;
   excludedConstraints?: string[];
@@ -50,6 +52,7 @@ export interface DiscoverSearchPlan {
   query: string;
   normalizedQuery: string;
   domain: DiscoverSearchDomain;
+  offerKind: DiscoverSearchOfferKind;
   sort: DiscoverSearchSort;
   interpretation: SmartQueryInterpretation;
   facets: SmartQueryFacets;
@@ -85,21 +88,22 @@ export interface DiscoverExchangeIntent {
 
 export interface DiscoverOfferSearchItem {
   kind: "offer";
+  offerKind: Exclude<DiscoverSearchOfferKind, "all">;
   id: string;
   title: string;
   cause: string;
   status: string;
   youOffer: string[];
   youGet: string[];
-  offerFlexibility: "Fixed";
-  returnFlexibility: "Fixed";
+  offerFlexibility: string;
+  returnFlexibility: string;
   providerName: string;
   providerRole: string;
   evidenceLabel: string;
   completionLabel: string;
   href: string;
-  exactMatchLabel: "Request exact match";
-  counteroffersAllowed: true;
+  exactMatchLabel: string;
+  counteroffersAllowed: boolean;
   createdAt: string;
   score: number;
 }
@@ -238,12 +242,42 @@ function tokenMatchesText(token: string, text: string) {
   });
 }
 
+function isCoFundQuery(value: string) {
+  const normalized = normalize(value);
+  return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(
+    normalized,
+  );
+}
+
+function isStandalonePoolQuery(value: string) {
+  const normalized = normalize(value);
+  return /\b(?:pools?|threshold pools?|standalone threshold|dominant[- ]assurance contracts?|assurance contracts?|near[- ]activation|near[- ]threshold)\b/.test(
+    normalized,
+  );
+}
+
 function residualTerms(query: string, interpretation: SmartQueryInterpretation) {
   const recognized = new Set(
     interpretation.recognizedPhrases.flatMap((phrase) => smartQueryTokens(phrase)),
   );
+  const mechanismTerms = new Set<string>();
+  if (isCoFundQuery(query)) {
+    ["co", "fund", "funds", "group", "buy", "buying", "collective", "collectively", "moral", "trade", "offer"].forEach(
+      (term) => mechanismTerms.add(term),
+    );
+  } else if (isStandalonePoolQuery(query)) {
+    ["pool", "pools", "threshold", "standalone", "dominant", "assurance", "contract", "contracts", "near", "activation"].forEach(
+      (term) => mechanismTerms.add(term),
+    );
+  }
   return unique(
-    smartQueryTokens(query).filter((token) => !recognized.has(token) && !DOMAIN_WORDS.has(token) && !INTENT_WORDS.has(token)),
+    smartQueryTokens(query).filter(
+      (token) =>
+        !recognized.has(token) &&
+        !DOMAIN_WORDS.has(token) &&
+        !INTENT_WORDS.has(token) &&
+        !mechanismTerms.has(token),
+    ),
   );
 }
 
@@ -322,6 +356,12 @@ function safeDomain(value: unknown): DiscoverSearchDomain | null {
   return value === "offers" || value === "pools" || value === "people" ? value : null;
 }
 
+function safeOfferKind(value: unknown): DiscoverSearchOfferKind | null {
+  return value === "all" || value === "individual" || value === "co-fund"
+    ? value
+    : null;
+}
+
 function inferDomain(
   query: string,
   requested: DiscoverSearchDomain | undefined,
@@ -331,12 +371,26 @@ function inferDomain(
   if (excluded.has("domain")) return requested ?? "offers";
   if (interpretation.intent === "people") return "people";
   if (interpretation.intent === "pools" || interpretation.intent === "mpgf_pools") return "pools";
+  if (interpretation.intent === "offers") return "offers";
   const normalized = normalize(query);
   if (/\b(people|person|members?|who|counterpart(?:y|ies))\b/.test(normalized)) return "people";
-  if (/\b(pools?|threshold|near[- ]threshold|conditional funding|group[- ]buy)\b/.test(normalized)) {
-    return "pools";
-  }
+  if (isCoFundQuery(normalized)) return "offers";
+  if (isStandalonePoolQuery(normalized)) return "pools";
   return requested ?? "offers";
+}
+
+function inferOfferKind(
+  query: string,
+  domain: DiscoverSearchDomain,
+  requested: DiscoverSearchOfferKind | undefined,
+  excluded: ReadonlySet<string>,
+): DiscoverSearchOfferKind {
+  if (domain !== "offers" || excluded.has("offer-kind")) return "all";
+  if (isCoFundQuery(query)) return "co-fund";
+  if (/\b(?:individual|one[- ]to[- ]one) offers?\b/.test(normalize(query))) {
+    return "individual";
+  }
+  return requested ?? "all";
 }
 
 function normalizedManualFilters(value: Partial<DiscoverSearchManualFilters> | undefined) {
@@ -364,6 +418,7 @@ function normalizedManualFilters(value: Partial<DiscoverSearchManualFilters> | u
 
 function queryConstraints(
   domain: DiscoverSearchDomain,
+  offerKind: DiscoverSearchOfferKind,
   facets: SmartQueryFacets,
   exchange: DiscoverExchangeIntent,
   excluded: ReadonlySet<string>,
@@ -371,6 +426,13 @@ function queryConstraints(
   const result: DiscoverSearchConstraint[] = [];
   if (!excluded.has("domain")) {
     result.push({ key: "domain", label: `Domain: ${domain[0].toUpperCase()}${domain.slice(1)}`, source: "query" });
+  }
+  if (domain === "offers" && offerKind !== "all" && !excluded.has("offer-kind")) {
+    result.push({
+      key: "offer-kind",
+      label: offerKind === "co-fund" ? "Offer type: Co-Fund" : "Offer type: Individual",
+      source: "query",
+    });
   }
   for (const cause of facets.causes) {
     const key = `cause:${cause}`;
@@ -431,6 +493,13 @@ export function buildDiscoverSearchPlan(input: DiscoverSearchInput): DiscoverSea
   const excluded = new Set(excludedConstraints);
   const requestedDomain = safeDomain(input.domain) ?? undefined;
   const domain = inferDomain(normalizedQuery, requestedDomain, interpretation, excluded);
+  const requestedOfferKind = safeOfferKind(input.offerKind) ?? undefined;
+  const offerKind = inferOfferKind(
+    normalizedQuery,
+    domain,
+    requestedOfferKind,
+    excluded,
+  );
   const exchange = parseDiscoverExchangeIntent(normalizedQuery, interpretation);
   const facets: SmartQueryFacets = {
     ...interpretation.facets,
@@ -452,6 +521,7 @@ export function buildDiscoverSearchPlan(input: DiscoverSearchInput): DiscoverSea
     query,
     normalizedQuery,
     domain,
+    offerKind,
     sort,
     interpretation,
     facets,
@@ -459,7 +529,7 @@ export function buildDiscoverSearchPlan(input: DiscoverSearchInput): DiscoverSea
     exchange,
     excludedConstraints,
     constraints: [
-      ...queryConstraints(domain, facets, exchange, excluded),
+      ...queryConstraints(domain, offerKind, facets, exchange, excluded),
       ...manualConstraints(manual),
     ],
   };
@@ -535,6 +605,7 @@ export function filterAndRankDiscoverOffers(
   listings: readonly PublicOfferListing[],
   plan: DiscoverSearchPlan,
 ): DiscoverOfferSearchItem[] {
+  if (plan.domain !== "offers" || plan.offerKind === "co-fund") return [];
   const queryOfferMaximum = plan.exchange.offerMaximumCents;
   const queryOfferMinimum = plan.exchange.offerMinimumCents;
   const queryReturnMaximum = plan.exchange.returnMaximumCents;
@@ -593,6 +664,7 @@ export function filterAndRankDiscoverOffers(
     if (listing.manualReviewRequired) youGet.push("Provided after both parties confirm and the published review gate clears");
     return [{
       kind: "offer",
+      offerKind: "individual",
       id: listing.id,
       title: listing.title,
       cause: listing.secondaryCause || listing.primaryCause,
@@ -618,6 +690,130 @@ export function filterAndRankDiscoverOffers(
     if (plan.sort === "strongest-evidence") return right.evidenceLabel.length - left.evidenceLabel.length || right.score - left.score;
     return right.score - left.score || Date.parse(right.createdAt) - Date.parse(left.createdAt);
   });
+}
+
+export function filterAndRankDiscoverCoFunds(
+  routes: readonly LiveGroupBuyingRoute[],
+  plan: DiscoverSearchPlan,
+): DiscoverOfferSearchItem[] {
+  if (plan.domain !== "offers" || plan.offerKind === "individual") return [];
+  const maximumOffer = [
+    plan.exchange.offerMaximumCents,
+    plan.facets.maxAmountCents,
+    plan.manual.maximumOfferAmountCents,
+  ]
+    .filter((value): value is number => value !== null)
+    .reduce<number | null>(
+      (current, value) => (current === null ? value : Math.min(current, value)),
+      null,
+    );
+  const minimumOffer = [plan.exchange.offerMinimumCents, plan.facets.minAmountCents]
+    .filter((value): value is number => value !== null)
+    .reduce<number | null>(
+      (current, value) => (current === null ? value : Math.max(current, value)),
+      null,
+    );
+  if (
+    plan.exchange.returnMinimumCents !== null ||
+    plan.exchange.returnMaximumCents !== null ||
+    plan.manual.minimumReturnAmountCents !== null
+  ) {
+    return [];
+  }
+
+  return routes
+    .flatMap((route): DiscoverOfferSearchItem[] => {
+      const offerText = [
+        `Contribute from ${formatMoney(route.minimumFundingCents, route.currency)}`,
+        `Published target: ${formatMoney(route.targetFundingCents, route.currency)}`,
+        route.failureBehavior,
+      ];
+      const returnText = [route.intervention, route.expectedEffect, route.statusSentence];
+      const text = [
+        route.title,
+        route.summary,
+        route.causeArea,
+        route.recipientName,
+        ...offerText,
+        ...returnText,
+        route.verificationSummary,
+        route.timeline,
+        route.statusLabel,
+      ].join(" ");
+      const actualCauses = causeIdsForText(`${route.causeArea} ${route.title} ${route.summary}`);
+      if (!causeGroupMatches(plan.facets.causes, actualCauses, text)) return [];
+      if (!causeGroupMatches(plan.manual.causes, actualCauses, text)) return [];
+      if (!textMatchesResidualTerms(plan.exchange.residualTerms, text)) return [];
+      const actualOfferTypes: DiscoverExchangeType[] = ["fund", "pool"];
+      const actualReturnTypes = actionTypes(returnText.join(" "));
+      if (!matchesTypeGroup(plan.exchange.offerTypes, actualOfferTypes)) return [];
+      if (!matchesTypeGroup(plan.exchange.returnTypes, actualReturnTypes)) return [];
+      if (!matchesTypeGroup(plan.manual.offerTypes, actualOfferTypes)) return [];
+      if (!matchesTypeGroup(plan.manual.returnTypes, actualReturnTypes)) return [];
+      if (
+        !amountSatisfies(
+          [route.minimumFundingCents],
+          minimumOffer,
+          maximumOffer,
+          false,
+        )
+      ) {
+        return [];
+      }
+      const verified = Boolean(
+        route.verificationSummary &&
+          !/unavailable|not verified/i.test(route.verificationSummary),
+      );
+      if ((plan.facets.verified === true || plan.manual.verifiedOnly) && !verified) return [];
+      if (plan.facets.verified === false && verified) return [];
+      const evidenceText = normalize(route.verificationSummary);
+      if (plan.exchange.evidenceTerms.some((term) => !evidenceText.includes(normalize(term)))) return [];
+      if (plan.manual.evidence && !evidenceText.includes(normalize(plan.manual.evidence))) return [];
+      if (plan.manual.recipient && !normalize(route.recipientName).includes(normalize(plan.manual.recipient))) return [];
+      const deadline = route.deadlineAt?.slice(0, 10) ?? null;
+      if (plan.facets.deadlineBefore && (!deadline || deadline > plan.facets.deadlineBefore)) return [];
+      if (plan.manual.deadlineBefore && (!deadline || deadline > plan.manual.deadlineBefore)) return [];
+      const flexibility = [...plan.exchange.flexibilities, ...plan.manual.flexibilities];
+      if (flexibility.some((value) => value !== "fixed")) return [];
+      const score = poolScore(route, plan, text);
+      return [{
+        kind: "offer",
+        offerKind: "co-fund",
+        id: route.id,
+        title: route.title,
+        cause: route.causeArea,
+        status: route.statusLabel,
+        youOffer: offerText,
+        youGet: returnText,
+        offerFlexibility: "Threshold terms",
+        returnFlexibility: "Fixed",
+        providerName: route.recipientName,
+        providerRole: "Co-Fund counterparty",
+        evidenceLabel: route.verificationSummary,
+        completionLabel: route.deadlineAt
+          ? `Funding closes ${route.deadlineAt.slice(0, 10)}`
+          : route.timeline,
+        href: route.href,
+        exactMatchLabel: "Join Co-Fund",
+        counteroffersAllowed: false,
+        createdAt: route.deadlineAt ?? "1970-01-01T00:00:00.000Z",
+        score,
+      }];
+    })
+    .sort((left, right) => {
+      if (plan.sort === "newest") return Date.parse(right.createdAt) - Date.parse(left.createdAt);
+      if (plan.sort === "lowest-cost") {
+        return (
+          extractDollarAmounts(left.youOffer[0])[0] -
+            extractDollarAmounts(right.youOffer[0])[0] ||
+          right.score - left.score
+        );
+      }
+      if (plan.sort === "strongest-evidence") {
+        return right.evidenceLabel.length - left.evidenceLabel.length || right.score - left.score;
+      }
+      return right.score - left.score || left.title.localeCompare(right.title);
+    });
 }
 
 function poolScore(route: LiveGroupBuyingRoute, plan: DiscoverSearchPlan, text: string) {
