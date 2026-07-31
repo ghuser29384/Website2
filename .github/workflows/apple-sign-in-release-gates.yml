@@ -73,8 +73,8 @@ jobs:
       - name: Create the rendered Apple sign-in smoke test
         shell: bash
         run: |
-          mkdir -p artifacts/apple-sign-in
-          cat > /tmp/apple-sign-in-smoke.mjs <<'EOF'
+          mkdir -p artifacts/apple-sign-in .tmp
+          cat > .tmp/apple-sign-in-smoke.mjs <<'EOF'
           import assert from "node:assert/strict";
           import { chromium } from "@playwright/test";
 
@@ -143,7 +143,10 @@ jobs:
 
               const bodyText = await page.locator("body").innerText();
               assert.match(bodyText, /Continue with Apple/);
-              assert.doesNotMatch(bodyText, /Application error|Internal Server Error|Unhandled Runtime Error/i);
+              assert.doesNotMatch(
+                bodyText,
+                /Application error|Internal Server Error|Unhandled Runtime Error/i,
+              );
               assert.equal(
                 await page.locator("nextjs-portal, [data-nextjs-dialog-overlay]").count(),
                 0,
@@ -158,7 +161,10 @@ jobs:
                 );
                 return button instanceof HTMLButtonElement && !button.disabled;
               });
-              assert.ok(await appleButton.boundingBox(), `${variant.name}: Apple button has no layout box`);
+              assert.ok(
+                await appleButton.boundingBox(),
+                `${variant.name}: Apple button has no layout box`,
+              );
 
               await appleButton.click();
               const alert = page.getByRole("alert");
@@ -213,7 +219,7 @@ jobs:
           exit 1
 
       - name: Run desktop and mobile rendered QA
-        run: node /tmp/apple-sign-in-smoke.mjs
+        run: node .tmp/apple-sign-in-smoke.mjs
 
       - name: Stop the production server
         if: always()
@@ -222,6 +228,7 @@ jobs:
           if [[ -f /tmp/apple-next.pid ]]; then
             kill "$(cat /tmp/apple-next.pid)" 2>/dev/null || true
           fi
+          rm -rf .tmp
 
       - name: Upload rendered evidence and server log
         if: always()
