@@ -1,0 +1,137 @@
+name: Marketplace delta prebuilt moraltrade rescue
+
+on:
+  push:
+    branches:
+      - qa/marketplace-delta-exact-head-repair-20260731
+    paths:
+      - ".github/workflows/marketplace-delta-prebuilt-moral-rescue.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      PRODUCT_BRANCH: agent/marketplace-delta-current-main-20260729
+      EXPECTED_PRODUCT_HEAD: 276d671da0bfb075451c481ec08052cb7fb02e89
+      QA_GATE_RUN: "30646951460"
+      QA_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      TEAM_SCOPE: ellen-s
+      PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      PROJECT_NAME: moraltrade-site
+
+    steps:
+      - name: Check out exact PR 326 head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify exact clean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git rev-parse HEAD)" == "$EXPECTED_PRODUCT_HEAD" ]]
+          [[ -z "$(git status --porcelain)" ]]
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and deploy the exact source as a prebuilt Preview
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .vercel .env.local
+          npx --yes vercel@58.4.0 link \
+            --yes --project "$PROJECT_NAME" --scope "$TEAM_SCOPE" --token "$VERCEL_TOKEN" >/dev/null
+          npx --yes vercel@58.4.0 pull \
+            --yes --environment=preview --git-branch="$PRODUCT_BRANCH" \
+            --scope "$TEAM_SCOPE" --token "$VERCEL_TOKEN" >/dev/null
+
+          NEXT_PUBLIC_SUPABASE_URL="$QA_URL" \
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$QA_SUPABASE_PUBLISHABLE_KEY" \
+          SUPABASE_SERVICE_ROLE_KEY="$QA_SUPABASE_SERVICE_ROLE_KEY" \
+          VERCEL_ENV=preview \
+          VERCEL_GIT_COMMIT_SHA="$EXPECTED_PRODUCT_HEAD" \
+          VERCEL_GIT_COMMIT_REF="$PRODUCT_BRANCH" \
+          npx --yes vercel@58.4.0 build \
+            --yes --scope "$TEAM_SCOPE" --token "$VERCEL_TOKEN"
+
+          [[ -d .vercel/output ]]
+          deploy_log="$RUNNER_TEMP/prebuilt-deploy.log"
+          npx --yes vercel@58.4.0 deploy \
+            --prebuilt --archive=tgz --yes --scope "$TEAM_SCOPE" --token "$VERCEL_TOKEN" \
+            --meta "qaGateRun=$QA_GATE_RUN" \
+            --meta "qaRole=candidate-moraltrade" \
+            --meta "qaSourceSha=$EXPECTED_PRODUCT_HEAD" \
+            --meta "qaSourceRef=$PRODUCT_BRANCH" \
+            2>&1 | tee "$deploy_log"
+
+          url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' "$deploy_log" | tail -1)"
+          [[ -n "$url" ]]
+          host="${url#https://}"
+          response="$RUNNER_TEMP/deployments.json"
+          row=""
+          for _ in $(seq 1 120); do
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v6/deployments?projectId=${PROJECT_ID}&limit=100&teamId=${TEAM_ID}" \
+              --output "$response"
+            row="$(jq -c --arg host "$host" --arg run "$QA_GATE_RUN" --arg sha "$EXPECTED_PRODUCT_HEAD" '
+              [.deployments[] | select(
+                (.url == $host or (.meta.qaGateRun == $run and .meta.qaRole == "candidate-moraltrade" and .meta.qaSourceSha == $sha))
+                and (.meta.gitDirty // "0") != "1"
+              )] | sort_by(.created) | reverse | .[0]
+              | if . == null then empty else {id:(.uid // .id // ""),host:.url,state:(.state // .readyState // "UNKNOWN")} end
+            ' "$response")"
+            if [[ -n "$row" ]]; then
+              id="$(jq -r '.id' <<< "$row")"
+              found_host="$(jq -r '.host' <<< "$row")"
+              state="$(jq -r '.state' <<< "$row")"
+              if [[ "$state" == "READY" ]]; then
+                [[ "$id" == dpl_* ]]
+                [[ "$found_host" == *.vercel.app ]]
+                echo "deployment_id=$id" >> "$GITHUB_OUTPUT"
+                echo "deployment_url=https://$found_host" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              if [[ "$state" == "ERROR" || "$state" == "CANCELED" ]]; then
+                echo "Prebuilt deployment reached $state: $row" >&2
+                exit 1
+              fi
+            fi
+            sleep 5
+          done
+          echo "Timed out waiting for prebuilt deployment." >&2
+          exit 1
+
+      - name: Record rescue deployment on temporary PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="Prebuilt exact-source rescue for marketplace run ${QA_GATE_RUN}: deployment \`${{ steps.deploy.outputs.deployment_id }}\` at \`${{ steps.deploy.outputs.deployment_url }}\`, source \`${EXPECTED_PRODUCT_HEAD}\`."
+          jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Content-Type: application/json" \
+            --data-binary "@$RUNNER_TEMP/comment.json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/359/comments" \
+            --output /dev/null
