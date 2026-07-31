@@ -81,3 +81,5 @@ jobs:
           if [[ -z "$run_id" || "$status" != "completed" ]]; then
             exit 1
           fi
+
+# Observe the second repair attempt with keyed timestamp elements.
