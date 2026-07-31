@@ -45,7 +45,9 @@ test("public navigation exposes professional marketplace routes", () => {
   const links = getPrimaryNavLinks(false);
   const labels = links.map((link) => link.label);
   const hrefs = flattenPrimaryNavHrefs();
-  const footerHrefs = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));
+  const footerHrefs: string[] = FOOTER_LINK_GROUPS.flatMap((group) =>
+  group.links.map((link) => String(link.href)),
+);
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
