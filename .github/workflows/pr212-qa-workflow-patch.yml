@@ -88,6 +88,7 @@ jobs:
           git diff --check
           git diff -- .github/workflows/institutional-trade-qa.yml > /tmp/pr212-qa-workflow-patch/workflow.patch
           cp .github/workflows/institutional-trade-qa.yml /tmp/pr212-qa-workflow-patch/.github/workflows/institutional-trade-qa.yml
+          cp .github/workflows/institutional-trade-qa.yml /tmp/pr212-qa-workflow-patch/patched-institutional-trade-qa.yml
           {
             echo "feature_head=$(git rev-parse HEAD)"
             echo "original_blob=$(git hash-object /tmp/original-institutional-trade-qa.yml)"
