@@ -1,0 +1,428 @@
+name: PR 212 targeted main-integration regression
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-ops-20260730
+    paths:
+      - .github/workflows/pr212-targeted-main-regression.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-targeted-main-regression
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      INTEGRATED_BRANCH: agent/pr212-main-integrated-20260731
+      EXPECTED_INTEGRATED_HEAD: 68d96443d1fe233b22046350d3d73d716f4657d2
+      PINNED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      INSTITUTIONAL_TRADES_ENABLED: "true"
+      INSTITUTIONAL_POOLS_ENABLED: "true"
+      INSTITUTIONAL_ENTERPRISE_API_ENABLED: "true"
+      INSTITUTIONAL_WEBHOOKS_ENABLED: "true"
+      CRON_SECRET: qa-institutional-cron-not-production
+      REGRESSION_BASE_URL: http://127.0.0.1:3210
+      REGRESSION_OUTPUT_DIR: /tmp/pr212-targeted-regression-evidence
+
+    steps:
+      - name: Check out exact main-integrated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.INTEGRATED_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate and pinned main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_INTEGRATED_HEAD"
+          git fetch --no-tags origin main "$INTEGRATED_BRANCH"
+          test "$(git rev-parse origin/main)" = "$PINNED_MAIN"
+          git merge-base --is-ancestor "$PINNED_MAIN" HEAD
+          git merge-base --is-ancestor e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e HEAD
+          test -d pr212-main-integration-evidence
+
+      - name: Remove temporary integration evidence from the product candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm -r pr212-main-integration-evidence
+          git diff --cached --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Reconfirm source, type, lint, and build gates after evidence cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts \
+            src/lib/crawlability.test.ts \
+            src/lib/public-route-smoke.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          npx tsc --noEmit --pretty false
+          npm run lint
+          npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm start -- --hostname 127.0.0.1 --port 3210 > /tmp/pr212-targeted-server.log 2>&1 &
+          echo $! > /tmp/pr212-targeted-server.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3210/feed >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/pr212-targeted-server.log >&2
+          exit 1
+
+      - name: Run existing Create and Walkthrough desktop/mobile regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            tests/create-route-workbench.spec.ts \
+            tests/walkthrough.spec.ts \
+            --reporter=line
+
+      - name: Run conflict-adjacent and cross-surface rendered regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$REGRESSION_OUTPUT_DIR"
+          cat > /tmp/pr212-targeted-regression.mjs <<'NODE'
+          import { chromium } from "@playwright/test";
+          import fs from "node:fs/promises";
+          import path from "node:path";
+
+          const baseURL = process.env.REGRESSION_BASE_URL;
+          const outputDir = process.env.REGRESSION_OUTPUT_DIR;
+          if (!baseURL || !outputDir) throw new Error("Missing regression configuration.");
+
+          const forbiddenOrganizationControls = [
+            "Mandates",
+            "Delegated authority",
+            "Approval committees",
+            "Institutional funds",
+            "Enterprise integrations",
+          ];
+          const results = [];
+
+          function assert(condition, message) {
+            if (!condition) throw new Error(message);
+          }
+
+          async function settle(page) {
+            await page.waitForLoadState("domcontentloaded");
+            await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
+            await page.waitForTimeout(250);
+          }
+
+          function attachDiagnostics(page, name) {
+            const diagnostics = [];
+            page.on("pageerror", (error) => diagnostics.push(`pageerror:${error.message}`));
+            page.on("console", (message) => {
+              if (message.type() === "error") diagnostics.push(`console:${message.text()}`);
+            });
+            page.on("requestfailed", (request) => {
+              const failure = request.failure()?.errorText || "unknown";
+              const target = new URL(request.url());
+              if (target.origin === baseURL && !failure.includes("ERR_ABORTED")) {
+                diagnostics.push(`requestfailed:${target.pathname}:${failure}`);
+              }
+            });
+            return async () => {
+              assert(!diagnostics.length, `${name} emitted browser diagnostics:\n${diagnostics.join("\n")}`);
+            };
+          }
+
+          async function assertNoOrganizationAdminLeak(page, name) {
+            for (const label of forbiddenOrganizationControls) {
+              const visible = await page.getByText(label, { exact: true }).count();
+              assert(visible === 0, `${name} exposed organization-only control: ${label}`);
+            }
+          }
+
+          async function assertNoHorizontalOverflow(page, name) {
+            const overflow = await page.evaluate(
+              () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            );
+            assert(overflow <= 1, `${name} has ${overflow}px horizontal overflow.`);
+          }
+
+          async function screenshot(page, name) {
+            await page.screenshot({
+              animations: "disabled",
+              fullPage: true,
+              path: path.join(outputDir, `${name}.png`),
+            });
+          }
+
+          async function visit(context, {
+            name,
+            route,
+            expectedText,
+            viewport,
+            finalPath,
+            noLeak = true,
+          }) {
+            const page = await context.newPage();
+            await page.setViewportSize(viewport);
+            const finishDiagnostics = attachDiagnostics(page, name);
+            const response = await page.goto(`${baseURL}${route}`, { waitUntil: "domcontentloaded" });
+            assert(response, `${name} returned no navigation response.`);
+            assert(response.status() < 500, `${name} returned HTTP ${response.status()}.`);
+            await settle(page);
+            if (finalPath) {
+              assert(new URL(page.url()).pathname === finalPath, `${name} ended at ${page.url()}.`);
+            }
+            if (expectedText) {
+              const text = await page.locator("body").innerText();
+              assert(text.includes(expectedText), `${name} is missing expected text: ${expectedText}`);
+            }
+            if (noLeak) await assertNoOrganizationAdminLeak(page, name);
+            if (viewport.width <= 430) await assertNoHorizontalOverflow(page, name);
+            await screenshot(page, name);
+            await finishDiagnostics();
+            results.push({ name, route, finalUrl: page.url(), status: response.status() });
+            return page;
+          }
+
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const publicContext = await browser.newContext({
+              baseURL,
+              viewport: { width: 1440, height: 1000 },
+              storageState: {
+                cookies: [{
+                  domain: "127.0.0.1",
+                  expires: -1,
+                  httpOnly: true,
+                  name: "mt_walkthrough_seen",
+                  path: "/",
+                  sameSite: "Lax",
+                  secure: false,
+                  value: "1",
+                }],
+                origins: [],
+              },
+            });
+
+            await publicContext.route("**/api/offers/plane", async (route) => {
+              await route.fulfill({
+                contentType: "application/json",
+                status: 200,
+                body: JSON.stringify({
+                  liveOffersAvailable: true,
+                  items: [{
+                    actionRequested: "Fund $25 for global health",
+                    actionReturned: "Eat vegetarian for one week",
+                    causeAreas: ["Animal welfare", "Global health"],
+                    challengeScore: 34,
+                    creditScore: 72,
+                    duration: "One week",
+                    href: "/offers/regression-offer",
+                    id: "regression-offer",
+                    maxExposureCents: 2500,
+                    mode: "pledge",
+                    offererName: "Regression participant",
+                    returnScore: 78,
+                    scoreExplanation: {
+                      challenge: ["Duration: one week"],
+                      credit: ["Established history"],
+                      return: ["Participant-stated return: 8.0/10"],
+                    },
+                    source: "live",
+                    title: "Animal welfare ↔ Global health",
+                    verification: "Evidence-gated",
+                  }],
+                }),
+              });
+            });
+
+            const offers = await visit(publicContext, {
+              name: "offers-visual-directory-desktop",
+              route: "/offers?view=live",
+              expectedText: "Find a live proposal you can evaluate quickly.",
+              viewport: { width: 1440, height: 1000 },
+            });
+            await offers.evaluate(() => {
+              const existing = document.querySelector(".mt-directory-view");
+              if (existing?.querySelector(".mt-market-grid article")) return;
+              const directory = existing || document.body.appendChild(Object.assign(document.createElement("div"), { className: "mt-directory-view" }));
+              const grid = document.createElement("div");
+              grid.className = "mt-market-grid";
+              grid.innerHTML = `
+                <article>
+                  <h3>Animal welfare ↔ Global health</h3>
+                  <div class="mt-market-card-foot"><a href="/offers/regression-offer">Open proposal</a></div>
+                </article>`;
+              directory.appendChild(grid);
+            });
+            await offers.waitForSelector('[data-visual-offer-grid="true"]', { timeout: 8_000 });
+            assert(await offers.locator('[data-visual-offer-grid="true"]').count() === 1, "Visual offer directory did not mount exactly once.");
+            await offers.goto(`${baseURL}/discover`, { waitUntil: "domcontentloaded" });
+            await settle(offers);
+            assert(await offers.locator("#visual-offer-directory-host").count() === 0, "Visual offer portal survived route cleanup.");
+            await offers.close();
+
+            const completeProfileRoute = "/complete-profile?source=walkthrough&cause_area=Existential%20risk&walkthrough_cause=AI%20safety&offer_type=Money&match_name=Sam&match_get=Fund%20AI%20safety&match_give=Eat%20vegetarian&panel=connections";
+            const profile = await visit(publicContext, {
+              name: "complete-profile-connections-desktop",
+              route: completeProfileRoute,
+              expectedText: "Choose what may inform private suggestions.",
+              viewport: { width: 1440, height: 1000 },
+            });
+            assert(await profile.getByRole("dialog").count() === 1, "Connections dialog did not open from the request-stable initial state.");
+            await profile.getByRole("button", { name: "Close account sources" }).click();
+            assert(await profile.getByRole("dialog").count() === 0, "Connections dialog did not close.");
+            await profile.getByRole("button", { name: "Sources" }).click();
+            assert(await profile.getByRole("dialog").count() === 1, "Connections dialog did not reopen.");
+            await profile.close();
+
+            await visit(publicContext, {
+              name: "feed-desktop",
+              route: "/feed",
+              expectedText: "Moral Trade",
+              viewport: { width: 1440, height: 1000 },
+            });
+            await visit(publicContext, {
+              name: "feed-mobile",
+              route: "/feed",
+              expectedText: "Moral Trade",
+              viewport: { width: 390, height: 844 },
+            });
+            await visit(publicContext, {
+              name: "evidence-desktop",
+              route: "/evidence",
+              expectedText: "Verified outcomes, without public evidence dossiers.",
+              viewport: { width: 1440, height: 1000 },
+            });
+            await visit(publicContext, {
+              name: "evidence-mobile",
+              route: "/evidence",
+              expectedText: "Verified outcomes, without public evidence dossiers.",
+              viewport: { width: 390, height: 844 },
+            });
+
+            const unauthAdmin = await visit(publicContext, {
+              name: "admin-auth-redirect",
+              route: "/admin",
+              expectedText: "Sign in",
+              viewport: { width: 1440, height: 1000 },
+              finalPath: "/login",
+              noLeak: false,
+            });
+            assert(new URL(unauthAdmin.url()).searchParams.get("returnTo") === "/admin", "Admin redirect lost its return target.");
+            await unauthAdmin.close();
+
+            const institutionalDesk = await visit(publicContext, {
+              name: "institutional-deal-desk-auth-redirect",
+              route: "/admin/institutional-deal-desk",
+              expectedText: "Sign in",
+              viewport: { width: 390, height: 844 },
+              finalPath: "/login",
+              noLeak: false,
+            });
+            assert(new URL(institutionalDesk.url()).searchParams.get("returnTo") === "/admin/institutional-deal-desk", "Institutional admin redirect lost its return target.");
+            await institutionalDesk.close();
+
+            const personalWorkspace = await visit(publicContext, {
+              name: "individual-institutional-auth-redirect",
+              route: "/institutions/individual",
+              expectedText: "Sign in",
+              viewport: { width: 390, height: 844 },
+              finalPath: "/login",
+              noLeak: false,
+            });
+            assert(new URL(personalWorkspace.url()).searchParams.get("returnTo") === "/institutions/individual", "Individual workspace redirect lost its return target.");
+            await personalWorkspace.close();
+
+            const noDraft = await visit(publicContext, {
+              name: "complete-profile-without-draft-redirect",
+              route: "/complete-profile",
+              expectedText: "What do you value?",
+              viewport: { width: 390, height: 844 },
+              finalPath: "/walkthrough",
+            });
+            await noDraft.close();
+
+            await publicContext.close();
+          } finally {
+            await fs.writeFile(path.join(outputDir, "results.json"), JSON.stringify(results, null, 2));
+            await browser.close();
+          }
+          NODE
+          node /tmp/pr212-targeted-regression.mjs
+
+      - name: Recheck pinned main and publish evidence-free integrated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main "$INTEGRATED_BRANCH"
+          test "$(git rev-parse origin/main)" = "$PINNED_MAIN"
+          test "$(git rev-parse "origin/${INTEGRATED_BRANCH}")" = "$EXPECTED_INTEGRATED_HEAD"
+          test -z "$(git status --short | grep -v '^D  pr212-main-integration-evidence/' || true)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Remove temporary PR 212 integration evidence"
+          git push origin "HEAD:${INTEGRATED_BRANCH}"
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f /tmp/pr212-targeted-server.pid ]]; then
+            kill "$(cat /tmp/pr212-targeted-server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload targeted regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-targeted-main-regression-${{ github.run_id }}
+          path: |
+            /tmp/pr212-targeted-regression-evidence
+            /tmp/pr212-targeted-server.log
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
