@@ -1,0 +1,81 @@
+name: Apply Apple ID-token sign-in 20260731
+
+on:
+  push:
+    branches:
+      - fix/apple-id-token-sign-in-20260731
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: fix/apple-id-token-sign-in-20260731
+          fetch-depth: 0
+
+      - name: Apply the narrow Apple sign-in patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          auth_card = Path("src/components/auth/auth-card.tsx")
+          text = auth_card.read_text(encoding="utf-8")
+          import_line = 'import { AppleSignInButton } from "@/components/auth/apple-sign-in-button";\n'
+          if import_line not in text:
+              target = 'import { oauthSignInAction, signInAction, signUpAction } from "@/app/actions";\n'
+              if target not in text:
+                  raise SystemExit("auth-card import target not found")
+              text = text.replace(target, target + import_line, 1)
+          apple_branch = '''  if (provider === "apple") {\n    return <AppleSignInButton mode={mode} returnTo={returnTo} />;\n  }\n\n'''
+          if apple_branch not in text:
+              target = '''  const copy = getProviderCopy(provider);\n\n'''
+              if target not in text:
+                  raise SystemExit("auth-card provider target not found")
+              text = text.replace(target, apple_branch + target, 1)
+          auth_card.write_text(text, encoding="utf-8")
+
+          confirm = Path("src/app/auth/confirm/route.ts")
+          text = confirm.read_text(encoding="utf-8")
+          apple_session = '''  if (searchParams.get("provider") === "apple-js") {\n    const supabase = await createClient();\n    const {\n      data: { user },\n      error,\n    } = await supabase.auth.getUser();\n\n    if (!error && user) {\n      await ensureAccountRowsForUser(user, supabase);\n      return NextResponse.redirect(new URL(next, origin));\n    }\n\n    const loginUrl = new URL(authPath, origin);\n    loginUrl.searchParams.set(\n      "error",\n      "We could not complete Apple sign-in. Try again or use email.",\n    );\n    return NextResponse.redirect(loginUrl);\n  }\n\n'''
+          if apple_session not in text:
+              target = '''  if (code) {\n    const supabase = await createClient();\n'''
+              if target not in text:
+                  raise SystemExit("confirm-route target not found")
+              text = text.replace(target, apple_session + target, 1)
+          confirm.write_text(text, encoding="utf-8")
+
+          next_config = Path("next.config.ts")
+          text = next_config.read_text(encoding="utf-8")
+          old_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://www.every.org https://every.org"
+          new_policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://appleid.cdn-apple.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; frame-src https://appleid.apple.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self' https://appleid.apple.com https://www.every.org https://every.org"
+          if new_policy not in text:
+              if old_policy not in text:
+                  raise SystemExit("CSP target not found")
+              text = text.replace(old_policy, new_policy, 1)
+          next_config.write_text(text, encoding="utf-8")
+          PY
+
+          git diff --check
+
+      - name: Commit the applied patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add src/components/auth/auth-card.tsx src/app/auth/confirm/route.ts next.config.ts
+          if git diff --cached --quiet; then
+            echo "Apple sign-in patch is already applied."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Route Apple sign-in through verified ID tokens"
+          git push origin HEAD:fix/apple-id-token-sign-in-20260731
