@@ -1,0 +1,122 @@
+name: Inspect pooled-settlement payload against current main
+
+on:
+  push:
+    branches:
+      - ops/inspect-pooled-settlement-payload-20260731
+    paths:
+      - ".github/workflows/inspect-pooled-settlement-payload.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      OUTPUT_DIR: pooled-settlement-inspection
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out exact current-main inspection branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Reconstruct the reviewed PR 208 payload without modifying the branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$OUTPUT_DIR" /tmp/payload-source /tmp/payload-extracted
+          git fetch --no-tags origin \
+            '+refs/heads/feat/cross-user-pooled-settlement:refs/remotes/origin/pooled-settlement-source'
+          git worktree add --detach /tmp/payload-source refs/remotes/origin/pooled-settlement-source
+
+          cat /tmp/payload-source/.github/pooled-settlement-payload-fixes/chunk-02/part-* \
+            > /tmp/payload-source/.github/pooled-settlement-payload/chunk-02
+          cat /tmp/payload-source/.github/pooled-settlement-payload-fixes/chunk-05/part-* \
+            > /tmp/payload-source/.github/pooled-settlement-payload/chunk-05
+          echo 'd5d4a6ef7f8cce78ec7f3ce3148436f494edc55d01dfc1805db916bb52bb4783  /tmp/payload-source/.github/pooled-settlement-payload/chunk-02' | sha256sum --check --strict
+          echo '99e87a7fb46096e65ebaa5b7f39155aca8a26e8cf7912df1a59a711b5251e0c8  /tmp/payload-source/.github/pooled-settlement-payload/chunk-05' | sha256sum --check --strict
+          mapfile -t chunks < <(find /tmp/payload-source/.github/pooled-settlement-payload -maxdepth 1 -type f -name 'chunk-*' | sort)
+          test "${#chunks[@]}" -eq 8
+          cat "${chunks[@]}" | base64 --decode > /tmp/pooled-settlement-payload.tgz
+          echo 'a39d6e2a4e0205dd9cc2d10a050ffc87d0db3b806ead2c1991d74fbf94b81d4f  /tmp/pooled-settlement-payload.tgz' | sha256sum --check --strict
+          tar -tzf /tmp/pooled-settlement-payload.tgz > "$OUTPUT_DIR/payload-manifest.txt"
+          tar -xzf /tmp/pooled-settlement-payload.tgz -C /tmp/payload-extracted
+          test -f /tmp/payload-extracted/supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
+          test -f /tmp/payload-extracted/src/lib/trade-donation-pool.ts
+          test -f /tmp/payload-extracted/docs/trade-donation-pooled-settlement-runbook.md
+          sha256sum /tmp/pooled-settlement-payload.tgz > "$OUTPUT_DIR/payload-digest.txt"
+          printf 'source_head=%s\ncurrent_main=%s\n' \
+            "$(git -C /tmp/payload-source rev-parse HEAD)" \
+            "$(git rev-parse HEAD^)" \
+            > "$OUTPUT_DIR/refs.txt"
+
+      - name: Apply payload to a disposable current-main worktree and inspect drift
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(git rev-parse HEAD^)"
+          git worktree add --detach /tmp/current-main "$current_main"
+          tar -xzf /tmp/pooled-settlement-payload.tgz -C /tmp/current-main
+
+          git -C /tmp/current-main status --short > "$OUTPUT_DIR/status.txt"
+          git -C /tmp/current-main diff --stat > "$OUTPUT_DIR/diff-stat.txt"
+          git -C /tmp/current-main diff --name-status > "$OUTPUT_DIR/diff-name-status.txt"
+          git -C /tmp/current-main diff --check > "$OUTPUT_DIR/diff-check.txt" || true
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+          manifest = [line.strip() for line in Path('pooled-settlement-inspection/payload-manifest.txt').read_text().splitlines() if line.strip()]
+          status = [line.rstrip() for line in Path('pooled-settlement-inspection/status.txt').read_text().splitlines() if line.strip()]
+          paths = []
+          for line in status:
+              path = line[3:] if len(line) > 3 else line
+              paths.append(path)
+          summary = {
+              'payload_file_count': len(manifest),
+              'changed_path_count_against_current_main': len(paths),
+              'changed_paths': paths,
+              'contains_migration': any('20260725152000_cross_user_pooled_trade_donations.sql' in p for p in manifest),
+              'contains_runbook': any('trade-donation-pooled-settlement-runbook.md' in p for p in manifest),
+              'contains_pool_service': any('src/lib/trade-donation-pool.ts' in p for p in manifest),
+          }
+          Path('pooled-settlement-inspection/summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+          PY
+
+          cat "$OUTPUT_DIR/summary.json"
+          cat "$OUTPUT_DIR/diff-stat.txt"
+
+      - name: Upload inspection evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-payload-inspection-${{ github.run_id }}
+          path: pooled-settlement-inspection
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Post inspection summary to canonical activation issue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### PR #208 payload inspection against exact current main'
+            echo
+            echo "- workflow run: $GITHUB_RUN_ID"
+            echo "- inspection commit: $GITHUB_SHA"
+            echo "- status before reporting: ${{ job.status }}"
+            for file in refs.txt payload-digest.txt summary.json diff-stat.txt diff-name-status.txt diff-check.txt; do
+              echo; echo "#### $file"; echo '```'
+              if [[ -f "$OUTPUT_DIR/$file" ]]; then cat "$OUTPUT_DIR/$file"; else echo 'not produced'; fi
+              echo '```'
+            done
+          } > /tmp/comment.md
+          gh issue comment 337 --repo "$GITHUB_REPOSITORY" --body-file /tmp/comment.md
