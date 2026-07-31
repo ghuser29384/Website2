@@ -1,0 +1,52 @@
+name: Materialize returning-user Complete Profile v2
+
+on:
+  push:
+    branches:
+      - qa/materialize-complete-profile-returning-20260731-v2
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out carrier
+        uses: actions/checkout@v4
+        with:
+          ref: qa/materialize-complete-profile-returning-20260731-v2
+          fetch-depth: 0
+
+      - name: Apply reviewed product patch to current main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main fix/direct-complete-profile-100-sparks-20260731
+          git show origin/fix/direct-complete-profile-100-sparks-20260731:.github/patches/direct-complete-profile.patch.gz.b64 \
+            | tr -d '\n\r ' \
+            | base64 --decode > /tmp/direct-complete-profile.patch.gz
+          gzip -t /tmp/direct-complete-profile.patch.gz
+          gzip -dc /tmp/direct-complete-profile.patch.gz > /tmp/direct-complete-profile.patch
+          echo "f7d0cb216401fc1da0b4ffffa514af6cfe6cc7676ad96838e543436e6372d33d  /tmp/direct-complete-profile.patch" | sha256sum --check -
+
+          git checkout --detach origin/main
+          git apply --check /tmp/direct-complete-profile.patch
+          git apply /tmp/direct-complete-profile.patch
+          git diff --check
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- \
+            src/app/complete-profile/actions.ts \
+            src/app/complete-profile/page.tsx \
+            src/components/profile/complete-profile-review.tsx \
+            src/lib/complete-profile-private-preferences.ts \
+            src/lib/complete-profile.test.ts \
+            src/lib/complete-profile.ts \
+            src/lib/walkthrough-profile.test.ts \
+            src/lib/walkthrough-profile.ts \
+            tests/complete-profile-review.spec.ts
+          git commit -m "Fix Complete Profile direct entry"
+          git push --force origin HEAD:refs/heads/fix/complete-profile-returning-users-20260731
