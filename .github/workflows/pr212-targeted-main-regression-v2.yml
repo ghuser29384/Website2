@@ -1,0 +1,372 @@
+name: PR 212 targeted main-integration regression v2
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-ops-20260730
+    paths:
+      - .github/workflows/pr212-targeted-main-regression-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr212-targeted-main-regression-v2
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      INTEGRATED_BRANCH: agent/pr212-main-integrated-20260731
+      EXPECTED_INTEGRATED_HEAD: 6e4deac3530e8f0989b457d082e6efd11b2fa34e
+      CLEAN_HEAD: e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e
+      PINNED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      INSTITUTIONAL_TRADES_ENABLED: "true"
+      INSTITUTIONAL_POOLS_ENABLED: "true"
+      INSTITUTIONAL_ENTERPRISE_API_ENABLED: "true"
+      INSTITUTIONAL_WEBHOOKS_ENABLED: "true"
+      CRON_SECRET: qa-institutional-cron-not-production
+      REGRESSION_BASE_URL: http://127.0.0.1:3210
+      REGRESSION_OUTPUT_DIR: /tmp/pr212-targeted-regression-evidence
+
+    steps:
+      - name: Check out exact evidence-free integrated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.INTEGRATED_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate, ancestry, cleanup, and pinned main
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          echo "actual_head=$actual_head"
+          test "$actual_head" = "$EXPECTED_INTEGRATED_HEAD"
+          git fetch --no-tags origin main "$INTEGRATED_BRANCH"
+          actual_main="$(git rev-parse origin/main)"
+          echo "actual_main=$actual_main"
+          test "$actual_main" = "$PINNED_MAIN"
+          git merge-base --is-ancestor "$PINNED_MAIN" HEAD
+          git merge-base --is-ancestor "$CLEAN_HEAD" HEAD
+          test ! -e pr212-main-integration-evidence
+          test ! -e .github/workflows/pr212-clean-reconstruction-gates.yml
+          test -z "$(git status --short)"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Reconfirm source, TypeScript, ESLint, and production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts \
+            src/lib/crawlability.test.ts \
+            src/lib/public-route-smoke.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          npx tsc --noEmit --pretty false
+          npm run lint
+          npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm start -- --hostname 127.0.0.1 --port 3210 > /tmp/pr212-targeted-server.log 2>&1 &
+          echo $! > /tmp/pr212-targeted-server.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3210/feed >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/pr212-targeted-server.log >&2
+          exit 1
+
+      - name: Run current-main Create and Walkthrough desktop/mobile regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            tests/create-route-workbench.spec.ts \
+            tests/walkthrough.spec.ts \
+            --reporter=line
+
+      - name: Run conflict-adjacent and cross-surface rendered regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$REGRESSION_OUTPUT_DIR"
+          cat > /tmp/pr212-targeted-regression.mjs <<'NODE'
+          import { chromium } from "@playwright/test";
+          import fs from "node:fs/promises";
+          import path from "node:path";
+
+          const baseURL = process.env.REGRESSION_BASE_URL;
+          const outputDir = process.env.REGRESSION_OUTPUT_DIR;
+          if (!baseURL || !outputDir) throw new Error("Missing regression configuration.");
+
+          const forbidden = [
+            "Mandates",
+            "Delegated authority",
+            "Approval committees",
+            "Institutional funds",
+            "Enterprise integrations",
+          ];
+          const results = [];
+          const assert = (condition, message) => {
+            if (!condition) throw new Error(message);
+          };
+
+          async function settle(page) {
+            await page.waitForLoadState("domcontentloaded");
+            await page.waitForLoadState("networkidle", { timeout: 8_000 }).catch(() => {});
+            await page.waitForTimeout(300);
+          }
+
+          function diagnostics(page, name) {
+            const errors = [];
+            page.on("pageerror", (error) => errors.push(`pageerror:${error.message}`));
+            page.on("console", (message) => {
+              if (message.type() === "error") errors.push(`console:${message.text()}`);
+            });
+            page.on("requestfailed", (request) => {
+              const failure = request.failure()?.errorText || "unknown";
+              const url = new URL(request.url());
+              if (url.origin === baseURL && !failure.includes("ERR_ABORTED")) {
+                errors.push(`requestfailed:${url.pathname}:${failure}`);
+              }
+            });
+            return () => assert(!errors.length, `${name} emitted browser errors:\n${errors.join("\n")}`);
+          }
+
+          async function noOrganizationLeak(page, name) {
+            for (const label of forbidden) {
+              const count = await page.locator("a,button").filter({ hasText: label }).count();
+              assert(count === 0, `${name} exposed organization-only control: ${label}`);
+            }
+          }
+
+          async function noOverflow(page, name) {
+            const amount = await page.evaluate(
+              () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            );
+            assert(amount <= 1, `${name} has ${amount}px horizontal overflow.`);
+          }
+
+          async function visit(context, options) {
+            const page = await context.newPage();
+            await page.setViewportSize(options.viewport);
+            const finishDiagnostics = diagnostics(page, options.name);
+            const response = await page.goto(`${baseURL}${options.route}`, { waitUntil: "domcontentloaded" });
+            assert(response, `${options.name} returned no response.`);
+            assert(response.status() < 500, `${options.name} returned HTTP ${response.status()}.`);
+            await settle(page);
+            if (options.finalPath) {
+              assert(new URL(page.url()).pathname === options.finalPath, `${options.name} ended at ${page.url()}.`);
+            }
+            if (options.expectedText) {
+              const body = await page.locator("body").innerText();
+              assert(body.includes(options.expectedText), `${options.name} is missing: ${options.expectedText}`);
+            }
+            if (options.noLeak !== false) await noOrganizationLeak(page, options.name);
+            if (options.viewport.width <= 430) await noOverflow(page, options.name);
+            await page.screenshot({
+              animations: "disabled",
+              fullPage: true,
+              path: path.join(outputDir, `${options.name}.png`),
+            });
+            finishDiagnostics();
+            results.push({ name: options.name, route: options.route, finalUrl: page.url(), status: response.status() });
+            return page;
+          }
+
+          const browser = await chromium.launch({ headless: true });
+          try {
+            const context = await browser.newContext({
+              baseURL,
+              viewport: { width: 1440, height: 1000 },
+              storageState: {
+                cookies: [{
+                  domain: "127.0.0.1",
+                  expires: -1,
+                  httpOnly: true,
+                  name: "mt_walkthrough_seen",
+                  path: "/",
+                  sameSite: "Lax",
+                  secure: false,
+                  value: "1",
+                }],
+                origins: [],
+              },
+            });
+
+            await context.route("**/api/offers/plane", (route) => route.fulfill({
+              contentType: "application/json",
+              status: 200,
+              body: JSON.stringify({
+                liveOffersAvailable: true,
+                items: [{
+                  actionRequested: "Fund $25 for global health",
+                  actionReturned: "Eat vegetarian for one week",
+                  causeAreas: ["Animal welfare", "Global health"],
+                  challengeScore: 34,
+                  creditScore: 72,
+                  duration: "One week",
+                  href: "/offers/regression-offer",
+                  id: "regression-offer",
+                  maxExposureCents: 2500,
+                  mode: "pledge",
+                  offererName: "Regression participant",
+                  returnScore: 78,
+                  scoreExplanation: {
+                    challenge: ["Duration: one week"],
+                    credit: ["Established history"],
+                    return: ["Participant-stated return: 8.0/10"],
+                  },
+                  source: "live",
+                  title: "Animal welfare ↔ Global health",
+                  verification: "Evidence-gated",
+                }],
+              }),
+            }));
+
+            const offers = await visit(context, {
+              name: "offers-visual-directory-desktop",
+              route: "/offers?view=live",
+              expectedText: "Find a live proposal you can evaluate quickly.",
+              viewport: { width: 1440, height: 1000 },
+            });
+            await offers.evaluate(() => {
+              const existing = document.querySelector(".mt-directory-view");
+              if (existing?.querySelector(".mt-market-grid article")) return;
+              const directory = existing || document.body.appendChild(Object.assign(document.createElement("div"), { className: "mt-directory-view" }));
+              const grid = document.createElement("div");
+              grid.className = "mt-market-grid";
+              grid.innerHTML = '<article><h3>Animal welfare ↔ Global health</h3><div class="mt-market-card-foot"><a href="/offers/regression-offer">Open proposal</a></div></article>';
+              directory.appendChild(grid);
+            });
+            await offers.waitForSelector('[data-visual-offer-grid="true"]', { timeout: 8_000 });
+            assert(await offers.locator('[data-visual-offer-grid="true"]').count() === 1, "Visual offer directory did not mount exactly once.");
+            await offers.goto(`${baseURL}/discover`, { waitUntil: "domcontentloaded" });
+            await settle(offers);
+            assert(await offers.locator("#visual-offer-directory-host").count() === 0, "Visual offer portal survived route cleanup.");
+            await offers.close();
+
+            const profileRoute = "/complete-profile?source=walkthrough&cause_area=Existential%20risk&walkthrough_cause=AI%20safety&offer_type=Money&match_name=Sam&match_get=Fund%20AI%20safety&match_give=Eat%20vegetarian&panel=connections";
+            const profile = await visit(context, {
+              name: "complete-profile-connections-desktop",
+              route: profileRoute,
+              expectedText: "Choose what may inform private suggestions.",
+              viewport: { width: 1440, height: 1000 },
+            });
+            assert(await profile.getByRole("dialog").count() === 1, "Connections dialog did not open from initial state.");
+            await profile.getByRole("button", { name: "Close account sources" }).click();
+            assert(await profile.getByRole("dialog").count() === 0, "Connections dialog did not close.");
+            await profile.getByRole("button", { name: "Sources" }).click();
+            assert(await profile.getByRole("dialog").count() === 1, "Connections dialog did not reopen.");
+            await profile.close();
+
+            for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
+              const suffix = viewport.width <= 430 ? "mobile" : "desktop";
+              const feed = await visit(context, {
+                name: `feed-${suffix}`,
+                route: "/feed",
+                expectedText: "Moral Trade",
+                viewport,
+              });
+              await feed.close();
+              const evidence = await visit(context, {
+                name: `evidence-${suffix}`,
+                route: "/evidence",
+                expectedText: "Verified outcomes, without public evidence dossiers.",
+                viewport,
+              });
+              await evidence.close();
+            }
+
+            for (const [name, route, finalPath, returnTo, viewport] of [
+              ["admin-auth-redirect", "/admin", "/login", "/admin", { width: 1440, height: 1000 }],
+              ["institutional-deal-desk-auth-redirect", "/admin/institutional-deal-desk", "/login", "/admin/institutional-deal-desk", { width: 390, height: 844 }],
+              ["individual-institutional-auth-redirect", "/institutions/individual", "/login", "/institutions/individual", { width: 390, height: 844 }],
+            ]) {
+              const page = await visit(context, { name, route, finalPath, viewport, noLeak: false });
+              assert(new URL(page.url()).searchParams.get("returnTo") === returnTo, `${name} lost its return target.`);
+              await page.close();
+            }
+
+            const noDraft = await visit(context, {
+              name: "complete-profile-without-draft-redirect",
+              route: "/complete-profile",
+              expectedText: "What do you value?",
+              viewport: { width: 390, height: 844 },
+              finalPath: "/walkthrough",
+            });
+            await noDraft.close();
+            await context.close();
+          } finally {
+            await fs.writeFile(path.join(outputDir, "results.json"), JSON.stringify(results, null, 2));
+            await browser.close();
+          }
+          NODE
+          node /tmp/pr212-targeted-regression.mjs
+
+      - name: Reconfirm exact branch, pinned main, and clean working tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main "$INTEGRATED_BRANCH"
+          test "$(git rev-parse origin/main)" = "$PINNED_MAIN"
+          test "$(git rev-parse "origin/${INTEGRATED_BRANCH}")" = "$EXPECTED_INTEGRATED_HEAD"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_INTEGRATED_HEAD"
+          test -z "$(git status --short)"
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f /tmp/pr212-targeted-server.pid ]]; then
+            kill "$(cat /tmp/pr212-targeted-server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload targeted regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-targeted-main-regression-v2-${{ github.run_id }}
+          path: |
+            /tmp/pr212-targeted-regression-evidence
+            /tmp/pr212-targeted-server.log
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
