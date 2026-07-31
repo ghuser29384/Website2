@@ -1,0 +1,81 @@
+name: PR 382 boundary repair controller
+
+on:
+  push:
+    branches:
+      - fix/discover-live-search-runtime-20260731
+    paths:
+      - "scripts/repair-pr382-live-search-boundaries.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr382-boundary-repair-controller
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out PR 382 branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/discover-live-search-runtime-20260731
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply live-search boundary repair
+        run: python3 scripts/repair-pr382-live-search-boundaries.py
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate source and exact contracts
+        run: |
+          set -o pipefail
+          node --check public/moral-trade-discover-search.js
+          npx eslint \
+            src/lib/discover-search.ts \
+            src/lib/discover-search-plan.ts \
+            src/lib/discover-search.test.ts \
+            src/app/api/discover/search/route.ts \
+            tests/discover-live-search.spec.ts \
+            tests/discover-preflight-filter.spec.ts \
+            tests/discover-cofund.spec.ts
+          npm run verify:discover
+          npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run rendered regressions
+        run: |
+          npx playwright test \
+            tests/discover-live-search.spec.ts \
+            tests/discover-preflight-filter.spec.ts \
+            tests/discover-cofund.spec.ts \
+            tests/discover-payload-cache.spec.ts \
+            --reporter=line
+
+      - name: Commit and push repaired candidate
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            public/moral-trade-discover-search.js \
+            scripts/discover-live-search-loader-contract.test.mjs \
+            src/app/api/discover/search/route.ts \
+            src/lib/discover-search.ts \
+            src/lib/discover-search.test.ts \
+            tests/discover-cofund.spec.ts \
+            tests/discover-live-search.spec.ts
+          git diff --cached --check
+          git commit -m "Keep live Co-Funds under Offers and preserve result ownership"
+          git push origin HEAD:fix/discover-live-search-runtime-20260731
