@@ -1,0 +1,188 @@
+verify	Run exact-base differential full-test gate	﻿2026-07-31T01:51:54.2113968Z ##[group]Run set -euo pipefail
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2114635Z ^[[36;1mset -euo pipefail^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2114959Z ^[[36;1mmkdir -p institutional-qa-artifacts^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2115296Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2115598Z ^[[36;1mfeature_log=institutional-qa-artifacts/full-tests-feature.log^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2116062Z ^[[36;1mbase_log=institutional-qa-artifacts/full-tests-base.log^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2116526Z ^[[36;1mreport=institutional-qa-artifacts/full-tests-differential.json^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2116956Z ^[[36;1mbase_dir=/tmp/institutional-pr-base^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2117227Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2117506Z ^[[36;1mgit fetch --no-tags origin main:refs/remotes/origin/main^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2118101Z ^[[36;1mbase_sha="$(git merge-base HEAD origin/main)"^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2118516Z ^[[36;1mprintf '%s\n' "$base_sha" | tee institutional-qa-artifacts/full-tests-base.sha^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2118901Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2119206Z ^[[36;1mif ! git diff --quiet "$base_sha" HEAD -- package.json package-lock.json; then^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2120056Z ^[[36;1m  echo "Package manifests differ from the exact PR base; a shared dependency tree would make the comparison invalid." >&2^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2120599Z ^[[36;1m  exit 1^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2120800Z ^[[36;1mfi^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2120993Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2121202Z ^[[36;1mrm -rf "$base_dir"^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2121459Z ^[[36;1mgit worktree prune^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2121781Z ^[[36;1mgit worktree add --detach "$base_dir" "$base_sha"^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2122196Z ^[[36;1mcleanup_base_worktree() {^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2122763Z ^[[36;1m  git worktree remove --force "$base_dir" >/dev/null 2>&1 || true^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2123134Z ^[[36;1m}^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2123359Z ^[[36;1mtrap cleanup_base_worktree EXIT^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2123649Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2124025Z ^[[36;1mcp src/lib/supabase/database.types.ts "$base_dir/src/lib/supabase/database.types.ts"^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2124458Z ^[[36;1mrm -rf "$base_dir/node_modules"^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2124821Z ^[[36;1mln -s "$GITHUB_WORKSPACE/node_modules" "$base_dir/node_modules"^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2125196Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2125392Z ^[[36;1mset +e^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2125605Z ^[[36;1m(^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2125819Z ^[[36;1m  cd "$base_dir"^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2126062Z ^[[36;1m  npm test^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2126306Z ^[[36;1m) >"$base_log" 2>&1^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2126555Z ^[[36;1mbase_status=$?^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2126817Z ^[[36;1mnpm test >"$feature_log" 2>&1^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2127112Z ^[[36;1mfeature_status=$?^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2127334Z ^[[36;1mset -e^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2127614Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2128115Z ^[[36;1mprintf '%s\n' "$base_status" > institutional-qa-artifacts/full-tests-base.status^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2128665Z ^[[36;1mprintf '%s\n' "$feature_status" > institutional-qa-artifacts/full-tests-feature.status^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2129065Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2129523Z ^[[36;1mpython - "$base_log" "$feature_log" "$base_status" "$feature_status" "$base_sha" "$report" <<'PY_COMPARE'^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2130032Z ^[[36;1mfrom __future__ import annotations^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2130311Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2130510Z ^[[36;1mfrom collections import Counter^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2130765Z ^[[36;1mimport json^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2130992Z ^[[36;1mimport os^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2131238Z ^[[36;1mfrom pathlib import Path^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2131504Z ^[[36;1mimport re^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2131707Z ^[[36;1mimport sys^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2131923Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2132289Z ^[[36;1mbase_log, feature_log, base_status_raw, feature_status_raw, base_sha, report_path = sys.argv[1:]^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2132740Z ^[[36;1mbase_status = int(base_status_raw)^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2133049Z ^[[36;1mfeature_status = int(feature_status_raw)^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2133393Z ^[[36;1mansi = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2134008Z ^[[36;1mfailure_line = re.compile(r"(?:^|\s)✖\s+(.+?)\s+\([^)]+\)\s*$")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2134543Z ^[[36;1msummary_line = re.compile(r"(?:^|\s)ℹ\s+(tests|pass|fail|cancelled|skipped|todo)\s+(\d+)\s*$", re.IGNORECASE)^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2135012Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2135291Z ^[[36;1mdef parse(path: str) -> tuple[Counter[str], dict[str, int]]:^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2135680Z ^[[36;1m    failures: Counter[str] = Counter()^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2135983Z ^[[36;1m    summary: dict[str, int] = {}^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2136287Z ^[[36;1m    summary_started = False^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2136658Z ^[[36;1m    for raw in Path(path).read_text(errors="replace").splitlines():^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2137103Z ^[[36;1m        line = ansi.sub("", raw).replace("\ufeff", "")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2137468Z ^[[36;1m        summary_match = summary_line.search(line)^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2137798Z ^[[36;1m        if summary_match:^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2138354Z ^[[36;1m            summary_started = True^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2138798Z ^[[36;1m            summary[summary_match.group(1).lower()] = int(summary_match.group(2))^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2139240Z ^[[36;1m        if not summary_started:^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2139546Z ^[[36;1m            match = failure_line.search(line)^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2139870Z ^[[36;1m            if match:^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2140165Z ^[[36;1m                failures[match.group(1).strip()] += 1^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2140447Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2140718Z ^[[36;1m    required = {"tests", "pass", "fail", "cancelled"}^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2141114Z ^[[36;1m    missing = sorted(required - summary.keys())^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2141630Z ^[[36;1m    if missing:^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2142039Z ^[[36;1m        raise SystemExit(f"Could not parse {path}; missing test summary fields: {', '.join(missing)}")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2142571Z ^[[36;1m    if summary["fail"] != sum(failures.values()):^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2142909Z ^[[36;1m        raise SystemExit(^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2143307Z ^[[36;1m            f"Could not safely compare {path}: summary reports {summary['fail']} failures "^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2143792Z ^[[36;1m            f"but the parser found {sum(failures.values())}."^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2144108Z ^[[36;1m        )^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2144351Z ^[[36;1m    return failures, summary^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2144601Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2144813Z ^[[36;1mif base_status not in (0, 1):^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2145240Z ^[[36;1m    raise SystemExit(f"Exact-base npm test exited with infrastructure status {base_status}.")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2145705Z ^[[36;1mif feature_status not in (0, 1):^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2146144Z ^[[36;1m    raise SystemExit(f"Feature npm test exited with infrastructure status {feature_status}.")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2146532Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2146775Z ^[[36;1mbase_failures, base_summary = parse(base_log)^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2147147Z ^[[36;1mfeature_failures, feature_summary = parse(feature_log)^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2147485Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2147745Z ^[[36;1mif (base_status == 0) != (base_summary["fail"] == 0):^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2148476Z ^[[36;1m    raise SystemExit("Exact-base npm exit status and parsed failure summary disagree.")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2149000Z ^[[36;1mif (feature_status == 0) != (feature_summary["fail"] == 0):^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2149461Z ^[[36;1m    raise SystemExit("Feature npm exit status and parsed failure summary disagree.")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2149851Z ^[[36;1mif base_summary["cancelled"] or feature_summary["cancelled"]:^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2150197Z ^[[36;1m    raise SystemExit("Cancelled tests are not accepted by the differential gate.")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2150534Z ^[[36;1mif feature_summary["tests"] < base_summary["tests"]:^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2150764Z ^[[36;1m    raise SystemExit(^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2151059Z ^[[36;1m        f"Feature test count fell from {base_summary['tests']} to {feature_summary['tests']}; "^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2151617Z ^[[36;1m        "the differential gate will not accept reduced coverage."^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2151868Z ^[[36;1m    )^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2152018Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2152209Z ^[[36;1mfeature_only = feature_failures - base_failures^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2152469Z ^[[36;1mbase_only = base_failures - feature_failures^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2152711Z ^[[36;1mshared = feature_failures & base_failures^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2152923Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2153070Z ^[[36;1mpayload = {^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2153242Z ^[[36;1m    "base_sha": base_sha,^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2153478Z ^[[36;1m    "feature_sha": os.environ.get("GITHUB_SHA", ""),^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2153706Z ^[[36;1m    "base_status": base_status,^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2153925Z ^[[36;1m    "feature_status": feature_status,^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2154138Z ^[[36;1m    "base_summary": base_summary,^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2154353Z ^[[36;1m    "feature_summary": feature_summary,^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2154606Z ^[[36;1m    "base_failure_count": sum(base_failures.values()),^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2154880Z ^[[36;1m    "feature_failure_count": sum(feature_failures.values()),^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2155160Z ^[[36;1m    "shared_failure_count": sum(shared.values()),^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2155424Z ^[[36;1m    "feature_only_failure_count": sum(feature_only.values()),^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2155714Z ^[[36;1m    "base_only_failure_count": sum(base_only.values()),^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2155989Z ^[[36;1m    "feature_only_failures": sorted(feature_only.elements()),^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2156276Z ^[[36;1m    "base_only_failures": sorted(base_only.elements()),^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2156568Z ^[[36;1m}^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2156836Z ^[[36;1mPath(report_path).write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2157132Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2157338Z ^[[36;1mprint(json.dumps(payload, indent=2, ensure_ascii=False))^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2157588Z ^[[36;1mif feature_only:^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2158136Z ^[[36;1m    raise SystemExit("The feature branch introduced full-suite failures not present at the exact PR base.")^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2158531Z ^[[36;1mPY_COMPARE^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2158689Z ^[[36;1m^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2158892Z ^[[36;1mecho "Exact-base differential full-test gate passed."^[[0m
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2190476Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2190759Z env:
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2190936Z   QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2191583Z   QA_SUPABASE_DB_URL: ***
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2191925Z   NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2192434Z   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ***
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2193457Z   SUPABASE_SERVICE_ROLE_KEY: ***
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2193687Z   QA_TEST_PASSWORD: ***
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2193888Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2194105Z   SITE_URL: http://127.0.0.1:3000
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2194325Z   INSTITUTIONAL_TRADES_ENABLED: true
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2194525Z   INSTITUTIONAL_POOLS_ENABLED: true
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2194727Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2194958Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2195179Z   INSTITUTIONAL_E2E_BASE_URL: http://127.0.0.1:3000
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2195450Z   INSTITUTIONAL_E2E_OUTPUT_DIR: institutional-e2e-evidence
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2195715Z   CRON_SECRET: qa-institutional-cron-not-production
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2195952Z   SUPABASE_INTERNAL_IMAGE_REGISTRY: ghcr.io
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.2196155Z ##[endgroup]
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.4331544Z 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.4373415Z Preparing worktree (detached HEAD 36650b48)
+verify	Run exact-base differential full-test gate	2026-07-31T01:51:54.6166068Z HEAD is now at 36650b48 Remove temporary Donation Upgrade rename workflow
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7017445Z The feature branch introduced full-suite failures not present at the exact PR base.
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7017995Z {
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7018494Z   "base_sha": "36650b48f9e664ea6d67c0840cf6a803060e8d7c",
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7018802Z   "feature_sha": "6e4deac3530e8f0989b457d082e6efd11b2fa34e",
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7019043Z   "base_status": 1,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7019221Z   "feature_status": 1,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7019388Z   "base_summary": {
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7019550Z     "tests": 835,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7019710Z     "pass": 827,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7019872Z     "fail": 8,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7020029Z     "cancelled": 0,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7020193Z     "skipped": 0,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7020345Z     "todo": 0
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7020496Z   },
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7020663Z   "feature_summary": {
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7020825Z     "tests": 844,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7020988Z     "pass": 835,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7021144Z     "fail": 9,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7021307Z     "cancelled": 0,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7021461Z     "skipped": 0,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7021619Z     "todo": 0
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7021759Z   },
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7021911Z   "base_failure_count": 8,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7022103Z   "feature_failure_count": 9,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7022295Z   "shared_failure_count": 8,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7022494Z   "feature_only_failure_count": 1,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7022711Z   "base_only_failure_count": 0,
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7022901Z   "feature_only_failures": [
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7023205Z     "Server Components do not format visitor-facing dates in the server time zone"
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7023478Z   ],
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7023631Z   "base_only_failures": []
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7023799Z }
+verify	Run exact-base differential full-test gate	2026-07-31T01:52:28.7337823Z ##[error]Process completed with exit code 1.
