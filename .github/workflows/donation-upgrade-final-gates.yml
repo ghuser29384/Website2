@@ -1,16 +1,13 @@
-name: Donation Upgrade final engineering gates
+name: Pooled donation settlement gates
 
 on:
-  push:
-    branches:
-      - feature/donation-upgrade-approved-fallbacks-20260731
   pull_request:
     branches:
       - main
     paths:
       - .env.example
       - docs/trade-donation-pooled-settlement-runbook.md
-      - src/app/admin/**
+      - src/app/admin/trade-donation-pools/**
       - src/app/api/connectors/every-org/**
       - src/app/api/stripe/webhook/route.ts
       - src/app/trade-donation-actions-base.ts
@@ -21,22 +18,21 @@ on:
       - src/lib/payments/trade-donation-pool-webhook.ts
       - src/lib/trade-donation-pool*.ts
       - supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
+      - supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
       - .github/workflows/donation-upgrade-final-gates.yml
+  workflow_dispatch:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
-  group: donation-upgrade-final-gates-${{ github.event.pull_request.number || github.ref }}
+  group: pooled-donation-settlement-gates-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,7 +58,7 @@ jobs:
       - name: Absolute ESLint gate
         run: npm run lint
 
-      - name: Production build
+      - name: Production build with money movement disabled
         env:
           NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
           VERCEL: "1"
@@ -72,44 +68,13 @@ jobs:
           TRADE_DONATION_POOL_ENABLED: "false"
         run: npm run build
 
-      - name: Exact diff hygiene
-        run: git diff --check
-
-      - name: Package exact candidate tree
-        if: always()
+      - name: Migration integrity and exact diff hygiene
         shell: bash
         run: |
           set -euo pipefail
-          git archive --format=tar.gz --prefix=Website2/ HEAD > donation-upgrade-candidate.tar.gz
-          sha256sum donation-upgrade-candidate.tar.gz > donation-upgrade-candidate.sha256
-          git rev-parse HEAD > donation-upgrade-candidate.ref
-
-      - name: Upload exact candidate tree
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: donation-upgrade-candidate-${{ github.run_id }}
-          path: |
-            donation-upgrade-candidate.tar.gz
-            donation-upgrade-candidate.sha256
-            donation-upgrade-candidate.ref
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Post run locator
-        if: always() && github.event_name == 'push'
-        shell: bash
-        run: |
-          set -euo pipefail
-          cat > /tmp/run.md <<EOF
-          Exact Donation Upgrade engineering-gate run.
-
-          - Run: $GITHUB_RUN_ID
-          - Commit: $GITHUB_SHA
-          - Job status before reporting: ${{ job.status }}
-          - Artifact: donation-upgrade-candidate-$GITHUB_RUN_ID
-          EOF
-          gh issue create \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "Donation Upgrade engineering gates — run $GITHUB_RUN_ID" \
-            --body-file /tmp/run.md
+          test "$(grep -cF 'create or replace function public.submit_conditional_payment_destination_request(' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql)" = "1"
+          test "$(grep -cF 'create or replace function public.review_trade_donation_pool_gate(' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql)" = "1"
+          ! grep -F 'conditional-payment-destination-_at' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+          ! grep -F 'p_environm,' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+          git fetch origin main
+          git diff --check "$(git merge-base origin/main HEAD)"...HEAD
