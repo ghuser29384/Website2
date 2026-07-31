@@ -1,0 +1,75 @@
+name: Temporary pledge-impact mobile-sheet repair
+
+on:
+  push:
+    branches:
+      - feature/pledge-impact-estimate-20260731
+    paths:
+      - ".github/workflows/pledge-impact-mobile-sheet-repair-temp.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/pledge-impact-estimate-20260731
+          fetch-depth: 0
+
+      - name: Repair mobile inspector and strengthen rendered regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              source = target.read_text()
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}; found {count}")
+              target.write_text(source.replace(old, new, 1))
+
+          replace_once(
+              "src/discover/moral-trade-discover.source.html",
+              "  .mobile-sheet {\n    position: fixed;",
+              "  .mobile-sheet {\n    display: block;\n    position: fixed;",
+          )
+
+          old_test = '''  await expect(page.locator("body")).not.toContainText("Loading Discover…");
+  await expect(page.locator('[data-pledge-impact-root][data-pool-key="pool-wild-research"]').first()).toHaveAttribute(
+    "data-impact-status",
+    "available",
+  );'''
+          new_test = '''  await expect(page.locator("body")).not.toContainText("Loading Discover…");
+  const mobileSheet = page.locator(".mobile-sheet");
+  await expect(mobileSheet).toBeVisible();
+  await expect(
+    mobileSheet.locator('[data-pledge-impact-root][data-pool-key="pool-wild-research"]'),
+  ).toHaveAttribute("data-impact-status", "available");'''
+          replace_once("tests/pledge-impact-estimate.spec.ts", old_test, new_test)
+          PY
+
+          node scripts/pack-discover-payload.mjs
+          npm run verify:discover
+          git diff --check
+
+      - name: Commit and push repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/discover/moral-trade-discover.source.html \
+            public/moral-trade-discover.html \
+            public/discover/payload \
+            tests/pledge-impact-estimate.spec.ts
+          git commit -m "Show the selected pool inspector on mobile"
+          git push origin HEAD:feature/pledge-impact-estimate-20260731
