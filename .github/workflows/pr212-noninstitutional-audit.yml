@@ -1,0 +1,104 @@
+name: Audit PR 212 non-institutional diffs
+
+on:
+  push:
+    branches:
+      - agent/pr212-noninstitutional-audit-20260731
+    paths:
+      - .github/workflows/pr212-noninstitutional-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-noninstitutional-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      FEATURE_HEAD: d698d8a07905ab2b9323493e149f202823dd1d56
+      PINNED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+    steps:
+      - name: Check out operations branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Materialize exact feature and revert audited non-institutional files to pinned main
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/pr212-audit
+          git worktree add --detach /tmp/pr212-audit "$FEATURE_HEAD"
+          test "$(git -C /tmp/pr212-audit rev-parse HEAD)" = "$FEATURE_HEAD"
+          git -C /tmp/pr212-audit cat-file -e "${PINNED_MAIN}^{commit}"
+
+          files=(
+            src/lib/discovery-ranking.test.ts
+            src/lib/funding.test.ts
+            src/lib/mpgf/failure-bonus-operator.test.ts
+            src/lib/payments/conditional-state.test.ts
+            src/lib/public-route-smoke.test.ts
+            src/lib/recommendation-training-execution.test.ts
+            src/lib/x-profile-connector.test.ts
+            tsconfig.json
+          )
+          git -C /tmp/pr212-audit checkout "$PINNED_MAIN" -- "${files[@]}"
+          git -C /tmp/pr212-audit diff --check
+          mkdir -p ops/pr212-noninstitutional-audit
+          git -C /tmp/pr212-audit status --short > ops/pr212-noninstitutional-audit/reverted-files.txt
+          git -C /tmp/pr212-audit diff --stat > ops/pr212-noninstitutional-audit/reverted-diff-stat.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install exact feature dependencies
+        shell: bash
+        working-directory: /tmp/pr212-audit
+        run: npm ci
+
+      - name: Run complete gates and preserve every result
+        shell: bash
+        run: |
+          set +e
+          (cd /tmp/pr212-audit && npm test) > ops/pr212-noninstitutional-audit/npm-test.log 2>&1
+          test_status=$?
+          (cd /tmp/pr212-audit && npx tsc --noEmit) > ops/pr212-noninstitutional-audit/typecheck.log 2>&1
+          type_status=$?
+          (cd /tmp/pr212-audit && npm run lint) > ops/pr212-noninstitutional-audit/lint.log 2>&1
+          lint_status=$?
+          (cd /tmp/pr212-audit && NEXT_PUBLIC_SITE_URL=https://www.moraltrade.org VERCEL=1 VERCEL_ENV=preview npm run build) > ops/pr212-noninstitutional-audit/build.log 2>&1
+          build_status=$?
+          set -e
+
+          jq -n \
+            --arg feature_head "$FEATURE_HEAD" \
+            --arg pinned_main "$PINNED_MAIN" \
+            --argjson test_status "$test_status" \
+            --argjson type_status "$type_status" \
+            --argjson lint_status "$lint_status" \
+            --argjson build_status "$build_status" \
+            '{feature_head:$feature_head,pinned_main:$pinned_main,test_status:$test_status,type_status:$type_status,lint_status:$lint_status,build_status:$build_status,all_green:($test_status==0 and $type_status==0 and $lint_status==0 and $build_status==0)}' \
+            > ops/pr212-noninstitutional-audit/report.json
+
+          for file in npm-test typecheck lint build; do
+            tail -n 400 "ops/pr212-noninstitutional-audit/${file}.log" > "ops/pr212-noninstitutional-audit/${file}-tail.log"
+          done
+          rm ops/pr212-noninstitutional-audit/npm-test.log ops/pr212-noninstitutional-audit/typecheck.log ops/pr212-noninstitutional-audit/lint.log ops/pr212-noninstitutional-audit/build.log
+          cat ops/pr212-noninstitutional-audit/report.json
+
+      - name: Commit audit evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-noninstitutional-audit
+          git commit -m "Audit PR 212 non-institutional diffs against pinned main"
+          git push origin HEAD:agent/pr212-noninstitutional-audit-20260731
