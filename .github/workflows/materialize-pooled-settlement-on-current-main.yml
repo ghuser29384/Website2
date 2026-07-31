@@ -1,4 +1,4 @@
-name: Materialize pooled settlement on exact current main
+name: Validate pooled settlement on exact current main
 
 on:
   push:
@@ -9,19 +9,18 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 concurrency:
-  group: materialize-pooled-settlement-current-main-20260731
+  group: validate-pooled-settlement-current-main-20260731
   cancel-in-progress: true
 
 jobs:
-  materialize-and-validate:
+  validate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 70
     env:
-      TARGET_BRANCH: feature/donation-upgrade-pooled-settlement-20260731
       OUTPUT_DIR: pooled-settlement-materialization
       GH_TOKEN: ${{ github.token }}
     steps:
@@ -52,15 +51,16 @@ jobs:
           test "${#chunks[@]}" -eq 8
           cat "${chunks[@]}" | base64 --decode > /tmp/pooled-settlement-payload.tgz
           echo 'a39d6e2a4e0205dd9cc2d10a050ffc87d0db3b806ead2c1991d74fbf94b81d4f  /tmp/pooled-settlement-payload.tgz' | sha256sum --check --strict
-          tar -tzf /tmp/pooled-settlement-payload.tgz >/dev/null
+          tar -tzf /tmp/pooled-settlement-payload.tgz > "$OUTPUT_DIR/payload-manifest.txt"
+          cp /tmp/pooled-settlement-payload.tgz "$OUTPUT_DIR/candidate-source.tgz"
+          sha256sum "$OUTPUT_DIR/candidate-source.tgz" > "$OUTPUT_DIR/candidate-source.sha256"
 
-      - name: Apply payload to exact current main and create one clean engineering commit
+      - name: Apply payload to exact current main
         shell: bash
         run: |
           set -euo pipefail
           exact_main="$(git rev-parse refs/remotes/origin/exact-main)"
           git worktree add --detach /tmp/integration "$exact_main"
-          git -C /tmp/integration switch -c "$TARGET_BRANCH"
           tar -xzf /tmp/pooled-settlement-payload.tgz -C /tmp/integration
 
           test -f /tmp/integration/supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
@@ -73,16 +73,16 @@ jobs:
           git -C /tmp/integration config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git -C /tmp/integration commit -m 'Add pooled Every.org settlement rail for donation-backed commitments'
           candidate_sha="$(git -C /tmp/integration rev-parse HEAD)"
-          printf 'exact_main=%s\ncandidate_sha=%s\n' "$exact_main" "$candidate_sha" > "$OUTPUT_DIR/refs.txt"
-          git -C /tmp/integration push --force-with-lease="refs/heads/$TARGET_BRANCH:" \
-            origin "HEAD:refs/heads/$TARGET_BRANCH"
+          candidate_tree="$(git -C /tmp/integration rev-parse HEAD^{tree})"
+          printf 'exact_main=%s\nlocal_candidate_sha=%s\nlocal_candidate_tree=%s\n' \
+            "$exact_main" "$candidate_sha" "$candidate_tree" > "$OUTPUT_DIR/refs.txt"
+          git -C /tmp/integration show --stat --oneline --decorate --no-renames HEAD \
+            > "$OUTPUT_DIR/commit-stat.txt"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: /tmp/integration/package-lock.json
 
       - name: Install dependencies
         working-directory: /tmp/integration
@@ -150,11 +150,14 @@ jobs:
             --arg build '${{ steps.build.outcome }}' \
             '{focused_tests:$focused,complete_tests:$tests,typescript:$typescript,eslint:$lint,production_build:$build,all_passed:([$focused,$tests,$typescript,$lint,$build] | all(. == "success"))}' \
             > "$OUTPUT_DIR/validation-summary.json"
-          git -C /tmp/integration status --short > "$OUTPUT_DIR/worktree-status-after-validation.txt"
-          git -C /tmp/integration show --stat --oneline --decorate --no-renames HEAD > "$OUTPUT_DIR/commit-stat.txt"
+          if [[ -d /tmp/integration/.git ]]; then
+            git -C /tmp/integration status --short > "$OUTPUT_DIR/worktree-status-after-validation.txt"
+          else
+            echo 'integration worktree was not created' > "$OUTPUT_DIR/worktree-status-after-validation.txt"
+          fi
           cat "$OUTPUT_DIR/validation-summary.json"
 
-      - name: Upload validation evidence
+      - name: Upload validation evidence and exact source payload
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -169,12 +172,11 @@ jobs:
         run: |
           set -euo pipefail
           {
-            echo '### Clean current-main pooled-settlement materialization'
+            echo '### Pooled-settlement validation against exact current main'
             echo
             echo "- run: $GITHUB_RUN_ID"
-            echo "- target branch: \`$TARGET_BRANCH\`"
             echo "- operator commit: \`$GITHUB_SHA\`"
-            for file in refs.txt validation-summary.json commit-stat.txt worktree-status-after-validation.txt; do
+            for file in refs.txt candidate-source.sha256 validation-summary.json commit-stat.txt worktree-status-after-validation.txt; do
               echo; echo "#### $file"; echo '```'
               if [[ -f "$OUTPUT_DIR/$file" ]]; then cat "$OUTPUT_DIR/$file"; else echo 'not produced'; fi
               echo '```'
