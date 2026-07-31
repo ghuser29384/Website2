@@ -1,0 +1,435 @@
+integrate	Check out pinned-main integration branch	﻿2026-07-31T02:03:31.6125969Z Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6135191Z ##[group]Run actions/checkout@v4
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6136155Z with:
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6136656Z   ref: agent/pr212-main-integrated-36650b-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6137263Z   fetch-depth: 0
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6137707Z   repository: ghuser29384/Website2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6141637Z   token: ***
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6142060Z   ssh-strict: true
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6142483Z   ssh-user: git
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6142917Z   persist-credentials: true
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6143386Z   clean: true
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6143813Z   sparse-checkout-cone-mode: true
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6144339Z   fetch-tags: false
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6144956Z   show-progress: true
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6145430Z   lfs: false
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6145819Z   submodules: false
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6146251Z   set-safe-directory: true
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6146754Z   allow-unsafe-pr-checkout: false
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6147503Z env:
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6147995Z   PINNED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6148705Z   CLEAN_COMMIT: e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6149470Z   INTEGRATION_BRANCH: agent/pr212-main-integrated-36650b-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6150147Z   CLEAN_GATE_RUN: 30560630091
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6154001Z   GH_TOKEN: ***
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.6154410Z ##[endgroup]
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7161906Z Syncing repository: ghuser29384/Website2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7163760Z ##[group]Getting Git version info
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7164508Z Working directory is '/home/runner/work/Website2/Website2'
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7166010Z [command]/usr/bin/git version
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7237586Z git version 2.54.0
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7291582Z ##[endgroup]
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7307331Z Temporarily overriding HOME='/home/runner/work/_temp/ea96d5ce-6a02-487e-8642-f979ea8bf877' before making global git config changes
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7309885Z Adding repository directory to the temporary git global config as a safe directory
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7314212Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/Website2/Website2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7367123Z Deleting the contents of '/home/runner/work/Website2/Website2'
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7372105Z ##[group]Initializing the repository
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7376237Z [command]/usr/bin/git init /home/runner/work/Website2/Website2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7499870Z hint: Using 'master' as the name for the initial branch. This default branch name
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7502048Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7503860Z hint: to use in all of your new repositories, which will suppress this warning,
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7505705Z hint: call:
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7506634Z hint:
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7507735Z hint: 	git config --global init.defaultBranch <name>
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7509019Z hint:
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7510186Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7511937Z hint: 'development'. The just-created branch can be renamed via this command:
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7513333Z hint:
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7514259Z hint: 	git branch -m <name>
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7515486Z hint:
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7516768Z hint: Disable this message with "git config set advice.defaultBranchName false"
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7518638Z Initialized empty Git repository in /home/runner/work/Website2/Website2/.git/
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7521849Z [command]/usr/bin/git remote add origin https://github.com/ghuser29384/Website2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7566925Z ##[endgroup]
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7568348Z ##[group]Disabling automatic garbage collection
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7572706Z [command]/usr/bin/git config --local gc.auto 0
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7605481Z ##[endgroup]
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7607023Z ##[group]Setting up auth
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7612804Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.7654737Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.8043328Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.8082655Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.8306290Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.8342867Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.8565085Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.8604223Z ##[endgroup]
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.8605421Z ##[group]Fetching the repository
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:31.8615437Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4724484Z From https://github.com/ghuser29384/Website2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4726955Z  * [new branch]        acquisition/pilot-journey-20260715 -> origin/acquisition/pilot-journey-20260715
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4733415Z  * [new branch]        action-first-payments   -> origin/action-first-payments
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4734623Z  * [new branch]        action-first-payments-v2 -> origin/action-first-payments-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4736390Z  * [new branch]        action-first-payments-v3 -> origin/action-first-payments-v3
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4737687Z  * [new branch]        action-first-payments-v4 -> origin/action-first-payments-v4
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4738640Z  * [new branch]        activation-gate-20260715 -> origin/activation-gate-20260715
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4739708Z  * [new branch]        activation-gate-live-20260715 -> origin/activation-gate-live-20260715
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4741059Z  * [new branch]        agent/adaptive-moral-opportunity-feed -> origin/agent/adaptive-moral-opportunity-feed
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4742851Z  * [new branch]        agent/adaptive-moral-opportunity-feed-recovered -> origin/agent/adaptive-moral-opportunity-feed-recovered
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4744582Z  * [new branch]        agent/compact-mixed-feed-20260723 -> origin/agent/compact-mixed-feed-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4746237Z  * [new branch]        agent/compact-mixed-feed-release-20260723 -> origin/agent/compact-mixed-feed-release-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4747643Z  * [new branch]        agent/compact-unified-feed-20260722 -> origin/agent/compact-unified-feed-20260722
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4749139Z  * [new branch]        agent/complete-verification-production -> origin/agent/complete-verification-production
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4750699Z  * [new branch]        agent/conditional-donation-redirect -> origin/agent/conditional-donation-redirect
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4752215Z  * [new branch]        agent/conditional-redirect-fail-closed -> origin/agent/conditional-redirect-fail-closed
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4753257Z  * [new branch]        agent/contextual-trade-safeguards-20260730 -> origin/agent/contextual-trade-safeguards-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4754137Z  * [new branch]        agent/create-conditional-donation-20260729 -> origin/agent/create-conditional-donation-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4755276Z  * [new branch]        agent/custom-route-budget-accounting -> origin/agent/custom-route-budget-accounting
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4756231Z  * [new branch]        agent/custom-route-budget-accounting-v2 -> origin/agent/custom-route-budget-accounting-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4757252Z  * [new branch]        agent/direct-template-start -> origin/agent/direct-template-start
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4758360Z  * [new branch]        agent/dynamic-marketplace-clearing-rounds -> origin/agent/dynamic-marketplace-clearing-rounds
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4759141Z  * [new branch]        agent/evidence-dossier-redesign -> origin/agent/evidence-dossier-redesign
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4759802Z  * [new branch]        agent/evidence-product-shell -> origin/agent/evidence-product-shell
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4760533Z  * [new branch]        agent/evidence-timestamp-hydration-fix -> origin/agent/evidence-timestamp-hydration-fix
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4761894Z  * [new branch]        agent/evidence-weighted-payouts-20260723 -> origin/agent/evidence-weighted-payouts-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4763133Z  * [new branch]        agent/expose-personalized-feed -> origin/agent/expose-personalized-feed
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4763908Z  * [new branch]        agent/global-evidence-ledger-navigation -> origin/agent/global-evidence-ledger-navigation
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4764641Z  * [new branch]        agent/home-offer-trade-entry -> origin/agent/home-offer-trade-entry
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4765701Z  * [new branch]        agent/inspect-live-offer-types-20260723 -> origin/agent/inspect-live-offer-types-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4767064Z  * [new branch]        agent/inspect-live-source-20260718 -> origin/agent/inspect-live-source-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4768375Z  * [new branch]        agent/invite-non-users-20260722 -> origin/agent/invite-non-users-20260722
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4769495Z  * [new branch]        agent/manage-reminders  -> origin/agent/manage-reminders
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4770827Z  * [new branch]        agent/marketplace-delta-current-main-20260729 -> origin/agent/marketplace-delta-current-main-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4772315Z  * [new branch]        agent/mpgf-equal-ballots-20260726 -> origin/agent/mpgf-equal-ballots-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4773507Z  * [new branch]        agent/plain-language-copy -> origin/agent/plain-language-copy
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4775128Z  * [new branch]        agent/plan-resource-controls -> origin/agent/plan-resource-controls
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4776363Z  * [new branch]        agent/plan-resources-reset -> origin/agent/plan-resources-reset
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4777679Z  * [new branch]        agent/pr212-clean-gate-inspector-20260730 -> origin/agent/pr212-clean-gate-inspector-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4779251Z  * [new branch]        agent/pr212-clean-reconstruction-20260730 -> origin/agent/pr212-clean-reconstruction-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4780254Z  * [new branch]        agent/pr212-clean-reconstruction-staging-20260730 -> origin/agent/pr212-clean-reconstruction-staging-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4781256Z  * [new branch]        agent/pr212-clean-reconstruction-tree-record-20260730 -> origin/agent/pr212-clean-reconstruction-tree-record-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4854507Z  * [new branch]        agent/pr212-create-debug-observer-20260731 -> origin/agent/pr212-create-debug-observer-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4856162Z  * [new branch]        agent/pr212-final-status-20260731 -> origin/agent/pr212-final-status-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4857660Z  * [new branch]        agent/pr212-final-v3-observer-20260731 -> origin/agent/pr212-final-v3-observer-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4859097Z  * [new branch]        agent/pr212-main-integrated-20260731 -> origin/agent/pr212-main-integrated-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4860711Z  * [new branch]        agent/pr212-main-integration-inspector-20260730 -> origin/agent/pr212-main-integration-inspector-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4862410Z  * [new branch]        agent/pr212-main-integration-ops-20260730 -> origin/agent/pr212-main-integration-ops-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4863955Z  * [new branch]        agent/pr212-postcleanup-status-20260731 -> origin/agent/pr212-postcleanup-status-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4865587Z  * [new branch]        agent/pr212-qa-observer-20260731 -> origin/agent/pr212-qa-observer-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4866882Z  * [new branch]        agent/pr212-qa-snapshot-20260731 -> origin/agent/pr212-qa-snapshot-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4868591Z  * [new branch]        agent/pr212-rendered-v4-observer-20260731 -> origin/agent/pr212-rendered-v4-observer-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4870097Z  * [new branch]        agent/pr212-rendered-v4-snapshot-20260731 -> origin/agent/pr212-rendered-v4-snapshot-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4871240Z  * [new branch]        agent/profile-driven-live-now -> origin/agent/profile-driven-live-now
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4871927Z  * [new branch]        agent/public-evidence-contract -> origin/agent/public-evidence-contract
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4872672Z  * [new branch]        agent/publish-moral-offer-bank-20260721 -> origin/agent/publish-moral-offer-bank-20260721
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4873436Z  * [new branch]        agent/remove-home-offer-trade-cta -> origin/agent/remove-home-offer-trade-cta
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4874214Z  * [new branch]        agent/scale-live-offers-directory-20260721 -> origin/agent/scale-live-offers-directory-20260721
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4875403Z  * [new branch]        agent/semantic-commitment-matcher-20260727 -> origin/agent/semantic-commitment-matcher-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4876195Z  * [new branch]        agent/trade-controls-production -> origin/agent/trade-controls-production
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4876837Z  * [new branch]        agent/trade-template-system -> origin/agent/trade-template-system
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4877425Z  * [new branch]        agent/user-timezone-dates -> origin/agent/user-timezone-dates
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4878009Z  * [new branch]        agent/visual-unified-feed -> origin/agent/visual-unified-feed
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4878730Z  * [new branch]        backup/canonical-favicon-sitewide-20260730 -> origin/backup/canonical-favicon-sitewide-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4879670Z  * [new branch]        backup/canonical-favicon-sitewide-integrated-20260730 -> origin/backup/canonical-favicon-sitewide-integrated-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4880890Z  * [new branch]        backup/moraltrade-before-exact-code-20260717-2047 -> origin/backup/moraltrade-before-exact-code-20260717-2047
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4881799Z  * [new branch]        backup/moraltrade-before-live-20260717-1545 -> origin/backup/moraltrade-before-live-20260717-1545
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4882590Z  * [new branch]        chore/report-llm-query-smoke-status -> origin/chore/report-llm-query-smoke-status
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4883360Z  * [new branch]        cleanup/canonical-trade-entry-20260729 -> origin/cleanup/canonical-trade-entry-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4884127Z  * [new branch]        cleanup/canonical-trade-entry-20260730 -> origin/cleanup/canonical-trade-entry-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4885030Z  * [new branch]        codex/design-5-spark-mosaic -> origin/codex/design-5-spark-mosaic
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4885737Z  * [new branch]        codex/hide-offset-compromise-field -> origin/codex/hide-offset-compromise-field
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4886456Z  * [new branch]        codex/remove-pilot-journey-heading -> origin/codex/remove-pilot-journey-heading
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4887099Z  * [new branch]        codex/trade-input-assist -> origin/codex/trade-input-assist
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4887734Z  * [new branch]        debug/extract-live-source-20260723 -> origin/debug/extract-live-source-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4888372Z  * [new branch]        deploy/discover-defensible -> origin/deploy/discover-defensible
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4889041Z  * [new branch]        deploy/exact-moraltrade-20260717-2047 -> origin/deploy/exact-moraltrade-20260717-2047
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4889691Z  * [new branch]        design/marketplace-ui-95 -> origin/design/marketplace-ui-95
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4890297Z  * [new branch]        develop-create-route-workbench -> origin/develop-create-route-workbench
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4890981Z  * [new branch]        diag/local-date-time-path-20260729 -> origin/diag/local-date-time-path-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4891607Z  * [new branch]        diagnostic/back-lint-run -> origin/diagnostic/back-lint-run
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4892269Z  * [new branch]        docs/add-design-intent-clarification -> origin/docs/add-design-intent-clarification
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4893144Z  * [new branch]        feat/complete-profile-x-connector -> origin/feat/complete-profile-x-connector
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4893759Z  * [new branch]        feat/core-trade-loop    -> origin/feat/core-trade-loop
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4894367Z  * [new branch]        feat/cross-user-pooled-settlement -> origin/feat/cross-user-pooled-settlement
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4895408Z  * [new branch]        feat/donation-redirect-impact-production -> origin/feat/donation-redirect-impact-production
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4896227Z  * [new branch]        feat/donation-redirect-production-v2 -> origin/feat/donation-redirect-production-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4896989Z  * [new branch]        feat/enable-llm-query-interpretation -> origin/feat/enable-llm-query-interpretation
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4897741Z  * [new branch]        feat/evidence-stage-design-01-20260718 -> origin/feat/evidence-stage-design-01-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4898496Z  * [new branch]        feat/fiscal-sponsor-funding-20260716 -> origin/feat/fiscal-sponsor-funding-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4899268Z  * [new branch]        feat/immersive-moral-trade-walkthrough -> origin/feat/immersive-moral-trade-walkthrough
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4899986Z  * [new branch]        feat/institutional-trade-system -> origin/feat/institutional-trade-system
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4900676Z  * [new branch]        feat/returning-homepage-match-deck -> origin/feat/returning-homepage-match-deck
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4901393Z  * [new branch]        feat/review-refine-profile-20260717 -> origin/feat/review-refine-profile-20260717
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4902032Z  * [new branch]        feat/salary-gap-threshold -> origin/feat/salary-gap-threshold
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4902653Z  * [new branch]        feat/skip-first-time-walkthrough -> origin/feat/skip-first-time-walkthrough
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4903269Z  * [new branch]        feat/smart-query-pipeline -> origin/feat/smart-query-pipeline
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4904065Z  * [new branch]        feat/stripe-dynamic-wallets-20260716 -> origin/feat/stripe-dynamic-wallets-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4904994Z  * [new branch]        feat/threshold-radar-20260717 -> origin/feat/threshold-radar-20260717
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4905668Z  * [new branch]        feat/universal-command-workspace -> origin/feat/universal-command-workspace
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4906422Z  * [new branch]        feat/walkthrough-starter-profile-20260717 -> origin/feat/walkthrough-starter-profile-20260717
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4907310Z  * [new branch]        feature/collective-commitments-in-create-20260729 -> origin/feature/collective-commitments-in-create-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4908266Z  * [new branch]        feature/collective-identity-threshold-commitments -> origin/feature/collective-identity-threshold-commitments
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4909311Z  * [new branch]        feature/collective-identity-threshold-commitments-20260726 -> origin/feature/collective-identity-threshold-commitments-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4910240Z  * [new branch]        feature/common-ground-pool-20260727 -> origin/feature/common-ground-pool-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4910928Z  * [new branch]        feature/contextual-credibility -> origin/feature/contextual-credibility
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4911745Z  * [new branch]        feature/create-common-ground-pool-compact-20260729 -> origin/feature/create-common-ground-pool-compact-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4912705Z  * [new branch]        feature/create-common-ground-pool-inline-20260729 -> origin/feature/create-common-ground-pool-inline-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4913575Z  * [new branch]        feature/credit-aware-discovery-filters -> origin/feature/credit-aware-discovery-filters
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4914302Z  * [new branch]        feature/develop-back-create-flow -> origin/feature/develop-back-create-flow
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4915461Z  * [new branch]        feature/donation-redirect-group-buying-walkthrough-20260726 -> origin/feature/donation-redirect-group-buying-walkthrough-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4916411Z  * [new branch]        feature/every-org-pledge-donations -> origin/feature/every-org-pledge-donations
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4917335Z  * [new branch]        feature/interactive-mutual-gain-field -> origin/feature/interactive-mutual-gain-field
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4918239Z  * [new branch]        feature/moral-trade-create-interface-adapter-20260727 -> origin/feature/moral-trade-create-interface-adapter-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4919261Z  * [new branch]        feature/mpgf-failure-bonus-success-premium-20260726 -> origin/feature/mpgf-failure-bonus-success-premium-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4920311Z  * [new branch]        feature/mpgf-multi-threshold-failure-bonus-editor-20260726 -> origin/feature/mpgf-multi-threshold-failure-bonus-editor-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4921333Z  * [new branch]        feature/mpgf-pool-visibility-controls-20260726 -> origin/feature/mpgf-pool-visibility-controls-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4922172Z  * [new branch]        feature/offer-challenge-return-plane -> origin/feature/offer-challenge-return-plane
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4922997Z  * [new branch]        feature/pareto-causal-learning-feed-20260725 -> origin/feature/pareto-causal-learning-feed-20260725
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4923942Z  * [new branch]        feature/privacy-first-reciprocal-feed-20260723 -> origin/feature/privacy-first-reciprocal-feed-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4924708Z  * [new branch]        feature/profile-affiliation -> origin/feature/profile-affiliation
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4925561Z  * [new branch]        feature/public-evidence-desk -> origin/feature/public-evidence-desk
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4926214Z  * [new branch]        feature/public-evidence-desk-v2 -> origin/feature/public-evidence-desk-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4926849Z  * [new branch]        feature/search-credit-scores -> origin/feature/search-credit-scores
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4927420Z  * [new branch]        fix-moral-trade-brand   -> origin/fix-moral-trade-brand
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4928179Z  * [new branch]        fix-moral-trade-brand-current -> origin/fix-moral-trade-brand-current
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4928912Z  * [new branch]        fix/a1-cron-idempotency-audit-20260729 -> origin/fix/a1-cron-idempotency-audit-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4929690Z  * [new branch]        fix/activation-offer-surface-20260715 -> origin/fix/activation-offer-surface-20260715
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4930453Z  * [new branch]        fix/auth-session-missing-log-20260727 -> origin/fix/auth-session-missing-log-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4931240Z  * [new branch]        fix/backed-requester-identities-20260721 -> origin/fix/backed-requester-identities-20260721
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4932134Z  * [new branch]        fix/block-stripe-test-mode-in-production-20260716 -> origin/fix/block-stripe-test-mode-in-production-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4933015Z  * [new branch]        fix/canonical-favicon-sitewide-20260730 -> origin/fix/canonical-favicon-sitewide-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4933980Z  * [new branch]        fix/charity-organization-autocomplete-20260723 -> origin/fix/charity-organization-autocomplete-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4935213Z  * [new branch]        fix/charity-organization-autocomplete-20260723-v2 -> origin/fix/charity-organization-autocomplete-20260723-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4936033Z  * [new branch]        fix/clean-trust-page-20260715 -> origin/fix/clean-trust-page-20260715
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4936687Z  * [new branch]        fix/command-center-draft-handoff -> origin/fix/command-center-draft-handoff
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4937407Z  * [new branch]        fix/compact-offer-directory-20260715 -> origin/fix/compact-offer-directory-20260715
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4938210Z  * [new branch]        fix/complete-profile-email-prefill-20260717 -> origin/fix/complete-profile-email-prefill-20260717
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4939095Z  * [new branch]        fix/create-route-action-heading-wrap-20260716 -> origin/fix/create-route-action-heading-wrap-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4939857Z  * [new branch]        fix/create-route-hover-colors -> origin/fix/create-route-hover-colors
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4940505Z  * [new branch]        fix/create-route-iconic-20260716 -> origin/fix/create-route-iconic-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4941425Z  * [new branch]        fix/create-route-plain-language-20260716 -> origin/fix/create-route-plain-language-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4942235Z  * [new branch]        fix/create-route-visual-economy-20260716 -> origin/fix/create-route-visual-economy-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4943033Z  * [new branch]        fix/discover-value-hover-labels-20260718 -> origin/fix/discover-value-hover-labels-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4943720Z  * [new branch]        fix/dynamic-home-identity -> origin/fix/dynamic-home-identity
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4944337Z  * [new branch]        fix/exact-approved-walkthrough -> origin/fix/exact-approved-walkthrough
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4945324Z  * [new branch]        fix/exact-live-trade-autocomplete-20260723 -> origin/fix/exact-live-trade-autocomplete-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4946163Z  * [new branch]        fix/expose-discover-navigation-20260718 -> origin/fix/expose-discover-navigation-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4946983Z  * [new branch]        fix/feed-adjust-priorities-sparks-20260723 -> origin/fix/feed-adjust-priorities-sparks-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4947795Z  * [new branch]        fix/first-time-walkthrough-production -> origin/fix/first-time-walkthrough-production
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4948484Z  * [new branch]        fix/first-visit-walkthrough -> origin/fix/first-visit-walkthrough
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4949093Z  * [new branch]        fix/gain-field-cursor-follow -> origin/fix/gain-field-cursor-follow
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4949702Z  * [new branch]        fix/gain-field-pin-on-click -> origin/fix/gain-field-pin-on-click
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4950361Z  * [new branch]        fix/gain-field-second-click-release -> origin/fix/gain-field-second-click-release
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4951185Z  * [new branch]        fix/global-charity-organization-search-20260725 -> origin/fix/global-charity-organization-search-20260725
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4952080Z  * [new branch]        fix/home-mode-hover-colors -> origin/fix/home-mode-hover-colors
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4952789Z  * [new branch]        fix/home-new-trade-template-route-20260723 -> origin/fix/home-new-trade-template-route-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4953569Z  * [new branch]        fix/home-process-intuitive-20260716 -> origin/fix/home-process-intuitive-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4954412Z  * [new branch]        fix/home-set-priorities-complete-profile-20260721 -> origin/fix/home-set-priorities-complete-profile-20260721
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4955500Z  * [new branch]        fix/homepage-examples-only-20260716 -> origin/fix/homepage-examples-only-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4956229Z  * [new branch]        fix/intuitive-pool-section-20260716 -> origin/fix/intuitive-pool-section-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4956903Z  * [new branch]        fix/live-account-data-20260718 -> origin/fix/live-account-data-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4957637Z  * [new branch]        fix/live-account-data-production-20260718 -> origin/fix/live-account-data-production-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4958486Z  * [new branch]        fix/live-account-data-production-v2-20260718 -> origin/fix/live-account-data-production-v2-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4959221Z  * [new branch]        fix/live-group-buying-state -> origin/fix/live-group-buying-state
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4959903Z  * [new branch]        fix/live-interface-local-date-20260718 -> origin/fix/live-interface-local-date-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4960630Z  * [new branch]        fix/live-offer-structure-20260723 -> origin/fix/live-offer-structure-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4961359Z  * [new branch]        fix/mandatory-first-time-walkthrough -> origin/fix/mandatory-first-time-walkthrough
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4962136Z  * [new branch]        fix/now-complete-profile-route-20260721 -> origin/fix/now-complete-profile-route-20260721
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4962814Z  * [new branch]        fix/oauth-provider-logos -> origin/fix/oauth-provider-logos
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4963448Z  * [new branch]        fix/payment-method-entry-20260723 -> origin/fix/payment-method-entry-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4964336Z  * [new branch]        fix/payment-test-readiness-20260715 -> origin/fix/payment-test-readiness-20260715
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4965302Z  * [new branch]        fix/primary-menu-mechanisms-20260716 -> origin/fix/primary-menu-mechanisms-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4966075Z  * [new branch]        fix/primary-nav-product-labels-20260716 -> origin/fix/primary-nav-product-labels-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4966928Z  * [new branch]        fix/private-message-thread-visibility-20260723 -> origin/fix/private-message-thread-visibility-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4967685Z  * [new branch]        fix/public-group-buying-rpc -> origin/fix/public-group-buying-rpc
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4968275Z  * [new branch]        fix/public-site-readability -> origin/fix/public-site-readability
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4968905Z  * [new branch]        fix/remove-gain-field-explainer -> origin/fix/remove-gain-field-explainer
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4969693Z  * [new branch]        fix/remove-guided-onboarding-section-20260716 -> origin/fix/remove-guided-onboarding-section-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4970566Z  * [new branch]        fix/remove-homepage-trade-heading-20260717 -> origin/fix/remove-homepage-trade-heading-20260717
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4971384Z  * [new branch]        fix/remove-internal-pilot-copy-20260716 -> origin/fix/remove-internal-pilot-copy-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4972253Z  * [new branch]        fix/remove-meta-explainers-action-first-20260716 -> origin/fix/remove-meta-explainers-action-first-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4973223Z  * [new branch]        fix/remove-meta-explainers-action-first-20260716-v2 -> origin/fix/remove-meta-explainers-action-first-20260716-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4974202Z  * [new branch]        fix/remove-meta-explainers-action-first-20260716-v3 -> origin/fix/remove-meta-explainers-action-first-20260716-v3
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4975535Z  * [new branch]        fix/remove-meta-explanatory-copy-20260716 -> origin/fix/remove-meta-explanatory-copy-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4976430Z  * [new branch]        fix/remove-meta-explanatory-copy-clean-20260716 -> origin/fix/remove-meta-explanatory-copy-clean-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4977272Z  * [new branch]        fix/remove-no-shared-moral-score-copy -> origin/fix/remove-no-shared-moral-score-copy
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4977972Z  * [new branch]        fix/remove-pilot-path-section -> origin/fix/remove-pilot-path-section
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4978670Z  * [new branch]        fix/remove-pilot-safeguards-20260716 -> origin/fix/remove-pilot-safeguards-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4979480Z  * [new branch]        fix/remove-pilot-safeguards-rebased-20260716 -> origin/fix/remove-pilot-safeguards-rebased-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4980347Z  * [new branch]        fix/remove-pilot-safeguards-section-20260716 -> origin/fix/remove-pilot-safeguards-section-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4981186Z  * [new branch]        fix/remove-trade-overflow-button-20260723 -> origin/fix/remove-trade-overflow-button-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4982056Z  * [new branch]        fix/remove-user-qualification-copy-20260716-v2 -> origin/fix/remove-user-qualification-copy-20260716-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4982964Z  * [new branch]        fix/remove-user-qualification-copy-20260716-v3 -> origin/fix/remove-user-qualification-copy-20260716-v3
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4983848Z  * [new branch]        fix/remove-user-qualification-copy-20260716-v4 -> origin/fix/remove-user-qualification-copy-20260716-v4
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4984635Z  * [new branch]        fix/ror-client-id-header-20260725 -> origin/fix/ror-client-id-header-20260725
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4985597Z  * [new branch]        fix/ror-global-charity-search-20260725 -> origin/fix/ror-global-charity-search-20260725
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4986312Z  * [new branch]        fix/search-bar-polish-20260716 -> origin/fix/search-bar-polish-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4986975Z  * [new branch]        fix/search-bar-polish-20260716-v2 -> origin/fix/search-bar-polish-20260716-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4987689Z  * [new branch]        fix/single-a1-training-cron-20260729 -> origin/fix/single-a1-training-cron-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4988583Z  * [new branch]        fix/sitewide-account-identity-20260720 -> origin/fix/sitewide-account-identity-20260720
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4989401Z  * [new branch]        fix/smart-query-openai-diagnostics-20260729 -> origin/fix/smart-query-openai-diagnostics-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4990280Z  * [new branch]        fix/smart-query-openai-output-budget-20260729 -> origin/fix/smart-query-openai-output-budget-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4991128Z  * [new branch]        fix/smart-query-openai-timeout-20260729 -> origin/fix/smart-query-openai-timeout-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4991914Z  * [new branch]        fix/stripe-webhook-config-gate-20260715 -> origin/fix/stripe-webhook-config-gate-20260715
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4992715Z  * [new branch]        fix/timezone-aware-home-greeting-20260717 -> origin/fix/timezone-aware-home-greeting-20260717
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4993583Z  * [new branch]        fix/timezone-aware-home-greeting-main-20260717 -> origin/fix/timezone-aware-home-greeting-main-20260717
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4994548Z  * [new branch]        fix/trade-agreement-outcome-feedback-scroll-20260726 -> origin/fix/trade-agreement-outcome-feedback-scroll-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4995832Z  * [new branch]        fix/visible-trade-autocomplete-20260723 -> origin/fix/visible-trade-autocomplete-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4996710Z  * [new branch]        fix/visible-trade-autocomplete-release-20260723 -> origin/fix/visible-trade-autocomplete-release-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4997503Z  * [new branch]        fix/visual-offer-cards-20260715 -> origin/fix/visual-offer-cards-20260715
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4998183Z  * [new branch]        fix/walkthrough-action-visibility -> origin/fix/walkthrough-action-visibility
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4998880Z  * [new branch]        fix/walkthrough-copy-visibility -> origin/fix/walkthrough-copy-visibility
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.4999675Z  * [new branch]        fix/your-match-short-viewport -> origin/fix/your-match-short-viewport
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5000510Z  * [new branch]        hotfix/complete-profile-encryption-fallback-20260721 -> origin/hotfix/complete-profile-encryption-fallback-20260721
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5001573Z  * [new branch]        hotfix/complete-profile-save-without-private-key-20260721 -> origin/hotfix/complete-profile-save-without-private-key-20260721
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5002544Z  * [new branch]        hotfix/discover-loader-script-tag-20260718 -> origin/hotfix/discover-loader-script-tag-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5003248Z  * [new branch]        hotfix/launch-offer-schema -> origin/hotfix/launch-offer-schema
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5003981Z  * [new branch]        hotfix/live-account-signed-out-guard-20260718 -> origin/hotfix/live-account-signed-out-guard-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5005034Z  * [new branch]        hotfix/restore-first-visit-walkthrough -> origin/hotfix/restore-first-visit-walkthrough
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5005794Z  * [new branch]        hotfix/restore-home-feed-20260729 -> origin/hotfix/restore-home-feed-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5006420Z  * [new branch]        hotfix/returning-homepage -> origin/hotfix/returning-homepage
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5007011Z  * [new branch]        hotfix/returning-homepage-v2 -> origin/hotfix/returning-homepage-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5007805Z  * [new branch]        integration/threshold-sign-on-current-main-20260730 -> origin/integration/threshold-sign-on-current-main-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5008565Z  * [new branch]        launch/four-day-50-users -> origin/launch/four-day-50-users
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5009142Z  * [new branch]        launch/full-stack-24h-20260722 -> origin/launch/full-stack-24h-20260722
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5009794Z  * [new branch]        launch/verify-and-harden-20260723 -> origin/launch/verify-and-harden-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5010339Z  * [new branch]        main                    -> origin/main
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5010876Z  * [new branch]        ops/a1-production-smoke-20260725 -> origin/ops/a1-production-smoke-20260725
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5011769Z  * [new branch]        ops/apply-collective-commitments-20260726 -> origin/ops/apply-collective-commitments-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5012629Z  * [new branch]        ops/apply-moral-trade-create-adapter-20260727 -> origin/ops/apply-moral-trade-create-adapter-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5013488Z  * [new branch]        ops/apply-pr158-atomic-acceptance-20260726 -> origin/ops/apply-pr158-atomic-acceptance-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5014255Z  * [new branch]        ops/authenticated-core-e2e-20260725 -> origin/ops/authenticated-core-e2e-20260725
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5015304Z  * [new branch]        ops/create-adapter-authenticated-qa-20260728 -> origin/ops/create-adapter-authenticated-qa-20260728
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5016156Z  * [new branch]        ops/create-adapter-release-fix-20260728 -> origin/ops/create-adapter-release-fix-20260728
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5016894Z  * [new branch]        ops/create-adapter-tree-20260727 -> origin/ops/create-adapter-tree-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5017665Z  * [new branch]        ops/donation-upgrade-live-readiness-20260730 -> origin/ops/donation-upgrade-live-readiness-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5018497Z  * [new branch]        ops/donation-upgrade-prod-smoke-20260730 -> origin/ops/donation-upgrade-prod-smoke-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5019345Z  * [new branch]        ops/enable-collective-preview-review-20260727 -> origin/ops/enable-collective-preview-review-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5020242Z  * [new branch]        ops/evidence-completion-compatibility-20260730 -> origin/ops/evidence-completion-compatibility-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5021178Z  * [new branch]        ops/export-collective-commitments-source-20260726 -> origin/ops/export-collective-commitments-source-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5022137Z  * [new branch]        ops/export-collective-commitments-source-20260727 -> origin/ops/export-collective-commitments-source-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5023302Z  * [new branch]        ops/export-failure-bonus-integration-source-20260726 -> origin/ops/export-failure-bonus-integration-source-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5024264Z  * [new branch]        ops/export-feed-create-phase1-source-20260730 -> origin/ops/export-feed-create-phase1-source-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5025385Z  * [new branch]        ops/export-mpgf-create-adapter-source-20260727 -> origin/ops/export-mpgf-create-adapter-source-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5026325Z  * [new branch]        ops/export-mpgf-create-adapter-source-20260727-v2 -> origin/ops/export-mpgf-create-adapter-source-20260727-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5027204Z  * [new branch]        ops/fix-collective-preview-seed-20260727 -> origin/ops/fix-collective-preview-seed-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5028054Z  * [new branch]        ops/fix-pr158-bilateral-confirmation-20260727 -> origin/ops/fix-pr158-bilateral-confirmation-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5028911Z  * [new branch]        ops/fix-pr158-core-version-linking-20260726 -> origin/ops/fix-pr158-core-version-linking-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5029800Z  * [new branch]        ops/inspect-pooled-settlement-payload-20260731 -> origin/ops/inspect-pooled-settlement-payload-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5030700Z  * [new branch]        ops/inspect-pr158-agreement-contract-20260726 -> origin/ops/inspect-pr158-agreement-contract-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5031584Z  * [new branch]        ops/live-trade-feed-production-smoke-20260729 -> origin/ops/live-trade-feed-production-smoke-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5032454Z  * [new branch]        ops/marketplace-delta-final-gate-v2-20260730 -> origin/ops/marketplace-delta-final-gate-v2-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5033289Z  * [new branch]        ops/materialize-create-adapter-20260727 -> origin/ops/materialize-create-adapter-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5034126Z  * [new branch]        ops/materialize-create-adapter-patch-20260727 -> origin/ops/materialize-create-adapter-patch-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5035231Z  * [new branch]        ops/materialize-feed-create-phase1-20260730 -> origin/ops/materialize-feed-create-phase1-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5036312Z  * [new branch]        ops/materialize-feed-create-phase1-v2-20260731 -> origin/ops/materialize-feed-create-phase1-v2-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5037213Z  * [new branch]        ops/materialize-feed-create-phase1-v3-20260731 -> origin/ops/materialize-feed-create-phase1-v3-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5038081Z  * [new branch]        ops/materialize-marketplace-delta-20260729 -> origin/ops/materialize-marketplace-delta-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5038988Z  * [new branch]        ops/materialize-marketplace-delta-final-20260730 -> origin/ops/materialize-marketplace-delta-final-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5039803Z  * [new branch]        ops/monitor-moraltrade-qa-resume -> origin/ops/monitor-moraltrade-qa-resume
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5040551Z  * [new branch]        ops/pr158-bilateral-confirmation-20260727 -> origin/ops/pr158-bilateral-confirmation-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5041471Z  * [new branch]        ops/pr158-bilateral-confirmation-coordinator-20260727 -> origin/ops/pr158-bilateral-confirmation-coordinator-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5042471Z  * [new branch]        ops/pr158-bilateral-confirmation-finalize-20260727 -> origin/ops/pr158-bilateral-confirmation-finalize-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5043404Z  * [new branch]        ops/pr158-bilateral-confirmation-gate-20260727 -> origin/ops/pr158-bilateral-confirmation-gate-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5044153Z  * [new branch]        ops/pr158-browser-qa-20260726 -> origin/ops/pr158-browser-qa-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5045042Z  * [new branch]        ops/pr158-final-isolated-qa-20260726 -> origin/ops/pr158-final-isolated-qa-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5045841Z  * [new branch]        ops/pr158-integrated-exact-head-qa-20260727 -> origin/ops/pr158-integrated-exact-head-qa-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5046709Z  * [new branch]        ops/pr158-sync-main-release-validation-20260727 -> origin/ops/pr158-sync-main-release-validation-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5047645Z  * [new branch]        ops/pr212-absolute-gates-20260729 -> origin/ops/pr212-absolute-gates-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5048300Z  * [new branch]        ops/pr212-complete-ui-20260729 -> origin/ops/pr212-complete-ui-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5049001Z  * [new branch]        ops/pr212-complete-ui-publish-20260730 -> origin/ops/pr212-complete-ui-publish-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5049747Z  * [new branch]        ops/pr212-complete-ui-status-20260730 -> origin/ops/pr212-complete-ui-status-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5050452Z  * [new branch]        ops/pr212-current-export-20260730 -> origin/ops/pr212-current-export-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5051122Z  * [new branch]        ops/pr212-current-source-20260730 -> origin/ops/pr212-current-source-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5051856Z  * [new branch]        ops/pr212-current-source-export-20260730 -> origin/ops/pr212-current-source-export-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5052605Z  * [new branch]        ops/pr212-final-ui-publish-20260730 -> origin/ops/pr212-final-ui-publish-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5053460Z  * [new branch]        ops/pr212-individual-capacity-qa-controller-20260727 -> origin/ops/pr212-individual-capacity-qa-controller-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5054290Z  * [new branch]        ops/pr212-source-export-20260729 -> origin/ops/pr212-source-export-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5055236Z  * [new branch]        ops/read-bootstrap-log-30197487993 -> origin/ops/read-bootstrap-log-30197487993
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5056012Z  * [new branch]        ops/read-pr158-browser-qa-log-89800162151 -> origin/ops/read-pr158-browser-qa-log-89800162151
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5056792Z  * [new branch]        ops/read-pr158-browser-v3-log-20260727 -> origin/ops/read-pr158-browser-v3-log-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5057502Z  * [new branch]        ops/redeploy-llm-query-after-key -> origin/ops/redeploy-llm-query-after-key
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5058250Z  * [new branch]        ops/rotate-prod-db-credentials-20260726 -> origin/ops/rotate-prod-db-credentials-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5059125Z  * [new branch]        ops/sync-collective-create-current-main-20260729 -> origin/ops/sync-collective-create-current-main-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5060213Z  * [new branch]        ops/sync-collective-create-current-main-20260730 -> origin/ops/sync-collective-create-current-main-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5061091Z  * [new branch]        ops/threshold-sign-on-integrate-20260730 -> origin/ops/threshold-sign-on-integrate-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5061949Z  * [new branch]        ops/threshold-sign-on-merge-report-v2-20260730 -> origin/ops/threshold-sign-on-merge-report-v2-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5062801Z  * [new branch]        ops/threshold-sign-on-release-v4-20260730 -> origin/ops/threshold-sign-on-release-v4-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5063571Z  * [new branch]        ops/vercel-supabase-repair-20260721 -> origin/ops/vercel-supabase-repair-20260721
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5064292Z  * [new branch]        ops/verify-a1-natural-cron-20260730 -> origin/ops/verify-a1-natural-cron-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5065283Z  * [new branch]        ops/verify-next-a1-natural-cron-20260727 -> origin/ops/verify-next-a1-natural-cron-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5066129Z  * [new branch]        ops/verify-walkthrough-production-20260727 -> origin/ops/verify-walkthrough-production-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5066947Z  * [new branch]        ops/website2-preview-ownership-20260723 -> origin/ops/website2-preview-ownership-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5067739Z  * [new branch]        payments/conditional-offset-settlement -> origin/payments/conditional-offset-settlement
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5068441Z  * [new branch]        polish-home-process-section -> origin/polish-home-process-section
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5069104Z  * [new branch]        polish/editorial-colorway-20260716 -> origin/polish/editorial-colorway-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5069913Z  * [new branch]        polish/editorial-marketplace-colorway-20260716 -> origin/polish/editorial-marketplace-colorway-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5070964Z  * [new branch]        preview/collective-in-create-exact-20260730 -> origin/preview/collective-in-create-exact-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5071861Z  * [new branch]        product/rename-common-ground-to-co-fund-20260730 -> origin/product/rename-common-ground-to-co-fund-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5072948Z  * [new branch]        product/rename-conditional-donation-to-donation-upgrade-20260730 -> origin/product/rename-conditional-donation-to-donation-upgrade-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5074099Z  * [new branch]        qa/collective-commitments-adversarial-browser-20260727 -> origin/qa/collective-commitments-adversarial-browser-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5075295Z  * [new branch]        qa/collective-commitments-db-20260726 -> origin/qa/collective-commitments-db-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5076481Z  * [new branch]        qa/collective-identity-adversarial-browser-20260726 -> origin/qa/collective-identity-adversarial-browser-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5077841Z  * [new branch]        qa/collective-identity-adversarial-browser-v2-20260726 -> origin/qa/collective-identity-adversarial-browser-v2-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5078932Z  * [new branch]        qa/collective-identity-adversarial-browser-v3-20260726 -> origin/qa/collective-identity-adversarial-browser-v3-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5079790Z  * [new branch]        qa/collective-in-create-20260729 -> origin/qa/collective-in-create-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5080568Z  * [new branch]        qa/collective-in-create-current-main-20260729 -> origin/qa/collective-in-create-current-main-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5081506Z  * [new branch]        qa/collective-in-create-protected-preview-20260730 -> origin/qa/collective-in-create-protected-preview-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5082374Z  * [new branch]        qa/collective-mobile-subnav-20260727 -> origin/qa/collective-mobile-subnav-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5083113Z  * [new branch]        qa/conditional-payments-e2e-20260730 -> origin/qa/conditional-payments-e2e-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5083887Z  * [new branch]        qa/contextual-safeguards-exact-78616fb -> origin/qa/contextual-safeguards-exact-78616fb
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5085126Z  * [new branch]        qa/contextual-trade-safeguards-20260730 -> origin/qa/contextual-trade-safeguards-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5085990Z  * [new branch]        qa/contextual-trade-safeguards-final-20260730 -> origin/qa/contextual-trade-safeguards-final-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5086907Z  * [new branch]        qa/export-collective-identity-source-20260726-v5 -> origin/qa/export-collective-identity-source-20260726-v5
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5087840Z  * [new branch]        qa/failure-bonus-authenticated-browser-20260726 -> origin/qa/failure-bonus-authenticated-browser-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5088822Z  * [new branch]        qa/failure-bonus-combined-integration-gates-20260726 -> origin/qa/failure-bonus-combined-integration-gates-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5089768Z  * [new branch]        qa/failure-bonus-exact-release-gates-20260726 -> origin/qa/failure-bonus-exact-release-gates-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5090638Z  * [new branch]        qa/fix-multi-threshold-sql-aliases-20260727 -> origin/qa/fix-multi-threshold-sql-aliases-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5091518Z  * [new branch]        qa/fix-multi-threshold-type-narrowing-20260727 -> origin/qa/fix-multi-threshold-type-narrowing-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5092327Z  * [new branch]        qa/home-authenticated-feed-20260727 -> origin/qa/home-authenticated-feed-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5093095Z  * [new branch]        qa/live-trade-authenticated-feed-20260727 -> origin/qa/live-trade-authenticated-feed-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5094066Z  * [new branch]        qa/materialize-final-collective-candidate-staging-20260727 -> origin/qa/materialize-final-collective-candidate-staging-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5095383Z  * [new branch]        qa/mpgf-pool-visibility-main-baseline-20260726 -> origin/qa/mpgf-pool-visibility-main-baseline-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5096295Z  * [new branch]        qa/mpgf-visibility-source-snapshot-20260726 -> origin/qa/mpgf-visibility-source-snapshot-20260726
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5097370Z  * [new branch]        qa/multi-threshold-authenticated-browser-20260727 -> origin/qa/multi-threshold-authenticated-browser-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5098274Z  * [new branch]        qa/multi-threshold-browser-runner-20260727 -> origin/qa/multi-threshold-browser-runner-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5099173Z  * [new branch]        qa/multi-threshold-browser-script-source-20260727 -> origin/qa/multi-threshold-browser-script-source-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5100106Z  * [new branch]        qa/multi-threshold-exact-release-gates-20260727 -> origin/qa/multi-threshold-exact-release-gates-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5100992Z  * [new branch]        qa/production-charity-autocomplete-20260723 -> origin/qa/production-charity-autocomplete-20260723
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5101805Z  * [new branch]        recovery/previous-codex-20260713-111633 -> origin/recovery/previous-codex-20260713-111633
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5102532Z  * [new branch]        redesign/auth-experience-20260716 -> origin/redesign/auth-experience-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5103348Z  * [new branch]        redesign/clear-marketplace-20260716 -> origin/redesign/clear-marketplace-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5104365Z  * [new branch]        redesign/pledge-swaps-intuitive-20260716 -> origin/redesign/pledge-swaps-intuitive-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5105280Z  * [new branch]        release-inline-itinerary-editor -> origin/release-inline-itinerary-editor
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5105992Z  * [new branch]        release-inline-itinerary-editor-v2 -> origin/release-inline-itinerary-editor-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5106650Z  * [new branch]        release-moral-trade-brand -> origin/release-moral-trade-brand
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5107418Z  * [new branch]        release-source/moral-trade-create-adapter-20260728 -> origin/release-source/moral-trade-create-adapter-20260728
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5108227Z  * [new branch]        release-trade-three-layer-flow -> origin/release-trade-three-layer-flow
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5108958Z  * [new branch]        release/create-replaces-trade-20260729 -> origin/release/create-replaces-trade-20260729
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5109853Z  * [new branch]        release/live-account-data-20260718 -> origin/release/live-account-data-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5110616Z  * [new branch]        release/live-route-recommendations-20260722 -> origin/release/live-route-recommendations-20260722
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5111318Z  * [new branch]        release/marketplace-ui-95 -> origin/release/marketplace-ui-95
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5112022Z  * [new branch]        release/moral-trade-create-adapter-20260728 -> origin/release/moral-trade-create-adapter-20260728
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5112817Z  * [new branch]        release/offer-challenge-return-plane -> origin/release/offer-challenge-return-plane
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5113533Z  * [new branch]        release/threshold-sign-on-20260730 -> origin/release/threshold-sign-on-20260730
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5114149Z  * [new branch]        remove-example-fallback -> origin/remove-example-fallback
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5114945Z  * [new branch]        remove-example-fallback-v2 -> origin/remove-example-fallback-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5115638Z  * [new branch]        remove-how-it-works-20260716 -> origin/remove-how-it-works-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5116287Z  * [new branch]        remove-how-it-works-20260716-v2 -> origin/remove-how-it-works-20260716-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5117052Z  * [new branch]        remove-research-section-and-page-20260716 -> origin/remove-research-section-and-page-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5117865Z  * [new branch]        remove-trust-infrastructure-section -> origin/remove-trust-infrastructure-section
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5118497Z  * [new branch]        remove-trust-page       -> origin/remove-trust-page
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5119094Z  * [new branch]        remove-trust-page-menu-20260716 -> origin/remove-trust-page-menu-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5119786Z  * [new branch]        remove-trust-page-menu-20260716-v2 -> origin/remove-trust-page-menu-20260716-v2
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5120658Z  * [new branch]        tmp/export-core-trade-loop-20260716 -> origin/tmp/export-core-trade-loop-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5121402Z  * [new branch]        tmp/export-walkthrough-html-20260727 -> origin/tmp/export-walkthrough-html-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5122279Z  * [new branch]        tmp/render-donation-redirect-walkthrough-20260727 -> origin/tmp/render-donation-redirect-walkthrough-20260727
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5123125Z  * [new branch]        trigger/finalize-universal-command -> origin/trigger/finalize-universal-command
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5123852Z  * [new branch]        verified/universal-command-final -> origin/verified/universal-command-final
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5124627Z  * [new branch]        verify/public-evidence-production-20260718 -> origin/verify/public-evidence-production-20260718
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5125654Z  * [new branch]        verify/sitewide-account-production-20260721 -> origin/verify/sitewide-account-production-20260721
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5126503Z  * [new branch]        work/transaction-first-payments-20260716 -> origin/work/transaction-first-payments-20260716
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5199454Z ##[endgroup]
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5199997Z ##[group]Determining the checkout info
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5209944Z [command]/usr/bin/git branch --list --remote origin/agent/pr212-main-integrated-36650b-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5256414Z [command]/usr/bin/git tag --list agent/pr212-main-integrated-36650b-20260731
+integrate	Check out pinned-main integration branch	2026-07-31T02:03:34.5348785Z ##[error]A branch or tag with the name 'agent/pr212-main-integrated-36650b-20260731' could not be found
