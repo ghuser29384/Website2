@@ -1,0 +1,108 @@
+name: Marketplace delta repaired exact-head evidence gate
+
+on:
+  push:
+    branches:
+      - qa/marketplace-delta-exact-head-repair-20260731
+    paths:
+      - ".github/workflows/marketplace-delta-exact-head-repair.yml"
+      - ".github/scripts/run-marketplace-delta-exact-head-repair-gate.sh"
+      - ".github/scripts/marketplace-delta-claimed-guest-browser-qa.mjs"
+      - ".github/qa/marketplace-delta-cleanup-now"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: marketplace-delta-repaired-exact-head-evidence-20260731
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    if: ${{ !contains(github.event.head_commit.message, '[cleanup]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out temporary QA branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Record authoritative run on temporary PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="Repaired exact-head marketplace evidence gate: run ${GITHUB_RUN_ID}, attempt ${GITHUB_RUN_ATTEMPT}, workflow head ${GITHUB_SHA}."
+          jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Content-Type: application/json" \
+            --data-binary "@$RUNNER_TEMP/comment.json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/359/comments" \
+            --output /dev/null
+
+      - name: Run exact-head static, deployment, rendered, and cleanup gate
+        shell: bash
+        run: bash .github/scripts/run-marketplace-delta-exact-head-repair-gate.sh
+
+      - name: Upload desktop and mobile browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-delta-repaired-browser-evidence-${{ github.run_id }}
+          path: marketplace-delta-browser-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload exact-head and deterministic-cleanup proof
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-delta-repaired-final-proof-${{ github.run_id }}
+          path: marketplace-delta-final-proof
+          if-no-files-found: warn
+          retention-days: 14
+
+  cleanup:
+    if: ${{ contains(github.event.head_commit.message, '[cleanup]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Close temporary PR without merging and delete QA branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n '{state:"closed"}' > "$RUNNER_TEMP/close.json"
+          curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            --header "Content-Type: application/json" \
+            --data-binary "@$RUNNER_TEMP/close.json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/359" \
+            --output /dev/null
+          curl --fail-with-body --silent --show-error \
+            --request DELETE \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            --header "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/refs/heads/qa/marketplace-delta-exact-head-repair-20260731" \
+            --output /dev/null
