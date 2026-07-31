@@ -40,3 +40,51 @@ test("Discover bypasses stale payload caches with content-versioned part URLs", 
     expect(url.searchParams.get("v")).toBe(version);
   }
 });
+
+test("Discover automatically recovers from one corrupted cached payload part", async ({
+  page,
+}) => {
+  let corruptedFirstAttempt = false;
+  const retriedParts = new Set<string>();
+  const pageErrors: string[] = [];
+
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await page.route("**/discover/payload/*.txt*", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.searchParams.has("reload")) retriedParts.add(url.pathname);
+
+    if (
+      url.pathname.endsWith("/0.txt") &&
+      !url.searchParams.has("reload") &&
+      !corruptedFirstAttempt
+    ) {
+      corruptedFirstAttempt = true;
+      await route.fulfill({
+        status: 200,
+        contentType: "text/plain; charset=utf-8",
+        body: "corrupted-first-attempt",
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.goto("/discover?domain=offers&view=list", {
+    waitUntil: "networkidle",
+  });
+
+  await expect(page.locator("body")).not.toContainText("Loading Discover…");
+  await expect(page.locator("body")).not.toContainText("Discover could not be loaded");
+  await expect(page.locator(".offer-transaction-row").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /Run search/i })).toBeVisible();
+
+  expect(corruptedFirstAttempt).toBe(true);
+  expect(retriedParts.size).toBe(7);
+  expect(pageErrors).toEqual([]);
+
+  await page.screenshot({
+    path: "test-results/discover-loader-self-heal.png",
+    fullPage: true,
+  });
+});

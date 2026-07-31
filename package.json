@@ -20,7 +20,7 @@
     "test": "node --import tsx --test src/**/*.test.ts",
     "test:e2e": "playwright test",
     "discover:pack": "node scripts/pack-discover-payload.mjs",
-    "verify:discover": "node scripts/pack-discover-payload.mjs --check && node --test scripts/discover-two-sided-contract.test.mjs scripts/discover-cofund-contract.test.mjs",
+    "verify:discover": "node scripts/pack-discover-payload.mjs --check && node --test scripts/discover-two-sided-contract.test.mjs scripts/discover-cofund-contract.test.mjs scripts/discover-loader-self-heal.test.mjs",
     "test:discover-cofund": "node --test scripts/discover-cofund-contract.test.mjs"
   },
   "dependencies": {

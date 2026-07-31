@@ -26,8 +26,7 @@ function evaluateOfferContract() {
   assert.notEqual(end, -1, "canonical Discover source must define pools after offers");
 
   const context = vm.createContext({ structuredClone });
-  const contractSource = `${source.slice(start, end)}\n
-globalThis.__contract = {
+  const contractSource = `${source.slice(start, end)}\n\nglobalThis.__contract = {
   offers,
   exchangeProfiles,
   exchangeFlexibilityLabels,
@@ -49,7 +48,7 @@ function functionBody(name) {
   return source.slice(start, next === -1 ? source.length : next);
 }
 
-test("the Discover loader content-versions every payload request", () => {
+test("the Discover loader content-versions, verifies, and recovers every payload request", () => {
   const expectedVersion = createHash("sha1")
     .update(Buffer.from(`blob ${sourceBuffer.length}\0`))
     .update(sourceBuffer)
@@ -67,19 +66,21 @@ test("the Discover loader content-versions every payload request", () => {
     "6.txt",
   ]);
   assert.equal(payloadManifest.sourceBytes, sourceBuffer.length);
-  assert.ok(loader.includes('fetch("/discover/payload/manifest.json", {'));
+  assert.ok(loader.includes('const MANIFEST_PATH = "/discover/payload/manifest.json";'));
+  assert.ok(loader.includes("fetchJson(MANIFEST_PATH, reloadToken)"));
   assert.ok(loader.includes('cache: "no-store"'));
-  assert.ok(
-    loader.includes(
-      '/discover/payload/${part}?v=${encodeURIComponent(manifest.version)}',
-    ),
-  );
+  assert.ok(loader.includes("buildAssetUrl(path, manifest.version, reloadToken)"));
   assert.ok(
     loader.includes(
       "window.__MT_DISCOVER_PAYLOAD_VERSION__ = manifest.version;",
     ),
   );
-  assert.ok(loader.includes('fetch(path, { cache: "force-cache" })'));
+  assert.ok(loader.includes("await verifyPayload(source, manifest);"));
+  assert.ok(loader.includes("for (let attempt = 0; attempt < 2; attempt += 1)"));
+  assert.ok(loader.includes('url.searchParams.set("reload", reloadToken)'));
+  assert.ok(loader.includes("VERSIONED_BODY_ASSETS"));
+  assert.ok(!loader.includes('cache: "force-cache"'));
+  assert.ok(!loader.includes("manifest.parts.length !== 7"));
   assert.ok(
     !loader.includes(
       'const paths = [\n          "/discover/payload/0.txt"',
