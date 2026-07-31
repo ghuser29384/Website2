@@ -55,6 +55,8 @@ jobs:
 
           def replace_when_present(path_name: str, old: str, new: str) -> None:
               path = Path(path_name)
+              if not path.exists():
+                  return
               text = path.read_text(encoding="utf-8")
               if old in text:
                   path.write_text(text.replace(old, new), encoding="utf-8")
@@ -66,17 +68,18 @@ jobs:
           )
 
           dashboard = Path("src/components/core-trade/institutional-admin-dashboard.tsx")
-          dashboard_text = dashboard.read_text(encoding="utf-8")
-          dashboard_text = dashboard_text.replace(
-              'import { useEffect, useMemo, useState, type PropsWithChildren } from "react";',
-              'import { useEffect, useMemo, useState, type ReactNode } from "react";',
-          )
-          dashboard_text = re.sub(
-              r"interface InlineHintProps extends PropsWithChildren \{\n  text: string;\n\}",
-              "type InlineHintProps = {\n  children: ReactNode;\n  text: string;\n};",
-              dashboard_text,
-          )
-          dashboard.write_text(dashboard_text, encoding="utf-8")
+          if dashboard.exists():
+              dashboard_text = dashboard.read_text(encoding="utf-8")
+              dashboard_text = dashboard_text.replace(
+                  'import { useEffect, useMemo, useState, type PropsWithChildren } from "react";',
+                  'import { useEffect, useMemo, useState, type ReactNode } from "react";',
+              )
+              dashboard_text = re.sub(
+                  r"interface InlineHintProps extends PropsWithChildren \{\n  text: string;\n\}",
+                  "type InlineHintProps = {\n  children: ReactNode;\n  text: string;\n};",
+                  dashboard_text,
+              )
+              dashboard.write_text(dashboard_text, encoding="utf-8")
 
           replace_when_present(
               "src/lib/discover-offer-action.ts",
@@ -179,7 +182,7 @@ jobs:
             src/components/core-trade/institutional-admin-dashboard.tsx \
             src/lib/discover-offer-action.ts
           do
-            if ! git diff --quiet -- "$path"; then
+            if test -e "$path" && ! git diff --quiet -- "$path"; then
               git add -- "$path"
             fi
           done
