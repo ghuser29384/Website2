@@ -20,7 +20,7 @@ on:
       - src/lib/trade-donation-pool*.ts
       - supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
       - supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
-      - supabase/migrations/20260731121500_donation_upgrade_technical_readiness.sql
+      - supabase/migrations/20260731123000_donation_upgrade_public_provider_conformance_gates.sql
       - .github/workflows/donation-upgrade-final-gates.yml
   workflow_dispatch:
 
@@ -74,13 +74,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(grep -cF 'create or replace function public.submit_conditional_payment_destination_request(' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql)" = "1"
-          test "$(grep -cF 'create or replace function public.review_trade_donation_pool_gate(' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql)" = "1"
-          ! grep -F 'conditional-payment-destination-_at' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
-          ! grep -F 'p_environm,' supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
-          if [ -f supabase/migrations/20260731121500_donation_upgrade_technical_readiness.sql ]; then
-            grep -F 'donation_upgrade_technical_readiness' supabase/migrations/20260731121500_donation_upgrade_technical_readiness.sql >/dev/null
-          fi
+          destination_migration="supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql"
+          gate_migration="supabase/migrations/20260731123000_donation_upgrade_public_provider_conformance_gates.sql"
+
+          test "$(grep -cF 'create or replace function public.submit_conditional_payment_destination_request(' "$destination_migration")" = "1"
+          test "$(grep -cF 'create or replace function public.review_trade_donation_pool_gate(' "$destination_migration")" = "1"
+          ! grep -F 'conditional-payment-destination-_at' "$destination_migration"
+          ! grep -F 'p_environm,' "$destination_migration"
+
+          grep -F "'every_org_live_flow_verified'" "$gate_migration" >/dev/null
+          grep -F "'stripe_live_account_ready'" "$gate_migration" >/dev/null
+          grep -F "'every_org_written_approval'" "$gate_migration" >/dev/null
+          grep -F "'stripe_account_and_product_review'" "$gate_migration" >/dev/null
+          grep -F "'externalWrittenConfirmationRequired', false" "$gate_migration" >/dev/null
+
           git fetch origin main
           git diff --check "$(git merge-base origin/main HEAD)"...HEAD
 
