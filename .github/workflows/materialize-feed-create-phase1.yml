@@ -1,9 +1,9 @@
 name: Temporary materialize — Feed to Create Phase 1
 
 on:
-  push:
+  pull_request:
     branches:
-      - ops/materialize-feed-create-phase1-20260730
+      - main
   workflow_dispatch:
 
 permissions:
