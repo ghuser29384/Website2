@@ -1,0 +1,23 @@
+{
+  "generated_at": "2026-07-31T02:34:10Z",
+  "feature_head": "71f28543df87fb13005e07582603410e5cef7255",
+  "run_id": "30598511737",
+  "status": "completed",
+  "conclusion": "failure",
+  "pinned_main": "36650b48f9e664ea6d67c0840cf6a803060e8d7c",
+  "current_main": "36650b48f9e664ea6d67c0840cf6a803060e8d7c",
+  "main_moved": false,
+  "failed_steps": [
+    "Run exact-base differential full-test gate"
+  ],
+  "skipped_steps": [
+    "Build production application",
+    "Post Set up Node.js",
+    "Restore committed database type contract",
+    "Run authenticated organization and independent workflows plus negative matrix",
+    "Run exact-base differential generated-schema typecheck",
+    "Run full ESLint",
+    "Start QA-backed production server",
+    "Type-check application with committed database contract"
+  ]
+}
