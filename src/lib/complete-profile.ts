@@ -131,8 +131,16 @@ function buildRoleAndAffiliation(input: CompleteProfileSubmission) {
   return input.affiliation ? `${input.role} at ${input.affiliation}` : input.role;
 }
 
-export function buildCompleteProfileCapabilityText(input: CompleteProfileSubmission) {
-  return `${buildRoleAndAffiliation(input)}. Can contribute ${input.offerType.toLowerCase()} with about ${input.monthlyTime} available each month.`;
+export function buildCompleteProfileCapabilityText(
+  input: CompleteProfileSubmission,
+  options: { includeOfferType?: boolean } = {},
+) {
+  const identity = buildRoleAndAffiliation(input);
+  if (options.includeOfferType === false) {
+    return `${identity}. Has about ${input.monthlyTime} available each month for separately reviewed opportunities.`;
+  }
+
+  return `${identity}. Can contribute ${input.offerType.toLowerCase()} with about ${input.monthlyTime} available each month.`;
 }
 
 export function buildCompleteProfileConstraintText(input: CompleteProfileSubmission) {
