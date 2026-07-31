@@ -61,7 +61,7 @@ jobs:
           git apply --check /tmp/feed-create-phase1.patch
           git apply /tmp/feed-create-phase1.patch
           git diff --check
-          git status --porcelain=v1 | sed -E 's/^.. //' | LC_ALL=C sort > /tmp/actual-paths.txt
+          git status --porcelain=v1 --untracked-files=all | sed -E 's/^.. //' | LC_ALL=C sort > /tmp/actual-paths.txt
           LC_ALL=C sort /tmp/feed-create-phase1-manifest.txt > /tmp/expected-paths.txt
           diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
 
