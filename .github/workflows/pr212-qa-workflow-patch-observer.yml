@@ -60,3 +60,5 @@ jobs:
           git commit -m "Record PR 212 QA workflow patch result"
           git push origin HEAD:agent/pr212-qa-workflow-patch-observer-20260731
           [[ "$status" == "completed" ]]
+
+# Observe the exact run-step matcher repair.
