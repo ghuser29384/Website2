@@ -61,15 +61,22 @@ jobs:
           git apply --check /tmp/feed-create-phase1.patch
           git apply /tmp/feed-create-phase1.patch
 
-          # Exact-gate repairs: two source-contract assertions had literal whitespace/copy
-          # drift, and the transient sessionStorage reader must schedule its state update
-          # rather than synchronously cascading a render from the effect body.
+          # Exact-gate repairs discovered during materialization:
+          # - source contracts must avoid ES2018-only dotAll flags and tolerate JSX whitespace;
+          # - union helpers must narrow before reading the discriminated member;
+          # - the sessionStorage read must not synchronously cascade a render from an effect.
           python - <<'PY'
           from pathlib import Path
 
           wiring_path = Path("src/feed-create-phase1-wiring.test.ts")
           wiring = wiring_path.read_text(encoding="utf-8")
           replacements = {
+              "assert.doesNotMatch(feedScript, /donation_pool.*Create a trade from this/s);":
+                  "assert.doesNotMatch(feedScript, /donation_pool[\\s\\S]*Create a trade from this/);",
+              "assert.doesNotMatch(feedScript, /donation_redirect.*Create a trade from this/s);":
+                  "assert.doesNotMatch(feedScript, /donation_redirect[\\s\\S]*Create a trade from this/);",
+              "assert.match(sourceResolver, /workflow_status.*published/s);":
+                  "assert.match(sourceResolver, /workflow_status[\\s\\S]*published/);",
               "assert.match(workbench, /Match scores and explanations are session-only/);":
                   "assert.match(workbench, /Match\\s+scores and explanations are session-only/);",
               "assert.match(managePage, /has not been delivered/);":
@@ -82,6 +89,22 @@ jobs:
                   raise SystemExit(f"Expected one source-contract assertion: {old}")
               wiring = wiring.replace(old, new)
           wiring_path.write_text(wiring, encoding="utf-8")
+
+          phase_test_path = Path("src/lib/feed-create/phase1.test.ts")
+          phase_test = phase_test_path.read_text(encoding="utf-8")
+          phase_replacements = {
+              '''  assert.equal(result.ok, true, result.ok ? undefined : result.failure.message);
+  if (!result.ok) throw new Error(result.failure.message);''':
+                  '''  if (!result.ok) throw new Error(result.failure.message);''',
+              '''  assert.equal(result.ok, false);
+  if (result.ok) throw new Error("Expected a Feed-to-Create failure.");''':
+                  '''  if (result.ok) throw new Error("Expected a Feed-to-Create failure.");''',
+          }
+          for old, new in phase_replacements.items():
+              if phase_test.count(old) != 1:
+                  raise SystemExit("Expected one discriminated-union test helper block.")
+              phase_test = phase_test.replace(old, new)
+          phase_test_path.write_text(phase_test, encoding="utf-8")
 
           workbench_path = Path("src/components/core-trade/trade-draft-workbench.tsx")
           workbench = workbench_path.read_text(encoding="utf-8")
@@ -130,7 +153,7 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run focused source and syntax gates
+      - name: Run focused source, syntax, and lint gates
         shell: bash
         run: |
           set -euo pipefail
@@ -152,7 +175,61 @@ jobs:
             src/lib/feed-create/phase1.ts \
             src/lib/live-now-recommendations.ts \
             tests/feed-create-phase1-authenticated.spec.ts
-          npx tsc --noEmit
+
+      - name: Run exact-base differential TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_dir=/tmp/feed-create-phase1-base
+          rm -rf "$base_dir"
+          git worktree add --detach "$base_dir" "$EXPECTED_MAIN_SHA"
+          ln -s "$GITHUB_WORKSPACE/node_modules" "$base_dir/node_modules"
+
+          set +e
+          (
+            cd "$base_dir"
+            "$GITHUB_WORKSPACE/node_modules/.bin/tsc" --noEmit --pretty false
+          ) > /tmp/base-tsc.log 2>&1
+          base_status=$?
+          "$GITHUB_WORKSPACE/node_modules/.bin/tsc" --noEmit --pretty false > /tmp/candidate-tsc.log 2>&1
+          candidate_status=$?
+          set -e
+          printf '%s\n' "$base_status" > /tmp/base-tsc.status
+          printf '%s\n' "$candidate_status" > /tmp/candidate-tsc.status
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          pattern = re.compile(r"^(.+?)\(\d+,\d+\): error (TS\d+): (.*)$")
+
+          def diagnostics(path: str):
+              result = set()
+              for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+                  match = pattern.match(line.strip())
+                  if match:
+                      result.add((match.group(1), match.group(2), match.group(3)))
+              return result
+
+          base = diagnostics("/tmp/base-tsc.log")
+          candidate = diagnostics("/tmp/candidate-tsc.log")
+          base_status = int(Path("/tmp/base-tsc.status").read_text().strip())
+          candidate_status = int(Path("/tmp/candidate-tsc.status").read_text().strip())
+          if base_status and not base:
+              raise SystemExit("The exact-base TypeScript command failed without parseable diagnostics.")
+          if candidate_status and not candidate:
+              raise SystemExit("The candidate TypeScript command failed without parseable diagnostics.")
+          unexpected = sorted(candidate - base)
+          if unexpected:
+              print("Unexpected candidate TypeScript diagnostics:")
+              for file_name, code, message in unexpected:
+                  print(f"{file_name}: {code}: {message}")
+              raise SystemExit(1)
+          print(
+              f"TypeScript differential passed: base={len(base)} candidate={len(candidate)} unexpected=0"
+          )
+          PY
+          git worktree remove --force "$base_dir"
 
       - name: Build the production application
         run: npm run build
