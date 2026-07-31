@@ -94,7 +94,6 @@ jobs:
           required = {
               "src/app/complete-profile/actions.ts",
               "src/app/complete-profile/page.tsx",
-              "src/complete-profile-direct-route.test.ts",
               "src/components/profile/complete-profile-review.tsx",
               "src/lib/complete-profile-private-preferences.ts",
               "src/lib/complete-profile.test.ts",
@@ -168,7 +167,6 @@ jobs:
           git add -- \
             src/app/complete-profile/actions.ts \
             src/app/complete-profile/page.tsx \
-            src/complete-profile-direct-route.test.ts \
             src/components/profile/complete-profile-review.tsx \
             src/lib/complete-profile-private-preferences.ts \
             src/lib/complete-profile.test.ts \
