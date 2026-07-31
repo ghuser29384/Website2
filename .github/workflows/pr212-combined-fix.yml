@@ -1,0 +1,281 @@
+name: PR 212 combined E2E and function-ACL repair
+
+on:
+  push:
+    branches:
+      - agent/pr212-combined-fix-ops-20260731
+    paths:
+      - .github/workflows/pr212-combined-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-combined-e2e-acl-repair
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EXPECTED_FEATURE_HEAD: d698d8a07905ab2b9323493e149f202823dd1d56
+      FEATURE_BRANCH: feat/institutional-trade-system
+      CANDIDATE_BRANCH: agent/pr212-combined-fix-candidate-20260731
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Refuse a stale or unexpected target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+          test "$(git rev-parse 'HEAD:supabase/migrations/20260726123000_institutional_trade_system.sql')" = "5d2e04eec2a15cbf56a752cc157b13b657f959e1"
+          test "$(git rev-parse 'HEAD:src/institutional-trade-migration.test.ts')" = "f52843bf6fa61b9ef2312adef5810db6b605380b"
+          test "$(git rev-parse 'HEAD:.github/scripts/institutional-trade-qa-e2e.mjs')" = "06eacee497fdf0916dcc08930980b3556603c795"
+
+      - name: Apply exact E2E fixture, cleanup, public-view, and function-ACL repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          migration_path = Path("supabase/migrations/20260726123000_institutional_trade_system.sql")
+          migration = migration_path.read_text()
+
+          for view in (
+              "institutional_public_organizations",
+              "institutional_public_programs",
+              "institutional_public_opportunities",
+              "institutional_track_record",
+          ):
+              old = f"alter view public.{view} set (security_invoker=true);"
+              new = f"alter view public.{view} set (security_invoker=false);"
+              if migration.count(old) != 1:
+                  raise SystemExit(f"Expected one security-invoker setting for {view}, found {migration.count(old)}")
+              migration = migration.replace(old, new)
+
+          first_revoke = "revoke all on function public.get_institutional_deal_authorization_snapshot(uuid,uuid,uuid) from public;"
+          if migration.count(first_revoke) != 1:
+              raise SystemExit(f"Expected one first client-RPC revoke marker, found {migration.count(first_revoke)}")
+
+          deny_and_helper_grants = """-- SECURITY DEFINER entry points are deny-by-default. PostgreSQL grants
+          -- EXECUTE to PUBLIC when a function is created, and Supabase may also retain
+          -- role-specific defaults. Revoke all client execution after every institutional
+          -- function exists, then restore only the exact authenticated allowlist below.
+          do $$
+          declare target record;
+          begin
+           for target in
+            select p.oid::regprocedure as function_identity
+            from pg_proc p
+            join pg_namespace n on n.oid=p.pronamespace
+            where n.nspname='public'
+              and p.prosecdef
+              and p.proname like '%institutional%'
+           loop
+            execute format('revoke all on function %s from public,anon,authenticated',target.function_identity);
+           end loop;
+          end $$;
+
+          -- These five boolean helpers are required by forced-RLS policies. The two
+          -- internal assertion/party helpers remain private and are reachable only
+          -- through the allowlisted SECURITY DEFINER functions that call them.
+          grant execute on function public.is_institutional_organization_member(uuid) to authenticated;
+          grant execute on function public.has_institutional_permission(uuid,uuid,text,bigint) to authenticated;
+          grant execute on function public.can_manage_institutional_organization(uuid) to authenticated;
+          grant execute on function public.can_read_institutional_deal(uuid) to authenticated;
+          grant execute on function public.can_manage_institutional_deal(uuid) to authenticated;
+
+          """
+          if "revoke all on function %s from public,anon,authenticated" in migration:
+              raise SystemExit("Dynamic institutional function revoke already exists unexpectedly")
+          migration = migration.replace(first_revoke, deny_and_helper_grants + first_revoke)
+          migration_path.write_text(migration)
+
+          test_path = Path("src/institutional-trade-migration.test.ts")
+          test_text = test_path.read_text()
+          for view in (
+              "institutional_public_organizations",
+              "institutional_public_programs",
+              "institutional_public_opportunities",
+              "institutional_track_record",
+          ):
+              old = rf"/alter view public\.{view} set \(security_invoker=true\)/i"
+              new = rf"/alter view public\.{view} set \(security_invoker=false\)/i"
+              if test_text.count(old) != 1:
+                  raise SystemExit(f"Expected one view contract for {view}, found {test_text.count(old)}")
+              test_text = test_text.replace(old, new)
+
+          insertion_marker = 'test("all institutional base tables use forced RLS, generated FK indexes, and restricted grants", () => {'
+          if test_text.count(insertion_marker) != 1:
+              raise SystemExit(f"Expected one RLS/grants test marker, found {test_text.count(insertion_marker)}")
+
+          security_test = r'''test("institutional SECURITY DEFINER execution is deny-by-default and exactly allowlisted", () => {
+            expectAll([
+              /p\.prosecdef[\s\S]*p\.proname like '%institutional%'/i,
+              /revoke all on function %s from public,anon,authenticated/i,
+              /grant execute on function public\.is_institutional_organization_member\(uuid\) to authenticated/i,
+              /grant execute on function public\.has_institutional_permission\(uuid,uuid,text,bigint\) to authenticated/i,
+              /grant execute on function public\.can_manage_institutional_organization\(uuid\) to authenticated/i,
+              /grant execute on function public\.can_read_institutional_deal\(uuid\) to authenticated/i,
+              /grant execute on function public\.can_manage_institutional_deal\(uuid\) to authenticated/i,
+            ], "institutional function execute grants");
+
+            const observed = Array.from(
+              migration.matchAll(/grant execute on function public\.([a-z0-9_]+\([^;]*\)) to authenticated;/gi),
+              (match) => match[1].replace(/\s+/g, ""),
+            ).sort();
+            const expected = [
+              "accept_institutional_deal_party(uuid)",
+              "accept_institutional_organization_party(uuid,uuid,uuid,uuid)",
+              "accept_institutional_verifier_assignment(uuid,text,text)",
+              "activate_institutional_pool(uuid,uuid,uuid,uuid)",
+              "can_manage_institutional_deal(uuid)",
+              "can_manage_institutional_organization(uuid)",
+              "can_read_institutional_deal(uuid)",
+              "cast_institutional_pool_vote(uuid,uuid,uuid,text,text,uuid)",
+              "decide_institutional_approval(uuid,text,uuid,text)",
+              "decide_institutional_individual_consent(uuid,text,text)",
+              "generate_institutional_matches(uuid)",
+              "get_institutional_deal_authorization_snapshot(uuid,uuid,uuid)",
+              "has_institutional_permission(uuid,uuid,text,bigint)",
+              "is_institutional_organization_member(uuid)",
+              "record_institutional_match_interest(uuid,uuid,text,text)",
+              "record_institutional_pool_approval(uuid,uuid,uuid,uuid,text)",
+              "request_institutional_individual_consent(uuid,uuid)",
+              "reserve_institutional_budget(uuid,uuid,bigint,uuid,text)",
+              "review_institutional_evidence(uuid,uuid,text,text,uuid,uuid,uuid)",
+              "revoke_institutional_room_access(uuid,uuid)",
+              "revoke_institutional_verifier_assignment(uuid,uuid)",
+              "save_institutional_pool_anchor(uuid,uuid,uuid,uuid,bigint,text,uuid)",
+              "save_institutional_pool_contribution(uuid,uuid,uuid,bigint,text,uuid,uuid)",
+              "save_institutional_pool_underwriting(uuid,uuid,uuid,bigint,text,uuid,uuid)",
+              "select_institutional_proposal_version(uuid,uuid,uuid,uuid)",
+              "sign_institutional_deal(uuid,uuid,uuid,text)",
+              "transition_institutional_deal_stage(uuid,text)",
+              "transition_institutional_milestone_status(uuid,uuid,text)",
+              "transition_institutional_obligation_status(uuid,uuid,text)",
+            ].sort();
+            assert.deepEqual(observed, expected, "authenticated institutional execution must equal the exact 29-function allowlist");
+            assert.doesNotMatch(
+              migration,
+              /grant execute on function public\.[^;]*institutional[^;]* to anon/i,
+              "anonymous callers must never execute institutional SECURITY DEFINER functions",
+            );
+            assert.doesNotMatch(
+              migration,
+              /grant execute on function public\.(?:assert_institutional_aal2|can_act_for_institutional_party)\([^;]*\) to authenticated/i,
+              "internal authorization helpers must remain private",
+            );
+          });
+
+          '''
+          test_text = test_text.replace(insertion_marker, security_test + insertion_marker)
+          test_path.write_text(test_text)
+
+          e2e_path = Path(".github/scripts/institutional-trade-qa-e2e.mjs")
+          e2e = e2e_path.read_text()
+          lead_marker = '    representative_profile_id: lead.id,\n    authority_status: "verified_for_scope",'
+          lead_replacement = '    representative_profile_id: lead.id,\n    authority_grant_id: leadGrant.id,\n    authority_status: "verified_for_scope",'
+          named_marker = '    representative_profile_id: named.id,\n    authority_status: "verified_for_scope",'
+          named_replacement = '    representative_profile_id: named.id,\n    authority_grant_id: namedGrant.id,\n    authority_status: "verified_for_scope",'
+          if e2e.count(lead_marker) != 2:
+              raise SystemExit(f"Expected two lead organization-party fixtures, found {e2e.count(lead_marker)}")
+          if e2e.count(named_marker) != 2:
+              raise SystemExit(f"Expected two counterparty organization-party fixtures, found {e2e.count(named_marker)}")
+          e2e = e2e.replace(lead_marker, lead_replacement).replace(named_marker, named_replacement)
+
+          invalid_cleanup_entry = '  "institutional_dispute_events",\n'
+          if e2e.count(invalid_cleanup_entry) != 1:
+              raise SystemExit(f"Expected one invalid dispute-event deal-scope entry, found {e2e.count(invalid_cleanup_entry)}")
+          e2e = e2e.replace(invalid_cleanup_entry, "")
+
+          loop_tail = '''    } else {
+                residue[table] = await countByIds(table, "deal_id", createdDealIds);
+              }
+            }
+            const authResidue = [];
+          '''
+          loop_replacement = '''    } else {
+                residue[table] = await countByIds(table, "deal_id", createdDealIds);
+              }
+            }
+            residue["institutional_dispute_events.actor_profile_id"] = await countByIds(
+              "institutional_dispute_events",
+              "actor_profile_id",
+              createdUserIds,
+            );
+            const authResidue = [];
+          '''
+          if e2e.count(loop_tail) != 1:
+              raise SystemExit(f"Expected one residue-loop tail, found {e2e.count(loop_tail)}")
+          e2e_path.write_text(e2e.replace(loop_tail, loop_replacement))
+          PY
+
+          git diff --check
+          grep -F "revoke all on function %s from public,anon,authenticated" supabase/migrations/20260726123000_institutional_trade_system.sql
+          ! grep -E "grant execute on function public\..*institutional.* to anon" supabase/migrations/20260726123000_institutional_trade_system.sql
+          changed="$(git status --short | cut -c4- | sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/institutional-trade-qa-e2e.mjs' \
+            'src/institutional-trade-migration.test.ts' \
+            'supabase/migrations/20260726123000_institutional_trade_system.sql' | sort)"
+          test "$changed" = "$expected"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run institutional and migration contracts
+        run: |
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          node --check .github/scripts/pr212-targeted-regression-qa.mjs
+
+      - name: Run complete repository tests absolutely
+        run: npm test
+
+      - name: Run TypeScript absolutely
+        run: npx tsc --noEmit
+
+      - name: Run ESLint absolutely
+        run: npm run lint
+
+      - name: Build production application absolutely
+        run: npm run build
+
+      - name: Commit exact candidate only after every gate passes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/scripts/institutional-trade-qa-e2e.mjs \
+            src/institutional-trade-migration.test.ts \
+            supabase/migrations/20260726123000_institutional_trade_system.sql
+          git commit -m "Harden institutional function grants and QA fixtures"
+          git push origin HEAD:"$CANDIDATE_BRANCH"
