@@ -34,6 +34,15 @@ test("the integration preserves the static source and adds the compact funding c
   assert.doesNotMatch(integrated, />Conditional donation</);
   assert.doesNotMatch(integrated, /Set up a conditional donation\./);
   assert.match(integrated, /Co-Fund/);
+  assert.match(
+    integrated,
+    /If this Co-Fund does not happen, where would you otherwise use this money\?/,
+  );
+  assert.match(
+    integrated,
+    /These are the projects we would honestly fund if this Co-Fund did not happen\./,
+  );
+  assert.doesNotMatch(integrated, /honest no-pool defaults/);
   assert.match(integrated, /Threshold pool/);
 });
 

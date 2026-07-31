@@ -41,12 +41,28 @@ test.describe("compact Co-Fund in Create", () => {
     ).toBeVisible();
     await expect(create.getByRole("button", { name: /Review pool/ })).toBeDisabled();
 
+    await expect(
+      create.getByText(
+        "If this Co-Fund does not happen, where would you otherwise use this money?",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      create.getByLabel("What would you fund instead?", { exact: true }),
+    ).toHaveCount(2);
+    await expect(create.locator("#commonGroundFields")).not.toContainText("Without pool");
+
     const visibleWords = await create.locator("#commonGroundFields").evaluate((element) =>
       (element.textContent || "").trim().split(/\s+/).filter(Boolean).length,
     );
-    expect(visibleWords).toBeLessThanOrEqual(95);
+    expect(visibleWords).toBeLessThanOrEqual(125);
 
-    await create.getByLabel("These are honest no-pool defaults.").check();
+    await create
+      .getByLabel(
+        "These are the projects we would honestly fund if this Co-Fund did not happen.",
+        { exact: true },
+      )
+      .check();
     await expect(create.getByRole("button", { name: /Review pool/ })).toBeEnabled();
     await create.getByRole("button", { name: /Review pool/ }).click();
 
