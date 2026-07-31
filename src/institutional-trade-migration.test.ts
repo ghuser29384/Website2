@@ -49,7 +49,7 @@ test("individual deal leads and parties do not require an organization or progra
     /An individual cannot self-verify institutional identity or qualifications/i,
     /Individual verification status may be changed only by an authorized reviewer/i,
     /Only the named personal-capacity participant may accept this deal-party invitation/i,
-    /create policy institutional_deal_parties_insert[\s\S]*lead_capacity='individual' and party_capacity='individual'[\s\S]*lead_profile_id=profile_id and profile_id=auth\.uid\(\)/i,
+    /create policy institutional_deal_parties_insert[\s\S]*lead_capacity='individual' and party_capacity='individual'[\s\S]*lead_profile_id=profile_id and profile_id=\(select auth\.uid\(\)\)/i,
     /create policy institutional_deal_parties_update[\s\S]*using\(public\.can_manage_institutional_deal\(deal_id\)\)/i,
     /create policy institutional_deal_parties_delete[\s\S]*using\(public\.can_manage_institutional_deal\(deal_id\)\)/i,
     /A personal-capacity obligation cannot name or bind a different individual/i,
@@ -332,5 +332,13 @@ test("all institutional base tables use forced RLS, generated FK indexes, and re
     migration,
     /p\.deal_id=p\.deal_id|p\.organization_id=p\.organization_id/i,
     "deal-message party scope must never collapse into a tautology",
+  );
+  const policyStart = migration.indexOf("-- Independent participation is self-managed and opt-in.");
+  const policyEnd = migration.indexOf("-- Every foreign-key column sequence receives a covering index.");
+  const policySection = migration.slice(policyStart, policyEnd);
+  assert.doesNotMatch(
+    policySection.replaceAll("(select auth.uid())", ""),
+    /auth\.uid\(\)/i,
+    "institutional RLS policies must initialize auth.uid once rather than once per row",
   );
 });

@@ -2144,11 +2144,11 @@ end $$;
 -- Independent participation is self-managed and opt-in. A public individual
 -- profile may be read, but ordinary user profiles are never implicitly exposed.
 create policy institutional_individual_profiles_select on public.institutional_individual_profiles for select to authenticated using(
- profile_id=auth.uid() or (visibility='public' and status='active')
+ profile_id=(select auth.uid()) or (visibility='public' and status='active')
 );
-create policy institutional_individual_profiles_insert on public.institutional_individual_profiles for insert to authenticated with check(profile_id=auth.uid());
-create policy institutional_individual_profiles_update on public.institutional_individual_profiles for update to authenticated using(profile_id=auth.uid()) with check(profile_id=auth.uid());
-create policy institutional_individual_profiles_delete on public.institutional_individual_profiles for delete to authenticated using(profile_id=auth.uid());
+create policy institutional_individual_profiles_insert on public.institutional_individual_profiles for insert to authenticated with check(profile_id=(select auth.uid()));
+create policy institutional_individual_profiles_update on public.institutional_individual_profiles for update to authenticated using(profile_id=(select auth.uid())) with check(profile_id=(select auth.uid()));
+create policy institutional_individual_profiles_delete on public.institutional_individual_profiles for delete to authenticated using(profile_id=(select auth.uid()));
 
 -- Public directory and member-scoped organization records.
 create policy institutional_organizations_public_select on public.institutional_organizations
@@ -2157,13 +2157,13 @@ create policy institutional_organizations_member_select on public.institutional_
 for select to authenticated using(
  (status='active' and public_profile_enabled) or public.is_institutional_organization_member(id)
 );
-create policy institutional_organizations_insert on public.institutional_organizations for insert to authenticated with check(created_by=auth.uid());
+create policy institutional_organizations_insert on public.institutional_organizations for insert to authenticated with check(created_by=(select auth.uid()));
 create policy institutional_organizations_update on public.institutional_organizations for update to authenticated using(public.can_manage_institutional_organization(id)) with check(public.can_manage_institutional_organization(id));
 
-create policy institutional_memberships_select on public.institutional_memberships for select to authenticated using(profile_id=auth.uid() or public.can_manage_institutional_organization(organization_id));
+create policy institutional_memberships_select on public.institutional_memberships for select to authenticated using(profile_id=(select auth.uid()) or public.can_manage_institutional_organization(organization_id));
 create policy institutional_memberships_insert on public.institutional_memberships for insert to authenticated with check(
  public.can_manage_institutional_organization(organization_id)
- or exists(select 1 from public.institutional_organizations o where o.id=organization_id and o.created_by=auth.uid() and profile_id=auth.uid())
+ or exists(select 1 from public.institutional_organizations o where o.id=organization_id and o.created_by=(select auth.uid()) and profile_id=(select auth.uid()))
 );
 create policy institutional_memberships_update on public.institutional_memberships for update to authenticated using(public.can_manage_institutional_organization(organization_id)) with check(public.can_manage_institutional_organization(organization_id));
 
@@ -2188,12 +2188,12 @@ create policy institutional_programs_write on public.institutional_programs for 
 
 create policy institutional_legal_entities_select on public.institutional_legal_entities for select to authenticated using(public.is_institutional_organization_member(organization_id));
 create policy institutional_legal_entities_write on public.institutional_legal_entities for all to authenticated using(public.can_manage_institutional_organization(organization_id)) with check(public.can_manage_institutional_organization(organization_id));
-create policy institutional_authority_grants_select on public.institutional_authority_grants for select to authenticated using(profile_id=auth.uid() or public.can_manage_institutional_organization(organization_id));
+create policy institutional_authority_grants_select on public.institutional_authority_grants for select to authenticated using(profile_id=(select auth.uid()) or public.can_manage_institutional_organization(organization_id));
 create policy institutional_authority_grants_write on public.institutional_authority_grants for all to authenticated using(public.can_manage_institutional_organization(organization_id)) with check(public.can_manage_institutional_organization(organization_id));
 create policy institutional_approval_policies_select on public.institutional_approval_policies for select to authenticated using(public.is_institutional_organization_member(organization_id));
 create policy institutional_approval_policies_write on public.institutional_approval_policies for all to authenticated using(public.has_institutional_permission(organization_id,program_id,'program:manage',null)) with check(public.has_institutional_permission(organization_id,program_id,'program:manage',null));
 create policy institutional_verification_records_select on public.institutional_verification_records for select to authenticated using(public.is_institutional_organization_member(organization_id));
-create policy institutional_verification_records_insert on public.institutional_verification_records for insert to authenticated with check(requested_by=auth.uid() and public.is_institutional_organization_member(organization_id));
+create policy institutional_verification_records_insert on public.institutional_verification_records for insert to authenticated with check(requested_by=(select auth.uid()) and public.is_institutional_organization_member(organization_id));
 
 create policy institutional_mandates_select on public.institutional_mandates for select using(
  (status='active' and exists(select 1 from public.institutional_programs p where p.id=program_id and p.public_profile_enabled))
@@ -2220,10 +2220,10 @@ create policy institutional_match_interests_select on public.institutional_match
 -- a public deal, or the named individual/verifier’s own pending record.
 create policy institutional_deals_select on public.institutional_deals for select using(public.can_read_institutional_deal(id));
 create policy institutional_deals_insert on public.institutional_deals for insert to authenticated with check(
- created_by=auth.uid() and (
+ created_by=(select auth.uid()) and (
   (
-   lead_capacity='individual' and lead_profile_id=auth.uid()
-   and exists(select 1 from public.institutional_individual_profiles i where i.profile_id=auth.uid() and i.status='active')
+   lead_capacity='individual' and lead_profile_id=(select auth.uid())
+   and exists(select 1 from public.institutional_individual_profiles i where i.profile_id=(select auth.uid()) and i.status='active')
   )
   or
   (lead_capacity='organization' and public.has_institutional_permission(lead_organization_id,lead_program_id,'deal:manage',null))
@@ -2236,10 +2236,10 @@ create policy institutional_deal_parties_insert on public.institutional_deal_par
  public.can_manage_institutional_deal(deal_id)
  or exists(
   select 1 from public.institutional_deals d
-  where d.id=deal_id and d.created_by=auth.uid() and (
+  where d.id=deal_id and d.created_by=(select auth.uid()) and (
    (d.lead_capacity='organization' and party_capacity='organization' and d.lead_organization_id=organization_id and d.lead_program_id is not distinct from program_id)
    or
-   (d.lead_capacity='individual' and party_capacity='individual' and d.lead_profile_id=profile_id and profile_id=auth.uid())
+   (d.lead_capacity='individual' and party_capacity='individual' and d.lead_profile_id=profile_id and profile_id=(select auth.uid()))
   )
  )
 );
@@ -2248,7 +2248,7 @@ create policy institutional_deal_parties_update on public.institutional_deal_par
  with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_deal_parties_delete on public.institutional_deal_parties for delete to authenticated
  using(public.can_manage_institutional_deal(deal_id));
-create policy institutional_deal_room_members_select on public.institutional_deal_room_members for select to authenticated using(profile_id=auth.uid() or public.can_read_institutional_deal(deal_id));
+create policy institutional_deal_room_members_select on public.institutional_deal_room_members for select to authenticated using(profile_id=(select auth.uid()) or public.can_read_institutional_deal(deal_id));
 create policy institutional_deal_room_members_write on public.institutional_deal_room_members for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_deal_messages_select on public.institutional_deal_messages for select to authenticated using(
  (visibility='all_parties' and public.can_read_institutional_deal(deal_id))
@@ -2257,7 +2257,7 @@ create policy institutional_deal_messages_select on public.institutional_deal_me
   and public.is_institutional_organization_member(organization_id))
 );
 create policy institutional_deal_messages_insert on public.institutional_deal_messages for insert to authenticated with check(
- sender_profile_id=auth.uid() and public.can_read_institutional_deal(deal_id) and (
+ sender_profile_id=(select auth.uid()) and public.can_read_institutional_deal(deal_id) and (
   (visibility='all_parties' and organization_id is null)
   or
   (visibility='party_internal' and organization_id is not null
@@ -2292,18 +2292,18 @@ end $$;
 
 create policy institutional_proposal_versions_write on public.institutional_proposal_versions for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_counterfactual_baselines_write on public.institutional_counterfactual_baselines for all to authenticated using(
- public.can_manage_institutional_deal(deal_id) or profile_id=auth.uid()
+ public.can_manage_institutional_deal(deal_id) or profile_id=(select auth.uid())
 ) with check(
- public.can_manage_institutional_deal(deal_id) or profile_id=auth.uid()
+ public.can_manage_institutional_deal(deal_id) or profile_id=(select auth.uid())
 );
 create policy institutional_obligations_write on public.institutional_obligations for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_obligation_dependencies_write on public.institutional_obligation_dependencies for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_approvals_insert on public.institutional_approvals for insert to authenticated with check(public.can_manage_institutional_deal(deal_id));
-create policy institutional_approvals_update on public.institutional_approvals for update to authenticated using(requested_from_profile_id=auth.uid() or public.can_manage_institutional_deal(deal_id)) with check(requested_from_profile_id=auth.uid() or public.can_manage_institutional_deal(deal_id));
+create policy institutional_approvals_update on public.institutional_approvals for update to authenticated using(requested_from_profile_id=(select auth.uid()) or public.can_manage_institutional_deal(deal_id)) with check(requested_from_profile_id=(select auth.uid()) or public.can_manage_institutional_deal(deal_id));
 create policy institutional_budget_reservations_write on public.institutional_budget_reservations for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_milestones_write on public.institutional_milestones for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_evidence_requirements_write on public.institutional_evidence_requirements for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
-create policy institutional_evidence_submissions_insert on public.institutional_evidence_submissions for insert to authenticated with check(submitted_by=auth.uid() and public.can_read_institutional_deal(deal_id));
+create policy institutional_evidence_submissions_insert on public.institutional_evidence_submissions for insert to authenticated with check(submitted_by=(select auth.uid()) and public.can_read_institutional_deal(deal_id));
 create policy institutional_evidence_submissions_update on public.institutional_evidence_submissions for update to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_risk_reviews_write on public.institutional_risk_reviews for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 create policy institutional_amendments_write on public.institutional_amendments for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
@@ -2315,18 +2315,18 @@ create policy institutional_dispute_events_select on public.institutional_disput
  )
 );
 create policy institutional_dispute_events_write on public.institutional_dispute_events for insert to authenticated with check(
- actor_profile_id=auth.uid() and exists(
+ actor_profile_id=(select auth.uid()) and exists(
   select 1 from public.institutional_disputes d
   where d.id=dispute_id and public.can_read_institutional_deal(d.deal_id)
  )
 );
 create policy institutional_attribution_claims_write on public.institutional_attribution_claims for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
-create policy institutional_report_snapshots_insert on public.institutional_report_snapshots for insert to authenticated with check(generated_by=auth.uid() and public.can_manage_institutional_deal(deal_id));
+create policy institutional_report_snapshots_insert on public.institutional_report_snapshots for insert to authenticated with check(generated_by=(select auth.uid()) and public.can_manage_institutional_deal(deal_id));
 create policy institutional_pool_terms_write on public.institutional_pool_terms for all to authenticated using(public.can_manage_institutional_deal(deal_id)) with check(public.can_manage_institutional_deal(deal_id));
 
-create policy institutional_individual_consents_select on public.institutional_individual_consents for select to authenticated using(individual_profile_id=auth.uid() or public.can_read_institutional_deal(deal_id));
-create policy institutional_verifier_assignments_select on public.institutional_verifier_assignments for select to authenticated using(verifier_profile_id=auth.uid() or public.can_read_institutional_deal(deal_id));
-create policy institutional_verifier_assignments_insert on public.institutional_verifier_assignments for insert to authenticated with check(assigned_by=auth.uid() and public.can_manage_institutional_deal(deal_id));
+create policy institutional_individual_consents_select on public.institutional_individual_consents for select to authenticated using(individual_profile_id=(select auth.uid()) or public.can_read_institutional_deal(deal_id));
+create policy institutional_verifier_assignments_select on public.institutional_verifier_assignments for select to authenticated using(verifier_profile_id=(select auth.uid()) or public.can_read_institutional_deal(deal_id));
+create policy institutional_verifier_assignments_insert on public.institutional_verifier_assignments for insert to authenticated with check(assigned_by=(select auth.uid()) and public.can_manage_institutional_deal(deal_id));
 
 create policy institutional_budget_accounts_select on public.institutional_budget_accounts for select to authenticated using(public.is_institutional_organization_member(organization_id));
 create policy institutional_budget_accounts_write on public.institutional_budget_accounts for all to authenticated using(public.has_institutional_permission(organization_id,program_id,'finance:manage',null)) with check(public.has_institutional_permission(organization_id,program_id,'finance:manage',null));
@@ -2334,14 +2334,14 @@ create policy institutional_templates_select on public.institutional_templates f
 create policy institutional_templates_write on public.institutional_templates for all to authenticated using(public.has_institutional_permission(organization_id,program_id,'deal:manage',null)) with check(public.has_institutional_permission(organization_id,program_id,'deal:manage',null));
 create policy institutional_framework_agreements_select on public.institutional_framework_agreements for select to authenticated using(public.is_institutional_organization_member(organization_a_id) or public.is_institutional_organization_member(organization_b_id));
 create policy institutional_framework_agreements_write on public.institutional_framework_agreements for all to authenticated using(public.can_manage_institutional_organization(organization_a_id) or public.can_manage_institutional_organization(organization_b_id)) with check(public.can_manage_institutional_organization(organization_a_id) or public.can_manage_institutional_organization(organization_b_id));
-create policy institutional_command_drafts_select on public.institutional_command_drafts for select to authenticated using(profile_id=auth.uid());
-create policy institutional_command_drafts_write on public.institutional_command_drafts for all to authenticated using(profile_id=auth.uid()) with check(profile_id=auth.uid() and public.is_institutional_organization_member(organization_id));
+create policy institutional_command_drafts_select on public.institutional_command_drafts for select to authenticated using(profile_id=(select auth.uid()));
+create policy institutional_command_drafts_write on public.institutional_command_drafts for all to authenticated using(profile_id=(select auth.uid())) with check(profile_id=(select auth.uid()) and public.is_institutional_organization_member(organization_id));
 create policy institutional_integrations_select on public.institutional_integrations for select to authenticated using(public.is_institutional_organization_member(organization_id));
 create policy institutional_integrations_write on public.institutional_integrations for all to authenticated using(public.has_institutional_permission(organization_id,program_id,'integration:manage',null)) with check(public.has_institutional_permission(organization_id,program_id,'integration:manage',null));
 create policy institutional_webhooks_select on public.institutional_webhooks for select to authenticated using(exists(select 1 from public.institutional_integrations i where i.id=integration_id and public.is_institutional_organization_member(i.organization_id)));
 create policy institutional_webhooks_write on public.institutional_webhooks for all to authenticated using(exists(select 1 from public.institutional_integrations i where i.id=integration_id and public.has_institutional_permission(i.organization_id,i.program_id,'integration:manage',null))) with check(exists(select 1 from public.institutional_integrations i where i.id=integration_id and public.has_institutional_permission(i.organization_id,i.program_id,'integration:manage',null)));
 create policy institutional_webhook_deliveries_select on public.institutional_webhook_deliveries for select to authenticated using(exists(select 1 from public.institutional_webhooks w join public.institutional_integrations i on i.id=w.integration_id where w.id=webhook_id and public.is_institutional_organization_member(i.organization_id)));
-create policy institutional_one_time_secrets_select on public.institutional_one_time_secrets for select to authenticated using(created_for_profile_id=auth.uid() and revealed_at is null and expires_at>timezone('utc',now()));
+create policy institutional_one_time_secrets_select on public.institutional_one_time_secrets for select to authenticated using(created_for_profile_id=(select auth.uid()) and revealed_at is null and expires_at>timezone('utc',now()));
 
 -- Every foreign-key column sequence receives a covering index. Composite FKs
 -- are indexed in declared column order, avoiding advisor findings and delete/
