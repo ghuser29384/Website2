@@ -1,0 +1,22 @@
+name: Dispatch PR 212 pinned-main integration
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-ops-20260730
+    paths:
+      - .github/pr212-main-integration.trigger
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Dispatch exact integration workflow on this operations branch
+        run: gh workflow run pr212-integrate-main-and-validate.yml --repo "$GITHUB_REPOSITORY" --ref agent/pr212-main-integration-ops-20260730
