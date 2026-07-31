@@ -105,9 +105,9 @@ jobs:
           verifier = verifier.replace(import_old, import_new)
 
           assigned_old = '["Assigned", new Date(assignment.created_at).toLocaleString()]'
-          assigned_new = '["Assigned", <InstitutionalDate value={assignment.created_at} />]'
+          assigned_new = '["Assigned", <InstitutionalDate key="assigned" value={assignment.created_at} />]'
           accepted_old = '["Accepted", assignment.accepted_at ? new Date(assignment.accepted_at).toLocaleString() : "Not accepted"]'
-          accepted_new = '["Accepted", assignment.accepted_at ? <InstitutionalDate value={assignment.accepted_at} /> : "Not accepted"]'
+          accepted_new = '["Accepted", assignment.accepted_at ? <InstitutionalDate key="accepted" value={assignment.accepted_at} /> : "Not accepted"]'
           if verifier.count(assigned_old) != 1:
               raise SystemExit(f"Expected one server-formatted assigned timestamp, found {verifier.count(assigned_old)}")
           if verifier.count(accepted_old) != 1:
