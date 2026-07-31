@@ -1,0 +1,89 @@
+name: Temporary pledge-impact final repair
+
+on:
+  push:
+    branches:
+      - feature/pledge-impact-estimate-20260731
+    paths:
+      - ".github/workflows/pledge-impact-final-repair-temp.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/pledge-impact-estimate-20260731
+          fetch-depth: 0
+
+      - name: Apply exact final repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              source = target.read_text()
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}; found {count}")
+              target.write_text(source.replace(old, new, 1))
+
+          replace_once(
+              "src/components/pools/threshold-radar.tsx",
+              '        <strong>Make a conditional ${pledgeAmount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} pledge.</strong>',
+              '''        <strong>
+                  {`Make a conditional ${pledgeAmount.toLocaleString("en-US", {
+                    style: "currency",
+                    currency: "USD",
+                    maximumFractionDigits: 0,
+                  })} pledge.`}
+                </strong>''',
+          )
+
+          replace_once(
+              "src/components/pools/threshold-radar.module.css",
+              '''  .radar {
+                height: 700px;
+              }
+
+              .detailPanel {''',
+              '''  .radar {
+                height: 700px;
+              }
+
+              .satellite {
+                z-index: 10;
+              }
+
+              .detailPanel {''',
+          )
+
+          replace_once(
+              "src/lib/pledge-impact-integration-contract.test.ts",
+              '  assert.match(discoverRuntime, /Moving the slider does not save a pledge or authorize payment|no pledge/i);',
+              '  assert.match(discoverSource, /Moving the slider does not save a pledge or authorize payment|no pledge/i);',
+          )
+          PY
+
+          git diff --check
+
+      - name: Commit and push repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/components/pools/threshold-radar.tsx \
+            src/components/pools/threshold-radar.module.css \
+            src/lib/pledge-impact-integration-contract.test.ts
+          git commit -m "Repair pledge-impact CTA and mobile controls"
+          git push origin HEAD:feature/pledge-impact-estimate-20260731
