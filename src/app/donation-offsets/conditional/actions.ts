@@ -4,16 +4,25 @@ import { redirect } from "next/navigation";
 
 import { requireViewer } from "@/lib/app-data";
 import {
+  buildEveryOrgDetailsUrl,
+  buildEveryOrgIdentitySnapshot,
+  mapEveryOrgNonprofitDetails,
+  normalizeEveryOrgIdentifier,
+} from "@/lib/every-org-nonprofit";
+import {
   cancelConditionalRedirectOffer,
   createConditionalRedirectOffer,
   joinConditionalRedirectOffer,
   reauthorizeConditionalRedirect,
   withdrawConditionalRedirectCandidate,
 } from "@/lib/payments/conditional-redirect-service";
+import { getDonationUpgradeDestinationEnvironment } from "@/lib/payments/donation-upgrade-destination-environment";
+import { createServiceClient } from "@/lib/supabase/server";
 
 const CREATE_PATH = "/trades/new";
 const CONDITIONAL_STRUCTURE = "conditional-donation";
 const RETURN_PATH = `${CREATE_PATH}?structure=${CONDITIONAL_STRUCTURE}`;
+const EVERY_ORG_DETAILS_TIMEOUT_MS = 5_000;
 
 function returnPath(values: Record<string, string>) {
   const params = new URLSearchParams({
@@ -55,6 +64,78 @@ function origin() {
 function fail(error: unknown): never {
   const message = error instanceof Error ? error.message : "Unable to complete that request.";
   redirect(returnPath({ error: message }));
+}
+
+async function resolveEveryOrgNonprofit(identifierValue: string) {
+  const apiKey = String(process.env.EVERY_ORG_PUBLIC_API_KEY ?? "").trim();
+  if (!apiKey) {
+    throw new Error("Every.org nonprofit search is not configured yet.");
+  }
+
+  const identifier = normalizeEveryOrgIdentifier(identifierValue);
+  if (!identifier) {
+    throw new Error("Choose a valid Every.org charity before requesting review.");
+  }
+
+  const response = await fetch(buildEveryOrgDetailsUrl(identifier, apiKey), {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "MoralTrade.org Donation Upgrade destination verification",
+    },
+    cache: "no-store",
+    signal: AbortSignal.timeout(EVERY_ORG_DETAILS_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(
+      response.status === 404
+        ? "Every.org could not find that charity."
+        : "Every.org could not verify that charity right now.",
+    );
+  }
+
+  const nonprofit = mapEveryOrgNonprofitDetails(await response.json());
+  if (!nonprofit) {
+    throw new Error("Every.org returned an incomplete nonprofit identity.");
+  }
+  if (!nonprofit.isDisbursable) {
+    throw new Error("That Every.org listing is not currently eligible to receive disbursements.");
+  }
+  return nonprofit;
+}
+
+export async function requestConditionalPaymentDestinationAction(formData: FormData) {
+  try {
+    const viewer = await requireViewer(RETURN_PATH);
+    const nonprofit = await resolveEveryOrgNonprofit(
+      required(formData, "every_org_identifier"),
+    );
+    const identitySnapshot = buildEveryOrgIdentitySnapshot(nonprofit);
+    const environment = getDonationUpgradeDestinationEnvironment();
+    const supabase = createServiceClient() as any;
+    const { data, error } = await supabase.rpc(
+      "submit_conditional_payment_destination_request",
+      {
+        p_requester_profile_id: viewer.authUser.id,
+        p_environment: environment,
+        p_provider_nonprofit_id: nonprofit.id,
+        p_nonprofit_slug: nonprofit.primarySlug,
+        p_display_name: nonprofit.name,
+        p_nonprofit_ein: nonprofit.ein ?? "",
+        p_country_code: nonprofit.ein ? "US" : "",
+        p_website_url: nonprofit.profileUrl,
+        p_identity_snapshot: identitySnapshot,
+      },
+    );
+    if (error || !data) {
+      throw new Error(
+        `Unable to request charity review: ${error?.message ?? "request was not stored"}`,
+      );
+    }
+  } catch (error) {
+    fail(error);
+  }
+
+  redirect(returnPath({ destination_request: "submitted" }));
 }
 
 export async function createConditionalRedirectOfferAction(formData: FormData) {
