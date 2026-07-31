@@ -19,7 +19,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_WORKFLOW: pr212-integrated-final-gate-v3.yml
-      TARGET_HEAD: 555c087329685bc6bd31337900f0543c8271b4aa
+      TARGET_HEAD: 2af308c0a616f54e42067e7bfb2c87352d0cf193
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,3 +64,5 @@ jobs:
           git push origin HEAD:agent/pr212-main-integration-ops-20260730
 
           [[ -n "$run_id" && "$status" == "completed" ]] || exit 1
+
+# Observe the exact unified Create contract rerun.
