@@ -7,247 +7,77 @@ on:
 
 permissions:
   contents: read
-  statuses: write
 
 concurrency:
-  group: complete-profile-preview-smoke-41994c4a
+  group: complete-profile-preview-auth-diagnostic
   cancel-in-progress: false
 
 jobs:
-  preview-smoke:
+  preview-auth-diagnostic:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     env:
       EXPECTED_SHA: 41994c4a11203cbe7a79e9bb262b938011051379
-      STATUS_CONTEXT: QA / Complete Profile preview smoke
-      PREVIEW_SHARE_URL: https://moraltrade-site-1koy9yv8s-ellen-s.vercel.app/?_vercel_share=VU8N7USn2QfiOH8wOzOhRnjkU0G186X4
+      PREVIEW_SHARE_URL: https://moraltrade-site-1koy9yv8s-ellen-s.vercel.app/?_vercel_share=AMVFbwA15eaZFX9gK8F0ZVLzwfcXE98c
     steps:
-      - name: Mark preview smoke pending
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
-            -f state=pending \
-            -f context="${STATUS_CONTEXT}" \
-            -f description="Running first-time and returning-user preview smoke" \
-            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-      - name: Check out exact candidate
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: ${{ env.EXPECTED_SHA }}
-          fetch-depth: 0
-
-      - name: Verify exact candidate
-        run: test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Run protected Vercel preview smoke
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect preview authorization handoff
         run: |
-          mkdir -p .qa preview-smoke
-          cat > .qa/preview-smoke.mjs <<'SCRIPT'
-          import assert from "node:assert/strict";
-          import { mkdir, writeFile } from "node:fs/promises";
+          mkdir -p .qa preview-auth-diagnostic
+          cat > .qa/preview-auth-diagnostic.mjs <<'SCRIPT'
           import { chromium } from "@playwright/test";
+          import { writeFile } from "node:fs/promises";
 
-          const shareUrl = process.env.PREVIEW_SHARE_URL;
-          const expectedSha = process.env.EXPECTED_SHA;
-          assert.ok(shareUrl, "PREVIEW_SHARE_URL is required");
-          assert.ok(expectedSha, "EXPECTED_SHA is required");
-
-          const outputDir = "preview-smoke";
-          await mkdir(outputDir, { recursive: true });
           const browser = await chromium.launch({ headless: true });
-          const report = {
-            expectedSha,
-            previewUrl: new URL(shareUrl).origin,
-            checkedAt: new Date().toISOString(),
-            scenarios: [],
+          const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+          const page = await context.newPage();
+          const navigations = [];
+          page.on("framenavigated", (frame) => {
+            if (frame === page.mainFrame()) navigations.push(frame.url());
+          });
+          const response = await page.goto(process.env.PREVIEW_SHARE_URL, {
+            waitUntil: "domcontentloaded",
+            timeout: 120_000,
+          });
+          await page.waitForTimeout(5_000);
+          const diagnostic = {
+            responseStatus: response?.status() ?? null,
+            finalUrl: page.url(),
+            title: await page.title(),
+            bodyText: (await page.locator("body").innerText()).slice(0, 5000),
+            links: await page.locator("a").evaluateAll((nodes) =>
+              nodes.slice(0, 30).map((node) => ({ text: node.textContent, href: node.href })),
+            ),
+            buttons: await page.locator("button").evaluateAll((nodes) =>
+              nodes.slice(0, 30).map((node) => ({ text: node.textContent })),
+            ),
+            cookies: (await context.cookies()).map((cookie) => ({
+              name: cookie.name,
+              domain: cookie.domain,
+              path: cookie.path,
+              expires: cookie.expires,
+            })),
+            navigations,
           };
-
-          function attachDiagnostics(page, state) {
-            page.on("pageerror", (error) => state.pageErrors.push(error.message));
-            page.on("response", (response) => {
-              if (response.status() >= 500) {
-                state.serverErrors.push({ status: response.status(), url: response.url() });
-              }
-            });
-          }
-
-          async function authorizePreview(context, state) {
-            const page = await context.newPage();
-            attachDiagnostics(page, state);
-            const response = await page.goto(shareUrl, {
-              waitUntil: "domcontentloaded",
-              timeout: 120_000,
-            });
-            assert.ok(response, "Vercel share authorization returned no response");
-            assert.ok(response.status() < 500, `Vercel share authorization returned ${response.status()}`);
-            await page.waitForLoadState("networkidle", { timeout: 20_000 }).catch(() => {});
-            const origin = new URL(page.url()).origin;
-            assert.equal(origin, new URL(shareUrl).origin, "Share URL did not resolve to the pinned preview");
-            return { page, origin };
-          }
-
-          async function retainOnlyPreviewAuthorization(context) {
-            const cookies = (await context.cookies()).filter(
-              (cookie) => cookie.name !== "mt_walkthrough_seen",
-            );
-            await context.clearCookies();
-            if (cookies.length > 0) await context.addCookies(cookies);
-          }
-
-          async function assertNoFatalDiagnostics(state, origin) {
-            const sameOriginServerErrors = state.serverErrors.filter(
-              (entry) => new URL(entry.url).origin === origin,
-            );
-            assert.deepEqual(state.pageErrors, [], `Page errors: ${state.pageErrors.join(" | ")}`);
-            assert.deepEqual(
-              sameOriginServerErrors,
-              [],
-              `Same-origin 5xx responses: ${JSON.stringify(sameOriginServerErrors)}`,
-            );
-          }
-
-          try {
-            {
-              const state = { name: "first-time-desktop", pageErrors: [], serverErrors: [] };
-              const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-              const { page, origin } = await authorizePreview(context, state);
-              await retainOnlyPreviewAuthorization(context);
-              await page.goto(`${origin}/complete-profile`, {
-                waitUntil: "domcontentloaded",
-                timeout: 120_000,
-              });
-              await page.waitForURL((url) => url.pathname === "/walkthrough", { timeout: 60_000 });
-              assert.equal(new URL(page.url()).pathname, "/walkthrough");
-              assert.equal(await page.getByLabel("Profile setup: priorities").count(), 0);
-              const cookies = await context.cookies(origin);
-              assert.equal(
-                cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")?.value,
-                "1",
-                "First-time redirect did not record the Walkthrough as seen",
-              );
-              await page.screenshot({ path: `${outputDir}/first-time-desktop.png`, fullPage: true });
-              await assertNoFatalDiagnostics(state, origin);
-              state.finalUrl = page.url();
-              state.status = "passed";
-              report.scenarios.push(state);
-              await context.close();
-            }
-
-            {
-              const state = { name: "returning-desktop", pageErrors: [], serverErrors: [] };
-              const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-              const { page, origin } = await authorizePreview(context, state);
-              await retainOnlyPreviewAuthorization(context);
-              await context.addCookies([
-                { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
-              ]);
-              await page.goto(`${origin}/complete-profile`, {
-                waitUntil: "domcontentloaded",
-                timeout: 120_000,
-              });
-              await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
-              await page
-                .getByRole("heading", { name: "Spend 100 sparks of attention." })
-                .waitFor({ state: "visible", timeout: 60_000 });
-              await page
-                .getByLabel("Profile setup: priorities")
-                .waitFor({ state: "visible", timeout: 60_000 });
-              assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
-              await page.getByRole("button", { name: "Save profile" }).click();
-              const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
-              await dialog.waitFor({ state: "visible", timeout: 30_000 });
-              const dialogText = await dialog.textContent();
-              assert.match(dialogText ?? "", /Your 100-spark ranking/);
-              assert.match(dialogText ?? "", /Not set here/);
-              assert.match(dialogText ?? "", /Saving does not create or publish an offer\./);
-              await page.screenshot({ path: `${outputDir}/returning-desktop.png`, fullPage: true });
-              await assertNoFatalDiagnostics(state, origin);
-              state.finalUrl = page.url();
-              state.status = "passed";
-              report.scenarios.push(state);
-              await context.close();
-            }
-
-            {
-              const state = { name: "returning-mobile", pageErrors: [], serverErrors: [] };
-              const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-              const { page, origin } = await authorizePreview(context, state);
-              await retainOnlyPreviewAuthorization(context);
-              await context.addCookies([
-                { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
-              ]);
-              await page.goto(`${origin}/complete-profile`, {
-                waitUntil: "domcontentloaded",
-                timeout: 120_000,
-              });
-              await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
-              await page
-                .getByLabel("80 of 100 attention points assigned")
-                .waitFor({ state: "visible", timeout: 60_000 });
-              const dimensions = await page.evaluate(() => ({
-                viewportWidth: window.innerWidth,
-                documentWidth: document.documentElement.scrollWidth,
-              }));
-              assert.ok(
-                dimensions.documentWidth <= dimensions.viewportWidth,
-                `Mobile horizontal overflow: ${JSON.stringify(dimensions)}`,
-              );
-              await page.screenshot({ path: `${outputDir}/returning-mobile.png`, fullPage: true });
-              await assertNoFatalDiagnostics(state, origin);
-              state.finalUrl = page.url();
-              state.dimensions = dimensions;
-              state.status = "passed";
-              report.scenarios.push(state);
-              await context.close();
-            }
-          } catch (error) {
-            report.failure = error instanceof Error ? error.stack : String(error);
-            throw error;
-          } finally {
-            await writeFile(`${outputDir}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
-            await browser.close();
-          }
+          console.log(JSON.stringify(diagnostic, null, 2));
+          await writeFile("preview-auth-diagnostic/report.json", `${JSON.stringify(diagnostic, null, 2)}\n`);
+          await writeFile("preview-auth-diagnostic/page.html", await page.content());
+          await page.screenshot({ path: "preview-auth-diagnostic/page.png", fullPage: true });
+          await browser.close();
           SCRIPT
-          node .qa/preview-smoke.mjs
-
-      - name: Upload preview smoke evidence
-        if: always()
+          node .qa/preview-auth-diagnostic.mjs
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: complete-profile-preview-smoke-41994c4a
-          path: preview-smoke
+          name: complete-profile-preview-auth-diagnostic
+          path: preview-auth-diagnostic
           if-no-files-found: error
-          retention-days: 14
-
-      - name: Publish preview smoke result
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JOB_STATUS: ${{ job.status }}
-        run: |
-          if [ "$JOB_STATUS" = "success" ]; then
-            state=success
-            description="Pinned preview passed first-time, returning desktop, and returning mobile smoke"
-          else
-            state=failure
-            description="Pinned preview smoke failed; inspect workflow evidence"
-          fi
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
-            -f state="$state" \
-            -f context="${STATUS_CONTEXT}" \
-            -f description="$description" \
-            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          retention-days: 2
