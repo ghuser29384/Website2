@@ -1,4 +1,0 @@
-src/app/offers/offer-visual-directory-mount.tsx
-src/components/profile/complete-profile-connections.tsx
-src/lib/crawlability.test.ts
-src/lib/public-route-smoke.test.ts
