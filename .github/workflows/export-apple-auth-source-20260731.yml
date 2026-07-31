@@ -1,0 +1,34 @@
+name: Export Apple auth source 20260731
+
+on:
+  push:
+    branches:
+      - ops/export-apple-auth-source-20260731
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact branch commit
+        uses: actions/checkout@v4
+
+      - name: Record exact source commit
+        run: |
+          git rev-parse HEAD > SOURCE_COMMIT.txt
+          git status --short
+
+      - name: Package repository source
+        run: |
+          tar --exclude=.git --exclude=node_modules --exclude=.next -czf /tmp/moraltrade-source.tgz .
+
+      - name: Upload source bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: moraltrade-apple-auth-source
+          path: /tmp/moraltrade-source.tgz
+          if-no-files-found: error
+          retention-days: 1
