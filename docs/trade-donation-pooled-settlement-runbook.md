@@ -15,6 +15,8 @@ The funds flow is materially different from the direct Every.org connector:
 
 A participant payment is a payment to Moral Trade toward pooled settlement. It is **not represented as the participant's direct Every.org donation or as a tax-deductible charitable contribution**. Moral Trade absorbs payment-processing charges and does not reduce the frozen charitable allocation.
 
+The integration relies on Every.org's supported public Donate Link, Nonprofits API, and Partner Webhook behavior. No external provider approval letter is required.
+
 ## Environment controls
 
 ```text
@@ -26,9 +28,9 @@ Permitted modes:
 
 - `disabled`: no participant funding and no platform provider checkout.
 - `test`: non-production deployment, Stripe test key, signed Stripe test webhook, and Every.org staging.
-- `live`: canonical production only, Stripe live key, Every.org live, and every live gate passed.
+- `live`: canonical production only, Stripe live key, Every.org live, and every required live-readiness gate passed.
 
-Production infrastructure must initially deploy with the two disabled values above.
+Production infrastructure initially deploys with the two disabled values above.
 
 ## Compatibility key
 
@@ -210,17 +212,16 @@ The release is not eligible for fail-closed production infrastructure until all 
 
 Record the run, commit SHA, environment, IDs, timestamps, expected result, actual result, and evidence for every case.
 
-## Live gates
+## Live readiness gates
 
 Before `TRADE_DONATION_POOL_MODE=live`:
 
-- written Every.org approval for consolidated platform-paid gifts;
-- Stripe live account and product review;
-- signed live Stripe webhook evidence;
-- approved participant custody, donor-of-record, non-tax-deductibility, fee, refund, abandonment, dispute, and chargeback terms;
-- approved platform funding account and reserve;
-- named operators and monitoring ownership;
-- approved reconciliation and incident runbook;
-- controlled live launch authorization.
+- `every_org_live_flow_verified`: the exact supported live Donate Link and Partner Webhook flow verifies recipient, amount, currency, frequency, partner donation ID, HMAC metadata, replay behavior, and settlement state;
+- `stripe_live_account_ready`: the canonical Stripe API reports details submitted, charges enabled, payouts enabled, and no currently due or past-due requirements;
+- `stripe_signed_webhook`: a signed live event passes exact account and payload checks, replay is idempotent, and an altered replay fails closed;
+- `participant_terms_approved`: versioned participant disclosures accurately describe custody, donor-of-record, tax-receipt, fee, refund, abandonment, dispute, and chargeback treatment;
+- `platform_reserve_approved`: the funding account, minimum reserve, replenishment, shortfall owner, and stop-loss are configured;
+- `operator_runbook_approved`: named operators own monitoring, reconciliation, incidents, refunds, disputes, and disablement;
+- `controlled_launch_approved`: recipient pair and launch limits are fixed and every preceding gate has passed.
 
-No code deployment, test pass, or provider API capability may be treated as satisfying these institutional approvals.
+No external provider letter is required. Each gate still requires exact, immutable evidence on the release being activated; a generic documentation page or unrelated test is insufficient.
