@@ -1,0 +1,84 @@
+name: PR 212 exact QA observer
+
+on:
+  push:
+    branches:
+      - agent/pr212-qa-observer-20260731
+    paths:
+      - .github/workflows/pr212-exact-qa-observer.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: institutional-trade-qa.yml
+      TARGET_BRANCH: feat/institutional-trade-system
+      TARGET_HEAD: 6e4deac3530e8f0989b457d082e6efd11b2fa34e
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Poll exact PR-head institutional QA to terminal state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-exact-qa
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 680); do
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$TARGET_WORKFLOW" \
+              --branch "$TARGET_BRANCH" \
+              --limit 80 \
+              --json databaseId,headSha,status,conclusion,createdAt,url,event,displayTitle \
+              > /tmp/runs.json
+            run_id="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+            status="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+            conclusion="$(jq -r --arg head "$TARGET_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 10
+          done
+
+          if [[ -z "$run_id" ]]; then
+            echo "No exact PR-head institutional QA run found." >&2
+            exit 1
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > /tmp/run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/jobs.json
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log > /tmp/full.log 2>&1 || true
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts?per_page=100" > /tmp/artifacts.json
+
+          jq -n \
+            --arg observed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg target_head "$TARGET_HEAD" \
+            --arg run_id "$run_id" \
+            --arg status "$status" \
+            --arg conclusion "$conclusion" \
+            --slurpfile runs /tmp/runs.json \
+            --slurpfile run /tmp/run.json \
+            --slurpfile jobs /tmp/jobs.json \
+            --slurpfile artifacts /tmp/artifacts.json \
+            '{observed_at:$observed_at,target_head:$target_head,run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0],run:$run[0],jobs:$jobs[0].jobs,artifacts:$artifacts[0].artifacts}' \
+            > ops/pr212-exact-qa/status.json
+          tail -n 3000 /tmp/full.log > ops/pr212-exact-qa/full-log.txt
+          tail -n 2200 /tmp/failed.log > ops/pr212-exact-qa/failed-log.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-exact-qa
+          git commit -m "Record exact PR 212 QA result"
+          git push origin HEAD:agent/pr212-qa-observer-20260731
+
+          test "$status" = "completed"
