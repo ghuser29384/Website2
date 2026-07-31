@@ -47,6 +47,46 @@ if source.count(old_deploy) != 1:
     raise SystemExit(f"Expected one linked exact deployment block, found {source.count(old_deploy)}")
 source = source.replace(old_deploy, new_deploy, 1)
 
+reuse_marker = '''  local log_file="$RUNNER_TEMP/deploy-${role}-${project_name}.log"
+  local -a extra_env=()
+'''
+reuse_block = '''  local log_file="$RUNNER_TEMP/deploy-${role}-${project_name}.log"
+  local existing_response="$RUNNER_TEMP/existing-${role}-${project_name}.json"
+  local existing_row=""
+  curl --fail-with-body --silent --show-error \\
+    --header "Authorization: Bearer $VERCEL_TOKEN" \\
+    "https://api.vercel.com/v6/deployments?projectId=${project_id}&limit=100&teamId=${VERCEL_TEAM_ID}" \\
+    --output "$existing_response"
+  existing_row="$(jq -r --arg role "$role" --arg sha "$source_sha" --arg ref "$source_ref" '
+    [.deployments[] | select(
+      (.state // .readyState) == "READY"
+      and .meta.qaRole == $role
+      and .meta.qaSourceSha == $sha
+      and .meta.qaSourceRef == $ref
+      and (.meta.gitDirty // "0") != "1"
+      and (.target // "preview") != "production"
+    )] | sort_by(.created) | reverse | .[0]
+    | if . == null then "" else [.id, .url, (.state // .readyState // "UNKNOWN")] | @tsv end
+  ' "$existing_response")"
+  if [[ -n "$existing_row" ]]; then
+    local existing_id existing_host existing_state
+    IFS=$'\\t' read -r existing_id existing_host existing_state <<< "$existing_row"
+    jq -n \\
+      --arg role "$role" --arg project "$project_name" --arg projectId "$project_id" \\
+      --arg id "$existing_id" --arg url "https://$existing_host" --arg state "$existing_state" \\
+      --arg sha "$source_sha" --arg ref "$source_ref" \\
+      '{role:$role,project:$project,projectId:$projectId,id:$id,url:$url,state:$state,sourceSha:$sha,sourceRef:$ref,reused:true}' \\
+      | tee -a "$deploy_records"
+    printf '%s\\t%s\\n' "$existing_id" "https://$existing_host"
+    return 0
+  fi
+
+  local -a extra_env=()
+'''
+if source.count(reuse_marker) != 1:
+    raise SystemExit(f"Expected one deploy function insertion point, found {source.count(reuse_marker)}")
+source = source.replace(reuse_marker, reuse_block, 1)
+
 old_filter = '''      [.deployments[] | select(
         .url == $host or
         (.meta.qaGateRun == $run and .meta.qaRole == $role and .meta.qaSourceSha == $sha)
