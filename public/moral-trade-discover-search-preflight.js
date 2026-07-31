@@ -40,12 +40,14 @@
   }
 
   function firstControlValue(filter) {
-    const control = preferredElements(`[data-filter="${filter}"]`).find(
+    const controls = preferredElements(`[data-filter="${filter}"]`).filter(
       (element) =>
         element instanceof HTMLInputElement ||
         element instanceof HTMLSelectElement,
     );
-    return control?.value ?? "";
+    const focused = controls.find((element) => element === document.activeElement);
+    const populated = controls.find((element) => element.value.trim() !== "");
+    return (focused ?? populated ?? controls[0])?.value ?? "";
   }
 
   function numericControlValue(filter) {
