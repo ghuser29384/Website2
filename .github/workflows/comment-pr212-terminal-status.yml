@@ -1,0 +1,58 @@
+name: Comment PR 212 terminal status
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/comment-pr212-terminal-status.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  comment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+      - name: Publish exact terminal status without changing draft state
+        shell: bash
+        run: |
+          set -euo pipefail
+          final=ops/pr212-full-qa-convergence-v2/final.json
+          test -s "$final"
+          conclusion="$(jq -r .conclusion "$final")"
+          head="$(jq -r .feature_head "$final")"
+          run_id="$(jq -r .run_id "$final")"
+          failed="$(jq -r '.failed_steps | if length == 0 then "None" else join(", ") end' "$final")"
+          main_status="not evaluated"
+          if [[ -s ops/pr212-post-success/status.json ]]; then
+            main_status="$(jq -r 'if .main_moved then "moved: " + .current_main else "unchanged: " + .current_main end' ops/pr212-post-success/status.json)"
+          fi
+          marker='<!-- pr212-terminal-status -->'
+          body=$(cat <<EOF
+          $marker
+          ## PR #212 exact-head QA status
+
+          - Feature head: \`$head\`
+          - Workflow run: [$run_id](https://github.com/${GITHUB_REPOSITORY}/actions/runs/$run_id)
+          - Conclusion: **$conclusion**
+          - Failed gates: $failed
+          - Main status after QA: $main_status
+          - PR remains draft; production and institutional custody remain disabled.
+          EOF
+          )
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/212/comments?per_page=100" --jq '.[] | select(.body | contains("<!-- pr212-terminal-status -->")) | .id' | tail -1)"
+          if [[ -n "$existing" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/212/comments" -f body="$body" >/dev/null
+          fi
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .draft)" = true
