@@ -278,7 +278,7 @@ test("natural-language group-buying searches route to Offers → Co-Funds", asyn
   await waitForDiscover(page);
   const form = page.locator("#command-form");
   await form.locator("#command-input").fill("group buying a moral trade");
-  await form.getByRole("button", { name: "Run search" }).click();
+  await form.getByRole("button", { name: "Search" }).click();
 
   await expect(page).toHaveURL(/domain=offers/);
   await expect(page).toHaveURL(/offerKind=co-fund/);
@@ -326,7 +326,7 @@ test("dominant-assurance searches route to standalone Pools even without a serve
   await waitForDiscover(page);
   const form = page.locator("#command-form");
   await form.locator("#command-input").fill("dominant assurance contracts");
-  await form.getByRole("button", { name: "Run search" }).click();
+  await form.getByRole("button", { name: "Search" }).click();
 
   await expect(page).toHaveURL(/domain=pools/);
   await expect(page).toHaveURL(/view=list/);

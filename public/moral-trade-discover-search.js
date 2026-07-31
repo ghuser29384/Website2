@@ -551,7 +551,21 @@
     const relax = verificationConstraint
       ? `<button type="button" data-discover-remove-constraint="${escapeHtml(verificationConstraint.key)}">Include verification-pending records</button>`
       : "";
-    return `<div class="state-panel"><div class="state-panel-inner"><h2>No active ${escapeHtml(response.domain)} match “${escapeHtml(state.query || "this search")}”</h2><p>The active hard constraints produced no exact live result. No unrelated record has been counted as a match.</p>${constraintList}<div class="discover-live-zero-actions">${relax}${domainActions}<button type="button" data-discover-action="clear">Clear search</button></div></div></div>`;
+    return `<div class="state-panel" data-live-search-zero="true"><div class="state-panel-inner"><h2>No active ${escapeHtml(response.domain)} match “${escapeHtml(state.query || "this search")}”</h2><p>The active hard constraints produced no exact live result. No unrelated record has been counted as a match.</p>${constraintList}<div class="discover-live-zero-actions">${relax}${domainActions}<button type="button" data-discover-action="clear">Clear search</button></div></div></div>`;
+  }
+
+  function liveResultsIntact(response = state.response) {
+    const list = document.querySelector(".transaction-list");
+    if (!response || !list || list.dataset.liveSearchResults !== "true") {
+      return false;
+    }
+    if (response.items.length === 0) {
+      return Boolean(list.querySelector('[data-live-search-zero="true"]'));
+    }
+    return (
+      list.querySelectorAll('[data-live-record="true"]').length ===
+      response.items.length
+    );
   }
 
   function updateHeading() {
@@ -1284,9 +1298,7 @@
         upgradeBaseUi();
         if (
           state.response &&
-          !document.querySelector(
-            '.transaction-list[data-live-search-results="true"]',
-          ) &&
+          !liveResultsIntact(state.response) &&
           state.controller
         ) {
           await renderResults(
