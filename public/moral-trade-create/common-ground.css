@@ -58,6 +58,15 @@
   border-bottom: 1px solid var(--line);
 }
 
+.common-ground-fallback-help {
+  margin: 0;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .common-ground-participant-list {
   display: grid;
 }
