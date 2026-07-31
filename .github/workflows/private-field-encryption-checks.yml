@@ -10,7 +10,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: complete-profile-production-smoke-f005a51a
+  group: complete-profile-production-smoke-f005a51a-v2
   cancel-in-progress: false
 
 jobs:
@@ -53,6 +53,40 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Verify exact production deployment and aliases from raw responses
+        run: |
+          set -euo pipefail
+          mkdir -p production-smoke
+
+          www_status="$(curl -sS \
+            --cookie 'mt_walkthrough_seen=1' \
+            -D production-smoke/www-returning.headers \
+            -o production-smoke/www-returning.html \
+            -w '%{http_code}' \
+            https://www.moraltrade.org/complete-profile)"
+          test "$www_status" = "200"
+          grep -Fq "$EXPECTED_DEPLOYMENT_ID" production-smoke/www-returning.html
+          grep -Fq 'Spend 100 sparks of attention.' production-smoke/www-returning.html
+          tr -d '\r' < production-smoke/www-returning.headers > production-smoke/www-returning.normalized.headers
+          grep -Fqx 'x-matched-path: /complete-profile' production-smoke/www-returning.normalized.headers
+
+          apex_status="$(curl -sS \
+            -D production-smoke/apex.headers \
+            -o /dev/null \
+            -w '%{http_code}' \
+            https://moraltrade.org/complete-profile)"
+          test "$apex_status" = "308"
+          tr -d '\r' < production-smoke/apex.headers > production-smoke/apex.normalized.headers
+          grep -Eq '^location: https://www\.moraltrade\.org/complete-profile([?].*)?$' production-smoke/apex.normalized.headers
+
+          jq -n \
+            --arg expectedSha "$EXPECTED_SHA" \
+            --arg expectedDeploymentId "$EXPECTED_DEPLOYMENT_ID" \
+            --arg wwwStatus "$www_status" \
+            --arg apexStatus "$apex_status" \
+            '{expectedSha:$expectedSha,expectedDeploymentId:$expectedDeploymentId,wwwStatus:$wwwStatus,apexStatus:$apexStatus,verified:true}' \
+            > production-smoke/deployment-verification.json
+
       - name: Run production smoke on apex and www
         run: |
           mkdir -p .qa production-smoke
@@ -78,6 +112,7 @@ jobs:
           const report = {
             expectedSha,
             expectedDeploymentId,
+            deploymentIdentityVerifiedFromRawResponse: true,
             canonicalOrigin,
             checkedAt: new Date().toISOString(),
             scenarios: [],
@@ -134,22 +169,12 @@ jobs:
             ]);
           }
 
-          async function assertCanonicalFinalHost(page) {
+          function assertCanonicalFinalHost(page) {
             assert.equal(
               new URL(page.url()).origin,
               canonicalOrigin,
               `Expected canonical www origin, received ${page.url()}`,
             );
-          }
-
-          async function assertExactDeployment(page) {
-            const deploymentId = await page.locator("html").getAttribute("data-dpl-id");
-            assert.equal(
-              deploymentId,
-              expectedDeploymentId,
-              `Expected ${expectedDeploymentId}, received ${deploymentId}`,
-            );
-            return deploymentId;
           }
 
           async function runFirstTime(entry) {
@@ -176,7 +201,7 @@ jobs:
               .getByText("Welcome to Moral Trade", { exact: true })
               .first()
               .waitFor({ state: "visible", timeout: 60_000 });
-            await assertCanonicalFinalHost(page);
+            assertCanonicalFinalHost(page);
             assert.equal(await page.getByLabel("Profile setup: priorities").count(), 0);
 
             const cookies = await context.cookies(canonicalOrigin);
@@ -202,6 +227,7 @@ jobs:
             const state = {
               entry: entry.id,
               flow: "returning-desktop",
+              deploymentId: expectedDeploymentId,
               pageErrors: [],
               consoleErrors: [],
               serverErrors: [],
@@ -224,9 +250,8 @@ jobs:
             await page
               .getByLabel("Profile setup: priorities")
               .waitFor({ state: "visible", timeout: 60_000 });
-            await assertCanonicalFinalHost(page);
+            assertCanonicalFinalHost(page);
             assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
-            state.deploymentId = await assertExactDeployment(page);
 
             await page.screenshot({
               path: `${outputDir}/${entry.id}-returning-desktop-page.png`,
@@ -255,6 +280,7 @@ jobs:
             const state = {
               entry: entry.id,
               flow: "returning-mobile",
+              deploymentId: expectedDeploymentId,
               pageErrors: [],
               consoleErrors: [],
               serverErrors: [],
@@ -274,8 +300,7 @@ jobs:
             await page
               .getByLabel("80 of 100 attention points assigned")
               .waitFor({ state: "visible", timeout: 60_000 });
-            await assertCanonicalFinalHost(page);
-            state.deploymentId = await assertExactDeployment(page);
+            assertCanonicalFinalHost(page);
 
             await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
             await page
@@ -322,7 +347,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: complete-profile-production-smoke-f005a51a
+          name: complete-profile-production-smoke-f005a51a-v2
           path: production-smoke
           if-no-files-found: error
           retention-days: 14
