@@ -40,6 +40,7 @@ declare global {
   }
 }
 
+const APPLE_SDK_LOAD_TIMEOUT_MS = 15_000;
 let appleSdkPromise: Promise<AppleSignInSdk> | null = null;
 
 function loadAppleSignInSdk() {
@@ -56,19 +57,38 @@ function loadAppleSignInSdk() {
       `script[src="${APPLE_SIGN_IN_SCRIPT_URL}"]`,
     );
     const script = existingScript ?? document.createElement("script");
+    let settled = false;
 
-    const handleLoad = () => {
-      if (window.AppleID?.auth) {
-        resolve(window.AppleID);
-      } else {
-        appleSdkPromise = null;
-        reject(new Error("Apple sign-in loaded without an authentication API."));
+    const finish = (sdk: AppleSignInSdk | null, error?: Error) => {
+      if (settled) {
+        return;
       }
+
+      settled = true;
+      window.clearTimeout(timeoutId);
+      script.removeEventListener("load", handleLoad);
+      script.removeEventListener("error", handleError);
+
+      if (sdk) {
+        resolve(sdk);
+        return;
+      }
+
+      appleSdkPromise = null;
+      reject(error ?? new Error("Apple sign-in could not load."));
+    };
+    const handleLoad = () => {
+      finish(
+        window.AppleID?.auth ? window.AppleID : null,
+        new Error("Apple sign-in loaded without an authentication API."),
+      );
     };
     const handleError = () => {
-      appleSdkPromise = null;
-      reject(new Error("Apple sign-in could not load."));
+      finish(null, new Error("Apple sign-in could not load."));
     };
+    const timeoutId = window.setTimeout(() => {
+      finish(null, new Error("Apple sign-in timed out while loading."));
+    }, APPLE_SDK_LOAD_TIMEOUT_MS);
 
     script.addEventListener("load", handleLoad, { once: true });
     script.addEventListener("error", handleError, { once: true });
@@ -214,6 +234,7 @@ export function AppleSignInButton({
       <input name="mode" type="hidden" value={mode} />
       <input name="return_to" type="hidden" value={returnTo} />
       <button
+        aria-busy={pending || sdkState === "loading"}
         aria-describedby={errorMessage ? "apple-sign-in-error" : undefined}
         className={styles.providerButton}
         disabled={disabled}
