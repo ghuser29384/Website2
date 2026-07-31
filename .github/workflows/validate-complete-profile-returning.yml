@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
-      EXPECTED_SHA: 8c7511280a8e05d13777aedd140e6606df251416
+      EXPECTED_SHA: 7b8ab3c9e7cf952d14c5207e67963c1efdbe1eac
       STATUS_CONTEXT: QA / returning-user Complete Profile
     steps:
       - name: Mark validation pending
