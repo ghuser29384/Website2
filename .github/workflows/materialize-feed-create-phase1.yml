@@ -61,15 +61,14 @@ jobs:
           git apply --check /tmp/feed-create-phase1.patch
           git apply /tmp/feed-create-phase1.patch
 
-          # The first exact gate found two source-contract assertions whose literal
-          # wording did not match the already-correct rendered implementation. Repair
-          # only those assertions: one must tolerate JSX whitespace, and the other
-          # must verify the explicit Delivered: No / no-contact state actually shown.
+          # Exact-gate repairs: two source-contract assertions had literal whitespace/copy
+          # drift, and the transient sessionStorage reader must schedule its state update
+          # rather than synchronously cascading a render from the effect body.
           python - <<'PY'
           from pathlib import Path
 
-          path = Path("src/feed-create-phase1-wiring.test.ts")
-          source = path.read_text(encoding="utf-8")
+          wiring_path = Path("src/feed-create-phase1-wiring.test.ts")
+          wiring = wiring_path.read_text(encoding="utf-8")
           replacements = {
               "assert.match(workbench, /Match scores and explanations are session-only/);":
                   "assert.match(workbench, /Match\\s+scores and explanations are session-only/);",
@@ -79,10 +78,51 @@ jobs:
                   "  assert.match(managePage, /<dd>No<\\/dd>/);",
           }
           for old, new in replacements.items():
-              if source.count(old) != 1:
+              if wiring.count(old) != 1:
                   raise SystemExit(f"Expected one source-contract assertion: {old}")
-              source = source.replace(old, new)
-          path.write_text(source, encoding="utf-8")
+              wiring = wiring.replace(old, new)
+          wiring_path.write_text(wiring, encoding="utf-8")
+
+          workbench_path = Path("src/components/core-trade/trade-draft-workbench.tsx")
+          workbench = workbench_path.read_text(encoding="utf-8")
+          old = '''      setTransientMatchContext({
+                actionFitLabel:
+                  typeof parsed.actionFitLabel === "string"
+                    ? parsed.actionFitLabel.trim().slice(0, 40)
+                    : "",
+                matchPercent: Number.isFinite(rawPercent)
+                  ? Math.max(0, Math.min(100, Math.round(rawPercent)))
+                  : null,
+                ownerAlias:
+                  typeof parsed.ownerAlias === "string"
+                    ? parsed.ownerAlias.trim().slice(0, 100)
+                    : "",
+                reason:
+                  typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 240) : "",
+                reasonDetails,
+              });'''
+          new = '''      const timeoutId = window.setTimeout(() => {
+                setTransientMatchContext({
+                  actionFitLabel:
+                    typeof parsed.actionFitLabel === "string"
+                      ? parsed.actionFitLabel.trim().slice(0, 40)
+                      : "",
+                  matchPercent: Number.isFinite(rawPercent)
+                    ? Math.max(0, Math.min(100, Math.round(rawPercent)))
+                    : null,
+                  ownerAlias:
+                    typeof parsed.ownerAlias === "string"
+                      ? parsed.ownerAlias.trim().slice(0, 100)
+                      : "",
+                  reason:
+                    typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 240) : "",
+                  reasonDetails,
+                });
+              }, 0);
+              return () => window.clearTimeout(timeoutId);'''
+          if workbench.count(old) != 1:
+              raise SystemExit("Expected one synchronous transient match-context state update.")
+          workbench_path.write_text(workbench.replace(old, new), encoding="utf-8")
           PY
 
           git diff --check
