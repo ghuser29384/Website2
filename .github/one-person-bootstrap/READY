@@ -1,0 +1,6 @@
+one-person-one-account candidate transport ready
+base_sha=8181eed1c0cf075f01ebd22c88d4a8cce441c19d
+archive_sha256=0f273e48aaa14c351b58ce45afdad951735533bf912836a82c731659073fce53
+materializer_sha256=9c464773b1f581449214dd085537a12637582c36cc5724fba0261675b52e3832
+candidate_parts=12
+materializer_parts=6
