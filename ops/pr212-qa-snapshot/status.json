@@ -1,10 +1,10 @@
 {
   "conclusion": "",
-  "createdAt": "2026-07-31T01:50:06Z",
-  "databaseId": 30597382257,
-  "displayTitle": "Remove temporary PR 212 merge stdout artifact",
+  "createdAt": "2026-07-31T06:10:06Z",
+  "databaseId": 30608851155,
+  "displayTitle": "Harden institutional function grants and QA fixtures",
   "event": "push",
-  "headSha": "6e4deac3530e8f0989b457d082e6efd11b2fa34e",
+  "headSha": "46524afa6c37977b9ce431087117472180590712",
   "status": "in_progress",
-  "url": "https://github.com/ghuser29384/Website2/actions/runs/30597382257"
+  "url": "https://github.com/ghuser29384/Website2/actions/runs/30608851155"
 }
