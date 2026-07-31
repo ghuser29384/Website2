@@ -56,10 +56,11 @@ const COMMON_GROUND_PANEL = `
                 <span id="commonGroundParticipantCount">2 participants</span>
                 <button type="button" id="addCommonGroundParticipant">+ Add</button>
               </div>
+              <p class="common-ground-fallback-help" id="commonGroundFallbackHelp">If this Co-Fund does not happen, where would you otherwise use this money?</p>
               <div class="common-ground-participant-list" id="commonGroundParticipantList"></div>
               <label class="common-ground-confirm">
                 <input type="checkbox" id="commonGroundBaselineConfirm" />
-                <span>These are honest no-pool defaults.</span>
+                <span>These are the projects we would honestly fund if this Co-Fund did not happen.</span>
               </label>
               <div class="common-ground-status" id="commonGroundStatus" role="status" aria-live="polite"></div>
             </div>
