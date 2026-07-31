@@ -1,4 +1,18 @@
-export function getPrimaryNavLinks(_isAuthenticated = false) {
+export interface SiteNavRouteItem {
+  href: string;
+  label: string;
+  description?: string;
+  section?: string;
+}
+
+export interface SiteNavLinkItem {
+  href?: string;
+  label: string;
+  summary?: string;
+  items?: SiteNavRouteItem[];
+}
+
+export function getPrimaryNavLinks(_isAuthenticated = false): SiteNavLinkItem[] {
   return [
     { href: "/feed", label: "Feed" },
     { href: "/discover", label: "Discover" },
