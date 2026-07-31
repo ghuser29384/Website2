@@ -1,0 +1,16 @@
+{
+  "version": "e52896a3aad2699da15afab7e743eb3fb94dc73c",
+  "encoding": "gzip+base64",
+  "parts": [
+    "0.txt",
+    "1.txt",
+    "2.txt",
+    "3.txt",
+    "4.txt",
+    "5.txt",
+    "6.txt"
+  ],
+  "sourceBytes": 209161,
+  "gzipBytes": 47059,
+  "encodedCharacters": 62748
+}
