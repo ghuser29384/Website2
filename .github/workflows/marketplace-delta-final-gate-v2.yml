@@ -7,86 +7,13 @@ on:
     paths:
       - ".github/workflows/marketplace-delta-final-gate-v2.yml"
       - ".github/scripts/run-marketplace-delta-final-gate-v2.sh"
-  pull_request:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/marketplace-delta-final-gate-v2.yml"
-      - ".github/scripts/run-marketplace-delta-final-gate-v2.sh"
 
 permissions:
-  contents: write
-  issues: write
-  pull-requests: write
-
-concurrency:
-  group: marketplace-delta-final-exact-head-gate-v2
-  cancel-in-progress: false
+  contents: read
 
 jobs:
   exact-head-browser-gate:
-    if: >-
-      (github.event_name == 'push' &&
-       github.ref == 'refs/heads/ops/marketplace-delta-final-gate-v2-20260730') ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == 'ghuser29384/Website2' &&
-       github.head_ref == 'ops/marketplace-delta-final-gate-v2-20260730')
+    if: ${{ false }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    env:
-      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
-      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
-      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
-      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-
     steps:
-      - name: Check out standalone QA branch
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Record exact workflow run on temporary PR
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          body="Marketplace delta final gate v2 started: run `${GITHUB_RUN_ID}`, attempt `${GITHUB_RUN_ATTEMPT}`, event `${GITHUB_EVENT_NAME}`, source `${GITHUB_SHA}`."
-          jq -n --arg body "$body" '{body: $body}' > "$RUNNER_TEMP/run-comment.json"
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer $GH_TOKEN" \
-            --header "Accept: application/vnd.github+json" \
-            --header "Content-Type: application/json" \
-            --data-binary "@$RUNNER_TEMP/run-comment.json" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/331/comments" \
-            --output /dev/null
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Run exact-head environment, comparison, browser, and cleanup gate
-        shell: bash
-        run: bash .github/scripts/run-marketplace-delta-final-gate-v2.sh
-
-      - name: Upload rendered browser evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: marketplace-delta-v2-browser-evidence-${{ github.run_id }}
-          path: marketplace-delta-browser-artifacts
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Upload exact-head and clean-state proof
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: marketplace-delta-v2-final-proof-${{ github.run_id }}
-          path: marketplace-delta-final-proof
-          if-no-files-found: warn
-          retention-days: 14
+      - run: echo "Runner replacement in progress."
