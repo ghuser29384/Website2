@@ -95,3 +95,26 @@ test("rejects a submission with a forged or over-budget priority allocation", ()
 
   assert.equal(result, null);
 });
+
+test("builds direct profile capability text without inferring an offer type", () => {
+  const result = normalizeCompleteProfileSubmission({
+    displayName: "Mina Park",
+    role: "Researcher",
+    affiliation: "Future Institute",
+    maxCommitment: 50,
+    monthlyTime: "2 hours",
+    contactRule: "Introductions only",
+    privateProfile: true,
+    offerType: "Time",
+    causeArea: "Existential risk",
+    priorityAllocation,
+  });
+
+  assert.ok(result);
+  const capability = buildCompleteProfileCapabilityText(result, {
+    includeOfferType: false,
+  });
+  assert.match(capability, /2 hours/);
+  assert.match(capability, /separately reviewed opportunities/);
+  assert.doesNotMatch(capability, /contribute time/i);
+});

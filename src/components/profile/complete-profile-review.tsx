@@ -171,7 +171,15 @@ function SubmitButton({ isAuthenticated }: { isAuthenticated: boolean }) {
   );
 }
 
+function getRefinementContext(draft: WalkthroughProfileDraft) {
+  return `${draft.source}|${draft.causeArea}|${draft.offerType}|${draft.matchName}`;
+}
+
 function getDefaultBio(draft: WalkthroughProfileDraft) {
+  if (draft.source === "direct") {
+    return "I look for concrete, verifiable ways to make progress on the priorities I rank here without taking on open-ended commitments.";
+  }
+
   return `I look for concrete, verifiable ways to support ${draft.causeArea.toLowerCase()} without taking on open-ended commitments.`;
 }
 
@@ -211,7 +219,7 @@ export function CompleteProfileReview({
             priorityAllocation?: unknown;
           })
         : null;
-      const context = `${draft.causeArea}|${draft.offerType}|${draft.matchName}`;
+      const context = getRefinementContext(draft);
 
       if (stored?.context === context) {
         const restoredAllocation = normalizeProfilePriorityAllocation(
@@ -249,7 +257,14 @@ export function CompleteProfileReview({
     } finally {
       setRestored(true);
     }
-  }, [accountEmail, draft.causeArea, draft.matchName, draft.offerType, isAuthenticated]);
+  }, [
+    accountEmail,
+    draft.causeArea,
+    draft.matchName,
+    draft.offerType,
+    draft.source,
+    isAuthenticated,
+  ]);
 
   useEffect(() => {
     if (!restored) return;
@@ -259,7 +274,7 @@ export function CompleteProfileReview({
         REFINEMENT_STORAGE_KEY,
         JSON.stringify({
           ...profile,
-          context: `${draft.causeArea}|${draft.offerType}|${draft.matchName}`,
+          context: getRefinementContext(draft),
           priorityAllocation: JSON.parse(serializeProfilePriorityAllocation(allocation)),
           version: 3,
         }),
@@ -267,7 +282,15 @@ export function CompleteProfileReview({
     } catch (error) {
       console.warn("Moral Trade could not save the profile refinement draft.", error);
     }
-  }, [allocation, draft.causeArea, draft.matchName, draft.offerType, profile, restored]);
+  }, [
+    allocation,
+    draft.causeArea,
+    draft.matchName,
+    draft.offerType,
+    draft.source,
+    profile,
+    restored,
+  ]);
 
   useEffect(() => {
     if (!detailsOpen) return;
@@ -354,6 +377,7 @@ export function CompleteProfileReview({
           type="hidden"
           value="/discover?source=profile-complete&domain=offers&view=constellation"
         />
+        <input name="profile_source" type="hidden" value={draft.source} />
         <input name="walkthrough_cause" type="hidden" value={draft.originalCause} />
         <input name="cause_area" type="hidden" value={draft.causeArea} />
         <input name="offer_type" type="hidden" value={draft.offerType} />
@@ -376,20 +400,31 @@ export function CompleteProfileReview({
             <MoralMark />
             <span>Moral Trade</span>
           </Link>
-          <div
-            aria-label="Walkthrough progress: final step"
-            className={styles.walkthroughProgress}
-          >
-            <span>1&nbsp; Welcome</span>
-            <i />
-            <span>2&nbsp; Explore</span>
-            <i />
-            <span>3&nbsp; Priorities</span>
-            <i />
-            <strong>
-              <b>4</b> Complete
-            </strong>
-          </div>
+          {draft.source === "walkthrough" ? (
+            <div
+              aria-label="Walkthrough progress: final step"
+              className={styles.walkthroughProgress}
+            >
+              <span>1&nbsp; Welcome</span>
+              <i />
+              <span>2&nbsp; Explore</span>
+              <i />
+              <span>3&nbsp; Priorities</span>
+              <i />
+              <strong>
+                <b>4</b> Complete
+              </strong>
+            </div>
+          ) : (
+            <div
+              aria-label="Profile setup: priorities"
+              className={styles.walkthroughProgress}
+            >
+              <strong>
+                <b aria-hidden="true">✦</b> Profile setup
+              </strong>
+            </div>
+          )}
           <button
             className={styles.primaryAction}
             onClick={() => setDetailsOpen(true)}
@@ -613,9 +648,21 @@ export function CompleteProfileReview({
 
               <div className={styles.contextStrip}>
                 <div>
-                  <span>Walkthrough priority</span>
-                  <strong>{draft.originalCause}</strong>
-                  <small>{draft.causeArea}</small>
+                  <span>
+                    {draft.source === "walkthrough"
+                      ? "Walkthrough priority"
+                      : "Priority basis"}
+                  </span>
+                  <strong>
+                    {draft.source === "walkthrough"
+                      ? draft.originalCause
+                      : "Your 100-spark ranking"}
+                  </strong>
+                  <small>
+                    {draft.source === "walkthrough"
+                      ? draft.causeArea
+                      : "Saved from the priorities you assign here."}
+                  </small>
                 </div>
                 <div>
                   <span>Personal emphasis</span>
@@ -623,9 +670,17 @@ export function CompleteProfileReview({
                   <small>{unassigned} unassigned blocks remain</small>
                 </div>
                 <div>
-                  <span>Offer boundary</span>
-                  <strong>{draft.offerType}</strong>
-                  <small>No offer or obligation has been created.</small>
+                  <span>
+                    {draft.source === "walkthrough" ? "Offer boundary" : "Offer status"}
+                  </span>
+                  <strong>
+                    {draft.source === "walkthrough" ? draft.offerType : "Not set here"}
+                  </strong>
+                  <small>
+                    {draft.source === "walkthrough"
+                      ? "No offer or obligation has been created."
+                      : "Saving does not create or publish an offer."}
+                  </small>
                 </div>
               </div>
 
