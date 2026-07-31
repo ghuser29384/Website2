@@ -82,3 +82,5 @@ jobs:
           git push origin HEAD:agent/pr212-main-integration-ops-20260730
 
           test "$status" = "completed"
+
+# Observe the main-compatible absolute-gate repair run.
