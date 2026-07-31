@@ -41,6 +41,9 @@ function extractNamedFunction(source: string, name: string) {
   const functionStart = source.indexOf(`function ${name}(`);
   assert.notEqual(functionStart, -1, `${name} should be defined in the Discover loader.`);
 
+  const asyncStart = source.lastIndexOf("async ", functionStart);
+  const declarationStart =
+    asyncStart >= 0 && asyncStart + "async ".length === functionStart ? asyncStart : functionStart;
   const bodyStart = source.indexOf("{", functionStart);
   assert.notEqual(bodyStart, -1, `${name} should have a function body.`);
 
@@ -74,7 +77,7 @@ function extractNamedFunction(source: string, name: string) {
     }
     if (character === "}") {
       depth -= 1;
-      if (depth === 0) return source.slice(functionStart, index + 1);
+      if (depth === 0) return source.slice(declarationStart, index + 1);
     }
   }
 
