@@ -1,0 +1,76 @@
+name: Mark PR 212 main-integration readiness
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/mark-pr212-main-integration-readiness.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+jobs:
+  mark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_WORKFLOW: pr212-main-integrated-gates.yml
+      TARGET_BRANCH: agent/pr212-main-integrated-36650b-20260731
+      PINNED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+      CLEAN_COMMIT: e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e
+      INSPECTOR_BRANCH: agent/pr212-main-integration-inspector-20260730
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+
+      - name: Require a successful exact-head second-pass gate and unchanged main
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-promotion-readiness
+          rm -rf "$output"
+          mkdir -p "$output"
+
+          integration_head="$(git ls-remote --heads origin "refs/heads/${TARGET_BRANCH}" | awk '{print $1}')"
+          test -n "$integration_head"
+          current_main="$(git ls-remote --heads origin refs/heads/main | awk '{print $1}')"
+
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 50 --json databaseId,headSha,status,conclusion,createdAt,url > /tmp/runs.json
+          run_id="$(jq -r --arg head "$integration_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+          status="$(jq -r --arg head "$integration_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+          conclusion="$(jq -r --arg head "$integration_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+
+          test -n "$run_id"
+          test "$status" = completed
+          test "$conclusion" = success
+          test "$current_main" = "$PINNED_MAIN"
+
+          git fetch origin "$integration_head" "$PINNED_MAIN" "$CLEAN_COMMIT"
+          git merge-base --is-ancestor "$PINNED_MAIN" "$integration_head"
+          git merge-base --is-ancestor "$CLEAN_COMMIT" "$integration_head"
+
+          jq -n \
+            --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg integration_head "$integration_head" \
+            --arg pinned_main "$PINNED_MAIN" \
+            --arg current_main "$current_main" \
+            --arg clean_commit "$CLEAN_COMMIT" \
+            --arg gate_run_id "$run_id" \
+            --arg gate_status "$status" \
+            --arg gate_conclusion "$conclusion" \
+            '{ready:true,generated_at:$generated_at,integration_head:$integration_head,pinned_main:$pinned_main,current_main:$current_main,clean_commit:$clean_commit,gate_run_id:$gate_run_id,gate_status:$gate_status,gate_conclusion:$gate_conclusion}' \
+            > "$output/ready.json"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output/ready.json"
+          git commit -m "Mark PR 212 main integration ready for workflow materialization"
+          git push origin "HEAD:refs/heads/${INSPECTOR_BRANCH}"
