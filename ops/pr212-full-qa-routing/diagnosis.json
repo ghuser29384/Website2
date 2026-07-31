@@ -1,0 +1,8 @@
+{
+  "feature_head": "71f28543df87fb13005e07582603410e5cef7255",
+  "run_id": "30598511737",
+  "conclusion": "failure",
+  "failed_steps": [
+    "Run exact-base differential full-test gate"
+  ]
+}
