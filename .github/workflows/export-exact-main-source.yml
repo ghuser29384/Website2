@@ -1,0 +1,46 @@
+name: Export exact current main source
+
+on:
+  push:
+    branches:
+      - ops/inspect-pooled-settlement-payload-20260731
+    paths:
+      - ".github/workflows/export-exact-main-source.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          show-progress: false
+      - name: Export exact main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/exact-main'
+          exact_main="$(git rev-parse refs/remotes/origin/exact-main)"
+          mkdir -p exact-main-export
+          git archive --format=tar.gz --output=exact-main-export/exact-main-source.tgz "$exact_main"
+          sha256sum exact-main-export/exact-main-source.tgz > exact-main-export/exact-main-source.sha256
+          printf 'exact_main=%s\n' "$exact_main" > exact-main-export/ref.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-main-source-${{ github.run_id }}
+          path: exact-main-export
+          if-no-files-found: error
+          retention-days: 7
+      - name: Report run
+        shell: bash
+        run: |
+          gh issue comment 337 --repo "$GITHUB_REPOSITORY" \
+            --body "Exact-main source export completed in workflow run $GITHUB_RUN_ID from operator commit $GITHUB_SHA."
