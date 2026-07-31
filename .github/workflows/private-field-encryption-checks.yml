@@ -7,366 +7,103 @@ on:
 
 permissions:
   contents: read
-  statuses: write
-
-concurrency:
-  group: complete-profile-production-smoke-f005a51a-v2
-  cancel-in-progress: false
 
 jobs:
-  production-smoke:
+  complete-profile-404-diagnostic:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    env:
-      EXPECTED_SHA: f005a51a18f01ed0a93b986c044658d6c9dd8d49
-      EXPECTED_DEPLOYMENT_ID: dpl_9ZQhYBkusdTr73Xbz5eZptDiY7ec
-      STATUS_CONTEXT: QA / Complete Profile production smoke
+    timeout-minutes: 15
     steps:
-      - name: Mark production smoke pending
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
-            -f state=pending \
-            -f context="${STATUS_CONTEXT}" \
-            -f description="Testing first-time and returning flows on both production domains" \
-            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-      - name: Check out exact production commit
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ env.EXPECTED_SHA }}
-          fetch-depth: 0
-
-      - name: Verify exact production commit
-        run: test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+          ref: f005a51a18f01ed0a93b986c044658d6c9dd8d49
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Verify exact production deployment and aliases from raw responses
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Identify every production 4xx request from the returning page
         run: |
-          set -euo pipefail
-          mkdir -p production-smoke
-
-          www_status="$(curl -sS \
-            --cookie 'mt_walkthrough_seen=1' \
-            -D production-smoke/www-returning.headers \
-            -o production-smoke/www-returning.html \
-            -w '%{http_code}' \
-            https://www.moraltrade.org/complete-profile)"
-          test "$www_status" = "200"
-          grep -Fq "$EXPECTED_DEPLOYMENT_ID" production-smoke/www-returning.html
-          grep -Fq 'Spend 100 sparks of attention.' production-smoke/www-returning.html
-          tr -d '\r' < production-smoke/www-returning.headers > production-smoke/www-returning.normalized.headers
-          grep -Fqx 'x-matched-path: /complete-profile' production-smoke/www-returning.normalized.headers
-
-          apex_status="$(curl -sS \
-            -D production-smoke/apex.headers \
-            -o /dev/null \
-            -w '%{http_code}' \
-            https://moraltrade.org/complete-profile)"
-          test "$apex_status" = "308"
-          tr -d '\r' < production-smoke/apex.headers > production-smoke/apex.normalized.headers
-          grep -Eq '^location: https://www\.moraltrade\.org/complete-profile([?].*)?$' production-smoke/apex.normalized.headers
-
-          jq -n \
-            --arg expectedSha "$EXPECTED_SHA" \
-            --arg expectedDeploymentId "$EXPECTED_DEPLOYMENT_ID" \
-            --arg wwwStatus "$www_status" \
-            --arg apexStatus "$apex_status" \
-            '{expectedSha:$expectedSha,expectedDeploymentId:$expectedDeploymentId,wwwStatus:$wwwStatus,apexStatus:$apexStatus,verified:true}' \
-            > production-smoke/deployment-verification.json
-
-      - name: Run production smoke on apex and www
-        run: |
-          mkdir -p .qa production-smoke
-          cat > .qa/production-smoke.mjs <<'SCRIPT'
-          import assert from "node:assert/strict";
-          import { mkdir, writeFile } from "node:fs/promises";
+          mkdir -p .qa complete-profile-404-diagnostic
+          cat > .qa/complete-profile-404-diagnostic.mjs <<'SCRIPT'
           import { chromium } from "@playwright/test";
+          import { writeFile } from "node:fs/promises";
 
-          const expectedSha = process.env.EXPECTED_SHA;
-          const expectedDeploymentId = process.env.EXPECTED_DEPLOYMENT_ID;
-          assert.ok(expectedSha, "EXPECTED_SHA is required");
-          assert.ok(expectedDeploymentId, "EXPECTED_DEPLOYMENT_ID is required");
-
-          const canonicalOrigin = "https://www.moraltrade.org";
-          const entries = [
-            { id: "apex", origin: "https://moraltrade.org" },
-            { id: "www", origin: canonicalOrigin },
-          ];
-          const outputDir = "production-smoke";
-          await mkdir(outputDir, { recursive: true });
-
+          const origin = "https://www.moraltrade.org";
           const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+          await context.addCookies([
+            {
+              name: "mt_walkthrough_seen",
+              value: "1",
+              url: origin,
+              httpOnly: true,
+              secure: true,
+              sameSite: "Lax",
+            },
+          ]);
+          const page = await context.newPage();
+          const responses = [];
+          const requestsFailed = [];
+          const consoleMessages = [];
+          const pageErrors = [];
+
+          page.on("response", async (response) => {
+            if (response.status() >= 400) {
+              const request = response.request();
+              responses.push({
+                status: response.status(),
+                url: response.url(),
+                method: request.method(),
+                resourceType: request.resourceType(),
+                requestHeaders: await request.allHeaders(),
+                responseHeaders: await response.allHeaders(),
+              });
+            }
+          });
+          page.on("requestfailed", (request) => {
+            requestsFailed.push({
+              url: request.url(),
+              method: request.method(),
+              resourceType: request.resourceType(),
+              failure: request.failure(),
+            });
+          });
+          page.on("console", (message) => {
+            consoleMessages.push({ type: message.type(), text: message.text(), location: message.location() });
+          });
+          page.on("pageerror", (error) => pageErrors.push(error.message));
+
+          const navigation = await page.goto(`${origin}/complete-profile`, {
+            waitUntil: "networkidle",
+            timeout: 120_000,
+          });
+          await page.waitForTimeout(2_000);
+          await page.screenshot({
+            path: "complete-profile-404-diagnostic/returning-page.png",
+            fullPage: true,
+          });
           const report = {
-            expectedSha,
-            expectedDeploymentId,
-            deploymentIdentityVerifiedFromRawResponse: true,
-            canonicalOrigin,
             checkedAt: new Date().toISOString(),
-            scenarios: [],
+            navigationStatus: navigation?.status() ?? null,
+            finalUrl: page.url(),
+            responses,
+            requestsFailed,
+            consoleMessages,
+            pageErrors,
           };
-
-          function isMoralTradeUrl(rawUrl) {
-            try {
-              const hostname = new URL(rawUrl).hostname;
-              return hostname === "moraltrade.org" || hostname === "www.moraltrade.org";
-            } catch {
-              return false;
-            }
-          }
-
-          function attachDiagnostics(page, state) {
-            page.on("pageerror", (error) => state.pageErrors.push(error.message));
-            page.on("console", (message) => {
-              if (message.type() === "error") state.consoleErrors.push(message.text());
-            });
-            page.on("response", (response) => {
-              if (response.status() >= 500 && isMoralTradeUrl(response.url())) {
-                state.serverErrors.push({ status: response.status(), url: response.url() });
-              }
-            });
-            page.on("requestfailed", (request) => {
-              if (isMoralTradeUrl(request.url())) {
-                state.failedRequests.push({
-                  url: request.url(),
-                  errorText: request.failure()?.errorText ?? "unknown",
-                });
-              }
-            });
-          }
-
-          function assertNoFatalDiagnostics(state) {
-            assert.deepEqual(state.pageErrors, [], `Page errors: ${state.pageErrors.join(" | ")}`);
-            assert.deepEqual(
-              state.serverErrors,
-              [],
-              `Same-site 5xx responses: ${JSON.stringify(state.serverErrors)}`,
-            );
-          }
-
-          async function addReturningCookie(context) {
-            await context.addCookies([
-              {
-                name: "mt_walkthrough_seen",
-                value: "1",
-                url: canonicalOrigin,
-                httpOnly: true,
-                secure: true,
-                sameSite: "Lax",
-              },
-            ]);
-          }
-
-          function assertCanonicalFinalHost(page) {
-            assert.equal(
-              new URL(page.url()).origin,
-              canonicalOrigin,
-              `Expected canonical www origin, received ${page.url()}`,
-            );
-          }
-
-          async function runFirstTime(entry) {
-            const state = {
-              entry: entry.id,
-              flow: "first-time-desktop",
-              pageErrors: [],
-              consoleErrors: [],
-              serverErrors: [],
-              failedRequests: [],
-            };
-            const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-            await context.clearCookies();
-            const page = await context.newPage();
-            attachDiagnostics(page, state);
-
-            const response = await page.goto(`${entry.origin}/complete-profile`, {
-              waitUntil: "domcontentloaded",
-              timeout: 120_000,
-            });
-            assert.ok(response && response.status() < 500, "First-time route returned no usable response");
-            await page.waitForURL((url) => url.pathname === "/walkthrough", { timeout: 60_000 });
-            await page
-              .getByText("Welcome to Moral Trade", { exact: true })
-              .first()
-              .waitFor({ state: "visible", timeout: 60_000 });
-            assertCanonicalFinalHost(page);
-            assert.equal(await page.getByLabel("Profile setup: priorities").count(), 0);
-
-            const cookies = await context.cookies(canonicalOrigin);
-            assert.equal(
-              cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")?.value,
-              "1",
-              "First-time flow did not persist the Walkthrough-seen signal",
-            );
-
-            await page.screenshot({
-              path: `${outputDir}/${entry.id}-first-time-desktop.png`,
-              fullPage: true,
-            });
-            assertNoFatalDiagnostics(state);
-            state.finalUrl = page.url();
-            state.walkthroughCookiePresent = true;
-            state.status = "passed";
-            report.scenarios.push(state);
-            await context.close();
-          }
-
-          async function runReturningDesktop(entry) {
-            const state = {
-              entry: entry.id,
-              flow: "returning-desktop",
-              deploymentId: expectedDeploymentId,
-              pageErrors: [],
-              consoleErrors: [],
-              serverErrors: [],
-              failedRequests: [],
-            };
-            const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-            await addReturningCookie(context);
-            const page = await context.newPage();
-            attachDiagnostics(page, state);
-
-            const response = await page.goto(`${entry.origin}/complete-profile`, {
-              waitUntil: "domcontentloaded",
-              timeout: 120_000,
-            });
-            assert.ok(response && response.status() < 500, "Returning route returned no usable response");
-            await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
-            await page
-              .getByRole("heading", { name: "Spend 100 sparks of attention." })
-              .waitFor({ state: "visible", timeout: 60_000 });
-            await page
-              .getByLabel("Profile setup: priorities")
-              .waitFor({ state: "visible", timeout: 60_000 });
-            assertCanonicalFinalHost(page);
-            assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
-
-            await page.screenshot({
-              path: `${outputDir}/${entry.id}-returning-desktop-page.png`,
-              fullPage: true,
-            });
-            await page.getByRole("button", { name: "Save profile" }).click();
-            const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
-            await dialog.waitFor({ state: "visible", timeout: 30_000 });
-            const dialogText = await dialog.textContent();
-            assert.match(dialogText ?? "", /Your 100-spark ranking/);
-            assert.match(dialogText ?? "", /Not set here/);
-            assert.match(dialogText ?? "", /Saving does not create or publish an offer\./);
-            await page.screenshot({
-              path: `${outputDir}/${entry.id}-returning-desktop-dialog.png`,
-              fullPage: true,
-            });
-
-            assertNoFatalDiagnostics(state);
-            state.finalUrl = page.url();
-            state.status = "passed";
-            report.scenarios.push(state);
-            await context.close();
-          }
-
-          async function runReturningMobile(entry) {
-            const state = {
-              entry: entry.id,
-              flow: "returning-mobile",
-              deploymentId: expectedDeploymentId,
-              pageErrors: [],
-              consoleErrors: [],
-              serverErrors: [],
-              failedRequests: [],
-            };
-            const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-            await addReturningCookie(context);
-            const page = await context.newPage();
-            attachDiagnostics(page, state);
-
-            const response = await page.goto(`${entry.origin}/complete-profile`, {
-              waitUntil: "domcontentloaded",
-              timeout: 120_000,
-            });
-            assert.ok(response && response.status() < 500, "Returning mobile route returned no usable response");
-            await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
-            await page
-              .getByLabel("80 of 100 attention points assigned")
-              .waitFor({ state: "visible", timeout: 60_000 });
-            assertCanonicalFinalHost(page);
-
-            await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
-            await page
-              .getByRole("button", { name: "Decrease Space governance" })
-              .waitFor({ state: "visible", timeout: 30_000 });
-            const dimensions = await page.evaluate(() => ({
-              viewportWidth: window.innerWidth,
-              documentWidth: document.documentElement.scrollWidth,
-            }));
-            assert.ok(
-              dimensions.documentWidth <= dimensions.viewportWidth,
-              `Mobile horizontal overflow: ${JSON.stringify(dimensions)}`,
-            );
-            await page.screenshot({
-              path: `${outputDir}/${entry.id}-returning-mobile.png`,
-              fullPage: true,
-            });
-
-            assertNoFatalDiagnostics(state);
-            state.finalUrl = page.url();
-            state.dimensions = dimensions;
-            state.status = "passed";
-            report.scenarios.push(state);
-            await context.close();
-          }
-
-          try {
-            for (const entry of entries) {
-              await runFirstTime(entry);
-              await runReturningDesktop(entry);
-              await runReturningMobile(entry);
-            }
-          } catch (error) {
-            report.failure = error instanceof Error ? error.stack : String(error);
-            throw error;
-          } finally {
-            await writeFile(`${outputDir}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
-            await browser.close();
-          }
+          console.log(JSON.stringify(report, null, 2));
+          await writeFile(
+            "complete-profile-404-diagnostic/report.json",
+            `${JSON.stringify(report, null, 2)}\n`,
+          );
+          await browser.close();
           SCRIPT
-          node .qa/production-smoke.mjs
-
-      - name: Upload production smoke evidence
-        if: always()
+          node .qa/complete-profile-404-diagnostic.mjs
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: complete-profile-production-smoke-f005a51a-v2
-          path: production-smoke
+          name: complete-profile-production-404-diagnostic
+          path: complete-profile-404-diagnostic
           if-no-files-found: error
-          retention-days: 14
-
-      - name: Publish production smoke result
-        if: always()
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JOB_STATUS: ${{ job.status }}
-        run: |
-          if [ "$JOB_STATUS" = "success" ]; then
-            state=success
-            description="Both domains passed first-time, returning desktop, and returning mobile smoke"
-          else
-            state=failure
-            description="Production smoke failed; inspect workflow evidence"
-          fi
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
-            -f state="$state" \
-            -f context="${STATUS_CONTEXT}" \
-            -f description="$description" \
-            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          retention-days: 2
