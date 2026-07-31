@@ -1,5 +1,5 @@
-# Temporary migration materializer. Remove before merge.
-name: Materialize Donation Upgrade destination-review migration
+# Temporary migration repair. Remove before merge.
+name: Repair Donation Upgrade destination-review migration
 
 on:
   push:
@@ -18,11 +18,11 @@ permissions:
   contents: write
 
 concurrency:
-  group: donation-upgrade-destination-review-materializer
+  group: donation-upgrade-destination-review-repair
   cancel-in-progress: false
 
 jobs:
-  materialize:
+  repair:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -32,33 +32,59 @@ jobs:
           ref: feature/donation-upgrade-approved-fallbacks-20260731
           fetch-depth: 0
 
-      - name: Reconstruct and verify the migration
+      - name: Remove the duplicated truncated function block
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t chunks < <(find .github/donation-upgrade-followup-payload -maxdepth 1 -type f -name 'chunk-*' | sort)
-          test "${#chunks[@]}" -eq 5
-          for chunk in "${chunks[@]}"; do
-            wc -c "$chunk"
-            sha256sum "$chunk"
-          done
-          cat "${chunks[@]}" | base64 --decode > supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
-          sha256sum supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
-          echo "8e247964358c43c24d76927306756fd92cff4fa9684bc543ab3e9b3c24bfe54f  supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql" | sha256sum --check --strict
-          grep -F "create table if not exists public.conditional_payment_destination_requests" supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
-          grep -F "create or replace function public.review_trade_donation_pool_gate" supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
-          git diff --check
+          python - <<'PY'
+          from pathlib import Path
 
-      - name: Commit exact migration
+          path = Path('supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql')
+          text = path.read_text()
+          marker = 'create or replace function public.submit_conditional_payment_destination_request('
+          positions = []
+          start = 0
+          while True:
+              index = text.find(marker, start)
+              if index < 0:
+                  break
+              positions.append(index)
+              start = index + len(marker)
+          if len(positions) != 2:
+              raise SystemExit(f'Expected exactly two submit-function markers before repair, found {len(positions)}')
+          text = text[:positions[0]] + text[positions[1]:]
+          text = text.replace("'environment', p_environm,", "'environment', p_environment,")
+          path.write_text(text)
+
+          repaired = path.read_text()
+          assertions = {
+              marker: 1,
+              'create or replace function public.guard_conditional_destination_request_identity()': 1,
+              'create or replace function public.prevent_conditional_destination_review_event_mutation()': 1,
+              'create or replace function public.review_conditional_payment_destination_request(': 1,
+              'create or replace function public.review_trade_donation_pool_gate(': 1,
+              "'schemaVersion', 'conditional-payment-destination-identity-v1'": 1,
+              "'environment', p_environment,": 1,
+          }
+          for needle, expected in assertions.items():
+              actual = repaired.count(needle)
+              if actual != expected:
+                  raise SystemExit(f'Expected {expected} occurrences of {needle!r}, found {actual}')
+          for forbidden in ('conditional-payment-destination-_at', 'p_environm,'):
+              if forbidden in repaired:
+                  raise SystemExit(f'Corruption marker remains: {forbidden}')
+          if not repaired.endswith('\n'):
+              raise SystemExit('Migration must end with a newline')
+          PY
+          git diff --check
+          sha256sum supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+
+      - name: Commit repaired migration
         shell: bash
         run: |
           set -euo pipefail
           git add supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
-          if git diff --cached --quiet; then
-            echo "Migration already materialized."
-            exit 0
-          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Add Donation Upgrade destination review and gate evidence"
+          git commit -m "Repair Donation Upgrade destination-review migration"
           git push origin HEAD:feature/donation-upgrade-approved-fallbacks-20260731
