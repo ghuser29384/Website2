@@ -34,3 +34,107 @@ jobs:
           path: /tmp/moraltrade-source.tgz
           if-no-files-found: error
           retention-days: 1
+
+  credential-presence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      APPLE_OAUTH_CLIENT_ID: ${{ secrets.APPLE_OAUTH_CLIENT_ID }}
+      APPLE_OAUTH_CLIENT_SECRET: ${{ secrets.APPLE_OAUTH_CLIENT_SECRET }}
+      APPLE_CLIENT_ID: ${{ secrets.APPLE_CLIENT_ID }}
+      APPLE_CLIENT_SECRET: ${{ secrets.APPLE_CLIENT_SECRET }}
+      APPLE_SERVICE_ID: ${{ secrets.APPLE_SERVICE_ID }}
+      APPLE_SERVICES_ID: ${{ secrets.APPLE_SERVICES_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_KEY_ID: ${{ secrets.APPLE_KEY_ID }}
+      APPLE_PRIVATE_KEY: ${{ secrets.APPLE_PRIVATE_KEY }}
+      APPLE_PRIVATE_KEY_P8: ${{ secrets.APPLE_PRIVATE_KEY_P8 }}
+      SIGN_IN_WITH_APPLE_CLIENT_ID: ${{ secrets.SIGN_IN_WITH_APPLE_CLIENT_ID }}
+      SIGN_IN_WITH_APPLE_CLIENT_SECRET: ${{ secrets.SIGN_IN_WITH_APPLE_CLIENT_SECRET }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Check out exact pull-request head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Record repository-secret presence without exposing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > apple-auth-credential-presence.txt
+          for name in \
+            APPLE_OAUTH_CLIENT_ID \
+            APPLE_OAUTH_CLIENT_SECRET \
+            APPLE_CLIENT_ID \
+            APPLE_CLIENT_SECRET \
+            APPLE_SERVICE_ID \
+            APPLE_SERVICES_ID \
+            APPLE_TEAM_ID \
+            APPLE_KEY_ID \
+            APPLE_PRIVATE_KEY \
+            APPLE_PRIVATE_KEY_P8 \
+            SIGN_IN_WITH_APPLE_CLIENT_ID \
+            SIGN_IN_WITH_APPLE_CLIENT_SECRET \
+            SUPABASE_ACCESS_TOKEN \
+            SUPABASE_PROJECT_REF \
+            VERCEL_TOKEN
+          do
+            if [[ -n "${!name:-}" ]]; then
+              printf 'github:%s=configured\n' "$name" >> apple-auth-credential-presence.txt
+            else
+              printf 'github:%s=missing\n' "$name" >> apple-auth-credential-presence.txt
+            fi
+          done
+          cat apple-auth-credential-presence.txt
+
+      - name: Inspect production Vercel environment names without exposing values
+        if: env.VERCEL_TOKEN != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"team_ySu6sF3Uho1E1GnJtCQPVEuJ","projectId":"prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7"}\n' > .vercel/project.json
+          umask 077
+          npx --yes vercel@latest env pull /tmp/moraltrade-production.env \
+            --environment=production \
+            --yes \
+            --token="$VERCEL_TOKEN" \
+            >/tmp/vercel-env-pull.stdout \
+            2>/tmp/vercel-env-pull.stderr
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('/tmp/moraltrade-production.env')
+          names = []
+          for line in path.read_text(encoding='utf-8').splitlines():
+              match = re.match(r'^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=', line)
+              if match:
+                  names.append(match.group(1))
+
+          interesting = sorted({
+              name for name in names
+              if 'APPLE' in name.upper()
+              or name in {'SUPABASE_ACCESS_TOKEN', 'SUPABASE_PROJECT_REF', 'PROJECT_REF'}
+          })
+          output = Path('apple-auth-credential-presence.txt')
+          with output.open('a', encoding='utf-8') as stream:
+              if interesting:
+                  for name in interesting:
+                      stream.write(f'vercel:{name}=configured\n')
+              else:
+                  stream.write('vercel:apple-or-supabase-management-credentials=none-found\n')
+          PY
+          rm -f /tmp/moraltrade-production.env /tmp/vercel-env-pull.stdout /tmp/vercel-env-pull.stderr
+          cat apple-auth-credential-presence.txt
+
+      - name: Upload credential-presence report
+        uses: actions/upload-artifact@v4
+        with:
+          name: apple-auth-credential-presence
+          path: apple-auth-credential-presence.txt
+          if-no-files-found: error
+          retention-days: 1
