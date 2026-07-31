@@ -1,4 +1,4 @@
-name: Temporary export — current main Discover source
+name: Temporary export — current main Discover integration files
 
 on:
   pull_request:
@@ -18,26 +18,19 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Verify and package current main Discover surface
+      - name: Verify and package current main Discover integration files
         shell: bash
         run: |
           set -euo pipefail
-          expected="0a26b17d75c9590f92c73663ea19fe1b0e8aa6c4"
+          expected="85660ffc07f6125bd28028a89480c85927d03ae8"
           git merge-base --is-ancestor "$expected" HEAD
           paths=(
             .github/workflows/smart-query-qa.yml
-            package.json
-            public/discover/payload/0.txt
-            public/discover/payload/1.txt
-            public/discover/payload/2.txt
-            public/discover/payload/3.txt
-            public/discover/payload/4.txt
-            public/discover/payload/5.txt
-            public/discover/payload/6.txt
+            public/discover/payload/manifest.json
+            public/moral-trade-discover.html
             scripts/discover-two-sided-contract.test.mjs
             scripts/pack-discover-payload.mjs
-            src/discover/moral-trade-discover.source.html
-            tests/discover-query-audit.spec.ts
+            tests/discover-payload-cache.spec.ts
           )
           git diff --quiet "$expected" HEAD -- "${paths[@]}"
           mkdir -p export
@@ -47,12 +40,12 @@ jobs:
             cp "$path" "export/$path"
           done
           printf '%s\n' "$expected" > export/EXPORTED_SOURCE_SHA
-          tar -czf current-main-discover-source.tgz -C export .
+          tar -czf current-main-discover-integration-files.tgz -C export .
 
       - name: Upload exact source surface
         uses: actions/upload-artifact@v4
         with:
-          name: current-main-discover-source
-          path: current-main-discover-source.tgz
+          name: current-main-discover-integration-files
+          path: current-main-discover-integration-files.tgz
           if-no-files-found: error
           retention-days: 1
