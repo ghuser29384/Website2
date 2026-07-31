@@ -285,3 +285,52 @@ test("natural-language group-buying searches route to Offers → Co-Funds", asyn
   await expect(page).toHaveURL(/view=list/);
   await expect(page.locator('.offer-transaction-row[data-offer-kind="co-fund"]')).toHaveCount(2);
 });
+
+
+test("dominant-assurance searches route to standalone Pools even without a server routing hint", async ({
+  page,
+}) => {
+  await page.route("**/api/query/interpret", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        interpretation: {
+          originalQuery: "dominant assurance contracts",
+          normalizedQuery: "dominant assurance contracts",
+          parsedConstraintCount: 0,
+          confidence: 0.99,
+          reasonCodes: [],
+          needsClarification: false,
+          clarification: null,
+          facets: {
+            causes: [],
+            verified: null,
+            maxAmountCents: null,
+            maxAmountInclusive: true,
+            deadlineBefore: null,
+            deadlineBeforeInclusive: true,
+            actionTypes: [],
+            participantKinds: [],
+            sort: null,
+          },
+          residualTerms: [],
+        },
+        target: "/discover?smart=1&domain=offers",
+        usedLlm: false,
+      }),
+    });
+  });
+
+  await page.goto("/discover", { waitUntil: "networkidle" });
+  await waitForDiscover(page);
+  const form = page.locator("#command-form");
+  await form.locator("#command-input").fill("dominant assurance contracts");
+  await form.getByRole("button", { name: "Run search" }).click();
+
+  await expect(page).toHaveURL(/domain=pools/);
+  await expect(page).toHaveURL(/view=list/);
+  expect(page.url()).not.toContain("offerKind=co-fund");
+  await expect(page.getByRole("heading", { name: "Standalone threshold pools" })).toBeVisible();
+  await expect(page.locator('.offer-transaction-row[data-offer-kind="co-fund"]')).toHaveCount(0);
+});

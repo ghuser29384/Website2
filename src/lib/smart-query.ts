@@ -494,6 +494,11 @@ function isCoFundQuery(query: string) {
   return /\bco[- ]?funds?\b|\bgroup[- ]buy(?:ing)?\b|\bcollective(?:ly)? fund(?:ing)? (?:an? )?(?:offer|trade)\b/.test(normalized);
 }
 
+function isStandalonePoolQuery(query: string) {
+  const normalized = normalizeSmartQueryText(query);
+  return /\b(pool|pools|threshold|conditional funding)\b|\b(?:dominant[- ]assurance(?: contracts?)?|assurance contracts?)\b/.test(normalized);
+}
+
 function inferIntent(query: string, surface: SmartQuerySurface): SmartQueryIntent {
   if (surface !== "global") return surface;
   if (isCoFundQuery(query)) return "offers";
@@ -507,7 +512,7 @@ function inferIntent(query: string, surface: SmartQuerySurface): SmartQueryInten
   if (/\b(mpgf|moral public goods fund|consensus good|hybrid good)\b/.test(query)) {
     return "mpgf_pools";
   }
-  if (/\b(pool|pools|threshold|conditional funding)\b/.test(query)) {
+  if (isStandalonePoolQuery(query)) {
     return "pools";
   }
   return "offers";
@@ -755,7 +760,10 @@ export function parseSmartQuery(
     ["pledge", /\b(pledge|pledges|pledge swap|reciprocal action|commitment swap)\b/i],
     ["payment", /\b(paid action|payment|payments|pay someone|payment-supported)\b/i],
     ["offset", /\b(offset|offsets|donation offset|redirected donation|opposed donation)\b/i],
-    ["pool", /\b(pool|pools|threshold pool|conditional funding)\b/i],
+    [
+      "pool",
+      /\b(pool|pools|threshold pool|conditional funding|(?:dominant[- ]assurance(?: contracts?)?|assurance contracts?))\b/i,
+    ],
   ];
   for (const [type, pattern] of actionPatterns) {
     const match = working.match(pattern);
