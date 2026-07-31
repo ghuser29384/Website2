@@ -32,6 +32,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  export-source:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Package exact source for release inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee /tmp/donation-upgrade-source.ref
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.next \
+            --exclude=output \
+            -czf /tmp/donation-upgrade-source.tar.gz .
+          sha256sum /tmp/donation-upgrade-source.tar.gz | tee /tmp/donation-upgrade-source.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: donation-upgrade-source-${{ github.run_id }}
+          path: |
+            /tmp/donation-upgrade-source.tar.gz
+            /tmp/donation-upgrade-source.ref
+            /tmp/donation-upgrade-source.sha256
+          if-no-files-found: error
+          retention-days: 1
+
   validate:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -90,26 +119,3 @@ jobs:
 
           git fetch origin main
           git diff --check "$(git merge-base origin/main HEAD)"...HEAD
-
-      - name: Package exact source for release inspection
-        shell: bash
-        run: |
-          set -euo pipefail
-          git rev-parse HEAD | tee /tmp/donation-upgrade-source.ref
-          tar \
-            --exclude=.git \
-            --exclude=node_modules \
-            --exclude=.next \
-            --exclude=output \
-            -czf /tmp/donation-upgrade-source.tar.gz .
-          sha256sum /tmp/donation-upgrade-source.tar.gz | tee /tmp/donation-upgrade-source.sha256
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: donation-upgrade-source-${{ github.run_id }}
-          path: |
-            /tmp/donation-upgrade-source.tar.gz
-            /tmp/donation-upgrade-source.ref
-            /tmp/donation-upgrade-source.sha256
-          if-no-files-found: error
-          retention-days: 1
