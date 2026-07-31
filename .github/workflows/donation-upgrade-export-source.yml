@@ -1,0 +1,44 @@
+name: Export Donation Upgrade branch source
+
+on:
+  push:
+    branches:
+      - feature/donation-upgrade-approved-fallbacks-20260731
+    paths:
+      - .github/workflows/donation-upgrade-export-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/donation-upgrade-approved-fallbacks-20260731
+          fetch-depth: 0
+      - name: Package exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee donation-upgrade-source.ref
+          git status --short
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.next \
+            --exclude=output \
+            -czf donation-upgrade-source.tar.gz .
+          sha256sum donation-upgrade-source.tar.gz | tee donation-upgrade-source.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: donation-upgrade-source-${{ github.run_id }}
+          path: |
+            donation-upgrade-source.tar.gz
+            donation-upgrade-source.ref
+            donation-upgrade-source.sha256
+          if-no-files-found: error
+          retention-days: 1
