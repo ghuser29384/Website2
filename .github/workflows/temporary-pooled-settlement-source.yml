@@ -53,6 +53,7 @@ jobs:
           set -euo pipefail
           rm -rf .github/pooled-settlement-payload
           rm -rf .github/pooled-settlement-payload-fixes
+          rm -f .github/workflows/pooled-settlement-release.yml
           rm .github/workflows/temporary-pooled-settlement-source.yml
           git diff --check
           git add -A
