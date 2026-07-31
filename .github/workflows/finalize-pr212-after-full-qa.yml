@@ -1,0 +1,260 @@
+name: Finalize PR 212 after full QA
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/finalize-pr212-after-full-qa.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: finalize-pr212-after-full-qa
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_BRANCH: feat/institutional-trade-system
+      QA_WORKFLOW: institutional-trade-qa.yml
+      INSPECTOR_BRANCH: agent/pr212-main-integration-inspector-20260730
+      PINNED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-main-integration-inspector-20260730
+          fetch-depth: 0
+
+      - name: Wait for a stable exact-head QA terminal state
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-finalization
+          rm -rf "$output" /tmp/pr212-final-artifact
+          mkdir -p "$output" /tmp/pr212-final-artifact
+
+          stable_head=""
+          stable_observations=0
+          run_id=""
+          status=""
+          conclusion=""
+
+          for attempt in $(seq 1 1800); do
+            pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212")"
+            feature_head="$(jq -r .head.sha <<<"$pr_json")"
+            pr_state="$(jq -r .state <<<"$pr_json")"
+            pr_draft="$(jq -r .draft <<<"$pr_json")"
+            test "$pr_state" = open
+            test "$pr_draft" = true
+
+            if [[ "$feature_head" == "$stable_head" ]]; then
+              stable_observations=$((stable_observations + 1))
+            else
+              stable_head="$feature_head"
+              stable_observations=0
+            fi
+
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$QA_WORKFLOW" \
+              --branch "$FEATURE_BRANCH" \
+              --limit 100 \
+              --json databaseId,headSha,status,conclusion,createdAt,url,displayTitle \
+              > /tmp/qa-runs.json
+
+            run_id="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/qa-runs.json)"
+            status="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/qa-runs.json)"
+            conclusion="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/qa-runs.json)"
+
+            if [[ -n "$run_id" && "$status" == completed && "$stable_observations" -ge 3 ]]; then
+              break
+            fi
+            sleep 10
+          done
+
+          test -n "$run_id"
+          test "$status" = completed
+
+          feature_head="$stable_head"
+          current_main="$(git ls-remote --heads origin refs/heads/main | awk '{print $1}')"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$output/run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$output/jobs.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/artifacts" > "$output/artifacts.json"
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$output/failed-log.txt" 2>&1 || true
+
+          failed_steps="$(jq -r '[.jobs[].steps[] | select(.conclusion == "failure") | .name] | unique | .[]' "$output/jobs.json")"
+          skipped_steps="$(jq -r '[.jobs[].steps[] | select(.conclusion == "skipped") | .name] | unique | .[]' "$output/jobs.json")"
+          main_moved=false
+          if [[ "$current_main" != "$PINNED_MAIN" ]]; then main_moved=true; fi
+
+          jq -n \
+            --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg feature_head "$feature_head" \
+            --arg run_id "$run_id" \
+            --arg status "$status" \
+            --arg conclusion "$conclusion" \
+            --arg pinned_main "$PINNED_MAIN" \
+            --arg current_main "$current_main" \
+            --argjson main_moved "$main_moved" \
+            --arg failed_steps "$failed_steps" \
+            --arg skipped_steps "$skipped_steps" \
+            '{generated_at:$generated_at,feature_head:$feature_head,run_id:$run_id,status:$status,conclusion:$conclusion,pinned_main:$pinned_main,current_main:$current_main,main_moved:$main_moved,failed_steps:($failed_steps|split("\n")|map(select(length>0))),skipped_steps:($skipped_steps|split("\n")|map(select(length>0)))}' \
+            > "$output/status.json"
+
+          printf '%s\n' "$feature_head" > /tmp/pr212-final-feature-head
+          printf '%s\n' "$run_id" > /tmp/pr212-final-run-id
+          printf '%s\n' "$conclusion" > /tmp/pr212-final-conclusion
+          printf '%s\n' "$current_main" > /tmp/pr212-current-main
+
+      - name: Preserve exact successful evidence or classify the blocking gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-finalization
+          feature_head="$(cat /tmp/pr212-final-feature-head)"
+          run_id="$(cat /tmp/pr212-final-run-id)"
+          conclusion="$(cat /tmp/pr212-final-conclusion)"
+          current_main="$(cat /tmp/pr212-current-main)"
+
+          if [[ "$conclusion" != success ]]; then
+            jq -n \
+              --arg feature_head "$feature_head" \
+              --arg run_id "$run_id" \
+              --arg conclusion "$conclusion" \
+              --slurpfile jobs "$output/jobs.json" \
+              '{ready_for_preview:false,feature_head:$feature_head,run_id:$run_id,conclusion:$conclusion,failed_steps:([$jobs[0].jobs[].steps[] | select(.conclusion == "failure") | .name] | unique),first_failed_job:([$jobs[0].jobs[] | select(.conclusion == "failure") | {name,html_url}] | .[0] // null)}' \
+              > "$output/blocker.json"
+            exit 0
+          fi
+
+          required_steps=(
+            "Validate isolated QA configuration and exact non-custody boundary"
+            "Run source-contract integrity tests before database mutation"
+            "Capture pre-migration Supabase lint baseline"
+            "Compile and atomically apply the amended original migration to isolated QA"
+            "Generate exact isolated-QA database types"
+            "Require no new or institutional Supabase lint findings"
+            "Run forced-RLS, grants, foreign-key-index, and non-custody inventories"
+            "Run exact-base differential complete test suite"
+            "Require absolute TypeScript success against generated QA schema"
+            "Require absolute ESLint success"
+            "Require absolute production build success"
+            "Start QA-backed production server"
+            "Run organization-led and independent-individual authenticated workflows plus negative matrix"
+            "Run targeted current-main desktop and mobile regression smoke"
+            "Confirm complete synthetic identity and institutional-record cleanup"
+            "Require exact generated database types to be committed"
+          )
+          for required in "${required_steps[@]}"; do
+            jq -e --arg required "$required" '.jobs[].steps[] | select(.name == $required) | .conclusion == "success"' "$output/jobs.json" >/dev/null
+          done
+
+          artifact_name="institutional-trade-qa-${feature_head}-${run_id}"
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name "$artifact_name" --dir /tmp/pr212-final-artifact
+
+          find /tmp/pr212-final-artifact -type f -print0 | sort -z | xargs -0 sha256sum > "$output/artifact-files.sha256"
+          find /tmp/pr212-final-artifact -type f -printf '%P\n' | sort > "$output/artifact-files.txt"
+
+          for candidate in \
+            exact-heads.txt \
+            institutional-migration.sha256 \
+            database.types.sha256 \
+            database-types-drift.txt \
+            supabase-db-lint-new.txt \
+            differential-tests.json \
+            post-suite-residue.txt \
+            targeted-regression/report.json; do
+            source="$(find /tmp/pr212-final-artifact -path "*/$candidate" -o -path "/tmp/pr212-final-artifact/$candidate" | head -1)"
+            if [[ -n "$source" && -f "$source" ]]; then
+              destination="$output/evidence/$candidate"
+              mkdir -p "$(dirname "$destination")"
+              cp "$source" "$destination"
+            fi
+          done
+
+          artifact_id="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name) | .id' "$output/artifacts.json" | head -1)"
+          artifact_digest="$(jq -r --arg name "$artifact_name" '.artifacts[] | select(.name == $name) | .digest // empty' "$output/artifacts.json" | head -1)"
+          current_main="$(cat /tmp/pr212-current-main)"
+          main_moved=false
+          if [[ "$current_main" != "$PINNED_MAIN" ]]; then main_moved=true; fi
+
+          jq -n \
+            --arg feature_head "$feature_head" \
+            --arg run_id "$run_id" \
+            --arg artifact_name "$artifact_name" \
+            --arg artifact_id "$artifact_id" \
+            --arg artifact_digest "$artifact_digest" \
+            --arg pinned_main "$PINNED_MAIN" \
+            --arg current_main "$current_main" \
+            --argjson main_moved "$main_moved" \
+            '{ready_for_preview:($main_moved|not),qa_success:true,feature_head:$feature_head,run_id:$run_id,artifact:{name:$artifact_name,id:$artifact_id,digest:$artifact_digest},pinned_main:$pinned_main,current_main:$current_main,main_moved:$main_moved}' \
+            > "$output/ready.json"
+
+          if [[ "$main_moved" == true ]]; then
+            git fetch origin "$PINNED_MAIN" "$current_main" "$feature_head"
+            git diff --name-status "$PINNED_MAIN" "$current_main" > "$output/main-delta-files.txt"
+            git diff --stat "$PINNED_MAIN" "$current_main" > "$output/main-delta-stat.txt"
+          fi
+
+      - name: Commit evidence and update the PR status comment without changing draft state
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-finalization
+          feature_head="$(cat /tmp/pr212-final-feature-head)"
+          run_id="$(cat /tmp/pr212-final-run-id)"
+          conclusion="$(cat /tmp/pr212-final-conclusion)"
+          current_main="$(cat /tmp/pr212-current-main)"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Finalize PR 212 exact-head QA evidence"
+          git push origin "HEAD:refs/heads/${INSPECTOR_BRANCH}"
+
+          failed="$(jq -r '.failed_steps | if length == 0 then "None" else join(", ") end' "$output/status.json")"
+          main_status="unchanged at ${current_main}"
+          if [[ "$current_main" != "$PINNED_MAIN" ]]; then
+            main_status="moved to ${current_main}; delta integration required"
+          fi
+          readiness="No"
+          if [[ -s "$output/ready.json" ]]; then
+            readiness="$(jq -r 'if .ready_for_preview then "Yes" else "No" end' "$output/ready.json")"
+          fi
+
+          marker='<!-- pr212-final-qa-status -->'
+          body=$(cat <<EOF
+          $marker
+          ## PR #212 exact-head QA
+
+          - Feature head: \`$feature_head\`
+          - QA run: [$run_id](https://github.com/${GITHUB_REPOSITORY}/actions/runs/$run_id)
+          - Conclusion: **$conclusion**
+          - Failed gates: $failed
+          - Current main: $main_status
+          - Ready for invite-only preview: **$readiness**
+          - PR remains draft. Production deployment, institutional custody, and live payment activation remain disabled.
+          EOF
+          )
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/212/comments?per_page=100" --jq '.[] | select(.body | contains("<!-- pr212-final-qa-status -->")) | .id' | tail -1)"
+          if [[ -n "$existing" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/212/comments" -f body="$body" >/dev/null
+          fi
+
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .state)" = open
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .draft)" = true
+
+          test "$conclusion" = success
+          test "$current_main" = "$PINNED_MAIN"
