@@ -1,0 +1,51 @@
+name: Cancel obsolete marketplace moraltrade QA deployments
+
+on:
+  push:
+    branches:
+      - qa/marketplace-delta-exact-head-repair-20260731
+    paths:
+      - ".github/workflows/cancel-obsolete-marketplace-moral-deployments.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cancel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      CURRENT_QA_RUN: "30646951460"
+    steps:
+      - name: Cancel only obsolete exact-gate candidate deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$RUNNER_TEMP/deployments.json"
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=${PROJECT_ID}&limit=100&teamId=${TEAM_ID}" \
+            --output "$response"
+
+          mapfile -t obsolete_ids < <(jq -r --arg run "$CURRENT_QA_RUN" '
+            .deployments[]
+            | select(.meta.qaRole == "candidate-moraltrade")
+            | select((.meta.qaGateRun // "") != $run)
+            | select((.state // .readyState // "") == "QUEUED" or (.state // .readyState // "") == "BUILDING")
+            | (.uid // .id // empty)
+          ' "$response")
+
+          printf 'Found %s obsolete exact-gate deployment(s).\n' "${#obsolete_ids[@]}"
+          for id in "${obsolete_ids[@]}"; do
+            [[ "$id" == dpl_* ]]
+            echo "Cancelling $id"
+            curl --fail-with-body --silent --show-error \
+              --request PATCH \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v12/deployments/${id}/cancel?teamId=${TEAM_ID}" \
+              --output "$RUNNER_TEMP/cancel-${id}.json"
+            jq -e --arg id "$id" '(.id // .uid // "") == $id' "$RUNNER_TEMP/cancel-${id}.json" >/dev/null
+          done
