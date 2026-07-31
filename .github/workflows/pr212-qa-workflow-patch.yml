@@ -1,0 +1,102 @@
+name: Prepare PR 212 targeted-regression QA workflow patch
+
+on:
+  push:
+    branches:
+      - agent/pr212-qa-workflow-patch-20260731
+    paths:
+      - .github/workflows/pr212-qa-workflow-patch.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_FEATURE_HEAD: a7587f66592934e37fe1de8e174de6534a7e31f4
+      TARGET_BRANCH: feat/institutional-trade-system
+    steps:
+      - name: Check out exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Add targeted desktop and mobile regression smoke to exact-head QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+          test -f .github/scripts/pr212-targeted-regression-qa.mjs
+          node --check .github/scripts/pr212-targeted-regression-qa.mjs
+
+          mkdir -p /tmp/pr212-qa-workflow-patch/.github/workflows
+          cp .github/workflows/institutional-trade-qa.yml /tmp/original-institutional-trade-qa.yml
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path(".github/workflows/institutional-trade-qa.yml")
+          text = path.read_text()
+
+          syntax_marker = "          node --check .github/scripts/institutional-trade-qa-e2e.mjs\n"
+          syntax_replacement = (
+              syntax_marker
+              + "          node --check .github/scripts/pr212-targeted-regression-qa.mjs\n"
+          )
+          if text.count(syntax_marker) != 1:
+              raise SystemExit(
+                  f"Expected exactly one institutional E2E syntax marker, found {text.count(syntax_marker)}"
+              )
+          text = text.replace(syntax_marker, syntax_replacement)
+
+          runtime_pattern = re.compile(
+              r"^(?P<indent>\s*)node \.github/scripts/institutional-trade-qa-e2e\.mjs\s*$",
+              re.MULTILINE,
+          )
+          runtime_matches = list(runtime_pattern.finditer(text))
+          if len(runtime_matches) != 1:
+              raise SystemExit(
+                  f"Expected exactly one institutional E2E runtime command, found {len(runtime_matches)}"
+              )
+
+          match = runtime_matches[0]
+          indent = match.group("indent")
+          runtime_replacement = (
+              f"{indent}node .github/scripts/institutional-trade-qa-e2e.mjs\n"
+              f"{indent}node .github/scripts/pr212-targeted-regression-qa.mjs"
+          )
+          text = text[: match.start()] + runtime_replacement + text[match.end() :]
+
+          if text.count("node --check .github/scripts/pr212-targeted-regression-qa.mjs") != 1:
+              raise SystemExit("Targeted regression syntax gate was not inserted exactly once")
+          if text.count("node .github/scripts/pr212-targeted-regression-qa.mjs") != 1:
+              raise SystemExit("Targeted regression runtime gate was not inserted exactly once")
+
+          path.write_text(text)
+          PY
+
+          git diff --check
+          git diff -- .github/workflows/institutional-trade-qa.yml > /tmp/pr212-qa-workflow-patch/workflow.patch
+          cp .github/workflows/institutional-trade-qa.yml /tmp/pr212-qa-workflow-patch/.github/workflows/institutional-trade-qa.yml
+          {
+            echo "feature_head=$(git rev-parse HEAD)"
+            echo "original_blob=$(git hash-object /tmp/original-institutional-trade-qa.yml)"
+            echo "patched_blob=$(git hash-object .github/workflows/institutional-trade-qa.yml)"
+            echo "original_sha256=$(sha256sum /tmp/original-institutional-trade-qa.yml | cut -d' ' -f1)"
+            echo "patched_sha256=$(sha256sum .github/workflows/institutional-trade-qa.yml | cut -d' ' -f1)"
+          } > /tmp/pr212-qa-workflow-patch/manifest.txt
+          cat /tmp/pr212-qa-workflow-patch/manifest.txt
+          grep -n "pr212-targeted-regression-qa" .github/workflows/institutional-trade-qa.yml
+
+      - name: Upload exact patched workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-targeted-regression-qa-workflow-${{ github.run_id }}
+          path: /tmp/pr212-qa-workflow-patch
+          if-no-files-found: error
+          retention-days: 3
