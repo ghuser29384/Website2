@@ -7,15 +7,285 @@ on:
 
 permissions:
   contents: read
+  statuses: write
+
+concurrency:
+  group: complete-profile-preview-smoke-41994c4a-v2
+  cancel-in-progress: false
 
 jobs:
-  preview-secret-presence:
+  preview-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     env:
-      AUTOMATION_BYPASS: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
-      VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+      EXPECTED_SHA: 41994c4a11203cbe7a79e9bb262b938011051379
+      STATUS_CONTEXT: QA / Complete Profile preview smoke
+      PREVIEW_ORIGIN: https://moraltrade-site-1koy9yv8s-ellen-s.vercel.app
+      VERCEL_PROJECT: moraltrade-site
+      VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
     steps:
-      - name: Report available protected-preview authentication methods
+      - name: Mark preview smoke pending
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -n "$AUTOMATION_BYPASS" ]; then echo "automation_bypass_present=true"; else echo "automation_bypass_present=false"; fi
-          if [ -n "$VERCEL_TOKEN_VALUE" ]; then echo "vercel_token_present=true"; else echo "vercel_token_present=false"; fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state=pending \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="Running pinned first-time and returning-user preview smoke" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact candidate
+        run: test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Generate one-run Vercel automation bypass
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          secret="$(openssl rand -hex 16)"
+          echo "::add-mask::$secret"
+          payload="$(jq -cn --arg secret "$secret" '{generate:{secret:$secret,note:"Complete Profile exact preview smoke 2026-07-31"}}')"
+          curl -fsS -X PATCH \
+            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            > /tmp/vercel-bypass-generate.json
+          jq -e '.protectionBypass | type == "object"' /tmp/vercel-bypass-generate.json >/dev/null
+          echo "VERCEL_AUTOMATION_BYPASS_SECRET=$secret" >> "$GITHUB_ENV"
+
+      - name: Run protected Vercel preview smoke
+        run: |
+          mkdir -p .qa preview-smoke
+          cat > .qa/preview-smoke.mjs <<'SCRIPT'
+          import assert from "node:assert/strict";
+          import { mkdir, writeFile } from "node:fs/promises";
+          import { chromium } from "@playwright/test";
+
+          const origin = process.env.PREVIEW_ORIGIN;
+          const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+          const expectedSha = process.env.EXPECTED_SHA;
+          assert.ok(origin, "PREVIEW_ORIGIN is required");
+          assert.ok(bypassSecret, "VERCEL_AUTOMATION_BYPASS_SECRET is required");
+          assert.ok(expectedSha, "EXPECTED_SHA is required");
+
+          const outputDir = "preview-smoke";
+          await mkdir(outputDir, { recursive: true });
+          const browser = await chromium.launch({ headless: true });
+          const report = {
+            expectedSha,
+            previewOrigin: origin,
+            checkedAt: new Date().toISOString(),
+            scenarios: [],
+          };
+
+          async function createContext(viewport) {
+            const context = await browser.newContext({ viewport });
+            await context.route(`${origin}/**`, async (route) => {
+              await route.continue({
+                headers: {
+                  ...route.request().headers(),
+                  "x-vercel-protection-bypass": bypassSecret,
+                  "x-vercel-set-bypass-cookie": "true",
+                },
+              });
+            });
+            return context;
+          }
+
+          function attachDiagnostics(page, state) {
+            page.on("pageerror", (error) => state.pageErrors.push(error.message));
+            page.on("response", (response) => {
+              if (response.status() >= 500 && new URL(response.url()).origin === origin) {
+                state.serverErrors.push({ status: response.status(), url: response.url() });
+              }
+            });
+          }
+
+          async function preserveBypassAndClearWalkthroughState(context) {
+            const cookies = (await context.cookies()).filter(
+              (cookie) => cookie.name !== "mt_walkthrough_seen",
+            );
+            await context.clearCookies();
+            if (cookies.length > 0) await context.addCookies(cookies);
+          }
+
+          function assertNoFatalDiagnostics(state) {
+            assert.deepEqual(state.pageErrors, [], `Page errors: ${state.pageErrors.join(" | ")}`);
+            assert.deepEqual(
+              state.serverErrors,
+              [],
+              `Same-origin 5xx responses: ${JSON.stringify(state.serverErrors)}`,
+            );
+          }
+
+          try {
+            {
+              const state = { name: "first-time-desktop", pageErrors: [], serverErrors: [] };
+              const context = await createContext({ width: 1440, height: 1000 });
+              const page = await context.newPage();
+              attachDiagnostics(page, state);
+              await preserveBypassAndClearWalkthroughState(context);
+              const response = await page.goto(`${origin}/complete-profile`, {
+                waitUntil: "domcontentloaded",
+                timeout: 120_000,
+              });
+              assert.ok(response && response.status() < 500, "First-time route did not return a usable response");
+              await page.waitForURL((url) => url.pathname === "/walkthrough", { timeout: 60_000 });
+              assert.equal(new URL(page.url()).pathname, "/walkthrough");
+              assert.equal(await page.getByLabel("Profile setup: priorities").count(), 0);
+              const cookies = await context.cookies(origin);
+              assert.equal(
+                cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")?.value,
+                "1",
+                "First-time redirect did not record the Walkthrough as seen",
+              );
+              await page.screenshot({ path: `${outputDir}/first-time-desktop.png`, fullPage: true });
+              assertNoFatalDiagnostics(state);
+              state.finalUrl = page.url();
+              state.status = "passed";
+              report.scenarios.push(state);
+              await context.close();
+            }
+
+            {
+              const state = { name: "returning-desktop", pageErrors: [], serverErrors: [] };
+              const context = await createContext({ width: 1440, height: 1000 });
+              const page = await context.newPage();
+              attachDiagnostics(page, state);
+              await preserveBypassAndClearWalkthroughState(context);
+              await context.addCookies([
+                { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
+              ]);
+              const response = await page.goto(`${origin}/complete-profile`, {
+                waitUntil: "domcontentloaded",
+                timeout: 120_000,
+              });
+              assert.ok(response && response.status() < 500, "Returning route did not return a usable response");
+              await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
+              await page
+                .getByRole("heading", { name: "Spend 100 sparks of attention." })
+                .waitFor({ state: "visible", timeout: 60_000 });
+              await page
+                .getByLabel("Profile setup: priorities")
+                .waitFor({ state: "visible", timeout: 60_000 });
+              assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
+              await page.getByRole("button", { name: "Save profile" }).click();
+              const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
+              await dialog.waitFor({ state: "visible", timeout: 30_000 });
+              const dialogText = await dialog.textContent();
+              assert.match(dialogText ?? "", /Your 100-spark ranking/);
+              assert.match(dialogText ?? "", /Not set here/);
+              assert.match(dialogText ?? "", /Saving does not create or publish an offer\./);
+              await page.screenshot({ path: `${outputDir}/returning-desktop.png`, fullPage: true });
+              assertNoFatalDiagnostics(state);
+              state.finalUrl = page.url();
+              state.status = "passed";
+              report.scenarios.push(state);
+              await context.close();
+            }
+
+            {
+              const state = { name: "returning-mobile", pageErrors: [], serverErrors: [] };
+              const context = await createContext({ width: 390, height: 844 });
+              const page = await context.newPage();
+              attachDiagnostics(page, state);
+              await preserveBypassAndClearWalkthroughState(context);
+              await context.addCookies([
+                { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
+              ]);
+              const response = await page.goto(`${origin}/complete-profile`, {
+                waitUntil: "domcontentloaded",
+                timeout: 120_000,
+              });
+              assert.ok(response && response.status() < 500, "Mobile returning route did not return a usable response");
+              await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
+              await page
+                .getByLabel("80 of 100 attention points assigned")
+                .waitFor({ state: "visible", timeout: 60_000 });
+              const dimensions = await page.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                documentWidth: document.documentElement.scrollWidth,
+              }));
+              assert.ok(
+                dimensions.documentWidth <= dimensions.viewportWidth,
+                `Mobile horizontal overflow: ${JSON.stringify(dimensions)}`,
+              );
+              await page.screenshot({ path: `${outputDir}/returning-mobile.png`, fullPage: true });
+              assertNoFatalDiagnostics(state);
+              state.finalUrl = page.url();
+              state.dimensions = dimensions;
+              state.status = "passed";
+              report.scenarios.push(state);
+              await context.close();
+            }
+          } catch (error) {
+            report.failure = error instanceof Error ? error.stack : String(error);
+            throw error;
+          } finally {
+            await writeFile(`${outputDir}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
+            await browser.close();
+          }
+          SCRIPT
+          node .qa/preview-smoke.mjs
+
+      - name: Upload preview smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-profile-preview-smoke-41994c4a-v2
+          path: preview-smoke
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Revoke one-run Vercel automation bypass
+        if: always() && env.VERCEL_AUTOMATION_BYPASS_SECRET != ''
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          payload="$(jq -cn --arg secret "$VERCEL_AUTOMATION_BYPASS_SECRET" '{revoke:{secret:$secret,regenerate:false}}')"
+          curl -fsS -X PATCH \
+            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            > /tmp/vercel-bypass-revoke.json
+
+      - name: Publish preview smoke result
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ "$JOB_STATUS" = "success" ]; then
+            state=success
+            description="Pinned preview passed first-time, returning desktop, and returning mobile smoke"
+          else
+            state=failure
+            description="Pinned preview smoke failed; inspect workflow evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state="$state" \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
