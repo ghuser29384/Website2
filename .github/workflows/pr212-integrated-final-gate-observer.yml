@@ -19,7 +19,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_WORKFLOW: pr212-integrated-final-gate.yml
-      TARGET_HEAD: c70a27eb48d3f0c5d69db70c0b987ebc94805dd8
+      TARGET_HEAD: 3eee5526c08ad5deebfc652d845b463cff994bc6
     steps:
       - uses: actions/checkout@v4
         with:
@@ -62,3 +62,5 @@ jobs:
           git push origin HEAD:agent/pr212-main-integration-ops-20260730
 
           [[ -n "$run_id" && "$status" == "completed" ]] || exit 1
+
+# Observe the current-main-aligned home-shell smoke rerun.
