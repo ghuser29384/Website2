@@ -1,0 +1,53 @@
+name: Temporary export — exact current main source
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Verify exact current-main base
+        run: |
+          set -euo pipefail
+          BASE='36650b48f9e664ea6d67c0840cf6a803060e8d7c'
+          test "$(git merge-base "$BASE" HEAD)" = "$BASE"
+          test "$(git diff --name-only "$BASE"..HEAD | sort)" = '.github/workflows/export-feed-create-current-main-20260731.yml'
+          git rev-parse HEAD > SOURCE_COMMIT
+          git rev-parse HEAD^{tree} > SOURCE_TREE
+          printf '%s\n' "$BASE" > SOURCE_BASE
+
+      - name: Package repository source
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/export
+          tar \
+            --exclude='.git' \
+            --exclude='node_modules' \
+            --exclude='.next' \
+            --exclude='test-results' \
+            --exclude='playwright-report' \
+            --exclude='coverage' \
+            -czf /tmp/export/Website2-current-main-source.tar.gz .
+          sha256sum /tmp/export/Website2-current-main-source.tar.gz > /tmp/export/SHA256SUMS
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: Website2-current-main-source-20260731
+          path: /tmp/export
+          if-no-files-found: error
+          retention-days: 3
