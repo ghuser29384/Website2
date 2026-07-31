@@ -73,19 +73,84 @@ jobs:
             src/lib/crawlability.test.ts \
             src/lib/public-route-smoke.test.ts
 
-          # Decision 3A: remove stale non-institutional clean-branch repairs and preserve current main.
+          # Decision 3A: remove only stale non-institutional clean changes that are not
+          # required for institutional behavior or absolute repository gates.
           git checkout "$PINNED_MAIN" -- \
             src/app/complete-profile/page.tsx \
             src/app/how-it-works/page.tsx \
-            src/app/offers/offer-plane-inline-mount.tsx \
-            src/lib/discovery-ranking.test.ts \
-            src/lib/funding.test.ts \
-            src/lib/payments/conditional-state.test.ts \
-            src/lib/x-profile-connector.test.ts \
-            tsconfig.json
+            src/app/offers/offer-plane-inline-mount.tsx
 
           test -z "$(git diff --name-only --diff-filter=U)"
           ! git grep -nE '^(<<<<<<<|=======|>>>>>>>)' -- . ':!package-lock.json'
+
+      - name: Apply narrow current-main TypeScript corrections required by the absolute gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          public_route = Path("src/lib/public-route-smoke.test.ts")
+          text = public_route.read_text()
+          old = '''function flattenPrimaryNavHrefs() {
+            return getPrimaryNavLinks(false).flatMap((link) =>
+              "items" in link && link.items
+                ? link.items.map((item) => item.href)
+                : "href" in link && link.href
+                  ? [link.href]
+                  : [],
+            );
+          }
+          '''
+          new = '''interface RegressionPrimaryNavItem {
+            href: string;
+          }
+
+          interface RegressionPrimaryNavEntry {
+            href?: string;
+            items?: readonly RegressionPrimaryNavItem[];
+          }
+
+          function flattenPrimaryNavHrefs(): string[] {
+            const links = getPrimaryNavLinks(false) as readonly RegressionPrimaryNavEntry[];
+            return links.flatMap((link) =>
+              link.items?.map((item) => item.href) ?? (link.href ? [link.href] : []),
+            );
+          }
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f"Expected one current-main nav flattener, found {text.count(old)}")
+          public_route.write_text(text.replace(old, new))
+
+          failure_bonus = Path("src/lib/mpgf/failure-bonus-operator.test.ts")
+          text = failure_bonus.read_text()
+          old = '  if (!result.ok) throw new Error(result.errors.join(" "));\n'
+          new = '  if (!result.ok) throw new Error("Expected a valid failure-bonus quote.");\n'
+          if text.count(old) != 1:
+              raise SystemExit(f"Expected one unreachable error access, found {text.count(old)}")
+          failure_bonus.write_text(text.replace(old, new))
+
+          training = Path("src/lib/recommendation-training-execution.test.ts")
+          text = training.read_text()
+          replacements = [
+              (
+                  '    { VERCEL_DEPLOYMENT_ID: "dpl_canonical" },\n',
+                  '    { NODE_ENV: "test", VERCEL_DEPLOYMENT_ID: "dpl_canonical" },\n',
+                  1,
+              ),
+              (
+                  '    canonicalRuntime,\n    {},\n',
+                  '    canonicalRuntime,\n    { NODE_ENV: "test" },\n',
+                  2,
+              ),
+          ]
+          for old, new, expected in replacements:
+              if text.count(old) != expected:
+                  raise SystemExit(f"Expected {expected} occurrences of {old!r}, found {text.count(old)}")
+              text = text.replace(old, new)
+          training.write_text(text)
+          PY
+
           git add -A
           git diff --cached --check
 
@@ -121,13 +186,21 @@ jobs:
           src/institutional-product-completeness.test.ts
           src/institutional-trade-migration.test.ts
           src/institutional-trade-wiring.test.ts
+          src/lib/discovery-ranking.test.ts
+          src/lib/funding.test.ts
           src/lib/institutional-data.ts
           src/lib/institutional-feature-gates.ts
           src/lib/institutional-trade.test.ts
           src/lib/institutional-trade.ts
           src/lib/institutional-webhooks.test.ts
           src/lib/institutional-webhooks.ts
+          src/lib/mpgf/failure-bonus-operator.test.ts
+          src/lib/payments/conditional-state.test.ts
+          src/lib/public-route-smoke.test.ts
+          src/lib/recommendation-training-execution.test.ts
+          src/lib/x-profile-connector.test.ts
           supabase/migrations/20260726123000_institutional_trade_system.sql
+          tsconfig.json
           FILES
           sort -o /tmp/expected-main-diff.txt /tmp/expected-main-diff.txt
           git diff --cached --name-only "$PINNED_MAIN" | sort > /tmp/actual-main-diff.txt
@@ -138,7 +211,7 @@ jobs:
             echo "pinned_main=$PINNED_MAIN"
             echo "merge_base=$(git merge-base "$CLEAN_HEAD" "$PINNED_MAIN")"
             echo "conflict_policy=take current main for both runtime conflicts and both test conflicts"
-            echo "non_institutional_policy=reset reviewed stale clean-branch files to pinned main"
+            echo "non_institutional_policy=preserve current main unless a narrow correction is required for absolute TypeScript, ESLint, or build success"
             echo
             echo "=== RETAINED DIFF RELATIVE TO PINNED MAIN ==="
             cat /tmp/actual-main-diff.txt
@@ -150,11 +223,16 @@ jobs:
               src/app/offers/offer-plane-inline-mount.tsx \
               src/app/offers/offer-visual-directory-mount.tsx \
               src/components/profile/complete-profile-connections.tsx \
-              src/lib/crawlability.test.ts \
+              src/lib/crawlability.test.ts
+            echo
+            echo "=== RETAINED SO ABSOLUTE GATES REMAIN GREEN ==="
+            printf '%s\n' \
               src/lib/discovery-ranking.test.ts \
               src/lib/funding.test.ts \
+              src/lib/mpgf/failure-bonus-operator.test.ts \
               src/lib/payments/conditional-state.test.ts \
               src/lib/public-route-smoke.test.ts \
+              src/lib/recommendation-training-execution.test.ts \
               src/lib/x-profile-connector.test.ts \
               tsconfig.json
           } > pr212-main-integration-evidence/audit.txt
