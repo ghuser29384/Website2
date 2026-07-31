@@ -108,6 +108,13 @@ export function CompleteProfileConnections({
   const descriptionId = useId();
 
   useEffect(() => {
+    if (!initialOpen) return;
+
+    const frame = window.requestAnimationFrame(() => setOpen(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [initialOpen]);
+
+  useEffect(() => {
     if (!open) return;
 
     const previousOverflow = document.body.style.overflow;

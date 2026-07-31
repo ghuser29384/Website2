@@ -1,0 +1,160 @@
+.fund-mode-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.common-ground-panel {
+  margin: 14px 0 0;
+  border: 1px solid var(--line-strong);
+  background: rgba(251, 250, 246, 0.9);
+}
+
+.common-ground-panel[hidden] {
+  display: none !important;
+}
+
+.common-ground-toolbar,
+.common-ground-participants-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.common-ground-toolbar strong,
+.common-ground-participants-head span {
+  font: 700 9px/1.2 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.common-ground-toolbar button,
+.common-ground-participants-head button,
+.common-ground-remove {
+  min-height: 32px;
+  border: 1px solid var(--line-strong);
+  padding: 0 10px;
+  background: white;
+  font: 700 9px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.common-ground-toolbar button:hover,
+.common-ground-participants-head button:hover,
+.common-ground-remove:hover {
+  background: var(--ink);
+  color: white;
+}
+
+.common-ground-top-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(260px, 1.3fr);
+  gap: 12px;
+  padding: 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.common-ground-participant-list {
+  display: grid;
+}
+
+.common-ground-participant-row {
+  display: grid;
+  grid-template-columns:
+    minmax(130px, 0.8fr)
+    minmax(180px, 1.2fr)
+    minmax(120px, 0.72fr)
+    minmax(120px, 0.72fr)
+    minmax(120px, 0.72fr)
+    auto;
+  gap: 10px;
+  align-items: end;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.common-ground-participant-row .offer-field {
+  margin: 0;
+}
+
+.common-ground-participant-row input[readonly] {
+  background: var(--blue-soft);
+  color: var(--blue);
+  font-weight: 700;
+}
+
+.common-ground-remove {
+  margin-bottom: 1px;
+  color: #8b3d32;
+}
+
+.common-ground-confirm {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 13px 14px 0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.common-ground-confirm input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--blue);
+}
+
+.common-ground-status {
+  min-height: 42px;
+  margin: 12px 14px 14px;
+  padding: 11px 13px;
+  border-left: 4px solid var(--line-strong);
+  background: rgba(18, 18, 15, 0.045);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.common-ground-status.ready {
+  border-left-color: var(--moss);
+  background: var(--moss-soft);
+  color: #315039;
+}
+
+.common-ground-status.blocked {
+  border-left-color: var(--apricot);
+  background: var(--apricot-soft);
+  color: #693b2a;
+}
+
+@media (max-width: 1100px) {
+  .fund-mode-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .common-ground-participant-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .common-ground-remove {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 700px) {
+  .common-ground-top-grid,
+  .common-ground-participant-row {
+    grid-template-columns: 1fr;
+  }
+
+  .common-ground-toolbar,
+  .common-ground-participants-head {
+    align-items: flex-start;
+    padding-top: 11px;
+    padding-bottom: 11px;
+  }
+}

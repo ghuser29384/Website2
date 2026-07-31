@@ -7,150 +7,158 @@ function source(path: string) {
   return readFileSync(resolve(process.cwd(), path), "utf8");
 }
 
-test("the Card Stack requires public-evidence certification before submission", () => {
+const migrationPaths = [
+  "supabase/migrations/20260729165525_evidence_weighted_milestones_additive.sql",
+  "supabase/migrations/20260729165526_evidence_weighted_payment_completion.sql",
+  "supabase/migrations/20260729165527_evidence_weighted_payment_advisor_indexes.sql",
+  "supabase/migrations/20260729165528_credibility_model_seed_invariant.sql",
+  "supabase/migrations/20260729165529_evidence_weighted_payment_rls_hardening.sql",
+  "supabase/migrations/20260729165531_evidence_weighted_rls_identity_binding.sql",
+  "supabase/migrations/20260729165532_evidence_weighted_remaining_fk_indexes.sql",
+  "supabase/migrations/20260729165533_evidence_weighted_privacy_authorization_cutover.sql",
+];
+
+function migrationSource() {
+  return migrationPaths.map(source).join("\n");
+}
+
+test("proposal drafting keeps evidence originals private", () => {
   const workbench = source("src/components/core-trade/trade-draft-workbench.tsx");
-  const action = source("src/app/core-trade-actions.ts");
+  const action = source("src/app/core-trade-actions-base.ts");
 
-  assert.match(workbench, /publicEvidenceCertification: boolean/);
-  assert.match(workbench, /name="public_evidence_certification"/);
-  assert.match(workbench, /!values\.publicEvidenceCertification/);
-  assert.match(workbench, /evidence submitted under an active agreement is public by default/i);
-  assert.match(action, /readCheckbox\(formData, "public_evidence_certification"\)/);
+  assert.doesNotMatch(workbench, /publicEvidenceCertification/);
+  assert.doesNotMatch(workbench, /name="public_evidence_certification"/);
+  assert.match(workbench, /Original evidence.*stay private/i);
+  assert.match(workbench, /Only safe outcome metadata may be published/i);
+  assert.doesNotMatch(action, /readCheckbox\(formData, "public_evidence_certification"\)/);
 });
 
-test("evidence submission requires a certified public-safe copy", () => {
-  const action = source("src/app/core-trade-actions.ts");
-  const agreement = source("src/app/trade-agreements/[agreementId]/page.tsx");
+test("the canonical agreement uses private milestone evidence and neutral grading", () => {
+  const page = source("src/app/trade-agreements/[agreementId]/page.tsx");
+  const workflow = source(
+    "src/components/core-trade/trade-milestone-workflow.tsx",
+  );
 
-  assert.match(action, /readCheckbox\(formData, "public_safe_copy"\)/);
-  assert.match(action, /public_visibility: "public"/);
-  assert.match(action, /public_storage_path:/);
-  assert.match(action, /public_redaction_note:/);
-  assert.match(agreement, /name="public_safe_copy" required/);
-  assert.match(agreement, /Review evidence/);
-  assert.match(agreement, /evidence (?:viewer|dossier)/i);
-  assert.match(agreement, /Visibility:/);
-  assert.match(agreement, /Redaction:/);
+  assert.match(page, /<TradeMilestoneWorkflow/);
+  assert.match(page, /submitTradeEvidenceBundleAction/);
+  assert.match(page, /submitNeutralTradeMilestoneReviewAction/);
+  assert.doesNotMatch(page, /name="public_safe_copy"/);
+  assert.doesNotMatch(page, /reviewTradeEvidenceAction/);
+  assert.match(workflow, /100%, 75%, 50%, 25%, or 0%/);
+  assert.match(workflow, /one complete bundle for this attempt/i);
+  assert.match(workflow, /Original files,[\s\S]*remain private/i);
 });
 
-test("the schema is public by default and keeps explicit safety and redaction states", () => {
-  const migration = source("supabase/migrations/20260718130000_public_trade_evidence.sql");
-
-  assert.match(migration, /public_evidence_enabled boolean not null default true/);
-  assert.match(migration, /public_visibility in \('public', 'withheld_safety'\)/);
-  assert.match(migration, /redaction_status in \('pending_review', 'not_required', 'redacted', 'withheld'\)/);
-  assert.match(migration, /initialize_public_trade_evidence_trigger/);
-  assert.match(migration, /touch_public_evidence_record_trigger/);
-});
-
-test("the evidence dossier exposes section tabs, artifact controls, and privacy details", () => {
+test("the anonymous outcome page requests only the v2 metadata projection", () => {
   const page = source("src/app/evidence/[[...recordId]]/page.tsx");
-  const stage = source("src/components/evidence/evidence-stage.tsx");
-  const evidenceSurface = `${page}\n${stage}`;
+  const styles = source("src/app/globals.css");
 
-  assert.match(evidenceSurface, /data-stage-evidence-viewer/);
-  assert.match(evidenceSurface, /role="tablist"/);
-  assert.match(evidenceSurface, /role="tab"/);
-  assert.match(evidenceSurface, /\{ id: "evidence", label: "Evidence" \}/);
-  assert.match(evidenceSurface, /\{ id: "terms", label: "Trade terms" \}/);
-  assert.match(evidenceSurface, /\{ id: "verification", label: "Verification" \}/);
-  assert.match(evidenceSurface, /data-stage-artifact/);
-  assert.match(evidenceSurface, /aria-pressed=/);
-  assert.match(evidenceSurface, /Privacy details/);
-  assert.match(evidenceSurface, /Illustrative record — the people, evidence, and review state below are examples/);
-  assert.match(stage, /LocalDateTime/);
-  assert.doesNotMatch(stage, /new Intl\.DateTimeFormat/);
-});
-
-test("the global directory is evidence-driven while direct trade dossiers can await submission", () => {
-  const page = source("src/app/evidence/[[...recordId]]/page.tsx");
-  const hydrateStart = page.indexOf("async function hydratePublic");
-  const hydrateEnd = page.indexOf("async function listRecords", hydrateStart);
-  const hydrate = page.slice(hydrateStart, hydrateEnd);
-  const directoryStart = page.indexOf("async function listRecords");
-  const directoryEnd = page.indexOf("async function getRecord", directoryStart);
-  const directory = page.slice(directoryStart, directoryEnd);
-
-  assert.ok(hydrateStart >= 0 && hydrateEnd > hydrateStart, "could not locate the evidence hydrator");
-  assert.match(hydrate, /const rawEvidence = byAgreement\.get\(id\) \?\? \[\]/);
-  assert.match(hydrate, /records\.push/);
-  assert.ok(directoryStart >= 0 && directoryEnd > directoryStart, "could not locate the evidence directory query");
-  assert.match(directory, /list_public_moral_trade_evidence_v1/);
-  assert.match(directory, /hydratePublic/);
-  assert.match(directory, /p_limit: DIRECTORY_PAGE_SIZE/);
-  assert.match(directory, /p_offset: from/);
-  assert.doesNotMatch(directory, /\.limit\(50\)/);
-  assert.doesNotMatch(hydrate, /from\("trade_evidence_items"\)\.select\("\*"\)/);
+  assert.match(page, /list_public_moral_trade_outcomes_v2/);
+  assert.doesNotMatch(page, /get_public_moral_trade_evidence_v1/);
+  assert.doesNotMatch(page, /list_public_moral_trade_evidence_v1/);
+  assert.doesNotMatch(page, /trade_evidence_items/);
   assert.doesNotMatch(page, /createServiceClient/);
-  assert.match(page, /No evidence has been submitted yet\./);
-  assert.match(page, /Evidence could not be loaded\./);
-});
-
-test("the Evidence directory uses the shared product language without confusing state colors", () => {
-  const page = source("src/app/evidence/[[...recordId]]/page.tsx");
-  const directoryStyles = source(
-    "src/app/evidence/[[...recordId]]/evidence-directory.module.css",
-  );
-  const dossierStyles = source("src/components/evidence/evidence-stage.module.css");
-
-  assert.match(page, /data-testid="evidence-product-shell"/);
-  assert.match(page, /aria-label="Evidence sections"/);
-  assert.match(page, /<form action="\/evidence" method="get">/);
-  assert.match(page, /aria-labelledby=\{titleId\}/);
-  assert.match(page, /Interface guide · no live data/);
-  assert.match(page, /showSearch/);
-  assert.doesNotMatch(page, /showSearch=\{false\}/);
-  assert.match(directoryStyles, /--ledger-paper: var\(--bg\)/);
-  assert.match(directoryStyles, /--ledger-blue: var\(--accent\)/);
-  assert.match(directoryStyles, /font-family: var\(--font-heading\)/);
-  assert.match(directoryStyles, /font-family: var\(--font-mono\)/);
-  assert.match(directoryStyles, /outline: 2px solid var\(--ledger-blue\)/);
-  assert.match(dossierStyles, /--evidence-accent: var\(--accent\)/);
-  assert.match(page, /label: "Participant accepted"/);
+  for (const field of [
+    "actionCategory",
+    "lifecycleStatus",
+    "confidenceBand",
+    "completionFraction",
+    "payoutPercentage",
+    "date",
+  ]) {
+    assert.match(page, new RegExp(field));
+  }
+  assert.match(page, /Individual public dossier links have been retired/i);
+  assert.match(page, /marketplace-app-shell evidence-outcomes-shell/);
   assert.match(
-    source("src/components/evidence/evidence-stage.tsx"),
-    /const allAccepted = record\.evidence\.length > 0 && acceptedCount === record\.evidence\.length/,
+    styles,
+    /\.evidence-outcomes-shell\.marketplace-app-shell #main-content > \.section\s*{\s*display:\s*block;/,
   );
-  assert.match(dossierStyles, /\.statusChallenged[\s\S]*var\(--evidence-red\)/);
-  assert.match(dossierStyles, /\.tabs \.activeTab::after \{\s*background: var\(--evidence-accent\)/);
-  assert.match(dossierStyles, /\.timelineAccepted \.timelineMarker[\s\S]*var\(--evidence-green\)/);
-  assert.match(dossierStyles, /\.timelineChallenged \.timelineMarker[\s\S]*var\(--evidence-red\)/);
 });
 
-test("the public evidence read contract projects only approved fields and gates stored files", () => {
-  const migration = source(
-    "supabase/migrations/20260722104500_public_evidence_read_contract.sql",
+test("the database exposes exactly the approved six public fields", () => {
+  const migration = migrationSource();
+  const start = migration.indexOf(
+    "create or replace function public.list_public_moral_trade_outcomes_v2",
   );
+  const end = migration.indexOf(
+    "create or replace function public.get_safe_profile_labels_v1",
+    start,
+  );
+  const projection = migration.slice(start, end);
+  const recordBuilder = projection.match(
+    /jsonb_build_object\(\s*'actionCategory'[\s\S]*?'date', outcome_page\.outcome_date\s*\)/i,
+  )?.[0];
 
-  assert.match(migration, /get_public_moral_trade_evidence_v1/);
-  assert.match(migration, /list_public_moral_trade_evidence_v1/);
-  assert.match(migration, /security definer/);
-  assert.match(migration, /set search_path = ''/);
-  assert.match(migration, /a\.public_evidence_enabled is true/);
-  assert.match(migration, /e\.public_visibility = 'public'/);
-  assert.match(migration, /e\.public_published_at is not null/);
-  assert.match(migration, /e\.redaction_status in \('redacted', 'not_required'\)/);
-  assert.match(migration, /e\.public_storage_path = target_object_name/);
-  assert.match(migration, /grant execute on function public\.get_public_moral_trade_evidence_v1\(uuid\) to anon, authenticated/);
-  assert.match(migration, /limit least\(greatest\(coalesce\(p_limit, 24\), 1\), 50\)/);
+  assert.ok(recordBuilder);
+  assert.deepEqual(
+    [...recordBuilder.matchAll(/'([A-Za-z]+)'/g)].map((match) => match[1]),
+    [
+      "actionCategory",
+      "lifecycleStatus",
+      "confidenceBand",
+      "completionFraction",
+      "payoutPercentage",
+      "date",
+    ],
+  );
+  assert.doesNotMatch(
+    projection,
+    /provider_reference|receipt_storage_path|paid_on|public_storage_path/i,
+  );
+});
+
+test("legacy public evidence functions and anonymous stored files are revoked", () => {
+  const migration = migrationSource();
+
+  assert.match(
+    migration,
+    /revoke execute on function public\.get_public_moral_trade_evidence_v1\(uuid\)[\s\S]*from public, anon, authenticated/i,
+  );
+  assert.match(
+    migration,
+    /revoke execute on function public\.list_public_moral_trade_evidence_v1\(integer, integer\)[\s\S]*from public, anon, authenticated/i,
+  );
+  assert.match(
+    migration,
+    /drop policy if exists "public_safe_trade_evidence_read" on storage\.objects/i,
+  );
   assert.doesNotMatch(
     migration.slice(
-      migration.indexOf("create or replace function public.get_public_moral_trade_evidence_v1"),
-      migration.indexOf("comment on function public.get_public_moral_trade_evidence_v1"),
+      migration.indexOf("private_trade_evidence_authorized_read"),
+      migration.indexOf("-- Phase 1B"),
     ),
-    /e\.(storage_path|evidence_url|attestation|challenge_reason)/,
+    /to anon/,
   );
-  assert.doesNotMatch(migration, /public_summary[^\n]+attestation/);
 });
 
-test("participant evidence decisions stay scoped, confirmed, and inside the review window", () => {
-  const action = source("src/app/core-trade-actions.ts");
-  const stage = source("src/components/evidence/evidence-stage.tsx");
+test("assigned reviewers see private evidence only through an authenticated route", () => {
+  const reviewPage = source("src/app/trade-review/[milestoneId]/page.tsx");
+  const migration = migrationSource();
 
-  assert.match(action, /safeInternalPath\(\s*read\(formData, "return_to"\)/);
-  assert.match(action, /reviewWindowEndsAt <= Date\.now\(\)/);
-  assert.match(stage, /acceptDialogRef\.current\?\.showModal\(\)/);
-  assert.match(stage, /Accepting records your participant review/);
-  assert.match(stage, /name="return_to"/);
-  assert.match(stage, /this screen does not itself move money/i);
+  assert.match(reviewPage, /requireViewer\(returnTo\)/);
+  assert.match(reviewPage, /createSignedUrl/);
+  assert.match(reviewPage, /resolveTradeMilestoneAppealAction/);
+  assert.match(reviewPage, /\[100, 75, 50, 25, 0\]/);
+  assert.match(
+    migration,
+    /current_actor_has_trade_role\('reviewer'\)/,
+  );
+  assert.match(migration, /auth\.jwt\(\) ->> 'aal'[\s\S]*= 'aal2'/);
+});
+
+test("external-payment evidence stays private and noncustodial", () => {
+  const workflow = source(
+    "src/components/core-trade/trade-milestone-workflow.tsx",
+  );
+  const actions = source("src/app/trade-milestone-actions.ts");
+
+  assert.match(workflow, /does not hold, escrow, capture, release, or redistribute/i);
+  assert.match(actions, /report_trade_external_payment_v1/);
+  assert.match(actions, /respond_trade_external_payment_v1/);
+  assert.match(actions, /payment_response/);
+  assert.doesNotMatch(
+    source("src/app/evidence/[[...recordId]]/page.tsx"),
+    /provider_reference|receipt_storage_path|amount_due_cents/,
+  );
 });

@@ -1582,3 +1582,517 @@
     transition-duration: 1ms !important;
   }
 }
+
+/* Donation Redirect: rescue opposed donations, then amplify one side through a coalition trade. */
+.mtw-redirect-comparison-scene,
+.mtw-coalition-scene,
+.mtw-group-deal-scene,
+.mtw-coalition-settlement-scene {
+  align-content: center;
+}
+
+.mtw-redirect-comparison-scene .mtw-scene-title,
+.mtw-coalition-scene .mtw-scene-title,
+.mtw-group-deal-scene .mtw-scene-title,
+.mtw-coalition-settlement-scene .mtw-scene-title {
+  max-width: 15ch;
+  font-size: clamp(40px, 5.4vw, 80px);
+}
+
+.mtw-stream-stage .mtw-stream-label span {
+  max-width: 210px;
+  line-height: 1.05;
+}
+
+.mtw-impact-options {
+  width: min(1080px, 100%);
+  margin-top: 26px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mtw-impact-option {
+  min-height: 190px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid rgba(25, 25, 21, 0.16);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.mtw-impact-option.is-group-buy {
+  border-color: rgba(45, 85, 61, 0.45);
+  background: #dce8da;
+  box-shadow: 0 18px 38px rgba(29, 58, 39, 0.1);
+  transform: translateY(-7px);
+}
+
+.mtw-impact-option > span,
+.mtw-group-deal-card > span,
+.mtw-coalition-profile > span,
+.mtw-governance-panel > span {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.58;
+}
+
+.mtw-impact-option strong {
+  margin-top: auto;
+  font-family: var(--mtw-serif);
+  font-size: clamp(28px, 3vw, 44px);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+}
+
+.mtw-impact-option b {
+  font-size: 17px;
+}
+
+.mtw-impact-option small,
+.mtw-group-deal-card small,
+.mtw-governance-choices small {
+  line-height: 1.35;
+  opacity: 0.64;
+}
+
+.mtw-example-note,
+.mtw-fallback-note {
+  width: min(900px, 100%);
+  margin: 16px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  opacity: 0.65;
+}
+
+.mtw-coalition-layout,
+.mtw-settlement-layout {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(430px, 1.18fr);
+  align-items: center;
+  gap: clamp(30px, 6vw, 92px);
+}
+
+.mtw-coalition-card,
+.mtw-governance-panel {
+  padding: clamp(20px, 3vw, 34px);
+  border: 1px solid rgba(25, 25, 21, 0.16);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.55);
+  box-shadow: 0 24px 50px rgba(25, 25, 21, 0.08);
+}
+
+.mtw-coalition-profile {
+  display: grid;
+  gap: 5px;
+}
+
+.mtw-coalition-profile strong {
+  font-family: var(--mtw-serif);
+  font-size: 29px;
+  font-weight: 400;
+}
+
+.mtw-priority-list {
+  margin-top: 20px;
+  display: grid;
+  gap: 11px;
+}
+
+.mtw-priority-list > div {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 12px;
+  font-size: 12px;
+}
+
+.mtw-priority-list > div > i {
+  grid-column: 1 / -1;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(25, 25, 21, 0.09);
+}
+
+.mtw-priority-list em {
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: #536bc8;
+}
+
+.mtw-coalition-dots {
+  width: min(210px, 62%);
+  margin: 22px auto 0;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 5px;
+}
+
+.mtw-coalition-dots > i {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #65785b;
+  opacity: 0.78;
+}
+
+.mtw-coalition-math {
+  margin-top: 18px;
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+
+.mtw-coalition-math strong {
+  font-family: var(--mtw-serif);
+  font-size: 27px;
+  font-weight: 400;
+}
+
+.mtw-coalition-math span {
+  font-size: 13px;
+  opacity: 0.62;
+}
+
+.mtw-group-deal-board {
+  width: min(1050px, 100%);
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: stretch;
+  gap: 14px;
+}
+
+.mtw-group-deal-card {
+  min-height: 215px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid rgba(25, 25, 21, 0.17);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.mtw-group-deal-card.is-coalition {
+  background: #dce8da;
+}
+
+.mtw-group-deal-card strong {
+  margin: auto 0;
+  font-family: var(--mtw-serif);
+  font-size: clamp(27px, 3.2vw, 45px);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+}
+
+.mtw-group-deal-arrow {
+  align-self: center;
+  font-size: 34px;
+  opacity: 0.5;
+}
+
+.mtw-coalition-progress {
+  width: min(560px, 100%);
+  margin-top: 30px;
+}
+
+.mtw-coalition-progress > div {
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  font-size: 13px;
+}
+
+.mtw-coalition-progress strong {
+  font-size: 22px;
+}
+
+.mtw-coalition-progress > i {
+  height: 16px;
+  display: block;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(25, 25, 21, 0.1);
+}
+
+.mtw-coalition-progress em {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #536bc8, #65785b);
+}
+
+.mtw-governance-choices {
+  margin-top: 18px;
+  display: grid;
+  gap: 10px;
+}
+
+.mtw-governance-choices button {
+  padding: 18px;
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(25, 25, 21, 0.16);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.42);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mtw-governance-choices button:hover,
+.mtw-governance-choices button[aria-pressed="true"] {
+  border-color: rgba(25, 25, 21, 0.52);
+  background: #fff;
+  transform: translateY(-2px);
+}
+
+.mtw-governance-panel .mtw-primary-action {
+  width: 100%;
+}
+
+.mtw-redirect-amplified-success .mtw-success-copy {
+  width: min(1060px, 100%);
+}
+
+.mtw-redirect-amplified-success .mtw-scene-title {
+  max-width: 14ch;
+  font-size: clamp(42px, 6vw, 88px);
+}
+
+@media (max-width: 900px) {
+  .mtw-impact-options {
+    grid-template-columns: 1fr;
+  }
+
+  .mtw-impact-option {
+    min-height: 0;
+  }
+
+  .mtw-impact-option.is-group-buy {
+    transform: none;
+  }
+
+  .mtw-coalition-layout,
+  .mtw-settlement-layout {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
+}
+
+@media (max-width: 740px) {
+  .mtw-experience[data-concept="redirect"] {
+    overflow-y: auto;
+  }
+
+  .mtw-experience[data-concept="redirect"] .mtw-step-mark span {
+    width: 14px;
+  }
+
+  .mtw-redirect-comparison-scene,
+  .mtw-coalition-scene,
+  .mtw-group-deal-scene,
+  .mtw-coalition-settlement-scene {
+    min-height: 100%;
+    padding: 74px 20px 34px;
+    align-content: start;
+  }
+
+  .mtw-redirect-comparison-scene .mtw-scene-title,
+  .mtw-coalition-scene .mtw-scene-title,
+  .mtw-group-deal-scene .mtw-scene-title,
+  .mtw-coalition-settlement-scene .mtw-scene-title {
+    font-size: 40px;
+  }
+
+  .mtw-impact-options {
+    margin-top: 18px;
+    gap: 8px;
+  }
+
+  .mtw-impact-option {
+    padding: 14px;
+    gap: 4px;
+  }
+
+  .mtw-impact-option strong {
+    font-size: 27px;
+  }
+
+  .mtw-coalition-card,
+  .mtw-governance-panel {
+    padding: 18px;
+  }
+
+  .mtw-coalition-dots {
+    width: 180px;
+  }
+
+  .mtw-group-deal-board {
+    grid-template-columns: 1fr;
+    margin-top: 20px;
+  }
+
+  .mtw-group-deal-card {
+    min-height: 0;
+    padding: 18px;
+  }
+
+  .mtw-group-deal-arrow {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+
+  .mtw-redirect-amplified-success .mtw-scene-title {
+    font-size: 46px;
+  }
+}
+
+/* Donation Redirect scheduled-notification reflow. */
+.mtw-redirect-comparison-scene {
+  grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.1fr);
+  grid-template-areas:
+    "redirect-head redirect-options"
+    "redirect-note redirect-options"
+    "redirect-action redirect-options";
+  align-items: start;
+  column-gap: clamp(30px, 4vw, 64px);
+}
+
+.mtw-redirect-comparison-scene .mtw-scene-head {
+  grid-area: redirect-head;
+  width: 100%;
+  max-width: 540px;
+}
+
+.mtw-redirect-comparison-scene .mtw-scene-title {
+  max-width: 10ch;
+  font-size: clamp(48px, 5.2vw, 72px);
+}
+
+.mtw-redirect-comparison-scene .mtw-scene-line {
+  max-width: 520px;
+  margin-top: 18px;
+  font-size: clamp(17px, 1.55vw, 21px);
+  line-height: 1.28;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-options {
+  grid-area: redirect-options;
+  width: 100%;
+  margin-top: 0;
+  grid-template-columns: 1fr;
+  align-self: center;
+  gap: 10px;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option {
+  min-height: 0;
+  padding: 15px 17px;
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-areas:
+    "impact-label impact-label"
+    "impact-amount impact-result"
+    "impact-detail impact-detail";
+  align-items: end;
+  gap: 5px 16px;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option.is-group-buy {
+  transform: none;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option > span {
+  grid-area: impact-label;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option > strong {
+  grid-area: impact-amount;
+  margin: 0;
+  font-size: clamp(28px, 2.6vw, 40px);
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option > b {
+  grid-area: impact-result;
+  align-self: end;
+  font-size: 16px;
+}
+
+.mtw-redirect-comparison-scene .mtw-impact-option > small {
+  grid-area: impact-detail;
+}
+
+.mtw-redirect-comparison-scene > .mtw-example-note {
+  grid-area: redirect-note;
+  width: 100%;
+  max-width: 500px;
+  margin-top: 16px;
+}
+
+.mtw-redirect-comparison-scene > .mtw-primary-action {
+  grid-area: redirect-action;
+  margin-top: 18px;
+}
+
+@media (max-width: 1100px) {
+  .mtw-experience[data-concept="redirect"] {
+    overflow-y: auto;
+  }
+
+  .mtw-redirect-comparison-scene {
+    position: relative;
+    min-height: 980px;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "redirect-head"
+      "redirect-options"
+      "redirect-note"
+      "redirect-action";
+    align-content: start;
+    row-gap: 0;
+  }
+
+  .mtw-redirect-comparison-scene .mtw-impact-options {
+    margin-top: 24px;
+  }
+}
+
+@media (max-width: 740px) {
+  .mtw-redirect-comparison-scene {
+    min-height: 1280px;
+  }
+
+  .mtw-redirect-comparison-scene .mtw-scene-title {
+    max-width: 11ch;
+    font-size: 40px;
+  }
+
+  .mtw-redirect-comparison-scene .mtw-scene-line {
+    font-size: 17px;
+  }
+
+  .mtw-redirect-comparison-scene .mtw-impact-option {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "impact-label"
+      "impact-amount"
+      "impact-result"
+      "impact-detail";
+    align-items: start;
+  }
+
+  .mtw-redirect-comparison-scene > .mtw-primary-action {
+    width: 100%;
+  }
+}

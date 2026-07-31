@@ -103,7 +103,9 @@ export function OfferVisualDirectoryMount() {
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    if (!queryState.shouldShow) return;
+    if (!queryState.shouldShow) {
+      return;
+    }
 
     document.getElementById(HOST_ID)?.remove();
     const portalHost = document.createElement("div");
@@ -112,6 +114,7 @@ export function OfferVisualDirectoryMount() {
     portalHost.dataset.visualOfferDirectory = "true";
 
     const controller = new AbortController();
+    let disposed = false;
     let payload: OfferPlaneResponse | null = null;
     let activeGrid: HTMLElement | null = null;
     let activeHeading: HTMLElement | null = null;
@@ -131,6 +134,8 @@ export function OfferVisualDirectoryMount() {
     }
 
     function syncDirectory() {
+      if (disposed) return;
+
       const directory = document.querySelector<HTMLElement>(".mt-directory-view");
       const grid = directory?.querySelector<HTMLElement>(".mt-market-grid");
       if (!directory || !grid) return;
@@ -189,13 +194,12 @@ export function OfferVisualDirectoryMount() {
       });
 
     return () => {
+      disposed = true;
       controller.abort();
       observer.disconnect();
       window.cancelAnimationFrame(frame);
       restoreDirectory();
       portalHost.remove();
-      setEntries([]);
-      setHost(null);
     };
   }, [queryState.key, queryState.shouldShow]);
 

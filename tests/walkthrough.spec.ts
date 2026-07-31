@@ -24,28 +24,19 @@ async function expectFullyInside(locator: Locator, container: Locator) {
   expect(box!.y + box!.height).toBeLessThanOrEqual(containerBox!.y + containerBox!.height);
 }
 
-test("a first homepage visit opens the walkthrough once", async ({ context, page }) => {
+test("a first homepage visit opens the mandatory walkthrough without a skip control", async ({ context, page }) => {
   await context.clearCookies();
   await page.goto("/?utm_source=invite", { waitUntil: "domcontentloaded" });
 
-  await expect(page).toHaveURL(/\/walkthrough\?utm_source=invite&first_visit=1$/);
+  await expect(page).toHaveURL(/\/walkthrough\?utm_source=invite$/);
   await expect(page.getByRole("heading", { name: "What do you value?" })).toBeVisible();
-
-  const skipWalkthrough = page.getByRole("button", { name: "Skip walkthrough" });
-  await expect(skipWalkthrough).toBeVisible();
-  await expectFullyInViewport(page, skipWalkthrough);
+  await expect(page.getByRole("button", { name: "Skip walkthrough" })).toHaveCount(0);
 
   const cookies = await context.cookies();
   expect(cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")).toMatchObject({
     httpOnly: true,
     value: "1",
   });
-
-  await skipWalkthrough.click();
-  await expect(page).toHaveURL(/\/$/);
-  await expect(
-    page.getByRole("heading", { level: 1, name: "A trade worth considering." }),
-  ).toBeVisible();
 });
 
 test("Third Option leads to Find the Mix and a real trade draft handoff", async ({ page }) => {
@@ -98,7 +89,8 @@ test("Make the trade stays fully visible on a wide, short screen", async ({ page
   await expectFullyInside(makeTrade, page.locator(".experience"));
 });
 
-test("Crowd and Redirect preserve the requested copy and routing", async ({ page }) => {
+test("Crowd and Redirect preserve the requested copy, coalition trade, and routing", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("tab", { name: /The crowd/i }).click();
@@ -116,24 +108,56 @@ test("Crowd and Redirect preserve the requested copy and routing", async ({ page
   await expect(page.getByRole("button", { name: "Offer trade" })).toHaveCount(0);
 
   await page.getByRole("tab", { name: /Redirect/i }).click();
-  const democratsMarker = page.locator(".stream-a .stream-label");
-  await expect(democratsMarker).toContainText("$100Democrats");
-  await expect(democratsMarker).toBeVisible();
-  await expectFullyInViewport(page, democratsMarker);
-  expect(
-    await democratsMarker.evaluate((element) => {
-      const bounds = element.getBoundingClientRect();
-      const topElement = document.elementFromPoint(
-        bounds.left + bounds.width / 2,
-        bounds.top + bounds.height / 2,
-      );
-      return topElement === element || element.contains(topElement);
-    }),
-  ).toBe(true);
-  await expect(page.getByText("Republicans")).toBeVisible();
-  await page.getByRole("button", { name: "Pause the tug-of-war" }).click();
-  await page.getByRole("button", { name: /Malaria prevention/ }).click();
-  await page.getByRole("button", { name: "See the result" }).click();
+  const democratMarker = page.locator(".stream-a .stream-label");
+  await expect(democratMarker).toContainText("$10Democrat · environment");
+  await expect(democratMarker).toBeVisible();
+  await expectFullyInViewport(page, democratMarker);
+  await expect(page.getByText("Republican · environment")).toBeVisible();
+
+  await page.getByRole("button", { name: "Redirect the matched $20" }).click();
+  await expect(page.getByText("$20to environmental protection")).toBeVisible();
+  await page.getByRole("button", { name: "See how one $10 can go further" }).click();
+
+  await expect(page.getByText("100 × 2.1 days")).toBeVisible();
+  await expect(page.getByText("210 person-days · 30 person-weeks")).toBeVisible();
+  await expect(page.getByText("1 × 10 weeks")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "The $10 redirect is already scheduled." }),
+  ).toBeVisible();
+  await expect(page.getByText(/Moral Trade notifies users now/)).toBeVisible();
+  await expect(
+    page.getByText(/Without an accepted and completed trade, the donation proceeds automatically/),
+  ).toBeVisible();
+  const coalitionStart = page.getByRole("button", {
+    name: "See a notified user start a coalition",
+  });
+  await expect(coalitionStart).toBeVisible();
+  await page.waitForTimeout(700);
+  await expectFullyInViewport(page, coalitionStart);
+  await expectFullyInside(coalitionStart, page.locator(".experience"));
+  await coalitionStart.click();
+
+  await expect(
+    page.getByRole("heading", { name: "A notified user finds 99 close matches." }),
+  ).toBeVisible();
+  await expect(page.getByText("Future flourishing")).toBeVisible();
+  await expect(page.getByText("60 / 100")).toBeVisible();
+  await expect(page.getByText("Existential risk")).toBeVisible();
+  await expect(page.getByText("25 / 100")).toBeVisible();
+  await page.getByRole("button", { name: "Form the 100-person coalition" }).click();
+
+  await expect(page.getByRole("heading", { name: "The coalition becomes one offer." })).toBeVisible();
+  await expect(page.getByText("$10 coalition payment")).toBeVisible();
+  await expect(page.getByText("210 person-days without buying single-use plastic bags")).toBeVisible();
+  await page.getByRole("button", { name: "Accept the group trade" }).click();
+
+  await expect(page.getByText("100 / 100")).toBeVisible();
+  await page.getByRole("button", { name: /Pre-agree the destination/ }).click();
+  await page.getByRole("button", { name: "Release $10 to the pre-agreed destination" }).click();
+  await expect(
+    page.getByRole("heading", { name: "One $10 bought 30 person-weeks of environmental action." }),
+  ).toBeVisible();
+  await expect(page.getByText(/pre-agreed future-focused destination/)).toBeVisible();
   await expect(page.getByRole("link", { name: /Offer Create a moral trade/ })).toBeVisible();
 
   const leverage = page.getByRole("button", {
@@ -158,7 +182,7 @@ test("The Crowd can close a verified salary gap for a higher-impact job", async 
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("tab", { name: /The crowd/i }).click();
-  await page.getByRole("button", { name: "$10", exact: true }).click();
+  await page.getByRole("button", { name: "$10" }).click();
   await page.getByRole("button", { name: "Pledge conditionally" }).click();
 
   const showCareerGap = page.getByRole("button", {
@@ -198,11 +222,11 @@ test("The Crowd can close a verified salary gap for a higher-impact job", async 
   ).toBeVisible({ timeout: 4_000 });
   await expect(page.getByRole("link", { name: /Start a career backing request/ })).toHaveAttribute(
     "href",
-    "https://moraltrade.org/create?mode=back",
+    "/create?source=walkthrough&mode=back",
   );
   await expect(page.getByRole("link", { name: /Explore conditional pools/ })).toHaveAttribute(
     "href",
-    "https://moraltrade.org/pools",
+    "/discover?source=walkthrough&domain=pools&view=threshold",
   );
 });
 
@@ -211,12 +235,13 @@ test("walkthrough preserves its guided keyboard flow and has no mobile overflow"
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("tab", { name: /Redirect/i }).click();
-  const mobileDemocratsMarker = page.locator(".stream-a .stream-label");
-  await expect(mobileDemocratsMarker).toBeVisible();
-  await expectFullyInViewport(page, mobileDemocratsMarker);
+  const mobileRedirectMarker = page.locator(".stream-a .stream-label");
+  await expect(mobileRedirectMarker).toBeVisible();
+  await expect(mobileRedirectMarker).toContainText("$10");
+  await expectFullyInViewport(page, mobileRedirectMarker);
 
   await page.getByRole("tab", { name: /The crowd/i }).click();
-  await page.getByRole("button", { name: "$5", exact: true }).click();
+  await page.getByRole("button", { name: "$5" }).click();
   await page.getByRole("button", { name: "Pledge conditionally" }).click();
   await page.getByRole("button", { name: "See what the crowd can unlock" }).click({ timeout: 5_000 });
   await page.getByRole("button", { name: /Higher-impact job/ }).click();
@@ -261,7 +286,7 @@ test("salary-gap actions fit the mid-size walkthrough layout", async ({ page }) 
   await page.goto("/walkthrough", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("tab", { name: /The crowd/i }).click();
-  await page.getByRole("button", { name: "$25", exact: true }).click();
+  await page.getByRole("button", { name: "$25" }).click();
   await page.getByRole("button", { name: "Pledge conditionally" }).click();
   await page.getByRole("button", { name: "See what the crowd can unlock" }).click({
     timeout: 5_000,

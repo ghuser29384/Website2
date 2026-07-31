@@ -44,10 +44,14 @@ const nextConfig: NextConfig = {
     // RSS crossing the 8 GB preview-builder limit on this route-heavy app.
     webpackBuildWorker: process.env.VERCEL !== "1",
     webpackMemoryOptimizations: true,
+    serverActions: {
+      bodySizeLimit: "4mb",
+    },
   },
   outputFileTracingIncludes: {
     "/mpgf": mpgfRuntimeArtifacts,
     "/mpgf/**/*": mpgfRuntimeArtifacts,
+    "/trades/new": ["./public/moral-trade-create/index.html"],
   },
   async redirects() {
     return [
@@ -55,6 +59,21 @@ const nextConfig: NextConfig = {
         source: "/:path*",
         has: [{ type: "host", value: "moraltrade.org" }],
         destination: "https://www.moraltrade.org/:path*",
+        permanent: true,
+      },
+      {
+        source: "/donation-offsets/conditional",
+        destination: "/trades/new?structure=conditional-donation",
+        permanent: true,
+      },
+      {
+        source: "/moral-trade-create",
+        destination: "/trades/new",
+        permanent: true,
+      },
+      {
+        source: "/moral-trade-create/index.html",
+        destination: "/trades/new",
         permanent: true,
       },
     ];

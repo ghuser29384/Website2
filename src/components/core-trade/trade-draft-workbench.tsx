@@ -25,7 +25,6 @@ export interface TradeDraftValues {
   privacyScope: string;
   exitConditions: string;
   notes: string;
-  publicEvidenceCertification: boolean;
   voluntaryCertification: boolean;
 }
 
@@ -49,10 +48,9 @@ const DEFAULT_VALUES: TradeDraftValues = {
   evidenceDueDate: "",
   evidenceRule: "",
   maximumBurden: "",
-  privacyScope: "Agreement evidence and public-safe source copies are public by default. Private messages remain private. A documented safety exception may withhold specific proof.",
+  privacyScope: "Original evidence, identities, payment details, and exact timestamps stay private. Only safe outcome metadata may be published: action category, lifecycle status, confidence band, completion fraction, payout percentage, and calendar date.",
   exitConditions: "",
   notes: "",
-  publicEvidenceCertification: false,
   voluntaryCertification: false,
 };
 
@@ -303,9 +301,6 @@ export function TradeDraftWorkbench({
         <input name="notes" type="hidden" value={values.notes} />
         {values.voluntaryCertification ? (
           <input name="voluntary_certification" type="hidden" value="on" />
-        ) : null}
-        {values.publicEvidenceCertification ? (
-          <input name="public_evidence_certification" type="hidden" value="on" />
         ) : null}
 
         <header className={styles.top}>
@@ -596,7 +591,7 @@ export function TradeDraftWorkbench({
                 <>
                   <div className={styles.prompt}>
                     <h1>What evidence will show completion?</h1>
-                    <p>Choose a standardized evidence type or describe another clear record. Certified public-safe copies are public by default; private messages remain private.</p>
+                    <p>Choose a standardized evidence type or describe another clear record. Original evidence stays private to participants and assigned reviewers.</p>
                   </div>
                   <div className={styles.fields}>
                     <label className={styles.field}>
@@ -616,7 +611,7 @@ export function TradeDraftWorkbench({
                       </span>
                     </label>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Public evidence and safety scope</span>
+                      <span className={styles.fieldLabel}>Evidence privacy and public metadata</span>
                       <textarea
                         autoComplete="off"
                         className={styles.textarea}
@@ -626,7 +621,7 @@ export function TradeDraftWorkbench({
                       />
                     </label>
                     <span className={styles.helper}>
-                      Remove exact addresses, account numbers, private contact details, and unrelated personal information before evidence submission. A narrow, documented safety exception may withhold specific proof.
+                      Submit only what the reviewer needs. Public outcome metadata never includes identities, the amount, provider, receipt, exact timestamps, links, or files.
                     </span>
                   </div>
                 </>
@@ -691,7 +686,7 @@ export function TradeDraftWorkbench({
                     </div>
                     <div className={styles.receiptRow}>
                       <dt>Evidence visibility</dt>
-                      <dd>{concise(values.privacyScope, "Public by default")}</dd>
+                      <dd>{concise(values.privacyScope, "Originals private")}</dd>
                     </div>
                   </dl>
 
@@ -707,26 +702,14 @@ export function TradeDraftWorkbench({
                     </span>
                   </label>
 
-                  <label className={styles.certification}>
-                    <input
-                      className={styles.checkbox}
-                      checked={values.publicEvidenceCertification}
-                      onChange={(event) => update("publicEvidenceCertification", event.target.checked)}
-                      type="checkbox"
-                    />
-                    <span>
-                      I understand that evidence submitted under an active agreement is public by default. I will submit only public-safe copies with sensitive identifiers and unrelated personal information removed.
-                    </span>
-                  </label>
-
                   <div className={styles.safetyList}>
                     <div className={styles.safetyItem}>
                       <strong>No payment or custody</strong>
                       <span>This route records non-financial commitments. Moral Trade does not hold or release funds here.</span>
                     </div>
                     <div className={styles.safetyItem}>
-                      <strong>Public-safe evidence</strong>
-                      <span>Evidence is public by default; only necessary, redacted, or certified public-safe copies should be submitted.</span>
+                      <strong>Private evidence originals</strong>
+                      <span>Only safe outcome metadata is public. Files, links, identities, payment details, and exact timestamps remain private.</span>
                     </div>
                     <div className={styles.safetyItem}>
                       <strong>Separate confirmation</strong>
@@ -756,7 +739,7 @@ export function TradeDraftWorkbench({
             </div>
             <div className={styles.guardrail}>
               <TradeFlowIcon name="evidence" />
-              Public-safe evidence specified
+              Private evidence scope specified
             </div>
             <div className={styles.guardrail}>
               <TradeFlowIcon name="lock" />
@@ -787,7 +770,7 @@ export function TradeDraftWorkbench({
           ) : (
             <>
               <span className={styles.footerNote}>
-                Save privately, or certify voluntariness and public-safe evidence before submitting once for operator review.
+                Save privately, or certify voluntariness before submitting once for operator review.
               </span>
               <PendingSubmitButton
                 className={`${styles.button} ${styles.buttonDark}`}
@@ -800,11 +783,7 @@ export function TradeDraftWorkbench({
               </PendingSubmitButton>
               <PendingSubmitButton
                 className={`${styles.button} ${styles.buttonPrimary}`}
-                disabled={
-                  !finalTermsComplete ||
-                  !values.voluntaryCertification ||
-                  !values.publicEvidenceCertification
-                }
+                disabled={!finalTermsComplete || !values.voluntaryCertification}
                 name="intent"
                 pendingLabel="Submitting for review..."
                 value="submit"

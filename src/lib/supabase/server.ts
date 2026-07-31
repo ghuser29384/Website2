@@ -1,13 +1,14 @@
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 
 import { getSupabaseEnv, getSupabaseServiceEnv } from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 
 export async function createClient() {
-  const cookieStore = await cookies();
-  const { url, publishableKey } = getSupabaseEnv();
+  const [cookieStore, requestHeaders] = await Promise.all([cookies(), headers()]);
+  const requestHostname = requestHeaders.get("host");
+  const { url, publishableKey } = getSupabaseEnv(requestHostname);
 
   return createServerClient<Database>(url, publishableKey, {
     cookies: {

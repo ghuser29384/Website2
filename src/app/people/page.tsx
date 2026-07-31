@@ -325,6 +325,7 @@ export default async function PeoplePage({ searchParams }: PeoplePageProps) {
               Describe the member, cause, location, evidence state, or openness you need in ordinary
               language. Hard constraints are applied before semantic fit, reviewed evidence, saved cause
               priorities, and a modest transaction-credit signal. Sparse evidence remains visibly Unproven.
+              Procedural badges report reviewed facts; they are not follower, karma, or comment leaderboards.
             </p>
             <div className="hero-actions">
               <Link className="button button-secondary" href="/credibility">

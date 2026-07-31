@@ -271,6 +271,24 @@ export function mergeLlmSmartQueryResolution(
   };
 }
 
+const DEFAULT_SMART_QUERY_LLM_TIMEOUT_MS = 12_000;
+const MIN_SMART_QUERY_LLM_TIMEOUT_MS = 3_000;
+const MAX_SMART_QUERY_LLM_TIMEOUT_MS = 20_000;
+export const SMART_QUERY_LLM_MAX_OUTPUT_TOKENS = 1_200;
+export const SMART_QUERY_LLM_REASONING_EFFORT = "minimal" as const;
+
+export function smartQueryLlmTimeoutMs(
+  rawValue = process.env.OPENAI_QUERY_TIMEOUT_MS,
+) {
+  if (!rawValue) return DEFAULT_SMART_QUERY_LLM_TIMEOUT_MS;
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed)) return DEFAULT_SMART_QUERY_LLM_TIMEOUT_MS;
+  return Math.min(
+    MAX_SMART_QUERY_LLM_TIMEOUT_MS,
+    Math.max(MIN_SMART_QUERY_LLM_TIMEOUT_MS, Math.round(parsed)),
+  );
+}
+
 export async function resolveSmartQueryWithLlm(
   base: SmartQueryInterpretation,
 ): Promise<LlmSmartQueryResult> {
@@ -289,7 +307,7 @@ export async function resolveSmartQueryWithLlm(
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 3_000);
+  const timeout = setTimeout(() => controller.abort(), smartQueryLlmTimeoutMs());
   try {
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -301,7 +319,8 @@ export async function resolveSmartQueryWithLlm(
       body: JSON.stringify({
         model: process.env.OPENAI_QUERY_MODEL || "gpt-5-nano",
         store: false,
-        max_output_tokens: 600,
+        reasoning: { effort: SMART_QUERY_LLM_REASONING_EFFORT },
+        max_output_tokens: SMART_QUERY_LLM_MAX_OUTPUT_TOKENS,
         input: [
           {
             role: "system",
@@ -340,19 +359,69 @@ export async function resolveSmartQueryWithLlm(
         },
       }),
     });
-    if (!response.ok) return fallback;
+    if (!response.ok) {
+  let errorPayload: unknown = null;
+  try {
+    errorPayload = await response.json() as unknown;
+  } catch {
+    errorPayload = null;
+  }
+  const errorRecord = errorPayload && typeof errorPayload === "object" && !Array.isArray(errorPayload)
+    ? (errorPayload as Record<string, unknown>).error
+    : null;
+  const error = errorRecord && typeof errorRecord === "object" && !Array.isArray(errorRecord)
+    ? errorRecord as Record<string, unknown>
+    : null;
+  // Operational metadata only: never log the key, query, prompt, or provider message.
+  console.warn("[smart-query-llm] openai_non_ok", {
+    status: response.status,
+    type: typeof error?.type === "string" ? error.type : null,
+    code: typeof error?.code === "string" ? error.code : null,
+    param: typeof error?.param === "string" ? error.param : null,
+  });
+  return fallback;
+}
     const payload = await response.json() as unknown;
-    const text = extractResponseText(payload);
-    if (!text) return fallback;
-    const resolution = cleanResolution(JSON.parse(text) as unknown);
-    if (!resolution) return fallback;
+  const outputText = extractResponseText(payload);
+  if (!outputText) {
+    const responseRecord = payload && typeof payload === "object" && !Array.isArray(payload)
+      ? payload as Record<string, unknown>
+      : null;
+    const incompleteDetails = responseRecord?.incomplete_details;
+    const incompleteRecord = incompleteDetails && typeof incompleteDetails === "object" && !Array.isArray(incompleteDetails)
+      ? incompleteDetails as Record<string, unknown>
+      : null;
+    const output = Array.isArray(responseRecord?.output) ? responseRecord.output : [];
+    const outputTypes = output
+      .map((item) => item && typeof item === "object" && !Array.isArray(item)
+        ? (item as Record<string, unknown>).type
+        : null)
+      .filter((value): value is string => typeof value === "string")
+      .slice(0, 8);
+    // Operational metadata only: never log generated content or user input.
+    console.warn("[smart-query-llm] openai_no_output_text", {
+      status: typeof responseRecord?.status === "string" ? responseRecord.status : null,
+      incompleteReason: typeof incompleteRecord?.reason === "string" ? incompleteRecord.reason : null,
+      outputTypes,
+    });
+    return fallback;
+  }
+  const resolution = cleanResolution(JSON.parse(outputText) as unknown);
+  if (!resolution) {
+    console.warn("[smart-query-llm] invalid_structured_resolution");
+    return fallback;
+  }
     const interpretation = mergeLlmSmartQueryResolution(base, resolution);
     return {
       interpretation,
       target: buildSmartQueryTarget(interpretation),
       usedLlm: true,
     };
-  } catch {
+  } catch (error) {
+    // Operational metadata only: never log the key, query, prompt, or provider message.
+    console.warn("[smart-query-llm] request_exception", {
+      name: error instanceof Error ? error.name : "unknown",
+    });
     return fallback;
   } finally {
     clearTimeout(timeout);

@@ -36,6 +36,20 @@ function markWalkthroughSeen(response: NextResponse, request: NextRequest) {
   return response;
 }
 
+function rewriteToLiveHome(request: NextRequest) {
+  const liveUrl = request.nextUrl.clone();
+  liveUrl.pathname = "/moral-trade-live.html";
+
+  return NextResponse.rewrite(liveUrl);
+}
+
+function rewriteToUnifiedCreate(request: NextRequest) {
+  const createUrl = request.nextUrl.clone();
+  createUrl.pathname = "/trades/new";
+
+  return NextResponse.rewrite(createUrl);
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const shouldRecordVisit =
@@ -45,20 +59,24 @@ export function proxy(request: NextRequest) {
     if (shouldRecordVisit) {
       const walkthroughUrl = request.nextUrl.clone();
       walkthroughUrl.pathname = "/walkthrough";
-      walkthroughUrl.searchParams.set("first_visit", "1");
 
       return markWalkthroughSeen(NextResponse.redirect(walkthroughUrl), request);
     }
 
-    const liveUrl = request.nextUrl.clone();
-    liveUrl.pathname = "/moral-trade-live.html";
-
-    return NextResponse.rewrite(liveUrl);
+    return rewriteToLiveHome(request);
   }
 
   if (pathname === "/walkthrough") {
     const response = NextResponse.next();
     return shouldRecordVisit ? markWalkthroughSeen(response, request) : response;
+  }
+
+  if (pathname === "/create") {
+    if (request.nextUrl.searchParams.get("mode") === "back") {
+      return NextResponse.next();
+    }
+
+    return rewriteToUnifiedCreate(request);
   }
 
   if (pathname !== "/offers") {
@@ -74,16 +92,15 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(discoverUrl);
   }
 
-  if (request.nextUrl.searchParams.has("view")) {
-    return NextResponse.next();
+  if (
+    request.nextUrl.searchParams.get("view") === "templates" ||
+    request.nextUrl.searchParams.get("tab") === "templates"
+  ) {
+    return rewriteToUnifiedCreate(request);
   }
 
-  if (request.nextUrl.searchParams.get("tab") === "templates") {
-    const templatesUrl = request.nextUrl.clone();
-    templatesUrl.searchParams.delete("tab");
-    templatesUrl.searchParams.set("view", "templates");
-
-    return NextResponse.redirect(templatesUrl);
+  if (request.nextUrl.searchParams.has("view")) {
+    return NextResponse.next();
   }
 
   const liveDirectoryUrl = request.nextUrl.clone();
@@ -93,5 +110,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/walkthrough", "/offers"],
+  matcher: ["/", "/walkthrough", "/create", "/offers"],
 };

@@ -14,6 +14,7 @@ import type { MpgfPublicGoodsReviewAction, MpgfPublicGoodsReviewReasonCode } fro
 
 type SupabaseServiceAny = ReturnType<typeof createServiceClient> & {
   from: (table: string) => any;
+  rpc: (name: string, args?: Record<string, unknown>) => Promise<{ data: unknown; error: { message: string } | null }>;
 };
 
 const approvableGateKeys = new Set([
@@ -92,6 +93,47 @@ async function recordAdminAuditLog(input: {
     actor_user_id: input.actorUserId,
     audit_json: input.auditJson,
   });
+}
+
+export async function approveMpgfFailureBonusScheduleAction(formData: FormData) {
+  const viewer = await requireMpgfAdmin();
+  const proposalId = readRequired(formData, "proposal_id");
+  const rationale = readRequired(formData, "rationale");
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(proposalId)) {
+    throw new Error("Failure-bonus schedule approval requires a valid proposal ID.");
+  }
+  if (rationale.length < 20) {
+    throw new Error("Failure-bonus schedule approval requires a substantive rationale of at least 20 characters.");
+  }
+
+  const supabase = createServiceClient() as SupabaseServiceAny;
+  const result = await supabase.rpc("mpgf_approve_failure_bonus_premium_schedule", {
+    proposal_id_input: proposalId,
+    reviewer_id_input: viewer.authUser.id,
+    rationale_input: rationale,
+  });
+
+  if (result.error) {
+    throw new Error(`Could not approve the complete failure-bonus schedule: ${result.error.message}`);
+  }
+
+  await recordAdminAuditLog({
+    actorUserId: viewer.authUser.id,
+    action: "mpgf.failure_bonus_schedule.approve",
+    targetType: "mpgf_pool_proposal",
+    targetId: proposalId,
+    auditJson: {
+      proposalId,
+      approvalMode: "atomic_complete_schedule",
+      rationale,
+      result: result.data,
+    },
+  });
+
+  revalidatePath("/mpgf/admin");
+  revalidatePath("/mpgf/admin/failure-bonus");
+  revalidatePath("/mpgf/pools");
 }
 
 export async function approveMpgfRealMoneyGateAction(formData: FormData) {

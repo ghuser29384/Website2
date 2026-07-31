@@ -10,7 +10,11 @@ import {
   isAnalyticsOptedOut,
   parseAttributionCookie,
 } from "@/lib/growth";
-import { hasSupabaseEnv } from "@/lib/supabase/config";
+import {
+  getSupabaseEnv,
+  hasSupabaseEnv,
+  isEvidencePaymentQaPreviewHost,
+} from "@/lib/supabase/config";
 import type { Database } from "@/lib/supabase/database.types";
 
 const SESSION_REFRESH_TIMEOUT_MS = 1_500;
@@ -93,18 +97,37 @@ function attachAttributionCookie(request: NextRequest, response: NextResponse) {
   return response;
 }
 
+function attachDataPlaneHeaders(response: NextResponse, hostname: string) {
+  if (isEvidencePaymentQaPreviewHost(hostname)) {
+    response.headers.set("x-moral-trade-data-plane", "isolated-qa");
+    if (process.env.VERCEL_GIT_COMMIT_SHA) {
+      response.headers.set(
+        "x-moral-trade-release-sha",
+        process.env.VERCEL_GIT_COMMIT_SHA,
+      );
+    }
+  }
+
+  return response;
+}
+
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({
     request,
   });
+  const requestHostname = request.headers.get("host") ?? request.nextUrl.hostname;
 
-  if (!hasSupabaseEnv()) {
-    return attachAttributionCookie(request, response);
+  if (!hasSupabaseEnv(requestHostname)) {
+    return attachDataPlaneHeaders(
+      attachAttributionCookie(request, response),
+      requestHostname,
+    );
   }
 
+  const { url, publishableKey } = getSupabaseEnv(requestHostname);
   const supabase = createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
+    url,
+    publishableKey,
     {
       cookies: {
         getAll() {
@@ -134,5 +157,8 @@ export async function updateSession(request: NextRequest) {
     }),
   ]);
 
-  return attachAttributionCookie(request, response);
+  return attachDataPlaneHeaders(
+    attachAttributionCookie(request, response),
+    requestHostname,
+  );
 }

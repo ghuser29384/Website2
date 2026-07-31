@@ -1,0 +1,125 @@
+name: MPGF pool visibility gates
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/mpgf-pool-visibility-gates.yml"
+      - "docs/mpgf-pool-visibility-controls.md"
+      - "src/lib/mpgf/pool-visibility.ts"
+      - "src/lib/mpgf/pool-visibility.test.ts"
+      - "supabase/migrations/20260726123500_mpgf_pool_visibility_controls.sql"
+      - "supabase/tests/mpgf_pool_visibility_controls.sql"
+  push:
+    branches:
+      - feature/mpgf-pool-visibility-controls-20260726
+    paths:
+      - ".github/workflows/mpgf-pool-visibility-gates.yml"
+      - "docs/mpgf-pool-visibility-controls.md"
+      - "src/lib/mpgf/pool-visibility.ts"
+      - "src/lib/mpgf/pool-visibility.test.ts"
+      - "supabase/migrations/20260726123500_mpgf_pool_visibility_controls.sql"
+      - "supabase/tests/mpgf_pool_visibility_controls.sql"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mpgf-pool-visibility-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-gates:
+    name: Test, lint, build, and diff check
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused visibility tests
+        run: node --import tsx --test src/lib/mpgf/pool-visibility.test.ts
+
+      - name: Run repository tests
+        id: repository_tests
+        continue-on-error: true
+        run: npm test > repository-tests.log 2>&1
+
+      - name: Run repository lint
+        id: repository_lint
+        continue-on-error: true
+        run: npm run lint -- --quiet > repository-lint.log 2>&1
+
+      - name: Build the production application
+        id: production_build
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build > production-build.log 2>&1
+
+      - name: Check whitespace errors
+        id: whitespace_check
+        continue-on-error: true
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          base_sha="${PR_BASE_SHA:-${PUSH_BEFORE_SHA:-$(git rev-parse HEAD^)}}"
+          git diff --check "$base_sha" "${GITHUB_SHA}" > diff-check.log 2>&1
+
+      - name: Upload gate diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-pool-visibility-gates-${{ github.run_id }}
+          path: |
+            repository-tests.log
+            repository-lint.log
+            production-build.log
+            diff-check.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Report failed gates
+        if: always()
+        shell: bash
+        env:
+          TEST_OUTCOME: ${{ steps.repository_tests.outcome }}
+          LINT_OUTCOME: ${{ steps.repository_lint.outcome }}
+          BUILD_OUTCOME: ${{ steps.production_build.outcome }}
+          DIFF_OUTCOME: ${{ steps.whitespace_check.outcome }}
+        run: |
+          failed=0
+          report_failure() {
+            local label="$1"
+            local outcome="$2"
+            local logfile="$3"
+            if [[ "$outcome" != "success" ]]; then
+              failed=1
+              echo "::error title=${label} failed::Last 120 log lines follow"
+              tail -n 120 "$logfile" || true
+            fi
+          }
+
+          report_failure "Repository tests" "$TEST_OUTCOME" repository-tests.log
+          report_failure "Repository lint" "$LINT_OUTCOME" repository-lint.log
+          report_failure "Production build" "$BUILD_OUTCOME" production-build.log
+          report_failure "Whitespace check" "$DIFF_OUTCOME" diff-check.log
+
+          if [[ "$failed" -ne 0 ]]; then
+            exit 1
+          fi
