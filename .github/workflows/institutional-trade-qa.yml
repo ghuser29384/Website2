@@ -122,6 +122,7 @@ jobs:
             src/lib/institutional-trade.test.ts \
             src/lib/institutional-webhooks.test.ts
           node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          node --check .github/scripts/pr212-targeted-regression-qa.mjs
 
       - name: Compile and apply institutional migration atomically to isolated QA
         shell: bash
@@ -525,6 +526,9 @@ jobs:
         shell: bash
         run: node .github/scripts/institutional-trade-qa-e2e.mjs
 
+      - name: Run targeted post-main application regression smoke
+        shell: bash
+        run: node .github/scripts/pr212-targeted-regression-qa.mjs
       - name: Confirm no synthetic email-pattern residue
         if: always()
         shell: bash
