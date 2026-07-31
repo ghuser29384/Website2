@@ -1,5 +1,5 @@
-# Temporary exact-branch TypeScript repair. Remove before merge.
-name: Repair Donation Upgrade route typing
+# Temporary migration materializer. Remove before merge.
+name: Materialize Donation Upgrade destination-review migration
 
 on:
   push:
@@ -13,11 +13,11 @@ permissions:
   contents: write
 
 concurrency:
-  group: donation-upgrade-route-typing-repair
+  group: donation-upgrade-destination-review-materializer
   cancel-in-progress: false
 
 jobs:
-  repair:
+  materialize:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -27,39 +27,28 @@ jobs:
           ref: feature/donation-upgrade-approved-fallbacks-20260731
           fetch-depth: 0
 
-      - name: Type the footer route list as strings
+      - name: Reconstruct and verify the migration
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("src/lib/public-route-smoke.test.ts")
-          text = path.read_text()
-          old = '  const footerHrefs = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));\n'
-          new = '''  const footerHrefs: string[] = FOOTER_LINK_GROUPS.flatMap((group) =>
-            group.links.map((link) => String(link.href)),
-          );
-          '''
-          if old in text:
-              if text.count(old) != 1:
-                  raise SystemExit("Unexpected footer route declaration count")
-              path.write_text(text.replace(old, new, 1))
-          elif new not in text:
-              raise SystemExit("Footer route declaration does not match either expected state")
-          PY
+          mapfile -t chunks < <(find .github/donation-upgrade-followup-payload -maxdepth 1 -type f -name 'chunk-*' | sort)
+          test "${#chunks[@]}" -eq 5
+          cat "${chunks[@]}" | base64 --decode > supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+          echo "eaafc865fccdd20d307b9959828804a3777eb6ba8fb020a78916688b49e6c243  supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql" | sha256sum --check --strict
+          grep -F "create table if not exists public.conditional_payment_destination_requests" supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
+          grep -F "create or replace function public.review_trade_donation_pool_gate" supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
           git diff --check
 
-      - name: Commit the repair
+      - name: Commit exact migration
         shell: bash
         run: |
           set -euo pipefail
-          git add src/lib/public-route-smoke.test.ts
+          git add supabase/migrations/20260731084000_donation_upgrade_destination_review_and_gate_evidence.sql
           if git diff --cached --quiet; then
-            echo "Repair already present."
+            echo "Migration already materialized."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Type public footer routes as strings"
+          git commit -m "Add Donation Upgrade destination review and gate evidence"
           git push origin HEAD:feature/donation-upgrade-approved-fallbacks-20260731
