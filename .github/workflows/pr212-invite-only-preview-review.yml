@@ -1,0 +1,327 @@
+name: PR 212 invite-only preview review
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-inspector-20260730
+    paths:
+      - .github/workflows/pr212-invite-only-preview-review.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  deployments: read
+  pull-requests: write
+
+concurrency:
+  group: pr212-invite-only-preview-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_BRANCH: feat/institutional-trade-system
+      QA_WORKFLOW: institutional-trade-qa.yml
+      INSPECTOR_BRANCH: agent/pr212-main-integration-inspector-20260730
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      INSTITUTIONAL_TRADES_ENABLED: "true"
+      INSTITUTIONAL_POOLS_ENABLED: "true"
+      INSTITUTIONAL_ENTERPRISE_API_ENABLED: "true"
+      INSTITUTIONAL_WEBHOOKS_ENABLED: "true"
+      CRON_SECRET: qa-institutional-preview-not-production
+
+    steps:
+      - name: Check out the exact current PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Require exact-head QA success, current-main ancestry, draft state, and non-custody
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/pr212-preview-review
+          rm -rf "$evidence"
+          mkdir -p "$evidence"
+
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212")"
+          feature_head="$(jq -r .head.sha <<<"$pr_json")"
+          test "$(git rev-parse HEAD)" = "$feature_head"
+          test "$(jq -r .state <<<"$pr_json")" = open
+          test "$(jq -r .draft <<<"$pr_json")" = true
+
+          git fetch origin main
+          current_main="$(git rev-parse origin/main)"
+          git merge-base --is-ancestor "$current_main" "$feature_head"
+
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 1800); do
+            latest_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .head.sha)"
+            test "$latest_head" = "$feature_head"
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$QA_WORKFLOW" --branch "$FEATURE_BRANCH" --limit 100 --json databaseId,headSha,status,conclusion,createdAt,url > /tmp/qa-runs.json
+            run_id="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/qa-runs.json)"
+            status="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/qa-runs.json)"
+            conclusion="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/qa-runs.json)"
+            if [[ -n "$run_id" && "$status" == completed ]]; then break; fi
+            sleep 10
+          done
+          test -n "$run_id"
+          test "$status" = completed
+          test "$conclusion" = success
+
+          test -n "$QA_SUPABASE_DB_URL"
+          [[ "$QA_SUPABASE_DB_URL" == *"hvmxfjjbdcgjjudmthdz"* ]]
+          [[ "$QA_SUPABASE_DB_URL" != *"jnpoxvalyjtdghnperyu"* ]]
+          test -n "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$QA_TEST_PASSWORD"
+          test "${STRIPE_SECRET_KEY:-}" = ""
+          test "${STRIPE_WEBHOOK_SECRET:-}" = ""
+          test "${INSTITUTIONAL_CUSTODY_ENABLED:-}" = ""
+
+          printf '%s\n' "$feature_head" > "$evidence/feature-head.txt"
+          printf '%s\n' "$current_main" > "$evidence/current-main.txt"
+          printf '%s\n' "$run_id" > "$evidence/qa-run-id.txt"
+          jq -n --arg feature_head "$feature_head" --arg current_main "$current_main" --arg qa_run_id "$run_id" '{feature_head:$feature_head,current_main:$current_main,qa_run_id:$qa_run_id,qa_success:true,pr_open:true,pr_draft:true,non_custody:true}' > "$evidence/preflight.json"
+
+      - name: Discover the exact-head Vercel preview URL
+        id: preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/pr212-preview-review
+          feature_head="$(cat "$evidence/feature-head.txt")"
+          preview_url=""
+          deployment_id=""
+
+          gh api "repos/${GITHUB_REPOSITORY}/deployments?sha=${feature_head}&per_page=100" > "$evidence/github-deployments.json"
+          while IFS= read -r id; do
+            [[ -z "$id" ]] && continue
+            gh api "repos/${GITHUB_REPOSITORY}/deployments/${id}/statuses?per_page=100" > "/tmp/deployment-${id}-statuses.json"
+            cp "/tmp/deployment-${id}-statuses.json" "$evidence/deployment-${id}-statuses.json"
+            candidate="$(jq -r '[.[] | select(.state == "success") | .environment_url // empty] | map(select(length>0)) | .[0] // empty' "/tmp/deployment-${id}-statuses.json")"
+            if [[ -n "$candidate" && "$candidate" != *"moraltrade.org"* ]]; then
+              preview_url="$candidate"
+              deployment_id="$id"
+              break
+            fi
+          done < <(jq -r '.[].id' "$evidence/github-deployments.json")
+
+          if [[ -z "$preview_url" && -n "$VERCEL_TOKEN" ]]; then
+            echo "::add-mask::$VERCEL_TOKEN"
+            gh api "repos/${GITHUB_REPOSITORY}/commits/${feature_head}/status" > "$evidence/commit-status.json"
+            while IFS= read -r target; do
+              [[ -z "$target" ]] && continue
+              vercel_id="${target##*/}"
+              [[ -z "$vercel_id" ]] && continue
+              query=""
+              if [[ -n "$VERCEL_ORG_ID" ]]; then query="?teamId=${VERCEL_ORG_ID}"; fi
+              set +e
+              http_status="$(curl --silent --show-error --output /tmp/vercel-deployment.json --write-out '%{http_code}' \
+                --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+                "https://api.vercel.com/v13/deployments/${vercel_id}${query}")"
+              set -e
+              if [[ "$http_status" != 200 ]]; then continue; fi
+              cp /tmp/vercel-deployment.json "$evidence/vercel-deployment-${vercel_id}.json"
+              deployment_sha="$(jq -r '.meta.githubCommitSha // .gitSource.sha // empty' /tmp/vercel-deployment.json)"
+              [[ "$deployment_sha" != "$feature_head" ]] && continue
+              candidate="$(jq -r '[.alias[]? | select(endswith(".vercel.app"))][0] // empty' /tmp/vercel-deployment.json)"
+              if [[ -z "$candidate" ]]; then candidate="$(jq -r '.url // empty' /tmp/vercel-deployment.json)"; fi
+              if [[ -n "$candidate" ]]; then
+                preview_url="https://${candidate#https://}"
+                deployment_id="$vercel_id"
+                break
+              fi
+            done < <(jq -r '.statuses[] | select(.context | test("Vercel"; "i")) | .target_url // empty' "$evidence/commit-status.json")
+          fi
+
+          if [[ -z "$preview_url" ]]; then
+            jq -n --arg feature_head "$feature_head" '{blocked:true,reason:"exact_head_preview_not_found",feature_head:$feature_head}' > "$evidence/blocker.json"
+            exit 1
+          fi
+
+          printf '%s\n' "$preview_url" > "$evidence/preview-url.txt"
+          printf '%s\n' "$deployment_id" > "$evidence/deployment-id.txt"
+          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+
+      - name: Require invite-only protection and a configured automation bypass
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/pr212-preview-review
+          preview_url="$(cat "$evidence/preview-url.txt")"
+          test -n "$VERCEL_AUTOMATION_BYPASS_SECRET"
+          echo "::add-mask::$VERCEL_AUTOMATION_BYPASS_SECRET"
+
+          unauth_status="$(curl --silent --show-error --location --output "$evidence/unauthenticated-response.html" --write-out '%{http_code}' "$preview_url")"
+          bypass_status="$(curl --silent --show-error --location --output "$evidence/bypassed-response.html" --write-out '%{http_code}' \
+            --header "x-vercel-protection-bypass: ${VERCEL_AUTOMATION_BYPASS_SECRET}" \
+            --header "x-vercel-set-bypass-cookie: true" \
+            "$preview_url")"
+          printf 'unauthenticated_status=%s\nbypassed_status=%s\n' "$unauth_status" "$bypass_status" > "$evidence/protection-status.txt"
+
+          protected=false
+          if [[ "$unauth_status" == 401 || "$unauth_status" == 403 ]]; then protected=true; fi
+          if grep -Eqi 'authentication required|vercel.*login|deployment protection|log in to vercel' "$evidence/unauthenticated-response.html"; then protected=true; fi
+          test "$protected" = true
+          [[ "$bypass_status" =~ ^2[0-9][0-9]$ ]]
+
+      - name: Set up Node.js and Playwright
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Prepare protection-aware copies of the exact reviewed QA scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          paths = [
+              Path('.github/scripts/institutional-trade-qa-e2e.mjs'),
+              Path('.github/scripts/pr212-targeted-regression-qa.mjs'),
+          ]
+          prefix = r'''
+          const __previewBypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? "";
+          if (__previewBypass) {
+            const __originalFetch = globalThis.fetch.bind(globalThis);
+            globalThis.fetch = (input, init = {}) => {
+              const headers = new Headers(init.headers ?? {});
+              headers.set("x-vercel-protection-bypass", __previewBypass);
+              headers.set("x-vercel-set-bypass-cookie", "true");
+              return __originalFetch(input, { ...init, headers });
+            };
+          }
+          '''
+          for source_path in paths:
+              source = source_path.read_text()
+              patched = prefix + source
+              patched = patched.replace(
+                  'browser.newContext({',
+                  'browser.newContext({ extraHTTPHeaders: __previewBypass ? { "x-vercel-protection-bypass": __previewBypass, "x-vercel-set-bypass-cookie": "true" } : {},',
+              )
+              patched = patched.replace(
+                  'browser.newContext()',
+                  'browser.newContext({ extraHTTPHeaders: __previewBypass ? { "x-vercel-protection-bypass": __previewBypass, "x-vercel-set-bypass-cookie": "true" } : {} })',
+              )
+              destination = Path('/tmp') / f'preview-{source_path.name}'
+              destination.write_text(patched)
+          PY
+          node --check /tmp/preview-institutional-trade-qa-e2e.mjs
+          node --check /tmp/preview-pr212-targeted-regression-qa.mjs
+
+      - name: Run the full organization, independent-person, pool, and authorization review on the protected preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/pr212-preview-review
+          preview_url="$(cat "$evidence/preview-url.txt")"
+          export INSTITUTIONAL_E2E_BASE_URL="$preview_url"
+          export INSTITUTIONAL_E2E_OUTPUT_DIR="$GITHUB_WORKSPACE/institutional-preview-evidence"
+          node /tmp/preview-institutional-trade-qa-e2e.mjs
+
+      - name: Run protected-preview desktop and mobile regression review
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/pr212-preview-review
+          preview_url="$(cat "$evidence/preview-url.txt")"
+          export INSTITUTIONAL_E2E_BASE_URL="$preview_url"
+          export INSTITUTIONAL_E2E_OUTPUT_DIR="$GITHUB_WORKSPACE/institutional-preview-evidence"
+          node /tmp/preview-pr212-targeted-regression-qa.mjs
+
+      - name: Require cleanup after preview review
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+          test -n "$QA_SUPABASE_DB_URL"
+          synthetic_auth="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select count(*) from auth.users where lower(email) like 'institutional-%@example.test'")"
+          synthetic_profiles="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select count(*) from public.profiles where lower(email) like 'institutional-%@example.test'")"
+          total_rows="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select coalesce(sum((xpath('/row/c/text()',query_to_xml(format('select count(*) c from public.%I',c.relname),false,true,'')))[1]::text::bigint),0) from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p') and c.relname like 'institutional_%'")"
+          printf 'synthetic_auth=%s\nsynthetic_profiles=%s\ninstitutional_rows=%s\n' "$synthetic_auth" "$synthetic_profiles" "$total_rows" > /tmp/pr212-preview-review/cleanup.txt
+          test "$synthetic_auth" = 0
+          test "$synthetic_profiles" = 0
+          test "$total_rows" = 0
+
+      - name: Preserve preview review evidence and update PR status without changing draft state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          output=ops/pr212-preview-review
+          rm -rf "$output"
+          mkdir -p "$output"
+          cp -a /tmp/pr212-preview-review/. "$output/" 2>/dev/null || true
+          if [[ -d institutional-preview-evidence ]]; then
+            find institutional-preview-evidence -type f -printf '%P\n' | sort > "$output/preview-evidence-files.txt"
+            find institutional-preview-evidence -type f -print0 | sort -z | xargs -0 sha256sum > "$output/preview-evidence-files.sha256"
+          fi
+          feature_head="$(cat /tmp/pr212-preview-review/feature-head.txt 2>/dev/null || true)"
+          preview_url="$(cat /tmp/pr212-preview-review/preview-url.txt 2>/dev/null || true)"
+          jq -n --arg feature_head "$feature_head" --arg preview_url "$preview_url" --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '{feature_head:$feature_head,preview_url:$preview_url,generated_at:$generated_at,review_workflow:env.GITHUB_RUN_ID}' > "$output/summary.json"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$output"
+          git commit -m "Record PR 212 protected-preview review evidence"
+          git push origin "HEAD:refs/heads/${INSPECTOR_BRANCH}"
+
+          conclusion="${{ job.status }}"
+          marker='<!-- pr212-preview-review-status -->'
+          body=$(cat <<EOF
+          $marker
+          ## PR #212 invite-only preview review
+
+          - Feature head: \`$feature_head\`
+          - Preview: $preview_url
+          - Workflow: [${GITHUB_RUN_ID}](https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})
+          - Result: **$conclusion**
+          - Review scope: organization-led trade, independent-individual trade, consortium/pool surfaces, full negative authorization matrix, and desktop/mobile regressions.
+          - PR remains draft. Production deployment, custody, and live payments remain disabled.
+          EOF
+          )
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/212/comments?per_page=100" --jq '.[] | select(.body | contains("<!-- pr212-preview-review-status -->")) | .id' | tail -1)"
+          if [[ -n "$existing" ]]; then
+            gh api --method PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${existing}" -f body="$body" >/dev/null
+          else
+            gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/212/comments" -f body="$body" >/dev/null
+          fi
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .draft)" = true
+
+      - name: Upload protected-preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-invite-only-preview-review-${{ github.run_id }}
+          path: |
+            /tmp/pr212-preview-review
+            institutional-preview-evidence
+          if-no-files-found: warn
+          retention-days: 14
