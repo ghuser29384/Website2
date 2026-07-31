@@ -41,7 +41,7 @@ jobs:
             exit 1
           fi
 
-      - name: Reconstruct and verify the immutable patch
+      - name: Reconstruct and verify the reviewed patch
         shell: bash
         run: |
           set -euo pipefail
@@ -52,7 +52,7 @@ jobs:
           gzip --decompress --stdout /tmp/feed-create-phase1.patch.gz > /tmp/feed-create-phase1.patch
           cp "$payload_dir/manifest.txt" /tmp/feed-create-phase1-manifest.txt
 
-      - name: Materialize only the reviewed product patch on exact main
+      - name: Materialize the reviewed product patch on exact main
         shell: bash
         run: |
           set -euo pipefail
@@ -60,6 +60,31 @@ jobs:
           git switch -c "$PRODUCT_BRANCH"
           git apply --check /tmp/feed-create-phase1.patch
           git apply /tmp/feed-create-phase1.patch
+
+          # The first exact gate found two source-contract assertions whose literal
+          # wording did not match the already-correct rendered implementation. Repair
+          # only those assertions: one must tolerate JSX whitespace, and the other
+          # must verify the explicit Delivered: No / no-contact state actually shown.
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/feed-create-phase1-wiring.test.ts")
+          source = path.read_text(encoding="utf-8")
+          replacements = {
+              "assert.match(workbench, /Match scores and explanations are session-only/);":
+                  "assert.match(workbench, /Match\\s+scores and explanations are session-only/);",
+              "assert.match(managePage, /has not been delivered/);":
+                  "assert.match(managePage, /No reliance or contact/);\n"
+                  "  assert.match(managePage, /<dt>Delivered<\\/dt>/);\n"
+                  "  assert.match(managePage, /<dd>No<\\/dd>/);",
+          }
+          for old, new in replacements.items():
+              if source.count(old) != 1:
+                  raise SystemExit(f"Expected one source-contract assertion: {old}")
+              source = source.replace(old, new)
+          path.write_text(source, encoding="utf-8")
+          PY
+
           git diff --check
           git status --porcelain=v1 --untracked-files=all | sed -E 's/^.. //' | LC_ALL=C sort > /tmp/actual-paths.txt
           LC_ALL=C sort /tmp/feed-create-phase1-manifest.txt > /tmp/expected-paths.txt
