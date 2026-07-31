@@ -35,6 +35,44 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  sync-current-main:
+    name: One-time current-main synchronization
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Merge current main and preserve deterministic Discover assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if git merge-base --is-ancestor origin/main HEAD; then
+            echo "The feature branch already contains current main."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-edit origin/main
+          node scripts/pack-discover-payload.mjs
+          npm run verify:discover
+          git diff --check
+
+          if ! git diff --quiet; then
+            git add public/moral-trade-discover.html public/discover/payload
+            git commit --amend --no-edit
+          fi
+
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+
   release-gates:
     name: Test, lint, build, payload, and rendered QA
     runs-on: ubuntu-latest
