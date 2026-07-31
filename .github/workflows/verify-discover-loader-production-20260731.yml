@@ -1,0 +1,260 @@
+name: Verify production Discover loader recovery
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-discover-loader-production-20260731.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discover-loader-production-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Wait for the exact self-healing loader in production
+        env:
+          PROD_URL: https://www.moraltrade.org
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/discover-loader-production-smoke
+          for attempt in $(seq 1 90); do
+            probe="${PROD_URL}/discover?loader_probe=${GITHUB_RUN_ID}-${attempt}"
+            body="$(curl --fail --silent --show-error --location --retry 2 --retry-delay 1 "$probe" || true)"
+            if printf '%s' "$body" | grep -Fq 'const MAX_PAYLOAD_PARTS = 32;' \
+              && printf '%s' "$body" | grep -Fq 'for (let attempt = 0; attempt < 2; attempt += 1)' \
+              && printf '%s' "$body" | grep -Fq 'Discover could not be loaded. Retry to fetch a clean copy.'; then
+              printf '%s' "$body" > artifacts/discover-loader-production-smoke/production-loader.html
+              echo "Exact self-healing loader is live after ${attempt} probe(s)."
+              exit 0
+            fi
+            echo "Probe ${attempt}: production has not promoted the exact loader yet."
+            sleep 10
+          done
+          echo "Timed out waiting for the self-healing Discover loader in production." >&2
+          exit 1
+
+      - name: Exercise desktop recovery and mobile rendering in production
+        env:
+          PROD_URL: https://www.moraltrade.org
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from "node:assert/strict";
+          import fs from "node:fs";
+          import path from "node:path";
+          import { chromium } from "@playwright/test";
+
+          const productionUrl = process.env.PROD_URL;
+          const outputDirectory = path.resolve("artifacts/discover-loader-production-smoke");
+          fs.mkdirSync(outputDirectory, { recursive: true });
+
+          const browser = await chromium.launch({ headless: true });
+          const report = {
+            productionUrl,
+            testedAt: new Date().toISOString(),
+            desktop: null,
+            mobile390: null,
+            mobile320: null,
+          };
+
+          const walkthroughCookie = {
+            name: "mt_walkthrough_seen",
+            value: "1",
+            domain: "www.moraltrade.org",
+            path: "/",
+            httpOnly: true,
+            secure: true,
+            sameSite: "Lax",
+          };
+
+          async function assertHealthyDiscover(page, label) {
+            const response = await page.goto(
+              `${productionUrl}/discover?domain=offers&view=list&smoke=${Date.now()}`,
+              { waitUntil: "domcontentloaded", timeout: 60_000 },
+            );
+            assert.ok(response, `${label}: navigation must return a response`);
+            assert.ok(response.ok(), `${label}: navigation returned ${response.status()}`);
+            await page.locator(".offer-transaction-row").first().waitFor({
+              state: "visible",
+              timeout: 30_000,
+            });
+            const bodyText = await page.locator("body").innerText();
+            assert.ok(!bodyText.includes("Loading Discover…"), `${label}: loading shell remained visible`);
+            assert.ok(
+              !bodyText.includes("Discover could not be loaded"),
+              `${label}: loader failure state remained visible`,
+            );
+            assert.ok(
+              !bodyText.includes("Unable to load Discover"),
+              `${label}: legacy loader failure state remained visible`,
+            );
+            assert.equal(await page.title(), "Moral Trade — Discover", `${label}: page title mismatch`);
+            const version = await page.evaluate(
+              () => window.__MT_DISCOVER_PAYLOAD_VERSION__ ?? "",
+            );
+            assert.match(version, /^[a-f0-9]{40}$/, `${label}: payload version was not exposed`);
+            const manifest = await page.evaluate(async () => {
+              const response = await fetch("/discover/payload/manifest.json", {
+                cache: "no-store",
+                headers: { Accept: "application/json" },
+              });
+              if (!response.ok) throw new Error(`manifest returned ${response.status}`);
+              return response.json();
+            });
+            assert.equal(version, manifest.version, `${label}: rendered payload did not match manifest`);
+            return { version, partCount: manifest.parts.length };
+          }
+
+          try {
+            const desktopContext = await browser.newContext({
+              viewport: { width: 1600, height: 1000 },
+            });
+            await desktopContext.addCookies([walkthroughCookie]);
+            const desktopPage = await desktopContext.newPage();
+            const desktopPageErrors = [];
+            const desktopConsoleErrors = [];
+            let corruptedFirstAttempt = false;
+            const retriedParts = new Set();
+
+            desktopPage.on("pageerror", (error) => desktopPageErrors.push(error.message));
+            desktopPage.on("console", (message) => {
+              if (message.type() === "error") desktopConsoleErrors.push(message.text());
+            });
+            await desktopPage.route("**/discover/payload/*.txt*", async (route) => {
+              const requestUrl = new URL(route.request().url());
+              if (requestUrl.searchParams.has("reload")) retriedParts.add(requestUrl.pathname);
+              if (
+                requestUrl.pathname.endsWith("/0.txt") &&
+                !requestUrl.searchParams.has("reload") &&
+                !corruptedFirstAttempt
+              ) {
+                corruptedFirstAttempt = true;
+                await route.fulfill({
+                  status: 200,
+                  contentType: "text/plain; charset=utf-8",
+                  body: "corrupted-production-smoke-first-attempt",
+                });
+                return;
+              }
+              await route.continue();
+            });
+
+            const desktopState = await assertHealthyDiscover(desktopPage, "desktop recovery");
+            assert.equal(corruptedFirstAttempt, true, "desktop recovery: first payload was not corrupted");
+            assert.equal(
+              retriedParts.size,
+              desktopState.partCount,
+              "desktop recovery: every payload part must be refetched with the retry token",
+            );
+            assert.deepEqual(desktopPageErrors, [], "desktop recovery: page errors occurred");
+            assert.deepEqual(desktopConsoleErrors, [], "desktop recovery: console errors occurred");
+            await desktopPage.screenshot({
+              path: path.join(outputDirectory, "production-desktop-recovered.png"),
+              fullPage: true,
+            });
+            report.desktop = {
+              ...desktopState,
+              corruptedFirstAttempt,
+              retriedPartCount: retriedParts.size,
+              pageErrors: desktopPageErrors,
+              consoleErrors: desktopConsoleErrors,
+            };
+            await desktopContext.close();
+
+            for (const [name, viewport] of [
+              ["mobile390", { width: 390, height: 844 }],
+              ["mobile320", { width: 320, height: 568 }],
+            ]) {
+              const context = await browser.newContext({ viewport });
+              await context.addCookies([walkthroughCookie]);
+              const page = await context.newPage();
+              const pageErrors = [];
+              const consoleErrors = [];
+              page.on("pageerror", (error) => pageErrors.push(error.message));
+              page.on("console", (message) => {
+                if (message.type() === "error") consoleErrors.push(message.text());
+              });
+
+              const state = await assertHealthyDiscover(page, name);
+              const dimensions = await page.evaluate(() => ({
+                innerWidth: window.innerWidth,
+                bodyScrollWidth: document.body.scrollWidth,
+                documentScrollWidth: document.documentElement.scrollWidth,
+              }));
+              assert.ok(
+                dimensions.bodyScrollWidth <= dimensions.innerWidth + 1,
+                `${name}: body overflowed horizontally`,
+              );
+              assert.ok(
+                dimensions.documentScrollWidth <= dimensions.innerWidth + 1,
+                `${name}: document overflowed horizontally`,
+              );
+              assert.deepEqual(pageErrors, [], `${name}: page errors occurred`);
+              assert.deepEqual(consoleErrors, [], `${name}: console errors occurred`);
+              await page.screenshot({
+                path: path.join(outputDirectory, `production-${name}.png`),
+                fullPage: true,
+              });
+              report[name] = { ...state, dimensions, pageErrors, consoleErrors };
+              await context.close();
+            }
+          } finally {
+            await browser.close();
+          }
+
+          fs.writeFileSync(
+            path.join(outputDirectory, "report.json"),
+            `${JSON.stringify(report, null, 2)}\n`,
+          );
+          fs.writeFileSync(
+            path.join(outputDirectory, "report.md"),
+            [
+              "# Production Discover loader smoke",
+              "",
+              `- Production URL: ${report.productionUrl}`,
+              `- Tested at: ${report.testedAt}`,
+              `- Payload version: ${report.desktop.version}`,
+              `- Payload parts: ${report.desktop.partCount}`,
+              `- Corrupted first request recovered: ${report.desktop.corruptedFirstAttempt}`,
+              `- Retried payload parts: ${report.desktop.retriedPartCount}`,
+              `- Desktop errors: ${report.desktop.pageErrors.length + report.desktop.consoleErrors.length}`,
+              `- 390×844 errors: ${report.mobile390.pageErrors.length + report.mobile390.consoleErrors.length}`,
+              `- 320×568 errors: ${report.mobile320.pageErrors.length + report.mobile320.consoleErrors.length}`,
+              `- 390×844 horizontal overflow: ${Math.max(report.mobile390.dimensions.bodyScrollWidth, report.mobile390.dimensions.documentScrollWidth) > report.mobile390.dimensions.innerWidth + 1}`,
+              `- 320×568 horizontal overflow: ${Math.max(report.mobile320.dimensions.bodyScrollWidth, report.mobile320.dimensions.documentScrollWidth) > report.mobile320.dimensions.innerWidth + 1}`,
+              "",
+            ].join("\n"),
+          );
+          console.log(JSON.stringify(report, null, 2));
+          NODE
+
+      - name: Upload production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-loader-production-smoke
+          path: artifacts/discover-loader-production-smoke
+          if-no-files-found: error
+          retention-days: 7
