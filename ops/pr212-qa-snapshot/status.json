@@ -1,10 +1,10 @@
 {
   "conclusion": "",
-  "createdAt": "2026-07-31T06:10:06Z",
-  "databaseId": 30608851155,
-  "displayTitle": "Harden institutional function grants and QA fixtures",
+  "createdAt": "2026-07-31T07:02:40Z",
+  "databaseId": 30611506334,
+  "displayTitle": "Fix institutional personal fixture and residue checks",
   "event": "push",
-  "headSha": "46524afa6c37977b9ce431087117472180590712",
+  "headSha": "c6ccc97a74a9e12577c37b0febecba36556244d6",
   "status": "in_progress",
-  "url": "https://github.com/ghuser29384/Website2/actions/runs/30608851155"
+  "url": "https://github.com/ghuser29384/Website2/actions/runs/30611506334"
 }
