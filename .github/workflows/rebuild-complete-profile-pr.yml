@@ -1,0 +1,78 @@
+name: Rebuild Complete Profile PR on current main
+
+on:
+  push:
+    branches:
+      - ops/rebuild-complete-profile-pr-20260731-v2
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebuild-complete-profile-pr-20260731
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Rebuild the product-only candidate and update PR branch
+        env:
+          MAIN_SHA: 349b44c89d2602a4195fd115f1632b307664adab
+          SOURCE_SHA: 7b8ab3c9e7cf952d14c5207e67963c1efdbe1eac
+          TARGET_BRANCH: fix/complete-profile-returning-users-20260731
+        run: |
+          set -euo pipefail
+
+          git fetch origin main "$TARGET_BRANCH"
+          test "$(git rev-parse origin/main)" = "$MAIN_SHA"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$SOURCE_SHA"
+
+          git checkout --detach "$MAIN_SHA"
+          git switch -C rebuilt-complete-profile
+          git checkout "$SOURCE_SHA" -- \
+            src/app/complete-profile/actions.ts \
+            src/app/complete-profile/page.tsx \
+            src/components/profile/complete-profile-review.tsx \
+            src/lib/complete-profile-private-preferences.ts \
+            src/lib/complete-profile.test.ts \
+            src/lib/complete-profile.ts \
+            src/lib/walkthrough-profile.test.ts \
+            src/lib/walkthrough-profile.ts \
+            src/lib/walkthrough-state.ts \
+            src/proxy.ts \
+            tests/complete-profile-review.spec.ts
+
+          expected="$(cat <<'FILES'
+src/app/complete-profile/actions.ts
+src/app/complete-profile/page.tsx
+src/components/profile/complete-profile-review.tsx
+src/lib/complete-profile-private-preferences.ts
+src/lib/complete-profile.test.ts
+src/lib/complete-profile.ts
+src/lib/walkthrough-profile.test.ts
+src/lib/walkthrough-profile.ts
+src/lib/walkthrough-state.ts
+src/proxy.ts
+tests/complete-profile-review.spec.ts
+FILES
+          )"
+          actual="$(git diff --cached --name-only | sort)"
+          test "$actual" = "$expected"
+          git diff --cached --check
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Fix Complete Profile routing for returning users"
+
+          new_sha="$(git rev-parse HEAD)"
+          git push \
+            --force-with-lease="refs/heads/$TARGET_BRANCH:$SOURCE_SHA" \
+            origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "Rebuilt PR head: $new_sha"
