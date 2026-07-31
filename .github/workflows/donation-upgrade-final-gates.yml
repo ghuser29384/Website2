@@ -10,12 +10,18 @@ on:
       - docs/donation-upgrade-live-*.md
       - src/app/admin/trade-donation-pools/**
       - src/app/api/connectors/every-org/**
+      - src/app/api/donation-upgrade/**
       - src/app/api/stripe/webhook/route.ts
+      - src/app/donation-offsets/conditional/actions.ts
       - src/app/trade-donation-actions-base.ts
       - src/app/trade-donation-pool-actions.ts
+      - src/app/trades/new/**
       - src/components/core-trade/trade-agreement-stage.tsx
       - src/components/core-trade/trade-donation-agreement-stage.tsx
       - src/components/core-trade/trade-donation-pool-agreement-stage.tsx
+      - src/lib/every-org-nonprofit*.ts
+      - src/lib/payments/conditional-redirect-page-data.ts
+      - src/lib/payments/donation-upgrade-*.ts
       - src/lib/payments/trade-donation-pool-webhook.ts
       - src/lib/trade-donation-pool*.ts
       - supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql
@@ -77,8 +83,14 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
-      - name: Focused pooled-settlement tests
-        run: node --import tsx --test src/lib/trade-donation-pool.test.ts src/lib/trade-donation-pool-source-contract.test.ts
+      - name: Focused Donation Upgrade and pooled-settlement tests
+        run: |
+          node --import tsx --test \
+            src/lib/every-org-nonprofit.test.ts \
+            src/lib/payments/donation-upgrade-destination-environment.test.ts \
+            src/lib/payments/donation-upgrade-fallback-source-contract.test.ts \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts
 
       - name: Complete repository tests
         run: npm test
