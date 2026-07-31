@@ -1,0 +1,49 @@
+name: Repair PR 382 exact-head search gates
+
+on:
+  push:
+    branches:
+      - fix/discover-live-search-runtime-20260731
+    paths:
+      - ".github/workflows/repair-pr382-exact-head.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-pr382-exact-head
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact branch head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/discover-live-search-runtime-20260731
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Apply fail-closed source and regression patches
+        run: node scripts/repair-pr382-exact-head.mjs
+
+      - name: Validate patched JavaScript syntax
+        run: node --check public/moral-trade-discover-search.js
+
+      - name: Commit the repair to PR 382
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            public/moral-trade-discover-search.js \
+            tests/discover-payload-cache.spec.ts \
+            tests/discover-cofund.spec.ts
+          git diff --cached --check
+          git commit -m "Repair exact-head Discover result ownership gates"
+          git push origin HEAD:fix/discover-live-search-runtime-20260731
