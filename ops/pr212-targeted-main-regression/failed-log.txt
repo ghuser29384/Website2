@@ -1,0 +1,27 @@
+verify	Verify exact candidate and pinned main	﻿2026-07-31T00:59:12.0414789Z ##[group]Run set -euo pipefail
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0415275Z ^[[36;1mset -euo pipefail^[[0m
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0415678Z ^[[36;1mtest "$(git rev-parse HEAD)" = "$EXPECTED_INTEGRATED_HEAD"^[[0m
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0416161Z ^[[36;1mgit fetch --no-tags origin main "$INTEGRATED_BRANCH"^[[0m
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0416606Z ^[[36;1mtest "$(git rev-parse origin/main)" = "$PINNED_MAIN"^[[0m
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0417063Z ^[[36;1mgit merge-base --is-ancestor "$PINNED_MAIN" HEAD^[[0m
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0417581Z ^[[36;1mgit merge-base --is-ancestor e9ba649a4e6bfffcbaac572fb2c5e52f83e3f01e HEAD^[[0m
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0418110Z ^[[36;1mtest -d pr212-main-integration-evidence^[[0m
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0468094Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0468513Z env:
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0468876Z   INTEGRATED_BRANCH: agent/pr212-main-integrated-20260731
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0469351Z   EXPECTED_INTEGRATED_HEAD: 68d96443d1fe233b22046350d3d73d716f4657d2
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0469805Z   PINNED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0470267Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0470639Z   SITE_URL: http://127.0.0.1:3210
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0471052Z   NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0471878Z   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ***
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0473786Z   SUPABASE_SERVICE_ROLE_KEY: ***
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0474152Z   INSTITUTIONAL_TRADES_ENABLED: true
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0474470Z   INSTITUTIONAL_POOLS_ENABLED: true
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0474797Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0475150Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0475515Z   CRON_SECRET: qa-institutional-cron-not-production
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0475923Z   REGRESSION_BASE_URL: http://127.0.0.1:3210
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0476359Z   REGRESSION_OUTPUT_DIR: /tmp/pr212-targeted-regression-evidence
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0476771Z ##[endgroup]
+verify	Verify exact candidate and pinned main	2026-07-31T00:59:12.0589798Z ##[error]Process completed with exit code 1.
