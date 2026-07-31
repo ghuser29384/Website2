@@ -105,6 +105,29 @@ if source.count(pinned_marker) != 1:
     raise SystemExit(f"Expected one post-v3 deployment reuse marker; found {source.count(pinned_marker)}")
 source = source.replace(pinned_marker, pinned_block, 1)
 
+auth_marker = """  node --check .qa/member.mjs
+  node --check .qa/claimed-guest.mjs
+"""
+auth_block = """  python3 - .qa/member.mjs .qa/claimed-guest.mjs <<'PY_AUTH'
+from pathlib import Path
+import sys
+old = 'getByRole("link", { name: /Log out/i })'
+new = 'getByRole("button", { name: /Log out/i })'
+for raw_path in sys.argv[1:]:
+    path = Path(raw_path)
+    text = path.read_text(encoding="utf-8")
+    count = text.count(old)
+    if count < 1:
+        raise SystemExit(f"Expected a stale Log out link locator in {path}; found {count}.")
+    path.write_text(text.replace(old, new), encoding="utf-8")
+PY_AUTH
+  node --check .qa/member.mjs
+  node --check .qa/claimed-guest.mjs
+"""
+if source.count(auth_marker) != 1:
+    raise SystemExit(f"Expected one harness syntax-check block; found {source.count(auth_marker)}")
+source = source.replace(auth_marker, auth_block, 1)
+
 Path(sys.argv[2]).write_text(source, encoding="utf-8")
 '''
 if text.count(end_needle) != 1:
