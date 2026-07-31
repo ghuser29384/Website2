@@ -181,3 +181,5 @@ jobs:
 
           git commit -m "Fix Complete Profile for returning users"
           git push --force origin HEAD:refs/heads/fix/complete-profile-returning-users-20260731
+
+      # This final comment exists only to make the materializer's trigger a separate push.
