@@ -1,0 +1,224 @@
+name: Prepare PR 212 institutional function-grant repair
+
+on:
+  push:
+    branches:
+      - agent/pr212-function-grant-fix-ops-20260731
+    paths:
+      - .github/workflows/pr212-function-grant-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-function-grant-fix
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      EXPECTED_FEATURE_HEAD: d698d8a07905ab2b9323493e149f202823dd1d56
+      FEATURE_BRANCH: feat/institutional-trade-system
+      CANDIDATE_BRANCH: agent/pr212-function-grant-fix-candidate-20260731
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out exact PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Refuse a stale or unexpected source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+          test "$(git rev-parse 'HEAD:supabase/migrations/20260726123000_institutional_trade_system.sql')" = "5d2e04eec2a15cbf56a752cc157b13b657f959e1"
+          test "$(git rev-parse 'HEAD:src/institutional-trade-migration.test.ts')" = "f52843bf6fa61b9ef2312adef5810db6b605380b"
+
+      - name: Make SECURITY DEFINER execution deny-by-default
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          migration_path = Path("supabase/migrations/20260726123000_institutional_trade_system.sql")
+          migration = migration_path.read_text()
+
+          dynamic_pattern = re.compile(
+              r"execute\s+format\(\s*'revoke all on function %s from public'\s*,\s*f\.function_identity\s*\);",
+              re.IGNORECASE,
+          )
+          migration, dynamic_count = dynamic_pattern.subn(
+              "execute format('revoke all on function %s from public,anon,authenticated', f.function_identity);",
+              migration,
+          )
+          if dynamic_count != 1:
+              raise SystemExit(f"Expected one dynamic SECURITY DEFINER revoke, found {dynamic_count}")
+
+          explicit_pattern = re.compile(
+              r"(revoke all on function public\.[^;\n]+) from public;",
+              re.IGNORECASE,
+          )
+          migration, explicit_count = explicit_pattern.subn(
+              r"\1 from public,anon,authenticated;",
+              migration,
+          )
+          if explicit_count != 24:
+              raise SystemExit(f"Expected 24 explicit client-RPC revokes, found {explicit_count}")
+
+          first_client_grant = (
+              "grant execute on function public.get_institutional_deal_authorization_snapshot(uuid,uuid,uuid) to authenticated;"
+          )
+          helper_grants = """-- RLS evaluates these five narrowly scoped boolean helpers as the authenticated
+          -- caller. Every other institutional SECURITY DEFINER function remains private
+          -- unless it appears in the explicit client-RPC allowlist below.
+          grant execute on function public.is_institutional_organization_member(uuid) to authenticated;
+          grant execute on function public.has_institutional_permission(uuid,uuid,text,bigint) to authenticated;
+          grant execute on function public.can_manage_institutional_organization(uuid) to authenticated;
+          grant execute on function public.can_read_institutional_deal(uuid) to authenticated;
+          grant execute on function public.can_manage_institutional_deal(uuid) to authenticated;
+
+          """
+          if migration.count(first_client_grant) != 1:
+              raise SystemExit(
+                  f"Expected one first client-RPC grant marker, found {migration.count(first_client_grant)}"
+              )
+          if "grant execute on function public.is_institutional_organization_member(uuid) to authenticated;" in migration:
+              raise SystemExit("RLS helper grants already exist unexpectedly")
+          migration = migration.replace(first_client_grant, helper_grants + first_client_grant)
+          migration_path.write_text(migration)
+
+          test_path = Path("src/institutional-trade-migration.test.ts")
+          test_text = test_path.read_text()
+          insertion_marker = 'test("all institutional base tables use forced RLS, generated FK indexes, and restricted grants", () => {'
+          if test_text.count(insertion_marker) != 1:
+              raise SystemExit(
+                  f"Expected one RLS/grants test marker, found {test_text.count(insertion_marker)}"
+              )
+
+          security_test = r'''test("institutional SECURITY DEFINER execution is deny-by-default and exactly allowlisted", () => {
+            expectAll([
+              /revoke all on function %s from public,anon,authenticated/i,
+              /grant execute on function public\.is_institutional_organization_member\(uuid\) to authenticated/i,
+              /grant execute on function public\.has_institutional_permission\(uuid,uuid,text,bigint\) to authenticated/i,
+              /grant execute on function public\.can_manage_institutional_organization\(uuid\) to authenticated/i,
+              /grant execute on function public\.can_read_institutional_deal\(uuid\) to authenticated/i,
+              /grant execute on function public\.can_manage_institutional_deal\(uuid\) to authenticated/i,
+            ], "institutional function execute grants");
+
+            const observed = Array.from(
+              migration.matchAll(/grant execute on function public\.([a-z0-9_]+\([^;]*\)) to authenticated;/gi),
+              (match) => match[1].replace(/\s+/g, ""),
+            ).sort();
+            const expected = [
+              "accept_institutional_deal_party(uuid)",
+              "accept_institutional_organization_party(uuid,uuid,uuid,uuid)",
+              "accept_institutional_verifier_assignment(uuid,text,text)",
+              "activate_institutional_pool(uuid,uuid,uuid,uuid)",
+              "can_manage_institutional_deal(uuid)",
+              "can_manage_institutional_organization(uuid)",
+              "can_read_institutional_deal(uuid)",
+              "cast_institutional_pool_vote(uuid,uuid,uuid,text,text,uuid)",
+              "decide_institutional_approval(uuid,text,uuid,text)",
+              "decide_institutional_individual_consent(uuid,text,text)",
+              "generate_institutional_matches(uuid)",
+              "get_institutional_deal_authorization_snapshot(uuid,uuid,uuid)",
+              "has_institutional_permission(uuid,uuid,text,bigint)",
+              "is_institutional_organization_member(uuid)",
+              "record_institutional_match_interest(uuid,uuid,text,text)",
+              "record_institutional_pool_approval(uuid,uuid,uuid,uuid,text)",
+              "request_institutional_individual_consent(uuid,uuid)",
+              "reserve_institutional_budget(uuid,uuid,bigint,uuid,text)",
+              "review_institutional_evidence(uuid,uuid,text,text,uuid,uuid,uuid)",
+              "revoke_institutional_room_access(uuid,uuid)",
+              "revoke_institutional_verifier_assignment(uuid,uuid)",
+              "save_institutional_pool_anchor(uuid,uuid,uuid,uuid,bigint,text,uuid)",
+              "save_institutional_pool_contribution(uuid,uuid,uuid,bigint,text,uuid,uuid)",
+              "save_institutional_pool_underwriting(uuid,uuid,uuid,bigint,text,uuid,uuid)",
+              "select_institutional_proposal_version(uuid,uuid,uuid,uuid)",
+              "sign_institutional_deal(uuid,uuid,uuid,text)",
+              "transition_institutional_deal_stage(uuid,text)",
+              "transition_institutional_milestone_status(uuid,uuid,text)",
+              "transition_institutional_obligation_status(uuid,uuid,text)",
+            ].sort();
+
+            assert.deepEqual(observed, expected);
+            assert.doesNotMatch(
+              migration,
+              /grant execute on function public\.[^;]*institutional[^;]* to anon/i,
+              "anonymous callers must never execute institutional SECURITY DEFINER functions",
+            );
+            assert.doesNotMatch(
+              migration,
+              /grant execute on function public\.(?:assert_institutional_aal2|can_act_for_institutional_party)\([^;]*\) to authenticated/i,
+              "internal authorization helpers must not be directly executable by authenticated callers",
+            );
+          });
+
+          '''
+          test_path.write_text(test_text.replace(insertion_marker, security_test + insertion_marker))
+          PY
+
+          git diff --check
+          grep -F "revoke all on function %s from public,anon,authenticated" supabase/migrations/20260726123000_institutional_trade_system.sql
+          ! grep -E "grant execute on function public\..*institutional.* to anon" supabase/migrations/20260726123000_institutional_trade_system.sql
+          changed="$(git status --short | cut -c4- | sort)"
+          expected="$(printf '%s\n' \
+            src/institutional-trade-migration.test.ts \
+            supabase/migrations/20260726123000_institutional_trade_system.sql | sort)"
+          test "$changed" = "$expected"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run institutional source and domain contracts
+        run: |
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          node --check .github/scripts/pr212-targeted-regression-qa.mjs
+
+      - name: Run complete repository tests absolutely
+        run: npm test
+
+      - name: Run TypeScript absolutely
+        run: npx tsc --noEmit
+
+      - name: Run ESLint absolutely
+        run: npm run lint
+
+      - name: Build production application absolutely
+        run: npm run build
+
+      - name: Publish verified candidate branch only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/institutional-trade-migration.test.ts \
+            supabase/migrations/20260726123000_institutional_trade_system.sql
+          git commit -m "Deny anonymous execution of institutional security-definer functions"
+          git push origin HEAD:"$CANDIDATE_BRANCH"
