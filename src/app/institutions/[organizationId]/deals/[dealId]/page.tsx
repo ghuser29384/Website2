@@ -145,7 +145,13 @@ export default async function InstitutionalDealPage({ params, searchParams }: Pa
     <main className={styles.main}>
       {message ? <p className={message.tone === "error" ? styles.errorNotice : styles.successNotice}>{message.text}</p> : null}
       <div className={styles.metricGrid}>
-        <InstitutionalMetric label="Deal stage" value={formatInstitutionalLabel(data.deal.stage)} note={data.deal.signed_at ? `Signed ${new Date(data.deal.signed_at).toLocaleString()}` : "No signed-stage timestamp"} />
+        <InstitutionalMetric label="Deal stage" value={formatInstitutionalLabel(data.deal.stage)} note={
+          data.deal.signed_at ? (
+            <>Signed <InstitutionalDate value={data.deal.signed_at} /></>
+          ) : (
+            "No signed-stage timestamp"
+          )
+        } />
         <InstitutionalMetric label="Exact parties" value={data.parties.length} note={`${exactPrograms.length} program scope${exactPrograms.length === 1 ? "" : "s"}`} />
         <InstitutionalMetric label="Signatures" value={data.signatures.length} note={`${requiredConsents.filter((row) => row.decision === "affirmed").length}/${requiredConsents.length} named consents affirmed`} />
         <InstitutionalMetric label={data.pool ? "Committed pool amount" : "Integrity gates"} value={data.pool ? formatInstitutionalMoney(committedCents, data.pool.currency) : blockingRisks} note={data.pool ? `${committedContributions.length} committed contributors` : `${acceptedVerifierCount} accepted verifier assignments`} />

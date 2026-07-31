@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import styles from "@/app/institutions/institutions.module.css";
 
 export type InstitutionalStatusTone = "neutral" | "good" | "warn" | "danger" | "info";
@@ -35,9 +36,20 @@ export function InstitutionalStatus({ children, tone = "neutral" }: { children: 
 }
 
 export function InstitutionalDate({ value }: { value: unknown }) {
-  const date = value ? new Date(String(value)) : null;
-  if (!date || Number.isNaN(date.getTime())) return <span>Not set</span>;
-  return <time dateTime={date.toISOString()}>{new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(date)}</time>;
+  const normalized =
+    value instanceof Date
+      ? value.toISOString()
+      : typeof value === "string" || typeof value === "number"
+        ? value
+        : null;
+
+  return (
+    <LocalDateTime
+      value={normalized}
+      fallback="Not set"
+      options={{ dateStyle: "medium", timeStyle: "short" }}
+    />
+  );
 }
 
 export function InstitutionalSectionHeader({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description?: string; action?: ReactNode }) {
