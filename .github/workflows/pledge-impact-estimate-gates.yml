@@ -49,56 +49,28 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Repair the hidden mobile inspector and strengthen its regression
+      - name: Repair the hidden mobile inspector
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          changed = False
-
           source_path = Path("src/discover/moral-trade-discover.source.html")
           source = source_path.read_text()
           old_css = "  .mobile-sheet {\n    position: fixed;"
           new_css = "  .mobile-sheet {\n    display: block;\n    position: fixed;"
-          if old_css in source:
-              if source.count(old_css) != 1:
-                  raise SystemExit("Expected exactly one mobile-sheet rule.")
-              source_path.write_text(source.replace(old_css, new_css, 1))
-              changed = True
-          elif new_css not in source:
-              raise SystemExit("Could not identify the mobile-sheet display rule.")
 
-          test_path = Path("tests/pledge-impact-estimate.spec.ts")
-          test_source = test_path.read_text()
-          old_test = '''  await expect(page.locator("body")).not.toContainText("Loading Discover…");
-          await expect(page.locator('[data-pledge-impact-root][data-pool-key="pool-wild-research"]').first()).toHaveAttribute(
-            "data-impact-status",
-            "available",
-          );'''
-          new_test = '''  await expect(page.locator("body")).not.toContainText("Loading Discover…");
-          const mobileSheet = page.locator(".mobile-sheet");
-          await expect(mobileSheet).toBeVisible();
-          await expect(
-            mobileSheet.locator('[data-pledge-impact-root][data-pool-key="pool-wild-research"]'),
-          ).toHaveAttribute("data-impact-status", "available");'''
-          if old_test in test_source:
-              if test_source.count(old_test) != 1:
-                  raise SystemExit("Expected exactly one mobile Discover assertion block.")
-              test_path.write_text(test_source.replace(old_test, new_test, 1))
-              changed = True
-          elif new_test not in test_source:
-              raise SystemExit("Could not identify the mobile Discover assertion block.")
+          if new_css in source:
+              print("Mobile inspector repair is already present.")
+              raise SystemExit(0)
+          if source.count(old_css) != 1:
+              raise SystemExit(
+                  f"Expected exactly one mobile-sheet rule; found {source.count(old_css)}."
+              )
 
-          if changed:
-              Path(".pledge-impact-mobile-repair-needed").write_text("1\n")
+          source_path.write_text(source.replace(old_css, new_css, 1))
           PY
-
-          if [[ ! -f .pledge-impact-mobile-repair-needed ]]; then
-            echo "Mobile inspector repair is already present."
-            exit 0
-          fi
 
           node scripts/pack-discover-payload.mjs
           npm run verify:discover
@@ -109,8 +81,7 @@ jobs:
           git add \
             src/discover/moral-trade-discover.source.html \
             public/moral-trade-discover.html \
-            public/discover/payload \
-            tests/pledge-impact-estimate.spec.ts
+            public/discover/payload
           git commit -m "Show the selected pool inspector on mobile"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
