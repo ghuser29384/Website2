@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/marketplace-delta-final-gate-v2.yml"
       - ".github/scripts/run-marketplace-delta-tree-equivalent-gate.sh"
+      - ".github/scripts/run-marketplace-delta-tree-equivalent-gate-v2.sh"
 
 permissions:
   contents: read
@@ -60,7 +61,7 @@ jobs:
 
       - name: Run exact-tree environment, comparison, browser, and cleanup gate
         shell: bash
-        run: bash .github/scripts/run-marketplace-delta-tree-equivalent-gate.sh
+        run: bash .github/scripts/run-marketplace-delta-tree-equivalent-gate-v2.sh
 
       - name: Upload rendered browser evidence
         if: always()
