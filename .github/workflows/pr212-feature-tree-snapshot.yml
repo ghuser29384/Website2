@@ -1,0 +1,43 @@
+name: Snapshot PR 212 feature tree
+
+on:
+  push:
+    branches:
+      - agent/pr212-qa-workflow-patch-20260731
+    paths:
+      - .github/workflows/pr212-feature-tree-snapshot.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EXPECTED_FEATURE_HEAD: a7587f66592934e37fe1de8e174de6534a7e31f4
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record exact feature tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(gh api repos/${GITHUB_REPOSITORY}/git/ref/heads/feat/institutional-trade-system --jq .object.sha)"
+          test "$actual_head" = "$EXPECTED_FEATURE_HEAD"
+          tree_sha="$(gh api repos/${GITHUB_REPOSITORY}/git/commits/${actual_head} --jq .tree.sha)"
+          workflow_blob="$(gh api 'repos/'${GITHUB_REPOSITORY}'/contents/.github/workflows/institutional-trade-qa.yml?ref=feat/institutional-trade-system' --jq .sha)"
+          mkdir -p ops/pr212-qa-workflow-patch
+          {
+            echo "feature_head=$actual_head"
+            echo "feature_tree=$tree_sha"
+            echo "workflow_blob=$workflow_blob"
+          } > ops/pr212-qa-workflow-patch/feature-tree.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-qa-workflow-patch/feature-tree.txt
+          git commit -m "Record exact PR 212 feature tree"
+          git push origin HEAD:agent/pr212-qa-workflow-patch-20260731
