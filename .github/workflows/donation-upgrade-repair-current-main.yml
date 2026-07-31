@@ -1,3 +1,4 @@
+# Trigger the current-main repair after the workflow is registered.
 name: Repair Donation Upgrade current-main integration
 
 on:
