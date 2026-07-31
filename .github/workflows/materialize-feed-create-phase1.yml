@@ -85,23 +85,16 @@ jobs:
 
           workbench_path = Path("src/components/core-trade/trade-draft-workbench.tsx")
           workbench = workbench_path.read_text(encoding="utf-8")
-          old = '''      setTransientMatchContext({
-                actionFitLabel:
-                  typeof parsed.actionFitLabel === "string"
-                    ? parsed.actionFitLabel.trim().slice(0, 40)
-                    : "",
-                matchPercent: Number.isFinite(rawPercent)
-                  ? Math.max(0, Math.min(100, Math.round(rawPercent)))
-                  : null,
-                ownerAlias:
-                  typeof parsed.ownerAlias === "string"
-                    ? parsed.ownerAlias.trim().slice(0, 100)
-                    : "",
-                reason:
-                  typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 240) : "",
-                reasonDetails,
-              });'''
-          new = '''      const timeoutId = window.setTimeout(() => {
+          marker = "      const rawPercent = Number(parsed.matchPercent);"
+          start_token = "      setTransientMatchContext({"
+          end_token = "      });"
+          marker_index = workbench.find(marker)
+          start = workbench.find(start_token, marker_index)
+          end = workbench.find(end_token, start)
+          if marker_index < 0 or start < 0 or end < 0:
+              raise SystemExit("Could not locate the synchronous transient match-context update.")
+          end += len(end_token)
+          new_block = '''      const timeoutId = window.setTimeout(() => {
                 setTransientMatchContext({
                   actionFitLabel:
                     typeof parsed.actionFitLabel === "string"
@@ -120,9 +113,7 @@ jobs:
                 });
               }, 0);
               return () => window.clearTimeout(timeoutId);'''
-          if workbench.count(old) != 1:
-              raise SystemExit("Expected one synchronous transient match-context state update.")
-          workbench_path.write_text(workbench.replace(old, new), encoding="utf-8")
+          workbench_path.write_text(workbench[:start] + new_block + workbench[end:], encoding="utf-8")
           PY
 
           git diff --check
