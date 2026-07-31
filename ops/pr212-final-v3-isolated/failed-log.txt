@@ -1,0 +1,143 @@
+validate	Run requested desktop and mobile rendered regressions	﻿2026-07-31T01:40:12.9460811Z ##[group]Run set -euo pipefail
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9461536Z ^[[36;1mset -euo pipefail^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9461961Z ^[[36;1mcat > .pr212-rendered-v3.mjs <<'NODE'^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9462495Z ^[[36;1mimport { chromium } from "@playwright/test";^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9462986Z ^[[36;1mimport fs from "node:fs/promises";^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9463612Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9463980Z ^[[36;1mconst baseURL = "http://127.0.0.1:3000";^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9464589Z ^[[36;1mconst browser = await chromium.launch({ headless: true });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9465134Z ^[[36;1mconst devices = [^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9465640Z ^[[36;1m  { name: "desktop", viewport: { width: 1440, height: 1000 } },^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9466457Z ^[[36;1m  { name: "mobile", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9467108Z ^[[36;1m];^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9467467Z ^[[36;1mconst report = [];^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9467831Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9468187Z ^[[36;1mfunction significantConsoleError(text) {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9469079Z ^[[36;1m  return !/Failed to load resource: the server responded with a status of (401|403|404)/i.test(text);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9469795Z ^[[36;1m}^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9470085Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9470564Z ^[[36;1masync function inspect(context, deviceName, name, path, assertion) {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9471225Z ^[[36;1m  const page = await context.newPage();^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9471711Z ^[[36;1m  const consoleErrors = [];^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9472113Z ^[[36;1m  const pageErrors = [];^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9472514Z ^[[36;1m  const serverErrors = [];^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9472927Z ^[[36;1m  page.on("console", (message) => {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9473934Z ^[[36;1m    if (message.type() === "error" && significantConsoleError(message.text())) consoleErrors.push(message.text());^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9474972Z ^[[36;1m  });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9475450Z ^[[36;1m  page.on("pageerror", (error) => pageErrors.push(String(error)));^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9476043Z ^[[36;1m  page.on("response", (response) => {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9476744Z ^[[36;1m    if (response.status() >= 500) serverErrors.push(`${response.status()} ${response.url()}`);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9477436Z ^[[36;1m  });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9477701Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9478181Z ^[[36;1m  const response = await page.goto(`${baseURL}${path}`, { waitUntil: "networkidle" });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9479247Z ^[[36;1m  if (!response || response.status() >= 400) throw new Error(`${deviceName}/${name}: initial response status ${response?.status() ?? "none"}`);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9480090Z ^[[36;1m  await assertion(page);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9480857Z ^[[36;1m  await page.screenshot({ path: `pr212-final-v3-evidence/screenshots/${deviceName}-${name}.png`, fullPage: true });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9481869Z ^[[36;1m  if (consoleErrors.length || pageErrors.length || serverErrors.length) {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9483051Z ^[[36;1m    throw new Error(`${deviceName}/${name}: console=${JSON.stringify(consoleErrors)} page=${JSON.stringify(pageErrors)} server=${JSON.stringify(serverErrors)}`);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9484183Z ^[[36;1m  }^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9484802Z ^[[36;1m  report.push({ device: deviceName, name, path, finalURL: page.url(), status: response.status() });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9485492Z ^[[36;1m  await page.close();^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9485842Z ^[[36;1m}^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9486109Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9486431Z ^[[36;1mfor (const device of devices) {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9487329Z ^[[36;1m  const context = await browser.newContext({ viewport: device.viewport, isMobile: device.isMobile, hasTouch: device.hasTouch });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9488185Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9488715Z ^[[36;1m  // Establish returning-visitor state through the actual mandatory walkthrough route.^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9489450Z ^[[36;1m  const bootstrap = await context.newPage();^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9490259Z ^[[36;1m  const bootstrapResponse = await bootstrap.goto(`${baseURL}/walkthrough`, { waitUntil: "networkidle" });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9491836Z ^[[36;1m  if (!bootstrapResponse || bootstrapResponse.status() >= 400) throw new Error(`${device.name}: walkthrough bootstrap failed`);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9492677Z ^[[36;1m  await bootstrap.close();^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9493057Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9493904Z ^[[36;1m  await inspect(context, device.name, "offers-visual-directory", "/offers?view=live", async (page) => {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9494997Z ^[[36;1m    await page.getByRole("heading", { name: "Open participant proposals" }).waitFor({ state: "visible" });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9495895Z ^[[36;1m    const grid = page.locator(".mt-directory-view .mt-market-grid");^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9496585Z ^[[36;1m    const empty = page.locator(".mt-directory-view .empty-state");^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9497618Z ^[[36;1m    if (!(await grid.count()) && !(await empty.count())) throw new Error("Offers rendered neither proposal grid nor explicit empty state.");^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9498486Z ^[[36;1m  });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9498780Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9500141Z ^[[36;1m  const completeBase = "/complete-profile?source=walkthrough&cause_area=Animal%20welfare&walkthrough_cause=Factory%20farming&offer_type=Money&match_name=Animal%20welfare&match_get=More%20animal%20welfare%20funding&match_give=Research%20time";^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9502039Z ^[[36;1m  await inspect(context, device.name, "complete-profile-connections", completeBase, async (page) => {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9503090Z ^[[36;1m    await page.getByRole("button", { name: /Sources/i }).waitFor({ state: "visible" });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9504333Z ^[[36;1m    if (await page.getByRole("dialog").count()) throw new Error("Connections dialog opened without a panel request.");^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9505507Z ^[[36;1m    const opened = await page.goto(`${baseURL}${completeBase}&panel=connections`, { waitUntil: "networkidle" });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9506776Z ^[[36;1m    if (!opened || opened.status() >= 400) throw new Error("Connections-panel navigation failed.");^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9507616Z ^[[36;1m    await page.getByRole("dialog").waitFor({ state: "visible" });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9508372Z ^[[36;1m    await page.getByRole("button", { name: /Close account sources/i }).click();^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9509134Z ^[[36;1m    await page.getByRole("dialog").waitFor({ state: "hidden" });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9509649Z ^[[36;1m  });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9509939Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9510455Z ^[[36;1m  await inspect(context, device.name, "create", "/trades/new", async (page) => {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9511510Z ^[[36;1m    const frameElement = page.locator('iframe[data-create-interface-frame="true"][title="Moral Trade Create"]');^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9512447Z ^[[36;1m    await frameElement.waitFor({ state: "visible" });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9513516Z ^[[36;1m    const createFrame = page.frameLocator('iframe[data-create-interface-frame="true"]');^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9514621Z ^[[36;1m    await createFrame.getByRole("heading", { level: 1, name: "What do you want to improve?" }).waitFor({ state: "visible" });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9515953Z ^[[36;1m    await createFrame.getByText("Create a trade, Donation Upgrade, or public-goods pool.", { exact: true }).waitFor({ state: "visible" });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9517055Z ^[[36;1m    const frameText = await createFrame.locator("body").innerText();^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9518362Z ^[[36;1m    if (/Delegated authority|Institutional budgets|Enterprise integrations/i.test(frameText)) throw new Error("Organization-only controls leaked into ordinary Create.");^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9519481Z ^[[36;1m  });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9519782Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9520275Z ^[[36;1m  await inspect(context, device.name, "feed", "/feed", async (page) => {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9521233Z ^[[36;1m    if (new URL(page.url()).pathname !== "/feed") throw new Error(`Unexpected Feed destination: ${page.url()}`);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9522325Z ^[[36;1m    const text = await page.locator("body").innerText();^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9523443Z ^[[36;1m    if (!/Feed|match|opportunit|trade/i.test(text)) throw new Error("Feed rendered no recognizable feed content.");^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9524234Z ^[[36;1m  });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9524536Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9525076Z ^[[36;1m  await inspect(context, device.name, "walkthrough", "/walkthrough", async (page) => {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9525847Z ^[[36;1m    const text = await page.locator("body").innerText();^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9526693Z ^[[36;1m    if (/Skip walkthrough|Skip for now/i.test(text)) throw new Error("Walkthrough exposes a skip control.");^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9527425Z ^[[36;1m  });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9527723Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9528255Z ^[[36;1m  await inspect(context, device.name, "evidence", "/evidence", async (page) => {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9529004Z ^[[36;1m    const pathname = new URL(page.url()).pathname;^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9529863Z ^[[36;1m    if (pathname !== "/evidence" && pathname !== "/login") throw new Error(`Unexpected Evidence destination: ${page.url()}`);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9530646Z ^[[36;1m  });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9530933Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9531449Z ^[[36;1m  await inspect(context, device.name, "admin-navigation", "/admin", async (page) => {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9532198Z ^[[36;1m    const pathname = new URL(page.url()).pathname;^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9533028Z ^[[36;1m    if (pathname !== "/admin" && pathname !== "/login") throw new Error(`Unexpected Admin destination: ${page.url()}`);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9533986Z ^[[36;1m  });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9534305Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9534970Z ^[[36;1m  await inspect(context, device.name, "authentication-return", "/login?returnTo=%2Fadmin", async (page) => {^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9536109Z ^[[36;1m    if (new URL(page.url()).pathname !== "/login") throw new Error(`Authentication redirect loop: ${page.url()}`);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9537007Z ^[[36;1m  });^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9537310Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9537624Z ^[[36;1m  await context.close();^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9537994Z ^[[36;1m}^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9538268Z ^[[36;1m^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9539038Z ^[[36;1mawait fs.writeFile("pr212-final-v3-evidence/rendered-regression-report.json", `${JSON.stringify(report, null, 2)}\n`);^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9539884Z ^[[36;1mawait browser.close();^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9540267Z ^[[36;1mNODE^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9540575Z ^[[36;1mnode .pr212-rendered-v3.mjs^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9540994Z ^[[36;1mrm -f .pr212-rendered-v3.mjs^[[0m
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9576312Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9576675Z env:
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9576958Z   CANDIDATE_BRANCH: agent/pr212-main-integrated-20260731
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9577334Z   CANDIDATE_SHA: 6e4deac3530e8f0989b457d082e6efd11b2fa34e
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9577730Z   CANDIDATE_TREE: 94309dbb19b2a93d68f1728f2452262ecb4354f7
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9578086Z   PINNED_MAIN_SHA: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9578445Z   PR_OLD_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9578785Z   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9579080Z   SITE_URL: http://127.0.0.1:3000
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9579350Z   INSTITUTIONAL_TRADES_ENABLED: true
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9579624Z   INSTITUTIONAL_POOLS_ENABLED: true
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9579905Z   INSTITUTIONAL_ENTERPRISE_API_ENABLED: true
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9580194Z   INSTITUTIONAL_WEBHOOKS_ENABLED: true
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:40:12.9580461Z ##[endgroup]
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4370672Z node:internal/modules/run_main:107
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4371493Z     triggerUncaughtException(
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4372388Z     ^
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4372640Z 
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4373479Z locator.waitFor: Timeout 30000ms exceeded.
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4375654Z Call log:
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4376919Z   - waiting for locator('iframe[data-create-interface-frame="true"]').contentFrame().getByText('Create a trade, Donation Upgrade, or public-goods pool.', { exact: true }) to be visible
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4381605Z     61 × locator resolved to hidden <p class="brand-subtitle">Create a trade, Donation Upgrade, or public-goods…</p>
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4382333Z 
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4382695Z     at /home/runner/work/Website2/Website2/.pr212-rendered-v3.mjs:72:109
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4383590Z     at async inspect (/home/runner/work/Website2/Website2/.pr212-rendered-v3.mjs:31:3)
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4384493Z     at async file:///home/runner/work/Website2/Website2/.pr212-rendered-v3.mjs:67:3 {
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4385183Z   name: 'TimeoutError'
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4385587Z }
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4385751Z 
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4385889Z Node.js v24.18.0
+validate	Run requested desktop and mobile rendered regressions	2026-07-31T01:41:03.4515591Z ##[error]Process completed with exit code 1.
