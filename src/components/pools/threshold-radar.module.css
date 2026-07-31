@@ -1419,6 +1419,10 @@
     height: 700px;
   }
 
+  .satellite {
+    z-index: 10;
+  }
+
   .detailPanel {
     min-height: 748px;
     border-top: 1px solid var(--line);

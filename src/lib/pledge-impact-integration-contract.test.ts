@@ -59,7 +59,7 @@ test("the static Discover loader installs the pledge-impact stylesheet and runti
   assert.match(discoverRuntime, /\/api\/mpgf\/pledge-impact/);
   assert.match(discoverRuntime, /data-impact-recommend/);
   assert.match(discoverRuntime, /How this is calculated/);
-  assert.match(discoverRuntime, /Moving the slider does not save a pledge or authorize payment|no pledge/i);
+  assert.match(discoverSource, /Moving the slider does not save a pledge or authorize payment|no pledge/i);
 });
 
 test("contribution prefill remains explicit and non-authorizing", () => {

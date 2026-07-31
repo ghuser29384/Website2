@@ -270,7 +270,13 @@ export function ThresholdRadar() {
     <>
       <LockSimpleOpen aria-hidden="true" size={35} weight="thin" />
       <span>
-        <strong>Make a conditional ${pledgeAmount.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} pledge.</strong>
+        <strong>
+          {`Make a conditional ${pledgeAmount.toLocaleString("en-US", {
+            style: "currency",
+            currency: "USD",
+            maximumFractionDigits: 0,
+          })} pledge.`}
+        </strong>
         <small>Moving the slider has not saved a pledge.</small>
       </span>
     </>
