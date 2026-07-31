@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   prepare:
@@ -18,6 +18,7 @@ jobs:
     env:
       EXPECTED_FEATURE_HEAD: a7587f66592934e37fe1de8e174de6534a7e31f4
       TARGET_BRANCH: feat/institutional-trade-system
+      STAGING_BRANCH: agent/pr212-qa-workflow-patch-20260731
     steps:
       - name: Check out exact PR branch
         uses: actions/checkout@v4
@@ -98,6 +99,22 @@ jobs:
           } > /tmp/pr212-qa-workflow-patch/manifest.txt
           cat /tmp/pr212-qa-workflow-patch/manifest.txt
           grep -n "pr212-targeted-regression-qa" .github/workflows/institutional-trade-qa.yml
+
+      - name: Persist the verified workflow bytes at a non-workflow staging path
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$STAGING_BRANCH"
+          rm -rf /tmp/pr212-workflow-staging
+          git worktree add --detach /tmp/pr212-workflow-staging "origin/$STAGING_BRANCH"
+          mkdir -p /tmp/pr212-workflow-staging/ops/pr212-qa-workflow-patch
+          cp /tmp/pr212-qa-workflow-patch/patched-institutional-trade-qa.yml /tmp/pr212-workflow-staging/ops/pr212-qa-workflow-patch/patched-institutional-trade-qa.yml
+          cp /tmp/pr212-qa-workflow-patch/manifest.txt /tmp/pr212-workflow-staging/ops/pr212-qa-workflow-patch/manifest.txt
+          git -C /tmp/pr212-workflow-staging config user.name "github-actions[bot]"
+          git -C /tmp/pr212-workflow-staging config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C /tmp/pr212-workflow-staging add ops/pr212-qa-workflow-patch
+          git -C /tmp/pr212-workflow-staging commit -m "Store verified PR 212 institutional QA workflow bytes"
+          git -C /tmp/pr212-workflow-staging push origin HEAD:"$STAGING_BRANCH"
 
       - name: Upload exact patched workflow
         uses: actions/upload-artifact@v4
