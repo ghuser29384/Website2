@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
-import { persistCreateSubmission } from "@/lib/create-interface/persistence";
-import { validateCreatePayload } from "@/lib/create-interface/validation";
+import { persistCreateSubmissionWithSafeguards } from "@/lib/create-interface/safeguards-persistence";
+import { validateCreatePayloadWithSafeguards } from "@/lib/create-interface/safeguards";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -45,9 +45,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const validated = validateCreatePayload(raw);
+    const validated = validateCreatePayloadWithSafeguards(raw);
     const supabase = createServiceClient();
-    const submission = await persistCreateSubmission({
+    const submission = await persistCreateSubmissionWithSafeguards({
       supabase,
       actorId: viewer.authUser.id,
       validated,
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     return response({ ok: true, submission }, 201);
   } catch (error) {
     const message = error instanceof Error ? error.message : "The Create submission could not be saved.";
-    const status = /required|invalid|must|unsupported|exceeds|cannot|between|future|formula|threshold/i.test(message)
+    const status = /required|invalid|must|unsupported|exceeds|cannot|between|future|formula|threshold|confirm|capacity/i.test(message)
       ? 400
       : 500;
     console.error("[create-interface] submission failed", {

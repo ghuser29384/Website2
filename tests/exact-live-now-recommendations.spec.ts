@@ -587,7 +587,6 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await expect(navigation.locator("button, a")).toHaveText([
       "Feed",
       "Discover",
-      "Controls",
       "Trade",
       "Commitments",
       "Evidence",
@@ -603,11 +602,11 @@ test.describe("adaptive moral-opportunity Now feed", () => {
     await evidence.click();
     await expect(page).toHaveURL(/\/evidence$/);
     await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: "Verified outcomes, without public evidence dossiers.",
-      exact: true,
-    }),
-  ).toBeVisible();
+      page.getByRole("heading", {
+        level: 1,
+        name: "Verified outcomes, without public evidence dossiers.",
+        exact: true,
+      }),
+    ).toBeVisible();
   });
 });

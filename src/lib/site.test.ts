@@ -12,7 +12,6 @@ test("exposes Feed and Discover as the first marketplace navigation entries", ()
     href: "/feed",
     label: "Feed",
   });
-
   assert.deepEqual(discoverLink, {
     href: "/discover",
     label: "Discover",
@@ -36,7 +35,7 @@ test("links to Feed and Discover from the marketplace footer group", () => {
   );
 });
 
-test("links to Trade controls without adding another primary navigation item", () => {
+test("keeps the safeguards compatibility route out of primary navigation", () => {
   const safetyGroup = FOOTER_LINK_GROUPS.find(
     (group) => group.title === "Safety & transparency",
   );
@@ -44,30 +43,32 @@ test("links to Trade controls without adding another primary navigation item", (
   assert.ok(safetyGroup);
   assert.ok(
     safetyGroup.links.some(
-      (link) => link.href === "/trade-controls" && link.label === "Trade controls",
+      (link) =>
+        link.href === "/trade-controls" && link.label === "Safeguards by workflow",
     ),
   );
   assert.ok(getPrimaryNavLinks(false).every((link) => link.href !== "/trade-controls"));
 });
 
-test("makes all ten coordination and safety controls discoverable in site search", () => {
-  const tradeControls = SITE_SEARCH_ITEMS.find((item) => item.href === "/trade-controls");
+test("makes the contextual safeguard workflow map discoverable", () => {
+  const safeguards = SITE_SEARCH_ITEMS.find((item) => item.href === "/trade-controls");
 
-  assert.ok(tradeControls);
-  assert.equal(tradeControls.label, "Trade controls");
+  assert.ok(safeguards);
+  assert.equal(safeguards.label, "Safeguards by workflow");
+  assert.match(safeguards.summary, /former Control simulator is retired/i);
 
   for (const keyword of [
     "counterfactual integrity",
     "multi-party trade circles",
-    "resolution center",
+    "trade circles unavailable",
     "pool governance",
-    "threshold failure",
+    "threshold settlement",
     "verifier governance",
     "private values",
-    "integration evidence hub",
+    "evidence integrations",
     "affected parties",
     "organizational authority",
   ]) {
-    assert.ok(tradeControls.keywords.includes(keyword), `missing search keyword: ${keyword}`);
+    assert.ok(safeguards.keywords.includes(keyword), `missing search keyword: ${keyword}`);
   }
 });

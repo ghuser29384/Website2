@@ -1,10 +1,12 @@
 import { getViewer } from "@/lib/app-data";
 import { loadTradeDonationAgreementContext } from "@/lib/trade-donation";
+import { buildTradeSafeguardItems } from "@/lib/trade-safeguards";
 
 import pageStyles from "./trade-agreement-page-visibility.module.css";
 import { TradeAgreementStage as BaseTradeAgreementStage } from "./trade-agreement-stage-base";
 import { TradeDonationAgreementStage } from "./trade-donation-agreement-stage";
 import { TradeOutcomeFeedback } from "./trade-outcome-feedback";
+import { TradeSafeguardsPanel } from "./trade-safeguards-panel";
 
 type TradeAgreementStageProps = Parameters<typeof BaseTradeAgreementStage>[0];
 
@@ -26,10 +28,25 @@ export async function TradeAgreementStage(props: TradeAgreementStageProps) {
   ) : (
     <BaseTradeAgreementStage {...props} />
   );
+  const safeguards = buildTradeSafeguardItems({
+    acceptedEvidenceCount: props.acceptedEvidenceCount,
+    confirmationCount: props.confirmationCount,
+    evidenceCount: props.evidenceCount,
+    lifecycleStatus: props.lifecycleStatus,
+    participantCount: 2,
+    version: {
+      evidenceRule: props.version.evidenceRule,
+      exitConditions: props.version.exitConditions,
+      maximumBurden: props.version.maximumBurden,
+      noTradeBaseline: props.version.noTradeBaseline,
+      privacyScope: props.version.privacyScope,
+    },
+  });
 
   return (
     <div className={pageStyles.scope}>
       {stage}
+      <TradeSafeguardsPanel items={safeguards} />
       {props.lifecycleStatus === "completed" && viewer ? (
         <section
           aria-labelledby="outcome-learning-heading"
