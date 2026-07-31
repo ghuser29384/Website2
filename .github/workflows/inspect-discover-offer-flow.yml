@@ -14,10 +14,10 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Expand Discover payload
+      - name: Expand Discover payload and export exact branch source
         run: |
           node <<'NODE'
           const fs = require('node:fs');
@@ -49,8 +49,10 @@ jobs:
           }
           fs.writeFileSync('artifacts/discover-inspection/snippets.txt', snippets.join('\n\n'));
           console.log(`Expanded ${source.length} characters across ${lines.length} lines.`);
-          console.log(snippets.slice(0, 24).join('\n\n'));
           NODE
+          git archive --format=tar.gz --output=artifacts/discover-inspection/branch-source.tar.gz HEAD
+          git rev-parse HEAD > artifacts/discover-inspection/exported-head.sha
+          sha256sum artifacts/discover-inspection/branch-source.tar.gz > artifacts/discover-inspection/branch-source.tar.gz.sha256
       - uses: actions/upload-artifact@v4
         with:
           name: discover-offer-flow-inspection-${{ github.sha }}
