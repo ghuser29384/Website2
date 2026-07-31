@@ -37,9 +37,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/direct-complete-profile-v3
-          cp .github/patches/direct-complete-profile-v3/part-* /tmp/direct-complete-profile-v3/
-          cat /tmp/direct-complete-profile-v3/part-* | tr -d '\n\r ' | base64 --decode > /tmp/direct-complete-profile.patch
+          : > /tmp/direct-complete-profile.patch
+          for part in .github/patches/direct-complete-profile-v3/part-*; do
+            tr -d '\n\r ' < "$part" | base64 --decode >> /tmp/direct-complete-profile.patch
+          done
           test -s /tmp/direct-complete-profile.patch
 
           git fetch origin main
