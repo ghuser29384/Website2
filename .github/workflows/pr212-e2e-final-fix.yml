@@ -1,0 +1,145 @@
+name: PR 212 final institutional E2E fixture repair
+
+on:
+  push:
+    branches:
+      - agent/pr212-e2e-final-fix-ops-20260731
+    paths:
+      - .github/workflows/pr212-e2e-final-fix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-final-institutional-e2e-fixture-repair
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EXPECTED_SOURCE_HEAD: e15797b2caeb2a9d4ae39913326d11a5ca668095
+      SOURCE_BRANCH: agent/pr212-public-view-security-fix-v4-candidate-20260731
+      CANDIDATE_BRANCH: agent/pr212-final-security-e2e-candidate-20260731
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out exact v4 security candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Refuse stale or unexpected source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_HEAD"
+          test "$(git rev-parse 'HEAD:.github/scripts/institutional-trade-qa-e2e.mjs')" = "2e15ef94deb8308b67f79cdbf7de08232dc0da30"
+
+      - name: Repair personal-party fixture and exact cleanup inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/institutional-trade-qa-e2e.mjs')
+          text = path.read_text()
+
+          old_party = '''    party_role: "independent_counterparty",
+              representative_profile_id: independent.id,
+              authority_status: "pending",
+              approval_status: "not_required",'''
+          new_party = '''    party_role: "independent_counterparty",
+              representative_profile_id: independent.id,
+              authority_status: "self_authorized",
+              approval_status: "not_required",'''
+          if text.count(old_party) != 1:
+              raise SystemExit(f'Expected one pending personal counterparty fixture, found {text.count(old_party)}')
+          text = text.replace(old_party, new_party)
+
+          command_entry = '  "institutional_command_drafts",\n'
+          if text.count(command_entry) != 1:
+              raise SystemExit(f'Expected one command-drafts deal-scope entry, found {text.count(command_entry)}')
+          text = text.replace(command_entry, '')
+
+          residue_marker = '''  residue["institutional_dispute_events.actor_profile_id"] = await countByIds(
+              "institutional_dispute_events",
+              "actor_profile_id",
+              createdUserIds,
+            );
+            const authResidue = [];'''
+          residue_replacement = '''  residue["institutional_dispute_events.actor_profile_id"] = await countByIds(
+              "institutional_dispute_events",
+              "actor_profile_id",
+              createdUserIds,
+            );
+            residue["institutional_command_drafts.profile_id"] = await countByIds(
+              "institutional_command_drafts",
+              "profile_id",
+              createdUserIds,
+            );
+            residue["institutional_command_drafts.organization_id"] = await countByIds(
+              "institutional_command_drafts",
+              "organization_id",
+              createdOrganizationIds,
+            );
+            const authResidue = [];'''
+          if text.count(residue_marker) != 1:
+              raise SystemExit(f'Expected one residue marker, found {text.count(residue_marker)}')
+          path.write_text(text.replace(residue_marker, residue_replacement))
+          PY
+
+          git diff --check
+          test "$(git status --short | cut -c4-)" = ".github/scripts/institutional-trade-qa-e2e.mjs"
+          grep -F 'authority_status: "self_authorized"' .github/scripts/institutional-trade-qa-e2e.mjs >/dev/null
+          ! grep -A30 'const dealScopedTables' .github/scripts/institutional-trade-qa-e2e.mjs | grep -F 'institutional_command_drafts'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run institutional contracts and syntax checks
+        run: |
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          node --check .github/scripts/pr212-targeted-regression-qa.mjs
+
+      - name: Run complete repository tests absolutely
+        run: npm test
+
+      - name: Run TypeScript absolutely
+        run: npx tsc --noEmit
+
+      - name: Run ESLint absolutely
+        run: npm run lint
+
+      - name: Build production application absolutely
+        run: npm run build
+
+      - name: Commit exact final candidate after every gate passes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_HEAD"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/scripts/institutional-trade-qa-e2e.mjs
+          git commit -m "Fix institutional personal fixture and residue checks"
+          git push origin HEAD:"$CANDIDATE_BRANCH"
