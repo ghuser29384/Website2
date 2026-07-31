@@ -1,0 +1,42 @@
+name: Temporary exact Feed-to-Create rebase
+
+on:
+  pull_request:
+    branches: [main]
+    paths: [".github/workflows/rebase-feed-create-current-main.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  rebase:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ghuser29384/Website2
+          ref: feature/feed-create-phase1-20260730
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Rebase the exact one-commit candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_head=184470161c5a311b8cc223531c0f15f18d72444e
+          main_head=85660ffc07f6125bd28028a89480c85927d03ae8
+          test "$(git rev-parse HEAD)" = "$product_head"
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$main_head"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rebase origin/main
+          test "$(git merge-base origin/main HEAD)" = "$main_head"
+          test "$(git rev-list --count origin/main..HEAD)" = "1"
+          test "$(git diff --name-only origin/main...HEAD | wc -l | tr -d '[:space:]')" = "21"
+          git diff --check origin/main...HEAD
+          git push --force-with-lease="refs/heads/feature/feed-create-phase1-20260730:${product_head}" origin HEAD:refs/heads/feature/feed-create-phase1-20260730
+          printf 'base=%s\n' "$(git rev-parse origin/main)"
+          printf 'head=%s\n' "$(git rev-parse HEAD)"
+          printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
