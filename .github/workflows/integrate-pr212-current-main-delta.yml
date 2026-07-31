@@ -1,0 +1,256 @@
+name: Integrate PR 212 current-main delta
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-ops-20260730
+    paths:
+      - .github/workflows/integrate-pr212-current-main-delta.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: integrate-pr212-current-main-delta
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_BRANCH: feat/institutional-trade-system
+      DELTA_BRANCH: agent/pr212-current-main-delta-20260731
+      QA_WORKFLOW: institutional-trade-qa.yml
+      PINNED_MAIN: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+
+    steps:
+      - name: Check out the pre-created delta branch
+        uses: actions/checkout@v4
+        with:
+          ref: agent/pr212-current-main-delta-20260731
+          fetch-depth: 0
+
+      - name: Require a successful stable exact-head QA run
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/pr212-current-main-delta
+          rm -rf "$evidence"
+          mkdir -p "$evidence"
+
+          pr_json="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212")"
+          feature_head="$(jq -r .head.sha <<<"$pr_json")"
+          test "$(jq -r .state <<<"$pr_json")" = open
+          test "$(jq -r .draft <<<"$pr_json")" = true
+          test "$(git rev-parse HEAD)" = "$feature_head"
+
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 1800); do
+            latest_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/212" --jq .head.sha)"
+            if [[ "$latest_head" != "$feature_head" ]]; then
+              echo "PR head moved while waiting; refusing to integrate a stale head." >&2
+              exit 1
+            fi
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$QA_WORKFLOW" --branch "$FEATURE_BRANCH" --limit 100 --json databaseId,headSha,status,conclusion,createdAt,url > /tmp/qa-runs.json
+            run_id="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/qa-runs.json)"
+            status="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/qa-runs.json)"
+            conclusion="$(jq -r --arg head "$feature_head" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/qa-runs.json)"
+            if [[ -n "$run_id" && "$status" == completed ]]; then break; fi
+            sleep 10
+          done
+          test -n "$run_id"
+          test "$status" = completed
+          test "$conclusion" = success
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$evidence/qa-jobs.json"
+          for required in \
+            "Run source-contract integrity tests before database mutation" \
+            "Compile and atomically apply the amended original migration to isolated QA" \
+            "Generate exact isolated-QA database types" \
+            "Require no new or institutional Supabase lint findings" \
+            "Run forced-RLS, grants, foreign-key-index, and non-custody inventories" \
+            "Run exact-base differential complete test suite" \
+            "Require absolute TypeScript success against generated QA schema" \
+            "Require absolute ESLint success" \
+            "Require absolute production build success" \
+            "Run organization-led and independent-individual authenticated workflows plus negative matrix" \
+            "Run targeted current-main desktop and mobile regression smoke" \
+            "Confirm complete synthetic identity and institutional-record cleanup" \
+            "Require exact generated database types to be committed"; do
+            jq -e --arg required "$required" '.jobs[].steps[] | select(.name == $required) | .conclusion == "success"' "$evidence/qa-jobs.json" >/dev/null
+          done
+
+          current_main="$(git ls-remote --heads origin refs/heads/main | awk '{print $1}')"
+          printf '%s\n' "$feature_head" > "$evidence/feature-head.txt"
+          printf '%s\n' "$run_id" > "$evidence/qa-run-id.txt"
+          printf '%s\n' "$current_main" > "$evidence/current-main.txt"
+          printf '%s\n' "$PINNED_MAIN" > "$evidence/pinned-main.txt"
+
+          if [[ "$current_main" == "$PINNED_MAIN" ]]; then
+            jq -n --arg feature_head "$feature_head" --arg current_main "$current_main" --arg run_id "$run_id" '{action:"none",reason:"main_unchanged",feature_head:$feature_head,current_main:$current_main,qa_run_id:$run_id}' > "$evidence/result.json"
+            touch /tmp/pr212-main-unchanged
+          fi
+
+      - name: Merge current main with current-main behavior as the default
+        if: hashFiles('/tmp/pr212-main-unchanged') == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/pr212-current-main-delta
+          current_main="$(cat "$evidence/current-main.txt")"
+          feature_head="$(cat "$evidence/feature-head.txt")"
+          git fetch origin "$current_main"
+
+          set +e
+          git merge --no-ff --no-commit "$current_main" > "$evidence/merge-output.txt" 2>&1
+          merge_status=$?
+          set -e
+          echo "$merge_status" > "$evidence/merge-status.txt"
+
+          git diff --name-only --diff-filter=U | sort > "$evidence/conflicts.txt"
+          institutional_conflicts=0
+          while IFS= read -r path; do
+            [[ -z "$path" ]] && continue
+            case "$path" in
+              .env.example|\
+              .github/scripts/institutional-*|\
+              .github/workflows/institutional-trade-qa.yml|\
+              .github/workflows/pr212-main-integrated-gates.yml|\
+              src/app/admin/institutional-deal-desk/*|\
+              src/app/admin/page.tsx|\
+              src/app/how-it-works/page.tsx|\
+              src/app/institutions/*|\
+              src/components/institutions/*|\
+              src/institutional-*.test.ts|\
+              src/lib/institutional-*|\
+              src/pr212-main-integration-regression.test.ts|\
+              src/lib/supabase/database.types.ts|\
+              supabase/migrations/20260726123000_institutional_trade_system.sql)
+                echo "Institutional or mixed-surface conflict requires explicit inspection: $path" >&2
+                institutional_conflicts=1
+                ;;
+              *)
+                # Decision 5A: preserve current main for every non-institutional conflict.
+                git checkout --theirs -- "$path"
+                git add "$path"
+                ;;
+            esac
+          done < "$evidence/conflicts.txt"
+
+          if [[ "$institutional_conflicts" != 0 ]]; then
+            git merge --abort || true
+            jq -n --arg feature_head "$feature_head" --arg current_main "$current_main" --rawfile conflicts "$evidence/conflicts.txt" '{action:"blocked",reason:"institutional_conflict",feature_head:$feature_head,current_main:$current_main,conflicts:($conflicts|split("\n")|map(select(length>0)))}' > "$evidence/result.json"
+            exit 1
+          fi
+
+          test -z "$(git diff --name-only --diff-filter=U)"
+          git add -A
+
+      - name: Audit the current-main delta boundary
+        if: hashFiles('/tmp/pr212-main-unchanged') == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/pr212-current-main-delta
+          current_main="$(cat "$evidence/current-main.txt")"
+          git diff --cached --name-only "$current_main" | sort > "$evidence/integrated-diff-files.txt"
+
+          unexpected=0
+          while IFS= read -r path; do
+            case "$path" in
+              .env.example|\
+              .github/scripts/institutional-*|\
+              .github/workflows/institutional-trade-qa.yml|\
+              .github/workflows/pr212-main-integrated-gates.yml|\
+              src/app/admin/institutional-deal-desk/*|\
+              src/app/admin/page.tsx|\
+              src/app/how-it-works/page.tsx|\
+              src/app/institutions/*|\
+              src/components/institutions/*|\
+              src/institutional-*.test.ts|\
+              src/lib/institutional-*|\
+              src/pr212-main-integration-regression.test.ts|\
+              src/lib/supabase/database.types.ts|\
+              supabase/migrations/20260726123000_institutional_trade_system.sql)
+                ;;
+              *)
+                echo "Unexpected non-institutional divergence from current main: $path" >&2
+                unexpected=1
+                ;;
+            esac
+          done < "$evidence/integrated-diff-files.txt"
+          test "$unexpected" = 0
+
+          for path in \
+            src/app/complete-profile/page.tsx \
+            src/app/offers/offer-plane-inline-mount.tsx \
+            src/app/offers/offer-visual-directory-mount.tsx \
+            src/components/profile/complete-profile-connections.tsx \
+            src/lib/crawlability.test.ts \
+            src/lib/public-route-smoke.test.ts; do
+            git diff --exit-code "$current_main" -- "$path"
+          done
+          git diff --check "$current_main"
+
+      - name: Set up Node.js
+        if: hashFiles('/tmp/pr212-main-unchanged') == ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and run the second source, type, lint, and build gate
+        if: hashFiles('/tmp/pr212-main-unchanged') == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then break; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts \
+            src/pr212-main-integration-regression.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          node --check .github/scripts/pr212-targeted-regression-qa.mjs
+          npx tsc --noEmit --pretty false
+          npm run lint
+          npm run build
+
+      - name: Commit the validated current-main delta on the separate branch
+        if: hashFiles('/tmp/pr212-main-unchanged') == ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence=/tmp/pr212-current-main-delta
+          current_main="$(cat "$evidence/current-main.txt")"
+          feature_head="$(cat "$evidence/feature-head.txt")"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Integrate PR 212 with current main ${current_main:0:12}"
+          integrated_head="$(git rev-parse HEAD)"
+          git push origin "HEAD:refs/heads/${DELTA_BRANCH}"
+          jq -n --arg action integrated --arg feature_head "$feature_head" --arg current_main "$current_main" --arg integrated_head "$integrated_head" '{action:$action,feature_head:$feature_head,current_main:$current_main,integrated_head:$integrated_head,source_gates:"passed"}' > "$evidence/result.json"
+
+      - name: Upload exact delta evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-current-main-delta-${{ github.run_id }}
+          path: /tmp/pr212-current-main-delta
+          if-no-files-found: warn
+          retention-days: 14
