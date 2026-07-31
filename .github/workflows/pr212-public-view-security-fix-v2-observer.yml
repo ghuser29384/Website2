@@ -1,0 +1,60 @@
+name: PR 212 public-directory and RLS repair v2 observer
+
+on:
+  push:
+    branches:
+      - agent/pr212-public-view-security-fix-observer-20260731
+    paths:
+      - .github/workflows/pr212-public-view-security-fix-v2-observer.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: agent/pr212-public-view-security-fix-ops-20260731
+      TARGET_WORKFLOW: pr212-public-view-security-fix-v2.yml
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Poll v2 repair to terminal state and preserve evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ops/pr212-public-view-security-fix-v2
+          run_id=""
+          status=""
+          conclusion=""
+          for attempt in $(seq 1 190); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$TARGET_WORKFLOW" --branch "$TARGET_BRANCH" --limit 10 --json databaseId,status,conclusion,createdAt,headSha,url,event > /tmp/runs.json
+            run_id="$(jq -r 'sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/runs.json)"
+            status="$(jq -r 'sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/runs.json)"
+            conclusion="$(jq -r 'sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 10
+          done
+          if [[ -n "$run_id" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > /tmp/run.json
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/jobs.json
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/failed.log 2>&1 || true
+          else
+            printf '%s\n' '{}' > /tmp/run.json
+            printf '%s\n' '{"jobs":[]}' > /tmp/jobs.json
+            printf '%s\n' 'No v2 repair run found.' > /tmp/failed.log
+          fi
+          jq -n --arg observed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg run_id "$run_id" --arg status "$status" --arg conclusion "$conclusion" --slurpfile runs /tmp/runs.json --slurpfile run /tmp/run.json --slurpfile jobs /tmp/jobs.json '{observed_at:$observed_at,run_id:$run_id,status:$status,conclusion:$conclusion,runs:$runs[0],run:$run[0],jobs:$jobs[0].jobs}' > ops/pr212-public-view-security-fix-v2/report.json
+          tail -n 900 /tmp/failed.log > ops/pr212-public-view-security-fix-v2/failed-log.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ops/pr212-public-view-security-fix-v2
+          git commit -m "Record PR 212 public-directory RLS repair v2"
+          git push origin HEAD:agent/pr212-public-view-security-fix-observer-20260731
+          if [[ -z "$run_id" || "$status" != "completed" ]]; then exit 1; fi
