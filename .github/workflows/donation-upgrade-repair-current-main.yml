@@ -31,90 +31,53 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
+          cat > /tmp/repair.py <<'PY'
           from pathlib import Path
+          import re
 
-          def replace_exact(path_string: str, old: str, new: str, count: int = 1) -> None:
+          def replace_or_verify(path_string, old, new, expected_new=None, count=1):
               path = Path(path_string)
               text = path.read_text()
-              actual = text.count(old)
-              if actual != count:
-                  raise SystemExit(f"{path}: expected {count} occurrence(s), found {actual}: {old[:80]!r}")
-              path.write_text(text.replace(old, new, count))
+              if old in text:
+                  actual = text.count(old)
+                  if actual != count:
+                      raise SystemExit(f"{path}: expected {count} old occurrences, found {actual}")
+                  path.write_text(text.replace(old, new, count))
+                  return
+              marker = expected_new or new
+              if marker not in text:
+                  raise SystemExit(f"{path}: neither old nor repaired text found")
 
-          replace_exact(
+          replace_or_verify(
               "src/app/trade-donation-pool-actions.ts",
-              '''  const agreement = context.agreement as Record<string, unknown>;
-          const payerUserId = payerUserIdForRole(agreement, context.term.payer_role);
-          ''',
-              '''  const agreement = context.agreement as Record<string, unknown>;
-          const payerUserId = payerUserIdForRole(
-            {
-              proposer_id: agreement.proposer_id,
-              responder_id: agreement.responder_id,
-            },
-            context.term.payer_role,
-          );
-          ''',
+              '  const agreement = context.agreement as Record<string, unknown>;\n  const payerUserId = payerUserIdForRole(agreement, context.term.payer_role);',
+              '  const agreement = context.agreement as Record<string, unknown>;\n  const payerUserId = payerUserIdForRole(\n    {\n      proposer_id: agreement.proposer_id,\n      responder_id: agreement.responder_id,\n    },\n    context.term.payer_role,\n  );',
+              '      proposer_id: agreement.proposer_id,',
           )
 
-          replace_exact(
+          replace_or_verify(
               "src/lib/discovery-ranking.test.ts",
-              '''function offer(overrides: Partial<OfferDiscoveryLike> & Pick<OfferDiscoveryLike, "id">): OfferDiscoveryLike {
-            return {
-              id: overrides.id,
-          ''',
-              '''function offer(overrides: Partial<OfferDiscoveryLike> & Pick<OfferDiscoveryLike, "id">): OfferDiscoveryLike {
-            const { id, ...rest } = overrides;
-            return {
-              id,
-          ''',
+              'function offer(overrides: Partial<OfferDiscoveryLike> & Pick<OfferDiscoveryLike, "id">): OfferDiscoveryLike {\n  return {\n    id: overrides.id,',
+              'function offer(overrides: Partial<OfferDiscoveryLike> & Pick<OfferDiscoveryLike, "id">): OfferDiscoveryLike {\n  const { id, ...rest } = overrides;\n  return {\n    id,',
+              'const { id, ...rest } = overrides;',
           )
-          replace_exact(
+          replace_or_verify(
               "src/lib/discovery-ranking.test.ts",
-              '''    donationOffset: null,
-              ...overrides,
-            };
-          }
-          ''',
-              '''    donationOffset: null,
-              ...rest,
-            };
-          }
-          ''',
+              '    donationOffset: null,\n    ...overrides,\n  };\n}',
+              '    donationOffset: null,\n    ...rest,\n  };\n}',
+              '    donationOffset: null,\n    ...rest,',
           )
-          replace_exact(
+          replace_or_verify(
               "src/lib/discovery-ranking.test.ts",
-              '''function profile(
-            overrides: Partial<ProfileDiscoveryLike> & Pick<ProfileDiscoveryLike, "id" | "resolvedName">,
-          ): ProfileDiscoveryLike {
-            return {
-              id: overrides.id,
-              resolvedName: overrides.resolvedName,
-              display_name: overrides.resolvedName,
-          ''',
-              '''function profile(
-            overrides: Partial<ProfileDiscoveryLike> & Pick<ProfileDiscoveryLike, "id" | "resolvedName">,
-          ): ProfileDiscoveryLike {
-            const { id, resolvedName, ...rest } = overrides;
-            return {
-              id,
-              resolvedName,
-              display_name: resolvedName,
-          ''',
+              '): ProfileDiscoveryLike {\n  return {\n    id: overrides.id,\n    resolvedName: overrides.resolvedName,\n    display_name: overrides.resolvedName,',
+              '): ProfileDiscoveryLike {\n  const { id, resolvedName, ...rest } = overrides;\n  return {\n    id,\n    resolvedName,\n    display_name: resolvedName,',
+              'const { id, resolvedName, ...rest } = overrides;',
           )
-          replace_exact(
+          replace_or_verify(
               "src/lib/discovery-ranking.test.ts",
-              '''    created_at: "2026-07-01T00:00:00.000Z",
-              ...overrides,
-            };
-          }
-          ''',
-              '''    created_at: "2026-07-01T00:00:00.000Z",
-              ...rest,
-            };
-          }
-          ''',
+              '    created_at: "2026-07-01T00:00:00.000Z",\n    ...overrides,\n  };\n}',
+              '    created_at: "2026-07-01T00:00:00.000Z",\n    ...rest,\n  };\n}',
+              '    created_at: "2026-07-01T00:00:00.000Z",\n    ...rest,',
           )
 
           for filename in (
@@ -123,89 +86,74 @@ jobs:
           ):
               path = Path(filename)
               text = path.read_text()
-              occurrences = text.count(" as NodeJS.ProcessEnv")
-              if occurrences == 0:
-                  raise SystemExit(f"{path}: expected ProcessEnv casts")
-              path.write_text(text.replace(" as NodeJS.ProcessEnv", " as unknown as NodeJS.ProcessEnv"))
+              if " as NodeJS.ProcessEnv" in text:
+                  path.write_text(text.replace(" as NodeJS.ProcessEnv", " as unknown as NodeJS.ProcessEnv"))
+              elif " as unknown as NodeJS.ProcessEnv" not in text:
+                  raise SystemExit(f"{filename}: ProcessEnv casts not found")
 
-          replace_exact(
+          replace_or_verify(
               "src/lib/mpgf/failure-bonus-operator.test.ts",
-              '''  assert.equal(result.ok, true);
-            if (!result.ok) throw new Error(result.errors.join(" "));
-          ''',
-              '''  if (!result.ok) throw new Error(result.errors.join(" "));
-            assert.equal(result.ok, true);
-          ''',
+              '  assert.equal(result.ok, true);\n  if (!result.ok) throw new Error(result.errors.join(" "));',
+              '  if (!result.ok) throw new Error(result.errors.join(" "));\n  assert.equal(result.ok, true);',
+              '  if (!result.ok) throw new Error(result.errors.join(" "));\n  assert.equal(result.ok, true);',
           )
 
-          replace_exact(
-              "src/lib/public-route-smoke.test.ts",
-              '''function flattenPrimaryNavHrefs() {
-            return getPrimaryNavLinks(false).flatMap((link) =>
-              "items" in link && link.items
-                ? link.items.map((item) => item.href)
-                : "href" in link && link.href
-                  ? [link.href]
-                  : [],
-            );
-          }
-          ''',
-              '''function flattenPrimaryNavHrefs(): string[] {
-            return getPrimaryNavLinks(false).map((link) => String(link.href));
-          }
-          ''',
+          path = Path("src/lib/public-route-smoke.test.ts")
+          text = path.read_text()
+          pattern = re.compile(
+              r'function flattenPrimaryNavHrefs\(\) \{\n'
+              r'  return getPrimaryNavLinks\(false\)\.flatMap\(\(link\) =>\n'
+              r'    "items" in link && link\.items\n'
+              r'      \? link\.items\.map\(\(item\) => item\.href\)\n'
+              r'      : "href" in link && link\.href\n'
+              r'        \? \[link\.href\]\n'
+              r'        : \[\],\n'
+              r'  \);\n'
+              r'\}'
           )
+          repaired = 'function flattenPrimaryNavHrefs(): string[] {\n  return getPrimaryNavLinks(false).map((link) => String(link.href));\n}'
+          if pattern.search(text):
+              text, changed = pattern.subn(repaired, text, count=1)
+              if changed != 1:
+                  raise SystemExit("Primary navigation helper changed unexpectedly")
+              path.write_text(text)
+          elif repaired not in text:
+              raise SystemExit("Primary navigation helper was not found")
 
-          replace_exact(
-              "src/lib/recommendation-training-execution.test.ts",
-              '''    { VERCEL_DEPLOYMENT_ID: "dpl_canonical" },
-          ''',
-              '''    { NODE_ENV: "test", VERCEL_DEPLOYMENT_ID: "dpl_canonical" },
-          ''',
+          path = Path("src/lib/recommendation-training-execution.test.ts")
+          text = path.read_text()
+          text = text.replace(
+              '{ VERCEL_DEPLOYMENT_ID: "dpl_canonical" },',
+              '{ NODE_ENV: "test", VERCEL_DEPLOYMENT_ID: "dpl_canonical" },',
           )
-          replace_exact(
-              "src/lib/recommendation-training-execution.test.ts",
-              '''    {},
-              new Date("2026-07-30T15:00:00.000Z"),
-          ''',
-              '''    { NODE_ENV: "test" },
-              new Date("2026-07-30T15:00:00.000Z"),
-          ''',
+          text = text.replace(
+              '    {},\n    new Date("2026-07-30T15:00:00.000Z"),',
+              '    { NODE_ENV: "test" },\n    new Date("2026-07-30T15:00:00.000Z"),',
           )
-          replace_exact(
-              "src/lib/recommendation-training-execution.test.ts",
-              '''    {},
-              new Date("2026-07-30T12:30:00.000Z"),
-          ''',
-              '''    { NODE_ENV: "test" },
-              new Date("2026-07-30T12:30:00.000Z"),
-          ''',
+          text = text.replace(
+              '    {},\n    new Date("2026-07-30T12:30:00.000Z"),',
+              '    { NODE_ENV: "test" },\n    new Date("2026-07-30T12:30:00.000Z"),',
           )
+          if text.count('NODE_ENV: "test"') < 3:
+              raise SystemExit("Recommendation-training test environments were not repaired")
+          path.write_text(text)
 
-          replace_exact(
-              "src/lib/x-profile-connector.test.ts",
-              '''} as NodeJS.ProcessEnv;
-          ''',
-              '''} as unknown as NodeJS.ProcessEnv;
-          ''',
-          )
-          replace_exact(
-              "src/lib/x-profile-connector.test.ts",
-              '''      env: {},
-          ''',
-              '''      env: { NODE_ENV: "test" },
-          ''',
-          )
+          path = Path("src/lib/x-profile-connector.test.ts")
+          text = path.read_text()
+          text = text.replace("} as NodeJS.ProcessEnv;", "} as unknown as NodeJS.ProcessEnv;")
+          text = text.replace('      env: {},', '      env: { NODE_ENV: "test" },')
+          if "as unknown as NodeJS.ProcessEnv" not in text or 'env: { NODE_ENV: "test" }' not in text:
+              raise SystemExit("X connector test environments were not repaired")
+          path.write_text(text)
 
-          replace_exact(
+          replace_or_verify(
               "tsconfig.json",
-              '''    "target": "ES2017",
-          ''',
-              '''    "target": "ES2018",
-          ''',
+              '    "target": "ES2017",',
+              '    "target": "ES2018",',
+              '    "target": "ES2018",',
           )
           PY
-
+          python /tmp/repair.py
           git diff --check
           git diff --stat
 
@@ -223,6 +171,10 @@ jobs:
             src/lib/recommendation-training-execution.test.ts \
             src/lib/x-profile-connector.test.ts \
             tsconfig.json
+          if git diff --cached --quiet; then
+            echo "Repairs are already present."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Repair absolute TypeScript gate"
