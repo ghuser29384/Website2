@@ -1,0 +1,8 @@
+M  src/lib/discovery-ranking.test.ts
+M  src/lib/funding.test.ts
+M  src/lib/mpgf/failure-bonus-operator.test.ts
+M  src/lib/payments/conditional-state.test.ts
+M  src/lib/public-route-smoke.test.ts
+M  src/lib/recommendation-training-execution.test.ts
+M  src/lib/x-profile-connector.test.ts
+M  tsconfig.json
