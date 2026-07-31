@@ -144,9 +144,15 @@ test("filters selected before the first query are snapshotted into the request, 
 
   await page.locator("#command-input").fill("animal welfare opportunities");
   await page.getByRole("button", { name: "Search", exact: true }).click();
-  await expect(page.locator(".state-panel")).toContainText(
-    "No active offers match",
+  const zeroState = page.locator(
+    '.transaction-list[data-live-search-results="true"] [data-live-search-zero="true"]',
   );
+  await expect(zeroState).toContainText("No active offers match");
+  await expect(
+    zeroState.locator(".discover-live-zero-actions"),
+  ).toBeVisible();
+  await page.waitForTimeout(300);
+  await expect(zeroState).toContainText("No active offers match");
 
   expect(requests).toHaveLength(1);
   expect(requests[0]).toMatchObject({
