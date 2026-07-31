@@ -11,10 +11,6 @@ on:
 permissions:
   contents: write
 
-concurrency:
-  group: materialize-direct-complete-profile
-  cancel-in-progress: false
-
 jobs:
   verify-and-publish:
     if: github.actor != 'github-actions[bot]'
