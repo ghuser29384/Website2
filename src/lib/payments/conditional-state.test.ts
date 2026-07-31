@@ -12,6 +12,10 @@ import {
   type DonationOffsetConditionSnapshot,
 } from "@/lib/payments/conditional-state";
 
+function testEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
+  return { NODE_ENV: "test", ...overrides };
+}
+
 function makeSnapshot(
   overrides: Partial<DonationOffsetConditionSnapshot> = {},
 ): DonationOffsetConditionSnapshot {
@@ -189,19 +193,23 @@ test("participant amounts are derived from the frozen role", () => {
 });
 
 test("Stripe test mode is available in preview and blocked on the production site", () => {
-  const previewSandbox = getConditionalPaymentsEnvironment({
-    VERCEL_ENV: "preview",
-    STRIPE_SECRET_KEY: "sk_test_example",
-  } as NodeJS.ProcessEnv);
+  const previewSandbox = getConditionalPaymentsEnvironment(
+    testEnv({
+      VERCEL_ENV: "preview",
+      STRIPE_SECRET_KEY: "sk_test_example",
+    }),
+  );
   assert.equal(previewSandbox.enabled, true);
   assert.equal(previewSandbox.mode, "test");
   assert.equal(previewSandbox.livemode, false);
 
-  const productionSandbox = getConditionalPaymentsEnvironment({
-    CONDITIONAL_PAYMENTS_MODE: "test",
-    VERCEL_ENV: "production",
-    STRIPE_SECRET_KEY: "sk_test_example",
-  } as NodeJS.ProcessEnv);
+  const productionSandbox = getConditionalPaymentsEnvironment(
+    testEnv({
+      CONDITIONAL_PAYMENTS_MODE: "test",
+      VERCEL_ENV: "production",
+      STRIPE_SECRET_KEY: "sk_test_example",
+    }),
+  );
   assert.equal(productionSandbox.enabled, false);
   assert.equal(productionSandbox.mode, "disabled");
   assert.equal(productionSandbox.livemode, false);
@@ -209,17 +217,21 @@ test("Stripe test mode is available in preview and blocked on the production sit
 });
 
 test("explicit disable wins and live mode requires a live key", () => {
-  const disabled = getConditionalPaymentsEnvironment({
-    CONDITIONAL_PAYMENTS_MODE: "disabled",
-    STRIPE_SECRET_KEY: "sk_test_example",
-  } as NodeJS.ProcessEnv);
+  const disabled = getConditionalPaymentsEnvironment(
+    testEnv({
+      CONDITIONAL_PAYMENTS_MODE: "disabled",
+      STRIPE_SECRET_KEY: "sk_test_example",
+    }),
+  );
   assert.equal(disabled.enabled, false);
   assert.equal(disabled.mode, "disabled");
 
-  const invalidLive = getConditionalPaymentsEnvironment({
-    CONDITIONAL_PAYMENTS_MODE: "live",
-    STRIPE_SECRET_KEY: "sk_test_example",
-  } as NodeJS.ProcessEnv);
+  const invalidLive = getConditionalPaymentsEnvironment(
+    testEnv({
+      CONDITIONAL_PAYMENTS_MODE: "live",
+      STRIPE_SECRET_KEY: "sk_test_example",
+    }),
+  );
   assert.equal(invalidLive.enabled, false);
   assert.equal(invalidLive.livemode, true);
 });
