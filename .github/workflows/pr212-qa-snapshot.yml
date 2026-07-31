@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
-      TARGET_HEAD: 46524afa6c37977b9ce431087117472180590712
+      TARGET_HEAD: c6ccc97a74a9e12577c37b0febecba36556244d6
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,5 +33,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ops/pr212-qa-snapshot/status.json
-          git commit -m "Snapshot exact PR 212 QA run"
+          git commit -m "Snapshot final exact PR 212 QA run"
           git push origin HEAD:agent/pr212-qa-snapshot-20260731
