@@ -1,0 +1,257 @@
+name: PR 212 integrated final gate v3
+
+on:
+  push:
+    branches:
+      - agent/pr212-main-integration-ops-20260730
+    paths:
+      - .github/workflows/pr212-integrated-final-gate-v3.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr212-integrated-final-gate-v3
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 85
+    env:
+      CANDIDATE_BRANCH: agent/pr212-main-integrated-20260731
+      CANDIDATE_SHA: 6e4deac3530e8f0989b457d082e6efd11b2fa34e
+      CANDIDATE_TREE: 94309dbb19b2a93d68f1728f2452262ecb4354f7
+      PINNED_MAIN_SHA: 36650b48f9e664ea6d67c0840cf6a803060e8d7c
+      PR_OLD_HEAD: 9ec3bd79618a704469bc4f3547d2d8a1e4dc2730
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      INSTITUTIONAL_TRADES_ENABLED: "true"
+      INSTITUTIONAL_POOLS_ENABLED: "true"
+      INSTITUTIONAL_ENTERPRISE_API_ENABLED: "true"
+      INSTITUTIONAL_WEBHOOKS_ENABLED: "true"
+
+    steps:
+      - name: Check out exact integrated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact immutable inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pr212-final-v3-evidence/screenshots
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$PINNED_MAIN_SHA"
+          test "$(git ls-remote origin "refs/heads/${CANDIDATE_BRANCH}" | awk '{print $1}')" = "$CANDIDATE_SHA"
+          test "$(git ls-remote origin refs/heads/feat/institutional-trade-system | awk '{print $1}')" = "$PR_OLD_HEAD"
+          git merge-base --is-ancestor "$PINNED_MAIN_SHA" "$CANDIDATE_SHA"
+          git merge-base --is-ancestor "$PR_OLD_HEAD" "$CANDIDATE_SHA"
+          ! git ls-tree -r --name-only HEAD | grep -E '(^|/)pr212-main-integration-evidence/|pr212-clean-reconstruction-gates\.yml$'
+          printf 'candidate_sha=%s\ncandidate_tree=%s\npinned_main_sha=%s\nold_pr_head=%s\n' \
+            "$CANDIDATE_SHA" "$CANDIDATE_TREE" "$PINNED_MAIN_SHA" "$PR_OLD_HEAD" \
+            | tee pr212-final-v3-evidence/exact-refs.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run exact source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts \
+            src/lib/crawlability.test.ts \
+            src/lib/public-route-smoke.test.ts \
+            src/proxy.test.ts \
+            src/walkthrough-production-shell.test.ts \
+            | tee pr212-final-v3-evidence/source-contracts.log
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Require absolute TypeScript success
+        run: npx tsc --noEmit --pretty false | tee pr212-final-v3-evidence/typescript.log
+
+      - name: Require absolute ESLint success
+        run: npm run lint | tee pr212-final-v3-evidence/eslint.log
+
+      - name: Require absolute production build success
+        run: npm run build | tee pr212-final-v3-evidence/build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start exact production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm start -- --hostname 127.0.0.1 --port 3000 > pr212-final-v3-evidence/server.log 2>&1 &
+          echo $! > pr212-final-v3-evidence/server.pid
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3000/walkthrough >/dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat pr212-final-v3-evidence/server.log >&2
+          exit 1
+
+      - name: Run requested desktop and mobile rendered regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > .pr212-rendered-v3.mjs <<'NODE'
+          import { chromium } from "@playwright/test";
+          import fs from "node:fs/promises";
+
+          const baseURL = "http://127.0.0.1:3000";
+          const browser = await chromium.launch({ headless: true });
+          const devices = [
+            { name: "desktop", viewport: { width: 1440, height: 1000 } },
+            { name: "mobile", viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
+          ];
+          const report = [];
+
+          function significantConsoleError(text) {
+            return !/Failed to load resource: the server responded with a status of (401|403|404)/i.test(text);
+          }
+
+          async function inspect(context, deviceName, name, path, assertion) {
+            const page = await context.newPage();
+            const consoleErrors = [];
+            const pageErrors = [];
+            const serverErrors = [];
+            page.on("console", (message) => {
+              if (message.type() === "error" && significantConsoleError(message.text())) consoleErrors.push(message.text());
+            });
+            page.on("pageerror", (error) => pageErrors.push(String(error)));
+            page.on("response", (response) => {
+              if (response.status() >= 500) serverErrors.push(`${response.status()} ${response.url()}`);
+            });
+
+            const response = await page.goto(`${baseURL}${path}`, { waitUntil: "networkidle" });
+            if (!response || response.status() >= 400) throw new Error(`${deviceName}/${name}: initial response status ${response?.status() ?? "none"}`);
+            await assertion(page);
+            await page.screenshot({ path: `pr212-final-v3-evidence/screenshots/${deviceName}-${name}.png`, fullPage: true });
+            if (consoleErrors.length || pageErrors.length || serverErrors.length) {
+              throw new Error(`${deviceName}/${name}: console=${JSON.stringify(consoleErrors)} page=${JSON.stringify(pageErrors)} server=${JSON.stringify(serverErrors)}`);
+            }
+            report.push({ device: deviceName, name, path, finalURL: page.url(), status: response.status() });
+            await page.close();
+          }
+
+          for (const device of devices) {
+            const context = await browser.newContext({ viewport: device.viewport, isMobile: device.isMobile, hasTouch: device.hasTouch });
+
+            // Establish returning-visitor state through the actual mandatory walkthrough route.
+            const bootstrap = await context.newPage();
+            const bootstrapResponse = await bootstrap.goto(`${baseURL}/walkthrough`, { waitUntil: "networkidle" });
+            if (!bootstrapResponse || bootstrapResponse.status() >= 400) throw new Error(`${device.name}: walkthrough bootstrap failed`);
+            await bootstrap.close();
+
+            await inspect(context, device.name, "offers-visual-directory", "/offers?view=live", async (page) => {
+              await page.getByRole("heading", { name: "Open participant proposals" }).waitFor({ state: "visible" });
+              const grid = page.locator(".mt-directory-view .mt-market-grid");
+              const empty = page.locator(".mt-directory-view .empty-state");
+              if (!(await grid.count()) && !(await empty.count())) throw new Error("Offers rendered neither proposal grid nor explicit empty state.");
+            });
+
+            const completeBase = "/complete-profile?source=walkthrough&cause_area=Animal%20welfare&walkthrough_cause=Factory%20farming&offer_type=Money&match_name=Animal%20welfare&match_get=More%20animal%20welfare%20funding&match_give=Research%20time";
+            await inspect(context, device.name, "complete-profile-connections", completeBase, async (page) => {
+              await page.getByRole("button", { name: /Sources/i }).waitFor({ state: "visible" });
+              if (await page.getByRole("dialog").count()) throw new Error("Connections dialog opened without a panel request.");
+              const opened = await page.goto(`${baseURL}${completeBase}&panel=connections`, { waitUntil: "networkidle" });
+              if (!opened || opened.status() >= 400) throw new Error("Connections-panel navigation failed.");
+              await page.getByRole("dialog").waitFor({ state: "visible" });
+              await page.getByRole("button", { name: /Close account sources/i }).click();
+              await page.getByRole("dialog").waitFor({ state: "hidden" });
+            });
+
+            await inspect(context, device.name, "create", "/trades/new", async (page) => {
+              const frameElement = page.locator('iframe[data-create-interface-frame="true"][title="Moral Trade Create"]');
+              await frameElement.waitFor({ state: "visible" });
+              const createFrame = page.frameLocator('iframe[data-create-interface-frame="true"]');
+              await createFrame.locator("body").waitFor({ state: "visible" });
+              const frameText = await createFrame.locator("body").innerText();
+              const buttonCount = await createFrame.locator("button").count();
+              if (!/Moral Trade/i.test(frameText) || buttonCount < 1) throw new Error("Unified Create iframe did not render its interactive shell.");
+              if (/Delegated authority|Institutional budgets|Enterprise integrations/i.test(frameText)) throw new Error("Organization-only controls leaked into ordinary Create.");
+            });
+
+            await inspect(context, device.name, "feed", "/feed", async (page) => {
+              if (new URL(page.url()).pathname !== "/feed") throw new Error(`Unexpected Feed destination: ${page.url()}`);
+              const text = await page.locator("body").innerText();
+              if (!/Feed|match|opportunit|trade/i.test(text)) throw new Error("Feed rendered no recognizable feed content.");
+            });
+
+            await inspect(context, device.name, "walkthrough", "/walkthrough", async (page) => {
+              const text = await page.locator("body").innerText();
+              if (/Skip walkthrough|Skip for now/i.test(text)) throw new Error("Walkthrough exposes a skip control.");
+            });
+
+            await inspect(context, device.name, "evidence", "/evidence", async (page) => {
+              const pathname = new URL(page.url()).pathname;
+              if (pathname !== "/evidence" && pathname !== "/login") throw new Error(`Unexpected Evidence destination: ${page.url()}`);
+            });
+
+            await inspect(context, device.name, "admin-navigation", "/admin", async (page) => {
+              const pathname = new URL(page.url()).pathname;
+              if (pathname !== "/admin" && pathname !== "/login") throw new Error(`Unexpected Admin destination: ${page.url()}`);
+            });
+
+            await inspect(context, device.name, "authentication-return", "/login?returnTo=%2Fadmin", async (page) => {
+              if (new URL(page.url()).pathname !== "/login") throw new Error(`Authentication redirect loop: ${page.url()}`);
+            });
+
+            await context.close();
+          }
+
+          await fs.writeFile("pr212-final-v3-evidence/rendered-regression-report.json", `${JSON.stringify(report, null, 2)}\n`);
+          await browser.close();
+          NODE
+          node .pr212-rendered-v3.mjs
+          rm -f .pr212-rendered-v3.mjs
+
+      - name: Confirm exact refs remained stable
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$PINNED_MAIN_SHA"
+          test "$(git ls-remote origin "refs/heads/${CANDIDATE_BRANCH}" | awk '{print $1}')" = "$CANDIDATE_SHA"
+          test "$(git ls-remote origin refs/heads/feat/institutional-trade-system | awk '{print $1}')" = "$PR_OLD_HEAD"
+
+      - name: Stop exact production build
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f pr212-final-v3-evidence/server.pid ]]; then kill "$(cat pr212-final-v3-evidence/server.pid)" 2>/dev/null || true; fi
+          rm -f .pr212-rendered-v3.mjs
+
+      - name: Upload exact v3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-integrated-final-v3-${{ github.run_id }}
+          path: pr212-final-v3-evidence
+          if-no-files-found: warn
+          retention-days: 14
