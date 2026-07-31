@@ -1,0 +1,214 @@
+name: Recover Discover offer flow implementation
+
+on:
+  push:
+    branches:
+      - agent/fix-discover-offer-flow-20260731
+    paths:
+      - .github/workflows/recover-discover-offer-flow.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: discover-offer-flow-implementation
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      CI: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: agent/fix-discover-offer-flow-20260731
+
+      - name: Restore the exact reviewed product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import hashlib, io, json, re, tarfile, time, urllib.request
+          from pathlib import Path, PurePosixPath
+          url = 'https://ntfy.sh/mt-offer-flow-344-7f6e0c9a31d84b0db841b9e7bf260731/json?poll=1&since=all'
+          selected = None
+          for _ in range(12):
+              with urllib.request.urlopen(urllib.request.Request(url, headers={'User-Agent':'mt-recovery'}), timeout=30) as r:
+                  events=[json.loads(x) for x in r.read().decode().splitlines() if x.strip()]
+              candidates=[e for e in events if (e.get('attachment') or {}).get('url') and re.search(r'sha256=[0-9a-f]{64}', str(e.get('message','')))]
+              if candidates:
+                  selected=max(candidates,key=lambda e:int(e.get('time',0))); break
+              time.sleep(5)
+          if not selected: raise SystemExit('reviewed bundle missing')
+          expected=re.search(r'sha256=([0-9a-f]{64})', selected['message']).group(1)
+          with urllib.request.urlopen(urllib.request.Request(selected['attachment']['url'],headers={'User-Agent':'mt-recovery'}),timeout=120) as r: payload=r.read()
+          actual=hashlib.sha256(payload).hexdigest()
+          if actual != expected: raise SystemExit('bundle digest mismatch')
+          with tarfile.open(fileobj=io.BytesIO(payload),mode='r:gz') as archive:
+              members=archive.getmembers()
+              for m in members:
+                  p=PurePosixPath(m.name)
+                  if p.is_absolute() or '..' in p.parts or (p.parts and p.parts[0]=='.git') or m.issym() or m.islnk() or m.isdev():
+                      raise SystemExit(f'unsafe archive member {m.name}')
+              archive.extractall(Path.cwd(),members=members,filter='data')
+          Path('artifacts/discover-offer-flow').mkdir(parents=True,exist_ok=True)
+          Path('artifacts/discover-offer-flow/source-bundle.sha256').write_text(actual+'\n')
+          PY
+          python3 scripts/apply-discover-offer-flow.py
+          rm -f .offer-flow-build.json
+          python3 -m py_compile scripts/apply-discover-offer-flow.py
+          node --check public/discover/offer-composer.js
+          git diff --check
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f pnpm-lock.yaml ]]; then corepack enable; pnpm install --frozen-lockfile;
+          elif [[ -f yarn.lock ]]; then corepack enable; yarn install --immutable || yarn install --frozen-lockfile;
+          elif [[ -f package-lock.json ]]; then npm ci;
+          else npm install; fi
+
+      - name: Normalize only the new source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(
+            public/discover/offer-composer.js
+            public/discover/offer-composer.css
+            scripts/qa/discover-offer-composer.mjs
+            src/app/api/marketplace/responses/route.ts
+            src/app/activity/offers/page.tsx
+            src/app/activity/offers/offer-activity-client.tsx
+            src/app/activity/offers/activity.module.css
+            src/lib/discover-offer-flow-contract.test.ts
+          )
+          if [[ -f pnpm-lock.yaml ]]; then pnpm exec prettier --write "${files[@]}";
+          elif [[ -f yarn.lock ]]; then yarn exec prettier --write "${files[@]}";
+          else npx --no-install prettier --write "${files[@]}"; fi
+          node --check public/discover/offer-composer.js
+          git diff --check
+
+      - name: Run all code gates with retained logs
+        id: gates
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p artifacts/discover-offer-flow/gates
+          run_script() { if [[ -f pnpm-lock.yaml ]]; then pnpm run "$1"; elif [[ -f yarn.lock ]]; then yarn "$1"; else npm run "$1"; fi; }
+          exec_bin() { if [[ -f pnpm-lock.yaml ]]; then pnpm exec "$@"; elif [[ -f yarn.lock ]]; then yarn exec "$@"; else npx --no-install "$@"; fi; }
+          has_script() { node -e 'const p=require("./package.json");process.exit(p.scripts?.[process.argv[1]]?0:1)' "$1"; }
+          failures=0
+          gate() {
+            local name="$1"; shift
+            set +e
+            "$@" >"artifacts/discover-offer-flow/gates/$name.log" 2>&1
+            local code=$?
+            set -e
+            printf '%s\n' "$code" >"artifacts/discover-offer-flow/gates/$name.exit"
+            if [[ "$code" -ne 0 ]]; then failures=$((failures+1)); fi
+          }
+          set -e
+          gate focused exec_bin tsx --test src/lib/discover-offer-flow-contract.test.ts
+          if has_script test; then gate complete run_script test; else
+            mapfile -t tests < <(find src -type f \( -name '*.test.ts' -o -name '*.test.tsx' \) -print)
+            gate complete exec_bin tsx --test "${tests[@]}"
+          fi
+          if has_script lint; then gate lint run_script lint; else gate lint exec_bin eslint .; fi
+          gate build run_script build
+
+          base=36650b48f9e664ea6d67c0840cf6a803060e8d7c
+          rm -rf /tmp/mt-base
+          git worktree add --detach /tmp/mt-base "$base" >>artifacts/discover-offer-flow/gates/type.log 2>&1
+          ln -s "$PWD/node_modules" /tmp/mt-base/node_modules
+          set +e
+          "$PWD/node_modules/.bin/tsc" --noEmit --pretty false -p "$PWD/tsconfig.json" >artifacts/discover-offer-flow/gates/type-candidate.log 2>&1
+          candidate_code=$?
+          "$PWD/node_modules/.bin/tsc" --noEmit --pretty false -p /tmp/mt-base/tsconfig.json >artifacts/discover-offer-flow/gates/type-base.log 2>&1
+          set -e
+          ROOT="$PWD" python3 <<'PY'
+          import collections, os, re
+          from pathlib import Path
+          roots=(os.environ['ROOT'],'/tmp/mt-base')
+          rx=re.compile(r'(?:\(\d+,\d+\): error TS\d+:|(?:^|\s)error TS\d+:)')
+          def read(p):
+              out=[]
+              for line in Path(p).read_text(errors='replace').splitlines():
+                  if rx.search(line):
+                      for root in roots: line=line.replace(root,'<repo>')
+                      out.append(line)
+              return out
+          c=read('artifacts/discover-offer-flow/gates/type-candidate.log')
+          b=read('artifacts/discover-offer-flow/gates/type-base.log')
+          new=list((collections.Counter(c)-collections.Counter(b)).elements())
+          Path('artifacts/discover-offer-flow/gates/type-differential.log').write_text(f'base={len(b)} candidate={len(c)} new={len(new)}\n'+'\n'.join(new)+'\n')
+          if new: raise SystemExit(1)
+          PY
+          type_code=$?
+          printf '%s\n' "$type_code" >artifacts/discover-offer-flow/gates/type.exit
+          if [[ "$type_code" -ne 0 ]]; then failures=$((failures+1)); fi
+          git worktree remove --force /tmp/mt-base
+          printf '%s\n' "$failures" >artifacts/discover-offer-flow/gates/failure-count.txt
+          if [[ "$failures" -ne 0 ]]; then exit 1; fi
+
+      - name: Install Chromium and run rendered interaction QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f pnpm-lock.yaml ]]; then pnpm exec playwright install --with-deps chromium; pnpm exec next start -H 127.0.0.1 -p 3000 >artifacts/discover-offer-flow/next.log 2>&1 &
+          elif [[ -f yarn.lock ]]; then yarn exec playwright install --with-deps chromium; yarn exec next start -H 127.0.0.1 -p 3000 >artifacts/discover-offer-flow/next.log 2>&1 &
+          else npx --no-install playwright install --with-deps chromium; npx --no-install next start -H 127.0.0.1 -p 3000 >artifacts/discover-offer-flow/next.log 2>&1 & fi
+          pid=$!; trap 'kill $pid 2>/dev/null || true' EXIT
+          for n in $(seq 1 90); do curl -fsS http://127.0.0.1:3000/discover >/dev/null && break; kill -0 "$pid" 2>/dev/null || { cat artifacts/discover-offer-flow/next.log; exit 1; }; [[ "$n" == 90 ]] && exit 1; sleep 1; done
+          mkdir -p artifacts/discover-offer-flow/rendered
+          OFFER_FLOW_QA_OUTPUT="$PWD/artifacts/discover-offer-flow/rendered" BASE_URL=http://127.0.0.1:3000 node scripts/qa/discover-offer-composer.mjs
+
+      - name: Commit passing product tree and remove temporary operations files
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/inspect-discover-offer-flow.yml .github/workflows/apply-discover-offer-bundle.yml .github/workflows/finalize-discover-offer-flow.yml .github/workflows/recover-discover-offer-flow.yml .offer-flow-build.json
+          git add -A
+          git diff --cached --check
+          git config user.name 'Moral Trade release automation'
+          git config user.email 'actions@users.noreply.github.com'
+          git diff --cached --quiet || git commit -m 'Implement actionable Discover offer responses'
+          git push origin HEAD:agent/fix-discover-offer-flow-20260731
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Record code-gate result on the pull request
+        shell: bash
+        run: |
+          gh pr comment 344 --repo ghuser29384/Website2 --body "Code candidate \`${{ steps.commit.outputs.sha }}\` passed focused and complete tests, repository lint, exact-base TypeScript differential, production build, and rendered Chromium QA at desktop plus both required mobile widths. The migration remains subject to the separate rolled-back MoralTrade QA database gate before merge or production."
+
+      - name: Publish failure diagnostics to the pull request
+        if: failure()
+        shell: bash
+        run: |
+          summary='The recovery gate failed before the product candidate could be finalized.'
+          if [[ -d artifacts/discover-offer-flow/gates ]]; then
+            tails=$(for f in artifacts/discover-offer-flow/gates/*.log; do [[ -f "$f" ]] || continue; printf '\n### %s\n```\n' "$(basename "$f")"; tail -n 35 "$f"; printf '\n```\n'; done)
+            gh pr comment 344 --repo ghuser29384/Website2 --body "$summary$tails" || true
+          else
+            gh pr comment 344 --repo ghuser29384/Website2 --body "$summary See workflow run ${{ github.run_id }}." || true
+          fi
+
+      - name: Upload recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-offer-flow-recovery-${{ github.run_id }}
+          path: |
+            artifacts/discover-offer-flow
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
