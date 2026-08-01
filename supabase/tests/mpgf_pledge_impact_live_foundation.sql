@@ -13,6 +13,7 @@ grant select, insert, update on pledge_impact_live_test_state
 insert into public.mpgf_pool_proposals (
   id,
   title,
+  proposed_recipient_name,
   problem,
   intervention,
   moral_public_good_rationale,
@@ -36,6 +37,7 @@ insert into public.mpgf_pool_proposals (
 ) values (
   '11111111-1111-4111-8111-111111111111',
   'QA wild-animal-suffering priority research pool',
+  'QA research recipient',
   'Important research is underfunded.',
   'Fund an independently reviewed priority study.',
   'Several moral views value reducing severe suffering.',
@@ -414,7 +416,6 @@ declare
     select snapshot_id from pledge_impact_live_test_state limit 1
   );
 begin
-  set constraints all immediate;
   begin
     update public.mpgf_pledge_impact_forecast_snapshots
     set model_version = 'mutated'
