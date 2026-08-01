@@ -6,6 +6,11 @@ on:
       - feature/direct-verified-donation-upgrade-20260731
     paths:
       - .github/workflows/export-direct-upgrade-source.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/export-direct-upgrade-source.yml
   workflow_dispatch:
 
 permissions:
@@ -33,7 +38,6 @@ jobs:
         run: |
           set -euo pipefail
           python3 - <<'PY'
-          import os
           import zipfile
           from pathlib import Path
 
