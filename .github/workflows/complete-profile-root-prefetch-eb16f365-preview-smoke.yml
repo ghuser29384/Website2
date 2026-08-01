@@ -85,9 +85,10 @@ jobs:
             '{expectedSha:$expectedSha,deploymentId:$deploymentId,origin:$origin,state:$state}' \
             > /tmp/preview-deployment.json
 
-      - name: Generate one-run Vercel automation bypass
+      - name: Generate and verify one-run Vercel automation bypass
         env:
           VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN_VALUE"
@@ -103,10 +104,33 @@ jobs:
           jq -e '.protectionBypass | type == "object"' /tmp/vercel-bypass-generate.json >/dev/null
           echo "VERCEL_AUTOMATION_BYPASS_SECRET=$secret" >> "$GITHUB_ENV"
 
+          ready=false
+          for attempt in $(seq 1 30); do
+            probe="$(curl -sS -L --max-redirs 5 \
+              -o /tmp/vercel-bypass-probe.html \
+              -w '%{url_effective}|%{http_code}' \
+              -H "x-vercel-protection-bypass: ${secret}" \
+              -H "x-vercel-set-bypass-cookie: true" \
+              -H 'Cookie: mt_walkthrough_seen=1' \
+              "${PREVIEW_ORIGIN}/complete-profile")"
+            final_url="${probe%|*}"
+            status="${probe##*|}"
+            if [[ "$final_url" == "${PREVIEW_ORIGIN}/"* && "$status" =~ ^2[0-9][0-9]$ ]]; then
+              ready=true
+              jq -n --arg finalUrl "$final_url" --arg status "$status" \
+                '{finalUrl:$finalUrl,status:($status|tonumber)}' > /tmp/vercel-bypass-probe.json
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+
       - name: Run protected exact-preview smoke
+        shell: bash
         run: |
           mkdir -p .qa complete-profile-root-prefetch-rebased-preview-smoke
           cp /tmp/preview-deployment.json complete-profile-root-prefetch-rebased-preview-smoke/deployment.json
+          cp /tmp/vercel-bypass-probe.json complete-profile-root-prefetch-rebased-preview-smoke/bypass-probe.json
           cat > .qa/complete-profile-root-prefetch-rebased-preview-smoke.mjs <<'SCRIPT'
           import assert from "node:assert/strict";
           import { mkdir, writeFile } from "node:fs/promises";
@@ -116,10 +140,7 @@ jobs:
           const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
           const expectedSha = process.env.EXPECTED_SHA;
           const expectedDeploymentId = process.env.PREVIEW_DEPLOYMENT_ID;
-          assert.ok(origin, "PREVIEW_ORIGIN is required");
-          assert.ok(bypassSecret, "VERCEL_AUTOMATION_BYPASS_SECRET is required");
-          assert.ok(expectedSha, "EXPECTED_SHA is required");
-          assert.ok(expectedDeploymentId, "PREVIEW_DEPLOYMENT_ID is required");
+          assert.ok(origin && bypassSecret && expectedSha && expectedDeploymentId);
 
           const outputDir = "complete-profile-root-prefetch-rebased-preview-smoke";
           await mkdir(outputDir, { recursive: true });
@@ -133,16 +154,26 @@ jobs:
           };
 
           async function createContext(viewport) {
-            const context = await browser.newContext({ viewport });
-            await context.route(`${origin}/**`, async (route) => {
-              await route.continue({
-                headers: {
-                  ...route.request().headers(),
-                  "x-vercel-protection-bypass": bypassSecret,
-                  "x-vercel-set-bypass-cookie": "true",
-                },
-              });
+            const bypassHeaders = {
+              "x-vercel-protection-bypass": bypassSecret,
+              "x-vercel-set-bypass-cookie": "true",
+            };
+            const context = await browser.newContext({ viewport, extraHTTPHeaders: bypassHeaders });
+            await context.route("**/*", async (route) => {
+              const request = route.request();
+              if (new URL(request.url()).origin === origin) {
+                await route.continue({ headers: { ...request.headers(), ...bypassHeaders } });
+              } else {
+                await route.continue();
+              }
             });
+            const primingResponse = await context.request.get(`${origin}/complete-profile`, {
+              headers: { ...bypassHeaders, Cookie: "mt_walkthrough_seen=1" },
+              maxRedirects: 5,
+              timeout: 60_000,
+            });
+            assert.equal(new URL(primingResponse.url()).origin, origin, `Bypass priming left preview origin: ${primingResponse.url()}`);
+            assert.ok(primingResponse.status() < 400, `Bypass priming returned ${primingResponse.status()}`);
             await context.addCookies([
               { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
             ]);
@@ -151,9 +182,7 @@ jobs:
 
           function isExpectedPrefetchAbort(request) {
             const failure = request.failure();
-            if (failure?.errorText !== "net::ERR_ABORTED" || request.isNavigationRequest()) {
-              return false;
-            }
+            if (failure?.errorText !== "net::ERR_ABORTED" || request.isNavigationRequest()) return false;
             const url = new URL(request.url());
             const headers = request.headers();
             return (
@@ -182,9 +211,7 @@ jobs:
           function attachDiagnostics(page, state) {
             page.on("pageerror", (error) => state.pageErrors.push(error.message));
             page.on("console", (message) => {
-              if (message.type() === "error") {
-                state.consoleErrors.push({ text: message.text(), location: message.location() });
-              }
+              if (message.type() === "error") state.consoleErrors.push({ text: message.text(), location: message.location() });
             });
             page.on("request", (request) => {
               const url = new URL(request.url());
@@ -195,9 +222,7 @@ jobs:
             page.on("requestfailed", (request) => {
               if (new URL(request.url()).origin !== origin) return;
               const record = {
-                url: request.url(),
-                method: request.method(),
-                resourceType: request.resourceType(),
+                url: request.url(), method: request.method(), resourceType: request.resourceType(),
                 errorText: request.failure()?.errorText ?? "unknown",
               };
               if (isExpectedPrefetchAbort(request)) state.expectedPrefetchAborts.push(record);
@@ -218,65 +243,60 @@ jobs:
             assert.deepEqual(state.httpErrors, [], `HTTP errors: ${JSON.stringify(state.httpErrors)}`);
           }
 
+          async function runDesktop() {
+            const state = makeState("returning-desktop");
+            const context = await createContext({ width: 1440, height: 1000 });
+            const page = await context.newPage();
+            attachDiagnostics(page, state);
+            const response = await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+            assert.ok(response && response.status() < 400);
+            assert.equal(new URL(page.url()).origin, origin, `Desktop left preview origin: ${page.url()}`);
+            await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
+            await page.getByRole("heading", { name: "Spend 100 sparks of attention." }).waitFor({ state: "visible", timeout: 60_000 });
+            await page.getByLabel("Profile setup: priorities").waitFor({ state: "visible", timeout: 60_000 });
+            assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
+            await page.waitForTimeout(1_500);
+            await page.getByRole("button", { name: "Save profile" }).click();
+            const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
+            await dialog.waitFor({ state: "visible", timeout: 30_000 });
+            assert.match((await dialog.textContent()) ?? "", /Saving does not create or publish an offer\./);
+            await page.waitForTimeout(500);
+            await page.screenshot({ path: `${outputDir}/returning-desktop.png`, fullPage: true });
+            assertClean(state);
+            state.finalUrl = page.url();
+            state.status = "passed";
+            report.scenarios.push(state);
+            await context.close();
+          }
+
+          async function runMobile() {
+            const state = makeState("returning-mobile");
+            const context = await createContext({ width: 390, height: 844 });
+            const page = await context.newPage();
+            attachDiagnostics(page, state);
+            const response = await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+            assert.ok(response && response.status() < 400);
+            assert.equal(new URL(page.url()).origin, origin, `Mobile left preview origin: ${page.url()}`);
+            await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
+            await page.getByLabel("80 of 100 attention points assigned").waitFor({ state: "visible", timeout: 60_000 });
+            await page.waitForTimeout(1_500);
+            await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
+            await page.getByRole("button", { name: "Decrease Space governance" }).waitFor({ state: "visible", timeout: 30_000 });
+            const dimensions = await page.evaluate(() => ({ viewportWidth: innerWidth, documentWidth: document.documentElement.scrollWidth }));
+            assert.ok(dimensions.documentWidth <= dimensions.viewportWidth, `Mobile overflow: ${JSON.stringify(dimensions)}`);
+            await page.waitForTimeout(500);
+            await page.screenshot({ path: `${outputDir}/returning-mobile.png`, fullPage: true });
+            assertClean(state);
+            state.finalUrl = page.url();
+            state.dimensions = dimensions;
+            state.status = "passed";
+            report.scenarios.push(state);
+            await context.close();
+          }
+
           try {
-            {
-              const state = makeState("returning-desktop");
-              const context = await createContext({ width: 1440, height: 1000 });
-              const page = await context.newPage();
-              attachDiagnostics(page, state);
-              const response = await page.goto(`${origin}/complete-profile`, {
-                waitUntil: "domcontentloaded",
-                timeout: 120_000,
-              });
-              assert.ok(response && response.status() < 400, "Desktop route returned no clean response");
-              await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
-              await page.getByRole("heading", { name: "Spend 100 sparks of attention." }).waitFor({ state: "visible", timeout: 60_000 });
-              await page.getByLabel("Profile setup: priorities").waitFor({ state: "visible", timeout: 60_000 });
-              assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
-              await page.waitForTimeout(1_500);
-              await page.getByRole("button", { name: "Save profile" }).click();
-              const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
-              await dialog.waitFor({ state: "visible", timeout: 30_000 });
-              assert.match((await dialog.textContent()) ?? "", /Saving does not create or publish an offer\./);
-              await page.waitForTimeout(500);
-              await page.screenshot({ path: `${outputDir}/returning-desktop.png`, fullPage: true });
-              assertClean(state);
-              state.finalUrl = page.url();
-              state.status = "passed";
-              report.scenarios.push(state);
-              await context.close();
-            }
-
-            {
-              const state = makeState("returning-mobile");
-              const context = await createContext({ width: 390, height: 844 });
-              const page = await context.newPage();
-              attachDiagnostics(page, state);
-              const response = await page.goto(`${origin}/complete-profile`, {
-                waitUntil: "domcontentloaded",
-                timeout: 120_000,
-              });
-              assert.ok(response && response.status() < 400, "Mobile route returned no clean response");
-              await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
-              await page.getByLabel("80 of 100 attention points assigned").waitFor({ state: "visible", timeout: 60_000 });
-              await page.waitForTimeout(1_500);
-              await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
-              await page.getByRole("button", { name: "Decrease Space governance" }).waitFor({ state: "visible", timeout: 30_000 });
-              const dimensions = await page.evaluate(() => ({
-                viewportWidth: window.innerWidth,
-                documentWidth: document.documentElement.scrollWidth,
-              }));
-              assert.ok(dimensions.documentWidth <= dimensions.viewportWidth, `Mobile overflow: ${JSON.stringify(dimensions)}`);
-              await page.waitForTimeout(500);
-              await page.screenshot({ path: `${outputDir}/returning-mobile.png`, fullPage: true });
-              assertClean(state);
-              state.finalUrl = page.url();
-              state.dimensions = dimensions;
-              state.status = "passed";
-              report.scenarios.push(state);
-              await context.close();
-            }
-
+            await runDesktop();
+            await runMobile();
             report.status = "passed";
           } catch (error) {
             report.status = "failed";
@@ -302,6 +322,7 @@ jobs:
         if: always() && env.VERCEL_AUTOMATION_BYPASS_SECRET != ''
         env:
           VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
         run: |
           set -euo pipefail
           payload="$(jq -cn --arg secret "$VERCEL_AUTOMATION_BYPASS_SECRET" '{revoke:{secret:$secret,regenerate:false}}')"
