@@ -1,6 +1,5 @@
-name: Sync PR 326 with current main
+name: Coordinate PR 326 exact-head validation
 
-# Triggered after the temporary one-person materialization controller was removed.
 on:
   push:
     branches:
@@ -11,66 +10,86 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  actions: read
 
 concurrency:
   group: pr326-sync-current-main-20260731
   cancel-in-progress: true
 
 jobs:
-  sync:
+  coordinate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 115
     env:
       PRODUCT_BRANCH: agent/marketplace-delta-current-main-20260729
+      QA_BRANCH: qa/marketplace-delta-exact-head-repair-20260731
+      TRIGGER_PATH: .github/qa/marketplace-delta-cleanup-now
     steps:
       - name: Check out QA controller branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Wait for a stable main and product pair
-        shell: bash
-        run: |
-          set -euo pipefail
-          last_main=""
-          last_product=""
-          stable_intervals=0
-          required_stable_intervals=4
-          while (( stable_intervals < required_stable_intervals )); do
-            main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-            product_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
-            if [[ -z "$main_sha" || -z "$product_sha" ]]; then
-              echo "Could not read main or product ref." >&2
-              exit 1
-            fi
-            if [[ "$main_sha" == "$last_main" && "$product_sha" == "$last_product" ]]; then
-              stable_intervals=$((stable_intervals + 1))
-            else
-              last_main="$main_sha"
-              last_product="$product_sha"
-              stable_intervals=0
-            fi
-            if (( stable_intervals < required_stable_intervals )); then
-              echo "Waiting for stable refs: ${stable_intervals}/${required_stable_intervals}." >&2
-              sleep 30
-            fi
-          done
-          printf 'Stable synchronization window: main=%s product=%s\n' "$last_main" "$last_product"
-
-      - name: Merge a stable current main snapshot into PR 326
-        id: sync
+      - name: Keep the product branch current and trigger only stable exact-head pairs
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          for attempt in 1 2 3 4 5; do
+          last_observed_pair=""
+          last_triggered_pair=""
+          stable_intervals=0
+          required_stable_intervals=4
+
+          post_comment() {
+            local body="$1"
+            jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
+            curl --fail-with-body --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$RUNNER_TEMP/comment.json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/326/comments" \
+              --output /dev/null
+          }
+
+          trigger_exact_gate() {
+            local main_sha="$1"
+            local product_sha="$2"
+            local api_url="https://api.github.com/repos/$GITHUB_REPOSITORY/contents/$TRIGGER_PATH"
+            local current="$RUNNER_TEMP/current-trigger.json"
+            curl --fail-with-body --silent --show-error --get \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              --data-urlencode "ref=$QA_BRANCH" \
+              "$api_url" --output "$current"
+            local blob_sha payload content
+            blob_sha="$(jq -r '.sha' "$current")"
+            content="audit-trigger-main-${main_sha}-product-${product_sha}-coordinator-${GITHUB_RUN_ID}"
+            payload="$RUNNER_TEMP/trigger-payload.json"
+            jq -n \
+              --arg message "Trigger exact-head marketplace audit for synchronized PR 326" \
+              --arg content "$(printf '%s\n' "$content" | base64 -w0)" \
+              --arg sha "$blob_sha" \
+              --arg branch "$QA_BRANCH" \
+              '{message:$message,content:$content,sha:$sha,branch:$branch}' > "$payload"
+            curl --fail-with-body --silent --show-error \
+              --request PUT \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$payload" \
+              "$api_url" --output /dev/null
+          }
+
+          for tick in $(seq 1 220); do
             git fetch --no-tags origin main "$PRODUCT_BRANCH"
             main_sha="$(git rev-parse origin/main)"
             product_sha="$(git rev-parse "origin/$PRODUCT_BRANCH")"
 
-            pr_json="$RUNNER_TEMP/pr-326-${attempt}.json"
+            pr_json="$RUNNER_TEMP/pr-326.json"
             curl --fail-with-body --silent --show-error \
               --header "Authorization: Bearer $GITHUB_TOKEN" \
               --header "Accept: application/vnd.github+json" \
@@ -81,44 +100,52 @@ jobs:
             [[ "$(jq -r '.head.ref' "$pr_json")" == "$PRODUCT_BRANCH" ]]
             [[ "$(jq -r '.head.sha' "$pr_json")" == "$product_sha" ]]
 
-            git checkout -B "$PRODUCT_BRANCH" "origin/$PRODUCT_BRANCH"
-            if ! git merge --no-ff --no-edit origin/main -m "Merge current main into marketplace delta PR"; then
-              git merge --abort || true
-              echo "Current main does not merge cleanly into PR #326." >&2
-              exit 1
+            if ! git merge-base --is-ancestor "$main_sha" "$product_sha"; then
+              before="$product_sha"
+              git checkout -B "$PRODUCT_BRANCH" "origin/$PRODUCT_BRANCH"
+              if ! git merge --no-ff --no-edit "$main_sha" -m "Merge current main into marketplace delta PR"; then
+                git merge --abort || true
+                echo "Current main does not merge cleanly into PR #326." >&2
+                exit 1
+              fi
+              git diff --check "$before...HEAD"
+              merged="$(git rev-parse HEAD)"
+
+              git fetch --no-tags origin main "$PRODUCT_BRANCH"
+              if [[ "$(git rev-parse origin/main)" != "$main_sha" ]] || \
+                 [[ "$(git rev-parse "origin/$PRODUCT_BRANCH")" != "$before" ]]; then
+                echo "Refs moved while preparing synchronization; retrying on the next interval." >&2
+                git reset --hard "origin/$PRODUCT_BRANCH"
+                stable_intervals=0
+                last_observed_pair=""
+                sleep 30
+                continue
+              fi
+
+              git push --force-with-lease="refs/heads/$PRODUCT_BRANCH:$before" \
+                origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+              product_sha="$merged"
+              post_comment "Synced PR #326 with exact main \`$main_sha\` via merge commit \`$product_sha\`. The coordinator will trigger the exact-head evidence gate after this pair remains stable."
+              stable_intervals=0
+              last_observed_pair=""
             fi
-            git diff --check "$product_sha...HEAD"
-            new_head="$(git rev-parse HEAD)"
 
-            git fetch --no-tags origin main "$PRODUCT_BRANCH"
-            final_main="$(git rev-parse origin/main)"
-            final_product="$(git rev-parse "origin/$PRODUCT_BRANCH")"
-            if [[ "$final_main" != "$main_sha" || "$final_product" != "$product_sha" ]]; then
-              echo "Refs moved during sync attempt ${attempt}; retrying." >&2
-              git reset --hard "$final_product"
-              sleep 15
-              continue
+            pair="${main_sha}:${product_sha}"
+            if [[ "$pair" == "$last_observed_pair" ]]; then
+              stable_intervals=$((stable_intervals + 1))
+            else
+              last_observed_pair="$pair"
+              stable_intervals=0
             fi
 
-            git push --force-with-lease="refs/heads/$PRODUCT_BRANCH:$product_sha" \
-              origin "HEAD:refs/heads/$PRODUCT_BRANCH"
-            printf 'main_sha=%s\nproduct_before=%s\nnew_head=%s\n' \
-              "$main_sha" "$product_sha" "$new_head" >> "$GITHUB_OUTPUT"
+            echo "Observed exact pair $pair; stable intervals ${stable_intervals}/${required_stable_intervals}."
+            if (( stable_intervals >= required_stable_intervals )) && [[ "$pair" != "$last_triggered_pair" ]]; then
+              trigger_exact_gate "$main_sha" "$product_sha"
+              last_triggered_pair="$pair"
+              post_comment "Triggered a new exact-head evidence gate for main \`$main_sha\` and PR head \`$product_sha\` after a stable synchronization window."
+            fi
 
-            body="Synced PR #326 with exact main \`$main_sha\` via merge commit \`$new_head\`. The product delta and current-main application state are ready for a new exact-head evidence gate."
-            jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
-            curl --fail-with-body --silent --show-error \
-              --request POST \
-              --header "Authorization: Bearer $GITHUB_TOKEN" \
-              --header "Accept: application/vnd.github+json" \
-              --header "Content-Type: application/json" \
-              --data-binary "@$RUNNER_TEMP/comment.json" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/326/comments" \
-              --output /dev/null
-            exit 0
+            sleep 30
           done
-
-          echo "Could not obtain a stable main/product pair after five attempts." >&2
-          exit 1
         env:
           GITHUB_TOKEN: ${{ github.token }}
