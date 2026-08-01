@@ -1,27 +1,33 @@
 name: Repair live pledge-impact type guards
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/pledge-impact-live-foundation-20260801
-  workflow_dispatch:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 permissions:
   contents: write
 
 concurrency:
-  group: pledge-impact-live-type-repair
+  group: pledge-impact-live-type-repair-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   repair:
-    if: github.repository == 'ghuser29384/Website2'
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feature/pledge-impact-live-foundation-20260801'
     runs-on: ubuntu-latest
     steps:
       - name: Check out exact feature branch
         uses: actions/checkout@v4
         with:
-          ref: feature/pledge-impact-live-foundation-20260801
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           persist-credentials: true
 
