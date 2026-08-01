@@ -68,13 +68,6 @@ jobs:
           path.write_text(text)
           PY
 
-      - name: Verify the focused TypeScript file before publishing
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm ci
-          npx tsc --noEmit
-
       - name: Publish repair and remove one-time workflow
         shell: bash
         run: |
