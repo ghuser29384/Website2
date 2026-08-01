@@ -35,7 +35,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
       NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"
       DIRECT_DONATION_UPGRADES_ENABLED: "true"
       DIRECT_DONATION_UPGRADE_MODE: staging
       DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
@@ -61,12 +61,11 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Validate isolated-QA database and service-role targets
+      - name: Validate isolated-QA database target
         shell: bash
         run: |
           set -euo pipefail
           test -n "${QA_SUPABASE_DB_URL:-}"
-          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
           python3 - <<'PY'
           import os
           from urllib.parse import parse_qs, urlparse
@@ -85,13 +84,6 @@ jobs:
           if not valid:
               raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
           PY
-
-          status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
-            --header "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
-            --header "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
-            "${NEXT_PUBLIC_SUPABASE_URL}/auth/v1/admin/users?page=1&per_page=1")"
-          test "$status" = "200"
-          printf 'Verified the configured service role against the exact MoralTrade QA Auth endpoint.\n'
 
       - name: Install dependencies and PostgreSQL client
         run: |
