@@ -1,0 +1,205 @@
+name: PR 406 exact-head release gates
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  actions: read
+
+concurrency:
+  group: pr406-exact-head-release-gates-20260801
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/pledge-impact-live-foundation-20260801
+  EXPECTED_HEAD: a73141c88438cbbecf79cf693109bc460150b70a
+  CONTROLLER_PATH: .github/workflows/pr406-exact-head-gates-controller.yml
+  PR_NUMBER: "406"
+  EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+
+jobs:
+  validate:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.issue.pull_request != null &&
+      github.event.issue.number == 406 &&
+      github.event.comment.body == '/gate-pr406-exact-head-20260801'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact feature head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard exact repository and head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+
+      - name: Remove temporary controller from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          controller_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha)"
+          jq -n \
+            --arg message 'Remove temporary PR 406 exact-head gate controller' \
+            --arg sha "$controller_sha" \
+            --arg branch main \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Verify exact PR file inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
+          git diff --check "$base" HEAD
+          git diff --name-only "$base" HEAD | sort > /tmp/actual-files.txt
+          cat > /tmp/expected-files.txt <<'EOF'
+          .github/workflows/pledge-impact-live-foundation-gates.yml
+          src/app/api/mpgf/pledge-impact/route.ts
+          src/lib/mpgf/pledge-impact-live-integration.test.ts
+          src/lib/mpgf/pledge-impact-live-server.ts
+          src/lib/mpgf/pledge-impact-live.test.ts
+          src/lib/mpgf/pledge-impact-live.ts
+          supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql
+          supabase/tests/mpgf_pledge_impact_live_foundation.sql
+          EOF
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused live pledge-impact tests
+        shell: bash
+        run: |
+          set -o pipefail
+          node --import tsx --test \
+            src/lib/mpgf/pledge-impact-live.test.ts \
+            src/lib/mpgf/pledge-impact-live-integration.test.ts \
+            2>&1 | tee focused-pledge-impact-live.log
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee repository-tests.log
+
+      - name: Run complete ESLint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint -- --quiet 2>&1 | tee repository-lint.log
+
+      - name: Run production build and TypeScript
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee production-build.log
+
+      - name: Validate exact MoralTrade QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          expected = os.environ['EXPECTED_QA_REF']
+          if expected not in (parsed.username or ''):
+              raise SystemExit('Refusing a database URL outside the exact MoralTrade QA project.')
+          if parsed.hostname != 'aws-0-us-west-1.pooler.supabase.com':
+              raise SystemExit(f'Refusing unexpected database host: {parsed.hostname}')
+          if parsed.port != 5432 or parsed.path != '/postgres':
+              raise SystemExit('Refusing unexpected database connection parameters.')
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Run migration and regression in one rollback-only transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf '%s\n' '\set ON_ERROR_STOP on' 'begin;'
+            cat supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql
+            tail -n +2 supabase/tests/mpgf_pledge_impact_live_foundation.sql | sed '$d'
+            printf '%s\n' 'rollback;'
+          } > qa-pledge-impact-live-transaction.sql
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file qa-pledge-impact-live-transaction.sql \
+            2>&1 | tee qa-pledge-impact-live.log
+
+      - name: Reconfirm exact remote head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr406-exact-head-${{ github.run_id }}
+          path: |
+            focused-pledge-impact-live.log
+            repository-tests.log
+            repository-lint.log
+            production-build.log
+            qa-pledge-impact-live-transaction.sql
+            qa-pledge-impact-live.log
+            /tmp/actual-files.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Exact-head release gates passed for \`$EXPECTED_HEAD\` in run \`$GITHUB_RUN_ID\`: 12/12 focused pledge-impact tests, complete repository tests, repository-wide ESLint, production build/TypeScript, exact eight-file inventory, and the full migration/regression against the exact MoralTrade QA project in a rollback-only transaction. No QA data or schema residue was intentionally retained. PR remains draft; production and numerical forecast publication remain unchanged."
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Exact-head PR #406 gates failed in run \`$GITHUB_RUN_ID\`. The controller was removed from main before validation. No feature branch or production mutation was performed."
