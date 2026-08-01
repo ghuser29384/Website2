@@ -1,0 +1,247 @@
+name: One-person account materialization controller v2
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+concurrency:
+  group: one-person-account-materialization-controller
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/one-person-one-account-20260731
+  EXPECTED_TRANSPORT_HEAD: 1294883a7988b72bbb4529b2a68ca3ff5eed123e
+  BASE_MAIN_SHA: 39139b5ab549b93a86bf70713f5c644e17dbab24
+  CONTROLLER_PATH: .github/workflows/one-person-account-materialization-controller-v2.yml
+  TRIGGER: /run-one-person-materialization-20260801-a19d
+
+jobs:
+  materialize:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.issue.pull_request != null &&
+      github.event.issue.number == 379 &&
+      github.event.comment.body == '/run-one-person-materialization-20260801-a19d'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out exact transport branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/one-person-one-account-20260731
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Verify repository, branch, transport head, and ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TRANSPORT_HEAD"
+          test -f .github/one-person-bootstrap/READY
+          git fetch --no-tags origin main "$TARGET_BRANCH"
+          git merge-base --is-ancestor 8181eed1c0cf075f01ebd22c88d4a8cce441c19d HEAD
+          git merge-base --is-ancestor "$BASE_MAIN_SHA" origin/main
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$EXPECTED_TRANSPORT_HEAD"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-edit "$BASE_MAIN_SHA"
+
+      - name: Reassemble and verify candidate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          echo "WORK_DIR=$work" >> "$GITHUB_ENV"
+          candidate_parts=(
+            .github/one-person-bootstrap/candidate.part-000
+            .github/one-person-bootstrap/candidate.part-001
+            .github/one-person-bootstrap/candidate.part-002
+            .github/one-person-bootstrap/candidate.part-003
+            .github/one-person-bootstrap/candidate.part-004
+            .github/one-person-bootstrap/candidate.part-005
+            .github/one-person-bootstrap/candidate.part-006
+            .github/one-person-bootstrap/candidate.part-007
+            .github/one-person-bootstrap/candidate.part-008
+            .github/one-person-bootstrap/candidate.part-009
+            .github/one-person-bootstrap/candidate.part-010
+            .github/one-person-bootstrap/candidate.part-011
+          )
+          for part in "${candidate_parts[@]}"; do test -s "$part"; done
+          cat "${candidate_parts[@]}" | tr -d '\r\n\t ' > "$work/candidate.b64"
+          echo "candidate_b64_bytes=$(wc -c < "$work/candidate.b64")"
+          base64 --decode "$work/candidate.b64" > "$work/candidate.tar.xz"
+          echo '0f273e48aaa14c351b58ce45afdad951735533bf912836a82c731659073fce53  candidate.tar.xz' > "$work/candidate.sha256"
+          (cd "$work" && sha256sum --check candidate.sha256)
+          xz --test "$work/candidate.tar.xz"
+
+      - name: Verify exact candidate inventory and extract safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .github/one-person-bootstrap/candidate
+          python3 - <<'PY'
+          import os
+          import tarfile
+          from pathlib import Path, PurePosixPath
+
+          archive = Path(os.environ['WORK_DIR']) / 'candidate.tar.xz'
+          destination = Path('.github/one-person-bootstrap/candidate')
+          expected = {
+              '.github/workflows/one-person-account-qa-auth-config.yml',
+              '.github/workflows/one-person-account-qa.yml',
+              'docs/one-person-one-account.md',
+              'scripts/test-one-person-concurrency.sh',
+              'src/app/account/identity/page.tsx',
+              'src/app/admin/identity/page.tsx',
+              'src/app/api/identity/provider/route.ts',
+              'src/app/api/identity/qa/complete/route.ts',
+              'src/app/identity/actions.ts',
+              'src/app/identity/identity.module.css',
+              'src/app/identity/page.tsx',
+              'src/app/identity/recovery/page.tsx',
+              'src/app/identity/status/page.tsx',
+              'src/lib/identity/one-person-account.test.ts',
+              'src/lib/identity/one-person-account.ts',
+              'src/lib/identity/server.ts',
+              'supabase/migrations/20260731072000_one_person_one_account.sql',
+              'supabase/tests/one_person_one_account.sql',
+              'tests/one-person-account-authenticated.spec.ts',
+          }
+          with tarfile.open(archive, 'r:xz') as tf:
+              members = tf.getmembers()
+              names = set()
+              for member in members:
+                  raw = member.name[2:] if member.name.startswith('./') else member.name
+                  path = PurePosixPath(raw)
+                  if path.is_absolute() or '..' in path.parts or not member.isfile():
+                      raise SystemExit(f'unsafe or non-regular archive member: {member.name}')
+                  names.add(raw)
+              if names != expected:
+                  raise SystemExit(
+                      f'archive inventory mismatch: missing={sorted(expected-names)} '
+                      f'unexpected={sorted(names-expected)}'
+                  )
+              tf.extractall(destination, filter='data')
+          PY
+
+      - name: Reassemble and verify deterministic materializer
+        shell: bash
+        run: |
+          set -euo pipefail
+          materializer_parts=(
+            .github/one-person-bootstrap/materializer.local-000
+            .github/one-person-bootstrap/materializer.local-001
+            .github/one-person-bootstrap/materializer.local-002
+          )
+          for part in "${materializer_parts[@]}"; do test -s "$part"; done
+          cat "${materializer_parts[@]}" | tr -d '\r\n\t ' > "$WORK_DIR/materializer.b64"
+          echo "materializer_b64_bytes=$(wc -c < "$WORK_DIR/materializer.b64")"
+          base64 --decode "$WORK_DIR/materializer.b64" > "$WORK_DIR/materialize.py"
+          echo '6fb25969630e77ca68eb8efba20e9cb8ab45d740699d4a96e3e0d3868a6f6de1  materialize.py' > "$WORK_DIR/materializer.sha256"
+          (cd "$WORK_DIR" && sha256sum --check materializer.sha256)
+          python3 -m py_compile "$WORK_DIR/materialize.py"
+
+      - name: Materialize the exact feature tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp -a .github/one-person-bootstrap/candidate/. .
+          python3 "$WORK_DIR/materialize.py" | tee "$WORK_DIR/materialization.json"
+          rm -rf .github/one-person-bootstrap
+          rm -f .github/workflows/materialize-one-person-account.yml
+          git diff --check
+
+      - name: Verify exact final feature diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$WORK_DIR/expected-paths.txt" <<'EOF'
+          .env.example
+          .github/workflows/one-person-account-qa-auth-config.yml
+          .github/workflows/one-person-account-qa.yml
+          docs/one-person-one-account.md
+          package.json
+          scripts/test-one-person-concurrency.sh
+          src/app/account/identity/page.tsx
+          src/app/actions.ts
+          src/app/admin/identity/page.tsx
+          src/app/api/identity/provider/route.ts
+          src/app/api/identity/qa/complete/route.ts
+          src/app/auth/confirm/route.ts
+          src/app/identity/actions.ts
+          src/app/identity/identity.module.css
+          src/app/identity/page.tsx
+          src/app/identity/recovery/page.tsx
+          src/app/identity/status/page.tsx
+          src/app/signup/page.tsx
+          src/components/auth/auth-card.tsx
+          src/lib/identity/one-person-account.test.ts
+          src/lib/identity/one-person-account.ts
+          src/lib/identity/server.ts
+          supabase/migrations/20260731072000_one_person_one_account.sql
+          supabase/tests/one_person_one_account.sql
+          tests/one-person-account-authenticated.spec.ts
+          EOF
+          sed -i 's/^          //' "$WORK_DIR/expected-paths.txt"
+          sort -u "$WORK_DIR/expected-paths.txt" -o "$WORK_DIR/expected-paths.txt"
+          git diff --name-only "$BASE_MAIN_SHA" | sort -u > "$WORK_DIR/actual-paths.txt"
+          diff -u "$WORK_DIR/expected-paths.txt" "$WORK_DIR/actual-paths.txt"
+          test ! -e .github/one-person-bootstrap
+          test ! -e .github/workflows/materialize-one-person-account.yml
+
+      - name: Commit and push the exact materialized candidate
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$EXPECTED_TRANSPORT_HEAD"
+          git add -A
+          git diff --cached --check
+          git commit -m 'Materialize one-person-one-account identity authority'
+          feature_sha="$(git rev-parse HEAD)"
+          git push origin "HEAD:$TARGET_BRANCH"
+          echo "feature_sha=$feature_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Reopen the draft pull request and record the exact feature SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          feature_sha='${{ steps.publish.outputs.feature_sha }}'
+          gh pr reopen 379 --repo "$GITHUB_REPOSITORY"
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Materialized the hash-verified one-person-account candidate at exact feature SHA \`$feature_sha\`. PR remains draft. Repository and isolated-QA release gates must pass before review readiness, merge, or deployment."
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "One-person-account materialization controller v2 failed at run $GITHUB_RUN_ID. No feature push was accepted unless the exact transport, hashes, inventory, current-main integration, and final path gate all passed."
+
+      - name: Remove temporary default-branch controller
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$sha" ]]; then
+            jq -n \
+              --arg message 'Remove temporary one-person materialization controller v2' \
+              --arg sha "$sha" \
+              --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
