@@ -32,15 +32,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REPOSITORY}" = "ghuser29384/Website2"
-          test "${GITHUB_REF_NAME}" = "feature/one-person-one-account-20260731"
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'feature/one-person-one-account-20260731'
           test -f .github/one-person-bootstrap/READY
-          git fetch origin main feature/one-person-one-account-20260731
+          git fetch --no-tags origin main feature/one-person-one-account-20260731
           git merge-base --is-ancestor 8181eed1c0cf075f01ebd22c88d4a8cce441c19d HEAD
           echo "TRIGGER_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           if ! git merge-base --is-ancestor origin/main HEAD; then
-            git config user.name moraltrade-automation
-            git config user.email github-actions[bot]@users.noreply.github.com
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git merge --no-edit origin/main
           fi
 
@@ -78,10 +78,11 @@ jobs:
           set -euo pipefail
           mkdir -p .github/one-person-bootstrap/candidate
           python3 - <<'PY'
+          import os
           import tarfile
           from pathlib import Path, PurePosixPath
 
-          archive = Path(__import__('os').environ['WORK_DIR']) / 'candidate.tar.xz'
+          archive = Path(os.environ['WORK_DIR']) / 'candidate.tar.xz'
           destination = Path('.github/one-person-bootstrap/candidate')
           expected = {
               '.github/workflows/one-person-account-qa-auth-config.yml',
@@ -108,12 +109,16 @@ jobs:
               members = tf.getmembers()
               names = set()
               for member in members:
-                  path = PurePosixPath(member.name)
+                  raw = member.name[2:] if member.name.startswith('./') else member.name
+                  path = PurePosixPath(raw)
                   if path.is_absolute() or '..' in path.parts or not member.isfile():
                       raise SystemExit(f'unsafe or non-regular archive member: {member.name}')
-                  names.add(member.name)
+                  names.add(raw)
               if names != expected:
-                  raise SystemExit(f'archive inventory mismatch: missing={sorted(expected-names)} unexpected={sorted(names-expected)}')
+                  raise SystemExit(
+                      f'archive inventory mismatch: missing={sorted(expected-names)} '
+                      f'unexpected={sorted(names-expected)}'
+                  )
               tf.extractall(destination, filter='data')
           PY
 
@@ -122,18 +127,15 @@ jobs:
         run: |
           set -euo pipefail
           materializer_parts=(
-            .github/one-person-bootstrap/materializer.part-000
-            .github/one-person-bootstrap/materializer.part-001
-            .github/one-person-bootstrap/materializer.part-002
-            .github/one-person-bootstrap/materializer.part-003
-            .github/one-person-bootstrap/materializer.part-004-correct
-            .github/one-person-bootstrap/materializer.part-005
+            .github/one-person-bootstrap/materializer.local-000
+            .github/one-person-bootstrap/materializer.local-001
+            .github/one-person-bootstrap/materializer.local-002
           )
           for part in "${materializer_parts[@]}"; do test -s "$part"; done
           cat "${materializer_parts[@]}" | tr -d '\r\n\t ' > "$WORK_DIR/materializer.b64"
-          test "$(wc -c < "$WORK_DIR/materializer.b64")" -eq 18600
+          test "$(wc -c < "$WORK_DIR/materializer.b64")" -eq 17636
           base64 --decode "$WORK_DIR/materializer.b64" > "$WORK_DIR/materialize.py"
-          echo '9c464773b1f581449214dd085537a12637582c36cc5724fba0261675b52e3832  materialize.py' > "$WORK_DIR/materializer.sha256"
+          echo '6fb25969630e77ca68eb8efba20e9cb8ab45d740699d4a96e3e0d3868a6f6de1  materialize.py' > "$WORK_DIR/materializer.sha256"
           (cd "$WORK_DIR" && sha256sum --check materializer.sha256)
           python3 -m py_compile "$WORK_DIR/materialize.py"
 
@@ -141,6 +143,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          cp -a .github/one-person-bootstrap/candidate/. .
           python3 "$WORK_DIR/materialize.py"
           rm -rf .github/one-person-bootstrap
           rm -f .github/workflows/materialize-one-person-account.yml
@@ -170,7 +173,6 @@ jobs:
           src/app/identity/status/page.tsx
           src/app/signup/page.tsx
           src/components/auth/auth-card.tsx
-          src/components/dashboard/dashboard-provider.tsx
           src/lib/identity/one-person-account.test.ts
           src/lib/identity/one-person-account.ts
           src/lib/identity/server.ts
@@ -181,10 +183,7 @@ jobs:
           sed -i 's/^          //' "$WORK_DIR/expected-paths.txt"
           sort -u "$WORK_DIR/expected-paths.txt" -o "$WORK_DIR/expected-paths.txt"
           git diff --name-only origin/main | sort -u > "$WORK_DIR/actual-paths.txt"
-          if ! diff -u "$WORK_DIR/expected-paths.txt" "$WORK_DIR/actual-paths.txt"; then
-            echo 'Final feature diff is not the exact approved path inventory.' >&2
-            exit 1
-          fi
+          diff -u "$WORK_DIR/expected-paths.txt" "$WORK_DIR/actual-paths.txt"
           test ! -e .github/one-person-bootstrap
           test ! -e .github/workflows/materialize-one-person-account.yml
 
@@ -196,7 +195,7 @@ jobs:
           test "$remote_head" = "$TRIGGER_HEAD"
           git add -A
           git diff --cached --check
-          git config user.name moraltrade-automation
-          git config user.email github-actions[bot]@users.noreply.github.com
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'Materialize one-person-one-account identity authority'
           git push origin HEAD:feature/one-person-one-account-20260731
