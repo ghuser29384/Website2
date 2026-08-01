@@ -13,12 +13,12 @@ permissions:
 
 concurrency:
   group: pr326-sync-current-main-20260731
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   sync:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
     env:
       PRODUCT_BRANCH: agent/marketplace-delta-current-main-20260729
     steps:
@@ -34,7 +34,7 @@ jobs:
           last_main=""
           last_product=""
           stable_intervals=0
-          required_stable_intervals=12
+          required_stable_intervals=4
           while (( stable_intervals < required_stable_intervals )); do
             main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
             product_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
