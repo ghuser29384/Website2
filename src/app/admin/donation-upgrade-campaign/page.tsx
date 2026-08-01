@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { evaluateAdminOperatorAccess } from "@/lib/admin";
 import { requireViewer } from "@/lib/app-data";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
@@ -26,12 +27,6 @@ type CampaignSummary = {
   first_seen_at: string | null;
   last_seen_at: string | null;
 };
-
-function formatDate(value: string | null) {
-  if (!value) return "Not yet";
-  const timestamp = Date.parse(value);
-  return Number.isNaN(timestamp) ? value : new Date(timestamp).toLocaleString();
-}
 
 async function loadCampaignSummary() {
   const supabase = createServiceClient() as any;
@@ -122,11 +117,15 @@ export default async function DonationUpgradeCampaignAnalyticsPage() {
                     </div>
                     <div>
                       <dt>First seen</dt>
-                      <dd>{formatDate(row.first_seen_at)}</dd>
+                      <dd>
+                        <LocalDateTime fallback="Not yet" value={row.first_seen_at} />
+                      </dd>
                     </div>
                     <div>
                       <dt>Last seen</dt>
-                      <dd>{formatDate(row.last_seen_at)}</dd>
+                      <dd>
+                        <LocalDateTime fallback="Not yet" value={row.last_seen_at} />
+                      </dd>
                     </div>
                   </dl>
                 </article>
