@@ -86,7 +86,7 @@ jobs:
       - name: Run real Create iframe proposal workflow
         env:
           CREATE_ROUTE_CAPTURE: "1"
-        run: npx playwright test tests/create-group-contribution-proposal.spec.ts --project=chromium
+        run: npx playwright test tests/create-group-contribution-proposal.spec.ts
 
       - name: Upload rendered evidence
         if: always()
