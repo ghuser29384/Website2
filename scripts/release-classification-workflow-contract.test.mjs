@@ -10,7 +10,7 @@ function read(path) {
   return readFileSync(path, "utf8");
 }
 
-test("the required policy workflow executes only trusted base code", () => {
+test("the required policy workflow executes only current trusted base code", () => {
   const source = read(policyWorkflowPath);
 
   assert.match(source, /^name: Release classification$/m);
@@ -21,7 +21,8 @@ test("the required policy workflow executes only trusted base code", () => {
   }
   assert.match(source, /^\s{2}statuses: write$/m);
   assert.match(source, /^\s{2}contents: read$/m);
-  assert.match(source, /ref: \$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
+  assert.match(source, /ref: \$\{\{ github\.event\.pull_request\.base\.ref \}\}/);
+  assert.doesNotMatch(source, /ref:\s*\$\{\{ github\.event\.pull_request\.base\.sha \}\}/);
   assert.doesNotMatch(source, /ref:\s*\$\{\{ github\.event\.pull_request\.head\.sha \}\}/);
   assert.doesNotMatch(source, /gh pr checkout|refs\/pull\/|npm (?:ci|install)|npx /);
   assert.match(source, /node scripts\/validate-release-pr-body\.mjs/);
