@@ -6,13 +6,15 @@ import test from "node:test";
 const SCRIPT_PATH = path.resolve(process.cwd(), "scripts/vercel-ignore-build.mjs");
 const WEBSITE2_PROJECT_ID = "prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK";
 const MORALTRADE_PROJECT_ID = "prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7";
-const LAUNCH_BRANCH = "launch/verify-and-harden-20260723";
+const RELEASE_PREVIEW_BRANCH = "release/vercel-preview";
 
 const CONTROLLED_ENV_KEYS = [
   "VERCEL_PROJECT_ID",
   "VERCEL_ENV",
   "VERCEL_TARGET_ENV",
   "VERCEL_GIT_COMMIT_REF",
+  "VERCEL_GIT_PREVIOUS_SHA",
+  "VERCEL_GIT_COMMIT_SHA",
 ] as const;
 
 function runOwnershipCheck(
@@ -29,64 +31,75 @@ function runOwnershipCheck(
   });
 }
 
-test("skips an allowlisted Moral Trade-only Preview build on website2", () => {
+test("skips every Preview build on the non-canonical website2 project", () => {
   const result = runOwnershipCheck({
     VERCEL_PROJECT_ID: WEBSITE2_PROJECT_ID,
     VERCEL_ENV: "preview",
-    VERCEL_GIT_COMMIT_REF: LAUNCH_BRANCH,
+    VERCEL_GIT_COMMIT_REF: RELEASE_PREVIEW_BRANCH,
   });
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Skipping duplicate website2 Preview build/);
+  assert.match(result.stdout, /Skipping non-canonical Vercel project/);
 });
 
-test("keeps the authoritative moraltrade-site Preview build", () => {
-  const result = runOwnershipCheck({
-    VERCEL_PROJECT_ID: MORALTRADE_PROJECT_ID,
-    VERCEL_ENV: "preview",
-    VERCEL_GIT_COMMIT_REF: LAUNCH_BRANCH,
-  });
-
-  assert.equal(result.status, 1, result.stderr || result.stdout);
-  assert.match(result.stdout, /not the duplicate website2 project/);
-});
-
-test("keeps website2 production builds", () => {
+test("skips every production build on the non-canonical website2 project", () => {
   const result = runOwnershipCheck({
     VERCEL_PROJECT_ID: WEBSITE2_PROJECT_ID,
     VERCEL_ENV: "production",
     VERCEL_GIT_COMMIT_REF: "main",
   });
 
-  assert.equal(result.status, 1, result.stderr || result.stdout);
-  assert.match(result.stdout, /production and other non-preview deployments remain enabled/);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Skipping non-canonical Vercel project/);
 });
 
-test("keeps website2 main-branch Preview deployments", () => {
+test("keeps the canonical designated release Preview build", () => {
   const result = runOwnershipCheck({
-    VERCEL_PROJECT_ID: WEBSITE2_PROJECT_ID,
-    VERCEL_TARGET_ENV: "preview",
+    VERCEL_PROJECT_ID: MORALTRADE_PROJECT_ID,
+    VERCEL_ENV: "preview",
+    VERCEL_GIT_COMMIT_REF: RELEASE_PREVIEW_BRANCH,
+  });
+
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(result.stdout, /changed-file range is unavailable; build conservatively/i);
+});
+
+test("keeps the canonical main production build", () => {
+  const result = runOwnershipCheck({
+    VERCEL_PROJECT_ID: MORALTRADE_PROJECT_ID,
+    VERCEL_ENV: "production",
     VERCEL_GIT_COMMIT_REF: "main",
   });
 
   assert.equal(result.status, 1, result.stderr || result.stdout);
-  assert.match(result.stdout, /main-branch deployments remain enabled/);
+  assert.match(result.stdout, /changed-file range is unavailable; build conservatively/i);
 });
 
-test("keeps unreviewed website2 Preview branches", () => {
+test("skips ordinary feature-branch Previews on the canonical project", () => {
   const result = runOwnershipCheck({
-    VERCEL_PROJECT_ID: WEBSITE2_PROJECT_ID,
+    VERCEL_PROJECT_ID: MORALTRADE_PROJECT_ID,
     VERCEL_ENV: "preview",
     VERCEL_GIT_COMMIT_REF: "feature/unrelated-domain-change",
   });
 
-  assert.equal(result.status, 1, result.stderr || result.stdout);
-  assert.match(result.stdout, /not on the reviewed Moral Trade-only allowlist/);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /not an approved release branch/);
+});
+
+test("skips main-branch Previews because only the designated release branch may preview", () => {
+  const result = runOwnershipCheck({
+    VERCEL_PROJECT_ID: MORALTRADE_PROJECT_ID,
+    VERCEL_TARGET_ENV: "preview",
+    VERCEL_GIT_COMMIT_REF: "main",
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.stdout, /Only "release\/vercel-preview" may create a release preview/);
 });
 
 test("fails open when Vercel build metadata is absent", () => {
   const result = runOwnershipCheck({});
 
   assert.equal(result.status, 1, result.stderr || result.stdout);
-  assert.match(result.stdout, /not the duplicate website2 project/);
+  assert.match(result.stdout, /No Vercel project is identified; build conservatively/);
 });
