@@ -8,6 +8,29 @@ const REQUEST_COPY = [
   "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, Donation Upgrades, shared-project pools, and threshold pools.",
 ] as const;
 
+const DIRECT_UPGRADE_COPY = [
+  [
+    "Authorize a fallback donation that changes destination—or becomes a larger match—when someone adds money.",
+    "Commit to an original donation. If someone adds money, you both donate directly to the upgraded recipient.",
+  ],
+  [
+    "<strong>Authorize inside Create</strong>",
+    "<strong>Commit inside Create</strong>",
+  ],
+  [
+    "No money is held now. The next step shows the exact matched and fallback branches before any payment method is saved.",
+    "No payment information is collected now. The next step freezes both recipients, both amounts, and the deadline.",
+  ],
+  [
+    'note: "Set the fallback donation, the matched destination, the added amount, and the deadline before authorizing."',
+    'note: "Set the original recipient, upgraded recipient, both amounts, and the deadline before publishing the commitment."',
+  ],
+  [
+    "Continue to choose both destinations, both amounts, and the deadline. You will see the exact future-charge terms before authorizing.",
+    "Choose both recipients, both amounts, and the deadline. No payment information is collected now; each participant donates directly after the outcome is fixed.",
+  ],
+] as const;
+
 const FUND_KICKER = [
   '<div class="fund-mode-kicker">If you chose Fund, choose the structure</div>',
   '<div class="fund-mode-kicker">Choose a funding structure</div>',
@@ -115,7 +138,15 @@ export function integrateCommonGroundCreateSource(source: string) {
     "Set up a Donation Upgrade.",
     "Donation Upgrade heading",
   );
-  integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");
+  for (const [oldValue, newValue] of DIRECT_UPGRADE_COPY) {
+  integrated = replaceExactlyOnce(
+    integrated,
+    oldValue,
+    newValue,
+    "direct Donation Upgrade copy",
+  );
+}
+integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");
   integrated = replaceExactlyOnce(
     integrated,
     THRESHOLD_POOL_CARD,

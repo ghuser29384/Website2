@@ -33,6 +33,23 @@ test("the integration preserves the static source and adds the compact funding c
   assert.match(integrated, /Donation Upgrade/);
   assert.doesNotMatch(integrated, />Conditional donation</);
   assert.doesNotMatch(integrated, /Set up a conditional donation\./);
+  assert.match(
+    integrated,
+    /Commit to an original donation\. If someone adds money, you both donate directly to the upgraded recipient\./,
+  );
+  assert.match(integrated, /Commit inside Create/);
+  assert.match(
+    integrated,
+    /No payment information is collected now\. The next step freezes both recipients, both amounts, and the deadline\./,
+  );
+  assert.match(
+    integrated,
+    /each participant donates directly after the outcome is fixed\./,
+  );
+  assert.doesNotMatch(
+    integrated,
+    /Authorize a fallback donation|Authorize inside Create|future-charge terms|before any payment method is saved/,
+  );
   assert.match(integrated, /Co-Fund/);
   assert.match(
     integrated,
