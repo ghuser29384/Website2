@@ -80,7 +80,7 @@ export default async function DonationUpgradeCampaignAnalyticsPage() {
         <section className="section section-white" aria-labelledby="campaign-analytics-heading">
           <div className="section-head section-head-compact">
             <p className="eyebrow">Donation Upgrade · billboard campaign</p>
-            <h1 id="campaign-analytics-heading">Measure the handoff without tracking people.</h1>
+            <h1 id="campaign-analytics-heading">Measure the handoff without collecting identity data.</h1>
             <p>
               Counts are idempotent per anonymous browser and variant. The campaign store omits
               IP addresses, user agents, email addresses, profile IDs, and raw browser identifiers.
