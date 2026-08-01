@@ -99,7 +99,7 @@ The workflow:
 - reruns when the pull request body changes;
 - leaves a pending status if the workflow is interrupted before a final result, which prevents a silent bypass.
 
-The `release-classification` context is intended to be a required status check for merges into `main`. Changes to the parser or workflow must pass the separate parser and workflow-contract self-test before merge.
+The `release-classification` context is intended to be a required status check for merges into `main`. Its context name must remain stable so branch protection cannot be silently bypassed by renaming the workflow job. Changes to the parser or workflow must pass the separate parser and workflow-contract self-test before merge.
 
 The validator requires:
 
