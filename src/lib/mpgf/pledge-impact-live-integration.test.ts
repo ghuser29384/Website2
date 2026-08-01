@@ -31,12 +31,15 @@ test("live pool state comes from approved MPGF proposals and linked pledges", ()
     "approved_as_candidate",
     "public_exact",
     "exact_amount",
-    "public_goods_deadline_at > p_at",
     "converted_to_payment_intent",
     "mpgf_pledge_impact_live_pool_state",
   ]) {
     assert.match(migration, new RegExp(required.replaceAll(".", "\\.")));
   }
+  assert.match(
+    migration,
+    /public_goods_deadline_at is null[\s\S]*public_goods_deadline_at <= p_at then[\s\S]*return null/,
+  );
   assert.doesNotMatch(migration, /mpgf_public_goods_campaigns/);
   assert.doesNotMatch(
     migration,
