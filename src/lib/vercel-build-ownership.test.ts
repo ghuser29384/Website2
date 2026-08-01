@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 
 const SCRIPT_PATH = path.resolve(process.cwd(), "scripts/vercel-ignore-build.mjs");
+const POLICY_WORKFLOW_PATH = path.resolve(
+  process.cwd(),
+  ".github/workflows/vercel-build-ownership-policy.yml",
+);
+const POLICY_WORKFLOW_SOURCE = readFileSync(POLICY_WORKFLOW_PATH, "utf8");
 const WEBSITE2_PROJECT_ID = "prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK";
 const MORALTRADE_PROJECT_ID = "prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7";
 const RELEASE_PREVIEW_BRANCH = "release/vercel-preview";
@@ -13,6 +19,8 @@ const CONTROLLED_ENV_KEYS = [
   "VERCEL_ENV",
   "VERCEL_TARGET_ENV",
   "VERCEL_GIT_COMMIT_REF",
+  "VERCEL_GIT_PREVIOUS_SHA",
+  "VERCEL_GIT_COMMIT_SHA",
 ] as const;
 
 function runOwnershipCheck(
@@ -89,4 +97,27 @@ test("fails open when Vercel build metadata is absent", () => {
 
   assert.equal(result.status, 1, result.stderr || result.stdout);
   assert.match(result.stdout, /No Vercel project is identified; build conservatively/);
+});
+
+test("ownership CI applies repository-only scope checks conditionally", () => {
+  assert.match(
+    POLICY_WORKFLOW_SOURCE,
+    /scripts\/vercel-project-config\.mjs/,
+    "runtime-affecting Vercel project configuration changes must trigger the policy workflow",
+  );
+  assert.match(
+    POLICY_WORKFLOW_SOURCE,
+    /repository_only_change=true/,
+    "the workflow must classify repository-only maintenance explicitly",
+  );
+  assert.match(
+    POLICY_WORKFLOW_SOURCE,
+    /Runtime-affecting or mixed ownership\/configuration change detected; the repository-only path restriction is not applicable\./,
+    "runtime-affecting PRs must not be rejected merely because they contain application changes",
+  );
+  assert.doesNotMatch(
+    POLICY_WORKFLOW_SOURCE,
+    /test "\$changed" = "\$expected"/,
+    "the previous unconditional two-file exact-diff assertion must not return",
+  );
 });
