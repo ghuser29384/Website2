@@ -1,0 +1,174 @@
+name: Disconnect duplicate website2 from Git once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/disconnect-website2-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: disconnect-website2-once
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+  VERCEL_CLI_VERSION: 50.38.1
+  CONTROLLER_PATH: .github/workflows/disconnect-website2-once.yml
+
+jobs:
+  disconnect:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Guard exact one-time scope
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_ACTOR" = 'ghuser29384'
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          test -n "$VERCEL_TOKEN"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Disconnect website2 from Git
+        id: disconnect
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set +e
+          set -o pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" git disconnect \
+            --token="$VERCEL_TOKEN" \
+            --scope=ellen-s \
+            2>&1 | tee website2-disconnect.log
+          status=${PIPESTATUS[0]}
+          printf '%s\n' "$status" > website2-disconnect.status
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Verify website2 Git link is absent and domains remain
+        id: verify
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set +e
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header 'Accept: application/json' \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID" \
+            > website2-after.json
+          fetch_status=$?
+          if (( fetch_status != 0 )); then
+            printf '1\n' > website2-verify.status
+            echo 'verified=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node <<'NODE'
+          const fs = require('node:fs');
+          const project = JSON.parse(fs.readFileSync('website2-after.json', 'utf8'));
+          const expectedDomains = [
+            'copromise.org',
+            'mplr.org',
+            'openly.social',
+            'openpublicgoods.org',
+            'www.copromise.org',
+            'www.mplr.org',
+            'www.openly.social',
+            'www.openpublicgoods.org',
+          ];
+          const domains = (project.alias ?? project.domains ?? []).map((entry) => typeof entry === 'string' ? entry : entry?.name).filter(Boolean);
+          const linkAbsent = project.link == null;
+          // The project endpoint may omit domains, so verify custom-domain preservation
+          // separately below rather than treating omission as deletion.
+          fs.writeFileSync('website2-link-check.json', JSON.stringify({ linkAbsent, endpointDomains: domains, expectedDomains }, null, 2) + '\n');
+          fs.writeFileSync('website2-verify.status', linkAbsent ? '0\n' : '1\n');
+          NODE
+          if [[ "$(cat website2-verify.status)" == '0' ]]; then
+            echo 'verified=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'verified=false' >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Upload redacted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website2-disconnect-${{ github.run_id }}
+          path: |
+            website2-disconnect.log
+            website2-disconnect.status
+            website2-after.json
+            website2-link-check.json
+            website2-verify.status
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report outcome to PR 422
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "$(cat website2-verify.status 2>/dev/null || echo 1)" == '0' ]]; then
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "The duplicate website2 project was disconnected from the Website2 GitHub repository and the resulting project state was verified. Its legacy custom domains were not deleted or migrated. Evidence: $run_url"
+          else
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "The corrected website2 Git-disconnect command was attempted, but the disconnected state was not verified. Inspect the redacted evidence: $run_url"
+          fi
+
+      - name: Remove one-time controller
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$blob_sha" ]]; then
+            jq -n \
+              --arg message 'Remove one-time website2 disconnect controller' \
+              --arg sha "$blob_sha" \
+              --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE \
+                  "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" \
+                  --input - >/dev/null
+          fi
+
+      - name: Enforce verified disconnect
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat website2-verify.status 2>/dev/null || echo 1)" = '0'
