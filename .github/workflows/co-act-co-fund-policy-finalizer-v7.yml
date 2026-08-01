@@ -1,0 +1,301 @@
+name: Add selected Co-Act and Co-Fund policy terms
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v2-20260801
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: co-act-co-fund-policy-finalizer-v7
+  cancel-in-progress: false
+
+env:
+  FEATURE_BRANCH: feature/co-act-co-fund-create-v2-20260801
+
+jobs:
+  patch-validate-clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v2-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Settle earlier controllers and reset to latest branch head
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 600
+          git fetch origin "$FEATURE_BRANCH"
+          git reset --hard "origin/$FEATURE_BRANCH"
+          echo "BASE_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Add selected synchronization, discussion, and Co-Fund failure terms
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          domain = Path('src/lib/create-interface/group-contribution.ts')
+          text = domain.read_text()
+
+          if 'timing: "same-period" | "same-time";' not in text:
+              anchor = '  frequency?: string;\n  reward:'
+              replacement = '  frequency?: string;\n  timing: "same-period" | "same-time";\n  coordination: "notifications-only" | "announcements" | "discussion-thread";\n  reward:'
+              if anchor not in text:
+                  raise SystemExit('Could not locate Co-Act timing interface anchor')
+              text = text.replace(anchor, replacement, 1)
+
+          if 'underThresholdFallback:' not in text:
+              anchor = '''  paymentFailure: {\n    repairWindowHours: number;\n    useWaitlistFirst: true;\n  };\n  overfunding: "proportional-reduction";'''
+              replacement = '''  paymentFailure: {\n    repairWindowHours: number;\n    useWaitlistFirst: true;\n  };\n  failure: {\n    deadlineOutcome: "release" | "one-extension" | "new-round" | "participant-vote";\n    extensionHours?: number;\n    underThresholdFallback: "expire" | "renegotiate" | "alternative-offer";\n  };\n  overfunding: "proportional-reduction";'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate Co-Fund failure interface anchor')
+              text = text.replace(anchor, replacement, 1)
+
+          if 'validateCoActTimingAndCoordination(value, issues);' not in text:
+              anchor = '  validateReward(value.reward, issues);'
+              if anchor not in text:
+                  raise SystemExit('Could not locate Co-Act validator anchor')
+              text = text.replace(
+                  anchor,
+                  '  validateCoActTimingAndCoordination(value, issues);\n  validateReward(value.reward, issues);',
+                  1,
+              )
+
+          if 'function validateCoActTimingAndCoordination' not in text:
+              anchor = 'function validateReward(value: unknown, issues: ValidationIssue[]): void {'
+              helper = '''function validateCoActTimingAndCoordination(\n  value: Record<string, unknown>,\n  issues: ValidationIssue[],\n): void {\n  if (!( ["same-period", "same-time"] as unknown[]).includes(value.timing)) {\n    addIssue(issues, "timing", "invalid-value", "Unsupported Co-Act timing rule");\n  }\n  if (\n    !(\n      ["notifications-only", "announcements", "discussion-thread"] as unknown[]\n    ).includes(value.coordination)\n  ) {\n    addIssue(issues, "coordination", "invalid-value", "Unsupported coordination policy");\n  }\n}\n\n'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate reward validator function')
+              text = text.replace(anchor, helper + anchor, 1)
+
+          if 'validateCoFundFailure(value.failure, issues);' not in text:
+              anchor = '  validatePaymentFailure(value.paymentFailure, issues);'
+              if anchor not in text:
+                  raise SystemExit('Could not locate payment failure validator anchor')
+              text = text.replace(
+                  anchor,
+                  anchor + '\n  validateCoFundFailure(value.failure, issues);',
+                  1,
+              )
+
+          if 'function validateCoFundFailure' not in text:
+              anchor = 'function validateRecurring(value: unknown, issues: ValidationIssue[]): void {'
+              helper = '''function validateCoFundFailure(value: unknown, issues: ValidationIssue[]): void {\n  if (!isRecord(value)) {\n    addIssue(issues, "failure", "invalid-type", "Co-Fund failure terms must be an object");\n    return;\n  }\n  if (\n    !(\n      ["release", "one-extension", "new-round", "participant-vote"] as unknown[]\n    ).includes(value.deadlineOutcome)\n  ) {\n    addIssue(issues, "failure.deadlineOutcome", "invalid-value", "Unsupported deadline outcome");\n  }\n  if (value.deadlineOutcome === "one-extension") {\n    if (!isPositiveInteger(value.extensionHours) || value.extensionHours > 24 * 365) {\n      addIssue(\n        issues,\n        "failure.extensionHours",\n        "invalid-value",\n        "One extension requires a period from 1 through 8760 hours",\n      );\n    }\n  } else if (value.extensionHours !== undefined) {\n    addIssue(\n      issues,\n      "failure.extensionHours",\n      "invalid-value",\n      "Extension hours apply only to the one-extension outcome",\n    );\n  }\n  if (\n    !( ["expire", "renegotiate", "alternative-offer"] as unknown[]).includes(\n      value.underThresholdFallback,\n    )\n  ) {\n    addIssue(\n      issues,\n      "failure.underThresholdFallback",\n      "invalid-value",\n      "Unsupported under-threshold fallback",\n    );\n  }\n}\n\n'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate recurring validator function')
+              text = text.replace(anchor, helper + anchor, 1)
+
+          domain.write_text(text)
+
+          draft = Path('src/lib/create-interface/group-contribution-draft.ts')
+          text = draft.read_text()
+          if 'coActTiming:' not in text:
+              anchor = '  frequency: string;\n  rewardMode:'
+              replacement = '  frequency: string;\n  coActTiming: "same-period" | "same-time";\n  coordination: "notifications-only" | "announcements" | "discussion-thread";\n  rewardMode:'
+              if anchor not in text:
+                  raise SystemExit('Could not locate draft Co-Act timing anchor')
+              text = text.replace(anchor, replacement, 1)
+          if 'coFundDeadlineOutcome:' not in text:
+              anchor = '  paymentRepairWindowHours: number;\n  recurringMode:'
+              replacement = '''  paymentRepairWindowHours: number;\n  coFundDeadlineOutcome: "release" | "one-extension" | "new-round" | "participant-vote";\n  coFundExtensionHours: number;\n  coFundFailureFallback: "expire" | "renegotiate" | "alternative-offer";\n  recurringMode:'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate draft Co-Fund failure anchor')
+              text = text.replace(anchor, replacement, 1)
+          if 'coActTiming: "same-period"' not in text:
+              anchor = '    frequency: "",\n    rewardMode:'
+              replacement = '    frequency: "",\n    coActTiming: "same-period",\n    coordination: "notifications-only",\n    rewardMode:'
+              if anchor not in text:
+                  raise SystemExit('Could not locate Co-Act defaults anchor')
+              text = text.replace(anchor, replacement, 1)
+          if 'coFundDeadlineOutcome: "release"' not in text:
+              anchor = '    paymentRepairWindowHours: 24,\n    recurringMode:'
+              replacement = '''    paymentRepairWindowHours: 24,\n    coFundDeadlineOutcome: "release",\n    coFundExtensionHours: 72,\n    coFundFailureFallback: "expire",\n    recurringMode:'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate Co-Fund defaults anchor')
+              text = text.replace(anchor, replacement, 1)
+          if 'timing: state.coActTiming,' not in text:
+              anchor = '    lateJoining: state.lateJoining,\n    ...(state.duration ? { duration: state.duration } : {}),\n    ...(state.frequency ? { frequency: state.frequency } : {}),\n    reward:'
+              replacement = '''    lateJoining: state.lateJoining,\n    ...(state.duration ? { duration: state.duration } : {}),\n    ...(state.frequency ? { frequency: state.frequency } : {}),\n    timing: state.coActTiming,\n    coordination: state.coordination,\n    reward:'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate Co-Act builder anchor')
+              text = text.replace(anchor, replacement, 1)
+          if 'deadlineOutcome: state.coFundDeadlineOutcome' not in text:
+              anchor = '''    paymentFailure: {\n      repairWindowHours: state.paymentRepairWindowHours,\n      useWaitlistFirst: true,\n    },\n    overfunding: "proportional-reduction",'''
+              replacement = '''    paymentFailure: {\n      repairWindowHours: state.paymentRepairWindowHours,\n      useWaitlistFirst: true,\n    },\n    failure: {\n      deadlineOutcome: state.coFundDeadlineOutcome,\n      ...(state.coFundDeadlineOutcome === "one-extension"\n        ? { extensionHours: state.coFundExtensionHours }\n        : {}),\n      underThresholdFallback: state.coFundFailureFallback,\n    },\n    overfunding: "proportional-reduction",'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate Co-Fund builder anchor')
+              text = text.replace(anchor, replacement, 1)
+          draft.write_text(text)
+
+          sanitizer = Path('src/lib/create-interface/group-contribution-draft-sanitize.ts')
+          text = sanitizer.read_text()
+          if 'CO_ACT_TIMING' not in text:
+              anchor = 'const REWARD_MODES = new Set(["fixed-group", "per-participant-or-unit"]);'
+              replacement = '''const CO_ACT_TIMING = new Set(["same-period", "same-time"]);\nconst COORDINATION = new Set(["notifications-only", "announcements", "discussion-thread"]);\nconst REWARD_MODES = new Set(["fixed-group", "per-participant-or-unit"]);'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate sanitizer reward set')
+              text = text.replace(anchor, replacement, 1)
+          if 'COFUND_DEADLINE_OUTCOMES' not in text:
+              anchor = 'const RECURRING_MODES = new Set(["none", "standing-authorization", "confirm-each-cycle"]);'
+              replacement = '''const COFUND_DEADLINE_OUTCOMES = new Set([\n  "release",\n  "one-extension",\n  "new-round",\n  "participant-vote",\n]);\nconst COFUND_FAILURE_FALLBACKS = new Set(["expire", "renegotiate", "alternative-offer"]);\nconst RECURRING_MODES = new Set(["none", "standing-authorization", "confirm-each-cycle"]);'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate recurring sanitizer set')
+              text = text.replace(anchor, replacement, 1)
+          if 'assignEnum(candidate, "coActTiming"' not in text:
+              anchor = '  assignString(candidate, "frequency", input.frequency);\n  assignEnum(candidate, "rewardMode", input.rewardMode, REWARD_MODES);'
+              replacement = '''  assignString(candidate, "frequency", input.frequency);\n  assignEnum(candidate, "coActTiming", input.coActTiming, CO_ACT_TIMING);\n  assignEnum(candidate, "coordination", input.coordination, COORDINATION);\n  assignEnum(candidate, "rewardMode", input.rewardMode, REWARD_MODES);'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate sanitizer Co-Act assignment anchor')
+              text = text.replace(anchor, replacement, 1)
+          if 'assignEnum(candidate, "coFundDeadlineOutcome"' not in text:
+              anchor = '  assignNumber(candidate, "paymentRepairWindowHours", input.paymentRepairWindowHours);\n  assignEnum(candidate, "recurringMode", input.recurringMode, RECURRING_MODES);'
+              replacement = '''  assignNumber(candidate, "paymentRepairWindowHours", input.paymentRepairWindowHours);\n  assignEnum(\n    candidate,\n    "coFundDeadlineOutcome",\n    input.coFundDeadlineOutcome,\n    COFUND_DEADLINE_OUTCOMES,\n  );\n  assignNumber(candidate, "coFundExtensionHours", input.coFundExtensionHours);\n  assignEnum(\n    candidate,\n    "coFundFailureFallback",\n    input.coFundFailureFallback,\n    COFUND_FAILURE_FALLBACKS,\n  );\n  assignEnum(candidate, "recurringMode", input.recurringMode, RECURRING_MODES);'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate sanitizer Co-Fund assignment anchor')
+              text = text.replace(anchor, replacement, 1)
+          sanitizer.write_text(text)
+
+          shape = Path('src/lib/create-interface/group-contribution-shape.ts')
+          text = shape.read_text()
+          if 'timing: "value"' not in text:
+              anchor = '  frequency: "value",\n  reward:'
+              replacement = '  frequency: "value",\n  timing: "value",\n  coordination: "value",\n  reward:'
+              if anchor not in text:
+                  raise SystemExit('Could not locate shape Co-Act anchor')
+              text = text.replace(anchor, replacement, 1)
+          if 'underThresholdFallback: "value"' not in text:
+              anchor = '''  paymentFailure: {\n    repairWindowHours: "value",\n    useWaitlistFirst: "value",\n  },\n  overfunding: "value",'''
+              replacement = '''  paymentFailure: {\n    repairWindowHours: "value",\n    useWaitlistFirst: "value",\n  },\n  failure: {\n    deadlineOutcome: "value",\n    extensionHours: "value",\n    underThresholdFallback: "value",\n  },\n  overfunding: "value",'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate shape Co-Fund anchor')
+              text = text.replace(anchor, replacement, 1)
+          shape.write_text(text)
+
+          client = Path('src/lib/create-interface/group-contribution-client.ts')
+          text = client.read_text()
+          if 'data-field="coActTiming"' not in text:
+              anchor = '${selectField("lateJoining", "Late joining", ['
+              insertion = '''${selectField("coActTiming", "Participant timing", [\n        ["same-period", "Complete within the same period"],\n        ["same-time", "Act at the same time"],\n      ])}\n      ${selectField("coordination", "Coordination", [\n        ["notifications-only", "Notifications and reminders"],\n        ["announcements", "Announcements and reminders"],\n        ["discussion-thread", "Optional participant discussion thread"],\n      ])}\n      '''
+              if anchor not in text:
+                  raise SystemExit('Could not locate client late-joining anchor')
+              text = text.replace(anchor, insertion + anchor, 1)
+          if 'data-field="coFundDeadlineOutcome"' not in text:
+              anchor = '${numberField("paymentRepairWindowHours", "Payment repair window (hours)", state.paymentRepairWindowHours, 1, 168)}'
+              insertion = '''${selectField("coFundDeadlineOutcome", "If the deadline is missed", [\n        ["release", "Release reservations"],\n        ["one-extension", "Allow one extension"],\n        ["new-round", "Create a new round"],\n        ["participant-vote", "Participants vote on an extension"],\n      ])}\n      ${\n        state.coFundDeadlineOutcome === "one-extension"\n          ? numberField("coFundExtensionHours", "Extension period (hours)", state.coFundExtensionHours, 1, 8760)\n          : ""\n      }\n      ${selectField("coFundFailureFallback", "If the project still does not fund", [\n        ["expire", "Expire the linked contribution"],\n        ["renegotiate", "Permit bilateral renegotiation"],\n        ["alternative-offer", "Use a specified alternative offer"],\n      ])}\n      '''
+              if anchor not in text:
+                  raise SystemExit('Could not locate payment repair client anchor')
+              text = text.replace(anchor, insertion + anchor, 1)
+          client.write_text(text)
+
+          contract_test = Path('src/lib/create-interface/group-contribution.test.ts')
+          text = contract_test.read_text()
+          if 'timing: "same-period"' not in text:
+              anchor = '    frequency: "once per week",\n    reward:'
+              replacement = '    frequency: "once per week",\n    timing: "same-period",\n    coordination: "notifications-only",\n    reward:'
+              if anchor not in text:
+                  raise SystemExit('Could not locate Co-Act fixture anchor')
+              text = text.replace(anchor, replacement, 1)
+          if 'underThresholdFallback: "expire"' not in text:
+              anchor = '''    paymentFailure: {\n      repairWindowHours: 24,\n      useWaitlistFirst: true,\n    },\n    overfunding: "proportional-reduction",'''
+              replacement = '''    paymentFailure: {\n      repairWindowHours: 24,\n      useWaitlistFirst: true,\n    },\n    failure: {\n      deadlineOutcome: "release",\n      underThresholdFallback: "expire",\n    },\n    overfunding: "proportional-reduction",'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate Co-Fund fixture anchor')
+              text = text.replace(anchor, replacement, 1)
+          contract_test.write_text(text)
+          PY
+
+      - run: npm ci
+
+      - name: Focused selected-policy and group contracts
+        run: >-
+          node --import tsx --test
+          src/lib/create-interface/group-contribution.test.ts
+          src/lib/create-interface/group-contribution-draft.test.ts
+          src/lib/create-interface/group-contribution-client.test.ts
+          src/lib/create-interface/group-contribution-payload.test.ts
+          src/lib/create-interface/group-contribution-shape.test.ts
+          src/lib/create-interface/group-contribution-draft-sanitize.test.ts
+          src/lib/create-interface/group-contribution-flags.test.ts
+          src/lib/create-interface/group-contribution-server.test.ts
+          src/lib/create-interface/group-contribution-form-data.test.ts
+          src/lib/create-interface/group-contribution-selected-policies.test.ts
+
+      - name: Focused lint
+        run: >-
+          npx eslint
+          src/instrumentation-client.ts
+          src/lib/create-interface/group-contribution*.ts
+          tests/create-group-contribution-proposal.spec.ts
+
+      - name: Absolute TypeScript
+        run: npx tsc --noEmit
+
+      - name: Complete repository tests
+        run: npm test
+
+      - name: Complete repository lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Rendered proposal checks
+        run: npx playwright test tests/create-group-contribution-proposal.spec.ts --project=chromium
+
+      - name: Ensure remote branch stayed fixed during validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$FEATURE_BRANCH"
+          test "$(git rev-parse origin/$FEATURE_BRANCH)" = "$BASE_HEAD"
+
+      - name: Remove all temporary Co-Act workflows and commit policy-complete candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          find .github/workflows -maxdepth 1 -type f -name 'co-act-co-fund-*' -delete
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --cached --quiet; then
+            git commit -m 'Complete selected Co-Act and Co-Fund proposal policies'
+            git push origin HEAD:"$FEATURE_BRANCH"
+          fi
+
+      - name: Comment exact result on draft PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$FEATURE_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$pr" ]]; then
+            gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body "The selected same-period/same-time, optional discussion, and Co-Fund deadline/fallback policies are now represented in structured proposal terms. Focused contracts, full tests, lint, TypeScript, production build, and rendered proposal checks passed before temporary workflows were removed. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. The PR remains draft pending authoritative review-record persistence wiring and exact preview inspection."
+          fi
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$FEATURE_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$pr" ]]; then
+            gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body "The selected-policy Co-Act/Co-Fund gate failed on \`${GITHUB_SHA}\`; the draft remains blocked. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          fi
