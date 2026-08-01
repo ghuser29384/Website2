@@ -18,52 +18,77 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       PRODUCT_BRANCH: agent/marketplace-delta-current-main-20260729
-      EXPECTED_PRODUCT_HEAD: 16e126b8bdc1669393794d57447c6f69ba854f97
-      EXPECTED_MAIN_HEAD: f005a51a18f01ed0a93b986c044658d6c9dd8d49
     steps:
       - name: Check out QA controller branch
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Merge exact current main into PR 326 branch
+      - name: Merge a stable current main snapshot into PR 326
+        id: sync
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin main "$PRODUCT_BRANCH"
-          actual_main="$(git rev-parse origin/main)"
-          actual_product="$(git rev-parse "origin/$PRODUCT_BRANCH")"
-          if [[ "$actual_main" != "$EXPECTED_MAIN_HEAD" ]]; then
-            echo "Main moved: expected $EXPECTED_MAIN_HEAD, got $actual_main" >&2
-            exit 1
-          fi
-          if [[ "$actual_product" != "$EXPECTED_PRODUCT_HEAD" ]]; then
-            echo "Product branch moved: expected $EXPECTED_PRODUCT_HEAD, got $actual_product" >&2
-            exit 1
-          fi
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B "$PRODUCT_BRANCH" "origin/$PRODUCT_BRANCH"
-          git merge --no-ff --no-edit origin/main -m "Merge current main into marketplace delta PR"
-          git diff --check "$EXPECTED_PRODUCT_HEAD...HEAD"
 
-          new_head="$(git rev-parse HEAD)"
-          git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
-          printf 'new_head=%s\n' "$new_head" >> "$GITHUB_OUTPUT"
+          for attempt in 1 2 3 4 5; do
+            git fetch --no-tags origin main "$PRODUCT_BRANCH"
+            main_sha="$(git rev-parse origin/main)"
+            product_sha="$(git rev-parse "origin/$PRODUCT_BRANCH")"
 
-          body="Synced PR #326 with exact main \`$EXPECTED_MAIN_HEAD\` via merge commit \`$new_head\`. The product changes and current-main TypeScript repairs are now tested together by the exact-head evidence gate."
-          jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer $GITHUB_TOKEN" \
-            --header "Accept: application/vnd.github+json" \
-            --header "Content-Type: application/json" \
-            --data-binary "@$RUNNER_TEMP/comment.json" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/326/comments" \
-            --output /dev/null
+            pr_json="$RUNNER_TEMP/pr-326-${attempt}.json"
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/326" \
+              --output "$pr_json"
+            [[ "$(jq -r '.state' "$pr_json")" == "open" ]]
+            [[ "$(jq -r '.base.ref' "$pr_json")" == "main" ]]
+            [[ "$(jq -r '.head.ref' "$pr_json")" == "$PRODUCT_BRANCH" ]]
+            [[ "$(jq -r '.head.sha' "$pr_json")" == "$product_sha" ]]
+
+            git checkout -B "$PRODUCT_BRANCH" "origin/$PRODUCT_BRANCH"
+            if ! git merge --no-ff --no-edit origin/main -m "Merge current main into marketplace delta PR"; then
+              git merge --abort || true
+              echo "Current main does not merge cleanly into PR #326." >&2
+              exit 1
+            fi
+            git diff --check "$product_sha...HEAD"
+            new_head="$(git rev-parse HEAD)"
+
+            git fetch --no-tags origin main "$PRODUCT_BRANCH"
+            final_main="$(git rev-parse origin/main)"
+            final_product="$(git rev-parse "origin/$PRODUCT_BRANCH")"
+            if [[ "$final_main" != "$main_sha" || "$final_product" != "$product_sha" ]]; then
+              echo "Refs moved during sync attempt ${attempt}; retrying." >&2
+              git reset --hard "$final_product"
+              sleep 15
+              continue
+            fi
+
+            git push --force-with-lease="refs/heads/$PRODUCT_BRANCH:$product_sha" \
+              origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+            printf 'main_sha=%s\nproduct_before=%s\nnew_head=%s\n' \
+              "$main_sha" "$product_sha" "$new_head" >> "$GITHUB_OUTPUT"
+
+            body="Synced PR #326 with exact main \`$main_sha\` via merge commit \`$new_head\`. The product delta and current-main application state are ready for a new exact-head evidence gate."
+            jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
+            curl --fail-with-body --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$RUNNER_TEMP/comment.json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/326/comments" \
+              --output /dev/null
+            exit 0
+          done
+
+          echo "Could not obtain a stable main/product pair after five attempts." >&2
+          exit 1
         env:
           GITHUB_TOKEN: ${{ github.token }}
