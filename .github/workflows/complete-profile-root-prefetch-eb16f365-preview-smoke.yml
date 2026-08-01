@@ -22,7 +22,8 @@ jobs:
       STATUS_CONTEXT: QA / Complete Profile prefetch rebased preview smoke
       PREVIEW_DEPLOYMENT_ID: dpl_4ffMNqZ7oT32PBTV7GyA2rJVMEFs
       PREVIEW_ORIGIN: https://website2-64hwac0iw-ellen-s.vercel.app
-      VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
 
     steps:
       - name: Mark exact preview smoke pending
@@ -72,7 +73,7 @@ jobs:
           test -n "$VERCEL_TOKEN_VALUE"
           response="$(curl -fsS \
             -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
-            "https://api.vercel.com/v13/deployments/${PREVIEW_DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}")"
+            "https://api.vercel.com/v13/deployments/${PREVIEW_DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}")"
           state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$response")"
           deployed_sha="$(jq -r '.meta.githubCommitSha // empty' <<<"$response")"
           test "$state" = "READY"
@@ -86,45 +87,32 @@ jobs:
             '{expectedSha:$expectedSha,deploymentId:$deploymentId,origin:$origin,state:$state}' \
             > complete-profile-root-prefetch-rebased-preview-smoke/deployment.json
 
-      - name: Temporarily override protection for the exact deployment
+      - name: Prime protected preview access with Vercel CLI
         env:
-          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          payload='{"override":{"scope":"alias-protection-override","action":"create"}}'
-          curl -fsS -X PATCH \
-            "https://api.vercel.com/v1/aliases/${PREVIEW_DEPLOYMENT_ID}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
-            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
-            -H "Content-Type: application/json" \
-            --data "$payload" \
-            > /tmp/vercel-protection-override-create.json
-          echo "PREVIEW_PROTECTION_OVERRIDE_CREATED=true" >> "$GITHUB_ENV"
-
-          ready=false
-          for attempt in $(seq 1 30); do
-            headers="$(mktemp)"
-            set +e
-            status="$(curl -sS -o /tmp/preview-probe.html -D "$headers" -w '%{http_code}' \
-              -H 'Cookie: mt_walkthrough_seen=1' \
-              "${PREVIEW_ORIGIN}/complete-profile")"
-            curl_status=$?
-            set -e
-            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $2); print $2}' "$headers" | tail -1)"
-            rm -f "$headers"
-            if [[ "$curl_status" -eq 0 && "$status" =~ ^2[0-9][0-9]$ ]]; then
-              ready=true
-              jq -n \
-                --arg status "$status" \
-                --arg location "$location" \
-                --arg attempt "$attempt" \
-                '{status:($status|tonumber),location:$location,attempt:($attempt|tonumber)}' \
-                > complete-profile-root-prefetch-rebased-preview-smoke/protection-probe.json
-              break
-            fi
-            sleep 2
-          done
-          test "$ready" = true
+          test -n "$VERCEL_TOKEN"
+          rm -f /tmp/vercel-preview-cookies.txt /tmp/vercel-preview-prime.html
+          npx --yes vercel@latest curl --url "${PREVIEW_ORIGIN}/complete-profile" \
+            -H "x-vercel-set-bypass-cookie: true" \
+            -H "Cookie: mt_walkthrough_seen=1" \
+            -L \
+            -c /tmp/vercel-preview-cookies.txt \
+            -o /tmp/vercel-preview-prime.html \
+            --fail-with-body
+          test -s /tmp/vercel-preview-prime.html
+          test -s /tmp/vercel-preview-cookies.txt
+          if grep -Fq 'vercel.com/login' /tmp/vercel-preview-prime.html; then
+            echo "Vercel CLI priming still reached the login surface." >&2
+            exit 1
+          fi
+          cookie_count="$(awk 'BEGIN{n=0} !/^#/ && NF>=7 {n++} END{print n}' /tmp/vercel-preview-cookies.txt)"
+          test "$cookie_count" -gt 0
+          jq -n --arg cookieCount "$cookie_count" \
+            '{authenticated:true,cookieCount:($cookieCount|tonumber)}' \
+            > complete-profile-root-prefetch-rebased-preview-smoke/access-prime.json
 
       - name: Run exact-preview browser smoke
         shell: bash
@@ -132,7 +120,7 @@ jobs:
           mkdir -p .qa complete-profile-root-prefetch-rebased-preview-smoke
           cat > .qa/complete-profile-root-prefetch-rebased-preview-smoke.mjs <<'SCRIPT'
           import assert from "node:assert/strict";
-          import { mkdir, writeFile } from "node:fs/promises";
+          import { mkdir, readFile, writeFile } from "node:fs/promises";
           import { chromium } from "@playwright/test";
 
           const origin = process.env.PREVIEW_ORIGIN;
@@ -142,17 +130,49 @@ jobs:
 
           const outputDir = "complete-profile-root-prefetch-rebased-preview-smoke";
           await mkdir(outputDir, { recursive: true });
+
+          function parseNetscapeCookies(text) {
+            const cookies = [];
+            for (const rawLine of text.split(/\r?\n/)) {
+              if (!rawLine || rawLine.startsWith("#") && !rawLine.startsWith("#HttpOnly_")) continue;
+              const line = rawLine.startsWith("#HttpOnly_") ? rawLine.slice("#HttpOnly_".length) : rawLine;
+              const fields = line.split("\t");
+              if (fields.length < 7) continue;
+              const [domain, includeSubdomains, path, secure, expires, name, value] = fields;
+              const cookie = {
+                name,
+                value,
+                domain,
+                path: path || "/",
+                secure: secure === "TRUE",
+                httpOnly: rawLine.startsWith("#HttpOnly_"),
+                sameSite: "Lax",
+              };
+              const expiresNumber = Number(expires);
+              if (Number.isFinite(expiresNumber) && expiresNumber > 0) cookie.expires = expiresNumber;
+              cookies.push(cookie);
+            }
+            return cookies;
+          }
+
+          const primedCookies = parseNetscapeCookies(
+            await readFile("/tmp/vercel-preview-cookies.txt", "utf8"),
+          );
+          assert.ok(primedCookies.length > 0, "No Vercel preview cookies were primed");
+
           const browser = await chromium.launch({ headless: true });
           const report = {
             expectedSha,
             expectedDeploymentId,
             previewOrigin: origin,
             checkedAt: new Date().toISOString(),
+            primedCookieNames: primedCookies.map((cookie) => cookie.name),
             scenarios: [],
           };
 
           async function createContext(viewport) {
             const context = await browser.newContext({ viewport });
+            await context.addCookies(primedCookies);
             await context.addCookies([
               { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
             ]);
@@ -309,21 +329,6 @@ jobs:
           path: complete-profile-root-prefetch-rebased-preview-smoke
           if-no-files-found: ignore
           retention-days: 14
-
-      - name: Revoke exact-deployment protection override
-        if: always() && env.PREVIEW_PROTECTION_OVERRIDE_CREATED == 'true'
-        env:
-          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          payload='{"override":{"scope":"alias-protection-override","action":"revoke"}}'
-          curl -fsS -X PATCH \
-            "https://api.vercel.com/v1/aliases/${PREVIEW_DEPLOYMENT_ID}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
-            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
-            -H "Content-Type: application/json" \
-            --data "$payload" \
-            > /tmp/vercel-protection-override-revoke.json
 
       - name: Publish preview-smoke result
         if: always()
