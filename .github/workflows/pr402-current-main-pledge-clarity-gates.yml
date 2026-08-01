@@ -1,4 +1,5 @@
 name: PR 402 current-main pledge clarity gates
+# Trigger the registered branch workflow on a second exact-head push.
 
 on:
   push:
