@@ -77,7 +77,7 @@ test("Discover automatically recovers from one corrupted cached payload part", a
   await expect(page.locator("body")).not.toContainText("Loading Discover…");
   await expect(page.locator("body")).not.toContainText("Discover could not be loaded");
   await expect(page.locator(".offer-transaction-row").first()).toBeVisible();
-  await expect(page.getByRole("button", { name: /Run search/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Search$/i })).toBeVisible();
 
   expect(corruptedFirstAttempt).toBe(true);
   expect(retriedParts.size).toBe(7);

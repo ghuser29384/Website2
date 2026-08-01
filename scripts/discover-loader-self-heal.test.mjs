@@ -82,7 +82,10 @@ test("Discover loader retries a mixed cache, accepts non-hard-coded part counts,
   let written = "";
 
   const windowObject = {
-    location: { origin: "https://example.test" },
+    location: {
+      origin: "https://example.test",
+      href: "https://example.test/discover?domain=offers&view=list",
+    },
     setTimeout,
     crypto: globalThis.crypto,
     DecompressionStream,
@@ -164,7 +167,23 @@ test("Discover loader retries a mixed cache, accepts non-hard-coded part counts,
   await waitFor(() => written.length > 0);
 
   assert.match(written, /Discover test content/);
-  assert.match(written, new RegExp(`moral-trade-smart-query\\.js\\?v=${manifest.version}`));
+  const preflightPattern = new RegExp(
+    `moral-trade-discover-search-preflight\\.js\\?v=${manifest.version}`,
+  );
+  const controllerPattern = new RegExp(
+    `moral-trade-discover-search\\.js\\?v=${manifest.version}`,
+  );
+  assert.match(written, preflightPattern);
+  assert.match(written, controllerPattern);
+  assert.ok(
+    written.search(preflightPattern) < written.search(controllerPattern),
+    "the filter preflight must load before the search controller",
+  );
+  assert.doesNotMatch(written, /moral-trade-smart-query\.js/);
+  assert.equal(
+    windowObject.__MT_DISCOVER_INITIAL_URL__,
+    windowObject.location.href,
+  );
   assert.equal(windowObject.__MT_DISCOVER_PAYLOAD_VERSION__, manifest.version);
   assert.ok(
     requests.some((url) => url.pathname.endsWith("/1.txt") && url.searchParams.has("reload")),
