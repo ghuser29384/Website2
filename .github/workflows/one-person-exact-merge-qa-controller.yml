@@ -1,0 +1,336 @@
+name: One-person exact-merge QA controller
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: one-person-exact-merge-qa-controller
+  cancel-in-progress: false
+
+env:
+  MERGE_SHA: 7a2c3d29c28805fa32e7ba62798b8ebd4a7905ea
+  BASE_SHA: a4f7c5788cef909f96e27ee105432aaba7f5cac5
+  FEATURE_SHA: 0d2cafa8e7bf464c24e2614ded8722d6226ac1cf
+  FEATURE_BRANCH: feature/one-person-one-account-20260731
+  CONTROLLER_PATH: .github/workflows/one-person-exact-merge-qa-controller.yml
+  QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+
+jobs:
+  exact-merge-qa:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.issue.pull_request != null &&
+      github.event.issue.number == 379 &&
+      github.event.comment.body == '/run-one-person-exact-merge-qa-20260801'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      MORALTRADE_QA_DATABASE_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      ADMIN_EMAILS: ${{ secrets.QA_ADMIN_EMAILS }}
+      ONE_PERSON_ACCOUNT_PROVIDER_MODE: qa_mock
+      ONE_PERSON_ACCOUNT_PROVIDER_NAME: MoralTrade QA
+      ONE_PERSON_ACCOUNT_REGISTRATION_ENFORCEMENT_ENABLED: "true"
+      ONE_PERSON_ACCOUNT_PARTICIPATION_ENFORCEMENT_ENABLED: "true"
+      ONE_PERSON_ACCOUNT_MANUAL_LINKING_ENABLED: "true"
+      ONE_PERSON_ACCOUNT_QA_RUN_ID: exact-merge-${{ github.run_id }}-${{ github.run_attempt }}
+      ONE_PERSON_ACCOUNT_EXPECT_AUTH_HOOK: "false"
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out the exact PR synthetic merge
+        uses: actions/checkout@v4
+        with:
+          ref: 7a2c3d29c28805fa32e7ba62798b8ebd4a7905ea
+          fetch-depth: 0
+
+      - name: Verify exact merge parents, remote feature head, and 24-path boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$MERGE_SHA"
+          test "$(git rev-parse HEAD^1)" = "$BASE_SHA"
+          test "$(git rev-parse HEAD^2)" = "$FEATURE_SHA"
+          test "$(git ls-remote origin "refs/heads/$FEATURE_BRANCH" | awk '{print $1}')" = "$FEATURE_SHA"
+          test ! -e .github/one-person-bootstrap
+          test ! -e .github/workflows/materialize-one-person-account.yml
+          git diff --check "$BASE_SHA...$MERGE_SHA"
+          cat > /tmp/one-person-expected-paths.txt <<'EOF'
+          .env.example
+          .github/workflows/one-person-account-qa.yml
+          docs/one-person-one-account.md
+          package.json
+          scripts/test-one-person-concurrency.sh
+          src/app/account/identity/page.tsx
+          src/app/actions.ts
+          src/app/admin/identity/page.tsx
+          src/app/api/identity/provider/route.ts
+          src/app/api/identity/qa/complete/route.ts
+          src/app/auth/confirm/route.ts
+          src/app/identity/actions.ts
+          src/app/identity/identity.module.css
+          src/app/identity/page.tsx
+          src/app/identity/recovery/page.tsx
+          src/app/identity/status/page.tsx
+          src/app/signup/page.tsx
+          src/components/auth/auth-card.tsx
+          src/lib/identity/one-person-account.test.ts
+          src/lib/identity/one-person-account.ts
+          src/lib/identity/server.ts
+          supabase/migrations/20260731072000_one_person_one_account.sql
+          supabase/tests/one_person_one_account.sql
+          tests/one-person-account-authenticated.spec.ts
+          EOF
+          sed -i 's/^          //' /tmp/one-person-expected-paths.txt
+          sort -u /tmp/one-person-expected-paths.txt -o /tmp/one-person-expected-paths.txt
+          git diff --name-only "$BASE_SHA...$MERGE_SHA" | sort -u | tee one-person-changed-paths.txt
+          diff -u /tmp/one-person-expected-paths.txt one-person-changed-paths.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies with transient retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run focused one-person-account tests
+        shell: bash
+        run: set -o pipefail; npm run test:one-person-account 2>&1 | tee one-person-focused.txt
+
+      - name: Run complete repository tests
+        shell: bash
+        run: set -o pipefail; npm test 2>&1 | tee one-person-unit.txt
+
+      - name: Run TypeScript absolute gate
+        shell: bash
+        run: set -o pipefail; npx tsc --noEmit 2>&1 | tee one-person-typescript.txt
+
+      - name: Run ESLint absolute gate
+        shell: bash
+        run: set -o pipefail; npm run lint -- --quiet 2>&1 | tee one-person-eslint.txt
+
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        shell: bash
+        run: set -o pipefail; npm run build 2>&1 | tee one-person-build.txt
+
+      - name: Derive domain-separated QA-only identity secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_TEST_PASSWORD:-}" || { echo 'Missing QA_TEST_PASSWORD' >&2; exit 1; }
+          qa_secret="$(printf 'one-person-qa-api:%s' "$QA_TEST_PASSWORD" | sha256sum | awk '{print $1}')"
+          dedupe_key="$(printf 'one-person-qa-dedupe:%s' "$QA_TEST_PASSWORD" | sha256sum | awk '{print $1}')"
+          echo "::add-mask::$qa_secret"
+          echo "::add-mask::$dedupe_key"
+          echo "ONE_PERSON_ACCOUNT_QA_SECRET=$qa_secret" >> "$GITHUB_ENV"
+          echo "ONE_PERSON_ACCOUNT_DEDUPE_KEY=$dedupe_key" >> "$GITHUB_ENV"
+
+      - name: Validate isolated QA credentials and target
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in MORALTRADE_QA_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY ONE_PERSON_ACCOUNT_QA_SECRET ONE_PERSON_ACCOUNT_DEDUPE_KEY; do
+            test -n "${!name:-}" || { echo "Missing required QA secret: $name" >&2; exit 1; }
+          done
+          test "$NEXT_PUBLIC_SUPABASE_URL" = "https://$QA_PROJECT_REF.supabase.co"
+          [[ "$MORALTRADE_QA_DATABASE_URL" == *"$QA_PROJECT_REF"* ]] || { echo 'Database URL does not target isolated MoralTrade QA.' >&2; exit 1; }
+          [[ "$MORALTRADE_QA_DATABASE_URL" != *"jnpoxvalyjtdghnperyu"* ]] || { echo 'Production database URL detected; refusing to continue.' >&2; exit 1; }
+
+      - name: Install PostgreSQL, jq, and Chromium dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client jq
+
+      - name: Assert clean pre-migration QA state
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' | tee one-person-pre-migration.json
+          select jsonb_build_object(
+            'releaseGates', to_regclass('moral_trade_private.person_account_release_gates') is not null,
+            'personAccounts', to_regclass('moral_trade_private.person_accounts') is not null,
+            'beforeUserCreatedHook', to_regprocedure('public.one_person_before_user_created_hook(jsonb)') is not null
+          );
+          SQL
+          jq -e '.releaseGates == false and .personAccounts == false and .beforeUserCreatedHook == false' one-person-pre-migration.json >/dev/null
+
+      - name: Apply additive migration atomically to isolated QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration=supabase/migrations/20260731072000_one_person_one_account.sql
+          sha256sum "$migration" | tee one-person-migration.sha256
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration" 2>&1 | tee one-person-migration.txt
+
+      - name: Verify exact schema inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' | tee one-person-schema-inventory.json
+          select jsonb_build_object(
+            'releaseGates', to_regclass('moral_trade_private.person_account_release_gates') is not null,
+            'personAccounts', to_regclass('moral_trade_private.person_accounts') is not null,
+            'identitySubjects', to_regclass('moral_trade_private.identity_subjects') is not null,
+            'registrationGrants', to_regclass('moral_trade_private.person_registration_grants') is not null,
+            'beforeUserCreatedHook', to_regprocedure('public.one_person_before_user_created_hook(jsonb)') is not null,
+            'customAccessTokenHook', to_regprocedure('public.one_person_custom_access_token_hook(jsonb)') is not null,
+            'cleanupFixture', to_regprocedure('public.cleanup_one_person_qa_fixture_v1(uuid,text)') is not null,
+            'cleanupSession', to_regprocedure('public.cleanup_one_person_qa_session_v1(uuid,text)') is not null
+          );
+          SQL
+          jq -e 'to_entries | all(.value == true)' one-person-schema-inventory.json >/dev/null
+
+      - name: Enable QA-only release gates for the test window
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL'
+          select public.configure_person_account_release_v1('qa_mock', true, true, true, null);
+          SQL
+
+      - name: Run SQL regression suite
+        shell: bash
+        run: set -o pipefail; psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/one_person_one_account.sql 2>&1 | tee one-person-sql.txt
+
+      - name: Run concurrent duplicate-registration test
+        shell: bash
+        run: set -o pipefail; scripts/test-one-person-concurrency.sh 2>&1 | tee one-person-concurrency.txt
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run authenticated desktop and mobile tests
+        shell: bash
+        run: set -o pipefail; npx playwright test tests/one-person-account-authenticated.spec.ts --reporter=line 2>&1 | tee one-person-browser.txt
+
+      - name: Prove every one-person synthetic residue count is zero
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' | tee one-person-residue.json
+          select jsonb_build_object(
+            'authUsers', (
+              select count(*) from auth.users
+              where lower(coalesce(raw_user_meta_data ->> 'qa_fixture', 'false')) = 'true'
+            ),
+            'qaSessions', (
+              select count(*) from moral_trade_private.preaccount_verification_sessions
+              where provider_mode = 'qa_mock'
+            ),
+            'qaSubjects', (
+              select count(*) from moral_trade_private.identity_subjects
+              where latest_provider_name = 'MoralTrade QA'
+            ),
+            'qaGrants', (
+              select count(*)
+              from moral_trade_private.person_registration_grants g
+              join moral_trade_private.preaccount_verification_sessions s on s.id = g.verification_session_id
+              where s.provider_mode = 'qa_mock'
+            ),
+            'qaVerificationEvents', (
+              select count(*)
+              from moral_trade_private.identity_verification_events e
+              join moral_trade_private.preaccount_verification_sessions s on s.id = e.verification_session_id
+              where s.provider_mode = 'qa_mock'
+            ),
+            'qaDedupeKeys', (
+              select count(*)
+              from moral_trade_private.identity_dedupe_keys k
+              join moral_trade_private.identity_subjects s on s.id = k.identity_subject_id
+              where s.latest_provider_name = 'MoralTrade QA'
+            ),
+            'qaDuplicateCases', (
+              select count(*)
+              from moral_trade_private.identity_duplicate_cases d
+              left join moral_trade_private.preaccount_verification_sessions s on s.id = d.verification_session_id
+              where s.provider_mode = 'qa_mock' or d.reason_code like 'qa_%'
+            )
+          );
+          SQL
+          jq -e 'to_entries | all(.value == 0)' one-person-residue.json >/dev/null
+
+      - name: Restore QA release gates to disabled
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${MORALTRADE_QA_DATABASE_URL:-}" ]]; then
+            psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' || true
+          select public.configure_person_account_release_v1('qa_mock', true, false, false, null);
+          SQL
+          fi
+
+      - name: Upload exact-merge evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-person-exact-merge-qa-${{ github.run_id }}
+          path: |
+            one-person-changed-paths.txt
+            one-person-focused.txt
+            one-person-unit.txt
+            one-person-typescript.txt
+            one-person-eslint.txt
+            one-person-build.txt
+            one-person-pre-migration.json
+            one-person-migration.sha256
+            one-person-migration.txt
+            one-person-schema-inventory.json
+            one-person-sql.txt
+            one-person-concurrency.txt
+            one-person-browser.txt
+            one-person-residue.json
+            test-results/**
+            .next/build-manifest.json
+            .next/routes-manifest.json
+          if-no-files-found: warn
+
+      - name: Report success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Exact synthetic merge \`$MERGE_SHA\` passed the full 24-path repository gates and isolated-QA migration, SQL, concurrency, authenticated desktop/mobile, cleanup, and residue gates in run $GITHUB_RUN_ID. QA release gates were restored disabled. PR remains draft pending Auth-hook configuration and hook-enabled rerun."
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Exact synthetic merge \`$MERGE_SHA\` failed one-person release validation in run $GITHUB_RUN_ID. QA release gates were restored disabled where the function existed; inspect the exact failed step and evidence artifact before repairing the same draft branch."
+
+      - name: Remove temporary controller
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$sha" ]]; then
+            jq -n --arg message 'Remove temporary one-person exact-merge QA controller' --arg sha "$sha" --arg branch main '{message:$message,sha:$sha,branch:$branch}' | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
