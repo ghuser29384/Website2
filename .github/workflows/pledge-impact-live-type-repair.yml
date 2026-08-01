@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/pledge-impact-live-foundation-20260801
+  workflow_dispatch:
 
 permissions:
   contents: write
