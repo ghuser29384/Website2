@@ -1,0 +1,128 @@
+name: One-person registration-grant alias repair v2
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: one-person-registration-grant-alias-repair
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/one-person-one-account-20260731
+  EXPECTED_HEAD: 07a02f006c9c05e400807aa3b77fd1574caa5abf
+  CONTROLLER_PATH: .github/workflows/one-person-registration-grant-alias-repair-v2.yml
+
+jobs:
+  repair:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.issue.pull_request != null &&
+      github.event.issue.number == 379 &&
+      github.event.comment.body == '/repair-one-person-registration-grant-alias-20260801-v2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+    steps:
+      - name: Check out exact draft branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/one-person-one-account-20260731
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard exact branch head and patch reserved SQL aliases
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          path = Path('supabase/migrations/20260731072000_one_person_one_account.sql')
+          text = path.read_text()
+          alias = 'from moral_trade_private.person_registration_grants grant'
+          if text.count(alias) != 6:
+              raise SystemExit(f'expected 6 reserved grant aliases, found {text.count(alias)}')
+          if len(re.findall(r'\bgrant\.', text)) != 9:
+              raise SystemExit(f'expected 9 reserved grant references, found {len(re.findall(r"\bgrant\.", text))}')
+          text = text.replace(alias, 'from moral_trade_private.person_registration_grants registration_grant')
+          text = re.sub(r'\bgrant\.', 'registration_grant.', text)
+          if re.search(r'person_registration_grants\s+grant\b', text) or re.search(r'\bgrant\.', text):
+              raise SystemExit('reserved grant alias remains after repair')
+          path.write_text(text)
+          PY
+          git diff --check
+
+      - name: Compile the entire migration in rollback-only QA transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}" || { echo 'Missing QA_SUPABASE_DB_URL' >&2; exit 1; }
+          [[ "$QA_SUPABASE_DB_URL" == *"$QA_PROJECT_REF"* ]] || { echo 'Wrong QA target' >&2; exit 1; }
+          [[ "$QA_SUPABASE_DB_URL" != *"jnpoxvalyjtdghnperyu"* ]] || { echo 'Production target refused' >&2; exit 1; }
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y postgresql-client >/dev/null
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('supabase/migrations/20260731072000_one_person_one_account.sql').read_text()
+          stripped = source.rstrip()
+          if not stripped.endswith('commit;'):
+              raise SystemExit('migration does not end in commit;')
+          Path('/tmp/one-person-compile.sql').write_text(stripped[:-len('commit;')] + 'rollback;\n')
+          PY
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/one-person-compile.sql > /tmp/one-person-compile.log
+          tail -n 20 /tmp/one-person-compile.log
+
+      - name: Commit and push repair
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add supabase/migrations/20260731072000_one_person_one_account.sql
+          git diff --cached --check
+          git commit -m 'Fix reserved registration-grant SQL aliases'
+          repaired_sha="$(git rev-parse HEAD)"
+          git push origin "HEAD:$TARGET_BRANCH"
+          echo "repaired_sha=$repaired_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Report success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Replaced the reserved SQL alias in all six registration-grant queries, compiled the complete migration against isolated QA in a rollback-only transaction, and pushed exact repaired candidate \`${{ steps.publish.outputs.repaired_sha }}\`. PR remains draft."
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "The registration-grant alias repair v2 failed in run $GITHUB_RUN_ID. No branch push was accepted unless the exact-head, replacement-count, rollback-only compilation, and remote-head guards all passed."
+
+      - name: Remove temporary controller
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$sha" ]]; then
+            jq -n --arg message 'Remove temporary registration-grant alias repair v2' --arg sha "$sha" --arg branch main '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
