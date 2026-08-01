@@ -136,6 +136,12 @@ jobs:
           where profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid
             and reason_code = 'direct_donation_upgrade_default';
 
+          delete from moral_trade_private.person_account_aliases
+          where alias_profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid
+             or canonical_profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid;
+          delete from moral_trade_private.person_accounts
+          where profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid;
+
           delete from auth.users
           where id = 'd1000000-0000-4000-8000-000000000001'::uuid;
 
@@ -305,6 +311,11 @@ jobs:
           delete from public.credibility_restrictions
           where profile_id='d1000000-0000-4000-8000-000000000001'::uuid
             and reason_code='direct_donation_upgrade_default';
+          delete from moral_trade_private.person_account_aliases
+          where alias_profile_id='d1000000-0000-4000-8000-000000000001'::uuid
+             or canonical_profile_id='d1000000-0000-4000-8000-000000000001'::uuid;
+          delete from moral_trade_private.person_accounts
+          where profile_id='d1000000-0000-4000-8000-000000000001'::uuid;
           delete from auth.users where id='d1000000-0000-4000-8000-000000000001'::uuid;
           commit;
           SQL
@@ -317,6 +328,8 @@ jobs:
           select jsonb_build_object(
             'authUsers', (select count(*) from auth.users where id='d1000000-0000-4000-8000-000000000001'),
             'profiles', (select count(*) from public.profiles where id='d1000000-0000-4000-8000-000000000001'),
+            'personAccounts', (select count(*) from moral_trade_private.person_accounts where profile_id='d1000000-0000-4000-8000-000000000001'),
+            'personAccountAliases', (select count(*) from moral_trade_private.person_account_aliases where alias_profile_id='d1000000-0000-4000-8000-000000000001' or canonical_profile_id='d1000000-0000-4000-8000-000000000001'),
             'offers', (select count(*) from public.direct_donation_upgrade_offers where creator_profile_id='d1000000-0000-4000-8000-000000000001'),
             'candidates', (select count(*) from public.direct_donation_upgrade_candidates where profile_id='d1000000-0000-4000-8000-000000000001'),
             'obligations', (select count(*) from public.direct_donation_upgrade_obligations where participant_profile_id='d1000000-0000-4000-8000-000000000001'),
