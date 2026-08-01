@@ -61,8 +61,11 @@ jobs:
 
           workflow = Path('.github/workflows/direct-donation-upgrade-rendered-qa.yml')
           flow = workflow.read_text()
+          service_env = '      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}\n'
+          if flow.count(service_env) != 1:
+              raise SystemExit('Could not find the rendered-QA service-role environment entry.')
           flow = flow.replace(
-              '      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}\n',
+              service_env,
               '      DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"\n',
           )
           validation_anchor = '''          test -n "${QA_SUPABASE_DB_URL:-}"
@@ -81,12 +84,22 @@ jobs:
           '''
           if flow.count(service_probe) != 1:
               raise SystemExit('Could not find the exact QA service-role probe.')
-          flow = flow.replace(service_probe, '')
-          workflow.write_text(flow)
+          workflow.write_text(flow.replace(service_probe, ''))
 
           contract = Path('src/lib/direct-donation-upgrade-source-contract.test.ts')
           contract_text = contract.read_text()
-          test_anchor = '''test("the direct rail stays non-custodial and separate from Stripe", () => {
+          import_anchor = '''const vercelConfig = readFileSync("scripts/vercel-project-config.mjs", "utf8");
+          '''
+          import_replacement = import_anchor + '''const renderedQaWorkflow = readFileSync(
+            ".github/workflows/direct-donation-upgrade-rendered-qa.yml",
+            "utf8",
+          );
+          '''
+          if contract_text.count(import_anchor) != 1:
+              raise SystemExit('Could not find the Vercel config source declaration.')
+          contract_text = contract_text.replace(import_anchor, import_replacement)
+
+          test_anchor = '''test("the direct Donation Upgrade rail never imports or invokes Stripe", () => {
           '''
           insertion = '''test("rendered QA can inspect the commitment form without loading service-role data", () => {
             assert.match(
@@ -104,17 +117,6 @@ jobs:
           ''' + test_anchor
           if contract_text.count(test_anchor) != 1:
               raise SystemExit('Could not find the Direct Donation Upgrade source-contract insertion point.')
-          if 'const renderedQaWorkflow' not in contract_text:
-              import_anchor = '''const qaSql = readFileSync("supabase/tests/direct_verified_donation_upgrade.sql", "utf8");
-          '''
-              import_replacement = import_anchor + '''const renderedQaWorkflow = readFileSync(
-            ".github/workflows/direct-donation-upgrade-rendered-qa.yml",
-            "utf8",
-          );
-          '''
-              if contract_text.count(import_anchor) != 1:
-                  raise SystemExit('Could not find the QA SQL source declaration.')
-              contract_text = contract_text.replace(import_anchor, import_replacement)
           contract.write_text(contract_text.replace(test_anchor, insertion))
           PY
 
