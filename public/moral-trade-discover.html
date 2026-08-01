@@ -24,6 +24,8 @@
     (() => {
       "use strict";
 
+      window.__MT_DISCOVER_INITIAL_URL__ = window.location.href;
+
       const MANIFEST_PATH = "/discover/payload/manifest.json";
       const MAX_PAYLOAD_PARTS = 32;
       const VERSION_PATTERN = /^[a-f0-9]{40}$/;
@@ -39,7 +41,8 @@
         "/moral-trade-brand.js",
         "/moral-trade-requester-identity.js",
         "/moral-trade-input-assist.js",
-        "/moral-trade-smart-query.js",
+        "/moral-trade-discover-search-preflight.js",
+        "/moral-trade-discover-search.js",
       ];
 
       const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
