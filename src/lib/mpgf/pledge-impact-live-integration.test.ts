@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const root = new URL("../../", import.meta.url);
+const root = new URL("../../../", import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), "utf8");
 
 const route = read("src/app/api/mpgf/pledge-impact/route.ts");
@@ -38,7 +38,10 @@ test("live pool state comes from approved MPGF proposals and linked pledges", ()
     assert.match(migration, new RegExp(required.replaceAll(".", "\\.")));
   }
   assert.doesNotMatch(migration, /mpgf_public_goods_campaigns/);
-  assert.doesNotMatch(migration, /insert into public\.mpgf_pledge_impact_pool_map[\s\S]*values\s*\(\s*'pool-/i);
+  assert.doesNotMatch(
+    migration,
+    /insert into public\.mpgf_pledge_impact_pool_map[\s\S]*values\s*\(\s*'pool-/i,
+  );
 });
 
 test("forecast publication derives and hashes state server-side", () => {
