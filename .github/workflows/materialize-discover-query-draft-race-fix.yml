@@ -1,0 +1,117 @@
+name: Materialize Discover query-draft race fix
+
+on:
+  push:
+    branches:
+      - fix/discover-query-draft-race-20260801
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-discover-query-draft-race-fix
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: github.ref == 'refs/heads/fix/discover-query-draft-race-20260801'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out exact repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/discover-query-draft-race-20260801
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Preserve an explicitly typed query across delayed source rerenders
+        shell: bash
+        run: |
+          set -euo pipefail
+          script='public/moral-trade-discover-search.js'
+          test_file='tests/discover-preflight-filter.spec.ts'
+          workflow='.github/workflows/materialize-discover-query-draft-race-fix.yml'
+
+          test "$(git hash-object "$script")" = '0b79d433440b074114054b0dc73d5bc9b920a5cf'
+          test "$(git hash-object "$test_file")" = '40d22cbb4329193425cd19c0fb52a94bb5f1f8ff'
+
+          python - <<'PY'
+          from pathlib import Path
+
+          script = Path('public/moral-trade-discover-search.js')
+          text = script.read_text()
+
+          replacements = [
+              (
+                  '    query: "",\n    normalizedQuery: "",\n    domain: "offers",',
+                  '    query: "",\n    normalizedQuery: "",\n    inputDraft: null,\n    domain: "offers",',
+              ),
+              (
+                  '  function hydrateFromUrl() {\n    Object.assign(state, readUrlState());\n  }',
+                  '  function hydrateFromUrl() {\n    const restored = readUrlState();\n    Object.assign(state, restored);\n    state.inputDraft = restored.query;\n  }',
+              ),
+              (
+                  '    const input = getQueryInput(form);\n    if (\n      input &&\n      state.query &&\n      document.activeElement !== input &&\n      input.value !== state.query\n    ) {\n      input.value = state.query;\n    }',
+                  '    const input = getQueryInput(form);\n    const desiredQuery =\n      state.inputDraft !== null ? state.inputDraft : state.query;\n    if (input && input.value !== desiredQuery) {\n      input.value = desiredQuery;\n    }',
+              ),
+              (
+                  '    const currentQuery = (getQueryInput()?.value || state.query || "").trim();',
+                  '    const currentInputValue = getQueryInput()?.value;\n    const currentQuery = String(\n      state.inputDraft !== null\n        ? state.inputDraft\n        : currentInputValue ?? state.query ?? "",\n    ).trim();',
+              ),
+              (
+                  '    state.query = currentQuery;\n    state.error = null;',
+                  '    state.query = currentQuery;\n    state.inputDraft = currentQuery;\n    state.error = null;',
+              ),
+              (
+                  '    state.query = "";\n    state.normalizedQuery = "";',
+                  '    state.query = "";\n    state.inputDraft = "";\n    state.normalizedQuery = "";',
+              ),
+              (
+                  '      if (target === getQueryInput()) {\n        state.error = null;',
+                  '      if (target === getQueryInput()) {\n        state.inputDraft = target.value;\n        state.error = null;',
+              ),
+              (
+                  '    state.response = null;\n    state.error = null;\n    state.clarification = null;\n    cancelCurrentSearch();',
+                  '    state.inputDraft = state.query;\n    state.response = null;\n    state.error = null;\n    state.clarification = null;\n    cancelCurrentSearch();',
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one script replacement, found {count}: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+
+          script.write_text(text)
+
+          test_file = Path('tests/discover-preflight-filter.spec.ts')
+          test_text = test_file.read_text()
+          old = '''  await page.locator("#command-input").fill("animal welfare opportunities");
+          await page.getByRole("button", { name: "Search", exact: true }).click();
+          '''
+          new = '''  await page.locator("#command-input").fill("animal welfare opportunities");
+          // Let the source renderer's delayed range/text-filter updates complete. They
+          // replace the form DOM, so the live controller must restore the user's draft.
+          await page.waitForTimeout(400);
+          await expect(page.locator("#command-input")).toHaveValue(
+            "animal welfare opportunities",
+          );
+          await page.getByRole("button", { name: "Search", exact: true }).click();
+          '''
+          count = test_text.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected one test insertion point, found {count}')
+          test_file.write_text(test_text.replace(old, new, 1))
+          PY
+
+          node --check "$script"
+          git diff --check
+          rm "$workflow"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$script" "$test_file" "$workflow"
+          git commit -m 'Preserve typed Discover queries across filter rerenders'
+          git push origin HEAD:fix/discover-query-draft-race-20260801
