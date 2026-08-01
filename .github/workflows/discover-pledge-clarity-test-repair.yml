@@ -1,0 +1,94 @@
+name: Repair Discover pledge clarity mobile test
+
+on:
+  push:
+    branches:
+      - fix/discover-pledge-clarity-20260801
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: discover-pledge-clarity-test-repair
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/discover-pledge-clarity-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Align the materializer with the current mobile sheet state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "fix/discover-pledge-clarity-20260801"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/discover-pledge-clarity-materialize.yml')
+          text = path.read_text()
+
+          old_mobile = '''            const inspectorTrigger = page.getByRole("button", { name: "Open selection inspector" });
+            await expect(inspectorTrigger).toBeVisible();
+            await inspectorTrigger.click();
+            await expect(page.getByRole("heading", { name: "Preview your conditional pledge" })).toBeVisible();
+            await setWildResearchPledge(page, 35);
+            await expect(page.getByText("0.43% of current gap", { exact: true }).first()).toBeVisible();
+
+            const sheet = page.locator(".inspector.mobile-sheet");
+            await expect(sheet).toBeVisible();'''
+          new_mobile = '''            const sheet = page.locator(".inspector.mobile-sheet");
+            await expect(sheet).toBeVisible();
+            await expect(page.getByRole("heading", { name: "Preview your conditional pledge" })).toBeVisible();
+            await setWildResearchPledge(page, 35);
+            await expect(page.getByText("0.43% of current gap", { exact: true }).first()).toBeVisible();'''
+
+          if text.count(old_mobile) != 1:
+              raise SystemExit(f'expected one mobile-test block, found {text.count(old_mobile)}')
+          text = text.replace(old_mobile, new_mobile)
+
+          anchor = '''          replace_once(
+              "Select any pool to inspect pivotality, failure conditions, authorization expiry, and exact proof.",
+              "Select any pool to inspect its current gap, failure conditions, authorization expiry, and exact proof.",
+              "radar instruction",
+          )'''
+          addition = anchor + '''
+          replace_once(
+              '<div><h3>Pivotality</h3><p>Your pledge divided by the current gap. It shows how much of the known gap you close, not how likely other contributors are to act.</p></div>',
+              '<div><h3>Share of the current gap</h3><p>Your proposed pledge divided by the current gap. It shows how much of the known gap you close, not how likely other contributors are to act.</p></div>',
+              "threshold methodology label",
+          )'''
+          if text.count(anchor) != 1:
+              raise SystemExit(f'expected one methodology insertion anchor, found {text.count(anchor)}')
+          text = text.replace(anchor, addition)
+
+          old_forbidden = '''              "How likely am I to be pivotal?",
+              "inspect pivotality",'''
+          new_forbidden = '''              "How likely am I to be pivotal?",
+              "<h3>Pivotality</h3>",
+              "inspect pivotality",'''
+          if text.count(old_forbidden) != 2:
+              raise SystemExit(f'expected two forbidden-copy lists, found {text.count(old_forbidden)}')
+          text = text.replace(old_forbidden, new_forbidden)
+
+          path.write_text(text)
+          PY
+
+      - name: Publish repair and remove this one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/discover-pledge-clarity-materialize.yml
+          git rm .github/workflows/discover-pledge-clarity-test-repair.yml
+          git commit -m "Align Discover pledge clarity mobile QA"
+          git push origin HEAD:fix/discover-pledge-clarity-20260801
