@@ -1,0 +1,274 @@
+.hero {
+  background:
+    radial-gradient(circle at 72% 38%, rgba(54, 88, 245, 0.08), transparent 34rem),
+    linear-gradient(150deg, #f8f7f3 0%, #eeece6 100%);
+  border-bottom: 1px solid rgba(23, 25, 27, 0.08);
+}
+
+.heroInner {
+  align-items: center;
+  display: grid;
+  gap: clamp(2.5rem, 6vw, 7rem);
+  grid-template-columns: minmax(0, 0.88fr) minmax(34rem, 1.12fr);
+  margin: 0 auto;
+  max-width: 1440px;
+  padding: clamp(4.5rem, 8vw, 8rem) clamp(1.5rem, 4vw, 4.5rem) clamp(5rem, 8vw, 8rem);
+}
+
+.heroCopy {
+  max-width: 42rem;
+}
+
+.heroCopy h1 {
+  font-family: var(--font-display, "CMU Serif", Georgia, serif);
+  font-size: clamp(3.15rem, 5.4vw, 6.15rem);
+  font-weight: 400;
+  letter-spacing: -0.045em;
+  line-height: 0.95;
+  margin: 0.7rem 0 1.5rem;
+}
+
+.heroText {
+  color: #555854;
+  font-size: clamp(1.05rem, 1.45vw, 1.35rem);
+  line-height: 1.62;
+  max-width: 39rem;
+}
+
+.diagramShell {
+  background: #0b0f13;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.6rem;
+  box-shadow: 0 2.4rem 6rem rgba(13, 18, 29, 0.2);
+  min-width: 0;
+  overflow: hidden;
+  padding: clamp(1rem, 2.5vw, 2rem);
+}
+
+.diagram {
+  display: block;
+  height: auto;
+  overflow: visible;
+  width: 100%;
+}
+
+.plannedTrack,
+.newTrack,
+.upgradedTrack,
+.fallbackTrack {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.plannedTrack {
+  stroke: #6a6f74;
+  stroke-width: 7;
+}
+
+.newTrack,
+.upgradedTrack {
+  stroke: #4f6dff;
+  stroke-width: 8;
+}
+
+.fallbackTrack {
+  opacity: 0.48;
+  stroke: #888c91;
+  stroke-dasharray: 10 15;
+  stroke-width: 5;
+}
+
+.plannedTile {
+  fill: #17191b;
+  stroke: rgba(255, 255, 255, 0.15);
+  stroke-width: 1.5;
+}
+
+.tileAmount,
+.outputAmount,
+.fallbackAmount {
+  fill: #f5f2e9;
+  font-family: var(--font-display, "CMU Serif", Georgia, serif);
+  font-size: 30px;
+}
+
+.tileCaption,
+.newCaption {
+  fill: #a7aaad;
+  font-family: var(--font-sans, Inter, Arial, sans-serif);
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.newCaption {
+  fill: #8ba0ff;
+}
+
+.outputBracket {
+  fill: none;
+  stroke: #7890ff;
+  stroke-width: 2;
+}
+
+.outputAmount {
+  font-size: 44px;
+}
+
+.outputLabel,
+.fallbackLabel {
+  fill: #d0cec7;
+  font-family: var(--font-display, "CMU Serif", Georgia, serif);
+  font-size: 18px;
+}
+
+.fallbackAmount {
+  font-size: 24px;
+}
+
+.fallbackLabel {
+  fill: #a2a4a2;
+  font-size: 17px;
+}
+
+.outcomeGrid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 2.25rem;
+}
+
+.outcomeCard {
+  background: #f3f1eb;
+  border: 1px solid rgba(23, 25, 27, 0.1);
+  border-radius: 1.25rem;
+  padding: clamp(1.5rem, 3vw, 2.5rem);
+}
+
+.outcomeCardActive {
+  background: linear-gradient(145deg, #edf0ff, #f8f8f5);
+  border-color: rgba(54, 88, 245, 0.24);
+}
+
+.outcomeEquation {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-family: var(--font-display, "CMU Serif", Georgia, serif);
+  font-size: clamp(1.6rem, 3vw, 2.6rem);
+  gap: 0.85rem;
+  margin: 1.3rem 0;
+}
+
+.blackToken,
+.blueToken,
+.bluePair {
+  align-items: center;
+  border-radius: 0.55rem;
+  color: white;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 3.5rem;
+  min-width: 5rem;
+  padding: 0.35rem 0.9rem;
+}
+
+.blackToken {
+  background: #17191b;
+}
+
+.blueToken,
+.bluePair {
+  background: #3658f5;
+}
+
+.bluePair {
+  min-width: 6.4rem;
+}
+
+.verificationGrid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 2.25rem;
+}
+
+.creditGrid {
+  align-items: start;
+  display: grid;
+  gap: clamp(2rem, 6vw, 6rem);
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.55fr);
+}
+
+.notClaim {
+  background: #11151a;
+  border-radius: 1.25rem;
+  color: #ece9df;
+  display: grid;
+  gap: 0.8rem;
+  padding: clamp(1.75rem, 3vw, 2.7rem);
+}
+
+.notClaim strong {
+  font-family: var(--font-display, "CMU Serif", Georgia, serif);
+  font-size: clamp(1.8rem, 3vw, 2.7rem);
+  font-weight: 400;
+}
+
+.notClaim span {
+  color: #b8bab7;
+  line-height: 1.55;
+}
+
+.finalCta {
+  align-items: center;
+  display: flex;
+  gap: 2rem;
+  justify-content: space-between;
+}
+
+.finalCta h2 {
+  margin-bottom: 0;
+}
+
+@media (max-width: 1050px) {
+  .heroInner {
+    grid-template-columns: 1fr;
+  }
+
+  .diagramShell {
+    max-width: 52rem;
+  }
+
+  .verificationGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .heroInner {
+    padding-top: 3.25rem;
+  }
+
+  .heroCopy h1 {
+    font-size: clamp(3rem, 13vw, 4.6rem);
+  }
+
+  .diagramShell {
+    border-radius: 1rem;
+    margin-inline: -0.6rem;
+    padding: 0.45rem;
+  }
+
+  .outcomeGrid,
+  .verificationGrid,
+  .creditGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .finalCta {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
