@@ -1,0 +1,120 @@
+name: Apply direct Co-Act and Co-Fund listener repair
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/co-act-co-fund-direct-listener-repair.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.event.pull_request.number == 420
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v2-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Update state synchronously and defer only Shadow DOM replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          client = Path('src/lib/create-interface/group-contribution-client.ts')
+          text = client.read_text()
+
+          replacements = [
+              (
+                  'let scanQueued = false;\nlet submitGuardInstalled = false;',
+                  'let scanQueued = false;\nlet submitGuardInstalled = false;\nconst pendingRenders = new Set<string>();',
+                  'render-state declarations',
+              ),
+              (
+                  '  mounted.clear();\n  activeWindow = targetWindow;',
+                  '  mounted.clear();\n  pendingRenders.clear();\n  activeWindow = targetWindow;',
+                  'document activation reset',
+              ),
+              (
+                  '''    button.addEventListener("click", () => {
+      const mode = button.dataset.mode as GroupDraftMode;
+      entry.state.mode = mode;
+      entry.state.primaryText =
+        readPrimaryText(entry.card, entry.underlying) || entry.state.primaryText;
+      renderMountedOption(entry);
+      writeProposalPayload();
+    });''',
+                  '''    button.addEventListener("click", () => {
+      const mode = button.dataset.mode as GroupDraftMode;
+      entry.state.mode = mode;
+      entry.state.primaryText =
+        readPrimaryText(entry.card, entry.underlying) || entry.state.primaryText;
+      entry.state = normalizeDraft(entry.state);
+      writeProposalPayload();
+      scheduleMountedOptionRender(entry);
+    });''',
+                  'mode listener',
+              ),
+              (
+                  '''        if (rerender) renderMountedOption(entry);
+        else updateValidationStatus(entry);''',
+                  '''        if (rerender) scheduleMountedOptionRender(entry);
+        else updateValidationStatus(entry);''',
+                  'state-changing control rerender',
+              ),
+          ]
+
+          for old, new, label in replacements:
+              if old not in text:
+                  raise SystemExit(f'Could not locate {label}; refusing a partial repair')
+              text = text.replace(old, new, 1)
+
+          anchor = '''function updateStateFromControl(
+  state: GroupContributionDraftState,'''
+          helper = '''function scheduleMountedOptionRender(entry: MountedOption): void {
+  if (pendingRenders.has(entry.key)) return;
+  pendingRenders.add(entry.key);
+  const targetWindow = createWindow();
+  targetWindow.setTimeout(() => {
+    pendingRenders.delete(entry.key);
+    if (mounted.get(entry.key) !== entry || !entry.host.isConnected) return;
+    renderMountedOption(entry);
+  }, 0);
+}
+
+function updateStateFromControl(
+  state: GroupContributionDraftState,'''
+          if anchor not in text:
+              raise SystemExit('Could not locate state-control insertion point')
+          text = text.replace(anchor, helper, 1)
+          client.write_text(text)
+
+          Path('src/instrumentation-client.ts').write_text(
+              'import { startGroupContributionEnhancement } from "./lib/create-interface/group-contribution-client";\n\n'
+              'startGroupContributionEnhancement();\n'
+          )
+          PY
+
+          rm -f \
+            src/lib/create-interface/group-contribution-interaction-stability.ts \
+            src/lib/create-interface/group-contribution-interaction-stability.test.ts \
+            .github/workflows/co-act-co-fund-source-export.yml
+          git rm .github/workflows/co-act-co-fund-direct-listener-repair.yml
+          git diff --check
+
+      - name: Commit clean product repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Defer Co-Act and Co-Fund Shadow DOM replacement'
+          git push origin HEAD:feature/co-act-co-fund-create-v2-20260801
