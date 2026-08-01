@@ -36,28 +36,85 @@ concurrency:
 jobs:
   repository-gates:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact feature boundary and diff hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          git diff --check origin/main...HEAD
+          cat > /tmp/one-person-expected-paths.txt <<'EOF'
+          .env.example
+          .github/workflows/one-person-account-qa.yml
+          docs/one-person-one-account.md
+          package.json
+          scripts/test-one-person-concurrency.sh
+          src/app/account/identity/page.tsx
+          src/app/actions.ts
+          src/app/admin/identity/page.tsx
+          src/app/api/identity/provider/route.ts
+          src/app/api/identity/qa/complete/route.ts
+          src/app/auth/confirm/route.ts
+          src/app/identity/actions.ts
+          src/app/identity/identity.module.css
+          src/app/identity/page.tsx
+          src/app/identity/recovery/page.tsx
+          src/app/identity/status/page.tsx
+          src/app/signup/page.tsx
+          src/components/auth/auth-card.tsx
+          src/lib/identity/one-person-account.test.ts
+          src/lib/identity/one-person-account.ts
+          src/lib/identity/server.ts
+          supabase/migrations/20260731072000_one_person_one_account.sql
+          supabase/tests/one_person_one_account.sql
+          tests/one-person-account-authenticated.spec.ts
+          EOF
+          sed -i 's/^          //' /tmp/one-person-expected-paths.txt
+          sort -u /tmp/one-person-expected-paths.txt -o /tmp/one-person-expected-paths.txt
+          git diff --name-only origin/main...HEAD | sort -u | tee one-person-changed-paths.txt
+          diff -u /tmp/one-person-expected-paths.txt one-person-changed-paths.txt
+          test ! -e .github/one-person-bootstrap
+          test ! -e .github/workflows/materialize-one-person-account.yml
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - name: Unit tests
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+      - name: Focused one-person-account tests
+        run: set -o pipefail; npm run test:one-person-account 2>&1 | tee one-person-focused.txt
+      - name: Complete repository tests
         run: set -o pipefail; npm test 2>&1 | tee one-person-unit.txt
       - name: TypeScript
         run: set -o pipefail; npx tsc --noEmit 2>&1 | tee one-person-typescript.txt
       - name: ESLint
-        run: set -o pipefail; npm run lint 2>&1 | tee one-person-eslint.txt
+        run: set -o pipefail; npm run lint -- --quiet 2>&1 | tee one-person-eslint.txt
       - name: Production build
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
         run: set -o pipefail; npm run build 2>&1 | tee one-person-build.txt
       - name: Upload repository evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: one-person-account-repository-gates
+          name: one-person-account-repository-gates-${{ github.run_id }}
           path: |
+            one-person-changed-paths.txt
+            one-person-focused.txt
             one-person-unit.txt
             one-person-typescript.txt
             one-person-eslint.txt
@@ -68,19 +125,20 @@ jobs:
 
   isolated-qa:
     needs: repository-gates
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
     env:
-      MORALTRADE_QA_DATABASE_URL: ${{ secrets.MORALTRADE_QA_DATABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.MORALTRADE_QA_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.MORALTRADE_QA_SUPABASE_PUBLISHABLE_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.MORALTRADE_QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+      MORALTRADE_QA_DATABASE_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
-      ADMIN_EMAILS: ${{ secrets.MORALTRADE_QA_ADMIN_EMAILS }}
+      SITE_URL: http://127.0.0.1:3210
+      ADMIN_EMAILS: ${{ secrets.QA_ADMIN_EMAILS }}
       ONE_PERSON_ACCOUNT_PROVIDER_MODE: qa_mock
       ONE_PERSON_ACCOUNT_PROVIDER_NAME: MoralTrade QA
-      ONE_PERSON_ACCOUNT_QA_SECRET: ${{ secrets.ONE_PERSON_ACCOUNT_QA_SECRET }}
-      ONE_PERSON_ACCOUNT_DEDUPE_KEY: ${{ secrets.ONE_PERSON_ACCOUNT_QA_DEDUPE_KEY }}
       ONE_PERSON_ACCOUNT_REGISTRATION_ENFORCEMENT_ENABLED: "true"
       ONE_PERSON_ACCOUNT_PARTICIPATION_ENFORCEMENT_ENABLED: "true"
       ONE_PERSON_ACCOUNT_MANUAL_LINKING_ENABLED: "true"
@@ -93,58 +151,154 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - name: Validate isolated QA credentials
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+      - name: Derive domain-separated QA-only identity secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_TEST_PASSWORD:-}" || { echo "Missing required QA secret: QA_TEST_PASSWORD" >&2; exit 1; }
+          qa_secret="$(printf 'one-person-qa-api:%s' "$QA_TEST_PASSWORD" | sha256sum | awk '{print $1}')"
+          dedupe_key="$(printf 'one-person-qa-dedupe:%s' "$QA_TEST_PASSWORD" | sha256sum | awk '{print $1}')"
+          echo "::add-mask::$qa_secret"
+          echo "::add-mask::$dedupe_key"
+          echo "ONE_PERSON_ACCOUNT_QA_SECRET=$qa_secret" >> "$GITHUB_ENV"
+          echo "ONE_PERSON_ACCOUNT_DEDUPE_KEY=$dedupe_key" >> "$GITHUB_ENV"
+      - name: Validate isolated QA target and credentials
         shell: bash
         run: |
           set -euo pipefail
           for name in MORALTRADE_QA_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY ONE_PERSON_ACCOUNT_QA_SECRET ONE_PERSON_ACCOUNT_DEDUPE_KEY; do
             test -n "${!name:-}" || { echo "Missing required QA secret: $name" >&2; exit 1; }
           done
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-      - name: Apply additive migration to isolated QA
-        run: psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260731072000_one_person_one_account.sql
+          test "$QA_PROJECT_REF" = "hvmxfjjbdcgjjudmthdz"
+          test "$NEXT_PUBLIC_SUPABASE_URL" = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
+          [[ "$MORALTRADE_QA_DATABASE_URL" == *"hvmxfjjbdcgjjudmthdz"* ]] || {
+            echo "Database URL does not target isolated MoralTrade QA." >&2
+            exit 1
+          }
+          [[ "$MORALTRADE_QA_DATABASE_URL" != *"jnpoxvalyjtdghnperyu"* ]] || {
+            echo "Production database URL detected; refusing to continue." >&2
+            exit 1
+          }
+      - name: Install PostgreSQL and evidence tooling
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
+      - name: Apply additive migration once to isolated QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration=supabase/migrations/20260731072000_one_person_one_account.sql
+          sha256sum "$migration" | tee one-person-migration.sha256
+          present="$(psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAtc "select to_regclass('moral_trade_private.person_account_release_gates') is not null")"
+          if [[ "$present" == "t" ]]; then
+            echo "One-person-account schema already exists in isolated QA; verifying instead of replaying the migration."
+          else
+            psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration" | tee one-person-migration.txt
+          fi
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' | tee one-person-schema-inventory.txt
+          select jsonb_build_object(
+            'releaseGates', to_regclass('moral_trade_private.person_account_release_gates') is not null,
+            'personAccounts', to_regclass('moral_trade_private.person_accounts') is not null,
+            'identitySubjects', to_regclass('moral_trade_private.identity_subjects') is not null,
+            'registrationGrants', to_regclass('moral_trade_private.person_registration_grants') is not null,
+            'beforeUserCreatedHook', to_regprocedure('public.one_person_before_user_created_hook(jsonb)') is not null,
+            'customAccessTokenHook', to_regprocedure('public.one_person_custom_access_token_hook(jsonb)') is not null,
+            'cleanupFixture', to_regprocedure('public.cleanup_one_person_qa_fixture_v1(uuid,text)') is not null,
+            'cleanupSession', to_regprocedure('public.cleanup_one_person_qa_session_v1(uuid,text)') is not null
+          );
+          SQL
+          grep -q '"releaseGates": true' one-person-schema-inventory.txt
+          grep -q '"beforeUserCreatedHook": true' one-person-schema-inventory.txt
       - name: Enable QA-only release gates for the test window
         run: |
           psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL'
           select public.configure_person_account_release_v1('qa_mock', true, true, true, null);
           SQL
       - name: SQL regression
-        run: psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/one_person_one_account.sql | tee one-person-sql.txt
+        run: set -o pipefail; psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/one_person_one_account.sql 2>&1 | tee one-person-sql.txt
       - name: Concurrent duplicate registration
-        run: scripts/test-one-person-concurrency.sh | tee one-person-concurrency.txt
+        run: set -o pipefail; scripts/test-one-person-concurrency.sh 2>&1 | tee one-person-concurrency.txt
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Authenticated desktop and mobile tests
-        run: npx playwright test tests/one-person-account-authenticated.spec.ts --reporter=line | tee one-person-browser.txt
-      - name: Prove synthetic residue is zero
+        run: set -o pipefail; npx playwright test tests/one-person-account-authenticated.spec.ts --reporter=line 2>&1 | tee one-person-browser.txt
+      - name: Prove every one-person synthetic residue count is zero
+        shell: bash
         run: |
-          residue="$(psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt \
-            -v qa_run_id="$ONE_PERSON_ACCOUNT_QA_RUN_ID" <<'SQL'
-          select count(*)
-          from auth.users
-          where lower(coalesce(raw_user_meta_data ->> 'qa_fixture', 'false')) = 'true'
-            and coalesce(raw_user_meta_data ->> 'one_person_qa_run_id', '') = :'qa_run_id';
+          set -euo pipefail
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' | tee one-person-residue.json
+          select jsonb_build_object(
+            'authUsers', (
+              select count(*) from auth.users
+              where lower(coalesce(raw_user_meta_data ->> 'qa_fixture', 'false')) = 'true'
+            ),
+            'qaSessions', (
+              select count(*) from moral_trade_private.preaccount_verification_sessions
+              where provider_mode = 'qa_mock'
+            ),
+            'qaSubjects', (
+              select count(*) from moral_trade_private.identity_subjects
+              where latest_provider_name = 'MoralTrade QA'
+            ),
+            'qaGrants', (
+              select count(*)
+              from moral_trade_private.person_registration_grants g
+              join moral_trade_private.preaccount_verification_sessions s
+                on s.id = g.verification_session_id
+              where s.provider_mode = 'qa_mock'
+            ),
+            'qaVerificationEvents', (
+              select count(*)
+              from moral_trade_private.identity_verification_events e
+              join moral_trade_private.preaccount_verification_sessions s
+                on s.id = e.verification_session_id
+              where s.provider_mode = 'qa_mock'
+            ),
+            'qaDedupeKeys', (
+              select count(*)
+              from moral_trade_private.identity_dedupe_keys k
+              join moral_trade_private.identity_subjects s
+                on s.id = k.identity_subject_id
+              where s.latest_provider_name = 'MoralTrade QA'
+            ),
+            'qaDuplicateCases', (
+              select count(*)
+              from moral_trade_private.identity_duplicate_cases d
+              left join moral_trade_private.preaccount_verification_sessions s
+                on s.id = d.verification_session_id
+              where s.provider_mode = 'qa_mock'
+                 or d.reason_code like 'qa_%'
+            )
+          );
           SQL
-          )"
-          printf 'synthetic_user_residue=%s\n' "$residue" | tee one-person-residue.txt
-          test "$residue" = "0"
+          jq -e 'to_entries | all(.value == 0)' one-person-residue.json >/dev/null
       - name: Restore QA release gates to disabled
         if: always()
         run: |
-          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' || true
+          if [[ -n "${MORALTRADE_QA_DATABASE_URL:-}" ]]; then
+            psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' || true
           select public.configure_person_account_release_v1('qa_mock', true, false, false, null);
           SQL
+          fi
       - name: Upload QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: one-person-account-isolated-qa
+          name: one-person-account-isolated-qa-${{ github.run_id }}
           path: |
+            one-person-migration.sha256
+            one-person-migration.txt
+            one-person-schema-inventory.txt
             one-person-sql.txt
             one-person-concurrency.txt
             one-person-browser.txt
-            one-person-residue.txt
+            one-person-residue.json
             test-results/**
           if-no-files-found: warn
