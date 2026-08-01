@@ -96,7 +96,7 @@ async function chooseRecipient(page: Page, legend: string, query: string, result
     name: "Search by nonprofit name, slug, or EIN",
   });
   await search.fill(query);
-  const choice = fieldset.getByRole("button", {
+  const choice = fieldset.getByRole("option", {
     name: `Select ${result}`,
     exact: true,
   });
