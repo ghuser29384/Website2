@@ -1,0 +1,164 @@
+name: PR 406 pledge-impact type-guard repair
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: pr406-pledge-impact-type-guard-repair-20260801
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/pledge-impact-live-foundation-20260801
+  EXPECTED_HEAD: f9402d70b8a0fcf3cf2e22d5a624bd41b901038d
+  CONTROLLER_PATH: .github/workflows/pr406-type-guard-repair-controller.yml
+  TYPE_REPAIR_PATH: .github/workflows/pledge-impact-live-type-repair.yml
+  PR_NUMBER: "406"
+  TRIGGER: /repair-pr406-type-guards-20260801
+
+jobs:
+  repair:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.issue.pull_request != null &&
+      github.event.issue.number == 406 &&
+      github.event.comment.body == '/repair-pr406-type-guards-20260801'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out exact feature head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard exact repository and head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+
+      - name: Remove temporary controller from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          controller_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha)"
+          jq -n \
+            --arg message 'Remove temporary PR 406 type-guard repair controller' \
+            --arg sha "$controller_sha" \
+            --arg branch main \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Narrow validation helpers and remove one-time branch workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/lib/mpgf/pledge-impact-live.ts')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  'function isSafeInteger(value: unknown, minimum = Number.MIN_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER) {',
+                  '''function isSafeInteger(
+            value: unknown,
+            minimum = Number.MIN_SAFE_INTEGER,
+            maximum = Number.MAX_SAFE_INTEGER,
+          ): value is number {''',
+              ),
+              (
+                  'function isFiniteNumber(value: unknown, minimum = -Infinity, maximum = Infinity) {',
+                  '''function isFiniteNumber(
+            value: unknown,
+            minimum = -Infinity,
+            maximum = Infinity,
+          ): value is number {''',
+              ),
+              (
+                  'function isIsoTimestamp(value: unknown) {',
+                  'function isIsoTimestamp(value: unknown): value is string {',
+              ),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one match, found {count}: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+          git rm "$TYPE_REPAIR_PATH"
+          mapfile -t changed < <(git status --short | sed -E 's/^.. //')
+          test "${#changed[@]}" -eq 2
+          printf '%s\n' "${changed[@]}" | sort > /tmp/changed.txt
+          printf '%s\n' "$TYPE_REPAIR_PATH" 'src/lib/mpgf/pledge-impact-live.ts' | sort > /tmp/expected.txt
+          diff -u /tmp/expected.txt /tmp/changed.txt
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused tests and production build
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/pledge-impact-live.test.ts \
+            src/lib/mpgf/pledge-impact-live-integration.test.ts
+          npm run build
+
+      - name: Commit and push exact repair
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/mpgf/pledge-impact-live.ts
+          git add -u "$TYPE_REPAIR_PATH"
+          git diff --cached --check
+          git commit -m 'Narrow live pledge-impact validation types'
+          repaired_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_HEAD"
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_HEAD" origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "repaired_sha=$repaired_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Report success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Applied the exact TypeScript type-predicate repair, removed the obsolete one-time repair workflow, passed the focused pledge-impact tests and production build, and pushed candidate \`${{ steps.publish.outputs.repaired_sha }}\`. The ordinary PR gates now provide the authoritative full-suite and rollback-only QA result. PR remains draft and production is unchanged."
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "The bounded PR #406 type-guard repair failed in run \`$GITHUB_RUN_ID\`. The temporary controller was removed from main before mutation. No feature push occurred unless the exact-head guards, focused tests, production build, and force-with-lease publish all passed."
