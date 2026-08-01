@@ -1,0 +1,95 @@
+name: Materialize proposal-only Co-Act and Co-Fund product source
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v2-20260801
+    paths:
+      - .github/workflows/materialize-co-act-co-fund-product.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v2-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Decode and verify reviewed product payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/co-act-co-fund-product-payload/part-* > /tmp/coact-product.b64
+          echo "0d3e4c17847fc7a1614418d2fe791cfcd03046d1b20a05b18ec858de5b9d9412  /tmp/coact-product.b64" | sha256sum -c -
+          base64 --decode /tmp/coact-product.b64 > /tmp/coact-product.tar.gz
+          echo "5533449bc3c76ab48e2c2aa3422e0ca776d1af8e7eca9f6b2c660de9642eb904  /tmp/coact-product.tar.gz" | sha256sum -c -
+          tar -tzf /tmp/coact-product.tar.gz | sort > /tmp/coact-actual-files.txt
+          cat > /tmp/coact-expected-files.txt <<'EOF'
+          docs/co-act-co-fund-create-spec.md
+          src/lib/create-interface/group-contribution-client.ts
+          src/lib/create-interface/group-contribution-draft-sanitize.ts
+          src/lib/create-interface/group-contribution-draft.ts
+          src/lib/create-interface/group-contribution-form-data.ts
+          src/lib/create-interface/group-contribution-payload.test.ts
+          src/lib/create-interface/group-contribution-payload.ts
+          src/lib/create-interface/group-contribution-review-record.ts
+          src/lib/create-interface/group-contribution-shape.ts
+          src/lib/create-interface/group-contribution.test.ts
+          src/lib/create-interface/group-contribution.ts
+          src/lib/create-interface/persistence.test.ts
+          src/lib/create-interface/persistence.ts
+          src/lib/create-interface/source-contract.test.ts
+          src/lib/create-interface/types.ts
+          src/lib/create-interface/validation.test.ts
+          src/lib/create-interface/validation.ts
+          tests/create-group-contribution-proposal.spec.ts
+          EOF
+          sort -o /tmp/coact-expected-files.txt /tmp/coact-expected-files.txt
+          diff -u /tmp/coact-expected-files.txt /tmp/coact-actual-files.txt
+          tar -xzf /tmp/coact-product.tar.gz
+          git diff --check
+
+      - name: Commit clean product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .github/co-act-co-fund-product-payload
+          git rm .github/workflows/materialize-co-act-co-fund-product.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            docs/co-act-co-fund-create-spec.md \
+            src/lib/create-interface/group-contribution-client.ts \
+            src/lib/create-interface/group-contribution-draft-sanitize.ts \
+            src/lib/create-interface/group-contribution-draft.ts \
+            src/lib/create-interface/group-contribution-form-data.ts \
+            src/lib/create-interface/group-contribution-payload.test.ts \
+            src/lib/create-interface/group-contribution-payload.ts \
+            src/lib/create-interface/group-contribution-review-record.ts \
+            src/lib/create-interface/group-contribution-shape.ts \
+            src/lib/create-interface/group-contribution.test.ts \
+            src/lib/create-interface/group-contribution.ts \
+            src/lib/create-interface/persistence.test.ts \
+            src/lib/create-interface/persistence.ts \
+            src/lib/create-interface/source-contract.test.ts \
+            src/lib/create-interface/types.ts \
+            src/lib/create-interface/validation.test.ts \
+            src/lib/create-interface/validation.ts \
+            tests/create-group-contribution-proposal.spec.ts
+          git diff --cached --quiet && { echo 'No product changes materialized'; exit 1; }
+          git commit -m 'Integrate Co-Act and Co-Fund into authoritative Create review flow'
+          git push origin HEAD:feature/co-act-co-fund-create-v2-20260801
+
+      - name: Report result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 420 --repo "$GITHUB_REPOSITORY" --body "The reviewed Co-Act/Co-Fund product payload was verified and materialized into clean source. Temporary payload chunks and the materializer were removed in the same resulting commit. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}."
