@@ -44,11 +44,17 @@ jobs:
           path = Path('.github/workflows/discover-pledge-clarity-materialize.yml')
           text = path.read_text()
 
-          old_method = '<div><h3>Pivotality</h3><p>Your pledge divided by the current gap. It shows how much of the known gap you close, not how likely other contributors are to act.</p></div>'
-          new_method = '<div><h3>Share of the current gap</h3><p>Your proposed pledge divided by the current gap. It shows how much of the known gap you close, not how likely other contributors are to act.</p></div>'
-          if text.count(old_method) != 1:
-              raise SystemExit(f'expected one threshold-methodology label, found {text.count(old_method)}')
-          text = text.replace(old_method, new_method)
+          preview_marker = '          replace_once(\n              "<span>TEST YOUR PLEDGE</span>",'
+          methodology_block = (
+              "          replace_once(\n"
+              "              '<div><h3>Pivotality</h3><p>Your pledge divided by the current gap. It shows how much of the known gap you close, not how likely other contributors are to act.</p></div>',\n"
+              "              '<div><h3>Share of the current gap</h3><p>Your proposed pledge divided by the current gap. It shows how much of the known gap you close, not how likely other contributors are to act.</p></div>',\n"
+              "              \"threshold methodology label\",\n"
+              "          )\n"
+          )
+          if text.count(preview_marker) != 1:
+              raise SystemExit(f'expected one methodology insertion marker, found {text.count(preview_marker)}')
+          text = text.replace(preview_marker, methodology_block + preview_marker)
 
           old_forbidden = '              "How likely am I to be pivotal?",\n              "inspect pivotality",'
           new_forbidden = '              "How likely am I to be pivotal?",\n              "<h3>Pivotality</h3>",\n              "inspect pivotality",'
@@ -56,15 +62,19 @@ jobs:
               raise SystemExit(f'expected two forbidden-copy lists, found {text.count(old_forbidden)}')
           text = text.replace(old_forbidden, new_forbidden)
 
-          old_slider = '''            const sliders = page.locator('[data-pledge-range][data-pool-id="pool-wild-research"]');
-            await expect(sliders.first()).toBeVisible();
-            await sliders.last().evaluate((element, value) => {'''
-          new_slider = '''            const slider = page.locator('[data-pledge-range][data-pool-id="pool-wild-research"]:visible').last();
-            await expect(slider).toBeVisible();
-            await slider.evaluate((element, value) => {'''
-          if text.count(old_slider) != 1:
-              raise SystemExit(f'expected one pledge-slider helper, found {text.count(old_slider)}')
-          text = text.replace(old_slider, new_slider)
+          slider_pattern = re.compile(
+              r'(?P<indent>[ \t]+)const sliders = page\.locator\(\'\[data-pledge-range\]\[data-pool-id="pool-wild-research"\]\'\);\n'
+              r'(?P=indent)await expect\(sliders\.first\(\)\)\.toBeVisible\(\);\n'
+              r'(?P=indent)await sliders\.last\(\)\.evaluate\(\(element, value\) => \{'
+          )
+          slider_replacement = (
+              r"\g<indent>const slider = page.locator('[data-pledge-range][data-pool-id=\"pool-wild-research\"]:visible').last();\n"
+              r"\g<indent>await expect(slider).toBeVisible();\n"
+              r"\g<indent>await slider.evaluate((element, value) => {"
+          )
+          text, slider_count = slider_pattern.subn(slider_replacement, text)
+          if slider_count != 1:
+              raise SystemExit(f'expected one pledge-slider helper, found {slider_count}')
 
           mobile_pattern = re.compile(
               r'(?P<indent>[ \t]+)const inspectorTrigger = page\.getByRole\("button", \{ name: "Open selection inspector" \}\);\n'
