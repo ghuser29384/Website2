@@ -74,19 +74,20 @@ jobs:
               "const formatMoney = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);\nconst formatGapShare = (share) => {\n  const percent = Math.max(0, Number(share) * 100);\n  if (!Number.isFinite(percent) || percent === 0) return '0%';\n  if (percent < 1) return `${percent.toFixed(2)}%`;\n  if (percent < 10) return `${percent.toFixed(1)}%`;\n  return `${Math.round(percent)}%`;\n};\nconst clamp = (value, min, max) => Math.min(max, Math.max(min, value));",
               "gap-share formatter",
           )
-
           replace_once(
               "Select any pool to inspect pivotality, failure conditions, authorization expiry, and exact proof.",
               "Select any pool to inspect its current gap, failure conditions, authorization expiry, and exact proof.",
               "radar instruction",
           )
-
           replace_once(
-              '''            <span>TEST YOUR PLEDGE</span><b>${formatMoney(pledge)}</b><input type="range" min="0" max="${Math.max(10, Math.min(250, activeMetrics.gap))}" step="5" value="${pledge}" data-pledge-range data-pool-id="${active.id}" aria-label="Conditional pledge amount for ${escapeHtml(active.title)}" />
-            <span>${formatMoney(afterGap)} remains if activated with your pledge</span><button data-action="pledge" data-id="${active.id}">Pledge conditionally →</button>''',
-              '''            <span>PREVIEW YOUR PLEDGE</span><b>${formatMoney(pledge)}</b><input type="range" min="0" max="${Math.max(10, Math.min(250, activeMetrics.gap))}" step="5" value="${pledge}" data-pledge-range data-pool-id="${active.id}" aria-label="Conditional pledge amount for ${escapeHtml(active.title)}" />
-            <span>${formatMoney(afterGap)} remains · ${formatGapShare(activeMetrics.gap > 0 ? pledge / activeMetrics.gap : 1)} of current gap</span><button data-action="pledge" data-id="${active.id}">Continue with a conditional pledge →</button>''',
-              "radar pledge preview",
+              "<span>TEST YOUR PLEDGE</span>",
+              "<span>PREVIEW YOUR PLEDGE</span>",
+              "radar preview label",
+          )
+          replace_once(
+              '<span>${formatMoney(afterGap)} remains if activated with your pledge</span><button data-action="pledge" data-id="${active.id}">Pledge conditionally →</button>',
+              '<span>${formatMoney(afterGap)} remains · ${formatGapShare(activeMetrics.gap > 0 ? pledge / activeMetrics.gap : 1)} of current gap</span><button data-action="pledge" data-id="${active.id}">Continue with a conditional pledge →</button>',
+              "radar preview result",
           )
 
           pattern = re.compile(
@@ -163,11 +164,11 @@ jobs:
           EOF
 
           cat > tests/discover-pledge-clarity.spec.ts <<'EOF'
-          import { expect, test } from "@playwright/test";
+          import { expect, test, type Page } from "@playwright/test";
 
           const discoverUrl = "/discover?domain=pools&view=threshold&query=Find+pools&selected=pool-wild-research&selectedType=pool#discover";
 
-          async function setWildResearchPledge(page: Parameters<typeof test>[0]["page"], amount: number) {
+          async function setWildResearchPledge(page: Page, amount: number) {
             const sliders = page.locator('[data-pledge-range][data-pool-id="pool-wild-research"]');
             await expect(sliders.first()).toBeVisible();
             await sliders.last().evaluate((element, value) => {
