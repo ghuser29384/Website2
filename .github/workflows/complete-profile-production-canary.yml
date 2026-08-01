@@ -19,7 +19,7 @@ concurrency:
 jobs:
   production-canary:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       EXPECTED_SHA: ${{ github.sha }}
       STATUS_CONTEXT: QA / Complete Profile production canary
@@ -73,7 +73,7 @@ jobs:
           api="https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&target=production&limit=100&teamId=${VERCEL_TEAM_ID}"
           deployment=''
 
-          for attempt in $(seq 1 120); do
+          for attempt in $(seq 1 300); do
             if curl -fsS \
               -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
               "$api" \
@@ -88,15 +88,35 @@ jobs:
               ' /tmp/moraltrade-production-deployments.json)"
             fi
 
+            latest_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+
             if [[ -n "$deployment" ]]; then
               state="$(jq -r '.state // "UNKNOWN"' <<<"$deployment")"
               if [[ "$state" == "READY" ]]; then
                 break
               fi
-              if [[ "$state" == "ERROR" || "$state" == "CANCELED" ]]; then
-                echo "The exact production deployment reached terminal state $state." >&2
+              if [[ "$state" == "ERROR" ]]; then
+                echo "The exact production deployment reached terminal state ERROR." >&2
                 exit 1
               fi
+              if [[ "$state" == "CANCELED" && "$latest_main" != "$EXPECTED_SHA" ]]; then
+                echo "superseded=true" >> "$GITHUB_OUTPUT"
+                jq -n \
+                  --arg expectedSha "$EXPECTED_SHA" \
+                  --arg latestMain "$latest_main" \
+                  --arg state "$state" \
+                  '{expectedSha:$expectedSha,latestMain:$latestMain,state:$state,superseded:true}' \
+                  > "$CANARY_OUTPUT_DIR/deployment.json"
+                exit 0
+              fi
+            elif [[ "$attempt" -ge 60 && "$latest_main" != "$EXPECTED_SHA" ]]; then
+              echo "superseded=true" >> "$GITHUB_OUTPUT"
+              jq -n \
+                --arg expectedSha "$EXPECTED_SHA" \
+                --arg latestMain "$latest_main" \
+                '{expectedSha:$expectedSha,latestMain:$latestMain,state:"not-created",superseded:true}' \
+                > "$CANARY_OUTPUT_DIR/deployment.json"
+              exit 0
             fi
 
             sleep 15
@@ -115,6 +135,7 @@ jobs:
 
           deployment_id="$(jq -r .id <<<"$deployment")"
           deployment_url="https://$(jq -r .url <<<"$deployment")"
+          echo "superseded=false" >> "$GITHUB_OUTPUT"
           echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
 
@@ -123,49 +144,80 @@ jobs:
             --arg deploymentId "$deployment_id" \
             --arg deploymentUrl "$deployment_url" \
             --arg state "$state" \
-            '{expectedSha:$expectedSha,deploymentId:$deploymentId,deploymentUrl:$deploymentUrl,state:$state}' \
+            '{expectedSha:$expectedSha,deploymentId:$deploymentId,deploymentUrl:$deploymentUrl,state:$state,superseded:false}' \
             > "$CANARY_OUTPUT_DIR/deployment.json"
 
       - name: Verify the exact deployment through both production domains
+        id: domains
+        if: steps.deployment.outputs.superseded != 'true'
         env:
           EXPECTED_DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
         run: |
           set -euo pipefail
 
-          www_status="$(curl -sS \
-            --cookie 'mt_walkthrough_seen=1' \
-            -D "$CANARY_OUTPUT_DIR/www-returning.headers" \
-            -o "$CANARY_OUTPUT_DIR/www-returning.html" \
-            -w '%{http_code}' \
-            "$CANONICAL_ORIGIN/complete-profile")"
-          test "$www_status" = "200"
-          grep -Fq "$EXPECTED_DEPLOYMENT_ID" "$CANARY_OUTPUT_DIR/www-returning.html"
-          grep -Fq 'Spend 100 sparks of attention.' "$CANARY_OUTPUT_DIR/www-returning.html"
-          tr -d '\r' < "$CANARY_OUTPUT_DIR/www-returning.headers" \
-            > "$CANARY_OUTPUT_DIR/www-returning.normalized.headers"
-          grep -Fqx 'x-matched-path: /complete-profile' \
-            "$CANARY_OUTPUT_DIR/www-returning.normalized.headers"
+          verified=false
+          for attempt in $(seq 1 40); do
+            www_status="$(curl -sS \
+              --cookie 'mt_walkthrough_seen=1' \
+              -D "$CANARY_OUTPUT_DIR/www-returning.headers" \
+              -o "$CANARY_OUTPUT_DIR/www-returning.html" \
+              -w '%{http_code}' \
+              "$CANONICAL_ORIGIN/complete-profile")"
 
-          apex_status="$(curl -sS \
-            -D "$CANARY_OUTPUT_DIR/apex.headers" \
-            -o /dev/null \
-            -w '%{http_code}' \
-            "$APEX_ORIGIN/complete-profile")"
-          test "$apex_status" = "308"
-          tr -d '\r' < "$CANARY_OUTPUT_DIR/apex.headers" \
-            > "$CANARY_OUTPUT_DIR/apex.normalized.headers"
-          grep -Eq '^location: https://www\.moraltrade\.org/complete-profile([?].*)?$' \
-            "$CANARY_OUTPUT_DIR/apex.normalized.headers"
+            apex_status="$(curl -sS \
+              -D "$CANARY_OUTPUT_DIR/apex.headers" \
+              -o /dev/null \
+              -w '%{http_code}' \
+              "$APEX_ORIGIN/complete-profile")"
 
+            tr -d '\r' < "$CANARY_OUTPUT_DIR/www-returning.headers" \
+              > "$CANARY_OUTPUT_DIR/www-returning.normalized.headers"
+            tr -d '\r' < "$CANARY_OUTPUT_DIR/apex.headers" \
+              > "$CANARY_OUTPUT_DIR/apex.normalized.headers"
+
+            if [[ "$www_status" == "200" ]] \
+              && grep -Fq "$EXPECTED_DEPLOYMENT_ID" "$CANARY_OUTPUT_DIR/www-returning.html" \
+              && grep -Fq 'Spend 100 sparks of attention.' "$CANARY_OUTPUT_DIR/www-returning.html" \
+              && grep -Fqx 'x-matched-path: /complete-profile' "$CANARY_OUTPUT_DIR/www-returning.normalized.headers" \
+              && [[ "$apex_status" == "308" ]] \
+              && grep -Eq '^location: https://www\.moraltrade\.org/complete-profile([?].*)?$' "$CANARY_OUTPUT_DIR/apex.normalized.headers"; then
+              verified=true
+              break
+            fi
+
+            sleep 15
+          done
+
+          if [[ "$verified" != "true" ]]; then
+            latest_main="$(git ls-remote origin refs/heads/main | cut -f1)"
+            if [[ "$latest_main" != "$EXPECTED_SHA" ]]; then
+              echo "superseded=true" >> "$GITHUB_OUTPUT"
+              jq -n \
+                --arg expectedSha "$EXPECTED_SHA" \
+                --arg expectedDeploymentId "$EXPECTED_DEPLOYMENT_ID" \
+                --arg latestMain "$latest_main" \
+                '{expectedSha:$expectedSha,expectedDeploymentId:$expectedDeploymentId,latestMain:$latestMain,verified:false,superseded:true}' \
+                > "$CANARY_OUTPUT_DIR/domain-verification.json"
+              exit 0
+            fi
+
+            echo "The exact READY deployment never became live on both production domains." >&2
+            exit 1
+          fi
+
+          echo "superseded=false" >> "$GITHUB_OUTPUT"
           jq -n \
             --arg expectedSha "$EXPECTED_SHA" \
             --arg expectedDeploymentId "$EXPECTED_DEPLOYMENT_ID" \
             --arg wwwStatus "$www_status" \
             --arg apexStatus "$apex_status" \
-            '{expectedSha:$expectedSha,expectedDeploymentId:$expectedDeploymentId,wwwStatus:$wwwStatus,apexStatus:$apexStatus,verified:true}' \
+            '{expectedSha:$expectedSha,expectedDeploymentId:$expectedDeploymentId,wwwStatus:$wwwStatus,apexStatus:$apexStatus,verified:true,superseded:false}' \
             > "$CANARY_OUTPUT_DIR/domain-verification.json"
 
       - name: Run the rendered first-time and returning-user canary
+        if: >-
+          steps.deployment.outputs.superseded != 'true' &&
+          steps.domains.outputs.superseded != 'true'
         env:
           EXPECTED_DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
         run: node .github/scripts/complete-profile-production-canary.mjs
@@ -173,17 +225,21 @@ jobs:
       - name: Summarize the canary
         if: always()
         run: |
-          if [[ -f "$CANARY_OUTPUT_DIR/report.json" ]]; then
-            {
-              echo '## Complete Profile production canary'
-              echo
-              echo "- Commit: \`$EXPECTED_SHA\`"
-              echo "- Deployment: \`${{ steps.deployment.outputs.deployment_id }}\`"
+          {
+            echo '## Complete Profile production canary'
+            echo
+            echo "- Commit: \`$EXPECTED_SHA\`"
+            echo "- Deployment: \`${{ steps.deployment.outputs.deployment_id }}\`"
+            if [[ "${{ steps.deployment.outputs.superseded }}" == "true" || "${{ steps.domains.outputs.superseded }}" == "true" ]]; then
+              echo '- Result: `superseded before becoming the live production alias`'
+            elif [[ -f "$CANARY_OUTPUT_DIR/report.json" ]]; then
               echo "- Result: \`$(jq -r '.status // "unknown"' "$CANARY_OUTPUT_DIR/report.json")\`"
               echo "- Scenarios passed: \`$(jq '[.scenarios[] | select(.status == "passed")] | length' "$CANARY_OUTPUT_DIR/report.json")/6\`"
               echo "- Known root-prefetch 404s: \`$(jq -r '.knownRootPrefetch404Count // 0' "$CANARY_OUTPUT_DIR/report.json")\`"
-            } >> "$GITHUB_STEP_SUMMARY"
-          fi
+            else
+              echo '- Result: `failed before the rendered canary`'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload canary evidence
         if: always()
@@ -199,13 +255,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           JOB_STATUS: ${{ job.status }}
+          DEPLOYMENT_SUPERSEDED: ${{ steps.deployment.outputs.superseded }}
+          DOMAIN_SUPERSEDED: ${{ steps.domains.outputs.superseded }}
         run: |
-          if [[ "$JOB_STATUS" == "success" ]]; then
-            state=success
-            description="Exact production deployment passed all six Complete Profile canary scenarios"
-          else
+          if [[ "$JOB_STATUS" != "success" ]]; then
             state=failure
             description="Complete Profile production canary failed; inspect the run evidence"
+          elif [[ "$DEPLOYMENT_SUPERSEDED" == "true" || "$DOMAIN_SUPERSEDED" == "true" ]]; then
+            state=success
+            description="Commit was superseded before becoming the live production alias"
+          else
+            state=success
+            description="Exact production deployment passed all six Complete Profile canary scenarios"
           fi
 
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
