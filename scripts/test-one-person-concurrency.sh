@@ -15,6 +15,8 @@ do \$\$
 declare
   subjects uuid[];
 begin
+  perform set_config('moral_trade.person_identity_internal_write', 'on', true);
+
   select coalesce(array_agg(distinct identity_subject_id), '{}'::uuid[]) into subjects
   from moral_trade_private.identity_dedupe_keys
   where token_namespace = 'manual_equivalent' and token_version = 1 and token_hmac = '$TOKEN';

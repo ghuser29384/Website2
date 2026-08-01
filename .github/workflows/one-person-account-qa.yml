@@ -126,7 +126,7 @@ jobs:
   isolated-qa:
     needs: repository-gates
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 90
     env:
       QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
       MORALTRADE_QA_DATABASE_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
@@ -195,6 +195,7 @@ jobs:
         run: |
           set -euo pipefail
           migration=supabase/migrations/20260731072000_one_person_one_account.sql
+          test "$(grep -cF '$one_person_migration_relation_locks$' "$migration")" -eq 2
           sha256sum "$migration" | tee one-person-migration.sha256
           present="$(psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAtc "select to_regclass('moral_trade_private.person_account_release_gates') is not null")"
           if [[ "$present" == "t" ]]; then
@@ -216,13 +217,171 @@ jobs:
           SQL
           grep -q '"releaseGates": true' one-person-schema-inventory.txt
           grep -q '"beforeUserCreatedHook": true' one-person-schema-inventory.txt
-      - name: Enable QA-only release gates for the test window
+      - name: Normalize isolated QA release gates to disabled
+        shell: bash
         run: |
-          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL'
+          set -euo pipefail
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' | tee one-person-gates-before.json
+          select public.configure_person_account_release_v1('qa_mock', true, false, false, null);
+          SQL
+          jq -e '
+            .providerMode == "qa_mock" and
+            .providerReady == true and
+            .registrationEnforcementEnabled == false and
+            .participationEnforcementEnabled == false
+          ' one-person-gates-before.json >/dev/null
+      - name: Replay complete migration under adversarial lock order with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration=supabase/migrations/20260731072000_one_person_one_account.sql
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source_path = Path("supabase/migrations/20260731072000_one_person_one_account.sql")
+          lines = source_path.read_text(encoding="utf-8").splitlines()
+          try:
+              start = next(index for index, line in enumerate(lines) if line.strip() == "begin;")
+          except StopIteration as exc:
+              raise SystemExit("migration begin statement not found") from exc
+
+          end = len(lines) - 1
+          while end >= 0 and not lines[end].strip():
+              end -= 1
+          if end <= start or lines[end].strip() != "commit;":
+              raise SystemExit("migration final commit statement not found")
+          if any(line.strip() for line in lines[end + 1 :]):
+              raise SystemExit("unexpected content after migration commit")
+
+          reset = r'''do $reset_one_person_replay_triggers$
+          declare
+            item record;
+          begin
+            for item in
+              select * from (values
+                ('person_account_release_gates', 'person_account_release_gates_touch_updated_at'),
+                ('identity_subjects', 'identity_subjects_touch_updated_at'),
+                ('preaccount_verification_sessions', 'preaccount_verification_sessions_touch_updated_at'),
+                ('person_accounts', 'person_accounts_touch_updated_at'),
+                ('preaccount_guardian_consents', 'preaccount_guardian_consents_touch_updated_at'),
+                ('guardian_relationships', 'guardian_relationships_touch_updated_at'),
+                ('account_merge_cases', 'account_merge_cases_touch_updated_at'),
+                ('identity_verification_events', 'identity_verification_events_append_only'),
+                ('account_security_events', 'account_security_events_append_only'),
+                ('identity_dedupe_keys', 'identity_dedupe_keys_no_delete')
+              ) as configured(table_name, trigger_name)
+            loop
+              if to_regclass('moral_trade_private.' || item.table_name) is not null then
+                execute format(
+                  'drop trigger if exists %I on moral_trade_private.%I',
+                  item.trigger_name,
+                  item.table_name
+                );
+              end if;
+            end loop;
+          end;
+          $reset_one_person_replay_triggers$;'''
+
+          body = "\n".join(lines[start + 1 : end]).rstrip() + "\n"
+          replay = (
+              "\\set ON_ERROR_STOP on\n"
+              "begin;\n"
+              "set local statement_timeout = '120s';\n"
+              "set local lock_timeout = '70s';\n\n"
+              + reset
+              + "\n\n"
+              + body
+              + "\nrollback;\n"
+          )
+          Path("/tmp/one-person-lock-replay.sql").write_text(replay, encoding="utf-8")
+          PY
+
+          sha256sum /tmp/one-person-lock-replay.sql | tee one-person-lock-replay.sha256
+          cat > /tmp/one-person-lock-blocker.sql <<'SQL'
+          \set ON_ERROR_STOP on
+          begin;
+          set local statement_timeout = '90s';
+          lock table public.profiles in access share mode;
+          select pg_advisory_lock(93791, 379);
+          select 'blocker-profile-lock-acquired';
+          select pg_sleep(2);
+          lock table auth.users in row exclusive mode;
+          select 'blocker-auth-lock-acquired';
+          select pg_sleep(2);
+          commit;
+          select pg_advisory_unlock(93791, 379);
+          SQL
+
+          blocker_pid=''
+          cleanup_blocker() {
+            if [[ -n "$blocker_pid" ]] && kill -0 "$blocker_pid" 2>/dev/null; then
+              kill "$blocker_pid" 2>/dev/null || true
+              wait "$blocker_pid" 2>/dev/null || true
+            fi
+          }
+          trap cleanup_blocker EXIT
+
+          psql "$MORALTRADE_QA_DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -f /tmp/one-person-lock-blocker.sql \
+            > one-person-lock-blocker.txt 2>&1 &
+          blocker_pid=$!
+
+          blocker_ready=false
+          for attempt in $(seq 1 200); do
+            readiness="$(psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAtc \
+              "select pg_try_advisory_lock(93791, 379)")"
+            if [[ "$readiness" == "f" ]]; then
+              blocker_ready=true
+              break
+            fi
+            sleep 0.1
+          done
+          if [[ "$blocker_ready" != "true" ]]; then
+            echo "The adversarial blocker did not acquire its profile lock." >&2
+            cat one-person-lock-blocker.txt >&2 || true
+            exit 1
+          fi
+
+          set +e
+          psql "$MORALTRADE_QA_DATABASE_URL" \
+            -v ON_ERROR_STOP=1 \
+            -f /tmp/one-person-lock-replay.sql \
+            2>&1 | tee one-person-lock-replay.txt
+          replay_status=${PIPESTATUS[0]}
+          wait "$blocker_pid"
+          blocker_status=$?
+          blocker_pid=''
+          set -e
+
+          if [[ "$replay_status" -ne 0 || "$blocker_status" -ne 0 ]]; then
+            echo "Migration replay status: $replay_status; blocker status: $blocker_status" >&2
+            cat one-person-lock-blocker.txt >&2 || true
+            exit 1
+          fi
+          grep -Fq 'blocker-profile-lock-acquired' one-person-lock-blocker.txt
+          grep -Fq 'blocker-auth-lock-acquired' one-person-lock-blocker.txt
+          grep -Fq 'ROLLBACK' one-person-lock-replay.txt
+          if grep -Fqi 'deadlock detected' one-person-lock-replay.txt one-person-lock-blocker.txt; then
+            echo "The repaired migration encountered a deadlock." >&2
+            exit 1
+          fi
+      - name: SQL regression with release gates initially disabled
+        run: set -o pipefail; psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/one_person_one_account.sql 2>&1 | tee one-person-sql.txt
+      - name: Enable QA-only release gates for the rendered test window
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' | tee one-person-gates-enabled.json
           select public.configure_person_account_release_v1('qa_mock', true, true, true, null);
           SQL
-      - name: SQL regression
-        run: set -o pipefail; psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/one_person_one_account.sql 2>&1 | tee one-person-sql.txt
+          jq -e '
+            .providerMode == "qa_mock" and
+            .providerReady == true and
+            .registrationEnforcementEnabled == true and
+            .participationEnforcementEnabled == true
+          ' one-person-gates-enabled.json >/dev/null
       - name: Concurrent duplicate registration
         run: set -o pipefail; scripts/test-one-person-concurrency.sh 2>&1 | tee one-person-concurrency.txt
       - name: Install Chromium
@@ -296,7 +455,12 @@ jobs:
             one-person-migration.sha256
             one-person-migration.txt
             one-person-schema-inventory.txt
+            one-person-gates-before.json
+            one-person-lock-replay.sha256
+            one-person-lock-replay.txt
+            one-person-lock-blocker.txt
             one-person-sql.txt
+            one-person-gates-enabled.json
             one-person-concurrency.txt
             one-person-browser.txt
             one-person-residue.json
