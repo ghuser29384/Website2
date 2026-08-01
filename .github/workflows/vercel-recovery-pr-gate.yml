@@ -1,0 +1,70 @@
+name: Vercel recovery PR gate
+
+on:
+  push:
+    branches:
+      - ops/vercel-post-payment-recovery-20260801
+    paths:
+      - .github/workflows/vercel-recovery-pr-gate.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-recovery-pr-gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused Vercel-control tests
+        run: npm run test:vercel-controls
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build the optimized production application
+        run: npm run build
+
+      - name: Verify exact candidate diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main --depth=1
+          git diff --check origin/main...HEAD
+          expected="$(cat <<'EOF'
+          .github/workflows/vercel-admin-cost-controls.yml
+          .github/workflows/vercel-recovery-pr-gate.yml
+          docs/operations/vercel-cost-controls.md
+          scripts/vercel-admin-cost-controls.mjs
+          scripts/vercel-admin-cost-controls.test.mjs
+          scripts/vercel-admin-workflow.test.mjs
+          EOF
+          )"
+          actual="$(git diff --name-only origin/main...HEAD | sort)"
+          test "$actual" = "$expected"
