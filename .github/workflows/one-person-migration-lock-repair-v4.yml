@@ -1,4 +1,4 @@
-name: One-person migration lock repair v4
+name: One-person migration lock repair v5
 
 on:
   issue_comment:
@@ -10,13 +10,18 @@ permissions:
   issues: write
 
 concurrency:
-  group: one-person-migration-lock-repair-v4-379
+  group: one-person-migration-lock-repair-v5-379
   cancel-in-progress: false
 
 env:
   TARGET_BRANCH: feature/one-person-one-account-20260731
-  EXPECTED_HEAD: 0a7e0b68ae3306fd24be6f2d586f272ad27cdfcf
+  EXPECTED_HEAD: d816f08280605c4ed8adb771665f81633ed61f64
+  ORIGINAL_CLEAN_HEAD: 0d2cafa8e7bf464c24e2614ded8722d6226ac1cf
+  EXPECTED_MIGRATION_BLOB: bf2bf6d8f8916915d5a606e449feefea6df4afaa
+  MIGRATION_PATH: supabase/migrations/20260731072000_one_person_one_account.sql
   HOLD_PATH: .github/one-person-lock-repair-hold
+  BRANCH_CONTROLLER_PATH: .github/workflows/one-person-migration-lock-repair-pr.yml
+  QA_WORKFLOW_PATH: .github/workflows/one-person-account-qa.yml
   CONTROLLER_PATH: .github/workflows/one-person-migration-lock-repair-v4.yml
   STALE_CONTROLLER_ONE: .github/workflows/one-person-migration-lock-repair-controller.yml
   STALE_CONTROLLER_TWO: .github/workflows/one-person-migration-parse-repair-v3.yml
@@ -28,9 +33,9 @@ jobs:
       github.repository == 'ghuser29384/Website2' &&
       github.event.issue.pull_request != null &&
       github.event.issue.number == 379 &&
-      github.event.comment.body == '/repair-one-person-migration-lock-20260801-v4'
+      github.event.comment.body == '/repair-one-person-migration-lock-20260801-v5'
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
     env:
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
     steps:
@@ -41,21 +46,30 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
-      - name: Apply bounded deadlock-safe relation locks
+      - name: Verify exact source state
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          test "$(git rev-parse "HEAD:$MIGRATION_PATH")" = "$EXPECTED_MIGRATION_BLOB"
           test -f "$HOLD_PATH"
+          test -f "$BRANCH_CONTROLLER_PATH"
+          test -f "$QA_WORKFLOW_PATH"
           test ! -e .github/one-person-bootstrap
           test ! -e .github/workflows/materialize-one-person-account.yml
+
+      - name: Apply bounded deadlock-safe relation locks and restore ordinary QA
+        shell: bash
+        run: |
+          set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
           path = Path('supabase/migrations/20260731072000_one_person_one_account.sql')
-          text = path.read_text()
+          text = path.read_text(encoding='utf-8')
           marker = '$one_person_migration_relation_locks$'
           if marker in text:
               raise SystemExit('migration relation-lock guard already exists')
@@ -96,20 +110,24 @@ create extension if not exists pgcrypto with schema extensions;'''
 
           if text.count(needle) != 1:
               raise SystemExit(f'unexpected migration preamble inventory: {text.count(needle)}')
-          path.write_text(text.replace(needle, block, 1))
+          path.write_text(text.replace(needle, block, 1), encoding='utf-8')
           PY
-          test "$(grep -cF '$one_person_migration_relation_locks$' supabase/migrations/20260731072000_one_person_one_account.sql)" -eq 2
-          git rm "$HOLD_PATH"
+          test "$(grep -cF '$one_person_migration_relation_locks$' "$MIGRATION_PATH")" -eq 2
+          git rm "$HOLD_PATH" "$BRANCH_CONTROLLER_PATH"
+          git show "$ORIGINAL_CLEAN_HEAD:$QA_WORKFLOW_PATH" > "$QA_WORKFLOW_PATH"
           cat > /tmp/expected-repair-paths.txt <<'EOF'
           .github/one-person-lock-repair-hold
+          .github/workflows/one-person-account-qa.yml
+          .github/workflows/one-person-migration-lock-repair-pr.yml
           supabase/migrations/20260731072000_one_person_one_account.sql
           EOF
           sed -i 's/^          //' /tmp/expected-repair-paths.txt
-          git diff --name-only | sort > /tmp/actual-repair-paths.txt
+          sort -u /tmp/expected-repair-paths.txt -o /tmp/expected-repair-paths.txt
+          git diff --name-only | sort -u > /tmp/actual-repair-paths.txt
           diff -u /tmp/expected-repair-paths.txt /tmp/actual-repair-paths.txt
           git diff --check
 
-      - name: Compile the full repaired migration with final rollback
+      - name: Compile complete repaired migration against isolated QA with rollback
         shell: bash
         run: |
           set -euo pipefail
@@ -120,15 +138,48 @@ create extension if not exists pgcrypto with schema extensions;'''
           sudo apt-get install -y postgresql-client >/dev/null
           python3 - <<'PY'
           from pathlib import Path
-          source = Path('supabase/migrations/20260731072000_one_person_one_account.sql').read_text().rstrip()
+
+          source = Path('supabase/migrations/20260731072000_one_person_one_account.sql').read_text(encoding='utf-8').rstrip()
           if not source.endswith('commit;'):
               raise SystemExit('migration does not end in commit;')
-          Path('/tmp/one-person-lock-compile.sql').write_text(source[:-len('commit;')] + 'rollback;\n')
+
+          reset = r'''begin;
+do $reset_one_person_triggers$
+declare
+  item record;
+begin
+  for item in
+    select * from (values
+      ('person_account_release_gates', 'person_account_release_gates_touch_updated_at'),
+      ('identity_subjects', 'identity_subjects_touch_updated_at'),
+      ('preaccount_verification_sessions', 'preaccount_verification_sessions_touch_updated_at'),
+      ('person_accounts', 'person_accounts_touch_updated_at'),
+      ('preaccount_guardian_consents', 'preaccount_guardian_consents_touch_updated_at'),
+      ('guardian_relationships', 'guardian_relationships_touch_updated_at'),
+      ('account_merge_cases', 'account_merge_cases_touch_updated_at'),
+      ('identity_verification_events', 'identity_verification_events_append_only'),
+      ('account_security_events', 'account_security_events_append_only'),
+      ('identity_dedupe_keys', 'identity_dedupe_keys_no_delete')
+    ) as configured(table_name, trigger_name)
+  loop
+    if to_regclass('moral_trade_private.' || item.table_name) is not null then
+      execute format(
+        'drop trigger if exists %I on moral_trade_private.%I',
+        item.trigger_name,
+        item.table_name
+      );
+    end if;
+  end loop;
+end;
+$reset_one_person_triggers$;
+'''
+          compiled = reset + source[:-len('commit;')] + 'rollback;\n'
+          Path('/tmp/one-person-lock-compile.sql').write_text(compiled, encoding='utf-8')
           PY
           psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/one-person-lock-compile.sql > /tmp/one-person-lock-compile.log
-          tail -n 30 /tmp/one-person-lock-compile.log
+          tail -n 50 /tmp/one-person-lock-compile.log
 
-      - name: Commit and push the compiled repair
+      - name: Commit and push exact compiled repair
         id: publish
         shell: bash
         run: |
@@ -139,16 +190,21 @@ create extension if not exists pgcrypto with schema extensions;'''
           git add -A
           cat > /tmp/expected-staged-paths.txt <<'EOF'
           .github/one-person-lock-repair-hold
+          .github/workflows/one-person-account-qa.yml
+          .github/workflows/one-person-migration-lock-repair-pr.yml
           supabase/migrations/20260731072000_one_person_one_account.sql
           EOF
           sed -i 's/^          //' /tmp/expected-staged-paths.txt
-          git diff --cached --name-only | sort > /tmp/actual-staged-paths.txt
+          sort -u /tmp/expected-staged-paths.txt -o /tmp/expected-staged-paths.txt
+          git diff --cached --name-only | sort -u > /tmp/actual-staged-paths.txt
           diff -u /tmp/expected-staged-paths.txt /tmp/actual-staged-paths.txt
           git diff --cached --check
           git commit -m 'Harden one-person migration lock acquisition'
           repaired_sha="$(git rev-parse HEAD)"
           test "$(git rev-parse HEAD^)" = "$EXPECTED_HEAD"
           test ! -e "$HOLD_PATH"
+          test ! -e "$BRANCH_CONTROLLER_PATH"
+          test "$(git rev-parse "HEAD:$QA_WORKFLOW_PATH")" = "$(git rev-parse "$ORIGINAL_CLEAN_HEAD:$QA_WORKFLOW_PATH")"
           git push --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_HEAD" origin "HEAD:refs/heads/$TARGET_BRANCH"
           echo "repaired_sha=$repaired_sha" >> "$GITHUB_OUTPUT"
 
@@ -158,7 +214,7 @@ create extension if not exists pgcrypto with schema extensions;'''
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "The deadlock-safe relation-lock repair compiled through the migration's final statement against isolated QA in a rollback-only transaction. Pushed exact repaired candidate \`${{ steps.publish.outputs.repaired_sha }}\`, removed the temporary branch hold, kept the PR draft, and left production unchanged."
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "The default-branch repair controller compiled the deadlock-safe migration through its final statement against isolated QA with rollback, pushed exact repair \`${{ steps.publish.outputs.repaired_sha }}\`, restored the ordinary QA workflow, and removed both temporary branch files. The PR remains draft; production is unchanged."
 
       - name: Report failure
         if: failure()
@@ -166,9 +222,9 @@ create extension if not exists pgcrypto with schema extensions;'''
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "One-person migration lock repair v4 failed in run \`$GITHUB_RUN_ID\`. No feature push occurred unless the exact-head, exact two-path repair, rollback-only compilation, and force-with-lease guards all passed. The temporary branch hold remains unless a successful push is explicitly recorded."
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "One-person migration lock repair v5 failed in run \`$GITHUB_RUN_ID\`. No feature push occurred unless exact-head, source-blob, four-path, rollback-only compilation, workflow-restoration, and force-with-lease guards all passed."
 
-      - name: Remove temporary controllers
+      - name: Remove temporary controllers from main
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
