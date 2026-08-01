@@ -1,0 +1,122 @@
+name: Verify PR 448 Vercel recovery exact head once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pr448-vercel-recovery-gate-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr448-vercel-recovery-gate-once
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 7cd518850a530c1fdb9674955ef2d5e76512b41e
+  BASE_SHA: 2b264b3b7b62358f051cf0ea93e2792f6c0d695b
+  CONTROLLER_PATH: .github/workflows/pr448-vercel-recovery-gate-once.yml
+  PR_NUMBER: 448
+
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Guard one-time controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')" = "$CONTROLLER_PATH"
+
+      - name: Check out exact PR candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$CANDIDATE_SHA" --depth=1
+          git checkout --detach "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused Vercel-control tests
+        run: npm run test:vercel-controls
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build the optimized production application
+        run: npm run build
+
+      - name: Verify exact candidate diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$BASE_SHA" --depth=1
+          git diff --check "$BASE_SHA...$CANDIDATE_SHA"
+          expected="$(cat <<'EOF'
+          .github/workflows/vercel-admin-cost-controls.yml
+          docs/operations/vercel-cost-controls.md
+          scripts/vercel-admin-cost-controls.mjs
+          scripts/vercel-admin-cost-controls.test.mjs
+          scripts/vercel-admin-workflow.test.mjs
+          EOF
+          )"
+          actual="$(git diff --name-only "$BASE_SHA...$CANDIDATE_SHA" | sort)"
+          test "$actual" = "$expected"
+
+      - name: Report gate result to PR 448
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Exact repository-only recovery gates finished with status \`${{ job.status }}\` on candidate \`$CANDIDATE_SHA\` against base \`$BASE_SHA\`. The run covered focused Vercel-control tests, complete repository tests, ESLint, TypeScript, optimized production build, and exact diff hygiene. Evidence: $run_url"
+
+      - name: Remove one-time controller
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$blob_sha" ]]; then
+            jq -n \
+              --arg message 'Remove one-time PR 448 recovery gate controller' \
+              --arg sha "$blob_sha" \
+              --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE \
+                  "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" \
+                  --input - >/dev/null
+          fi
