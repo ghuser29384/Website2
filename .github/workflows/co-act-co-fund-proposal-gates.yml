@@ -1,100 +1,221 @@
-name: Proposal-only Co-Act and Co-Fund gates
+name: Repair Co-Act and Co-Fund browser interaction
 
 on:
   pull_request:
     paths:
       - ".github/workflows/co-act-co-fund-proposal-gates.yml"
-      - "docs/co-act-co-fund-create-spec.md"
-      - "src/instrumentation-client.ts"
-      - "src/lib/create-interface/group-contribution*"
-      - "src/lib/create-interface/persistence.ts"
-      - "src/lib/create-interface/persistence.test.ts"
-      - "src/lib/create-interface/source-contract.test.ts"
-      - "src/lib/create-interface/types.ts"
-      - "src/lib/create-interface/validation.ts"
-      - "src/lib/create-interface/validation.test.ts"
-      - "tests/create-group-contribution-proposal.spec.ts"
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: co-act-co-fund-proposal-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: co-act-co-fund-browser-repair-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
-  proposal-release-gates:
-    name: Contracts, absolute gates, build, and rendered workflow
+  repair-and-restore:
+    if: github.event.pull_request.head.ref == 'feature/co-act-co-fund-create-v2-20260801'
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 10
     steps:
-      - name: Check out exact candidate
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
+          ref: feature/co-act-co-fund-create-v2-20260801
           fetch-depth: 0
+          persist-credentials: true
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run focused Co-Act and Co-Fund contracts
-        run: >-
-          node --import tsx --test
-          src/lib/create-interface/group-contribution*.test.ts
-          src/lib/create-interface/persistence.test.ts
-          src/lib/create-interface/source-contract.test.ts
-          src/lib/create-interface/validation.test.ts
-
-      - name: Run complete repository tests
-        run: npm test
-
-      - name: Run absolute ESLint
-        run: npm run lint
-
-      - name: Run absolute TypeScript check
-        run: npx tsc --noEmit
-
-      - name: Build the production application
-        env:
-          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
-          VERCEL: "1"
-          VERCEL_ENV: preview
-        run: npm run build
-
-      - name: Verify clean exact diff and absence of temporary machinery
+      - name: Defer Shadow DOM replacement until interaction dispatch completes
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin main
-          git diff --check origin/main...HEAD
-          test ! -e .github/co-act-co-fund-product-payload
-          test ! -e .github/workflows/materialize-co-act-co-fund-product.yml
-          if find .github/workflows -maxdepth 1 -type f \( -name 'co-act-co-fund-finalize-*' -o -name 'co-act-co-fund-hardening-*' -o -name 'co-act-co-fund-policy-finalizer-*' -o -name 'co-act-co-fund-proposal-gate-*' \) | grep -q .; then
-            echo 'Temporary Co-Act/Co-Fund controller remains in the candidate.' >&2
-            exit 1
-          fi
+          python3 - <<'PY'
+          from pathlib import Path
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+          path = Path('src/lib/create-interface/group-contribution-client.ts')
+          text = path.read_text()
 
-      - name: Run real Create iframe proposal workflow
-        env:
-          CREATE_ROUTE_CAPTURE: "1"
-        run: npx playwright test tests/create-group-contribution-proposal.spec.ts
+          replacements = [
+              (
+                  'let scanQueued = false;\nlet submitGuardInstalled = false;',
+                  'let scanQueued = false;\nlet submitGuardInstalled = false;\nconst pendingRenders = new Set<string>();',
+                  'render-state declarations',
+              ),
+              (
+                  '  mounted.clear();\n  activeWindow = targetWindow;',
+                  '  mounted.clear();\n  pendingRenders.clear();\n  activeWindow = targetWindow;',
+                  'document activation reset',
+              ),
+              (
+                  '''    button.addEventListener("click", () => {
+      const mode = button.dataset.mode as GroupDraftMode;
+      entry.state.mode = mode;
+      entry.state.primaryText =
+        readPrimaryText(entry.card, entry.underlying) || entry.state.primaryText;
+      renderMountedOption(entry);
+      writeProposalPayload();
+    });''',
+                  '''    button.addEventListener("click", () => {
+      const mode = button.dataset.mode as GroupDraftMode;
+      entry.state.mode = mode;
+      entry.state.primaryText =
+        readPrimaryText(entry.card, entry.underlying) || entry.state.primaryText;
+      entry.state = normalizeDraft(entry.state);
+      writeProposalPayload();
+      scheduleMountedOptionRender(entry);
+    });''',
+                  'mode-button listener',
+              ),
+              (
+                  '''        if (rerender) renderMountedOption(entry);
+        else updateValidationStatus(entry);''',
+                  '''        if (rerender) scheduleMountedOptionRender(entry);
+        else updateValidationStatus(entry);''',
+                  'control rerender path',
+              ),
+          ]
 
-      - name: Upload rendered evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: co-act-co-fund-proposal-evidence-${{ github.run_id }}
-          path: |
-            test-results
-            playwright-report
-          if-no-files-found: warn
-          retention-days: 14
+          for old, new, label in replacements:
+              if old not in text:
+                  raise SystemExit(f'Could not locate {label}')
+              text = text.replace(old, new, 1)
+
+          anchor = '''function updateStateFromControl(
+  state: GroupContributionDraftState,'''
+          helper = '''function scheduleMountedOptionRender(entry: MountedOption): void {
+  if (pendingRenders.has(entry.key)) return;
+  pendingRenders.add(entry.key);
+  const targetWindow = createWindow();
+  targetWindow.setTimeout(() => {
+    pendingRenders.delete(entry.key);
+    if (mounted.get(entry.key) !== entry || !entry.host.isConnected) return;
+    renderMountedOption(entry);
+  }, 0);
+}
+
+function updateStateFromControl(
+  state: GroupContributionDraftState,'''
+          if anchor not in text:
+              raise SystemExit('Could not locate updateStateFromControl insertion point')
+          text = text.replace(anchor, helper, 1)
+          path.write_text(text)
+          PY
+          git diff --check
+
+      - name: Restore the durable read-only release gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/co-act-co-fund-browser-interaction-repair.yml
+          cat > .github/workflows/co-act-co-fund-proposal-gates.yml <<'YAML'
+          name: Proposal-only Co-Act and Co-Fund gates
+
+          on:
+            pull_request:
+              paths:
+                - ".github/workflows/co-act-co-fund-proposal-gates.yml"
+                - "docs/co-act-co-fund-create-spec.md"
+                - "src/instrumentation-client.ts"
+                - "src/lib/create-interface/group-contribution*"
+                - "src/lib/create-interface/persistence.ts"
+                - "src/lib/create-interface/persistence.test.ts"
+                - "src/lib/create-interface/source-contract.test.ts"
+                - "src/lib/create-interface/types.ts"
+                - "src/lib/create-interface/validation.ts"
+                - "src/lib/create-interface/validation.test.ts"
+                - "tests/create-group-contribution-proposal.spec.ts"
+            workflow_dispatch:
+
+          permissions:
+            contents: read
+
+          concurrency:
+            group: co-act-co-fund-proposal-${{ github.workflow }}-${{ github.ref }}
+            cancel-in-progress: true
+
+          jobs:
+            proposal-release-gates:
+              name: Contracts, absolute gates, build, and rendered workflow
+              runs-on: ubuntu-24.04
+              timeout-minutes: 75
+              steps:
+                - name: Check out exact candidate
+                  uses: actions/checkout@v4
+                  with:
+                    fetch-depth: 0
+
+                - name: Set up Node.js
+                  uses: actions/setup-node@v4
+                  with:
+                    node-version: 24
+                    cache: npm
+
+                - name: Install dependencies
+                  run: npm ci
+
+                - name: Run focused Co-Act and Co-Fund contracts
+                  run: >-
+                    node --import tsx --test
+                    src/lib/create-interface/group-contribution*.test.ts
+                    src/lib/create-interface/persistence.test.ts
+                    src/lib/create-interface/source-contract.test.ts
+                    src/lib/create-interface/validation.test.ts
+
+                - name: Run complete repository tests
+                  run: npm test
+
+                - name: Run absolute ESLint
+                  run: npm run lint
+
+                - name: Run absolute TypeScript check
+                  run: npx tsc --noEmit
+
+                - name: Build the production application
+                  env:
+                    NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+                    VERCEL: "1"
+                    VERCEL_ENV: preview
+                  run: npm run build
+
+                - name: Verify clean exact diff and absence of temporary machinery
+                  shell: bash
+                  run: |
+                    set -euo pipefail
+                    git fetch origin main
+                    git diff --check origin/main...HEAD
+                    test ! -e .github/co-act-co-fund-product-payload
+                    test ! -e .github/workflows/materialize-co-act-co-fund-product.yml
+                    if find .github/workflows -maxdepth 1 -type f \( -name 'co-act-co-fund-finalize-*' -o -name 'co-act-co-fund-hardening-*' -o -name 'co-act-co-fund-policy-finalizer-*' -o -name 'co-act-co-fund-proposal-gate-*' \) | grep -q .; then
+                      echo 'Temporary Co-Act/Co-Fund controller remains in the candidate.' >&2
+                      exit 1
+                    fi
+
+                - name: Install Chromium
+                  run: npx playwright install --with-deps chromium
+
+                - name: Run real Create iframe proposal workflow
+                  env:
+                    CREATE_ROUTE_CAPTURE: "1"
+                  run: npx playwright test tests/create-group-contribution-proposal.spec.ts
+
+                - name: Upload rendered evidence
+                  if: always()
+                  uses: actions/upload-artifact@v4
+                  with:
+                    name: co-act-co-fund-proposal-evidence-${{ github.run_id }}
+                    path: |
+                      test-results
+                      playwright-report
+                    if-no-files-found: warn
+                    retention-days: 14
+          YAML
+          git diff --check
+
+      - name: Commit the repair and remove temporary machinery
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Stabilize Co-Act and Co-Fund Shadow DOM interactions'
+          git push origin HEAD:feature/co-act-co-fund-create-v2-20260801
