@@ -998,9 +998,9 @@ begin
 
   if p_registration_token_hash is not null then
     select * into grant_row
-    from moral_trade_private.person_registration_grants grant
-    where grant.verification_session_id = session_row.id
-      and grant.token_hash = p_registration_token_hash;
+    from moral_trade_private.person_registration_grants registration_grant
+    where registration_grant.verification_session_id = session_row.id
+      and registration_grant.token_hash = p_registration_token_hash;
   end if;
 
   return jsonb_build_object(
@@ -1992,10 +1992,10 @@ begin
     );
   end if;
 
-  select grant.id into existing_open_grant
-  from moral_trade_private.person_registration_grants grant
-  where grant.identity_subject_id = subject_row.id
-    and grant.state in ('issued', 'reserved')
+  select registration_grant.id into existing_open_grant
+  from moral_trade_private.person_registration_grants registration_grant
+  where registration_grant.identity_subject_id = subject_row.id
+    and registration_grant.state in ('issued', 'reserved')
   for update;
 
   if existing_open_grant is not null then
@@ -2107,8 +2107,8 @@ declare
   grant_row moral_trade_private.person_registration_grants%rowtype;
 begin
   select * into grant_row
-  from moral_trade_private.person_registration_grants grant
-  where grant.id = p_grant_id
+  from moral_trade_private.person_registration_grants registration_grant
+  where registration_grant.id = p_grant_id
   for update;
 
   if not found
@@ -2203,8 +2203,8 @@ begin
   );
 
   select * into grant_row
-  from moral_trade_private.person_registration_grants grant
-  where grant.id = grant_id_value
+  from moral_trade_private.person_registration_grants registration_grant
+  where registration_grant.id = grant_id_value
   for update;
 
   if not found
@@ -2362,8 +2362,8 @@ begin
   token_hash_value := encode(extensions.digest(convert_to(raw_token, 'UTF8'), 'sha256'), 'hex');
 
   select * into grant_row
-  from moral_trade_private.person_registration_grants grant
-  where grant.id = grant_id_value
+  from moral_trade_private.person_registration_grants registration_grant
+  where registration_grant.id = grant_id_value
   for update;
 
   if not found
@@ -2642,8 +2642,8 @@ begin
       revoked_at = null;
 
   select * into grant_row
-  from moral_trade_private.person_registration_grants grant
-  where grant.verification_session_id = session_row.id
+  from moral_trade_private.person_registration_grants registration_grant
+  where registration_grant.verification_session_id = session_row.id
   for update;
 
   if not found then
@@ -3603,7 +3603,7 @@ begin
      or merge_row.status <> 'approved'
      or not merge_row.credentials_reconciled
      or lower(coalesce(merge_row.conflict_summary ->> 'blocking', 'false')) = 'true'
-     or approve_count < case when merge_row.contested then 2 else 1 end
+     or approve_count < (case when merge_row.contested then 2 else 1 end)
      or exists (
        select 1 from moral_trade_private.account_merge_reviews review
        where review.merge_case_id = p_merge_case_id and review.decision = 'reject'
