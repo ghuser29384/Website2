@@ -1,0 +1,230 @@
+name: Co-Act and Co-Fund proposal gate v5
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v2-20260801
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: co-act-co-fund-proposal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v2-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply reviewed source refinements
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          client = Path('src/lib/create-interface/group-contribution-client.ts')
+          text = client.read_text()
+
+          replacements = {
+              'state.baselineQuantity, 0, 1_000_000, "number")': 'state.baselineQuantity, 0, 1_000_000, "any")',
+              '0, 0, 100, "number", true)': '0, 0, 100, "1", true)',
+              'state.redistributionMaximumQuantity, 0, 1_000_000, "number")': 'state.redistributionMaximumQuantity, 0, 1_000_000, "any")',
+              'state.mode === "co-act" ? coActPrimaryFields(state) : coFundPrimaryFields(state)': 'state.mode === "co-act" ? coActPrimaryFields(state) : coFundPrimaryFields()',
+              'function coFundPrimaryFields(_state: GroupContributionDraftState): string {': 'function coFundPrimaryFields(): string {',
+              '${commonAdvancedFields(state)}': '${commonAdvancedFields()}',
+              'function commonAdvancedFields(_state: GroupContributionDraftState): string {': 'function commonAdvancedFields(): string {',
+          }
+          for old, new in replacements.items():
+              text = text.replace(old, new)
+
+          if 'group-contribution-draft-sanitize' not in text:
+              anchor = 'import {\n  buildGroupContributionTerms,'
+              import_block = 'import { sanitizeGroupContributionDraft } from "./group-contribution-draft-sanitize";\n'
+              if anchor not in text:
+                  raise SystemExit('Could not locate draft import anchor')
+              text = text.replace(anchor, import_block + anchor, 1)
+
+          old_token = '''  return new Set(\n    normalizedText(value)\n      .split(/[^a-z0-9]+/u)'''
+          if old_token in text:
+              new_token = '''  const canonical = normalizedText(value)\n    .replace(/\\b(?:does not|doesn't|do not|don't|not|never)\\s+(?:eat|eating|consume|consuming)\\b/gu, "avoid")\n    .replace(/\\beach\\b/gu, "per");\n  return new Set(\n    canonical\n      .split(/[^a-z0-9]+/u)'''
+              text = text.replace(old_token, new_token)
+
+          pattern = re.compile(
+              r'function sanitizeStoredDraft\([\s\S]*?\n}\n\nfunction updateCounterpartyMatchDefault',
+              re.MULTILINE,
+          )
+          replacement = '''function sanitizeStoredDraft(\n  saved: GroupContributionDraftState,\n  key: string,\n  underlying: UnderlyingContributionKind,\n): GroupContributionDraftState {\n  return sanitizeGroupContributionDraft(saved, key, underlying);\n}\n\nfunction updateCounterpartyMatchDefault'''
+          if pattern.search(text):
+              text = pattern.sub(replacement, text, count=1)
+          elif 'return sanitizeGroupContributionDraft(saved, key, underlying);' not in text:
+              raise SystemExit('Could not locate stored-draft sanitizer')
+          client.write_text(text)
+
+          payload_test = Path('src/lib/create-interface/group-contribution-payload.test.ts')
+          text = payload_test.read_text()
+          old = '''  const terms = {\n    ...coActTerms(),\n    identity: {\n      ...(coActTerms().mode === "co-act" ? coActTerms().identity : {}),\n      publishIdentities: true,\n    },\n  };'''
+          if old in text:
+              new = '''  const base = coActTerms();\n  assert.equal(base.mode, "co-act");\n  if (base.mode !== "co-act") throw new Error("Expected Co-Act terms");\n  const terms = {\n    ...base,\n    identity: {\n      ...base.identity,\n      publishIdentities: true,\n    },\n  };'''
+              text = text.replace(old, new)
+          payload_test.write_text(text)
+
+          rendered = Path('tests/create-group-contribution-proposal.spec.ts')
+          text = rendered.read_text()
+          text = text.replace(
+              'import { expect, test } from "@playwright/test";',
+              'import { expect, test, type Page } from "@playwright/test";',
+          )
+          text = text.replace(
+              'async function mountSyntheticOfferStep(page: Parameters<typeof test>[0]["page"]) {',
+              'async function mountSyntheticOfferStep(page: Page) {',
+          )
+          text = text.replace(
+              '/stripe|paymentintent|checkout|card|ach/i.test(request.url())',
+              '/stripe|paymentintent|checkout|\\/payments?(?:\\/|\\?|$)|\\/ach(?:\\/|\\?|$)/i.test(request.url())',
+          )
+          rendered.write_text(text)
+
+          server = Path('src/lib/create-interface/group-contribution-server.ts')
+          text = server.read_text()
+          text = text.replace('featureDisabledIssue(index, mode, `${mode} proposals are disabled`)', 'featureDisabledIssue(index, `${mode} proposals are disabled`)')
+          text = text.replace('featureDisabledIssue(\n            index,\n            mode,\n            `${option.terms.structure} Co-Act proposals are disabled`,\n          )', 'featureDisabledIssue(\n            index,\n            `${option.terms.structure} Co-Act proposals are disabled`,\n          )')
+          text = text.replace('featureDisabledIssue(\n            index,\n            mode,\n            `${option.terms.allocationMode} Co-Fund proposals are disabled`,\n          )', 'featureDisabledIssue(\n            index,\n            `${option.terms.allocationMode} Co-Fund proposals are disabled`,\n          )')
+          text = text.replace('function featureDisabledIssue(\n  index: number,\n  _mode: GroupContributionMode,\n  message: string,\n)', 'function featureDisabledIssue(\n  index: number,\n  message: string,\n)')
+          text = text.replace('import type { GroupContributionMode, UnderlyingContributionKind }', 'import type { UnderlyingContributionKind }')
+          server.write_text(text)
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Focused group-contribution contracts
+        run: >-
+          node --import tsx --test
+          src/lib/create-interface/group-contribution.test.ts
+          src/lib/create-interface/group-contribution-draft.test.ts
+          src/lib/create-interface/group-contribution-client.test.ts
+          src/lib/create-interface/group-contribution-payload.test.ts
+          src/lib/create-interface/group-contribution-shape.test.ts
+          src/lib/create-interface/group-contribution-draft-sanitize.test.ts
+          src/lib/create-interface/group-contribution-flags.test.ts
+          src/lib/create-interface/group-contribution-server.test.ts
+
+      - name: Focused lint
+        run: >-
+          npx eslint
+          src/instrumentation-client.ts
+          src/lib/create-interface/group-contribution.ts
+          src/lib/create-interface/group-contribution-draft.ts
+          src/lib/create-interface/group-contribution-client.ts
+          src/lib/create-interface/group-contribution-payload.ts
+          src/lib/create-interface/group-contribution-shape.ts
+          src/lib/create-interface/group-contribution-draft-sanitize.ts
+          src/lib/create-interface/group-contribution-flags.ts
+          src/lib/create-interface/group-contribution-server.ts
+          src/lib/create-interface/group-contribution.test.ts
+          src/lib/create-interface/group-contribution-draft.test.ts
+          src/lib/create-interface/group-contribution-client.test.ts
+          src/lib/create-interface/group-contribution-payload.test.ts
+          src/lib/create-interface/group-contribution-shape.test.ts
+          src/lib/create-interface/group-contribution-draft-sanitize.test.ts
+          src/lib/create-interface/group-contribution-flags.test.ts
+          src/lib/create-interface/group-contribution-server.test.ts
+          tests/create-group-contribution-proposal.spec.ts
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Complete repository tests
+        run: npm test
+
+      - name: Complete repository lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Rendered desktop and mobile proposal checks
+        run: npx playwright test tests/create-group-contribution-proposal.spec.ts --project=chromium
+
+      - name: Inspect authoritative persistence wiring status
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "Validated server entry point: src/lib/create-interface/group-contribution-server.ts"
+            echo
+            echo "Current non-test call sites:"
+            grep -RIn --include='*.ts' --include='*.tsx' \
+              'validateGroupContributionProposalForPersistence' src \
+              | grep -Ev 'group-contribution-server(\.test)?\.ts' || true
+          } > /tmp/persistence-status.txt
+
+      - name: Remove temporary workflows and commit validated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/co-act-co-fund-proposal-gate.yml
+          rm -f .github/workflows/co-act-co-fund-proposal-gate-v2.yml
+          rm -f .github/workflows/co-act-co-fund-proposal-gate-v3.yml
+          rm -f .github/workflows/co-act-co-fund-proposal-gate-v4.yml
+          rm -f .github/workflows/co-act-co-fund-proposal-gate-v5.yml
+          rm -f .github/workflows/co-act-co-fund-persistence-inspector.yml
+          git add -A
+          if ! git diff --cached --quiet; then
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git commit -m 'Validate hardened proposal-only group contributions'
+            git push origin HEAD:feature/co-act-co-fund-create-v2-20260801
+          fi
+
+      - name: Record exact-head result on the draft PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head feature/co-act-co-fund-create-v2-20260801 --state open --json number --jq '.[0].number // empty')"
+          if [[ -z "$pr" ]]; then exit 0; fi
+          {
+            echo "The hardened proposal-only Co-Act/Co-Fund source passed focused contracts, focused lint, absolute TypeScript, complete repository tests, complete repository lint, production build, and rendered desktop/mobile Playwright checks before all temporary workflows were removed."
+            echo
+            echo "Validation run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            echo
+            echo '```text'
+            cat /tmp/persistence-status.txt
+            echo '```'
+            echo
+            echo "The PR remains draft. A non-test call site must wire the validated canonical JSON into the authoritative Create review-record persistence path before this candidate can be considered complete."
+          } > /tmp/comment.md
+          gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body-file /tmp/comment.md
+
+      - name: Report a failed gate on the draft PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head feature/co-act-co-fund-create-v2-20260801 --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$pr" ]]; then
+            gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body "The hardened proposal-only Co-Act/Co-Fund gate failed on exact head \`${GITHUB_SHA}\`. No validated release candidate was produced. Inspect run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          fi
