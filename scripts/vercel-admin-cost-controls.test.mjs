@@ -4,10 +4,16 @@ import test from "node:test";
 import {
   CANONICAL_PROJECT,
   OBSOLETE_TEST_PROJECTS,
+  PRODUCTION_ROUTE_CHECKS,
   buildCanonicalResourcePatch,
+  evaluateProductionRoute,
+  hasActiveAnchor,
   isVercelManagedDomain,
+  runProductionSmoke,
   safeProjectSummary,
   validateDisposableProject,
+  verifyCanonicalLive,
+  verifyCanonicalSettings,
 } from "./vercel-admin-cost-controls.mjs";
 
 test("canonical settings select Standard builds and serialized free concurrency", () => {
@@ -20,6 +26,37 @@ test("canonical settings select Standard builds and serialized free concurrency"
       },
     },
   });
+});
+
+test("canonical verification fails closed when settings or live state are wrong", () => {
+  const canonical = {
+    id: CANONICAL_PROJECT.id,
+    name: CANONICAL_PROJECT.name,
+    live: true,
+    resourceConfig: {
+      buildMachineType: "standard",
+      elasticConcurrencyEnabled: false,
+      buildQueue: "WAIT_FOR_NAMESPACE_QUEUE",
+    },
+  };
+
+  assert.equal(verifyCanonicalSettings(canonical), true);
+  assert.equal(verifyCanonicalLive(canonical), true);
+  assert.throws(
+    () => verifyCanonicalLive({ ...canonical, live: false }),
+    /not live/,
+  );
+  assert.throws(
+    () =>
+      verifyCanonicalSettings({
+        ...canonical,
+        resourceConfig: {
+          ...canonical.resourceConfig,
+          elasticConcurrencyEnabled: true,
+        },
+      }),
+    /concurrency remains enabled/,
+  );
 });
 
 test("only Vercel-managed aliases are safe on disposable projects", () => {
@@ -114,4 +151,95 @@ test("the deletion allowlist is narrow, immutable, and excludes live projects", 
         project.name === "moral-trade-live",
     ),
   );
+});
+
+test("production route evaluation verifies exact tab state without retaining HTML", () => {
+  const check = PRODUCTION_ROUTE_CHECKS.find((entry) => entry.name === "ledger");
+  const html = `<!doctype html><html data-dpl-id="dpl_exact"><body>
+    <h1>Additional resources you caused.</h1>
+    <h2>Sign in to view your commitments.</h2>
+    <a href="/commitments">Portfolio</a>
+    <a aria-current="page" href="/commitments?tab=ledger">Ledger</a>
+  </body></html>`;
+
+  assert.equal(
+    hasActiveAnchor(html, "/commitments?tab=ledger", "Ledger"),
+    true,
+  );
+  const result = evaluateProductionRoute(check, {
+    status: 200,
+    body: html,
+    contentType: "text/html; charset=utf-8",
+    finalUrl: "https://www.moraltrade.org/commitments?tab=ledger",
+  });
+  assert.equal(result.passed, true);
+  assert.equal(result.deploymentId, "dpl_exact");
+  assert.doesNotMatch(JSON.stringify(result), /<!doctype html>/);
+});
+
+test("production route evaluation rejects billing-disabled and wrong-tab responses", () => {
+  const check = PRODUCTION_ROUTE_CHECKS.find((entry) => entry.name === "calendar");
+  const result = evaluateProductionRoute(check, {
+    status: 402,
+    body: `Payment Required\nDEPLOYMENT_DISABLED\n<a aria-current="page" href="/commitments?tab=ledger">Ledger</a>`,
+    contentType: "text/plain; charset=utf-8",
+    finalUrl: "https://www.moraltrade.org/commitments?tab=calendar",
+  });
+
+  assert.equal(result.passed, false);
+  assert.ok(result.failures.some((failure) => /HTTP 200/.test(failure)));
+  assert.ok(
+    result.failures.some((failure) => /billing-blocked/.test(failure)),
+  );
+  assert.ok(result.failures.some((failure) => /active tab mismatch/.test(failure)));
+});
+
+test("production smoke retries all canonical routes and requires one deployment", async () => {
+  let round = 0;
+  const fetchImpl = async (url) => {
+    const parsed = new URL(url);
+    if (parsed.pathname === "/") {
+      return new Response("<title>Moral Trade</title>", {
+        status: 200,
+        headers: { "content-type": "text/html" },
+      });
+    }
+
+    const tab = parsed.searchParams.get("tab") ?? "portfolio";
+    const label =
+      tab === "portfolio"
+        ? "Portfolio"
+        : tab.charAt(0).toUpperCase() + tab.slice(1);
+    const href =
+      tab === "portfolio" ? "/commitments" : `/commitments?tab=${tab}`;
+    const status = round === 0 && tab === "calendar" ? 402 : 200;
+    const body =
+      status === 402
+        ? "Payment Required\nDEPLOYMENT_DISABLED"
+        : `<!doctype html><html data-dpl-id="dpl_same"><body>
+            <h1>Additional resources you caused.</h1>
+            <h2>Sign in to view your commitments.</h2>
+            <a aria-current="page" href="${href}">${label}</a>
+            <span>Portfolio Ledger Completed Calendar</span>
+          </body></html>`;
+    return new Response(body, {
+      status,
+      headers: { "content-type": status === 200 ? "text/html" : "text/plain" },
+    });
+  };
+
+  const report = await runProductionSmoke({
+    fetchImpl,
+    attempts: 2,
+    intervalMs: 1,
+    timeoutMs: 1_000,
+    sleep: async () => {
+      round += 1;
+    },
+  });
+
+  assert.equal(report.passed, true);
+  assert.equal(report.attemptsUsed, 2);
+  assert.deepEqual(report.deploymentIds, ["dpl_same"]);
+  assert.ok(report.routes.every((route) => route.passed));
 });
