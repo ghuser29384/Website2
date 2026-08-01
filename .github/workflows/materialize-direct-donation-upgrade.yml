@@ -35,6 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The payload includes the matcher-first / creator-default lifecycle repair and regression.
 
           git fetch origin main
           git merge-base --is-ancestor "$EXPECTED_BASE" HEAD
