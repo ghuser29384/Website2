@@ -1,0 +1,62 @@
+name: Vercel build ownership policy
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/vercel-build-ownership-policy.yml"
+      - "scripts/vercel-ignore-build.mjs"
+      - "scripts/vercel-project-config.mjs"
+      - "src/lib/vercel-build-ownership.test.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-build-ownership-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  policy-contract:
+    name: Policy contract and repository gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused ownership policy tests
+        run: node --import tsx --test src/lib/vercel-build-ownership.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run ESLint
+        run: npx eslint src/lib/vercel-build-ownership.test.ts
+
+      - name: Run TypeScript
+        run: npx tsc --noEmit
+
+      - name: Verify repository-only exact diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git diff --check origin/main...HEAD
+          changed="$(git diff --name-only origin/main...HEAD | sort)"
+          expected="$(printf '%s\n' \
+            .github/workflows/vercel-build-ownership-policy.yml \
+            src/lib/vercel-build-ownership.test.ts \
+            | sort)"
+          test "$changed" = "$expected"
