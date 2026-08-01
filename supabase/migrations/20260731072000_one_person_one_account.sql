@@ -8,34 +8,8 @@
 
 begin;
 
--- Acquire both relations without ever waiting while holding only one of them.
--- A failed NOWAIT attempt rolls back its PL/pgSQL subtransaction, releasing
--- any partial lock set before the bounded retry. This prevents lock-order
--- deadlocks with concurrent Auth and profile writes during deployment.
-do $one_person_migration_relation_locks$
-declare
-  attempt integer;
-  acquired boolean := false;
-begin
-  for attempt in 1..60 loop
-    begin
-      lock table auth.users in share row exclusive mode nowait;
-      lock table public.profiles in access exclusive mode nowait;
-      acquired := true;
-      exit;
-    exception
-      when lock_not_available then
-        perform pg_sleep(1);
-    end;
-  end loop;
-
-  if not acquired then
-    raise exception using
-      errcode = '55P03',
-      message = 'one_person_migration_relation_locks_unavailable';
-  end if;
-end;
-$one_person_migration_relation_locks$;
+-- Cross-relation DDL is split across migrations so this transaction never holds
+-- a strong lock on auth.users while waiting for public.profiles, or vice versa.
 
 create extension if not exists pgcrypto with schema extensions;
 create schema if not exists moral_trade_private;
@@ -880,10 +854,9 @@ $function$;
 revoke all on function moral_trade_private.sync_identity_badge_from_profile()
   from public, anon, authenticated, service_role;
 
-drop trigger if exists sync_identity_badge_from_profile on public.profiles;
-create trigger sync_identity_badge_from_profile
-after insert or update on public.profiles
-for each row execute function moral_trade_private.sync_identity_badge_from_profile();
+-- The public.profiles projection trigger is installed by the follow-up
+-- profile-only migration so this transaction never needs strong locks on both
+-- auth.users and public.profiles.
 
 create or replace function public.create_person_verification_session_v1(
   p_session_id uuid,

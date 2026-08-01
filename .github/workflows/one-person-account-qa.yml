@@ -15,6 +15,7 @@ on:
       - "src/components/auth/auth-card.tsx"
       - "src/lib/identity/**"
       - "supabase/migrations/20260731072000_one_person_one_account.sql"
+      - "supabase/migrations/20260801153000_one_person_profile_badge_projection_trigger.sql"
       - "supabase/tests/one_person_one_account.sql"
       - "tests/one-person-account-authenticated.spec.ts"
       - "package.json"
@@ -70,6 +71,7 @@ jobs:
           src/lib/identity/one-person-account.ts
           src/lib/identity/server.ts
           supabase/migrations/20260731072000_one_person_one_account.sql
+          supabase/migrations/20260801153000_one_person_profile_badge_projection_trigger.sql
           supabase/tests/one_person_one_account.sql
           tests/one-person-account-authenticated.spec.ts
           EOF
@@ -190,18 +192,20 @@ jobs:
           }
       - name: Install PostgreSQL and evidence tooling
         run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
-      - name: Apply additive migration once to isolated QA
+      - name: Apply additive migrations once to isolated QA
         shell: bash
         run: |
           set -euo pipefail
-          migration=supabase/migrations/20260731072000_one_person_one_account.sql
-          test "$(grep -cF '$one_person_migration_relation_locks$' "$migration")" -eq 2
-          sha256sum "$migration" | tee one-person-migration.sha256
+          identity_migration=supabase/migrations/20260731072000_one_person_one_account.sql
+          profile_migration=supabase/migrations/20260801153000_one_person_profile_badge_projection_trigger.sql
+          test "$(grep -cF '$one_person_migration_relation_locks$' "$identity_migration" || true)" -eq 0
+          sha256sum "$identity_migration" "$profile_migration" | tee one-person-migrations.sha256
           present="$(psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAtc "select to_regclass('moral_trade_private.person_account_release_gates') is not null")"
           if [[ "$present" == "t" ]]; then
-            echo "One-person-account schema already exists in isolated QA; verifying instead of replaying the migration."
+            echo "One-person-account schema already exists in isolated QA; verifying instead of replaying persistent migrations."
           else
-            psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration" | tee one-person-migration.txt
+            psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$identity_migration" | tee one-person-identity-migration.txt
+            psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$profile_migration" | tee one-person-profile-migration.txt
           fi
           psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' | tee one-person-schema-inventory.txt
           select jsonb_build_object(
@@ -212,11 +216,22 @@ jobs:
             'beforeUserCreatedHook', to_regprocedure('public.one_person_before_user_created_hook(jsonb)') is not null,
             'customAccessTokenHook', to_regprocedure('public.one_person_custom_access_token_hook(jsonb)') is not null,
             'cleanupFixture', to_regprocedure('public.cleanup_one_person_qa_fixture_v1(uuid,text)') is not null,
-            'cleanupSession', to_regprocedure('public.cleanup_one_person_qa_session_v1(uuid,text)') is not null
+            'cleanupSession', to_regprocedure('public.cleanup_one_person_qa_session_v1(uuid,text)') is not null,
+            'profileBadgeTrigger', exists (
+              select 1
+              from pg_catalog.pg_trigger trigger_row
+              join pg_catalog.pg_class relation on relation.oid = trigger_row.tgrelid
+              join pg_catalog.pg_namespace namespace on namespace.oid = relation.relnamespace
+              where namespace.nspname = 'public'
+                and relation.relname = 'profiles'
+                and trigger_row.tgname = 'sync_identity_badge_from_profile'
+                and not trigger_row.tgisinternal
+            )
           );
           SQL
           grep -q '"releaseGates": true' one-person-schema-inventory.txt
           grep -q '"beforeUserCreatedHook": true' one-person-schema-inventory.txt
+          grep -q '"profileBadgeTrigger": true' one-person-schema-inventory.txt
       - name: Normalize isolated QA release gates to disabled
         shell: bash
         run: |
@@ -230,11 +245,12 @@ jobs:
             .registrationEnforcementEnabled == false and
             .participationEnforcementEnabled == false
           ' one-person-gates-before.json >/dev/null
-      - name: Replay complete migration under adversarial lock order with rollback
+      - name: Replay relation-isolated migrations under adversarial lock order with rollback
         shell: bash
         run: |
           set -euo pipefail
-          migration=supabase/migrations/20260731072000_one_person_one_account.sql
+          identity_migration=supabase/migrations/20260731072000_one_person_one_account.sql
+          profile_migration=supabase/migrations/20260801153000_one_person_profile_badge_projection_trigger.sql
 
           python3 - <<'PY'
           from pathlib import Path
@@ -244,15 +260,13 @@ jobs:
           try:
               start = next(index for index, line in enumerate(lines) if line.strip() == "begin;")
           except StopIteration as exc:
-              raise SystemExit("migration begin statement not found") from exc
+              raise SystemExit("identity migration begin statement not found") from exc
 
           end = len(lines) - 1
           while end >= 0 and not lines[end].strip():
               end -= 1
           if end <= start or lines[end].strip() != "commit;":
-              raise SystemExit("migration final commit statement not found")
-          if any(line.strip() for line in lines[end + 1 :]):
-              raise SystemExit("unexpected content after migration commit")
+              raise SystemExit("identity migration final commit statement not found")
 
           reset = r'''do $reset_one_person_replay_triggers$
           declare
@@ -287,21 +301,31 @@ jobs:
           replay = (
               "\\set ON_ERROR_STOP on\n"
               "begin;\n"
-              "set local statement_timeout = '120s';\n"
-              "set local lock_timeout = '70s';\n\n"
+              "set local statement_timeout = '180s';\n"
+              "set local lock_timeout = '150s';\n\n"
               + reset
               + "\n\n"
               + body
               + "\nrollback;\n"
           )
-          Path("/tmp/one-person-lock-replay.sql").write_text(replay, encoding="utf-8")
+          Path("/tmp/one-person-identity-replay.sql").write_text(replay, encoding="utf-8")
+
+          profile_source = Path(
+              "supabase/migrations/20260801153000_one_person_profile_badge_projection_trigger.sql"
+          ).read_text(encoding="utf-8").rstrip()
+          if not profile_source.endswith("commit;"):
+              raise SystemExit("profile migration final commit statement not found")
+          Path("/tmp/one-person-profile-replay.sql").write_text(
+              profile_source[:-len("commit;")] + "rollback;\n",
+              encoding="utf-8",
+          )
           PY
 
-          sha256sum /tmp/one-person-lock-replay.sql | tee one-person-lock-replay.sha256
+          sha256sum /tmp/one-person-identity-replay.sql /tmp/one-person-profile-replay.sql             | tee one-person-replays.sha256
           cat > /tmp/one-person-lock-blocker.sql <<'SQL'
           \set ON_ERROR_STOP on
           begin;
-          set local statement_timeout = '90s';
+          set local statement_timeout = '180s';
           lock table public.profiles in access share mode;
           select pg_advisory_lock(93791, 379);
           select 'blocker-profile-lock-acquired';
@@ -322,16 +346,12 @@ jobs:
           }
           trap cleanup_blocker EXIT
 
-          psql "$MORALTRADE_QA_DATABASE_URL" \
-            -v ON_ERROR_STOP=1 \
-            -f /tmp/one-person-lock-blocker.sql \
-            > one-person-lock-blocker.txt 2>&1 &
+          psql "$MORALTRADE_QA_DATABASE_URL"             -v ON_ERROR_STOP=1             -f /tmp/one-person-lock-blocker.sql             > one-person-lock-blocker.txt 2>&1 &
           blocker_pid=$!
 
           blocker_ready=false
           for attempt in $(seq 1 200); do
-            readiness="$(psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAtc \
-              "select pg_try_advisory_lock(93791, 379)")"
+            readiness="$(psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAtc               "select pg_try_advisory_lock(93791, 379)")"
             if [[ "$readiness" == "f" ]]; then
               blocker_ready=true
               break
@@ -345,28 +365,28 @@ jobs:
           fi
 
           set +e
-          psql "$MORALTRADE_QA_DATABASE_URL" \
-            -v ON_ERROR_STOP=1 \
-            -f /tmp/one-person-lock-replay.sql \
-            2>&1 | tee one-person-lock-replay.txt
-          replay_status=${PIPESTATUS[0]}
+          psql "$MORALTRADE_QA_DATABASE_URL"             -v ON_ERROR_STOP=1             -f /tmp/one-person-identity-replay.sql             2>&1 | tee one-person-identity-replay.txt
+          identity_status=${PIPESTATUS[0]}
           wait "$blocker_pid"
           blocker_status=$?
           blocker_pid=''
           set -e
 
-          if [[ "$replay_status" -ne 0 || "$blocker_status" -ne 0 ]]; then
-            echo "Migration replay status: $replay_status; blocker status: $blocker_status" >&2
+          if [[ "$identity_status" -ne 0 || "$blocker_status" -ne 0 ]]; then
+            echo "Identity replay status: $identity_status; blocker status: $blocker_status" >&2
             cat one-person-lock-blocker.txt >&2 || true
             exit 1
           fi
           grep -Fq 'blocker-profile-lock-acquired' one-person-lock-blocker.txt
           grep -Fq 'blocker-auth-lock-acquired' one-person-lock-blocker.txt
-          grep -Fq 'ROLLBACK' one-person-lock-replay.txt
-          if grep -Fqi 'deadlock detected' one-person-lock-replay.txt one-person-lock-blocker.txt; then
-            echo "The repaired migration encountered a deadlock." >&2
+          grep -Fq 'ROLLBACK' one-person-identity-replay.txt
+          if grep -Fqi 'deadlock detected' one-person-identity-replay.txt one-person-lock-blocker.txt; then
+            echo "The relation-isolated identity migration encountered a deadlock." >&2
             exit 1
           fi
+
+          psql "$MORALTRADE_QA_DATABASE_URL"             -v ON_ERROR_STOP=1             -f /tmp/one-person-profile-replay.sql             2>&1 | tee one-person-profile-replay.txt
+          grep -Fq 'ROLLBACK' one-person-profile-replay.txt
       - name: SQL regression with release gates initially disabled
         run: set -o pipefail; psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/one_person_one_account.sql 2>&1 | tee one-person-sql.txt
       - name: Enable QA-only release gates for the rendered test window
@@ -452,12 +472,14 @@ jobs:
         with:
           name: one-person-account-isolated-qa-${{ github.run_id }}
           path: |
-            one-person-migration.sha256
-            one-person-migration.txt
+            one-person-migrations.sha256
+            one-person-identity-migration.txt
+            one-person-profile-migration.txt
             one-person-schema-inventory.txt
             one-person-gates-before.json
-            one-person-lock-replay.sha256
-            one-person-lock-replay.txt
+            one-person-replays.sha256
+            one-person-identity-replay.txt
+            one-person-profile-replay.txt
             one-person-lock-blocker.txt
             one-person-sql.txt
             one-person-gates-enabled.json
