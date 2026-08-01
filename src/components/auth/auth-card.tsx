@@ -13,6 +13,7 @@ import {
 } from "@/lib/auth-routes";
 import { getEnabledOAuthProviders } from "@/lib/auth-provider-settings";
 import { getFormMessage } from "@/lib/form-state";
+import { getOnePersonAccountConfig } from "@/lib/identity/one-person-account";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 
 import styles from "./auth-card.module.css";
@@ -325,7 +326,12 @@ export async function AuthPage({
   const returnTo = getAuthReturnTo(searchParams, mode);
   const formMessage = getFormMessage(searchParams);
   const supabaseReady = hasSupabaseEnv();
-  const enabledOAuthProviders = await getEnabledOAuthProviders();
+  const isSignup = mode === "signup";
+  const onePersonRegistrationEnforced =
+    isSignup && getOnePersonAccountConfig().registrationEnforcementEnabled;
+  const enabledOAuthProviders = onePersonRegistrationEnforced
+    ? []
+    : await getEnabledOAuthProviders();
   const featuredProviders = enabledOAuthProviders.filter((provider) =>
     featuredProviderSet.has(provider),
   );
@@ -336,7 +342,6 @@ export async function AuthPage({
       ? enabledOAuthProviders.filter((provider) => !featuredProviderSet.has(provider))
       : enabledOAuthProviders.slice(3);
   const hasSocialProviders = enabledOAuthProviders.length > 0;
-  const isSignup = mode === "signup";
   const authPath = buildAuthPath({ mode, returnTo, route: isSignup ? "/signup" : "/login" });
   const loginHref = buildAuthPath({ mode: "login", returnTo, route: "/login" });
   const signupHref = buildAuthPath({ mode: "signup", returnTo, route: "/signup" });
@@ -362,7 +367,9 @@ export async function AuthPage({
         ? "Use your email and a password to create your Moral Trade account."
         : "Enter your email and password to continue."
       : isSignup
-        ? "Choose a secure sign-in method. You can complete your profile later."
+        ? onePersonRegistrationEnforced
+          ? "Your private uniqueness check is complete. Create the one account attached to it."
+          : "Choose a secure sign-in method. You can complete your profile later."
         : "Choose how you would like to continue to Moral Trade.";
   const currentYear = new Date().getFullYear();
 
@@ -488,13 +495,15 @@ export async function AuthPage({
                   </AuthSubmitButton>
                 </form>
 
-                <p className={styles.providerBack}>
-                  <Link href={providersHref}>
-                    {hasSocialProviders
-                      ? "Use a different sign-in method"
-                      : "Back to sign-in options"}
-                  </Link>
-                </p>
+                {!onePersonRegistrationEnforced ? (
+                  <p className={styles.providerBack}>
+                    <Link href={providersHref}>
+                      {hasSocialProviders
+                        ? "Use a different sign-in method"
+                        : "Back to sign-in options"}
+                    </Link>
+                  </p>
+                ) : null}
               </div>
             ) : (
               <div className={styles.authOptions} aria-label="Authentication options">
