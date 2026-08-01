@@ -17,8 +17,8 @@ import {
   revokeXOAuthToken,
 } from "@/lib/x-profile-connector";
 
-function testEnv(values: Partial<NodeJS.ProcessEnv> = {}): NodeJS.ProcessEnv {
-  return { NODE_ENV: "test", ...values };
+function testEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
+  return { NODE_ENV: "test", ...overrides };
 }
 
 const readyEnv = testEnv({
