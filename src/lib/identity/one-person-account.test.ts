@@ -94,10 +94,10 @@ test("signed webhook accepts an exact fresh body and rejects mutation", () => {
   assert.equal(
     verifyOnePersonWebhookSignature({
       body,
-      nowSeconds: Number(timestamp),
+      now: Number(timestamp) * 1000,
       secret,
-      signature,
-      timestamp,
+      signatureHeader: signature,
+      timestampHeader: timestamp,
       toleranceSeconds: 300,
     }),
     true,
@@ -105,10 +105,10 @@ test("signed webhook accepts an exact fresh body and rejects mutation", () => {
   assert.equal(
     verifyOnePersonWebhookSignature({
       body: `${body} `,
-      nowSeconds: Number(timestamp),
+      now: Number(timestamp) * 1000,
       secret,
-      signature,
-      timestamp,
+      signatureHeader: signature,
+      timestampHeader: timestamp,
       toleranceSeconds: 300,
     }),
     false,
@@ -123,10 +123,10 @@ test("signed webhook rejects stale replay", () => {
   assert.equal(
     verifyOnePersonWebhookSignature({
       body,
-      nowSeconds: Number(timestamp) + 301,
+      now: (Number(timestamp) + 301) * 1000,
       secret,
-      signature,
-      timestamp,
+      signatureHeader: signature,
+      timestampHeader: timestamp,
       toleranceSeconds: 300,
     }),
     false,
