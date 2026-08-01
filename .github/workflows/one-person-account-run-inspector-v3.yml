@@ -1,0 +1,47 @@
+name: One-person account run inspector v3
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+env:
+  CONTROLLER_PATH: .github/workflows/one-person-account-run-inspector-v3.yml
+
+jobs:
+  inspect:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.issue.pull_request != null &&
+      github.event.issue.number == 379 &&
+      github.event.comment.body == '/inspect-one-person-repository-gates-20260801-v3'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Report repository-gate run status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?event=issue_comment&per_page=100")"
+          rows="$(jq -r '.workflow_runs[] | select(.name == "One-person account repository gates controller") | [.id,.status,(.conclusion // "pending"),.head_sha,.created_at,.updated_at] | @tsv' <<<"$payload")"
+          if [[ -z "$rows" ]]; then rows='no matching run found'; fi
+          body=$'Repository-gate controller run inventory v3:\n\n```text\n'"$rows"$'\n```'
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "$body"
+      - name: Remove temporary inspector
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$sha" ]]; then
+            jq -n --arg message 'Remove temporary one-person run inspector v3' --arg sha "$sha" --arg branch main '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
