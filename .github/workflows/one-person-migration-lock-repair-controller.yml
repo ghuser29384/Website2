@@ -1,0 +1,157 @@
+name: Repair one-person migration lock acquisition
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: one-person-migration-lock-repair
+  cancel-in-progress: false
+
+env:
+  FEATURE_SHA: 0d2cafa8e7bf464c24e2614ded8722d6226ac1cf
+  FEATURE_BRANCH: feature/one-person-one-account-20260731
+  CONTROLLER_PATH: .github/workflows/one-person-migration-lock-repair-controller.yml
+  PR_NUMBER: "379"
+  TRIGGER: /repair-one-person-migration-lock-20260801-v1
+
+jobs:
+  repair:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.issue.pull_request != null &&
+      github.event.issue.number == 379 &&
+      github.event.comment.body == '/repair-one-person-migration-lock-20260801-v1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout the pinned feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify the feature ref is exact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          git fetch --no-tags origin "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
+          test "$(git rev-parse HEAD)" = "$FEATURE_SHA"
+          test "$(git rev-parse "refs/remotes/origin/$FEATURE_BRANCH")" = "$FEATURE_SHA"
+          test "$(git ls-remote origin "refs/heads/$FEATURE_BRANCH" | awk '{print $1}')" = "$FEATURE_SHA"
+          test ! -e .github/one-person-bootstrap
+          test ! -e .github/workflows/materialize-one-person-account.yml
+
+      - name: Add bounded deadlock-safe relation lock acquisition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("supabase/migrations/20260731072000_one_person_one_account.sql")
+          text = path.read_text(encoding="utf-8")
+          marker = "$one_person_migration_relation_locks$"
+          if marker in text:
+              raise SystemExit("migration relation-lock guard already exists")
+
+          needle = "begin;\n\ncreate extension if not exists pgcrypto with schema extensions;"
+          block = """begin;
+
+-- Avoid lock-order deadlocks with concurrent authentication and profile writes.
+-- Every NOWAIT attempt runs inside its own PL/pgSQL subtransaction, so any
+-- partially acquired locks are released before the next bounded retry.
+do $one_person_migration_relation_locks$
+declare
+  attempt integer;
+  acquired boolean := false;
+begin
+  for attempt in 1..60 loop
+    begin
+      lock table auth.users in share row exclusive mode nowait;
+      lock table public.profiles in access exclusive mode nowait;
+      acquired := true;
+      exit;
+    exception
+      when lock_not_available then
+        perform pg_sleep(1);
+    end;
+  end loop;
+
+  if not acquired then
+    raise exception using
+      errcode = '55P03',
+      message = 'one_person_migration_relation_locks_unavailable';
+  end if;
+end;
+$one_person_migration_relation_locks$;
+
+create extension if not exists pgcrypto with schema extensions;"""
+
+          if text.count(needle) != 1:
+              raise SystemExit("unexpected migration preamble; refusing an ambiguous edit")
+          path.write_text(text.replace(needle, block, 1), encoding="utf-8")
+          PY
+
+          grep -n "one_person_migration_relation_locks" supabase/migrations/20260731072000_one_person_one_account.sql
+          git diff --check
+          test "$(git diff --name-only)" = "supabase/migrations/20260731072000_one_person_one_account.sql"
+          test "$(grep -cF '$one_person_migration_relation_locks$' supabase/migrations/20260731072000_one_person_one_account.sql)" -eq 2
+
+      - name: Commit and push the focused repair
+        id: push_repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/migrations/20260731072000_one_person_one_account.sql
+          test "$(git diff --cached --name-only)" = "supabase/migrations/20260731072000_one_person_one_account.sql"
+          git diff --cached --check
+          git commit -m "Harden one-person migration lock acquisition"
+          repaired_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$FEATURE_SHA"
+          remote_feature="$(git ls-remote origin "refs/heads/$FEATURE_BRANCH" | awk '{print $1}')"
+          test "$remote_feature" = "$FEATURE_SHA"
+          git push --force-with-lease="refs/heads/$FEATURE_BRANCH:$FEATURE_SHA" \
+            origin "HEAD:refs/heads/$FEATURE_BRANCH"
+          echo "repaired_sha=$repaired_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Record the repair on the draft PR
+        if: ${{ success() }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Diagnosed the isolated-QA migration failure as a lock-order deadlock between \`auth.users\` and \`public.profiles\`. Added bounded NOWAIT/retry lock acquisition to the migration and pushed repair commit \`${{ steps.push_repair.outputs.repaired_sha }}\` to the existing draft branch. PR workflows must pass before any merge or production change."
+
+      - name: Record repair failure on the draft PR
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "The automated migration-lock repair did not complete in run \`$GITHUB_RUN_ID\`. The feature branch was not intentionally advanced unless the push step is explicitly recorded. Inspect the failed step before retrying."
+
+      - name: Remove the temporary repair controller from main
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          file_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$file_sha" ]]; then
+            jq -n \
+              --arg message "Remove temporary one-person migration-lock repair controller" \
+              --arg sha "$file_sha" \
+              --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
