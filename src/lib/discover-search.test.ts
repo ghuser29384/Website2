@@ -58,7 +58,6 @@ const aiOffer = offer({
 const exampleOffer = offer({
   id: "example",
   slug: "example",
-  status: "example",
   source: "worked_example",
   isWorkedExample: true,
 });
