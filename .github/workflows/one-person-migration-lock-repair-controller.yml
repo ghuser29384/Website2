@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CLEAN_MAIN_SHA: db48f08706abddd824c2f6573878b5a3f4ca5c6b
+  CLEAN_MAIN_SHA: ec537e88e7faf036748c93a695c83d8191485647
   FEATURE_SHA: 0d2cafa8e7bf464c24e2614ded8722d6226ac1cf
   FEATURE_BRANCH: feature/one-person-one-account-20260731
   CONTROLLER_PATH: .github/workflows/one-person-migration-lock-repair-controller.yml
