@@ -1,0 +1,173 @@
+name: One-person migration lock repair PR controller
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - ".github/workflows/one-person-migration-lock-repair-pr.yml"
+      - ".github/one-person-lock-repair-hold"
+      - "supabase/migrations/20260731072000_one_person_one_account.sql"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: one-person-migration-lock-repair-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.pull_request.number == 379 &&
+      github.event.pull_request.head.ref == 'feature/one-person-one-account-20260731'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TARGET_BRANCH: feature/one-person-one-account-20260731
+      HOLD_PATH: .github/one-person-lock-repair-hold
+      CONTROLLER_PATH: .github/workflows/one-person-migration-lock-repair-pr.yml
+      MIGRATION_PATH: supabase/migrations/20260731072000_one_person_one_account.sql
+      EXPECTED_MIGRATION_BLOB: bf2bf6d8f8916915d5a606e449feefea6df4afaa
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+    steps:
+      - name: Check out the exact pull-request head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Verify exact held source state
+        shell: bash
+        run: |
+          set -euo pipefail
+          event_head='${{ github.event.pull_request.head.sha }}'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$event_head"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$event_head"
+          test "$(git rev-parse "HEAD:$MIGRATION_PATH")" = "$EXPECTED_MIGRATION_BLOB"
+          test -f "$HOLD_PATH"
+          test -f "$CONTROLLER_PATH"
+          test ! -e .github/one-person-bootstrap
+          test ! -e .github/workflows/materialize-one-person-account.yml
+
+      - name: Apply bounded deadlock-safe relation locks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('supabase/migrations/20260731072000_one_person_one_account.sql')
+          text = path.read_text()
+          marker = '$one_person_migration_relation_locks$'
+          if marker in text:
+              raise SystemExit('migration relation-lock guard already exists')
+
+          needle = 'begin;\n\ncreate extension if not exists pgcrypto with schema extensions;'
+          block = '''begin;
+
+-- Acquire both relations without ever waiting while holding only one of them.
+-- A failed NOWAIT attempt rolls back its PL/pgSQL subtransaction, releasing
+-- any partial lock set before the bounded retry. This prevents lock-order
+-- deadlocks with concurrent Auth and profile writes during deployment.
+do $one_person_migration_relation_locks$
+declare
+  attempt integer;
+  acquired boolean := false;
+begin
+  for attempt in 1..60 loop
+    begin
+      lock table auth.users in share row exclusive mode nowait;
+      lock table public.profiles in access exclusive mode nowait;
+      acquired := true;
+      exit;
+    exception
+      when lock_not_available then
+        perform pg_sleep(1);
+    end;
+  end loop;
+
+  if not acquired then
+    raise exception using
+      errcode = '55P03',
+      message = 'one_person_migration_relation_locks_unavailable';
+  end if;
+end;
+$one_person_migration_relation_locks$;
+
+create extension if not exists pgcrypto with schema extensions;'''
+
+          if text.count(needle) != 1:
+              raise SystemExit(f'unexpected migration preamble inventory: {text.count(needle)}')
+          path.write_text(text.replace(needle, block, 1))
+          PY
+          test "$(grep -cF '$one_person_migration_relation_locks$' "$MIGRATION_PATH")" -eq 2
+          git rm "$HOLD_PATH" "$CONTROLLER_PATH"
+          cat > /tmp/expected-repair-paths.txt <<'EOF'
+          .github/one-person-lock-repair-hold
+          .github/workflows/one-person-migration-lock-repair-pr.yml
+          supabase/migrations/20260731072000_one_person_one_account.sql
+          EOF
+          sed -i 's/^          //' /tmp/expected-repair-paths.txt
+          sort -u /tmp/expected-repair-paths.txt -o /tmp/expected-repair-paths.txt
+          git diff --name-only | sort -u > /tmp/actual-repair-paths.txt
+          diff -u /tmp/expected-repair-paths.txt /tmp/actual-repair-paths.txt
+          git diff --check
+
+      - name: Compile the complete repaired migration in isolated QA with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}" || { echo 'Missing QA_SUPABASE_DB_URL' >&2; exit 1; }
+          [[ "$QA_SUPABASE_DB_URL" == *"$QA_PROJECT_REF"* ]] || { echo 'Wrong QA target' >&2; exit 1; }
+          [[ "$QA_SUPABASE_DB_URL" != *"jnpoxvalyjtdghnperyu"* ]] || { echo 'Production target refused' >&2; exit 1; }
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y postgresql-client >/dev/null
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path('supabase/migrations/20260731072000_one_person_one_account.sql').read_text().rstrip()
+          if not source.endswith('commit;'):
+              raise SystemExit('migration does not end in commit;')
+          Path('/tmp/one-person-lock-compile.sql').write_text(source[:-len('commit;')] + 'rollback;\n')
+          PY
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/one-person-lock-compile.sql > /tmp/one-person-lock-compile.log
+          tail -n 40 /tmp/one-person-lock-compile.log
+
+      - name: Commit and push the exact compiled repair
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          event_head='${{ github.event.pull_request.head.sha }}'
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$event_head"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git diff --cached --check
+          git commit -m 'Harden one-person migration lock acquisition'
+          repaired_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$event_head"
+          test ! -e "$HOLD_PATH"
+          test ! -e "$CONTROLLER_PATH"
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$event_head" origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "repaired_sha=$repaired_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Report success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "The PR-head repair controller compiled the deadlock-safe migration through its final statement against isolated QA with rollback, pushed exact repair \`${{ steps.publish.outputs.repaired_sha }}\`, and removed both temporary branch files. The PR remains draft; production is unchanged."
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "The PR-head migration lock repair failed in run \`$GITHUB_RUN_ID\`. No push was accepted unless exact-head, source-blob, three-path, rollback-only compilation, and force-with-lease guards all passed. The branch remains held for inspection."
