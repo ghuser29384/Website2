@@ -17,6 +17,7 @@ test("Donation Upgrade explains the baseline, match, fallback, and claim boundar
 
   const diagram = page.getByRole("img", { name: "How a Donation Upgrade changes the outcome" });
   await expect(diagram).toBeVisible();
+  await page.screenshot({ fullPage: true, path: "test-results/donation-upgrade-desktop.png" });
 });
 
 test("Donation Upgrade does not overflow at a narrow mobile viewport", async ({ page }) => {
@@ -24,4 +25,5 @@ test("Donation Upgrade does not overflow at a narrow mobile viewport", async ({ 
   await page.goto(route);
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflow).toBe(false);
+  await page.screenshot({ fullPage: true, path: "test-results/donation-upgrade-mobile.png" });
 });
