@@ -41,12 +41,12 @@ jobs:
             '{state:$state,target_url:$target_url,description:$description,context:$context}' \
             | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" --input - >/dev/null
 
-      - name: Check out the trusted base revision
+      - name: Check out the current trusted base branch
         id: checkout
         continue-on-error: true
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.base.ref }}
           fetch-depth: 1
           persist-credentials: false
 
