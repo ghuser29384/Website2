@@ -1,0 +1,81 @@
+name: Materialize Feed-to-Create authenticated runtime
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/materialize-feed-create-auth-runtime-20260801.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-feed-create-auth-runtime-controller-20260801
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the target product branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/feed-create-phase1-20260730
+          fetch-depth: 0
+
+      - name: Apply only the non-workflow authenticated runtime changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f ops/refactor-feed-create-auth-runtime-20260801.py
+          sed -i 's/read_text(encoding="utf-8")n$/read_text(encoding="utf-8")/' \
+            ops/refactor-feed-create-auth-runtime-20260801.py
+          python3 ops/refactor-feed-create-auth-runtime-20260801.py
+
+          # The helper also prepares release-workflow cleanup. Restore workflow
+          # files so this controller pushes only ordinary product/migration files.
+          git checkout HEAD -- .github/workflows
+          rm -f ops/refactor-feed-create-auth-runtime-20260801.py
+
+          ! grep -R -F 'createServiceClient' \
+            src/lib/feed-create/phase1.ts \
+            src/app/feed-create-actions.ts
+          grep -Fq 'moral_trade_feed_create_save_authenticated' src/app/feed-create-actions.ts
+          grep -Fq 'moral_trade_feed_create_record_event_authenticated' src/lib/feed-create/phase1.ts
+          grep -Fq 'auth.uid()' \
+            supabase/migrations/20260801062000_feed_create_phase1_authenticated_runtime.sql
+          git diff --check
+
+      - name: Commit and push the exact product/runtime file set
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            src/lib/feed-create/phase1.ts \
+            src/app/feed-create-actions.ts \
+            src/feed-create-phase1-wiring.test.ts \
+            supabase/tests/feed_create_phase1.sql \
+            supabase/migrations/20260801062000_feed_create_phase1_authenticated_runtime.sql
+          git add -u ops/refactor-feed-create-auth-runtime-20260801.py
+
+          changed="$(git diff --cached --name-only | sort)"
+          expected="$(cat <<'FILES' | sort
+ops/refactor-feed-create-auth-runtime-20260801.py
+src/app/feed-create-actions.ts
+src/feed-create-phase1-wiring.test.ts
+src/lib/feed-create/phase1.ts
+supabase/migrations/20260801062000_feed_create_phase1_authenticated_runtime.sql
+supabase/tests/feed_create_phase1.sql
+FILES
+)"
+          test "$changed" = "$expected"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Use authenticated RLS for Feed-to-Create runtime'
+          if ! git push origin HEAD:feature/feed-create-phase1-20260730; then
+            git pull --rebase origin feature/feed-create-phase1-20260730
+            git push origin HEAD:feature/feed-create-phase1-20260730
+          fi
