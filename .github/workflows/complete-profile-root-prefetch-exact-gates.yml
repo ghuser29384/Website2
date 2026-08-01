@@ -69,7 +69,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Run rendered Complete Profile regressions
-        run: npx playwright test tests/complete-profile-review.spec.ts --project=chromium
+        run: npx playwright test tests/complete-profile-review.spec.ts
 
       - name: Upload rendered evidence
         if: always()
