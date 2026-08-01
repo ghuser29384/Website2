@@ -1,0 +1,63 @@
+name: Export Direct Donation Upgrade source
+
+on:
+  push:
+    branches:
+      - feature/direct-verified-donation-upgrade-20260731
+    paths:
+      - .github/workflows/export-direct-upgrade-source.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record exact source identity
+        run: |
+          set -euo pipefail
+          mkdir -p export-meta
+          git rev-parse HEAD | tee export-meta/head-sha.txt
+          git rev-parse HEAD^{tree} | tee export-meta/tree-sha.txt
+          git status --short --branch | tee export-meta/status.txt
+
+      - name: Package working tree
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          import zipfile
+          from pathlib import Path
+
+          root = Path('.')
+          output = Path('/tmp/direct-donation-upgrade-source.zip')
+          excluded_roots = {'.git', 'node_modules', '.next'}
+          with zipfile.ZipFile(output, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+              for path in sorted(root.rglob('*')):
+                  if not path.is_file():
+                      continue
+                  parts = path.parts
+                  if parts and parts[0] in excluded_roots:
+                      continue
+                  zf.write(path, path.as_posix())
+          print(output)
+          PY
+          sha256sum /tmp/direct-donation-upgrade-source.zip | tee export-meta/archive-sha256.txt
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-donation-upgrade-source-${{ github.sha }}
+          path: |
+            /tmp/direct-donation-upgrade-source.zip
+            export-meta
+          if-no-files-found: error
+          retention-days: 3
