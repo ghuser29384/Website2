@@ -742,6 +742,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
               <Link className="button button-secondary" href="/admin/growth">
                 View growth dashboard
               </Link>
+              <Link className="button button-secondary" href="/admin/donation-upgrades">
+                Donation Upgrade operations
+              </Link>
             </div>
           </section>
           <aside className="hero-panel panel">

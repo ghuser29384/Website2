@@ -1,4 +1,10 @@
 import {
+  getDirectDonationUpgradeConfig,
+  secureDirectDonationUpgradeWebhookPathMatches,
+  type EveryOrgPartnerWebhookPayload as DirectEveryOrgPartnerWebhookPayload,
+} from "@/lib/direct-donation-upgrade";
+import { handleDirectDonationUpgradeEveryOrgWebhook } from "@/lib/direct-donation-upgrade-webhook";
+import {
   evaluateEveryOrgTradeDonationWebhook,
   getTradeDonationProviderConfig,
   secureWebhookPathMatches,
@@ -86,9 +92,15 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ secret: string }> },
 ) {
-  const config = getTradeDonationProviderConfig();
+  const directConfig = getDirectDonationUpgradeConfig();
+  const pledgeConfig = getTradeDonationProviderConfig();
   const { secret } = await context.params;
-  if (!config.ready || !secureWebhookPathMatches(secret, config.webhookPathSecret)) {
+  const directPathAccepted =
+    directConfig.readyForCheckout &&
+    secureDirectDonationUpgradeWebhookPathMatches(secret, directConfig.webhookPathSecret);
+  const pledgePathAccepted =
+    pledgeConfig.ready && secureWebhookPathMatches(secret, pledgeConfig.webhookPathSecret);
+  if (!directPathAccepted && !pledgePathAccepted) {
     return Response.json({ ok: false }, { status: 401 });
   }
 
@@ -97,15 +109,30 @@ export async function POST(
     return Response.json({ ok: false, error: "invalid_body" }, { status: 400 });
   }
 
-  let payload: EveryOrgPartnerWebhookPayload;
+  let payload: EveryOrgPartnerWebhookPayload & DirectEveryOrgPartnerWebhookPayload;
   try {
-    payload = JSON.parse(rawBody) as EveryOrgPartnerWebhookPayload;
+    payload = JSON.parse(rawBody) as EveryOrgPartnerWebhookPayload & DirectEveryOrgPartnerWebhookPayload;
   } catch {
     return Response.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
   const partnerDonationId = String(payload.partnerDonationId ?? "").trim();
   if (!partnerDonationId) {
     return Response.json({ ok: false, error: "missing_partner_donation_id" }, { status: 400 });
+  }
+
+  if (directPathAccepted) {
+    const directResult = await handleDirectDonationUpgradeEveryOrgWebhook({
+      payload,
+      rawBody,
+      config: directConfig,
+    });
+    if (directResult.handled) {
+      return Response.json(directResult.body, { status: directResult.status });
+    }
+  }
+
+  if (!pledgePathAccepted) {
+    return Response.json({ ok: true, outcome: "unknown_intent" });
   }
 
   const supabase = createServiceClient() as any;
@@ -142,7 +169,7 @@ export async function POST(
     rawBody,
     intent,
     term,
-    metadataSecret: config.metadataSecret,
+    metadataSecret: pledgeConfig.metadataSecret,
   });
 
   const { data: completionData, error: completionError } = await supabase.rpc(
