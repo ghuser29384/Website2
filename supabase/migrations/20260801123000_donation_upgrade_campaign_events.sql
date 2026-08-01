@@ -23,26 +23,41 @@ alter table public.campaign_events enable row level security;
 
 -- No public or authenticated policies are intentionally created. The public API validates
 -- a fixed allow-list and writes only through the server-side service client.
+revoke all on table public.campaign_events from anon, authenticated;
+grant select, insert, update, delete on table public.campaign_events to service_role;
 
-create or replace view public.donation_upgrade_campaign_summary as
+create or replace view public.donation_upgrade_campaign_summary
+with (security_invoker = true)
+as
+with unique_counts as (
+  select
+    campaign,
+    variant,
+    count(distinct anonymous_id_hash) filter (where event_type = 'landing_view')
+      as unique_landing_views,
+    count(distinct anonymous_id_hash) filter (where event_type = 'create_click')
+      as unique_create_clicks,
+    min(created_at) as first_seen_at,
+    max(created_at) as last_seen_at
+  from public.campaign_events
+  where campaign = 'donation_upgrade_billboard_2026'
+  group by campaign, variant
+)
 select
   campaign,
   variant,
-  count(*) filter (where event_type = 'landing_view') as unique_landing_views,
-  count(*) filter (where event_type = 'create_click') as unique_create_clicks,
+  unique_landing_views,
+  unique_create_clicks,
   case
-    when count(*) filter (where event_type = 'landing_view') = 0 then 0
-    else round(
-      100.0 * count(*) filter (where event_type = 'create_click')
-      / count(*) filter (where event_type = 'landing_view'),
-      2
-    )
+    when unique_landing_views = 0 then 0
+    else round(100.0 * unique_create_clicks / unique_landing_views, 2)
   end as click_through_percent,
-  min(created_at) as first_seen_at,
-  max(created_at) as last_seen_at
-from public.campaign_events
-where campaign = 'donation_upgrade_billboard_2026'
-group by campaign, variant;
+  first_seen_at,
+  last_seen_at
+from unique_counts;
+
+revoke all on table public.donation_upgrade_campaign_summary from anon, authenticated;
+grant select on table public.donation_upgrade_campaign_summary to service_role;
 
 comment on table public.campaign_events is
   'Privacy-minimized, idempotent campaign landing and CTA events. Raw identifiers and request metadata are not stored.';
