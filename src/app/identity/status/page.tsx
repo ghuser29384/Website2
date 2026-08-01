@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getOnePersonVerificationSession } from "@/lib/identity/server";
 
 import {
@@ -54,7 +55,7 @@ export default async function IdentityStatusPage({
             <div className={styles.fact}><strong>State</strong><span>{status.state.replaceAll("_", " ")}</span></div>
             <div className={styles.fact}><strong>Purpose</strong><span>{status.purpose?.replaceAll("_", " ") ?? "unavailable"}</span></div>
             <div className={styles.fact}><strong>Provider</strong><span>{status.providerName}</span></div>
-            <div className={styles.fact}><strong>Expires</strong><span>{status.expiresAt ? new Date(status.expiresAt).toLocaleString() : "—"}</span></div>
+            <div className={styles.fact}><strong>Expires</strong><span><LocalDateTime fallback="—" value={status.expiresAt} /></span></div>
           </div>
 
           {status.registrationReady ? (
