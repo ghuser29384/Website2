@@ -203,7 +203,7 @@
       const participantPrivateValueBps = Number(privateValueBps.get(participant.id) || 0);
       if (!participant.name.trim()) calculationBlockers.push(`Name participant ${index + 1}.`);
       if (!participant.defaultProject.trim()) {
-        calculationBlockers.push(`Add participant ${index + 1}’s no-pool default.`);
+        calculationBlockers.push(`Add what participant ${index + 1} would fund instead.`);
       }
       if (!(budgetCents > 0)) calculationBlockers.push(`Add participant ${index + 1}’s budget.`);
       if (!(participantPrivateValueBps > 0)) {
@@ -246,7 +246,7 @@
     const uniqueCalculationBlockers = [...new Set(calculationBlockers)];
     const calculationOk = uniqueCalculationBlockers.length === 0;
     const blockers = [...uniqueCalculationBlockers];
-    if (!state.commonGroundBaselineConfirmed) blockers.push("Confirm the no-pool defaults.");
+    if (!state.commonGroundBaselineConfirmed) blockers.push("Confirm what each participant would fund instead.");
 
     return {
       ok: blockers.length === 0,
@@ -311,8 +311,8 @@
               <input id="cg-name-${index}" data-cg-field="name" data-cg-id="${escapeHTML(participant.id)}" maxlength="80" value="${escapeHTML(participant.name)}" />
             </div>
             <div class="offer-field">
-              <label for="cg-default-${index}">Without pool</label>
-              <input id="cg-default-${index}" data-cg-field="defaultProject" data-cg-id="${escapeHTML(participant.id)}" maxlength="160" value="${escapeHTML(participant.defaultProject)}" />
+              <label for="cg-default-${index}">What would you fund instead?</label>
+              <input id="cg-default-${index}" data-cg-field="defaultProject" data-cg-id="${escapeHTML(participant.id)}" maxlength="160" value="${escapeHTML(participant.defaultProject)}" aria-describedby="commonGroundFallbackHelp" />
             </div>
             <div class="offer-field">
               <label for="cg-budget-${index}">Budget</label>
@@ -447,7 +447,7 @@
       ["Target", `${formatUsd(result.targetCents)} · ${result.deadline}`],
       ...state.commonGroundParticipants.map((participant) => [
         participant.name,
-        `${formatUsd(parseCents(participant.contribution) || 0)} · without pool: ${participant.defaultProject}`,
+        `${formatUsd(parseCents(participant.contribution) || 0)} · would otherwise fund: ${participant.defaultProject}`,
       ]),
     ];
     $("#summaryOffers").innerHTML = rows
@@ -468,7 +468,7 @@
       <div class="publish-fact"><span>Target</span><strong>${escapeHTML(formatUsd(result.targetCents))}</strong></div>
       <div class="publish-fact"><span>Participants</span><strong>${state.commonGroundParticipants.length}</strong></div>
       <div class="publish-fact"><span>Visibility</span><strong>Private until approved</strong></div>`;
-    $("#publishConfirmTitle").textContent = "The split and no-pool defaults are accurate.";
+    $("#publishConfirmTitle").textContent = "The split and fallback projects are accurate.";
     $("#publishConfirmCopy").textContent = "Private value estimates stay in this tab.";
     $("#publishOffer").textContent = "Submit for review →";
     $("#boundaryNote").innerHTML =
@@ -567,7 +567,7 @@
       `<li>Deadline: ${escapeHTML(result.deadline)}</li>`,
       ...state.commonGroundParticipants.map(
         (participant) =>
-          `<li>${escapeHTML(participant.name)}: ${escapeHTML(formatUsd(parseCents(participant.contribution) || 0))}; without pool: ${escapeHTML(participant.defaultProject)}</li>`,
+          `<li>${escapeHTML(participant.name)}: ${escapeHTML(formatUsd(parseCents(participant.contribution) || 0))}; would otherwise fund: ${escapeHTML(participant.defaultProject)}</li>`,
       ),
       "<li>Private value estimates were not submitted.</li>",
     ].join("");

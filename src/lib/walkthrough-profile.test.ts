@@ -3,8 +3,10 @@ import test from "node:test";
 
 import {
   buildWalkthroughOnboardingPath,
+  createDirectCompleteProfileDraft,
   createWalkthroughProfileDraft,
   encodeWalkthroughProfileDraft,
+  getCompleteProfileDraft,
   getWalkthroughProfileDraft,
   mapWalkthroughCauseToCauseArea,
   parseWalkthroughProfileDraft,
@@ -68,4 +70,50 @@ test("query values take precedence over an older cookie draft", () => {
   assert.equal(draft?.causeArea, "Animal welfare");
   assert.equal(draft?.offerType, "A pledge");
   assert.equal(draft?.matchName, "Noor");
+});
+
+test("first-time direct Complete Profile visits do not receive a direct draft", () => {
+  const draft = getCompleteProfileDraft({
+    searchParams: {},
+  });
+
+  assert.equal(draft, null);
+});
+
+test("returning direct Complete Profile visits receive a conservative 100-spark draft", () => {
+  const draft = getCompleteProfileDraft({
+    allowDirect: true,
+    searchParams: {},
+  });
+
+  assert.ok(draft);
+  assert.equal(draft.source, "direct");
+  assert.equal(draft.originalCause, "Profile priorities");
+  assert.equal(draft.matchGet, "");
+  assert.equal(draft.matchGive, "");
+  assert.equal(draft.participantKind, "individual");
+});
+
+test("direct Complete Profile draft creation is deterministic when time is supplied", () => {
+  const draft = createDirectCompleteProfileDraft("2026-07-31T07:00:00.000Z");
+
+  assert.equal(draft.source, "direct");
+  assert.equal(draft.createdAt, "2026-07-31T07:00:00.000Z");
+});
+
+test("Complete Profile preserves genuine Walkthrough context without returning-user state", () => {
+  const draft = getCompleteProfileDraft({
+    searchParams: {
+      source: "walkthrough",
+      walkthrough_cause: "AI safety",
+      cause_area: "Existential risk",
+      offer_type: "Money",
+      match_name: "Rae",
+    },
+  });
+
+  assert.ok(draft);
+  assert.equal(draft.source, "walkthrough");
+  assert.equal(draft.originalCause, "AI safety");
+  assert.equal(draft.offerType, "Money");
 });

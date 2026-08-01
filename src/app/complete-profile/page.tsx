@@ -10,12 +10,13 @@ import { CompleteProfileReview } from "@/components/profile/complete-profile-rev
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
+import { WALKTHROUGH_SEEN_COOKIE_NAME } from "@/lib/walkthrough-state";
 import {
   getDisconnectedXProfileConnectorStatus,
   getXProfileConnectorStatus,
 } from "@/lib/x-profile-connector";
 import {
-  getWalkthroughProfileDraft,
+  getCompleteProfileDraft,
   type WalkthroughProfileDraft,
   WALKTHROUGH_PROFILE_COOKIE_NAME,
 } from "@/lib/walkthrough-profile";
@@ -37,6 +38,8 @@ interface CompleteProfilePageProps {
 }
 
 function buildCompleteProfilePath(draft: WalkthroughProfileDraft) {
+  if (draft.source === "direct") return "/complete-profile";
+
   const query = new URLSearchParams({
     source: "walkthrough",
     cause_area: draft.causeArea,
@@ -63,12 +66,13 @@ function readSearchParam(value: string | string[] | undefined) {
 export default async function CompleteProfilePage({ searchParams }: CompleteProfilePageProps) {
   const resolvedSearchParams = await searchParams;
   const cookieStore = await cookies();
-  const walkthroughDraft = getWalkthroughProfileDraft({
+  const profileDraft = getCompleteProfileDraft({
+    allowDirect: cookieStore.get(WALKTHROUGH_SEEN_COOKIE_NAME)?.value === "1",
     cookieValue: cookieStore.get(WALKTHROUGH_PROFILE_COOKIE_NAME)?.value,
     searchParams: resolvedSearchParams,
   });
 
-  if (!walkthroughDraft) {
+  if (!profileDraft) {
     redirect("/walkthrough");
   }
 
@@ -88,7 +92,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
     retentionExpiresAt: xConnectorStatus.retentionExpiresAt,
     username: xConnectorStatus.username,
   };
-  const returnTo = buildCompleteProfilePath(walkthroughDraft);
+  const returnTo = buildCompleteProfilePath(profileDraft);
   const signupHref = `/signup?method=email&returnTo=${encodeURIComponent(returnTo)}`;
   const loginHref = `/login?method=email&returnTo=${encodeURIComponent(returnTo)}`;
   const initialConnectionsOpen =
@@ -129,7 +133,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
 
         <CompleteProfileReview
           accountEmail={viewer?.profile.email ?? ""}
-          draft={walkthroughDraft}
+          draft={profileDraft}
           initialAffiliation={initialAffiliation}
           initialDisplayName={viewer?.displayName ?? ""}
           isAuthenticated={Boolean(viewer)}
