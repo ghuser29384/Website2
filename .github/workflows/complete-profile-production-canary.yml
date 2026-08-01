@@ -1,6 +1,10 @@
 name: Complete Profile production canary
 
 on:
+  pull_request:
+    paths:
+      - ".github/scripts/complete-profile-production-canary.mjs"
+      - ".github/workflows/complete-profile-production-canary.yml"
   push:
     branches:
       - main
@@ -17,7 +21,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  source-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+      - name: Parse the production canary script
+        run: node --check .github/scripts/complete-profile-production-canary.mjs
+
   production-canary:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
@@ -133,8 +148,10 @@ jobs:
             exit 1
           fi
 
-          deployment_id="$(jq -r .id <<<"$deployment")"
+          deployment_id="$(jq -r '.uid // .id // empty' <<<"$deployment")"
           deployment_url="https://$(jq -r .url <<<"$deployment")"
+          test -n "$deployment_id"
+          test "$deployment_id" != "null"
           echo "superseded=false" >> "$GITHUB_OUTPUT"
           echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
@@ -235,6 +252,7 @@ jobs:
             elif [[ -f "$CANARY_OUTPUT_DIR/report.json" ]]; then
               echo "- Result: \`$(jq -r '.status // "unknown"' "$CANARY_OUTPUT_DIR/report.json")\`"
               echo "- Scenarios passed: \`$(jq '[.scenarios[] | select(.status == "passed")] | length' "$CANARY_OUTPUT_DIR/report.json")/6\`"
+              echo "- Expected cancelled prefetches: \`$(jq -r '.expectedPrefetchAbortCount // 0' "$CANARY_OUTPUT_DIR/report.json")\`"
               echo "- Known root-prefetch 404s: \`$(jq -r '.knownRootPrefetch404Count // 0' "$CANARY_OUTPUT_DIR/report.json")\`"
             else
               echo '- Result: `failed before the rendered canary`'
