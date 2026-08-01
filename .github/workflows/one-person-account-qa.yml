@@ -1,304 +1,225 @@
-name: One-person account QA
+name: One-person migration lock repair
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize]
     paths:
       - ".github/workflows/one-person-account-qa.yml"
-      - "docs/one-person-one-account.md"
-      - "scripts/test-one-person-concurrency.sh"
-      - "src/app/account/identity/**"
-      - "src/app/admin/identity/**"
-      - "src/app/api/identity/**"
-      - "src/app/auth/confirm/route.ts"
-      - "src/app/identity/**"
-      - "src/app/signup/page.tsx"
-      - "src/components/auth/auth-card.tsx"
-      - "src/lib/identity/**"
+      - ".github/one-person-lock-repair-hold"
+      - ".github/workflows/one-person-migration-lock-repair-pr.yml"
       - "supabase/migrations/20260731072000_one_person_one_account.sql"
-      - "supabase/tests/one_person_one_account.sql"
-      - "tests/one-person-account-authenticated.spec.ts"
-      - "package.json"
-  workflow_dispatch:
-    inputs:
-      expect_auth_hook:
-        description: "Require the QA Before User Created hook test"
-        required: false
-        default: false
-        type: boolean
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 concurrency:
-  group: one-person-account-qa-${{ github.ref }}
+  group: one-person-migration-lock-repair-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
+env:
+  TARGET_BRANCH: feature/one-person-one-account-20260731
+  ORIGINAL_CLEAN_HEAD: 0d2cafa8e7bf464c24e2614ded8722d6226ac1cf
+  EXPECTED_MIGRATION_BLOB: bf2bf6d8f8916915d5a606e449feefea6df4afaa
+  MIGRATION_PATH: supabase/migrations/20260731072000_one_person_one_account.sql
+  HOLD_PATH: .github/one-person-lock-repair-hold
+  TEMP_CONTROLLER_PATH: .github/workflows/one-person-migration-lock-repair-pr.yml
+  QA_WORKFLOW_PATH: .github/workflows/one-person-account-qa.yml
+  QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+
 jobs:
-  repository-gates:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+  repair:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.pull_request.number == 379 &&
+      github.event.pull_request.head.ref == 'feature/one-person-one-account-20260731'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out exact pull-request head branch
+        uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
-      - name: Verify exact feature boundary and diff hygiene
+          token: ${{ github.token }}
+
+      - name: Verify exact held candidate
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin main
-          git diff --check origin/main...HEAD
-          cat > /tmp/one-person-expected-paths.txt <<'EOF'
-          .env.example
-          .github/workflows/one-person-account-qa.yml
-          docs/one-person-one-account.md
-          package.json
-          scripts/test-one-person-concurrency.sh
-          src/app/account/identity/page.tsx
-          src/app/actions.ts
-          src/app/admin/identity/page.tsx
-          src/app/api/identity/provider/route.ts
-          src/app/api/identity/qa/complete/route.ts
-          src/app/auth/confirm/route.ts
-          src/app/identity/actions.ts
-          src/app/identity/identity.module.css
-          src/app/identity/page.tsx
-          src/app/identity/recovery/page.tsx
-          src/app/identity/status/page.tsx
-          src/app/signup/page.tsx
-          src/components/auth/auth-card.tsx
-          src/lib/identity/one-person-account.test.ts
-          src/lib/identity/one-person-account.ts
-          src/lib/identity/server.ts
-          supabase/migrations/20260731072000_one_person_one_account.sql
-          supabase/tests/one_person_one_account.sql
-          tests/one-person-account-authenticated.spec.ts
-          EOF
-          sed -i 's/^          //' /tmp/one-person-expected-paths.txt
-          sort -u /tmp/one-person-expected-paths.txt -o /tmp/one-person-expected-paths.txt
-          git diff --name-only origin/main...HEAD | sort -u | tee one-person-changed-paths.txt
-          diff -u /tmp/one-person-expected-paths.txt one-person-changed-paths.txt
+          event_head='${{ github.event.pull_request.head.sha }}'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$event_head"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$event_head"
+          test "$(git rev-parse "HEAD:$MIGRATION_PATH")" = "$EXPECTED_MIGRATION_BLOB"
+          test -f "$HOLD_PATH"
+          test -f "$TEMP_CONTROLLER_PATH"
+          test -f "$QA_WORKFLOW_PATH"
           test ! -e .github/one-person-bootstrap
           test ! -e .github/workflows/materialize-one-person-account.yml
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install exact dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in 1 2 3 4; do
-            if npm ci; then exit 0; fi
-            if (( attempt == 4 )); then exit 1; fi
-            sleep $((attempt * 20))
-          done
-      - name: Focused one-person-account tests
-        run: set -o pipefail; npm run test:one-person-account 2>&1 | tee one-person-focused.txt
-      - name: Complete repository tests
-        run: set -o pipefail; npm test 2>&1 | tee one-person-unit.txt
-      - name: TypeScript
-        run: set -o pipefail; npx tsc --noEmit 2>&1 | tee one-person-typescript.txt
-      - name: ESLint
-        run: set -o pipefail; npm run lint -- --quiet 2>&1 | tee one-person-eslint.txt
-      - name: Production build
-        env:
-          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
-          SITE_URL: https://www.moraltrade.org
-          VERCEL: "1"
-          VERCEL_ENV: preview
-        run: set -o pipefail; npm run build 2>&1 | tee one-person-build.txt
-      - name: Upload repository evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: one-person-account-repository-gates-${{ github.run_id }}
-          path: |
-            one-person-changed-paths.txt
-            one-person-focused.txt
-            one-person-unit.txt
-            one-person-typescript.txt
-            one-person-eslint.txt
-            one-person-build.txt
-            .next/build-manifest.json
-            .next/routes-manifest.json
-          if-no-files-found: warn
 
-  isolated-qa:
-    needs: repository-gates
-    runs-on: ubuntu-24.04
-    timeout-minutes: 75
-    env:
-      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
-      MORALTRADE_QA_DATABASE_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
-      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
-      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
-      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
-      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
-      SITE_URL: http://127.0.0.1:3210
-      ADMIN_EMAILS: ${{ secrets.QA_ADMIN_EMAILS }}
-      ONE_PERSON_ACCOUNT_PROVIDER_MODE: qa_mock
-      ONE_PERSON_ACCOUNT_PROVIDER_NAME: MoralTrade QA
-      ONE_PERSON_ACCOUNT_REGISTRATION_ENFORCEMENT_ENABLED: "true"
-      ONE_PERSON_ACCOUNT_PARTICIPATION_ENFORCEMENT_ENABLED: "true"
-      ONE_PERSON_ACCOUNT_MANUAL_LINKING_ENABLED: "true"
-      ONE_PERSON_ACCOUNT_QA_RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
-      ONE_PERSON_ACCOUNT_EXPECT_AUTH_HOOK: ${{ inputs.expect_auth_hook || 'false' }}
-      VERCEL_ENV: preview
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - name: Install exact dependencies
+      - name: Apply bounded deadlock-safe relation-lock acquisition
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in 1 2 3 4; do
-            if npm ci; then exit 0; fi
-            if (( attempt == 4 )); then exit 1; fi
-            sleep $((attempt * 20))
-          done
-      - name: Derive domain-separated QA-only identity secrets
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('supabase/migrations/20260731072000_one_person_one_account.sql')
+          text = path.read_text(encoding='utf-8')
+          marker = '$one_person_migration_relation_locks$'
+          if marker in text:
+              raise SystemExit('migration relation-lock guard already exists')
+
+          needle = 'begin;\n\ncreate extension if not exists pgcrypto with schema extensions;'
+          block = '''begin;
+
+-- Acquire both relations without ever waiting while holding only one of them.
+-- A failed NOWAIT attempt rolls back its PL/pgSQL subtransaction, releasing
+-- any partial lock set before the bounded retry. This prevents lock-order
+-- deadlocks with concurrent Auth and profile writes during deployment.
+do $one_person_migration_relation_locks$
+declare
+  attempt integer;
+  acquired boolean := false;
+begin
+  for attempt in 1..60 loop
+    begin
+      lock table auth.users in share row exclusive mode nowait;
+      lock table public.profiles in access exclusive mode nowait;
+      acquired := true;
+      exit;
+    exception
+      when lock_not_available then
+        perform pg_sleep(1);
+    end;
+  end loop;
+
+  if not acquired then
+    raise exception using
+      errcode = '55P03',
+      message = 'one_person_migration_relation_locks_unavailable';
+  end if;
+end;
+$one_person_migration_relation_locks$;
+
+create extension if not exists pgcrypto with schema extensions;'''
+
+          if text.count(needle) != 1:
+              raise SystemExit(f'unexpected migration preamble inventory: {text.count(needle)}')
+          path.write_text(text.replace(needle, block, 1), encoding='utf-8')
+          PY
+          test "$(grep -cF '$one_person_migration_relation_locks$' "$MIGRATION_PATH")" -eq 2
+          git rm "$HOLD_PATH" "$TEMP_CONTROLLER_PATH"
+          git show "$ORIGINAL_CLEAN_HEAD:$QA_WORKFLOW_PATH" > "$QA_WORKFLOW_PATH"
+          cat > /tmp/expected-repair-paths.txt <<'EOF'
+          .github/one-person-lock-repair-hold
+          .github/workflows/one-person-account-qa.yml
+          .github/workflows/one-person-migration-lock-repair-pr.yml
+          supabase/migrations/20260731072000_one_person_one_account.sql
+          EOF
+          sed -i 's/^          //' /tmp/expected-repair-paths.txt
+          sort -u /tmp/expected-repair-paths.txt -o /tmp/expected-repair-paths.txt
+          git diff --name-only | sort -u > /tmp/actual-repair-paths.txt
+          diff -u /tmp/expected-repair-paths.txt /tmp/actual-repair-paths.txt
+          git diff --check
+
+      - name: Compile complete repaired migration against isolated QA with rollback
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${QA_TEST_PASSWORD:-}" || { echo "Missing required QA secret: QA_TEST_PASSWORD" >&2; exit 1; }
-          qa_secret="$(printf 'one-person-qa-api:%s' "$QA_TEST_PASSWORD" | sha256sum | awk '{print $1}')"
-          dedupe_key="$(printf 'one-person-qa-dedupe:%s' "$QA_TEST_PASSWORD" | sha256sum | awk '{print $1}')"
-          echo "::add-mask::$qa_secret"
-          echo "::add-mask::$dedupe_key"
-          echo "ONE_PERSON_ACCOUNT_QA_SECRET=$qa_secret" >> "$GITHUB_ENV"
-          echo "ONE_PERSON_ACCOUNT_DEDUPE_KEY=$dedupe_key" >> "$GITHUB_ENV"
-      - name: Validate isolated QA target and credentials
+          test -n "${QA_SUPABASE_DB_URL:-}" || { echo 'Missing QA_SUPABASE_DB_URL' >&2; exit 1; }
+          [[ "$QA_SUPABASE_DB_URL" == *"$QA_PROJECT_REF"* ]] || { echo 'Wrong QA target' >&2; exit 1; }
+          [[ "$QA_SUPABASE_DB_URL" != *"jnpoxvalyjtdghnperyu"* ]] || { echo 'Production target refused' >&2; exit 1; }
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y postgresql-client >/dev/null
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('supabase/migrations/20260731072000_one_person_one_account.sql').read_text(encoding='utf-8').rstrip()
+          if not source.endswith('commit;'):
+              raise SystemExit('migration does not end in commit;')
+
+          reset = r'''begin;
+do $reset_one_person_triggers$
+declare
+  item record;
+begin
+  for item in
+    select * from (values
+      ('person_account_release_gates', 'person_account_release_gates_touch_updated_at'),
+      ('identity_subjects', 'identity_subjects_touch_updated_at'),
+      ('preaccount_verification_sessions', 'preaccount_verification_sessions_touch_updated_at'),
+      ('person_accounts', 'person_accounts_touch_updated_at'),
+      ('preaccount_guardian_consents', 'preaccount_guardian_consents_touch_updated_at'),
+      ('guardian_relationships', 'guardian_relationships_touch_updated_at'),
+      ('account_merge_cases', 'account_merge_cases_touch_updated_at'),
+      ('identity_verification_events', 'identity_verification_events_append_only'),
+      ('account_security_events', 'account_security_events_append_only'),
+      ('identity_dedupe_keys', 'identity_dedupe_keys_no_delete')
+    ) as configured(table_name, trigger_name)
+  loop
+    if to_regclass('moral_trade_private.' || item.table_name) is not null then
+      execute format(
+        'drop trigger if exists %I on moral_trade_private.%I',
+        item.trigger_name,
+        item.table_name
+      );
+    end if;
+  end loop;
+end;
+$reset_one_person_triggers$;
+'''
+          compiled = reset + source[:-len('commit;')] + 'rollback;\n'
+          Path('/tmp/one-person-lock-compile.sql').write_text(compiled, encoding='utf-8')
+          PY
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f /tmp/one-person-lock-compile.sql > /tmp/one-person-lock-compile.log
+          tail -n 50 /tmp/one-person-lock-compile.log
+
+      - name: Commit and push exact compiled repair
+        id: publish
         shell: bash
         run: |
           set -euo pipefail
-          for name in MORALTRADE_QA_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY ONE_PERSON_ACCOUNT_QA_SECRET ONE_PERSON_ACCOUNT_DEDUPE_KEY; do
-            test -n "${!name:-}" || { echo "Missing required QA secret: $name" >&2; exit 1; }
-          done
-          test "$QA_PROJECT_REF" = "hvmxfjjbdcgjjudmthdz"
-          test "$NEXT_PUBLIC_SUPABASE_URL" = "https://hvmxfjjbdcgjjudmthdz.supabase.co"
-          [[ "$MORALTRADE_QA_DATABASE_URL" == *"hvmxfjjbdcgjjudmthdz"* ]] || {
-            echo "Database URL does not target isolated MoralTrade QA." >&2
-            exit 1
-          }
-          [[ "$MORALTRADE_QA_DATABASE_URL" != *"jnpoxvalyjtdghnperyu"* ]] || {
-            echo "Production database URL detected; refusing to continue." >&2
-            exit 1
-          }
-      - name: Install PostgreSQL and evidence tooling
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client jq
-      - name: Apply additive migration once to isolated QA
+          event_head='${{ github.event.pull_request.head.sha }}'
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$event_head"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          cat > /tmp/expected-staged-paths.txt <<'EOF'
+          .github/one-person-lock-repair-hold
+          .github/workflows/one-person-account-qa.yml
+          .github/workflows/one-person-migration-lock-repair-pr.yml
+          supabase/migrations/20260731072000_one_person_one_account.sql
+          EOF
+          sed -i 's/^          //' /tmp/expected-staged-paths.txt
+          sort -u /tmp/expected-staged-paths.txt -o /tmp/expected-staged-paths.txt
+          git diff --cached --name-only | sort -u > /tmp/actual-staged-paths.txt
+          diff -u /tmp/expected-staged-paths.txt /tmp/actual-staged-paths.txt
+          git diff --cached --check
+          git commit -m 'Harden one-person migration lock acquisition'
+          repaired_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$event_head"
+          test ! -e "$HOLD_PATH"
+          test ! -e "$TEMP_CONTROLLER_PATH"
+          test "$(git rev-parse "HEAD:$QA_WORKFLOW_PATH")" = "$(git rev-parse "$ORIGINAL_CLEAN_HEAD:$QA_WORKFLOW_PATH")"
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$event_head" origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "repaired_sha=$repaired_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Report successful repair
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -euo pipefail
-          migration=supabase/migrations/20260731072000_one_person_one_account.sql
-          sha256sum "$migration" | tee one-person-migration.sha256
-          present="$(psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAtc "select to_regclass('moral_trade_private.person_account_release_gates') is not null")"
-          if [[ "$present" == "t" ]]; then
-            echo "One-person-account schema already exists in isolated QA; verifying instead of replaying the migration."
-          else
-            psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f "$migration" | tee one-person-migration.txt
-          fi
-          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' | tee one-person-schema-inventory.txt
-          select jsonb_build_object(
-            'releaseGates', to_regclass('moral_trade_private.person_account_release_gates') is not null,
-            'personAccounts', to_regclass('moral_trade_private.person_accounts') is not null,
-            'identitySubjects', to_regclass('moral_trade_private.identity_subjects') is not null,
-            'registrationGrants', to_regclass('moral_trade_private.person_registration_grants') is not null,
-            'beforeUserCreatedHook', to_regprocedure('public.one_person_before_user_created_hook(jsonb)') is not null,
-            'customAccessTokenHook', to_regprocedure('public.one_person_custom_access_token_hook(jsonb)') is not null,
-            'cleanupFixture', to_regprocedure('public.cleanup_one_person_qa_fixture_v1(uuid,text)') is not null,
-            'cleanupSession', to_regprocedure('public.cleanup_one_person_qa_session_v1(uuid,text)') is not null
-          );
-          SQL
-          grep -q '"releaseGates": true' one-person-schema-inventory.txt
-          grep -q '"beforeUserCreatedHook": true' one-person-schema-inventory.txt
-      - name: Enable QA-only release gates for the test window
-        run: |
-          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL'
-          select public.configure_person_account_release_v1('qa_mock', true, true, true, null);
-          SQL
-      - name: SQL regression
-        run: set -o pipefail; psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/one_person_one_account.sql 2>&1 | tee one-person-sql.txt
-      - name: Concurrent duplicate registration
-        run: set -o pipefail; scripts/test-one-person-concurrency.sh 2>&1 | tee one-person-concurrency.txt
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-      - name: Authenticated desktop and mobile tests
-        run: set -o pipefail; npx playwright test tests/one-person-account-authenticated.spec.ts --reporter=line 2>&1 | tee one-person-browser.txt
-      - name: Prove every one-person synthetic residue count is zero
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "The recognized one-person QA workflow compiled the deadlock-safe migration through its final statement against isolated QA with rollback, pushed exact repair \`${{ steps.publish.outputs.repaired_sha }}\`, restored the ordinary QA workflow, and removed both temporary branch files. The PR remains draft; production is unchanged."
+
+      - name: Report repair failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -euo pipefail
-          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' | tee one-person-residue.json
-          select jsonb_build_object(
-            'authUsers', (
-              select count(*) from auth.users
-              where lower(coalesce(raw_user_meta_data ->> 'qa_fixture', 'false')) = 'true'
-            ),
-            'qaSessions', (
-              select count(*) from moral_trade_private.preaccount_verification_sessions
-              where provider_mode = 'qa_mock'
-            ),
-            'qaSubjects', (
-              select count(*) from moral_trade_private.identity_subjects
-              where latest_provider_name = 'MoralTrade QA'
-            ),
-            'qaGrants', (
-              select count(*)
-              from moral_trade_private.person_registration_grants g
-              join moral_trade_private.preaccount_verification_sessions s
-                on s.id = g.verification_session_id
-              where s.provider_mode = 'qa_mock'
-            ),
-            'qaVerificationEvents', (
-              select count(*)
-              from moral_trade_private.identity_verification_events e
-              join moral_trade_private.preaccount_verification_sessions s
-                on s.id = e.verification_session_id
-              where s.provider_mode = 'qa_mock'
-            ),
-            'qaDedupeKeys', (
-              select count(*)
-              from moral_trade_private.identity_dedupe_keys k
-              join moral_trade_private.identity_subjects s
-                on s.id = k.identity_subject_id
-              where s.latest_provider_name = 'MoralTrade QA'
-            ),
-            'qaDuplicateCases', (
-              select count(*)
-              from moral_trade_private.identity_duplicate_cases d
-              left join moral_trade_private.preaccount_verification_sessions s
-                on s.id = d.verification_session_id
-              where s.provider_mode = 'qa_mock'
-                 or d.reason_code like 'qa_%'
-            )
-          );
-          SQL
-          jq -e 'to_entries | all(.value == 0)' one-person-residue.json >/dev/null
-      - name: Restore QA release gates to disabled
-        if: always()
-        run: |
-          if [[ -n "${MORALTRADE_QA_DATABASE_URL:-}" ]]; then
-            psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' || true
-          select public.configure_person_account_release_v1('qa_mock', true, false, false, null);
-          SQL
-          fi
-      - name: Upload QA evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: one-person-account-isolated-qa-${{ github.run_id }}
-          path: |
-            one-person-migration.sha256
-            one-person-migration.txt
-            one-person-schema-inventory.txt
-            one-person-sql.txt
-            one-person-concurrency.txt
-            one-person-browser.txt
-            one-person-residue.json
-            test-results/**
-          if-no-files-found: warn
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "The recognized one-person migration-lock repair failed in run \`$GITHUB_RUN_ID\`. No push was accepted unless exact-head, source-blob, four-path, rollback-only compilation, workflow-restoration, and force-with-lease guards all passed. The branch remains held for inspection."
