@@ -1,2 +1,0 @@
-Temporary exact-head hold while correcting the migration lock order.
-Do not merge this branch until this file is removed and the exact QA gates pass.

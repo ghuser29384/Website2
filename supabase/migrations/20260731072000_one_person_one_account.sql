@@ -8,6 +8,35 @@
 
 begin;
 
+-- Acquire both relations without ever waiting while holding only one of them.
+-- A failed NOWAIT attempt rolls back its PL/pgSQL subtransaction, releasing
+-- any partial lock set before the bounded retry. This prevents lock-order
+-- deadlocks with concurrent Auth and profile writes during deployment.
+do $one_person_migration_relation_locks$
+declare
+  attempt integer;
+  acquired boolean := false;
+begin
+  for attempt in 1..60 loop
+    begin
+      lock table auth.users in share row exclusive mode nowait;
+      lock table public.profiles in access exclusive mode nowait;
+      acquired := true;
+      exit;
+    exception
+      when lock_not_available then
+        perform pg_sleep(1);
+    end;
+  end loop;
+
+  if not acquired then
+    raise exception using
+      errcode = '55P03',
+      message = 'one_person_migration_relation_locks_unavailable';
+  end if;
+end;
+$one_person_migration_relation_locks$;
+
 create extension if not exists pgcrypto with schema extensions;
 create schema if not exists moral_trade_private;
 revoke all on schema moral_trade_private from public, anon, authenticated;
