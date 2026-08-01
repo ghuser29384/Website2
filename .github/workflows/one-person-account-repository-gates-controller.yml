@@ -24,7 +24,7 @@ jobs:
       github.repository == 'ghuser29384/Website2' &&
       github.event.issue.pull_request != null &&
       github.event.issue.number == 379 &&
-      github.event.comment.body == '/run-one-person-repository-gates-20260801'
+      github.event.comment.body == '/run-one-person-repository-gates-20260801-v2'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -118,13 +118,17 @@ jobs:
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Exact-head repository gates passed for one-person-account candidate \`$EXPECTED_FEATURE_SHA\` in run $GITHUB_RUN_ID: focused tests, complete tests, TypeScript, ESLint, production build, exact 24-path boundary, and diff hygiene all passed. PR remains draft pending isolated-QA, Auth configuration, and browser gates."
+        shell: bash
+        run: |
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Exact-head repository gates passed for one-person-account candidate \`$EXPECTED_FEATURE_SHA\` in run $GITHUB_RUN_ID: focused tests, complete tests, TypeScript, ESLint, production build, exact 24-path boundary, and diff hygiene all passed. PR remains draft pending isolated-QA, Auth configuration, and browser gates."
 
       - name: Comment failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Exact-head one-person-account repository gates failed for candidate \`$EXPECTED_FEATURE_SHA\` in run $GITHUB_RUN_ID. Inspect the job logs and evidence artifact before changing the same draft branch."
+        shell: bash
+        run: |
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Exact-head one-person-account repository gates failed for candidate \`$EXPECTED_FEATURE_SHA\` in run $GITHUB_RUN_ID. Inspect the job logs and evidence artifact before changing the same draft branch."
 
       - name: Remove temporary controller
         if: always()
