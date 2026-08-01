@@ -1,27 +1,33 @@
 name: Repair Discover pledge clarity mobile test
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/discover-pledge-clarity-20260801
-  workflow_dispatch:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
 
 permissions:
   contents: write
 
 concurrency:
-  group: discover-pledge-clarity-test-repair
+  group: discover-pledge-clarity-test-repair-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   repair:
-    if: github.repository == 'ghuser29384/Website2'
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/discover-pledge-clarity-20260801'
     runs-on: ubuntu-latest
     steps:
       - name: Check out exact feature branch
         uses: actions/checkout@v4
         with:
-          ref: fix/discover-pledge-clarity-20260801
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
           persist-credentials: true
 
