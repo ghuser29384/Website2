@@ -197,7 +197,7 @@ jobs:
             await page.screenshot({ path: "test-results/discover-pledge-clarity-desktop.png", fullPage: true });
           });
 
-          test("mobile pool inspector preserves the same explanation without horizontal overflow", async ({ page }) => {
+          test("mobile selected-pool sheet preserves the same explanation and stays within the viewport", async ({ page }) => {
             await page.setViewportSize({ width: 390, height: 844 });
             await page.goto(discoverUrl);
             const inspectorTrigger = page.getByRole("button", { name: "Open selection inspector" });
@@ -207,8 +207,16 @@ jobs:
             await setWildResearchPledge(page, 35);
             await expect(page.getByText("0.43% of current gap", { exact: true }).first()).toBeVisible();
 
-            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-            expect(overflow).toBeLessThanOrEqual(1);
+            const sheet = page.locator(".inspector.mobile-sheet");
+            await expect(sheet).toBeVisible();
+            const bounds = await sheet.boundingBox();
+            expect(bounds).not.toBeNull();
+            expect(bounds!.x).toBeGreaterThanOrEqual(-1);
+            expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(391);
+            const sheetOverflow = await sheet.evaluate(
+              (element) => element.scrollWidth - element.clientWidth,
+            );
+            expect(sheetOverflow).toBeLessThanOrEqual(1);
             await page.screenshot({ path: "test-results/discover-pledge-clarity-mobile.png", fullPage: true });
           });
           EOF
