@@ -12,6 +12,10 @@ const canonicalRuntime: RecommendationTrainingRuntimeDecision = {
   targetEnvironment: "production",
 };
 
+function testEnv(overrides: Record<string, string | undefined> = {}): NodeJS.ProcessEnv {
+  return { NODE_ENV: "test", ...overrides };
+}
+
 test("a natural 12:30 UTC invocation receives a stable daily idempotency slot", () => {
   const request = new Request("https://www.moraltrade.org/api/jobs/recommendation-training", {
     headers: { "x-vercel-cron-schedule": "30 12 * * *" },
@@ -19,7 +23,7 @@ test("a natural 12:30 UTC invocation receives a stable daily idempotency slot", 
   const context = buildRecommendationTrainingExecutionContext(
     request,
     canonicalRuntime,
-    { NODE_ENV: "test", VERCEL_DEPLOYMENT_ID: "dpl_canonical" },
+    testEnv({ VERCEL_DEPLOYMENT_ID: "dpl_canonical" }),
     new Date("2026-07-30T12:30:48.000Z"),
   );
 
@@ -37,7 +41,7 @@ test("manual authorized execution is not assigned a natural cron slot", () => {
   const context = buildRecommendationTrainingExecutionContext(
     request,
     canonicalRuntime,
-    { NODE_ENV: "test" },
+    testEnv(),
     new Date("2026-07-30T15:00:00.000Z"),
   );
 
@@ -53,7 +57,7 @@ test("an unrelated cron schedule cannot collide with the daily A1 slot", () => {
   const context = buildRecommendationTrainingExecutionContext(
     request,
     canonicalRuntime,
-    { NODE_ENV: "test" },
+    testEnv(),
     new Date("2026-07-30T12:30:00.000Z"),
   );
 
