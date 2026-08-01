@@ -1,0 +1,234 @@
+name: Attempt Vercel cleanup while billing-blocked
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/attempt-vercel-cleanup-while-blocked.yml
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: attempt-vercel-cleanup-while-blocked
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  CANONICAL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  DUPLICATE_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+  VERCEL_CLI_VERSION: 50.38.1
+  CONTROLLER_PATH: .github/workflows/attempt-vercel-cleanup-while-blocked.yml
+
+jobs:
+  cleanup:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Guard authorization, scope, and secret
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_ACTOR" = 'ghuser29384'
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          test -n "$VERCEL_TOKEN"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Capture and validate exact before-state
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_COST_CONTROL_MODE: audit
+          VERCEL_COST_CONTROL_REPORT: vercel-cleanup-before.json
+        run: |
+          set -euo pipefail
+          node scripts/vercel-admin-cost-controls.mjs
+          node <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('vercel-cleanup-before.json', 'utf8'));
+          const expected = new Map([
+            ['prj_XuzEnQNY2Xrk6mUoBdzFG6VkILts', 'moral-trade-schema-test'],
+            ['prj_7JRowNTrMG4iHeIkTGBGvtxRlwT9', 'moral-trade-exact-verify'],
+            ['prj_YehABtMYO1rhOOMSHl8QyH2xgMu0', 'moral-trade-live'],
+            ['prj_cwrbl8tDfjk48p9UZCEw1zZF8Wiv', 'moral-trade-verify'],
+            ['prj_1oFSOZbCp28axBOdkQKhdI2OoYBM', 'moral-trade-live-test'],
+            ['prj_GjsRceONkKiX820msEgBkgIpb6qj', 'moraltrade-production-bridge-test'],
+          ]);
+          for (const entry of report.obsolete) {
+            const summary = entry.summary;
+            if (!summary) continue;
+            if (expected.get(summary.id) !== summary.name) {
+              throw new Error(`Unexpected cleanup identity: ${summary.id}/${summary.name}`);
+            }
+            if (summary.domains.some((domain) => !domain.endsWith('.vercel.app'))) {
+              throw new Error(`Custom domain blocks deletion of ${summary.name}`);
+            }
+          }
+          if (report.duplicate?.id !== 'prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK' || report.duplicate?.name !== 'website2') {
+            throw new Error('website2 identity mismatch');
+          }
+          NODE
+
+      - name: Attempt each authorized mutation independently
+        id: mutate
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set +e
+          set -o pipefail
+          : > vercel-cleanup-actions.tsv
+
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$DUPLICATE_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" git disconnect github \
+            --yes \
+            --token="$VERCEL_TOKEN" \
+            > vercel-cleanup-disconnect.log 2>&1
+          disconnect_status=$?
+          printf 'disconnect_website2\t%s\n' "$disconnect_status" >> vercel-cleanup-actions.tsv
+
+          for project_id in \
+            prj_XuzEnQNY2Xrk6mUoBdzFG6VkILts \
+            prj_7JRowNTrMG4iHeIkTGBGvtxRlwT9 \
+            prj_YehABtMYO1rhOOMSHl8QyH2xgMu0 \
+            prj_cwrbl8tDfjk48p9UZCEw1zZF8Wiv \
+            prj_1oFSOZbCp28axBOdkQKhdI2OoYBM \
+            prj_GjsRceONkKiX820msEgBkgIpb6qj
+          do
+            response_file="vercel-cleanup-delete-${project_id}.json"
+            http_code="$(curl --silent --show-error \
+              --request DELETE \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header 'Accept: application/json' \
+              --output "$response_file" \
+              --write-out '%{http_code}' \
+              "https://api.vercel.com/v9/projects/${project_id}?teamId=${VERCEL_ORG_ID}")"
+            printf 'delete_%s\t%s\n' "$project_id" "$http_code" >> vercel-cleanup-actions.tsv
+          done
+
+          patch_code="$(curl --silent --show-error \
+            --request PATCH \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header 'Accept: application/json' \
+            --header 'Content-Type: application/json' \
+            --data '{"resourceConfig":{"buildMachineType":"standard","elasticConcurrencyEnabled":false,"buildQueue":{"configuration":"WAIT_FOR_NAMESPACE_QUEUE"}}}' \
+            --output vercel-cleanup-canonical-patch.json \
+            --write-out '%{http_code}' \
+            "https://api.vercel.com/v9/projects/${CANONICAL_PROJECT_ID}?teamId=${VERCEL_ORG_ID}")"
+          printf 'patch_canonical\t%s\n' "$patch_code" >> vercel-cleanup-actions.tsv
+          exit 0
+
+      - name: Verify actual resulting account state
+        id: verify
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_COST_CONTROL_MODE: audit
+          VERCEL_COST_CONTROL_REPORT: vercel-cleanup-after.json
+        run: |
+          set +e
+          node scripts/vercel-admin-cost-controls.mjs
+          audit_status=$?
+          if (( audit_status != 0 )); then
+            echo 'complete=false' >> "$GITHUB_OUTPUT"
+            echo 1 > vercel-cleanup.status
+            exit 0
+          fi
+          node <<'NODE'
+          const fs = require('node:fs');
+          const report = JSON.parse(fs.readFileSync('vercel-cleanup-after.json', 'utf8'));
+          const canonical = report.canonical?.resourceConfig;
+          const canonicalReady = canonical?.buildMachineType === 'standard'
+            && canonical?.elasticConcurrencyEnabled === false
+            && canonical?.buildQueue === 'WAIT_FOR_NAMESPACE_QUEUE';
+          const disconnected = report.duplicate && report.duplicate.link === null;
+          const obsoleteAbsent = report.obsolete.every((entry) => entry.summary === null);
+          const result = { canonicalReady, disconnected, obsoleteAbsent };
+          fs.writeFileSync('vercel-cleanup-result.json', JSON.stringify(result, null, 2) + '\n');
+          fs.writeFileSync('vercel-cleanup.status', canonicalReady && disconnected && obsoleteAbsent ? '0\n' : '1\n');
+          NODE
+          if [[ "$(cat vercel-cleanup.status)" == '0' ]]; then
+            echo 'complete=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'complete=false' >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Upload redacted cleanup evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-cleanup-${{ github.run_id }}
+          path: |
+            vercel-cleanup-*.json
+            vercel-cleanup-*.log
+            vercel-cleanup-actions.tsv
+            vercel-cleanup.status
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report exact outcome to PR 422
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          result="$(cat vercel-cleanup-result.json 2>/dev/null || echo '{}')"
+          if [[ "$(cat vercel-cleanup.status 2>/dev/null || echo 1)" == '0' ]]; then
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "The independent Vercel cleanup completed and the final account state was verified. Evidence: $run_url"
+          else
+            compact="$(jq -c . <<<"$result" 2>/dev/null || echo '{}')"
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "The independent Vercel cleanup was attempted, but the full target state is not yet verified. Final checks: \`$compact\`. Inspect the per-action HTTP statuses and redacted evidence: $run_url"
+          fi
+
+      - name: Remove the one-time controller
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$blob_sha" ]]; then
+            jq -n \
+              --arg message 'Remove blocked-account cleanup controller' \
+              --arg sha "$blob_sha" \
+              --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE \
+                  "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" \
+                  --input - >/dev/null
+          fi
+
+      - name: Enforce full target state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat vercel-cleanup.status 2>/dev/null || echo 1)" = '0'
