@@ -188,3 +188,5 @@ jobs:
           CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
         shell: bash
         run: gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Browser redirect repair v2 finished. Candidate: \`${CANDIDATE_SHA:-unavailable}\`. No production action was attempted."
+
+# The workflow was first registered in an earlier commit; this edit intentionally triggers it.
