@@ -12,6 +12,7 @@ on:
       - ".github/scripts/run-marketplace-delta-exact-head-repair-gate-v4.sh"
       - ".github/scripts/run-marketplace-delta-exact-head-repair-gate-v5.sh"
       - ".github/scripts/run-marketplace-delta-exact-head-repair-gate-v6.sh"
+      - ".github/scripts/run-marketplace-delta-exact-head-repair-gate-v7.sh"
       - ".github/scripts/marketplace-delta-claimed-guest-browser-qa.mjs"
       - ".github/qa/marketplace-delta-cleanup-now"
 
@@ -65,7 +66,7 @@ jobs:
 
       - name: Run exact-head static, deployment, rendered, and cleanup gate
         shell: bash
-        run: bash .github/scripts/run-marketplace-delta-exact-head-repair-gate-v6.sh
+        run: bash .github/scripts/run-marketplace-delta-exact-head-repair-gate-v7.sh
 
       - name: Upload desktop and mobile browser evidence
         if: always()
