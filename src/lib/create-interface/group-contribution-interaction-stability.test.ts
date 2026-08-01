@@ -20,12 +20,14 @@ test("interaction stability installs before the group contribution enhancement",
   assert.ok(enhancementCall > stabilityCall);
 });
 
-test("only state-replacing controls inside group contribution Shadow roots are deferred", () => {
+test("state-replacing controls persist their draft and remount after dispatch", () => {
   assert.match(stability, /data-mt-group-contribution-host/);
-  assert.match(stability, /event\.type === "click" && target\.matches\("\[data-mode\]"\)/);
-  assert.match(stability, /event\.type === "change" && target\.matches\("\[data-field\]"\)/);
+  assert.match(stability, /event\.type === "click" \? control\.getAttribute\("data-mode"\)/);
+  assert.match(stability, /event\.type === "change" \? control\.getAttribute\("data-field"\)/);
   assert.match(stability, /event\.stopImmediatePropagation\(\)/);
+  assert.match(stability, /targetWindow\.localStorage\.setItem/);
   assert.match(stability, /targetWindow\.setTimeout/);
-  assert.match(stability, /replayingTargets\.add\(target\)/);
-  assert.doesNotMatch(stability, /fetch|XMLHttpRequest|payment/i);
+  assert.match(stability, /card\.removeAttribute\(OPTION_ATTRIBUTE\)/);
+  assert.match(stability, /window\.MoralTradeGroupContributions\?\.refresh\(\)/);
+  assert.doesNotMatch(stability, /fetch|XMLHttpRequest|paymentIntent|clientSecret/i);
 });
