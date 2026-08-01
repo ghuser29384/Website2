@@ -1,0 +1,79 @@
+name: Discover worked-example status exact gates
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/discover-worked-example-status-exact-gates.yml"
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: discover-worked-example-status-exact-gates-88de7e77
+  cancel-in-progress: false
+
+jobs:
+  exact-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_SHA: 88de7e770728dd355f386cd6ee25854639262986
+      STATUS_CONTEXT: QA / Discover status fixture exact gates
+
+    steps:
+      - name: Mark exact candidate pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state=pending \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="Running absolute TypeScript, focused Discover test, and production build" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Check out exact repair candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 1
+
+      - name: Verify exact checkout
+        run: test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run absolute TypeScript gate
+        run: npx tsc --noEmit
+
+      - name: Run focused Discover search test
+        run: node --import tsx --test src/lib/discover-search.test.ts
+
+      - name: Run production build
+        run: npm run build
+
+      - name: Publish exact-gate result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [[ "$JOB_STATUS" == "success" ]]; then
+            state=success
+            description="Absolute TypeScript, focused Discover test, and production build passed"
+          else
+            state=failure
+            description="Discover status fixture exact gates failed; inspect workflow evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state="$state" \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
