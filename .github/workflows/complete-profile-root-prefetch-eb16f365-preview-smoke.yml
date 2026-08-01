@@ -22,7 +22,6 @@ jobs:
       STATUS_CONTEXT: QA / Complete Profile prefetch rebased preview smoke
       PREVIEW_DEPLOYMENT_ID: dpl_4ffMNqZ7oT32PBTV7GyA2rJVMEFs
       PREVIEW_ORIGIN: https://website2-64hwac0iw-ellen-s.vercel.app
-      VERCEL_PROJECT: website2
       VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
 
     steps:
@@ -67,6 +66,7 @@ jobs:
       - name: Verify exact READY deployment
         env:
           VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN_VALUE"
@@ -77,70 +77,68 @@ jobs:
           deployed_sha="$(jq -r '.meta.githubCommitSha // empty' <<<"$response")"
           test "$state" = "READY"
           test "$deployed_sha" = "$EXPECTED_SHA"
+          mkdir -p complete-profile-root-prefetch-rebased-preview-smoke
           jq -n \
             --arg expectedSha "$EXPECTED_SHA" \
             --arg deploymentId "$PREVIEW_DEPLOYMENT_ID" \
             --arg origin "$PREVIEW_ORIGIN" \
             --arg state "$state" \
             '{expectedSha:$expectedSha,deploymentId:$deploymentId,origin:$origin,state:$state}' \
-            > /tmp/preview-deployment.json
+            > complete-profile-root-prefetch-rebased-preview-smoke/deployment.json
 
-      - name: Generate and verify one-run Vercel automation bypass
+      - name: Temporarily override protection for the exact deployment
         env:
           VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$VERCEL_TOKEN_VALUE"
-          secret="$(openssl rand -hex 16)"
-          echo "::add-mask::$secret"
-          payload="$(jq -cn --arg secret "$secret" '{generate:{secret:$secret,note:"Complete Profile rebased root-prefetch preview smoke 2026-08-01"}}')"
+          payload='{"override":{"scope":"alias-protection-override","action":"create"}}'
           curl -fsS -X PATCH \
-            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
+            "https://api.vercel.com/v1/aliases/${PREVIEW_DEPLOYMENT_ID}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
             -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
             -H "Content-Type: application/json" \
             --data "$payload" \
-            > /tmp/vercel-bypass-generate.json
-          jq -e '.protectionBypass | type == "object"' /tmp/vercel-bypass-generate.json >/dev/null
-          echo "VERCEL_AUTOMATION_BYPASS_SECRET=$secret" >> "$GITHUB_ENV"
+            > /tmp/vercel-protection-override-create.json
+          echo "PREVIEW_PROTECTION_OVERRIDE_CREATED=true" >> "$GITHUB_ENV"
 
           ready=false
           for attempt in $(seq 1 30); do
-            probe="$(curl -sS -L --max-redirs 5 \
-              -o /tmp/vercel-bypass-probe.html \
-              -w '%{url_effective}|%{http_code}' \
-              -H "x-vercel-protection-bypass: ${secret}" \
-              -H "x-vercel-set-bypass-cookie: true" \
+            headers="$(mktemp)"
+            set +e
+            status="$(curl -sS -o /tmp/preview-probe.html -D "$headers" -w '%{http_code}' \
               -H 'Cookie: mt_walkthrough_seen=1' \
               "${PREVIEW_ORIGIN}/complete-profile")"
-            final_url="${probe%|*}"
-            status="${probe##*|}"
-            if [[ "$final_url" == "${PREVIEW_ORIGIN}/"* && "$status" =~ ^2[0-9][0-9]$ ]]; then
+            curl_status=$?
+            set -e
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, "", $2); print $2}' "$headers" | tail -1)"
+            rm -f "$headers"
+            if [[ "$curl_status" -eq 0 && "$status" =~ ^2[0-9][0-9]$ ]]; then
               ready=true
-              jq -n --arg finalUrl "$final_url" --arg status "$status" \
-                '{finalUrl:$finalUrl,status:($status|tonumber)}' > /tmp/vercel-bypass-probe.json
+              jq -n \
+                --arg status "$status" \
+                --arg location "$location" \
+                --arg attempt "$attempt" \
+                '{status:($status|tonumber),location:$location,attempt:($attempt|tonumber)}' \
+                > complete-profile-root-prefetch-rebased-preview-smoke/protection-probe.json
               break
             fi
             sleep 2
           done
           test "$ready" = true
 
-      - name: Run protected exact-preview smoke
+      - name: Run exact-preview browser smoke
         shell: bash
         run: |
           mkdir -p .qa complete-profile-root-prefetch-rebased-preview-smoke
-          cp /tmp/preview-deployment.json complete-profile-root-prefetch-rebased-preview-smoke/deployment.json
-          cp /tmp/vercel-bypass-probe.json complete-profile-root-prefetch-rebased-preview-smoke/bypass-probe.json
           cat > .qa/complete-profile-root-prefetch-rebased-preview-smoke.mjs <<'SCRIPT'
           import assert from "node:assert/strict";
           import { mkdir, writeFile } from "node:fs/promises";
           import { chromium } from "@playwright/test";
 
           const origin = process.env.PREVIEW_ORIGIN;
-          const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
           const expectedSha = process.env.EXPECTED_SHA;
           const expectedDeploymentId = process.env.PREVIEW_DEPLOYMENT_ID;
-          assert.ok(origin && bypassSecret && expectedSha && expectedDeploymentId);
+          assert.ok(origin && expectedSha && expectedDeploymentId);
 
           const outputDir = "complete-profile-root-prefetch-rebased-preview-smoke";
           await mkdir(outputDir, { recursive: true });
@@ -154,26 +152,7 @@ jobs:
           };
 
           async function createContext(viewport) {
-            const bypassHeaders = {
-              "x-vercel-protection-bypass": bypassSecret,
-              "x-vercel-set-bypass-cookie": "true",
-            };
-            const context = await browser.newContext({ viewport, extraHTTPHeaders: bypassHeaders });
-            await context.route("**/*", async (route) => {
-              const request = route.request();
-              if (new URL(request.url()).origin === origin) {
-                await route.continue({ headers: { ...request.headers(), ...bypassHeaders } });
-              } else {
-                await route.continue();
-              }
-            });
-            const primingResponse = await context.request.get(`${origin}/complete-profile`, {
-              headers: { ...bypassHeaders, Cookie: "mt_walkthrough_seen=1" },
-              maxRedirects: 5,
-              timeout: 60_000,
-            });
-            assert.equal(new URL(primingResponse.url()).origin, origin, `Bypass priming left preview origin: ${primingResponse.url()}`);
-            assert.ok(primingResponse.status() < 400, `Bypass priming returned ${primingResponse.status()}`);
+            const context = await browser.newContext({ viewport });
             await context.addCookies([
               { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
             ]);
@@ -211,7 +190,9 @@ jobs:
           function attachDiagnostics(page, state) {
             page.on("pageerror", (error) => state.pageErrors.push(error.message));
             page.on("console", (message) => {
-              if (message.type() === "error") state.consoleErrors.push({ text: message.text(), location: message.location() });
+              if (message.type() === "error") {
+                state.consoleErrors.push({ text: message.text(), location: message.location() });
+              }
             });
             page.on("request", (request) => {
               const url = new URL(request.url());
@@ -222,7 +203,9 @@ jobs:
             page.on("requestfailed", (request) => {
               if (new URL(request.url()).origin !== origin) return;
               const record = {
-                url: request.url(), method: request.method(), resourceType: request.resourceType(),
+                url: request.url(),
+                method: request.method(),
+                resourceType: request.resourceType(),
                 errorText: request.failure()?.errorText ?? "unknown",
               };
               if (isExpectedPrefetchAbort(request)) state.expectedPrefetchAborts.push(record);
@@ -248,8 +231,11 @@ jobs:
             const context = await createContext({ width: 1440, height: 1000 });
             const page = await context.newPage();
             attachDiagnostics(page, state);
-            const response = await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
-            assert.ok(response && response.status() < 400);
+            const response = await page.goto(`${origin}/complete-profile`, {
+              waitUntil: "domcontentloaded",
+              timeout: 120_000,
+            });
+            assert.ok(response && response.status() < 400, "Desktop route returned no clean response");
             assert.equal(new URL(page.url()).origin, origin, `Desktop left preview origin: ${page.url()}`);
             await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
             await page.getByRole("heading", { name: "Spend 100 sparks of attention." }).waitFor({ state: "visible", timeout: 60_000 });
@@ -274,15 +260,21 @@ jobs:
             const context = await createContext({ width: 390, height: 844 });
             const page = await context.newPage();
             attachDiagnostics(page, state);
-            const response = await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
-            assert.ok(response && response.status() < 400);
+            const response = await page.goto(`${origin}/complete-profile`, {
+              waitUntil: "domcontentloaded",
+              timeout: 120_000,
+            });
+            assert.ok(response && response.status() < 400, "Mobile route returned no clean response");
             assert.equal(new URL(page.url()).origin, origin, `Mobile left preview origin: ${page.url()}`);
             await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
             await page.getByLabel("80 of 100 attention points assigned").waitFor({ state: "visible", timeout: 60_000 });
             await page.waitForTimeout(1_500);
             await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
             await page.getByRole("button", { name: "Decrease Space governance" }).waitFor({ state: "visible", timeout: 30_000 });
-            const dimensions = await page.evaluate(() => ({ viewportWidth: innerWidth, documentWidth: document.documentElement.scrollWidth }));
+            const dimensions = await page.evaluate(() => ({
+              viewportWidth: window.innerWidth,
+              documentWidth: document.documentElement.scrollWidth,
+            }));
             assert.ok(dimensions.documentWidth <= dimensions.viewportWidth, `Mobile overflow: ${JSON.stringify(dimensions)}`);
             await page.waitForTimeout(500);
             await page.screenshot({ path: `${outputDir}/returning-mobile.png`, fullPage: true });
@@ -318,20 +310,20 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Revoke one-run Vercel automation bypass
-        if: always() && env.VERCEL_AUTOMATION_BYPASS_SECRET != ''
+      - name: Revoke exact-deployment protection override
+        if: always() && env.PREVIEW_PROTECTION_OVERRIDE_CREATED == 'true'
         env:
           VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          payload="$(jq -cn --arg secret "$VERCEL_AUTOMATION_BYPASS_SECRET" '{revoke:{secret:$secret,regenerate:false}}')"
+          payload='{"override":{"scope":"alias-protection-override","action":"revoke"}}'
           curl -fsS -X PATCH \
-            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
+            "https://api.vercel.com/v1/aliases/${PREVIEW_DEPLOYMENT_ID}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
             -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
             -H "Content-Type: application/json" \
             --data "$payload" \
-            > /tmp/vercel-bypass-revoke.json
+            > /tmp/vercel-protection-override-revoke.json
 
       - name: Publish preview-smoke result
         if: always()
