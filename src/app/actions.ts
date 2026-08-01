@@ -96,6 +96,12 @@ import {
   type BackgroundPurposeBinding,
 } from "@/lib/background-purpose-registry";
 import { getSafeInternalPath } from "@/lib/paths";
+import { getOnePersonAccountConfig } from "@/lib/identity/one-person-account";
+import {
+  clearOnePersonIdentityCookies,
+  prepareOnePersonRegistration,
+  synchronizeOnePersonCredentialInventory,
+} from "@/lib/identity/server";
 import {
   getBaselineBondAppealWindowEndsAt,
   getBaselineBondStatusAfterAccepted,
@@ -2997,6 +3003,18 @@ export async function signUpAction(formData: FormData) {
     redirectWithMessage(signupPath, "error", "Email and password are required.");
   }
 
+  const onePersonConfig = getOnePersonAccountConfig();
+  let registrationGrant: Awaited<ReturnType<typeof prepareOnePersonRegistration>> = null;
+  try {
+    registrationGrant = await prepareOnePersonRegistration(email);
+  } catch (error) {
+    redirectWithMessage(
+      `/identity?returnTo=${encodeURIComponent(returnTo)}`,
+      "error",
+      error instanceof Error ? error.message : "Complete identity verification before creating an account.",
+    );
+  }
+
   enforceActionRateLimit({
     key: `signup:${email}`,
     limit: 5,
@@ -3017,12 +3035,29 @@ export async function signUpAction(formData: FormData) {
       emailRedirectTo: confirmUrl,
       data: {
         public_location_granularity: "hidden",
+        ...(registrationGrant
+          ? {
+              one_person_registration_grant_id: registrationGrant.grantId,
+              one_person_registration_grant_token: registrationGrant.rawToken,
+            }
+          : {}),
+        ...(onePersonConfig.providerMode === "qa_mock" && process.env.VERCEL_ENV !== "production"
+          ? {
+              one_person_qa_run_id: process.env.ONE_PERSON_ACCOUNT_QA_RUN_ID ?? "unspecified",
+              qa_fixture: true,
+            }
+          : {}),
       },
     },
   });
 
   if (error) {
     redirectWithMessage(signupPath, "error", error.message);
+  }
+
+  if (data.user) {
+    await synchronizeOnePersonCredentialInventory(data.user.id).catch(() => null);
+    await clearOnePersonIdentityCookies();
   }
 
   if (data.user && data.session) {
@@ -3284,6 +3319,7 @@ export async function signInAction(formData: FormData) {
 
   if (data.user) {
     await ensureAccountRowsForUser(data.user, supabase);
+    await synchronizeOnePersonCredentialInventory(data.user.id).catch(() => null);
   }
 
   redirect(next);
@@ -3297,6 +3333,14 @@ export async function oauthSignInAction(formData: FormData) {
   );
   const authPath = buildAuthPath({ mode, returnTo, route: mode === "signup" ? "/signup" : "/login" });
   const provider = normalizeOAuthProvider(readOptional(formData, "provider"));
+
+  if (mode === "signup" && getOnePersonAccountConfig().registrationEnforcementEnabled) {
+    redirectWithMessage(
+      `/identity?returnTo=${encodeURIComponent(returnTo)}`,
+      "error",
+      "Complete private uniqueness verification before creating your canonical account.",
+    );
+  }
 
   if (!provider) {
     redirectWithMessage(authPath, "error", "Choose a sign-in provider to continue.");
