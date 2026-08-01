@@ -2,6 +2,11 @@
 name: Repair Feed-to-Create browser assertion timing
 
 on:
+  push:
+    branches:
+      - ops/feed-create-browser-assertion-repair-20260801
+    paths:
+      - ".github/workflows/repair-feed-create-browser-assertion-20260801.yml"
   pull_request:
     branches:
       - main
@@ -17,7 +22,7 @@ concurrency:
 
 jobs:
   repair:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     steps:
       - name: Check out the target product branch
