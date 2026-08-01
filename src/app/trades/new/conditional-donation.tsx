@@ -46,6 +46,10 @@ function candidateOfferId(candidate: DirectDonationUpgradeCandidateRow) {
   return String(candidate.offer_id);
 }
 
+async function loadRenderClockMs() {
+  return Date.now();
+}
+
 export async function ConditionalDonationCreate({
   params,
 }: {
@@ -61,7 +65,7 @@ export async function ConditionalDonationCreate({
       })
     : { publicOffers: [], creatorOffers: [], viewerCandidates: [], viewerObligations: [] };
   const formMessage = getFormMessage(params);
-  const now = Date.now();
+  const now = await loadRenderClockMs();
   const creatorOfferById = new Map(
     pageData.creatorOffers.map((offer) => [String(offer.id), offer]),
   );
