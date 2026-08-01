@@ -1,0 +1,64 @@
+name: Diagnose one-person migration split v4
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/diagnose-one-person-v4-run.yml
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: diagnose-one-person-migration-split-v4
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/diagnose-one-person-v4-run.yml
+  TARGET_SHA: 17968d4a3091371ce860b794001152aee900334f
+  TARGET_NAME: Split one-person cross-relation migration locks v4
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact diagnostic commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Verify scope and remove diagnostic controller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-person v4 run diagnostic controller' \
+            --arg sha "$sha" \
+            --arg branch main \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Report exact v4 workflow run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&per_page=100")"
+          summary="$(jq -c --arg name "$TARGET_NAME" '[.workflow_runs[] | select(.name == $name) | {id,status,conclusion,event,head_sha,run_number,html_url,created_at,updated_at}]' <<<"$runs")"
+          count="$(jq 'length' <<<"$summary")"
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "One-person split-v4 run inventory for \`$TARGET_SHA\`: \`$summary\`. Matching run count: \`$count\`."
+          test "$count" -ge 1
