@@ -1,0 +1,71 @@
+name: Repair live pledge-impact QA fixture
+
+on:
+  push:
+    branches:
+      - feature/pledge-impact-live-foundation-20260801
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pledge-impact-live-repair
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/pledge-impact-live-foundation-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Repair fixture against current MPGF proposal constraints
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "feature/pledge-impact-live-foundation-20260801"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('supabase/tests/mpgf_pledge_impact_live_foundation.sql')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  '  title,\n  problem,',
+                  '  title,\n  proposed_recipient_name,\n  problem,',
+              ),
+              (
+                  "  'QA wild-animal-suffering priority research pool',\n  'Important research is underfunded.',",
+                  "  'QA wild-animal-suffering priority research pool',\n  'QA research recipient',\n  'Important research is underfunded.',",
+              ),
+              (
+                  '  set constraints all immediate;\n',
+                  '',
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected one fixture match, found {count}: {old!r}')
+              text = text.replace(old, new)
+
+          path.write_text(text)
+          PY
+
+      - name: Publish repair and remove one-time workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/tests/mpgf_pledge_impact_live_foundation.sql
+          git rm .github/workflows/pledge-impact-live-repair.yml
+          git commit -m "Repair live pledge-impact QA fixture"
+          git push origin HEAD:feature/pledge-impact-live-foundation-20260801
