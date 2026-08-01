@@ -216,7 +216,11 @@ function isRecord(value: unknown): value is JsonRecord {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function isSafeInteger(value: unknown, minimum = Number.MIN_SAFE_INTEGER, maximum = Number.MAX_SAFE_INTEGER) {
+function isSafeInteger(
+  value: unknown,
+  minimum = Number.MIN_SAFE_INTEGER,
+  maximum = Number.MAX_SAFE_INTEGER,
+): value is number {
   return (
     typeof value === "number" &&
     Number.isSafeInteger(value) &&
@@ -225,7 +229,11 @@ function isSafeInteger(value: unknown, minimum = Number.MIN_SAFE_INTEGER, maximu
   );
 }
 
-function isFiniteNumber(value: unknown, minimum = -Infinity, maximum = Infinity) {
+function isFiniteNumber(
+  value: unknown,
+  minimum = -Infinity,
+  maximum = Infinity,
+): value is number {
   return (
     typeof value === "number" &&
     Number.isFinite(value) &&
@@ -234,7 +242,7 @@ function isFiniteNumber(value: unknown, minimum = -Infinity, maximum = Infinity)
   );
 }
 
-function isIsoTimestamp(value: unknown) {
+function isIsoTimestamp(value: unknown): value is string {
   return typeof value === "string" && Number.isFinite(Date.parse(value));
 }
 
