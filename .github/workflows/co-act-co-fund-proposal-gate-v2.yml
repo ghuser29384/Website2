@@ -1,0 +1,104 @@
+name: Co-Act and Co-Fund proposal gate v2
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v2-20260801
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: co-act-co-fund-proposal-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v2-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Normalize reviewed source details
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          client = Path('src/lib/create-interface/group-contribution-client.ts')
+          text = client.read_text()
+          text = text.replace(
+              'state.baselineQuantity, 0, 1_000_000, "number")',
+              'state.baselineQuantity, 0, 1_000_000, "any")',
+          )
+          text = text.replace(
+              '0, 0, 100, "number", true)',
+              '0, 0, 100, "1", true)',
+          )
+          text = text.replace(
+              'state.redistributionMaximumQuantity, 0, 1_000_000, "number")',
+              'state.redistributionMaximumQuantity, 0, 1_000_000, "any")',
+          )
+          text = text.replace(
+              'state.mode === "co-act" ? coActPrimaryFields(state) : coFundPrimaryFields(state)',
+              'state.mode === "co-act" ? coActPrimaryFields(state) : coFundPrimaryFields()',
+          )
+          text = text.replace(
+              'function coFundPrimaryFields(_state: GroupContributionDraftState): string {',
+              'function coFundPrimaryFields(): string {',
+          )
+          client.write_text(text)
+
+          payload_test = Path('src/lib/create-interface/group-contribution-payload.test.ts')
+          text = payload_test.read_text()
+          old = '''  const terms = {\n    ...coActTerms(),\n    identity: {\n      ...(coActTerms().mode === "co-act" ? coActTerms().identity : {}),\n      publishIdentities: true,\n    },\n  };'''
+          new = '''  const base = coActTerms();\n  assert.equal(base.mode, "co-act");\n  if (base.mode !== "co-act") throw new Error("Expected Co-Act terms");\n  const terms = {\n    ...base,\n    identity: {\n      ...base.identity,\n      publishIdentities: true,\n    },\n  };'''
+          if old not in text:
+              raise SystemExit('Expected payload-test block was not found')
+          payload_test.write_text(text.replace(old, new))
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Focused group-contribution contracts
+        run: node --import tsx --test src/lib/create-interface/group-contribution.test.ts src/lib/create-interface/group-contribution-draft.test.ts src/lib/create-interface/group-contribution-client.test.ts src/lib/create-interface/group-contribution-payload.test.ts
+
+      - name: Focused lint
+        run: npx eslint src/instrumentation-client.ts src/lib/create-interface/group-contribution.ts src/lib/create-interface/group-contribution-draft.ts src/lib/create-interface/group-contribution-client.ts src/lib/create-interface/group-contribution-payload.ts src/lib/create-interface/group-contribution.test.ts src/lib/create-interface/group-contribution-draft.test.ts src/lib/create-interface/group-contribution-client.test.ts src/lib/create-interface/group-contribution-payload.test.ts
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Complete repository tests
+        run: npm test
+
+      - name: Complete repository lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Remove temporary gates and commit validated source
+        run: |
+          rm -f .github/workflows/co-act-co-fund-proposal-gate.yml
+          rm -f .github/workflows/co-act-co-fund-proposal-gate-v2.yml
+          git add -A
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Validate proposal-only group contribution implementation'
+          git push origin HEAD:feature/co-act-co-fund-create-v2-20260801
