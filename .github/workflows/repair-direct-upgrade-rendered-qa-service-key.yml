@@ -1,4 +1,4 @@
-name: Repair Direct Donation Upgrade rendered QA service-key boundary
+name: Export repaired Direct Donation Upgrade rendered QA workflow
 
 on:
   push:
@@ -14,135 +14,86 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: repair-direct-upgrade-rendered-qa-service-key
+  group: export-repaired-direct-upgrade-rendered-qa-workflow
   cancel-in-progress: false
 
 jobs:
-  repair:
+  export:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 20
     steps:
       - name: Check out feature branch
         uses: actions/checkout@v4
         with:
           ref: feature/direct-verified-donation-upgrade-20260731
           fetch-depth: 0
-          token: ${{ github.token }}
 
-      - name: Prepare and test the service-role-independent rendered QA patch
+      - name: Produce and validate the permanent workflow replacement
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          page = Path('src/app/trades/new/conditional-donation.tsx')
-          text = page.read_text()
-          anchor = '''  const config = getDirectDonationUpgradeConfig();
-            const pageData = config.environment
-              ? await loadDirectDonationUpgradeViewerData({
-                  viewerId: viewer.authUser.id,
-                  environment: config.environment,
-                })
-              : { publicOffers: [], creatorOffers: [], viewerCandidates: [], viewerObligations: [] };
-          '''
-          replacement = '''  const config = getDirectDonationUpgradeConfig();
-            const renderedQaNoServiceData =
-              process.env.DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE === "true";
-            const pageData =
-              config.environment && !renderedQaNoServiceData
-                ? await loadDirectDonationUpgradeViewerData({
-                    viewerId: viewer.authUser.id,
-                    environment: config.environment,
-                  })
-                : { publicOffers: [], creatorOffers: [], viewerCandidates: [], viewerObligations: [] };
-          '''
-          if text.count(anchor) != 1:
-              raise SystemExit('Could not find the unique Direct Donation Upgrade page-data anchor.')
-          page.write_text(text.replace(anchor, replacement))
-
           workflow = Path('.github/workflows/direct-donation-upgrade-rendered-qa.yml')
           flow_lines = workflow.read_text().splitlines(keepends=True)
+
           service_indexes = [
               index for index, line in enumerate(flow_lines)
               if line.strip().startswith('SUPABASE_SERVICE_ROLE_KEY:')
           ]
           if len(service_indexes) != 1:
-              raise SystemExit(f'Expected one rendered-QA service-role environment entry, found {len(service_indexes)}.')
-          service_index = service_indexes[0]
-          indentation = flow_lines[service_index][:-len(flow_lines[service_index].lstrip())]
-          flow_lines[service_index] = (
+              raise SystemExit(f'Expected one service-role environment entry, found {len(service_indexes)}.')
+          index = service_indexes[0]
+          indentation = flow_lines[index][:-len(flow_lines[index].lstrip())]
+          flow_lines[index] = (
               f'{indentation}DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"\n'
           )
 
-          validation_indexes = [
+          assertion_indexes = [
               index for index, line in enumerate(flow_lines)
               if line.strip() == 'test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"'
           ]
-          if len(validation_indexes) != 1:
-              raise SystemExit(f'Expected one rendered-QA service-role assertion, found {len(validation_indexes)}.')
-          del flow_lines[validation_indexes[0]]
+          if len(assertion_indexes) != 1:
+              raise SystemExit(f'Expected one service-role assertion, found {len(assertion_indexes)}.')
+          del flow_lines[assertion_indexes[0]]
 
           output = []
-          skipping_probe = False
-          probe_starts = 0
-          probe_ends = 0
+          skipping = False
+          starts = 0
+          ends = 0
           for line in flow_lines:
               stripped = line.strip()
               if stripped.startswith('status="$(curl --silent --show-error'):
-                  skipping_probe = True
-                  probe_starts += 1
+                  skipping = True
+                  starts += 1
                   continue
-              if skipping_probe:
+              if skipping:
                   if stripped.startswith("printf 'Verified the configured service role"):
-                      skipping_probe = False
-                      probe_ends += 1
+                      skipping = False
+                      ends += 1
                   continue
               output.append(line)
-          if skipping_probe or probe_starts != 1 or probe_ends != 1:
+          if skipping or starts != 1 or ends != 1:
               raise SystemExit(
-                  f'Could not remove the exact service-role probe: starts={probe_starts}, ends={probe_ends}, open={skipping_probe}.'
+                  f'Could not remove exact service-role probe: starts={starts}, ends={ends}, open={skipping}.'
               )
+
           workflow.write_text(''.join(output))
-
-          contract = Path('src/lib/direct-donation-upgrade-source-contract.test.ts')
-          contract_text = contract.read_text()
-          import_anchor = '''const vercelConfig = readFileSync("scripts/vercel-project-config.mjs", "utf8");
-          '''
-          import_replacement = import_anchor + '''const renderedQaWorkflow = readFileSync(
-            ".github/workflows/direct-donation-upgrade-rendered-qa.yml",
-            "utf8",
-          );
-          '''
-          if contract_text.count(import_anchor) != 1:
-              raise SystemExit('Could not find the Vercel config source declaration.')
-          contract_text = contract_text.replace(import_anchor, import_replacement)
-
-          test_anchor = '''test("the direct Donation Upgrade rail never imports or invokes Stripe", () => {
-          '''
-          insertion = '''test("rendered QA can inspect the commitment form without loading service-role data", () => {
-            assert.match(
-              createPage,
-              /DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE/,
-            );
-            assert.match(createPage, /config\.environment && !renderedQaNoServiceData/);
-            assert.match(
-              renderedQaWorkflow,
-              /DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"/,
-            );
-            assert.doesNotMatch(renderedQaWorkflow, /secrets\.SUPABASE_SERVICE_ROLE_KEY/);
-          });
-
-          ''' + test_anchor
-          if contract_text.count(test_anchor) != 1:
-              raise SystemExit('Could not find the Direct Donation Upgrade source-contract insertion point.')
-          contract.write_text(contract_text.replace(test_anchor, insertion))
           PY
 
-          git diff --check
+          grep -Fq 'DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"' \
+            .github/workflows/direct-donation-upgrade-rendered-qa.yml
+          ! grep -Fq 'secrets.SUPABASE_SERVICE_ROLE_KEY' \
+            .github/workflows/direct-donation-upgrade-rendered-qa.yml
+          ! grep -Fq 'SUPABASE_SERVICE_ROLE_KEY:-' \
+            .github/workflows/direct-donation-upgrade-rendered-qa.yml
+          ! grep -Fq 'Verified the configured service role' \
+            .github/workflows/direct-donation-upgrade-rendered-qa.yml
+
           npm ci
           node --import tsx --test \
             src/lib/direct-donation-upgrade.test.ts \
@@ -150,19 +101,15 @@ jobs:
           npx eslint \
             src/app/trades/new/conditional-donation.tsx \
             src/lib/direct-donation-upgrade-source-contract.test.ts
+          sha256sum .github/workflows/direct-donation-upgrade-rendered-qa.yml \
+            | tee direct-upgrade-rendered-qa-workflow.sha256
 
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            src/app/trades/new/conditional-donation.tsx \
-            src/lib/direct-donation-upgrade-source-contract.test.ts
-          git commit -m 'Decouple Direct Donation Upgrade rendered QA from service-role data'
-          git push origin HEAD:feature/direct-verified-donation-upgrade-20260731
-
-      - name: Upload the exact validated permanent workflow replacement
+      - name: Upload exact permanent workflow replacement
         uses: actions/upload-artifact@v4
         with:
           name: direct-upgrade-rendered-qa-workflow-replacement-${{ github.run_id }}
-          path: .github/workflows/direct-donation-upgrade-rendered-qa.yml
+          path: |
+            .github/workflows/direct-donation-upgrade-rendered-qa.yml
+            direct-upgrade-rendered-qa-workflow.sha256
           if-no-files-found: error
           retention-days: 3
