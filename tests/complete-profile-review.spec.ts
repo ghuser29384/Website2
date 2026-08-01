@@ -110,3 +110,23 @@ test("the returning-user Complete Profile page remains usable at 390 by 844", as
     await page.evaluate(() => window.innerWidth),
   );
 });
+
+test("the Complete Profile brand link does not prefetch the rewritten home route", async ({
+  page,
+}) => {
+  const rootRscRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/" && url.searchParams.has("_rsc")) {
+      rootRscRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/complete-profile");
+  await expect(
+    page.getByRole("heading", { name: "Spend 100 sparks of attention." }),
+  ).toBeVisible();
+  await page.waitForTimeout(1_000);
+
+  expect(rootRscRequests).toEqual([]);
+});
