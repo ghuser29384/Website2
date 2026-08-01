@@ -10,7 +10,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: complete-profile-root-prefetch-exact-gates-3298b06a
+  group: complete-profile-root-prefetch-exact-gates-395186b1
   cancel-in-progress: false
 
 jobs:
@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
-      EXPECTED_SHA: 3298b06a67755c0ddfd72e0b14eafd84a0c90b19
+      EXPECTED_SHA: 395186b114c81f73c68e29ce151f5811dfc039ee
       STATUS_CONTEXT: QA / Complete Profile prefetch exact gates
 
     steps:
@@ -75,7 +75,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: complete-profile-root-prefetch-exact-gates-3298b06a
+          name: complete-profile-root-prefetch-exact-gates-395186b1
           path: |
             playwright-report
             test-results
