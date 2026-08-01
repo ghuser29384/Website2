@@ -200,6 +200,9 @@ jobs:
           test("mobile pool inspector preserves the same explanation without horizontal overflow", async ({ page }) => {
             await page.setViewportSize({ width: 390, height: 844 });
             await page.goto(discoverUrl);
+            const inspectorTrigger = page.getByRole("button", { name: "Open selection inspector" });
+            await expect(inspectorTrigger).toBeVisible();
+            await inspectorTrigger.click();
             await expect(page.getByRole("heading", { name: "Preview your conditional pledge" })).toBeVisible();
             await setWildResearchPledge(page, 35);
             await expect(page.getByText("0.43% of current gap", { exact: true }).first()).toBeVisible();
