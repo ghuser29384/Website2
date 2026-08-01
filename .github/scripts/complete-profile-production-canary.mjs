@@ -10,6 +10,7 @@ const outputDir = process.env.CANARY_OUTPUT_DIR ?? "complete-profile-production-
 
 assert.ok(expectedSha, "EXPECTED_SHA is required");
 assert.ok(expectedDeploymentId, "EXPECTED_DEPLOYMENT_ID is required");
+assert.notEqual(expectedDeploymentId, "null", "EXPECTED_DEPLOYMENT_ID must be a real deployment ID");
 
 const entries = [
   { id: "apex", origin: apexOrigin },
@@ -34,9 +35,29 @@ function makeState(entry, flow) {
     pageErrors: [],
     consoleErrors: [],
     failedRequests: [],
+    expectedPrefetchAborts: [],
     unexpectedHttpErrors: [],
     knownRootPrefetch404s: [],
   };
+}
+
+function isExpectedPrefetchAbort(request) {
+  const failure = request.failure();
+  if (failure?.errorText !== "net::ERR_ABORTED" || request.isNavigationRequest()) {
+    return false;
+  }
+  if (!isMoralTradeUrl(request.url())) return false;
+
+  const url = new URL(request.url());
+  const headers = request.headers();
+  return (
+    request.method() === "GET" &&
+    request.resourceType() === "fetch" &&
+    (url.searchParams.has("_rsc") ||
+      headers["next-router-prefetch"] === "1" ||
+      headers.rsc === "1" ||
+      Object.hasOwn(headers, "next-url"))
+  );
 }
 
 function isKnownRootPrefetch404(response) {
@@ -64,12 +85,20 @@ function attachDiagnostics(page, state) {
   });
   page.on("requestfailed", (request) => {
     if (!isMoralTradeUrl(request.url())) return;
-    state.failedRequests.push({
+
+    const record = {
       url: request.url(),
       method: request.method(),
       resourceType: request.resourceType(),
       errorText: request.failure()?.errorText ?? "unknown",
-    });
+      headers: request.headers(),
+    };
+
+    if (isExpectedPrefetchAbort(request)) {
+      state.expectedPrefetchAborts.push(record);
+    } else {
+      state.failedRequests.push(record);
+    }
   });
   page.on("response", (response) => {
     if (!isMoralTradeUrl(response.url()) || response.status() < 400) return;
@@ -79,6 +108,7 @@ function attachDiagnostics(page, state) {
       url: response.url(),
       method: response.request().method(),
       resourceType: response.request().resourceType(),
+      headers: response.request().headers(),
     };
 
     if (isKnownRootPrefetch404(response)) {
@@ -290,6 +320,10 @@ try {
     await runReturningMobile(entry);
   }
   report.status = "passed";
+  report.expectedPrefetchAbortCount = report.scenarios.reduce(
+    (total, scenario) => total + scenario.expectedPrefetchAborts.length,
+    0,
+  );
   report.knownRootPrefetch404Count = report.scenarios.reduce(
     (total, scenario) => total + scenario.knownRootPrefetch404s.length,
     0,
