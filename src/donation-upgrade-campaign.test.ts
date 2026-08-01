@@ -36,6 +36,6 @@ test("campaign analytics are allow-listed and privacy-minimized", () => {
   assert.match(migration, /enable row level security/);
   assert.match(migration, /No public or authenticated policies/);
   assert.match(migration, /idempotency_key text not null unique/);
-  assert.match(adminPage, /Measure the handoff without tracking people/);
+  assert.match(adminPage, /Measure the handoff without collecting identity data/);
   assert.match(adminPage, /donation_upgrade_campaign_summary/);
 });
