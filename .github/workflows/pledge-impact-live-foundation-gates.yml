@@ -76,16 +76,26 @@ jobs:
           set -o pipefail
           npm run build 2>&1 | tee production-build.log
 
-      - name: Check exact diff
+      - name: Check exact current-main diff
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            base="${{ github.event.pull_request.base.sha }}"
-          else
-            base="${{ github.event.before }}"
-          fi
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
           git diff --check "$base" "$GITHUB_SHA" | tee diff-check.log
+          git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
+          cat > expected-files.txt <<'EOF'
+          .github/workflows/pledge-impact-live-foundation-gates.yml
+          src/app/api/mpgf/pledge-impact/route.ts
+          src/lib/mpgf/pledge-impact-live-integration.test.ts
+          src/lib/mpgf/pledge-impact-live-server.ts
+          src/lib/mpgf/pledge-impact-live.test.ts
+          src/lib/mpgf/pledge-impact-live.ts
+          supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql
+          supabase/tests/mpgf_pledge_impact_live_foundation.sql
+          EOF
+          sort -o expected-files.txt expected-files.txt
+          diff -u expected-files.txt actual-files.txt
 
       - name: Upload code evidence
         if: always()
@@ -98,6 +108,8 @@ jobs:
             repository-lint.log
             production-build.log
             diff-check.log
+            expected-files.txt
+            actual-files.txt
           if-no-files-found: warn
           retention-days: 30
 
@@ -108,6 +120,8 @@ jobs:
     env:
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      MIGRATION_VERSION: "20260801030000"
+      MIGRATION_BLOB: c83ab30d7a84b2c97a70181fb5ba909cbebb75f4
     steps:
       - name: Check out exact head
         uses: actions/checkout@v4
@@ -136,16 +150,37 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install --yes postgresql-client > /dev/null
 
-      - name: Run migration and live regression in one rollback-only transaction
+      - name: Run migration or persistent-schema live regression
         shell: bash
         run: |
           set -euo pipefail
-          {
-            printf '%s\n' '\set ON_ERROR_STOP on' 'begin;'
-            cat supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql
-            tail -n +2 supabase/tests/mpgf_pledge_impact_live_foundation.sql | sed '$d'
-            printf '%s\n' 'rollback;'
-          } > qa-pledge-impact-live-transaction.sql
+          registered="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+            "select count(*) from supabase_migrations.schema_migrations where version = '$MIGRATION_VERSION';")"
+
+          case "$registered" in
+            0)
+              {
+                printf '%s\n' '\set ON_ERROR_STOP on' 'begin;'
+                cat supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql
+                tail -n +2 supabase/tests/mpgf_pledge_impact_live_foundation.sql | sed '$d'
+                printf '%s\n' 'rollback;'
+              } > qa-pledge-impact-live-transaction.sql
+              ;;
+            1)
+              marker="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+                "select coalesce(statements[1], '') from supabase_migrations.schema_migrations where version = '$MIGRATION_VERSION';")"
+              [[ "$marker" == *"$MIGRATION_BLOB"* ]] || {
+                echo 'Registered migration source does not match this candidate.' >&2
+                exit 1
+              }
+              cp supabase/tests/mpgf_pledge_impact_live_foundation.sql \
+                qa-pledge-impact-live-transaction.sql
+              ;;
+            *)
+              echo "Unexpected migration inventory count: $registered" >&2
+              exit 1
+              ;;
+          esac
 
           psql "$QA_SUPABASE_DB_URL" \
             --no-psqlrc \
