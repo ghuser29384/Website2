@@ -6,6 +6,8 @@ import {
   DUPLICATE_WEBSITE2_PROJECT_ID,
   RECOMMENDATION_TRAINING_PATH,
   RECOMMENDATION_TRAINING_SCHEDULE,
+  RELEASE_PREVIEW_BRANCH,
+  VERCEL_IGNORE_COMMAND,
   buildVercelProjectConfig,
 } from "./vercel-project-config.mjs";
 
@@ -14,6 +16,15 @@ function trainingCrons(projectId) {
     (cron) => cron.path === RECOMMENDATION_TRAINING_PATH,
   );
 }
+
+test("automatic Git deployments are disabled in favor of gated prebuilt releases", () => {
+  const config = buildVercelProjectConfig({
+    projectId: CANONICAL_MORAL_TRADE_PROJECT_ID,
+  });
+  assert.deepEqual(config.git, { deploymentEnabled: false });
+  assert.equal(config.ignoreCommand, VERCEL_IGNORE_COMMAND);
+  assert.equal(RELEASE_PREVIEW_BRANCH, "release/vercel-preview");
+});
 
 test("the canonical Moral Trade project owns exactly one A1 training cron", () => {
   assert.deepEqual(trainingCrons(CANONICAL_MORAL_TRADE_PROJECT_ID), [
