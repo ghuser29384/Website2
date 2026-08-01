@@ -143,6 +143,14 @@ test("filters selected before the first query are snapshotted into the request, 
   await page.locator('select[data-filter="sort"]').selectOption("newest");
 
   await page.locator("#command-input").fill("animal welfare opportunities");
+  // The source renderer debounces range and text filters, then replaces the
+  // command form. The user's explicit draft must survive those delayed renders.
+  await page.waitForTimeout(400);
+  await expect(page.locator("#command-input")).toHaveValue(
+    "animal welfare opportunities",
+  );
+  expect(requests).toHaveLength(0);
+
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const zeroState = page.locator(
     '.transaction-list[data-live-search-results="true"] [data-live-search-zero="true"]',

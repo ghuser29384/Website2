@@ -20,29 +20,40 @@ Explain why the selected classification is correct. For repository-only changes,
 
 ## Release disposition
 
-Select the applicable procedure.
+Select a compatible procedure. A blocked change must select only the blocked option. A repository-only change may select both the merge-without-manual-promotion and ordinary-automatic-deployment options.
 
-- [ ] Explicit production release and post-release smoke test required
-- [ ] Merge after repository gates; no manual production promotion required
-- [ ] Ordinary automatic `main` deployment may occur, but it is not necessary to fix production
-- [ ] Do not merge or deploy yet; blockers remain
+- [ ] **Explicit production release and post-release smoke test required**
+- [ ] **Merge after repository gates; no manual production promotion required**
+- [ ] **Ordinary automatic `main` deployment may occur, but it is not necessary to fix production**
+- [ ] **Do not merge or deploy yet; blockers remain**
+
+### Deployment and post-release procedure
+
+Runtime-affecting and mixed changes must complete both fields, even while blocked. Repository-only changes may state that they are not applicable.
+
+- Deployment target / plan:
+- Post-release verification plan:
 
 ## Verification
 
-List the exact commands, workflow runs, rendered checks, migration checks, and runtime evidence used. Distinguish focused checks from complete repository gates.
+Mark only checks that have actually run. Leave non-applicable checks unchecked and explain that boundary under “Checks actually run.”
 
-- [ ] Focused tests passed
-- [ ] Repository tests passed, or an exact-base differential policy is documented
-- [ ] ESLint passed
-- [ ] TypeScript passed
-- [ ] Production build passed
-- [ ] Rendered desktop/mobile checks passed when user-visible behavior changed
-- [ ] Database, authorization, payment, job, or environment checks passed when applicable
-- [ ] Exact diff inspected for unrelated changes
+- [ ] **Focused tests passed**
+- [ ] **Repository tests passed, or an exact-base differential policy is documented**
+- [ ] **ESLint passed**
+- [ ] **TypeScript passed**
+- [ ] **Production build passed**
+- [ ] **Rendered desktop/mobile checks passed when user-visible behavior changed**
+- [ ] **Database, authorization, payment, job, or environment checks passed when applicable**
+- [ ] **Exact diff inspected for unrelated changes**
+
+### Checks actually run
+
+List exact commands and GitHub Actions run URLs. Distinguish focused checks from broader gates and identify anything not run.
 
 ## Production evidence
 
-Complete this section only for runtime-affecting changes or when reporting an automatic deployment.
+Complete these fields only after a runtime-affecting or mixed change is actually deployed or reported as fixed in production. Repository-only changes must not make production-fix claims.
 
 - Merged commit:
 - Vercel deployment:
