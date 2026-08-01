@@ -1,0 +1,212 @@
+name: Repair one-person browser redirect and residue QA
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/one-person-browser-redirect-repair-controller.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: one-person-browser-redirect-repair-controller
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/one-person-browser-redirect-repair-controller.yml
+  TARGET_BRANCH: feature/one-person-one-account-20260731
+  EXPECTED_HEAD: 3ade190729af5b652622c03d198bb2f796559294
+  ACTIONS_PATH: src/app/identity/actions.ts
+  BROWSER_TEST_PATH: tests/one-person-account-authenticated.spec.ts
+  QA_WORKFLOW_PATH: .github/workflows/one-person-account-qa.yml
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Verify scope and remove controller from main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-person browser redirect repair controller' \
+            --arg sha "$sha" \
+            --arg branch main \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE \
+                "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" \
+                --input - >/dev/null
+
+      - name: Check out exact feature head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/$TARGET_BRANCH:refs/remotes/origin/$TARGET_BRANCH"
+          test "$(git rev-parse "refs/remotes/origin/$TARGET_BRANCH")" = "$EXPECTED_HEAD"
+          git switch --detach "$EXPECTED_HEAD"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Repair swallowed redirects, failure cleanup, and residue scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          actions_path = Path('src/app/identity/actions.ts')
+          actions = actions_path.read_text(encoding='utf-8')
+
+          start_old = '''  try {
+            const result = await startOnePersonVerification({
+              origin,
+              purpose,
+              requestedProfileId: purpose === "verify_existing" ? viewer?.authUser.id ?? null : null,
+              returnTo,
+            });
+            redirect(result.externalUrl || result.statusPath);
+          } catch (error) {
+            redirectWith(
+              "/identity",
+              "error",
+              error instanceof Error ? error.message : "Unable to start identity verification.",
+            );
+          }
+          '''
+          start_new = '''  let redirectTarget: string;
+          try {
+            const result = await startOnePersonVerification({
+              origin,
+              purpose,
+              requestedProfileId: purpose === "verify_existing" ? viewer?.authUser.id ?? null : null,
+              returnTo,
+            });
+            redirectTarget = result.externalUrl || result.statusPath;
+          } catch (error) {
+            redirectWith(
+              "/identity",
+              "error",
+              error instanceof Error ? error.message : "Unable to start identity verification.",
+            );
+          }
+          redirect(redirectTarget);
+          '''
+          if actions.count(start_old) != 1:
+              raise SystemExit(f'unexpected start-action block inventory: {actions.count(start_old)}')
+          actions = actions.replace(start_old, start_new, 1)
+
+          review_old = '''  try {
+            await recordOnePersonProviderResult({ exactBody: JSON.stringify(payload), payload });
+            redirectWith("/admin/identity", "message", `Review recorded by ${reviewer.displayName}.`);
+          } catch (error) {
+            redirectWith(
+              "/admin/identity",
+              "error",
+              error instanceof Error ? error.message : "Unable to record review.",
+            );
+          }
+          '''
+          review_new = '''  try {
+            await recordOnePersonProviderResult({ exactBody: JSON.stringify(payload), payload });
+          } catch (error) {
+            redirectWith(
+              "/admin/identity",
+              "error",
+              error instanceof Error ? error.message : "Unable to record review.",
+            );
+          }
+          redirectWith("/admin/identity", "message", `Review recorded by ${reviewer.displayName}.`);
+          '''
+          if actions.count(review_old) != 1:
+              raise SystemExit(f'unexpected manual-review block inventory: {actions.count(review_old)}')
+          actions = actions.replace(review_old, review_new, 1)
+          if 'redirect(result.externalUrl || result.statusPath);' in actions:
+              raise SystemExit('swallowed start redirect remains')
+          actions_path.write_text(actions, encoding='utf-8')
+
+          test_path = Path('tests/one-person-account-authenticated.spec.ts')
+          browser_test = test_path.read_text(encoding='utf-8')
+          cleanup_old = '''    await page.getByRole("button", { name: "Start private verification" }).click();
+              await expect(page).toHaveURL(/\\/identity\\/status/);
+              session = await readIdentitySession(context);
+          '''
+          cleanup_new = '''    await page.getByRole("button", { name: "Start private verification" }).click();
+              session = await readIdentitySession(context);
+              await expect(page).toHaveURL(/\\/identity\\/status/);
+          '''
+          if browser_test.count(cleanup_old) != 1:
+              raise SystemExit(f'unexpected browser cleanup block inventory: {browser_test.count(cleanup_old)}')
+          browser_test = browser_test.replace(cleanup_old, cleanup_new, 1)
+          test_path.write_text(browser_test, encoding='utf-8')
+
+          workflow_path = Path('.github/workflows/one-person-account-qa.yml')
+          workflow = workflow_path.read_text(encoding='utf-8')
+          residue_old = '''              select count(*) from auth.users
+                        where lower(coalesce(raw_user_meta_data ->> 'qa_fixture', 'false')) = 'true'
+          '''
+          residue_new = '''              select count(*) from auth.users
+                        where lower(coalesce(raw_user_meta_data ->> 'qa_fixture', 'false')) = 'true'
+                          and nullif(btrim(coalesce(raw_user_meta_data ->> 'one_person_qa_run_id', '')), '') is not null
+          '''
+          if workflow.count(residue_old) != 1:
+              raise SystemExit(f'unexpected residue auth-user query inventory: {workflow.count(residue_old)}')
+          workflow = workflow.replace(residue_old, residue_new, 1)
+          workflow_path.write_text(workflow, encoding='utf-8')
+          PY
+
+          ruby -e 'require "yaml"; YAML.parse_file(ARGV[0]) or abort("invalid workflow YAML")' "$QA_WORKFLOW_PATH"
+          git diff --check
+          test "$(git diff --name-only | sort | tr '\n' ' ')" = ".github/workflows/one-person-account-qa.yml src/app/identity/actions.ts tests/one-person-account-authenticated.spec.ts "
+          grep -Fq 'redirect(redirectTarget);' "$ACTIONS_PATH"
+          grep -Fq "one_person_qa_run_id" "$QA_WORKFLOW_PATH"
+
+      - name: Commit exact repair and upload candidate object
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$ACTIONS_PATH" "$BROWSER_TEST_PATH" "$QA_WORKFLOW_PATH"
+          git diff --cached --check
+          git commit -m 'Preserve one-person server-action redirects in browser QA'
+          candidate_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_HEAD"
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "Prepared exact one-person browser redirect repair candidate \`$candidate_sha\` from parent \`$EXPECTED_HEAD\`. Uploading the object now; the PR remains draft and production is unchanged."
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          set +e
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_HEAD" origin "HEAD:refs/heads/$TARGET_BRANCH"
+          push_status=$?
+          set -e
+          if [[ "$push_status" -ne 0 ]]; then
+            echo "Expected workflow-scope ref rejection after object upload; candidate remains recoverable: $candidate_sha"
+          fi
+
+      - name: Report controller completion
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+        shell: bash
+        run: |
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "One-person browser redirect repair controller finished. Candidate: \`${CANDIDATE_SHA:-unavailable}\`. No production action was attempted."
