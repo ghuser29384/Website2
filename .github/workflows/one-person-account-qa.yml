@@ -1,0 +1,150 @@
+name: One-person account QA
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/one-person-account-qa.yml"
+      - "docs/one-person-one-account.md"
+      - "scripts/test-one-person-concurrency.sh"
+      - "src/app/account/identity/**"
+      - "src/app/admin/identity/**"
+      - "src/app/api/identity/**"
+      - "src/app/auth/confirm/route.ts"
+      - "src/app/identity/**"
+      - "src/app/signup/page.tsx"
+      - "src/components/auth/auth-card.tsx"
+      - "src/lib/identity/**"
+      - "supabase/migrations/20260731072000_one_person_one_account.sql"
+      - "supabase/tests/one_person_one_account.sql"
+      - "tests/one-person-account-authenticated.spec.ts"
+      - "package.json"
+  workflow_dispatch:
+    inputs:
+      expect_auth_hook:
+        description: "Require the QA Before User Created hook test"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: one-person-account-qa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  repository-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: set -o pipefail; npm test 2>&1 | tee one-person-unit.txt
+      - name: TypeScript
+        run: set -o pipefail; npx tsc --noEmit 2>&1 | tee one-person-typescript.txt
+      - name: ESLint
+        run: set -o pipefail; npm run lint 2>&1 | tee one-person-eslint.txt
+      - name: Production build
+        run: set -o pipefail; npm run build 2>&1 | tee one-person-build.txt
+      - name: Upload repository evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-person-account-repository-gates
+          path: |
+            one-person-unit.txt
+            one-person-typescript.txt
+            one-person-eslint.txt
+            one-person-build.txt
+            .next/build-manifest.json
+            .next/routes-manifest.json
+          if-no-files-found: warn
+
+  isolated-qa:
+    needs: repository-gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      MORALTRADE_QA_DATABASE_URL: ${{ secrets.MORALTRADE_QA_DATABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.MORALTRADE_QA_SUPABASE_URL }}
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.MORALTRADE_QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.MORALTRADE_QA_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      ADMIN_EMAILS: ${{ secrets.MORALTRADE_QA_ADMIN_EMAILS }}
+      ONE_PERSON_ACCOUNT_PROVIDER_MODE: qa_mock
+      ONE_PERSON_ACCOUNT_PROVIDER_NAME: MoralTrade QA
+      ONE_PERSON_ACCOUNT_QA_SECRET: ${{ secrets.ONE_PERSON_ACCOUNT_QA_SECRET }}
+      ONE_PERSON_ACCOUNT_DEDUPE_KEY: ${{ secrets.ONE_PERSON_ACCOUNT_QA_DEDUPE_KEY }}
+      ONE_PERSON_ACCOUNT_REGISTRATION_ENFORCEMENT_ENABLED: "true"
+      ONE_PERSON_ACCOUNT_PARTICIPATION_ENFORCEMENT_ENABLED: "true"
+      ONE_PERSON_ACCOUNT_MANUAL_LINKING_ENABLED: "true"
+      ONE_PERSON_ACCOUNT_QA_RUN_ID: gha-${{ github.run_id }}-${{ github.run_attempt }}
+      ONE_PERSON_ACCOUNT_EXPECT_AUTH_HOOK: ${{ inputs.expect_auth_hook || 'false' }}
+      VERCEL_ENV: preview
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Validate isolated QA credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in MORALTRADE_QA_DATABASE_URL NEXT_PUBLIC_SUPABASE_URL NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY SUPABASE_SERVICE_ROLE_KEY ONE_PERSON_ACCOUNT_QA_SECRET ONE_PERSON_ACCOUNT_DEDUPE_KEY; do
+            test -n "${!name:-}" || { echo "Missing required QA secret: $name" >&2; exit 1; }
+          done
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Apply additive migration to isolated QA
+        run: psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260731072000_one_person_one_account.sql
+      - name: Enable QA-only release gates for the test window
+        run: |
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL'
+          select public.configure_person_account_release_v1('qa_mock', true, true, true, null);
+          SQL
+      - name: SQL regression
+        run: psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/one_person_one_account.sql | tee one-person-sql.txt
+      - name: Concurrent duplicate registration
+        run: scripts/test-one-person-concurrency.sh | tee one-person-concurrency.txt
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Authenticated desktop and mobile tests
+        run: npx playwright test tests/one-person-account-authenticated.spec.ts --reporter=line | tee one-person-browser.txt
+      - name: Prove synthetic residue is zero
+        run: |
+          residue="$(psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt \
+            -v qa_run_id="$ONE_PERSON_ACCOUNT_QA_RUN_ID" <<'SQL'
+          select count(*)
+          from auth.users
+          where lower(coalesce(raw_user_meta_data ->> 'qa_fixture', 'false')) = 'true'
+            and coalesce(raw_user_meta_data ->> 'one_person_qa_run_id', '') = :'qa_run_id';
+          SQL
+          )"
+          printf 'synthetic_user_residue=%s\n' "$residue" | tee one-person-residue.txt
+          test "$residue" = "0"
+      - name: Restore QA release gates to disabled
+        if: always()
+        run: |
+          psql "$MORALTRADE_QA_DATABASE_URL" -v ON_ERROR_STOP=1 -qAt <<'SQL' || true
+          select public.configure_person_account_release_v1('qa_mock', true, false, false, null);
+          SQL
+      - name: Upload QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: one-person-account-isolated-qa
+          path: |
+            one-person-sql.txt
+            one-person-concurrency.txt
+            one-person-browser.txt
+            one-person-residue.txt
+            test-results/**
+          if-no-files-found: warn
