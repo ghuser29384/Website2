@@ -6,18 +6,26 @@ on:
       - feature/direct-verified-donation-upgrade-20260731
     paths:
       - .github/workflows/patch-direct-upgrade-rendered-qa-cleanup.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/patch-direct-upgrade-rendered-qa-cleanup.yml
 
 permissions:
   contents: write
 
 concurrency:
   group: patch-direct-upgrade-rendered-qa-cleanup
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   patch:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      EXPECTED_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Check out exact feature branch
         uses: actions/checkout@v4
@@ -30,7 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
           python3 - <<'PY'
           from pathlib import Path
 
