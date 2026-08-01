@@ -1,5 +1,6 @@
 name: Sync PR 326 with current main
 
+# Triggered after the temporary one-person materialization controller was removed.
 on:
   push:
     branches:
