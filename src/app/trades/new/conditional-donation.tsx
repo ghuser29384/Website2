@@ -58,12 +58,15 @@ export async function ConditionalDonationCreate({
   const returnTo = "/trades/new?structure=conditional-donation";
   const viewer = await requireViewer(returnTo);
   const config = getDirectDonationUpgradeConfig();
-  const pageData = config.environment
-    ? await loadDirectDonationUpgradeViewerData({
-        viewerId: viewer.authUser.id,
-        environment: config.environment,
-      })
-    : { publicOffers: [], creatorOffers: [], viewerCandidates: [], viewerObligations: [] };
+  const renderedQaNoServiceData =
+    process.env.DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE === "true";
+  const pageData =
+    config.environment && !renderedQaNoServiceData
+      ? await loadDirectDonationUpgradeViewerData({
+          viewerId: viewer.authUser.id,
+          environment: config.environment,
+        })
+      : { publicOffers: [], creatorOffers: [], viewerCandidates: [], viewerObligations: [] };
   const formMessage = getFormMessage(params);
   const now = await loadRenderClockMs();
   const creatorOfferById = new Map(

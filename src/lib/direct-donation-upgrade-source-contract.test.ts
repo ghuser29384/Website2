@@ -12,6 +12,23 @@ const migration = readFileSync(
   "utf8",
 );
 const vercelConfig = readFileSync("scripts/vercel-project-config.mjs", "utf8");
+const renderedQaWorkflow = readFileSync(
+  ".github/workflows/direct-donation-upgrade-rendered-qa.yml",
+  "utf8",
+);
+
+test("rendered QA can inspect the commitment form without loading service-role data", () => {
+  assert.match(
+    createPage,
+    /DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE/,
+  );
+  assert.match(createPage, /config\.environment && !renderedQaNoServiceData/);
+  assert.match(
+    renderedQaWorkflow,
+    /DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"/,
+  );
+  assert.doesNotMatch(renderedQaWorkflow, /secrets\.SUPABASE_SERVICE_ROLE_KEY/);
+});
 
 test("the direct Donation Upgrade rail never imports or invokes Stripe", () => {
   for (const source of [core, actions, createPage, lifecycleRoute]) {
