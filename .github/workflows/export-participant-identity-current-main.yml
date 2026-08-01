@@ -1,0 +1,48 @@
+name: Temporary export participant-identity current main
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  export:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.issue.pull_request != null &&
+      github.event.issue.number == 392 &&
+      github.event.comment.body == '/export-participant-identity-current-main-20260801'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Record and archive exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > participant-identity-main-head.txt
+          git archive --format=tar.gz --output=participant-identity-current-main.tar.gz HEAD
+          sha256sum participant-identity-current-main.tar.gz > participant-identity-current-main.sha256
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: participant-identity-current-main-${{ github.run_id }}
+          path: |
+            participant-identity-main-head.txt
+            participant-identity-current-main.tar.gz
+            participant-identity-current-main.sha256
+          retention-days: 1
+      - name: Report success
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 392 --repo "$GITHUB_REPOSITORY" --body "Participant-identity current-main export succeeded. Run: $GITHUB_RUN_ID. Artifact: \`participant-identity-current-main-$GITHUB_RUN_ID\`. Main head: \`$(cat participant-identity-main-head.txt)\`."
