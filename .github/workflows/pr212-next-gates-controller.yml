@@ -12,21 +12,20 @@ permissions:
 
 concurrency:
   group: pr212-next-gates-controller
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   integrate-repair-and-verify:
     if: >-
       github.event.issue.pull_request != null &&
       github.event.issue.number == 212 &&
-      github.event.comment.body == '/run-pr212-next-gates-20260801-7c8f3b2e'
+      github.event.comment.body == '/run-pr212-next-gates-20260801-9a31f6d4'
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_BRANCH: feat/institutional-trade-system
       EXPECTED_FEATURE_HEAD: c224595fe13b5fe39a1690938208d0a482714df1
-      INTEGRATION_BASE_SHA: 8181eed1c0cf075f01ebd22c88d4a8cce441c19d
       QA_WORKFLOW_PATH: .github/workflows/institutional-trade-qa.yml
       CONTROLLER_PATH: .github/workflows/pr212-next-gates-controller.yml
       POOL_PATCH: supabase/migrations/20260731173000_fix_institutional_pool_record_status_access.sql
@@ -39,7 +38,7 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
-      - name: Verify exact inputs and integrate the last non-controller main head
+      - name: Verify exact feature head and integrate the live main head
         id: integrate
         shell: bash
         run: |
@@ -50,18 +49,21 @@ jobs:
             exit 1
           fi
           git fetch --no-tags origin main
-          git cat-file -e "${INTEGRATION_BASE_SHA}^{commit}"
-          if ! git merge-base --is-ancestor "$INTEGRATION_BASE_SHA" origin/main; then
-            echo "The approved integration base is no longer an ancestor of main." >&2
-            exit 1
-          fi
+          integration_base="$(git rev-parse origin/main)"
           for required in "$QA_WORKFLOW_PATH" "$POOL_PATCH" "$POOL_TRIGGER_TEST"; do
             test -f "$required" || { echo "Missing required branch file: $required" >&2; exit 1; }
           done
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git merge --no-ff "$INTEGRATION_BASE_SHA" -m 'Merge current functional main into institutional trade branch'
+          git merge --no-ff origin/main -m "Merge main ${integration_base} into institutional trade branch"
+
+          if [[ -e "$CONTROLLER_PATH" ]]; then
+            git rm "$CONTROLLER_PATH"
+            git commit -m 'Exclude temporary PR 212 controller from feature branch'
+          fi
+
+          echo "integration_base=$integration_base" >> "$GITHUB_OUTPUT"
           echo "integrated_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Make institutional QA replay the additive migration and its regression test
@@ -162,7 +164,8 @@ jobs:
           gh pr comment 212 --repo "$repo" --body "<!-- pr212-current-main-qa -->
 ## PR #212 current-main exact-head QA
 
-- Integrated feature head: \`$final_head\`
+- Integrated main head: \`${{ steps.integrate.outputs.integration_base }}\`
+- Feature head: \`$final_head\`
 - QA run: [$run_id]($run_url)
 - Status: **running**
 - Production database and production institutional flags remain unchanged."
@@ -194,6 +197,7 @@ jobs:
           gh pr comment 212 --repo "$repo" --body "<!-- pr212-current-main-qa-result -->
 ## PR #212 current-main exact-head QA result
 
+- Integrated main head: \`${{ steps.integrate.outputs.integration_base }}\`
 - Feature head: \`$final_head\`
 - QA run: [$run_id]($run_url)
 - Conclusion: **$conclusion**
@@ -202,6 +206,13 @@ jobs:
           if [[ "$conclusion" != "success" ]]; then
             exit 1
           fi
+
+      - name: Report controller-level failure
+        if: failure()
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-controller-failure -->
+PR #212 next-gates controller failed. No production database migration or institutional feature activation was attempted. Inspect the controller and, if available, the exact-head QA run before proceeding."
 
       - name: Remove this one-use controller from main
         if: always()
