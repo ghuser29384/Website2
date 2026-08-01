@@ -23,7 +23,10 @@ test("the workflow preserves the canonical project and disconnects only website2
   const source = await workflow();
   assert.match(source, /CANONICAL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7/);
   assert.match(source, /DUPLICATE_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK/);
-  assert.match(source, /git disconnect github/);
+  assert.match(source, /printf 'y\\n' \| npx --yes/);
+  assert.match(source, /git disconnect \\\n\s+--token=/);
+  assert.match(source, /website2 is already disconnected from Git/);
+  assert.doesNotMatch(source, /git disconnect github/);
   assert.doesNotMatch(source, /project rm moraltrade-site/);
 });
 
