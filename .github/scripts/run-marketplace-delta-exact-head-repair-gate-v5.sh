@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Exact-head rerun requested for the synchronized PR 326 pair on 2026-08-01.
 
 SOURCE=".github/scripts/run-marketplace-delta-exact-head-repair-gate-v4.sh"
 PATCHED="$RUNNER_TEMP/run-marketplace-delta-exact-head-repair-gate-v5.sh"
