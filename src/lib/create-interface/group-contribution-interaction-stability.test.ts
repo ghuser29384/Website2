@@ -26,7 +26,8 @@ test("state-replacing controls persist their draft and remount after dispatch", 
   assert.match(stability, /event\.type === "change" \? control\.getAttribute\("data-field"\)/);
   assert.match(stability, /event\.stopImmediatePropagation\(\)/);
   assert.match(stability, /targetWindow\.localStorage\.setItem/);
-  assert.match(stability, /targetWindow\.setTimeout/);
+  assert.match(stability, /const REMOUNT_DELAY_MS = 100/);
+  assert.match(stability, /targetWindow\.setTimeout[\s\S]*REMOUNT_DELAY_MS/);
   assert.match(stability, /card\.removeAttribute\(OPTION_ATTRIBUTE\)/);
   assert.match(stability, /window\.MoralTradeGroupContributions\?\.refresh\(\)/);
   assert.doesNotMatch(stability, /fetch|XMLHttpRequest|paymentIntent|clientSecret/i);

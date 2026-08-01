@@ -3,6 +3,7 @@ const GROUP_HOST_SELECTOR = "[data-mt-group-contribution-host]";
 const HOST_ATTRIBUTE = "data-mt-group-contribution-host";
 const OPTION_ATTRIBUTE = "data-mt-group-contribution-option";
 const STORAGE_KEY = "mt:create:group-contribution-drafts:v1";
+const REMOUNT_DELAY_MS = 100;
 
 const observedDocuments = new WeakMap<Document, MutationObserver>();
 const observedFrames = new WeakSet<HTMLIFrameElement>();
@@ -99,7 +100,7 @@ function stabilizeStateReplacingInteraction(event: Event): void {
   targetWindow.setTimeout(() => {
     pendingHosts.delete(host);
     remountOption(host, key);
-  }, 0);
+  }, REMOUNT_DELAY_MS);
 }
 
 function updateStoredField(
