@@ -1,0 +1,208 @@
+name: Materialize Complete Profile root-prefetch cleanup
+
+on:
+  push:
+    branches:
+      - fix/complete-profile-root-prefetch-20260801
+    paths:
+      - ".github/workflows/materialize-complete-profile-root-prefetch.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-complete-profile-root-prefetch-20260801
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out cleanup branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/complete-profile-root-prefetch-20260801
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Apply the exact cleanup and regression coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(path: Path, old: str, new: str) -> None:
+              text = path.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one exact marker, found {count}")
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          component = Path("src/components/profile/complete-profile-review.tsx")
+          replace_once(
+              component,
+              '          <Link aria-label="Moral Trade home" className={styles.brandLockup} href="/">\n',
+              '          <Link\n'
+              '            aria-label="Moral Trade home"\n'
+              '            className={styles.brandLockup}\n'
+              '            href="/"\n'
+              '            prefetch={false}\n'
+              '          >\n',
+          )
+
+          test_path = Path("tests/complete-profile-review.spec.ts")
+          test_text = test_path.read_text(encoding="utf-8")
+          marker = 'test("the Complete Profile brand link does not prefetch the rewritten home route"'
+          if marker in test_text:
+              raise SystemExit(f"{test_path}: regression test marker already exists")
+          regression = r'''
+
+test("the Complete Profile brand link does not prefetch the rewritten home route", async ({
+  page,
+}) => {
+  const rootRscRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/" && url.searchParams.has("_rsc")) {
+      rootRscRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/complete-profile");
+  await expect(
+    page.getByRole("heading", { name: "Spend 100 sparks of attention." }),
+  ).toBeVisible();
+  await page.waitForTimeout(1_000);
+
+  expect(rootRscRequests).toEqual([]);
+});
+'''
+          test_path.write_text(test_text.rstrip() + regression + "\n", encoding="utf-8")
+
+          canary = Path(".github/scripts/complete-profile-production-canary.mjs")
+          text = canary.read_text(encoding="utf-8")
+          text, count = re.subn(
+              r'\nfunction isKnownRootPrefetch404\(response\) \{.*?\n\}\n',
+              "\n",
+              text,
+              count=1,
+              flags=re.S,
+          )
+          if count != 1:
+              raise SystemExit(f"{canary}: could not remove known-root-prefetch classifier")
+          replacements = [
+              (
+                  "    knownRootPrefetch404s: [],\n",
+                  "",
+              ),
+              (
+                  "    if (isKnownRootPrefetch404(response)) {\n"
+                  "      state.knownRootPrefetch404s.push(record);\n"
+                  "    } else {\n"
+                  "      state.unexpectedHttpErrors.push(record);\n"
+                  "    }\n",
+                  "    state.unexpectedHttpErrors.push(record);\n",
+              ),
+              (
+                  "  const knownPrefetchUrls = new Set(state.knownRootPrefetch404s.map((item) => item.url));\n"
+                  "  const unexpectedConsoleErrors = state.consoleErrors.filter((item) => {\n"
+                  "    const url = item.location?.url ?? \"\";\n"
+                  "    return !(\n"
+                  "      knownPrefetchUrls.has(url) &&\n"
+                  "      /Failed to load resource: the server responded with a status of 404/i.test(item.text)\n"
+                  "    );\n"
+                  "  });\n",
+                  "  const unexpectedConsoleErrors = state.consoleErrors;\n",
+              ),
+              (
+                  "  report.knownRootPrefetch404Count = report.scenarios.reduce(\n"
+                  "    (total, scenario) => total + scenario.knownRootPrefetch404s.length,\n"
+                  "    0,\n"
+                  "  );\n",
+                  "",
+              ),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{canary}: expected one cleanup marker, found {count}")
+              text = text.replace(old, new, 1)
+          canary.write_text(text, encoding="utf-8")
+
+          workflow = Path(".github/workflows/complete-profile-production-canary.yml")
+          workflow_text = workflow.read_text(encoding="utf-8")
+          old_source_check = '''  source-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+      - name: Parse the production canary script
+        run: node --check .github/scripts/complete-profile-production-canary.mjs
+'''
+          new_source_check = '''  source-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Parse the production canary script
+        run: node --check .github/scripts/complete-profile-production-canary.mjs
+
+      - name: Type-check the application
+        run: npx tsc --noEmit
+
+      - name: Lint the focused product and regression files
+        run: >-
+          npx eslint
+          src/components/profile/complete-profile-review.tsx
+          tests/complete-profile-review.spec.ts
+
+      - name: Build the production application
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Complete Profile rendered regressions
+        run: npx playwright test tests/complete-profile-review.spec.ts --project=chromium
+'''
+          if workflow_text.count(old_source_check) != 1:
+              raise SystemExit(f"{workflow}: source-check block marker mismatch")
+          workflow_text = workflow_text.replace(old_source_check, new_source_check, 1)
+          old_summary = '              echo "- Known root-prefetch 404s: \\`$(jq -r \'.knownRootPrefetch404Count // 0\' "$CANARY_OUTPUT_DIR/report.json")\\`"\n'
+          if workflow_text.count(old_summary) != 1:
+              raise SystemExit(f"{workflow}: known-root summary marker mismatch")
+          workflow_text = workflow_text.replace(old_summary, "", 1)
+          workflow.write_text(workflow_text, encoding="utf-8")
+          PY
+
+          rm .github/workflows/materialize-complete-profile-root-prefetch.yml
+          git diff --check
+          node --check .github/scripts/complete-profile-production-canary.mjs
+
+      - name: Commit and push the cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Stop Complete Profile home-link RSC prefetch"
+          git push origin HEAD:fix/complete-profile-root-prefetch-20260801
