@@ -1,0 +1,167 @@
+name: Apply Vercel cost controls once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/apply-vercel-cost-controls-once.yml
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: apply-vercel-cost-controls-once
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  CANONICAL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  DUPLICATE_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+  VERCEL_CLI_VERSION: 50.38.1
+  CONTROLLER_PATH: .github/workflows/apply-vercel-cost-controls-once.yml
+
+jobs:
+  apply:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Guard one-time authorization and secret availability
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_ACTOR" = 'ghuser29384'
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          test -n "$VERCEL_TOKEN"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+          test -f scripts/vercel-admin-cost-controls.mjs
+          test -f .github/workflows/vercel-release.yml
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Audit, apply, disconnect, and verify
+        id: controls
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set +e
+          set -o pipefail
+          status=0
+
+          VERCEL_COST_CONTROL_MODE=audit \
+          VERCEL_COST_CONTROL_REPORT=vercel-cost-controls-before.json \
+            node scripts/vercel-admin-cost-controls.mjs \
+            2>&1 | tee vercel-cost-controls-audit.log
+          audit_status=${PIPESTATUS[0]}
+          if (( audit_status != 0 )); then status=$audit_status; fi
+
+          if (( status == 0 )); then
+            VERCEL_COST_CONTROL_MODE=apply \
+            VERCEL_COST_CONTROL_REPORT=vercel-cost-controls-apply.json \
+            DELETE_OBSOLETE_PROJECTS=true \
+            RESUME_CANONICAL_PROJECT=false \
+              node scripts/vercel-admin-cost-controls.mjs \
+              2>&1 | tee vercel-cost-controls-apply.log
+            apply_status=${PIPESTATUS[0]}
+            if (( apply_status != 0 )); then status=$apply_status; fi
+          fi
+
+          if (( status == 0 )); then
+            mkdir -p .vercel
+            printf '{"orgId":"%s","projectId":"%s"}\n' \
+              "$VERCEL_ORG_ID" "$DUPLICATE_PROJECT_ID" > .vercel/project.json
+            npx --yes "vercel@$VERCEL_CLI_VERSION" git disconnect github \
+              --yes \
+              --token="$VERCEL_TOKEN" \
+              2>&1 | tee vercel-cost-controls-disconnect.log
+            disconnect_status=${PIPESTATUS[0]}
+            if (( disconnect_status != 0 )); then status=$disconnect_status; fi
+          fi
+
+          if (( status == 0 )); then
+            VERCEL_COST_CONTROL_MODE=verify \
+            VERCEL_COST_CONTROL_REPORT=vercel-cost-controls-after.json \
+            REQUIRE_WEBSITE2_DISCONNECTED=true \
+            REQUIRE_OBSOLETE_ABSENT=true \
+              node scripts/vercel-admin-cost-controls.mjs \
+              2>&1 | tee vercel-cost-controls-verify.log
+            verify_status=${PIPESTATUS[0]}
+            if (( verify_status != 0 )); then status=$verify_status; fi
+          fi
+
+          printf '%s\n' "$status" > vercel-cost-controls.status
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload redacted administrative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-cost-controls-${{ github.run_id }}
+          path: |
+            vercel-cost-controls-*.json
+            vercel-cost-controls-*.log
+            vercel-cost-controls.status
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Add verified result to PR 422
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          status="$(cat vercel-cost-controls.status 2>/dev/null || echo 1)"
+          if [[ "$status" == '0' ]]; then
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "Vercel account cost controls were applied and verified in run $GITHUB_RUN_ID. The canonical moraltrade-site project now uses Standard builds with paid elastic concurrency disabled and a serialized queue; website2 is disconnected from Git while its custom domains remain intact; and all six exact-ID domainless test projects are absent. Production was intentionally not resumed because the team remains at its spend limit. Evidence: $run_url"
+          else
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "The one-time Vercel cost-control run did not complete successfully (status $status). No success claim is made. Inspect the redacted evidence and logs: $run_url"
+          fi
+
+      - name: Remove the one-time controller
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$blob_sha" ]]; then
+            jq -n \
+              --arg message 'Remove one-time Vercel cost-control controller' \
+              --arg sha "$blob_sha" \
+              --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE \
+                  "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" \
+                  --input - >/dev/null
+          fi
+
+      - name: Enforce administrative result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat vercel-cost-controls.status 2>/dev/null || echo 1)" = '0'
