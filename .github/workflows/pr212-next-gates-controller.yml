@@ -5,7 +5,6 @@ on:
     types: [created]
 
 permissions:
-  actions: write
   contents: write
   issues: write
   pull-requests: write
@@ -15,21 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  integrate-repair-and-verify:
-    if: >-
-      github.event.issue.pull_request != null &&
-      github.event.issue.number == 212 &&
-      github.event.comment.body == '/run-pr212-next-gates-20260801-9a31f6d4'
+  integrate-and-push:
+    if: github.event.issue.pull_request != null && github.event.issue.number == 212 && github.event.comment.body == '/run-pr212-next-gates-20260801-b4e71c92'
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
       TARGET_BRANCH: feat/institutional-trade-system
       EXPECTED_FEATURE_HEAD: c224595fe13b5fe39a1690938208d0a482714df1
       QA_WORKFLOW_PATH: .github/workflows/institutional-trade-qa.yml
       CONTROLLER_PATH: .github/workflows/pr212-next-gates-controller.yml
-      POOL_PATCH: supabase/migrations/20260731173000_fix_institutional_pool_record_status_access.sql
-      POOL_TRIGGER_TEST: src/institutional-pool-record-trigger.test.ts
     steps:
       - name: Check out the exact feature branch
         uses: actions/checkout@v4
@@ -38,50 +32,46 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
-      - name: Verify exact feature head and integrate the live main head
-        id: integrate
+      - name: Integrate current main and make the QA gate durable
         shell: bash
         run: |
           set -euo pipefail
-          feature_head="$(git rev-parse HEAD)"
-          if [[ "$feature_head" != "$EXPECTED_FEATURE_HEAD" ]]; then
-            echo "Feature head moved: expected $EXPECTED_FEATURE_HEAD, found $feature_head" >&2
+          if [[ "$(git rev-parse HEAD)" != "$EXPECTED_FEATURE_HEAD" ]]; then
+            echo "Feature head moved; refusing to patch an uninspected commit." >&2
             exit 1
           fi
-          git fetch --no-tags origin main
-          integration_base="$(git rev-parse origin/main)"
-          for required in "$QA_WORKFLOW_PATH" "$POOL_PATCH" "$POOL_TRIGGER_TEST"; do
-            test -f "$required" || { echo "Missing required branch file: $required" >&2; exit 1; }
-          done
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git merge --no-ff origin/main -m "Merge main ${integration_base} into institutional trade branch"
+          git fetch --no-tags origin main
+          integrated_main="$(git rev-parse origin/main)"
+          git merge --no-ff origin/main -m "Merge main ${integrated_main} into institutional trade branch"
+          git rm --ignore-unmatch "$CONTROLLER_PATH"
 
-          if [[ -e "$CONTROLLER_PATH" ]]; then
-            git rm "$CONTROLLER_PATH"
-            git commit -m 'Exclude temporary PR 212 controller from feature branch'
-          fi
-
-          echo "integration_base=$integration_base" >> "$GITHUB_OUTPUT"
-          echo "integrated_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-
-      - name: Make institutional QA replay the additive migration and its regression test
-        id: workflow_patch
-        shell: bash
-        run: |
-          set -euo pipefail
           python - <<'PY'
           from pathlib import Path
 
           path = Path('.github/workflows/institutional-trade-qa.yml')
           text = path.read_text()
 
+          permissions_old = '''permissions:
+  contents: read
+'''
+          permissions_new = '''permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+'''
+          if 'pull-requests: write' not in text:
+              if text.count(permissions_old) != 1:
+                  raise SystemExit('Could not locate the QA workflow permissions block.')
+              text = text.replace(permissions_old, permissions_new)
+
           test_line = "            src/institutional-pool-record-trigger.test.ts \\\n"
           if test_line not in text:
               anchor = "            src/institutional-trade-migration.test.ts \\\n"
               if text.count(anchor) != 1:
-                  raise SystemExit('Could not locate the unique institutional source-test insertion point.')
+                  raise SystemExit('Could not locate the source-contract test insertion point.')
               text = text.replace(anchor, anchor + test_line)
 
           setup_old = '''          migration=supabase/migrations/20260726123000_institutional_trade_system.sql
@@ -94,7 +84,7 @@ jobs:
 '''
           if 'pool_patch=supabase/migrations/20260731173000_fix_institutional_pool_record_status_access.sql' not in text:
               if text.count(setup_old) != 1:
-                  raise SystemExit('Could not locate the unique institutional migration setup block.')
+                  raise SystemExit('Could not locate the migration setup block.')
               text = text.replace(setup_old, setup_new)
 
           apply_old = '''          fi
@@ -116,113 +106,64 @@ jobs:
 '''
           if 'Applying the additive pool-trigger migration atomically to isolated QA.' not in text:
               if text.count(apply_old) != 1:
-                  raise SystemExit('Could not locate the unique migration-to-inventory boundary.')
+                  raise SystemExit('Could not locate the migration-to-inventory boundary.')
               text = text.replace(apply_old, apply_new)
+
+          marker = '<!-- pr212-institutional-qa-run -->'
+          if marker not in text:
+              status_step = '''
+
+      - name: Publish institutional QA run status to PR 212
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-institutional-qa-run -->
+          ## PR #212 institutional QA run
+
+          - Run: [$GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)
+          - Head: \`$GITHUB_SHA\`
+          - Ref: \`$GITHUB_REF\`
+          - Job status: **${{ job.status }}**
+          - Evidence artifact upload is attempted before this status is published.
+          - Production database migrations and institutional feature activation remain blocked."
+'''
+              text = text.rstrip() + status_step + '\n'
 
           path.write_text(text)
           PY
 
-          node --import tsx --test "$POOL_TRIGGER_TEST"
+          node --import tsx --test src/institutional-pool-record-trigger.test.ts
           node --check .github/scripts/institutional-trade-qa-e2e.mjs
           node --check .github/scripts/pr212-targeted-regression-qa.mjs
           git diff --check
-          git diff -- "$QA_WORKFLOW_PATH"
 
-          if git diff --quiet -- "$QA_WORKFLOW_PATH"; then
-            echo "The QA workflow already contained the required durable replay gate."
-          else
-            git add "$QA_WORKFLOW_PATH"
-            git commit -m 'Replay institutional pool trigger migration in QA'
-          fi
+          git add -A
+          git commit -m 'Integrate main and harden institutional QA migration replay'
           final_head="$(git rev-parse HEAD)"
-          echo "final_head=$final_head" >> "$GITHUB_OUTPUT"
           git push origin "HEAD:${TARGET_BRANCH}"
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-current-main-integration -->
+          Integrated current main \`$integrated_main\` into PR #212 and pushed durable QA-gate head \`$final_head\`. The full institutional QA workflow has been triggered by this push. No production database migration or institutional feature activation was attempted."
 
-      - name: Locate the exact-head push QA run
-        id: locate
-        shell: bash
-        run: |
-          set -euo pipefail
-          repo="$GITHUB_REPOSITORY"
-          final_head='${{ steps.workflow_patch.outputs.final_head }}'
-          run_json=''
-          for attempt in $(seq 1 90); do
-            run_json="$(gh run list --repo "$repo" --workflow "$QA_WORKFLOW_PATH" --branch "$TARGET_BRANCH" --event push --limit 50 --json databaseId,headSha,status,conclusion,url,createdAt | jq -c --arg sha "$final_head" 'map(select(.headSha == $sha)) | sort_by(.createdAt) | reverse | .[0] // empty')"
-            if [[ -n "$run_json" ]]; then
-              break
-            fi
-            sleep 2
-          done
-          if [[ -z "$run_json" ]]; then
-            echo "Could not locate the push-triggered institutional QA run for $final_head." >&2
-            exit 1
-          fi
-          run_id="$(jq -r .databaseId <<<"$run_json")"
-          run_url="$(jq -r .url <<<"$run_json")"
-          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
-          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
-          gh pr comment 212 --repo "$repo" --body "<!-- pr212-current-main-qa -->
-## PR #212 current-main exact-head QA
-
-- Integrated main head: \`${{ steps.integrate.outputs.integration_base }}\`
-- Feature head: \`$final_head\`
-- QA run: [$run_id]($run_url)
-- Status: **running**
-- Production database and production institutional flags remain unchanged."
-
-      - name: Wait for the complete institutional QA gate
-        id: wait
-        shell: bash
-        run: |
-          set +e
-          repo="$GITHUB_REPOSITORY"
-          run_id='${{ steps.locate.outputs.run_id }}'
-          gh run watch "$run_id" --repo "$repo" --exit-status
-          watch_status=$?
-          conclusion="$(gh run view "$run_id" --repo "$repo" --json conclusion --jq .conclusion 2>/dev/null || echo unknown)"
-          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
-          echo "watch_status=$watch_status" >> "$GITHUB_OUTPUT"
-          exit 0
-
-      - name: Publish exact-head QA result
-        shell: bash
-        run: |
-          set -euo pipefail
-          repo="$GITHUB_REPOSITORY"
-          final_head='${{ steps.workflow_patch.outputs.final_head }}'
-          run_id='${{ steps.locate.outputs.run_id }}'
-          run_url='${{ steps.locate.outputs.run_url }}'
-          conclusion='${{ steps.wait.outputs.conclusion }}'
-          jobs="$(gh run view "$run_id" --repo "$repo" --json jobs --jq '[.jobs[] | {name,conclusion}]')"
-          gh pr comment 212 --repo "$repo" --body "<!-- pr212-current-main-qa-result -->
-## PR #212 current-main exact-head QA result
-
-- Integrated main head: \`${{ steps.integrate.outputs.integration_base }}\`
-- Feature head: \`$final_head\`
-- QA run: [$run_id]($run_url)
-- Conclusion: **$conclusion**
-- Job conclusions: \`$jobs\`
-- The PR remains draft and unmerged. Production database migrations and institutional feature activation remain blocked unless every release gate passes."
-          if [[ "$conclusion" != "success" ]]; then
-            exit 1
-          fi
-
-      - name: Report controller-level failure
+      - name: Report controller failure
         if: failure()
-        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-controller-failure -->
-PR #212 next-gates controller failed. No production database migration or institutional feature activation was attempted. Inspect the controller and, if available, the exact-head QA run before proceeding."
+          PR #212 next-gates controller failed before producing a verified exact-head QA result. No production database migration or institutional feature activation was attempted."
 
       - name: Remove this one-use controller from main
         if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          repo="$GITHUB_REPOSITORY"
-          controller_sha="$(gh api "repos/${repo}/contents/${CONTROLLER_PATH}?ref=main" --jq .sha 2>/dev/null || true)"
+          controller_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${CONTROLLER_PATH}?ref=main" --jq .sha 2>/dev/null || true)"
           if [[ -n "$controller_sha" ]]; then
-            gh api --method DELETE "repos/${repo}/contents/${CONTROLLER_PATH}" \
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/contents/${CONTROLLER_PATH}" \
               -f message='Remove temporary PR 212 next-gates controller' \
               -f sha="$controller_sha" \
               -f branch=main >/dev/null
