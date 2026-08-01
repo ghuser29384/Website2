@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import { getOnePersonAccountConfig } from "@/lib/identity/one-person-account";
 import {
@@ -93,7 +94,7 @@ export default async function AccountIdentityPage({
                 {identities.map((identity) => (
                   <tr key={identity.identity_id}>
                     <td>{identity.provider}</td>
-                    <td>{identity.created_at ? new Date(identity.created_at).toLocaleString() : "—"}</td>
+                    <td><LocalDateTime fallback="—" value={identity.created_at ?? null} /></td>
                     <td>
                       {identities.length > 1 && config.manualIdentityLinkingEnabled ? (
                         <form action={unlinkIdentityCredentialAction}>
