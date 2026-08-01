@@ -1,0 +1,52 @@
+name: One-person LocalDateTime inspector
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  inspect:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.issue.pull_request != null &&
+      github.event.issue.number == 379 &&
+      github.event.comment.body == '/inspect-one-person-localdatetime-20260801'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+      - name: Locate the canonical local date-time component and usages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo 'Files with date/time-like names:'
+            find src -type f \( -iname '*date*time*' -o -iname '*local*time*' \) -print | sort
+            echo
+            echo 'LocalDateTime references:'
+            grep -RIn --include='*.ts' --include='*.tsx' 'LocalDateTime' src || true
+          } > /tmp/localdatetime.txt
+          body=$'LocalDateTime repository inspection:\n\n```text\n'"$(head -c 12000 /tmp/localdatetime.txt)"$'\n```'
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "$body"
+      - name: Remove temporary inspector
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          path='.github/workflows/one-person-localdatetime-inspector.yml'
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$sha" ]]; then
+            jq -n --arg message 'Remove temporary one-person LocalDateTime inspector' --arg sha "$sha" --arg branch main '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$path" --input - >/dev/null
+          fi
