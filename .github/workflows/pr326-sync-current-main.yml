@@ -18,7 +18,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       PRODUCT_BRANCH: agent/marketplace-delta-current-main-20260729
     steps:
@@ -26,6 +26,35 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Wait for a stable main and product pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          last_main=""
+          last_product=""
+          stable_intervals=0
+          required_stable_intervals=12
+          while (( stable_intervals < required_stable_intervals )); do
+            main_sha="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+            product_sha="$(git ls-remote origin "refs/heads/$PRODUCT_BRANCH" | awk '{print $1}')"
+            if [[ -z "$main_sha" || -z "$product_sha" ]]; then
+              echo "Could not read main or product ref." >&2
+              exit 1
+            fi
+            if [[ "$main_sha" == "$last_main" && "$product_sha" == "$last_product" ]]; then
+              stable_intervals=$((stable_intervals + 1))
+            else
+              last_main="$main_sha"
+              last_product="$product_sha"
+              stable_intervals=0
+            fi
+            if (( stable_intervals < required_stable_intervals )); then
+              echo "Waiting for stable refs: ${stable_intervals}/${required_stable_intervals}." >&2
+              sleep 30
+            fi
+          done
+          printf 'Stable synchronization window: main=%s product=%s\n' "$last_main" "$last_product"
 
       - name: Merge a stable current main snapshot into PR 326
         id: sync
