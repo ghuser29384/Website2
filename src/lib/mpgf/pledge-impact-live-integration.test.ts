@@ -72,6 +72,7 @@ test("the model keeps causal effect, allocated credit, uncertainty, and bonus di
 
 test("transactional QA covers live derivation, stale and changed state, RLS, and cleanup", () => {
   for (const required of [
+    "proposed_recipient_name",
     "forecast_not_released",
     "pool_state_mismatch",
     "forecast_stale",
