@@ -1,0 +1,332 @@
+name: Complete Profile root-prefetch rebased preview smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/complete-profile-root-prefetch-eb16f365-preview-smoke.yml"
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: complete-profile-root-prefetch-eb16f365-preview-smoke
+  cancel-in-progress: false
+
+jobs:
+  preview-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      EXPECTED_SHA: eb16f365bbe37f77e03999d2c61ec8a04e06fc9b
+      STATUS_CONTEXT: QA / Complete Profile prefetch rebased preview smoke
+      PREVIEW_DEPLOYMENT_ID: dpl_4ffMNqZ7oT32PBTV7GyA2rJVMEFs
+      PREVIEW_ORIGIN: https://website2-64hwac0iw-ellen-s.vercel.app
+      VERCEL_PROJECT: website2
+      VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+
+    steps:
+      - name: Mark exact preview smoke pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state=pending \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="Checking exact READY preview on desktop and mobile" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 1
+
+      - name: Verify exact candidate
+        run: test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npm ci; then exit 0; fi
+            if [[ "$attempt" == "3" ]]; then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify exact READY deployment
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          response="$(curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            "https://api.vercel.com/v13/deployments/${PREVIEW_DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}")"
+          state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$response")"
+          deployed_sha="$(jq -r '.meta.githubCommitSha // empty' <<<"$response")"
+          test "$state" = "READY"
+          test "$deployed_sha" = "$EXPECTED_SHA"
+          jq -n \
+            --arg expectedSha "$EXPECTED_SHA" \
+            --arg deploymentId "$PREVIEW_DEPLOYMENT_ID" \
+            --arg origin "$PREVIEW_ORIGIN" \
+            --arg state "$state" \
+            '{expectedSha:$expectedSha,deploymentId:$deploymentId,origin:$origin,state:$state}' \
+            > /tmp/preview-deployment.json
+
+      - name: Generate one-run Vercel automation bypass
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          secret="$(openssl rand -hex 16)"
+          echo "::add-mask::$secret"
+          payload="$(jq -cn --arg secret "$secret" '{generate:{secret:$secret,note:"Complete Profile rebased root-prefetch preview smoke 2026-08-01"}}')"
+          curl -fsS -X PATCH \
+            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            > /tmp/vercel-bypass-generate.json
+          jq -e '.protectionBypass | type == "object"' /tmp/vercel-bypass-generate.json >/dev/null
+          echo "VERCEL_AUTOMATION_BYPASS_SECRET=$secret" >> "$GITHUB_ENV"
+
+      - name: Run protected exact-preview smoke
+        run: |
+          mkdir -p .qa complete-profile-root-prefetch-rebased-preview-smoke
+          cp /tmp/preview-deployment.json complete-profile-root-prefetch-rebased-preview-smoke/deployment.json
+          cat > .qa/complete-profile-root-prefetch-rebased-preview-smoke.mjs <<'SCRIPT'
+          import assert from "node:assert/strict";
+          import { mkdir, writeFile } from "node:fs/promises";
+          import { chromium } from "@playwright/test";
+
+          const origin = process.env.PREVIEW_ORIGIN;
+          const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+          const expectedSha = process.env.EXPECTED_SHA;
+          const expectedDeploymentId = process.env.PREVIEW_DEPLOYMENT_ID;
+          assert.ok(origin, "PREVIEW_ORIGIN is required");
+          assert.ok(bypassSecret, "VERCEL_AUTOMATION_BYPASS_SECRET is required");
+          assert.ok(expectedSha, "EXPECTED_SHA is required");
+          assert.ok(expectedDeploymentId, "PREVIEW_DEPLOYMENT_ID is required");
+
+          const outputDir = "complete-profile-root-prefetch-rebased-preview-smoke";
+          await mkdir(outputDir, { recursive: true });
+          const browser = await chromium.launch({ headless: true });
+          const report = {
+            expectedSha,
+            expectedDeploymentId,
+            previewOrigin: origin,
+            checkedAt: new Date().toISOString(),
+            scenarios: [],
+          };
+
+          async function createContext(viewport) {
+            const context = await browser.newContext({ viewport });
+            await context.route(`${origin}/**`, async (route) => {
+              await route.continue({
+                headers: {
+                  ...route.request().headers(),
+                  "x-vercel-protection-bypass": bypassSecret,
+                  "x-vercel-set-bypass-cookie": "true",
+                },
+              });
+            });
+            await context.addCookies([
+              { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
+            ]);
+            return context;
+          }
+
+          function isExpectedPrefetchAbort(request) {
+            const failure = request.failure();
+            if (failure?.errorText !== "net::ERR_ABORTED" || request.isNavigationRequest()) {
+              return false;
+            }
+            const url = new URL(request.url());
+            const headers = request.headers();
+            return (
+              url.origin === origin &&
+              request.method() === "GET" &&
+              request.resourceType() === "fetch" &&
+              (url.searchParams.has("_rsc") ||
+                headers["next-router-prefetch"] === "1" ||
+                headers.rsc === "1" ||
+                Object.hasOwn(headers, "next-url"))
+            );
+          }
+
+          function makeState(name) {
+            return {
+              name,
+              rootRscRequests: [],
+              pageErrors: [],
+              consoleErrors: [],
+              failedRequests: [],
+              expectedPrefetchAborts: [],
+              httpErrors: [],
+            };
+          }
+
+          function attachDiagnostics(page, state) {
+            page.on("pageerror", (error) => state.pageErrors.push(error.message));
+            page.on("console", (message) => {
+              if (message.type() === "error") {
+                state.consoleErrors.push({ text: message.text(), location: message.location() });
+              }
+            });
+            page.on("request", (request) => {
+              const url = new URL(request.url());
+              if (url.origin === origin && url.pathname === "/" && url.searchParams.has("_rsc")) {
+                state.rootRscRequests.push(request.url());
+              }
+            });
+            page.on("requestfailed", (request) => {
+              if (new URL(request.url()).origin !== origin) return;
+              const record = {
+                url: request.url(),
+                method: request.method(),
+                resourceType: request.resourceType(),
+                errorText: request.failure()?.errorText ?? "unknown",
+              };
+              if (isExpectedPrefetchAbort(request)) state.expectedPrefetchAborts.push(record);
+              else state.failedRequests.push(record);
+            });
+            page.on("response", (response) => {
+              if (new URL(response.url()).origin === origin && response.status() >= 400) {
+                state.httpErrors.push({ status: response.status(), url: response.url() });
+              }
+            });
+          }
+
+          function assertClean(state) {
+            assert.deepEqual(state.rootRscRequests, [], `Root RSC requests: ${state.rootRscRequests.join(" | ")}`);
+            assert.deepEqual(state.pageErrors, [], `Page errors: ${state.pageErrors.join(" | ")}`);
+            assert.deepEqual(state.consoleErrors, [], `Console errors: ${JSON.stringify(state.consoleErrors)}`);
+            assert.deepEqual(state.failedRequests, [], `Failed requests: ${JSON.stringify(state.failedRequests)}`);
+            assert.deepEqual(state.httpErrors, [], `HTTP errors: ${JSON.stringify(state.httpErrors)}`);
+          }
+
+          try {
+            {
+              const state = makeState("returning-desktop");
+              const context = await createContext({ width: 1440, height: 1000 });
+              const page = await context.newPage();
+              attachDiagnostics(page, state);
+              const response = await page.goto(`${origin}/complete-profile`, {
+                waitUntil: "domcontentloaded",
+                timeout: 120_000,
+              });
+              assert.ok(response && response.status() < 400, "Desktop route returned no clean response");
+              await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
+              await page.getByRole("heading", { name: "Spend 100 sparks of attention." }).waitFor({ state: "visible", timeout: 60_000 });
+              await page.getByLabel("Profile setup: priorities").waitFor({ state: "visible", timeout: 60_000 });
+              assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
+              await page.waitForTimeout(1_500);
+              await page.getByRole("button", { name: "Save profile" }).click();
+              const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
+              await dialog.waitFor({ state: "visible", timeout: 30_000 });
+              assert.match((await dialog.textContent()) ?? "", /Saving does not create or publish an offer\./);
+              await page.waitForTimeout(500);
+              await page.screenshot({ path: `${outputDir}/returning-desktop.png`, fullPage: true });
+              assertClean(state);
+              state.finalUrl = page.url();
+              state.status = "passed";
+              report.scenarios.push(state);
+              await context.close();
+            }
+
+            {
+              const state = makeState("returning-mobile");
+              const context = await createContext({ width: 390, height: 844 });
+              const page = await context.newPage();
+              attachDiagnostics(page, state);
+              const response = await page.goto(`${origin}/complete-profile`, {
+                waitUntil: "domcontentloaded",
+                timeout: 120_000,
+              });
+              assert.ok(response && response.status() < 400, "Mobile route returned no clean response");
+              await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
+              await page.getByLabel("80 of 100 attention points assigned").waitFor({ state: "visible", timeout: 60_000 });
+              await page.waitForTimeout(1_500);
+              await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
+              await page.getByRole("button", { name: "Decrease Space governance" }).waitFor({ state: "visible", timeout: 30_000 });
+              const dimensions = await page.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                documentWidth: document.documentElement.scrollWidth,
+              }));
+              assert.ok(dimensions.documentWidth <= dimensions.viewportWidth, `Mobile overflow: ${JSON.stringify(dimensions)}`);
+              await page.waitForTimeout(500);
+              await page.screenshot({ path: `${outputDir}/returning-mobile.png`, fullPage: true });
+              assertClean(state);
+              state.finalUrl = page.url();
+              state.dimensions = dimensions;
+              state.status = "passed";
+              report.scenarios.push(state);
+              await context.close();
+            }
+
+            report.status = "passed";
+          } catch (error) {
+            report.status = "failed";
+            report.failure = error instanceof Error ? error.stack : String(error);
+            throw error;
+          } finally {
+            await writeFile(`${outputDir}/report.json`, `${JSON.stringify(report, null, 2)}\n`);
+            await browser.close();
+          }
+          SCRIPT
+          node .qa/complete-profile-root-prefetch-rebased-preview-smoke.mjs
+
+      - name: Upload preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-profile-root-prefetch-rebased-preview-smoke-eb16f365
+          path: complete-profile-root-prefetch-rebased-preview-smoke
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Revoke one-run Vercel automation bypass
+        if: always() && env.VERCEL_AUTOMATION_BYPASS_SECRET != ''
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          payload="$(jq -cn --arg secret "$VERCEL_AUTOMATION_BYPASS_SECRET" '{revoke:{secret:$secret,regenerate:false}}')"
+          curl -fsS -X PATCH \
+            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT}/protection-bypass?teamId=${VERCEL_TEAM_ID}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            -H "Content-Type: application/json" \
+            --data "$payload" \
+            > /tmp/vercel-bypass-revoke.json
+
+      - name: Publish preview-smoke result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [[ "$JOB_STATUS" == "success" ]]; then
+            state=success
+            description="Exact preview passed desktop/mobile with no root RSC prefetch"
+          else
+            state=failure
+            description="Rebased Complete Profile preview smoke failed; inspect evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state="$state" \
+            -f context="${STATUS_CONTEXT}" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
