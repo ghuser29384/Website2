@@ -8,6 +8,8 @@
   const nativePushState = history.pushState.bind(history);
   const nativeReplaceState = history.replaceState.bind(history);
   const rememberedControlValues = new Map();
+  const QUERY_SELECTOR =
+    '#command-input, input[name="command"], input[name="q"]';
   const SUPPORTED_DOMAINS = new Set(["offers", "pools", "people"]);
   const SUPPORTED_SORTS = new Set([
     "best-fit",
@@ -16,6 +18,8 @@
     "lowest-cost",
     "strongest-evidence",
   ]);
+  let queryDraft = null;
+  let queryRestoreFrame = 0;
 
   function unique(values) {
     return [...new Set(values.filter(Boolean))];
@@ -28,6 +32,14 @@
         element instanceof HTMLElement && element.getClientRects().length > 0,
     );
     return visible.length ? visible : elements;
+  }
+
+  function getQueryInput() {
+    return (
+      preferredElements(QUERY_SELECTOR).find(
+        (element) => element instanceof HTMLInputElement,
+      ) ?? null
+    );
   }
 
   function rememberControlValue(event) {
@@ -49,8 +61,86 @@
     rememberedControlValues.set(filter, target.value);
   }
 
+  function rememberQueryDraft(event) {
+    const target = event.target;
+    if (
+      target instanceof HTMLInputElement &&
+      target.matches(QUERY_SELECTOR)
+    ) {
+      queryDraft = target.value;
+    }
+  }
+
+  function restoreQueryDraft() {
+    if (queryDraft === null) return;
+    const input = getQueryInput();
+    if (input && input.value !== queryDraft) input.value = queryDraft;
+  }
+
+  function scheduleQueryDraftRestore() {
+    if (queryDraft === null || queryRestoreFrame) return;
+    queryRestoreFrame = window.requestAnimationFrame(() => {
+      queryRestoreFrame = 0;
+      restoreQueryDraft();
+    });
+  }
+
   document.addEventListener("input", rememberControlValue, true);
+  document.addEventListener("input", rememberQueryDraft, true);
   document.addEventListener("change", rememberControlValue, true);
+  document.addEventListener(
+    "submit",
+    (event) => {
+      if (
+        event.target instanceof HTMLFormElement &&
+        event.target.id === "command-form"
+      ) {
+        restoreQueryDraft();
+      }
+    },
+    true,
+  );
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        event.key === "Enter" &&
+        event.target instanceof HTMLInputElement &&
+        event.target.matches(QUERY_SELECTOR)
+      ) {
+        restoreQueryDraft();
+      }
+    },
+    true,
+  );
+  document.addEventListener(
+    "click",
+    (event) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('#command-form button[type="submit"]')) {
+        restoreQueryDraft();
+      }
+      if (
+        target?.closest(
+          '[data-action="reset"], [data-discover-action="clear"]',
+        )
+      ) {
+        queryDraft = null;
+      }
+    },
+    true,
+  );
+  window.addEventListener("popstate", () => {
+    queryDraft = null;
+  });
+
+  const app = document.getElementById("app");
+  if (app) {
+    new MutationObserver(scheduleQueryDraftRestore).observe(app, {
+      childList: true,
+      subtree: true,
+    });
+  }
 
   function checkedValues(filter) {
     return unique(

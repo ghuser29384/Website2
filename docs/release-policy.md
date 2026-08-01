@@ -44,7 +44,15 @@ A merge to `main` may still trigger the ordinary Vercel production pipeline. Tha
 
 If a pull request contains both runtime-affecting and repository-only changes, or if its production effect is uncertain, classify it as runtime-affecting. Do not use a test-only label to avoid runtime release gates.
 
-## 2. Choose the release procedure from the classification
+## 2. Choose a compatible release procedure
+
+A blocked change selects only **Do not merge or deploy yet; blockers remain**.
+
+A release-ready repository-only change selects **Merge after repository gates; no manual production promotion required**. It may also acknowledge that an ordinary automatic `main` deployment can occur, but it must not claim that an explicit production release is required.
+
+A release-ready runtime-affecting or mixed change selects **Explicit production release and post-release smoke test required**. It must identify both its deployment target or plan and its post-release verification plan. It must not use a repository-only release disposition.
+
+Contradictory combinations fail closed.
 
 ### Runtime-affecting procedure
 
@@ -78,7 +86,33 @@ After merge:
 3. Do not describe the repair as a production hotfix or say that production behavior was fixed unless separate runtime evidence establishes an actual production defect and correction.
 4. If Vercel auto-deploys `main`, distinguish that ordinary deployment from a necessary release action.
 
-## 3. Evidence required for common claims
+## 3. Automated pull-request enforcement
+
+The `Release classification` GitHub Actions workflow validates the pull request body on open, edit, synchronization, reopen, and ready-for-review events targeting `main`.
+
+The workflow:
+
+- executes the validator from the trusted base revision rather than the pull request head;
+- treats the pull request body only as untrusted data;
+- posts one stable commit-status context, `release-classification`, to the pull request head SHA;
+- fails when required headings, options, evidence, or compatible dispositions are missing;
+- reruns when the pull request body changes;
+- leaves a pending status if the workflow is interrupted before a final result, which prevents a silent bypass.
+
+The `release-classification` context is intended to be a required status check for merges into `main`. Its context name must remain stable so branch protection cannot be silently bypassed by renaming the workflow job. Changes to the parser or workflow must pass the separate parser and workflow-contract self-test before merge.
+
+The validator requires:
+
+- exactly one release classification;
+- a compatible release disposition;
+- a concrete source of truth;
+- nonempty classification evidence;
+- at least one verification item that actually ran;
+- exact commands, workflow runs, or equivalent executed evidence;
+- deployment and post-release plans for runtime-affecting and mixed changes;
+- complete production-evidence fields before a runtime-affecting or mixed change is reported as deployed or fixed in production.
+
+## 4. Evidence required for common claims
 
 | Claim | Minimum evidence |
 | --- | --- |
@@ -90,7 +124,7 @@ After merge:
 
 Never infer one claim from evidence that establishes only another.
 
-## 4. Required reporting language
+## 5. Required reporting language
 
 Use precise status statements:
 
@@ -107,10 +141,10 @@ Avoid these overstatements unless the stronger evidence exists:
 - “no runtime errors” without a stated project, deployment, and inspection window;
 - “safe” or “live” based only on a `READY` deployment.
 
-## 5. Rollback policy
+## 6. Rollback policy
 
 Do not roll back merely because a repository-only change was unnecessarily included in an automatic deployment. Roll back when there is evidence of a runtime regression, unsafe configuration, data-integrity risk, authorization failure, payment risk, or another material production defect.
 
-## 6. Reference example
+## 7. Reference example
 
 A stale test that asserts one exact quotation or string-concatenation style, while the browser loader already behaves correctly, is a repository-only failure. The appropriate action is to replace the brittle assertion with a semantic test, merge after repository gates pass, and avoid presenting the repair as a production hotfix. If `main` auto-deploys afterward, that deployment is ordinary release infrastructure behavior rather than evidence that production needed the test repair.
