@@ -1,6 +1,8 @@
 import type { GroupContributionMode, ValidationIssue } from "./group-contribution";
 
-type Shape = Readonly<Record<string, Shape | "value" | "record" | "array-value" | "array-record">>;
+interface Shape {
+  readonly [key: string]: Shape | "value" | "record" | "array-value" | "array-record";
+}
 
 const COMMON_SHAPE: Shape = {
   schemaVersion: "value",
@@ -34,6 +36,8 @@ const CO_ACT_SHAPE: Shape = {
     startsAt: "value",
   },
   lateJoining: "value",
+  timing: "value",
+  coordination: "value",
   duration: "value",
   frequency: "value",
   reward: {
@@ -109,6 +113,11 @@ const CO_FUND_SHAPE: Shape = {
   foreignExchange: {
     lockAt: "value",
     restartConfirmationOnMaterialChange: "value",
+  },
+  failure: {
+    deadlineOutcome: "value",
+    extensionHours: "value",
+    underThresholdFallback: "value",
   },
 };
 

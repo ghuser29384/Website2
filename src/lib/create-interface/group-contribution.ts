@@ -82,6 +82,8 @@ export interface CoActTerms extends GroupContributionCommon {
     | { mode: "on-activation" }
     | { mode: "scheduled"; startsAt: string };
   lateJoining: "closed-after-activation" | "original-end-date" | "full-duration";
+  timing: "same-period" | "same-time";
+  coordination: "notifications-only" | "announcements" | "discussion-thread";
   duration?: string;
   frequency?: string;
   reward:
@@ -186,6 +188,15 @@ export interface CoFundTerms extends GroupContributionCommon {
     lockAt: "final-confirmation";
     restartConfirmationOnMaterialChange: true;
   };
+  failure: {
+    deadlineOutcome:
+      | "release-reservations"
+      | "one-extension"
+      | "new-round"
+      | "participant-vote";
+    extensionHours?: number;
+    underThresholdFallback: "expire-trade" | "alternative-offer" | "renegotiate";
+  };
 }
 
 export type GroupContributionTerms = CoActTerms | CoFundTerms;
@@ -260,6 +271,8 @@ const COACT_KEYS = new Set([
   "activation",
   "performanceStart",
   "lateJoining",
+  "timing",
+  "coordination",
   "duration",
   "frequency",
   "reward",
@@ -285,6 +298,7 @@ const COFUND_KEYS = new Set([
   "overfunding",
   "recurring",
   "foreignExchange",
+  "failure",
 ]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -497,6 +511,12 @@ function validateCoAct(value: Record<string, unknown>, issues: ValidationIssue[]
 
   validateActivation(value.activation, value.participantLimit, issues);
   validatePerformanceStart(value.performanceStart, issues);
+  if (!( ["same-period", "same-time"] as unknown[]).includes(value.timing)) {
+    addIssue(issues, "timing", "invalid-value", "Unsupported Co-Act timing rule");
+  }
+  if (!( ["notifications-only", "announcements", "discussion-thread"] as unknown[]).includes(value.coordination)) {
+    addIssue(issues, "coordination", "invalid-value", "Unsupported Co-Act coordination mode");
+  }
 
   if (
     !(["closed-after-activation", "original-end-date", "full-duration"] as unknown[]).includes(
@@ -852,6 +872,7 @@ function validateCoFund(value: Record<string, unknown>, issues: ValidationIssue[
 
   validateRecurring(value.recurring, issues);
   validateForeignExchange(value.foreignExchange, issues);
+  validateCoFundFailure(value.failure, issues);
 }
 
 function validateProject(value: unknown, issues: ValidationIssue[]): void {
@@ -1012,6 +1033,45 @@ function validateRecurring(value: unknown, issues: ValidationIssue[]): void {
       "recurring.maximumPerCycleMinor",
       "invalid-value",
       "Recurring maximum must be a positive minor-unit integer",
+    );
+  }
+}
+
+function validateCoFundFailure(value: unknown, issues: ValidationIssue[]): void {
+  if (!isRecord(value)) {
+    addIssue(issues, "failure", "invalid-type", "Co-Fund failure terms must be an object");
+    return;
+  }
+  if (
+    !(["release-reservations", "one-extension", "new-round", "participant-vote"] as unknown[]).includes(
+      value.deadlineOutcome,
+    )
+  ) {
+    addIssue(issues, "failure.deadlineOutcome", "invalid-value", "Unsupported deadline outcome");
+  }
+  if (value.deadlineOutcome === "one-extension") {
+    if (!isPositiveInteger(value.extensionHours) || value.extensionHours > 8_760) {
+      addIssue(
+        issues,
+        "failure.extensionHours",
+        "invalid-value",
+        "Extension hours must be from 1 through 8760",
+      );
+    }
+  } else if (value.extensionHours !== undefined) {
+    addIssue(
+      issues,
+      "failure.extensionHours",
+      "invalid-value",
+      "Extension hours may be supplied only for a one-extension deadline outcome",
+    );
+  }
+  if (!( ["expire-trade", "alternative-offer", "renegotiate"] as unknown[]).includes(value.underThresholdFallback)) {
+    addIssue(
+      issues,
+      "failure.underThresholdFallback",
+      "invalid-value",
+      "Unsupported under-threshold fallback",
     );
   }
 }

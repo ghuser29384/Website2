@@ -1,4 +1,6 @@
 import type { FormulaAst } from "./formula";
+import type { GroupContributionProposalPayload } from "./group-contribution-payload";
+import type { GroupContributionReviewRecordFragment } from "./group-contribution-review-record";
 
 export const CREATE_INTERFACE_VERSION = "moral_trade_create_v1" as const;
 
@@ -90,6 +92,7 @@ export interface MoralTradeCreatePayload {
   existingPoolCurrency: string;
   offers: CreateOfferContribution[];
   pool: CreatePoolInput | null;
+  groupContributionTerms: unknown | null;
 }
 
 export interface ValidatedFormulaTerms {
@@ -133,6 +136,8 @@ export interface ValidatedCreatePayload {
   existingPoolAmountCents: number | null;
   existingPoolCurrency: string | null;
   poolTerms: ValidatedCreatePoolTerms | null;
+  groupContributionTerms: GroupContributionProposalPayload;
+  groupContributionReviewRecord: GroupContributionReviewRecordFragment | null;
   payloadHash: string;
 }
 

@@ -88,10 +88,13 @@ test("rejects a contribution-kind mismatch from the authoritative option map", (
 });
 
 test("rejects executable authority nested inside otherwise valid terms", () => {
+  const base = coActTerms();
+  assert.equal(base.mode, "co-act");
+  if (base.mode !== "co-act") throw new Error("Expected Co-Act terms");
   const terms = {
-    ...coActTerms(),
+    ...base,
     identity: {
-      ...(coActTerms().mode === "co-act" ? coActTerms().identity : {}),
+      ...base.identity,
       publishIdentities: true,
     },
   };

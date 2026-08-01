@@ -18,7 +18,7 @@ export function validateGroupContributionFormDataForPersistence(
   input: ValidateGroupContributionFormDataInput,
 ): ServerGroupContributionResult {
   const field = input.formData.get(GROUP_CONTRIBUTION_FORM_FIELD);
-  if (field instanceof File) {
+  if (field !== null && typeof field !== "string") {
     return {
       ok: false,
       issues: [

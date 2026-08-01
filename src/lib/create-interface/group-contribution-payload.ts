@@ -52,7 +52,7 @@ export function parseGroupContributionProposalPayload(
     };
   }
 
-  if (Buffer.byteLength(raw, "utf8") > MAX_GROUP_CONTRIBUTION_PAYLOAD_BYTES) {
+  if (new TextEncoder().encode(raw).byteLength > MAX_GROUP_CONTRIBUTION_PAYLOAD_BYTES) {
     return {
       ok: false,
       issues: [

@@ -12,6 +12,8 @@ const CO_ACT_STRUCTURES = new Set(["same-action", "complementary-roles"]);
 const ACTIVATION_MODES = new Set(["independent", "minimum-participants"]);
 const PERFORMANCE_START_MODES = new Set(["on-activation", "scheduled"]);
 const LATE_JOINING = new Set(["closed-after-activation", "original-end-date", "full-duration"]);
+const CO_ACT_TIMING = new Set(["same-period", "same-time"]);
+const COORDINATION = new Set(["notifications-only", "announcements", "discussion-thread"]);
 const REWARD_MODES = new Set(["fixed-group", "per-participant-or-unit"]);
 const BASELINE_SOURCES = new Set(["verified-history", "self-report", "mixed"]);
 const CONFIDENCE = new Set(["low", "medium", "high"]);
@@ -39,6 +41,17 @@ const ALLOCATION_MODES = new Set([
 ]);
 const RECURRING_MODES = new Set(["none", "standing-authorization", "confirm-each-cycle"]);
 const PAYMENT_METHODS = new Set(["wallet", "card-or-ach", "escrow"]);
+const COFUND_DEADLINE_OUTCOMES = new Set([
+  "release-reservations",
+  "one-extension",
+  "new-round",
+  "participant-vote",
+]);
+const COFUND_FAILURE_FALLBACKS = new Set([
+  "expire-trade",
+  "alternative-offer",
+  "renegotiate",
+]);
 
 export function sanitizeGroupContributionDraft(
   input: unknown,
@@ -75,6 +88,8 @@ export function sanitizeGroupContributionDraft(
   assignEnum(candidate, "performanceStartMode", input.performanceStartMode, PERFORMANCE_START_MODES);
   assignString(candidate, "performanceStartsAt", input.performanceStartsAt);
   assignEnum(candidate, "lateJoining", input.lateJoining, LATE_JOINING);
+  assignEnum(candidate, "coActTiming", input.coActTiming, CO_ACT_TIMING);
+  assignEnum(candidate, "coordination", input.coordination, COORDINATION);
   assignString(candidate, "duration", input.duration);
   assignString(candidate, "frequency", input.frequency);
   assignEnum(candidate, "rewardMode", input.rewardMode, REWARD_MODES);
@@ -108,6 +123,19 @@ export function sanitizeGroupContributionDraft(
   assignString(candidate, "recurringFrequency", input.recurringFrequency);
   assignNumber(candidate, "recurringMaximumMinor", input.recurringMaximumMinor);
   assignBoolean(candidate, "milestoneBasedPayout", input.milestoneBasedPayout);
+  assignEnum(
+    candidate,
+    "coFundDeadlineOutcome",
+    input.coFundDeadlineOutcome,
+    COFUND_DEADLINE_OUTCOMES,
+  );
+  assignNumber(candidate, "coFundExtensionHours", input.coFundExtensionHours);
+  assignEnum(
+    candidate,
+    "coFundFailureFallback",
+    input.coFundFailureFallback,
+    COFUND_FAILURE_FALLBACKS,
+  );
 
   if (Array.isArray(input.paymentMethods)) {
     const methods = input.paymentMethods.filter(

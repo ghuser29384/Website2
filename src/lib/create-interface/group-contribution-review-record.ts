@@ -15,13 +15,18 @@ export interface GroupContributionReviewRecordFragment {
   };
 }
 
+type GroupContributionValidationFailure = Extract<
+  ReturnType<typeof validateGroupContributionFormDataForPersistence>,
+  { ok: false }
+>;
+
 export type GroupContributionReviewRecordResult =
   | {
       ok: true;
       fragment: GroupContributionReviewRecordFragment | null;
       issues: [];
     }
-  | ReturnType<typeof validateGroupContributionFormDataForPersistence>;
+  | GroupContributionValidationFailure;
 
 export function buildGroupContributionReviewRecordFragment(input: {
   formData: Pick<FormData, "get">;

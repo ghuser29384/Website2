@@ -37,6 +37,8 @@ export interface GroupContributionDraftState {
   performanceStartMode: "on-activation" | "scheduled";
   performanceStartsAt: string;
   lateJoining: "closed-after-activation" | "original-end-date" | "full-duration";
+  coActTiming: "same-period" | "same-time";
+  coordination: "notifications-only" | "announcements" | "discussion-thread";
   duration: string;
   frequency: string;
   rewardMode: "fixed-group" | "per-participant-or-unit";
@@ -80,6 +82,13 @@ export interface GroupContributionDraftState {
   recurringFrequency: string;
   recurringMaximumMinor: number;
   milestoneBasedPayout: boolean;
+  coFundDeadlineOutcome:
+    | "release-reservations"
+    | "one-extension"
+    | "new-round"
+    | "participant-vote";
+  coFundExtensionHours: number;
+  coFundFailureFallback: "expire-trade" | "alternative-offer" | "renegotiate";
 }
 
 export function defaultGroupContributionDraft(
@@ -113,6 +122,8 @@ export function defaultGroupContributionDraft(
     performanceStartMode: "on-activation",
     performanceStartsAt: "",
     lateJoining: "closed-after-activation",
+    coActTiming: "same-period",
+    coordination: "announcements",
     duration: "",
     frequency: "",
     rewardMode: "fixed-group",
@@ -147,6 +158,9 @@ export function defaultGroupContributionDraft(
     recurringFrequency: "monthly",
     recurringMaximumMinor: 0,
     milestoneBasedPayout: false,
+    coFundDeadlineOutcome: "release-reservations",
+    coFundExtensionHours: 72,
+    coFundFailureFallback: "expire-trade",
   };
 }
 
@@ -169,6 +183,7 @@ export function normalizeDraft(state: GroupContributionDraftState): GroupContrib
     maximumBudgetMinor: clampInteger(state.maximumBudgetMinor, 0, Number.MAX_SAFE_INTEGER),
     recurringMaximumMinor: clampInteger(state.recurringMaximumMinor, 0, Number.MAX_SAFE_INTEGER),
     paymentRepairWindowHours: clampInteger(state.paymentRepairWindowHours, 1, 168),
+    coFundExtensionHours: clampInteger(state.coFundExtensionHours, 1, 8_760),
     settlementCurrency: state.settlementCurrency.trim().toUpperCase().slice(0, 3),
     recruitmentDeadline: state.recruitmentDeadline.trim(),
     existingGroupId: state.existingGroupId.trim(),
@@ -269,6 +284,8 @@ function buildCoActTerms(state: GroupContributionDraftState): CoActTerms {
         ? { mode: "scheduled", startsAt: toIso(state.performanceStartsAt) }
         : { mode: "on-activation" },
     lateJoining: state.lateJoining,
+    timing: state.coActTiming,
+    coordination: state.coordination,
     ...(state.duration ? { duration: state.duration } : {}),
     ...(state.frequency ? { frequency: state.frequency } : {}),
     reward:
@@ -393,6 +410,13 @@ function buildCoFundTerms(state: GroupContributionDraftState): CoFundTerms {
     foreignExchange: {
       lockAt: "final-confirmation",
       restartConfirmationOnMaterialChange: true,
+    },
+    failure: {
+      deadlineOutcome: state.coFundDeadlineOutcome,
+      ...(state.coFundDeadlineOutcome === "one-extension"
+        ? { extensionHours: state.coFundExtensionHours }
+        : {}),
+      underThresholdFallback: state.coFundFailureFallback,
     },
   };
 }

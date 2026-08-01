@@ -140,6 +140,8 @@ Performance may begin:
 
 A scheduled date never bypasses an unmet activation condition.
 
+The creator also chooses whether participants perform during the same overall period or at the same time. Coordination may use notifications only, announcements and reminders, or an optional participant discussion thread. These choices are proposal terms, not authority to notify, publish, or open a live discussion before activation is independently released.
+
 ### 5.3 Obligations and rewards
 
 Same-action Co-Acts use an identical action definition. Quantity or frequency may vary only where the published terms allow it.
@@ -268,6 +270,8 @@ A future payment-failure bridge may apply only after a participant confirmed and
 - no recent repayment default;
 - per-user, per-group, and platform reserve limits;
 - emergency kill switch.
+
+The creator chooses the disclosed deadline outcome before publication: release reservations, allow one bounded extension, open a new round, or let participants vote. The creator also preselects the linked-trade fallback when the Co-Fund remains under threshold: expiry, a specified alternative offer, or renegotiation. The proposal release records these choices but executes none of them.
 
 The proposal release must not expose a client-controlled path to bridge funding.
 

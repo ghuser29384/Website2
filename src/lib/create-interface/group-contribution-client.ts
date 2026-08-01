@@ -12,12 +12,34 @@ import {
   type GroupContributionDraftState,
   type GroupDraftMode,
 } from "./group-contribution-draft";
+import { sanitizeGroupContributionDraft } from "./group-contribution-draft-sanitize";
+import {
+  permitsCoActStructure,
+  permitsCoFundAllocation,
+  permitsGroupContributionMode,
+  readGroupContributionProposalFlags,
+} from "./group-contribution-flags";
 
 const STORAGE_KEY = "mt:create:group-contribution-drafts:v1";
 const PAYLOAD_FIELD = "groupContributionTerms";
 const HOST_ATTRIBUTE = "data-mt-group-contribution-host";
 const OPTION_ATTRIBUTE = "data-mt-group-contribution-option";
 const MAX_LOCAL_DRAFTS = 50;
+const CREATE_FRAME_SELECTOR = "iframe[data-create-interface-frame='true']";
+const PROPOSAL_FLAGS = readGroupContributionProposalFlags({
+  NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS:
+    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS,
+  NEXT_PUBLIC_MORAL_TRADE_CO_FUND_PROPOSALS:
+    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_FUND_PROPOSALS,
+  NEXT_PUBLIC_MORAL_TRADE_CO_ACT_COMPLEMENTARY_ROLES:
+    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_ACT_COMPLEMENTARY_ROLES,
+  NEXT_PUBLIC_MORAL_TRADE_CO_FUND_FLEXIBLE:
+    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_FUND_FLEXIBLE,
+  NEXT_PUBLIC_MORAL_TRADE_CO_FUND_CUSTOM_SPLIT:
+    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_FUND_CUSTOM_SPLIT,
+  NEXT_PUBLIC_MORAL_TRADE_CO_FUND_MATCHING:
+    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_FUND_MATCHING,
+});
 
 interface StoredDrafts {
   version: 1;
@@ -55,11 +77,16 @@ interface PublicGroupContributionApi {
 declare global {
   interface Window {
     MoralTradeGroupContributions?: PublicGroupContributionApi;
+    __moralTradeGroupContributionFetchBridgeV1?: boolean;
   }
 }
 
 const mounted = new Map<string, MountedOption>();
 let observer: MutationObserver | null = null;
+let parentObserver: MutationObserver | null = null;
+let activeWindow: Window | null = null;
+let activeDocument: Document | null = null;
+let activeFrame: HTMLIFrameElement | null = null;
 let scanQueued = false;
 let submitGuardInstalled = false;
 
@@ -67,21 +94,82 @@ export function startGroupContributionEnhancement(): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   if (!isCreateTradePath(window.location.pathname)) return;
 
+  const attach = () => {
+    const frame = document.querySelector<HTMLIFrameElement>(CREATE_FRAME_SELECTOR);
+    if (frame) {
+      attachCreateFrame(frame);
+      return;
+    }
+    activateCreateDocument(window, document);
+  };
+
+  attach();
+  parentObserver ??= new window.MutationObserver(attach);
+  parentObserver.observe(document.documentElement, { childList: true, subtree: true });
+}
+
+function attachCreateFrame(frame: HTMLIFrameElement): void {
+  if (activeFrame !== frame) {
+    activeFrame?.removeEventListener("load", activateAttachedFrame);
+    activeFrame = frame;
+    frame.addEventListener("load", activateAttachedFrame);
+  }
+  activateAttachedFrame();
+}
+
+function activateAttachedFrame(): void {
+  const frame = activeFrame;
+  if (!frame?.contentWindow || !frame.contentDocument) return;
+  activateCreateDocument(frame.contentWindow, frame.contentDocument);
+}
+
+function activateCreateDocument(targetWindow: Window, targetDocument: Document): void {
+  if (!targetDocument.documentElement) return;
+  if (activeWindow === targetWindow && activeDocument === targetDocument) {
+    queueScan();
+    return;
+  }
+
+  observer?.disconnect();
+  for (const entry of mounted.values()) {
+    entry.card.removeEventListener("input", entry.inputListener);
+    entry.card.removeEventListener("change", entry.inputListener);
+  }
+  mounted.clear();
+  activeWindow = targetWindow;
+  activeDocument = targetDocument;
+  scanQueued = false;
+  submitGuardInstalled = false;
+
   installSubmitGuard();
-  queueScan();
+  installPublishBridge();
+  const nextObserver = new (targetWindow as Window & typeof globalThis).MutationObserver(
+    () => queueScan(),
+  );
+  nextObserver.observe(targetDocument.documentElement, { childList: true, subtree: true });
+  observer = nextObserver;
+  targetWindow.addEventListener("popstate", queueScan);
+  targetWindow.addEventListener("pageshow", queueScan);
 
-  observer ??= new MutationObserver(() => queueScan());
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-
-  window.addEventListener("popstate", queueScan);
-  window.addEventListener("pageshow", queueScan);
-
-  window.MoralTradeGroupContributions = {
+  const api: PublicGroupContributionApi = {
     readProposalPayload,
     readDrafts: () => [...mounted.values()].map((entry) => normalizeDraft(entry.state)),
     validate: validateMountedDrafts,
     refresh: queueScan,
   };
+  window.MoralTradeGroupContributions = api;
+  targetWindow.MoralTradeGroupContributions = api;
+  queueScan();
+}
+
+function createWindow(): Window {
+  if (!activeWindow) throw new Error("The Create group-contribution window is unavailable");
+  return activeWindow;
+}
+
+function createDocument(): Document {
+  if (!activeDocument) throw new Error("The Create group-contribution document is unavailable");
+  return activeDocument;
 }
 
 function isCreateTradePath(pathname: string): boolean {
@@ -98,7 +186,7 @@ function queueScan(): void {
 }
 
 function scanForOptions(): void {
-  if (!isCreateTradePath(window.location.pathname)) return;
+  if (!activeWindow || !activeDocument) return;
   const root = locateOfferStepRoot();
   if (!root) return;
 
@@ -113,7 +201,8 @@ function scanForOptions(): void {
 }
 
 function locateOfferStepRoot(): HTMLElement | null {
-  const headings = document.querySelectorAll<HTMLElement>(
+  const doc = createDocument();
+  const headings = doc.querySelectorAll<HTMLElement>(
     "h1, h2, h3, [role='heading'], [aria-label]",
   );
   for (const heading of headings) {
@@ -122,7 +211,7 @@ function locateOfferStepRoot(): HTMLElement | null {
       return (
         heading.closest<HTMLElement>("main, [role='main'], form") ??
         heading.parentElement?.parentElement ??
-        document.body
+        doc.body
       );
     }
   }
@@ -151,7 +240,8 @@ function locateOptionCards(root: HTMLElement): Array<{ card: HTMLElement; label:
 function closestOptionCard(label: HTMLElement, root: HTMLElement): HTMLElement | null {
   let node: HTMLElement | null = label.parentElement;
   let candidate: HTMLElement | null = null;
-  while (node && node !== root && node !== document.body) {
+  const doc = createDocument();
+  while (node && node !== root && node !== doc.body) {
     const controls = node.querySelectorAll("input, textarea, select, [contenteditable='true']").length;
     const textLength = (node.textContent ?? "").trim().length;
     if (controls > 0 && textLength < 4_000) {
@@ -159,7 +249,7 @@ function closestOptionCard(label: HTMLElement, root: HTMLElement): HTMLElement |
       if (
         node.matches("fieldset, article, section") ||
         node.getAttribute("role") === "group" ||
-        getComputedStyle(node).borderStyle !== "none"
+        createWindow().getComputedStyle(node).borderStyle !== "none"
       ) {
         break;
       }
@@ -171,13 +261,25 @@ function closestOptionCard(label: HTMLElement, root: HTMLElement): HTMLElement |
 
 function mountOption(card: HTMLElement, label: HTMLElement, index: number): void {
   const underlying = inferUnderlyingContribution(card);
-  const key = optionKey(card, label, index, underlying);
-  if (mounted.has(key)) {
-    card.setAttribute(OPTION_ATTRIBUTE, key);
+  const candidateMode: "co-act" | "co-fund" =
+    underlying === "financial" ? "co-fund" : "co-act";
+  if (!permitsGroupContributionMode(PROPOSAL_FLAGS, candidateMode)) {
+    card.setAttribute(OPTION_ATTRIBUTE, `disabled:${candidateMode}`);
     return;
   }
+  const key = optionKey(card, label, index, underlying);
+  const existing = mounted.get(key);
+  if (existing) {
+    if (existing.card === card && existing.host.isConnected) {
+      card.setAttribute(OPTION_ATTRIBUTE, key);
+      return;
+    }
+    existing.card.removeEventListener("input", existing.inputListener);
+    existing.card.removeEventListener("change", existing.inputListener);
+    mounted.delete(key);
+  }
 
-  const host = document.createElement("div");
+  const host = createDocument().createElement("div");
   host.setAttribute(HOST_ATTRIBUTE, key);
   host.setAttribute("data-mt-proposal-only", "true");
   host.style.display = "block";
@@ -187,13 +289,13 @@ function mountOption(card: HTMLElement, label: HTMLElement, index: number): void
   const saved = readStoredDrafts().drafts[key];
   const state = saved
     ? sanitizeStoredDraft(saved, key, underlying)
-    : defaultGroupContributionDraft(key, underlying, readPrimaryText(card));
-  state.primaryText = readPrimaryText(card) || state.primaryText;
+    : defaultGroupContributionDraft(key, underlying, readPrimaryText(card, underlying));
+  state.primaryText = readPrimaryText(card, underlying) || state.primaryText;
 
   const inputListener = () => {
     const entry = mounted.get(key);
     if (!entry) return;
-    entry.state.primaryText = readPrimaryText(card) || entry.state.primaryText;
+    entry.state.primaryText = readPrimaryText(card, entry.underlying) || entry.state.primaryText;
     updateCounterpartyMatchDefault(entry.state);
     renderMountedOption(entry);
     writeProposalPayload();
@@ -247,7 +349,8 @@ function inferUnderlyingContribution(card: HTMLElement): UnderlyingContributionK
 
 function nearestSectionHeading(card: HTMLElement): string {
   let node: HTMLElement | null = card;
-  while (node && node !== document.body) {
+  const doc = createDocument();
+  while (node && node !== doc.body) {
     const headings = [...node.querySelectorAll<HTMLElement>("h2, h3, h4, [role='heading']")]
       .map((heading) => heading.textContent?.trim() ?? "")
       .filter(Boolean)
@@ -264,6 +367,12 @@ function optionKey(
   index: number,
   underlying: UnderlyingContributionKind,
 ): string {
+  const offerId = card.getAttribute("data-offer-id");
+  const entryIndex = card.getAttribute("data-entry-index");
+  if (offerId && entryIndex !== null && /^\d+$/u.test(entryIndex)) {
+    return `${slug(offerId)}:${Number(entryIndex) + 1}`;
+  }
+
   const explicit =
     card.getAttribute("data-option-id") ??
     card.querySelector<HTMLElement>("[data-option-id]")?.getAttribute("data-option-id");
@@ -274,9 +383,23 @@ function optionKey(
   return `${section}:${optionNumber || index + 1}`;
 }
 
-function readPrimaryText(card: HTMLElement): string {
+function readPrimaryText(
+  card: HTMLElement,
+  underlying: UnderlyingContributionKind,
+): string {
+  const preferredFields = underlying === "financial"
+    ? ["organization", "matchTarget"]
+    : ["action", "work", "person", "cause", "support", "unit"];
+  for (const field of preferredFields) {
+    const control = card.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      `[data-offer-field='${field}']`,
+    );
+    const value = control?.value.trim() ?? "";
+    if (value) return value;
+  }
+
   const controls = card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-    "textarea, input:not([type='hidden']):not([type='checkbox']):not([type='radio']), select",
+    "textarea, input:not([type='hidden']):not([type='checkbox']):not([type='radio']):not([type='number']), select",
   );
   for (const control of controls) {
     const value = control.value.trim();
@@ -289,6 +412,12 @@ function renderMountedOption(entry: MountedOption): void {
   const { shadow, state, underlying } = entry;
   const availableGroupMode: GroupDraftMode = underlying === "financial" ? "co-fund" : "co-act";
   if (state.mode !== "solo" && state.mode !== availableGroupMode) state.mode = "solo";
+  if (state.mode === "co-act" && !permitsCoActStructure(PROPOSAL_FLAGS, state.coActStructure)) {
+    state.coActStructure = "same-action";
+  }
+  if (state.mode === "co-fund" && !permitsCoFundAllocation(PROPOSAL_FLAGS, state.allocationMode)) {
+    state.allocationMode = "equal-share";
+  }
 
   shadow.innerHTML = `${styles()}
     <section class="mt-group" aria-label="Group contribution terms">
@@ -336,12 +465,31 @@ function groupPanel(state: GroupContributionDraftState): string {
   </div>`;
 }
 
+function coActStructureOptions(): Array<[string, string]> {
+  const options: Array<[string, string]> = [["same-action", "Same action"]];
+  if (PROPOSAL_FLAGS.coActComplementaryRoles) {
+    options.push(["complementary-roles", "Complementary roles"]);
+  }
+  return options;
+}
+
+function coFundAllocationOptions(): Array<[string, string]> {
+  const options: Array<[string, string]> = [["equal-share", "Equal shares"]];
+  if (PROPOSAL_FLAGS.coFundFlexible) {
+    options.push(["flexible-contribution", "Flexible contributions"]);
+  }
+  if (PROPOSAL_FLAGS.coFundCustomSplit) {
+    options.push(["custom-split", "Custom split"]);
+  }
+  if (PROPOSAL_FLAGS.coFundMatching) {
+    options.push(["matching-pledge", "Matching pledge"]);
+  }
+  return options;
+}
+
 function coActPrimaryFields(state: GroupContributionDraftState): string {
   return `
-    ${selectField("coActStructure", "Structure", [
-      ["same-action", "Same action"],
-      ["complementary-roles", "Complementary roles"],
-    ])}
+    ${selectField("coActStructure", "Structure", coActStructureOptions())}
     ${selectField("activationMode", "Activation", [
       ["independent", "Act together without a minimum"],
       ["minimum-participants", "Act only if at least N join"],
@@ -360,12 +508,7 @@ function coActPrimaryFields(state: GroupContributionDraftState): string {
 
 function coFundPrimaryFields(_state: GroupContributionDraftState): string {
   return `
-    ${selectField("allocationMode", "Allocation", [
-      ["equal-share", "Equal shares"],
-      ["flexible-contribution", "Flexible contributions"],
-      ["custom-split", "Custom split"],
-      ["matching-pledge", "Matching pledge"],
-    ])}
+    ${selectField("allocationMode", "Allocation", coFundAllocationOptions())}
     ${moneyField("targetMinor", "Project target", "0.00")}
     ${textField("settlementCurrency", "Settlement currency", "USD", 3)}
     ${moneyField("maximumBudgetMinor", "Your maximum budget", "0.00")}
@@ -425,6 +568,15 @@ function coActAdvancedFields(state: GroupContributionDraftState): string {
         ["scheduled", "On a scheduled date"],
       ])}
       ${state.performanceStartMode === "scheduled" ? dateTimeField("performanceStartsAt", "Performance start") : ""}
+      ${selectField("coActTiming", "Participant timing", [
+        ["same-period", "Same overall period"],
+        ["same-time", "Same time"],
+      ])}
+      ${selectField("coordination", "Coordination", [
+        ["notifications-only", "Notifications only"],
+        ["announcements", "Announcements and reminders"],
+        ["discussion-thread", "Participant discussion thread"],
+      ])}
       ${selectField("lateJoining", "Late joining", [
         ["closed-after-activation", "Closed after activation"],
         ["original-end-date", "Join with the original end date"],
@@ -491,6 +643,18 @@ function coFundAdvancedFields(state: GroupContributionDraftState): string {
       ${checkboxField("milestoneBasedPayout", "Use milestone-based payout for a project or service provider")}
       ${paymentMethodFields(state)}
       ${numberField("paymentRepairWindowHours", "Payment repair window (hours)", state.paymentRepairWindowHours, 1, 168)}
+      ${selectField("coFundDeadlineOutcome", "If the deadline is missed", [
+        ["release-reservations", "Release reservations"],
+        ["one-extension", "Allow one extension"],
+        ["new-round", "Open a new round"],
+        ["participant-vote", "Let participants vote"],
+      ])}
+      ${state.coFundDeadlineOutcome === "one-extension" ? numberField("coFundExtensionHours", "Extension length (hours)", state.coFundExtensionHours, 1, 8_760) : ""}
+      ${selectField("coFundFailureFallback", "If the linked trade stays under threshold", [
+        ["expire-trade", "Expire the trade"],
+        ["alternative-offer", "Use a specified alternative offer"],
+        ["renegotiate", "Permit renegotiation"],
+      ])}
       ${checkboxField("preauthorizeExecutableFallback", "Request a separate fallback authorization after proposal review")}
       ${selectField("recurringMode", "Recurring terms", [
         ["none", "One time"],
@@ -578,13 +742,13 @@ function hydrateValues(shadow: ShadowRoot, state: GroupContributionDraftState): 
       const field = control.dataset.field as keyof GroupContributionDraftState;
       if (!(field in state)) return;
       const value = state[field];
-      if (control instanceof HTMLInputElement && control.type === "checkbox") {
+      if (isInputElement(control) && control.type === "checkbox") {
         if (field === "counterpartyParticipation") {
           control.checked = state.counterpartyParticipation === "explicitly-included";
         } else {
           control.checked = Boolean(value);
         }
-      } else if (control instanceof HTMLInputElement && control.dataset.minorUnits === "true") {
+      } else if (isInputElement(control) && control.dataset.minorUnits === "true") {
         control.value = typeof value === "number" && value > 0 ? (value / 100).toFixed(2) : "";
       } else if (value === null || value === undefined) {
         control.value = "";
@@ -600,7 +764,8 @@ function installShadowListeners(entry: MountedOption): void {
     button.addEventListener("click", () => {
       const mode = button.dataset.mode as GroupDraftMode;
       entry.state.mode = mode;
-      entry.state.primaryText = readPrimaryText(entry.card) || entry.state.primaryText;
+      entry.state.primaryText =
+        readPrimaryText(entry.card, entry.underlying) || entry.state.primaryText;
       renderMountedOption(entry);
       writeProposalPayload();
     });
@@ -642,17 +807,17 @@ function updateStateFromControl(
   const field = control.dataset.field as keyof GroupContributionDraftState;
   if (!(field in state)) return;
 
-  if (field === "counterpartyParticipation" && control instanceof HTMLInputElement) {
+  if (field === "counterpartyParticipation" && isInputElement(control)) {
     state.counterpartyParticipation = control.checked ? "explicitly-included" : "explicitly-excluded";
     return;
   }
 
-  if (control instanceof HTMLInputElement && control.type === "checkbox") {
+  if (isInputElement(control) && control.type === "checkbox") {
     (state as unknown as Record<string, unknown>)[field] = control.checked;
     return;
   }
 
-  if (control instanceof HTMLInputElement && control.dataset.minorUnits === "true") {
+  if (isInputElement(control) && control.dataset.minorUnits === "true") {
     const parsed = Number.parseFloat(control.value);
     (state as unknown as Record<string, unknown>)[field] = Number.isFinite(parsed)
       ? Math.max(0, Math.round(parsed * 100))
@@ -736,20 +901,21 @@ function writeProposalPayload(): void {
   }
 
   if (forms.size === 0) {
-    let hidden = document.querySelector<HTMLInputElement>(`input[type='hidden'][name='${PAYLOAD_FIELD}']`);
+    const doc = createDocument();
+    let hidden = doc.querySelector<HTMLInputElement>(`input[type='hidden'][name='${PAYLOAD_FIELD}']`);
     if (!hidden) {
-      hidden = document.createElement("input");
+      hidden = createDocument().createElement("input");
       hidden.type = "hidden";
       hidden.name = PAYLOAD_FIELD;
       hidden.setAttribute("data-mt-group-contribution-payload", "true");
-      document.body.append(hidden);
+      createDocument().body.append(hidden);
     }
     hidden.value = serialized;
   } else {
     for (const form of forms) {
       let hidden = form.querySelector<HTMLInputElement>(`input[type='hidden'][name='${PAYLOAD_FIELD}']`);
       if (!hidden) {
-        hidden = document.createElement("input");
+        hidden = createDocument().createElement("input");
         hidden.type = "hidden";
         hidden.name = PAYLOAD_FIELD;
         hidden.setAttribute("data-mt-group-contribution-payload", "true");
@@ -759,8 +925,11 @@ function writeProposalPayload(): void {
     }
   }
 
-  window.dispatchEvent(
-    new CustomEvent("moraltrade:group-contribution-change", {
+  renderReviewSummaries(payload);
+
+  const targetWindow = createWindow();
+  targetWindow.dispatchEvent(
+    new (targetWindow as Window & typeof globalThis).CustomEvent("moraltrade:group-contribution-change", {
       detail: {
         proposal: payload,
         drafts: [...mounted.values()].map((entry) => normalizeDraft(entry.state)),
@@ -769,13 +938,124 @@ function writeProposalPayload(): void {
   );
 }
 
+function renderReviewSummaries(payload: GroupContributionProposalPayload): void {
+  const doc = createDocument();
+  const summaryOffers = doc.querySelector<HTMLElement>("#summaryOffers");
+  if (!summaryOffers) return;
+
+  summaryOffers
+    .querySelector<HTMLElement>("[data-mt-group-contribution-review]")
+    ?.remove();
+  if (payload.options.length === 0) return;
+
+  const container = doc.createElement("section");
+  container.setAttribute("data-mt-group-contribution-review", "true");
+  container.setAttribute("aria-label", "Proposed group contribution terms");
+  container.style.cssText =
+    "margin-top:12px;border-top:1px solid #c6c0b5;padding-top:10px;display:grid;gap:8px";
+  const heading = doc.createElement("strong");
+  heading.textContent = "Proposed group terms";
+  heading.style.cssText =
+    "font:700 10px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.09em;text-transform:uppercase;color:#075ee8";
+  container.append(heading);
+
+  for (const option of payload.options) {
+    const item = doc.createElement("div");
+    item.setAttribute("data-mt-group-contribution-review-option", option.optionKey);
+    item.style.cssText =
+      "border:1px solid #c6c0b5;background:#fff;padding:9px 10px;font-size:13px;line-height:1.45";
+    const mechanism = option.terms.mode === "co-act" ? "CO-ACT" : "CO-FUND";
+    item.innerHTML = `<strong style="display:block;font:700 10px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;letter-spacing:.08em;color:#075ee8">${mechanism} · PROPOSAL ONLY</strong><span>${escapeHtml(summarizeGroupContribution(option.terms))}</span>`;
+    container.append(item);
+  }
+  summaryOffers.append(container);
+}
+
+function installPublishBridge(): void {
+  const targetWindow = createWindow();
+  if (targetWindow.__moralTradeGroupContributionFetchBridgeV1) return;
+
+  const originalFetch = targetWindow.fetch.bind(targetWindow);
+  targetWindow.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const requestUrl = resolveRequestUrl(input);
+    const method = (init?.method ?? requestMethod(input)).toUpperCase();
+    if (
+      method !== "POST" ||
+      requestUrl.origin !== window.location.origin ||
+      requestUrl.pathname !== "/api/create/publish"
+    ) {
+      return originalFetch(input, init);
+    }
+
+    const invalid = validateMountedDrafts();
+    if (invalid.length > 0) {
+      const first = invalid[0];
+      const entry = mounted.get(first.optionKey);
+      entry?.host.scrollIntoView({ behavior: "smooth", block: "center" });
+      throw new Error(first.issues[0]?.message ?? "Complete the group-contribution terms before submitting.");
+    }
+
+    const proposal = readProposalPayload();
+    if (proposal.options.length === 0) return originalFetch(input, init);
+    if (typeof init?.body !== "string") {
+      throw new Error("Group-contribution proposals require a JSON Create submission body.");
+    }
+
+    let payload: unknown;
+    try {
+      payload = JSON.parse(init.body);
+    } catch {
+      throw new Error("The Create submission body is not valid JSON.");
+    }
+    if (!isRecord(payload)) {
+      throw new Error("The Create submission body must be a JSON object.");
+    }
+
+    return originalFetch(input, {
+      ...init,
+      body: JSON.stringify({ ...payload, groupContributionTerms: proposal }),
+    });
+  }) as typeof targetWindow.fetch;
+  targetWindow.__moralTradeGroupContributionFetchBridgeV1 = true;
+}
+
+function resolveRequestUrl(input: RequestInfo | URL): URL {
+  const raw =
+    typeof input === "string" || input instanceof URL
+      ? String(input)
+      : typeof input === "object" && input !== null && "url" in input
+        ? String(input.url)
+        : String(input);
+  return new URL(raw, window.location.href);
+}
+
+function requestMethod(input: RequestInfo | URL): string {
+  return typeof input === "object" && input !== null && "method" in input
+    ? String(input.method)
+    : "GET";
+}
+
+function isInputElement(
+  control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+): control is HTMLInputElement {
+  return control.tagName === "INPUT";
+}
+
+function isFormElement(value: EventTarget | null): value is HTMLFormElement {
+  return Boolean(value && typeof value === "object" && "tagName" in value && value.tagName === "FORM");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function installSubmitGuard(): void {
   if (submitGuardInstalled) return;
   submitGuardInstalled = true;
-  document.addEventListener(
+  createDocument().addEventListener(
     "submit",
     (event) => {
-      if (!(event.target instanceof HTMLFormElement)) return;
+      if (!isFormElement(event.target)) return;
       const invalid = validateMountedDrafts();
       if (invalid.length === 0) return;
 
@@ -784,8 +1064,9 @@ function installSubmitGuard(): void {
       const entry = mounted.get(invalid[0].optionKey);
       entry?.host.scrollIntoView({ behavior: "smooth", block: "center" });
       entry?.shadow.querySelector<HTMLElement>(".validation.invalid")?.focus();
-      window.dispatchEvent(
-        new CustomEvent("moraltrade:group-contribution-invalid", { detail: invalid }),
+      const targetWindow = createWindow();
+      targetWindow.dispatchEvent(
+        new (targetWindow as Window & typeof globalThis).CustomEvent("moraltrade:group-contribution-invalid", { detail: invalid }),
       );
     },
     true,
@@ -801,7 +1082,7 @@ function persistDrafts(): void {
         return record;
       }, {});
     const value: StoredDrafts = { version: 1, drafts };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    createWindow().localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
   } catch {
     // Local draft persistence is best effort. Proposal submission remains explicit.
   }
@@ -809,7 +1090,7 @@ function persistDrafts(): void {
 
 function readStoredDrafts(): StoredDrafts {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = createWindow().localStorage.getItem(STORAGE_KEY);
     if (!raw) return { version: 1, drafts: {} };
     const parsed = JSON.parse(raw) as Partial<StoredDrafts>;
     if (parsed.version !== 1 || !parsed.drafts || typeof parsed.drafts !== "object") {
@@ -826,22 +1107,7 @@ function sanitizeStoredDraft(
   key: string,
   underlying: UnderlyingContributionKind,
 ): GroupContributionDraftState {
-  const defaults = defaultGroupContributionDraft(key, underlying);
-  const merged = {
-    ...defaults,
-    ...saved,
-    optionKey: key,
-    underlyingContribution: underlying,
-    paymentMethods: Array.isArray(saved.paymentMethods)
-      ? saved.paymentMethods.filter(
-          (method): method is "wallet" | "card-or-ach" | "escrow" =>
-            method === "wallet" || method === "card-or-ach" || method === "escrow",
-        )
-      : defaults.paymentMethods,
-  };
-  if (underlying === "financial" && merged.mode === "co-act") merged.mode = "solo";
-  if (underlying === "nonfinancial" && merged.mode === "co-fund") merged.mode = "solo";
-  return normalizeDraft(merged);
+  return sanitizeGroupContributionDraft(saved, key, underlying);
 }
 
 function updateCounterpartyMatchDefault(state: GroupContributionDraftState): void {
@@ -857,12 +1123,13 @@ function updateCounterpartyMatchDefault(state: GroupContributionDraftState): voi
 }
 
 function requestedActionText(): string {
-  const labels = [...document.querySelectorAll<HTMLElement>("*")].filter((element) =>
+  const doc = createDocument();
+  const labels = [...doc.querySelectorAll<HTMLElement>("*")].filter((element) =>
     normalizedText(directText(element)).includes("you want someone to"),
   );
   for (const label of labels) {
     let node: HTMLElement | null = label.parentElement;
-    while (node && node !== document.body) {
+    while (node && node !== doc.body) {
       const text = (node.textContent ?? "").replace(label.textContent ?? "", " ").trim();
       if (text.length > 3 && text.length < 500) return text;
       node = node.parentElement;
@@ -898,8 +1165,11 @@ function significantTokens(value: string): Set<string> {
     "would",
     "you",
   ]);
+  const canonical = normalizedText(value)
+    .replace(/\b(?:does not|doesn't|do not|don't|not|never)\s+(?:eat|eating|consume|consuming)\b/gu, "avoid")
+    .replace(/\beach\b/gu, "per");
   return new Set(
-    normalizedText(value)
+    canonical
       .split(/[^a-z0-9]+/u)
       .filter((token) => token.length > 1 && !stop.has(token)),
   );
@@ -907,7 +1177,7 @@ function significantTokens(value: string): Set<string> {
 
 function directText(element: HTMLElement): string {
   return [...element.childNodes]
-    .filter((node) => node.nodeType === Node.TEXT_NODE)
+    .filter((node) => node.nodeType === 3)
     .map((node) => node.textContent ?? "")
     .join(" ");
 }

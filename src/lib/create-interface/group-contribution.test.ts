@@ -50,6 +50,8 @@ function validCoAct(): CoActTerms {
     },
     performanceStart: { mode: "on-activation" },
     lateJoining: "closed-after-activation",
+    timing: "same-period",
+    coordination: "announcements",
     duration: "12 weeks",
     frequency: "once per week",
     reward: {
@@ -134,6 +136,10 @@ function validCoFund(): CoFundTerms {
     foreignExchange: {
       lockAt: "final-confirmation",
       restartConfirmationOnMaterialChange: true,
+    },
+    failure: {
+      deadlineOutcome: "release-reservations",
+      underThresholdFallback: "expire-trade",
     },
   };
 }
