@@ -1,0 +1,219 @@
+name: Harden proposal-only Co-Act and Co-Fund candidate
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v2-20260801
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: co-act-co-fund-hardening-v8
+  cancel-in-progress: false
+
+env:
+  FEATURE_BRANCH: feature/co-act-co-fund-create-v2-20260801
+
+jobs:
+  harden-validate-clean:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v2-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Use latest settled feature head
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 300
+          git fetch origin "$FEATURE_BRANCH"
+          git reset --hard "origin/$FEATURE_BRANCH"
+          echo "BASE_HEAD=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply edge-safe parsing, client flags, and review-record typing
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          domain = Path('src/lib/create-interface/group-contribution.ts').read_text()
+          if 'timing: "same-period" | "same-time";' not in domain or 'underThresholdFallback:' not in domain:
+              raise SystemExit('Selected-policy v7 materialization is absent; refusing to validate an incomplete head')
+
+          payload = Path('src/lib/create-interface/group-contribution-payload.ts')
+          text = payload.read_text()
+          text = text.replace(
+              'if (Buffer.byteLength(raw, "utf8") > MAX_GROUP_CONTRIBUTION_PAYLOAD_BYTES) {',
+              'if (new TextEncoder().encode(raw).byteLength > MAX_GROUP_CONTRIBUTION_PAYLOAD_BYTES) {',
+          )
+          payload.write_text(text)
+
+          form_data = Path('src/lib/create-interface/group-contribution-form-data.ts')
+          text = form_data.read_text()
+          text = text.replace(
+              '  if (field instanceof File) {',
+              '  if (field !== null && typeof field !== "string") {',
+          )
+          form_data.write_text(text)
+
+          review = Path('src/lib/create-interface/group-contribution-review-record.ts')
+          text = review.read_text()
+          old = '''export type GroupContributionReviewRecordResult =\n  | {\n      ok: true;\n      fragment: GroupContributionReviewRecordFragment | null;\n      issues: [];\n    }\n  | ReturnType<typeof validateGroupContributionFormDataForPersistence>;'''
+          new = '''type GroupContributionValidationFailure = Extract<\n  ReturnType<typeof validateGroupContributionFormDataForPersistence>,\n  { ok: false }\n>;\n\nexport type GroupContributionReviewRecordResult =\n  | {\n      ok: true;\n      fragment: GroupContributionReviewRecordFragment | null;\n      issues: [];\n    }\n  | GroupContributionValidationFailure;'''
+          if old not in text and 'type GroupContributionValidationFailure' not in text:
+              raise SystemExit('Could not locate review-record result type')
+          text = text.replace(old, new)
+          review.write_text(text)
+
+          client = Path('src/lib/create-interface/group-contribution-client.ts')
+          text = client.read_text()
+          if 'readGroupContributionProposalFlags' not in text:
+              anchor = 'import {\n  buildGroupContributionTerms,'
+              flag_import = '''import {\n  permitsCoActStructure,\n  permitsCoFundAllocation,\n  permitsGroupContributionMode,\n  readGroupContributionProposalFlags,\n} from "./group-contribution-flags";\n'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate client import anchor')
+              text = text.replace(anchor, flag_import + anchor, 1)
+
+          if 'const PROPOSAL_FLAGS = readGroupContributionProposalFlags' not in text:
+              anchor = 'const MAX_LOCAL_DRAFTS = 50;'
+              flags = '''const MAX_LOCAL_DRAFTS = 50;\nconst PROPOSAL_FLAGS = readGroupContributionProposalFlags({\n  NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS:\n    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS,\n  NEXT_PUBLIC_MORAL_TRADE_CO_FUND_PROPOSALS:\n    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_FUND_PROPOSALS,\n  NEXT_PUBLIC_MORAL_TRADE_CO_ACT_COMPLEMENTARY_ROLES:\n    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_ACT_COMPLEMENTARY_ROLES,\n  NEXT_PUBLIC_MORAL_TRADE_CO_FUND_FLEXIBLE:\n    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_FUND_FLEXIBLE,\n  NEXT_PUBLIC_MORAL_TRADE_CO_FUND_CUSTOM_SPLIT:\n    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_FUND_CUSTOM_SPLIT,\n  NEXT_PUBLIC_MORAL_TRADE_CO_FUND_MATCHING:\n    process.env.NEXT_PUBLIC_MORAL_TRADE_CO_FUND_MATCHING,\n});'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate client constants')
+              text = text.replace(anchor, flags, 1)
+
+          if 'permitsGroupContributionMode(PROPOSAL_FLAGS, candidateMode)' not in text:
+              anchor = '''  const underlying = inferUnderlyingContribution(card);\n  const key = optionKey(card, label, index, underlying);'''
+              replacement = '''  const underlying = inferUnderlyingContribution(card);\n  const candidateMode = underlying === "financial" ? "co-fund" : "co-act";\n  if (!permitsGroupContributionMode(PROPOSAL_FLAGS, candidateMode)) {\n    card.setAttribute(OPTION_ATTRIBUTE, `disabled:${candidateMode}`);\n    return;\n  }\n  const key = optionKey(card, label, index, underlying);'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate client mount mode anchor')
+              text = text.replace(anchor, replacement, 1)
+
+          if 'permitsCoActStructure(PROPOSAL_FLAGS, state.coActStructure)' not in text:
+              anchor = '''  if (state.mode !== "solo" && state.mode !== availableGroupMode) state.mode = "solo";'''
+              replacement = '''  if (state.mode !== "solo" && state.mode !== availableGroupMode) state.mode = "solo";\n  if (\n    state.mode === "co-act" &&\n    !permitsCoActStructure(PROPOSAL_FLAGS, state.coActStructure)\n  ) {\n    state.coActStructure = "same-action";\n  }\n  if (\n    state.mode === "co-fund" &&\n    !permitsCoFundAllocation(PROPOSAL_FLAGS, state.allocationMode)\n  ) {\n    state.allocationMode = "equal-share";\n  }'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate render mode normalization')
+              text = text.replace(anchor, replacement, 1)
+
+          if 'function coActStructureOptions' not in text:
+              anchor = 'function coActPrimaryFields(state: GroupContributionDraftState): string {'
+              helpers = '''function coActStructureOptions(): Array<[string, string]> {\n  const options: Array<[string, string]> = [["same-action", "Same action"]];\n  if (PROPOSAL_FLAGS.coActComplementaryRoles) {\n    options.push(["complementary-roles", "Complementary roles"]);\n  }\n  return options;\n}\n\nfunction coFundAllocationOptions(): Array<[string, string]> {\n  const options: Array<[string, string]> = [["equal-share", "Equal shares"]];\n  if (PROPOSAL_FLAGS.coFundFlexible) {\n    options.push(["flexible-contribution", "Flexible contributions"]);\n  }\n  if (PROPOSAL_FLAGS.coFundCustomSplit) {\n    options.push(["custom-split", "Custom split"]);\n  }\n  if (PROPOSAL_FLAGS.coFundMatching) {\n    options.push(["matching-pledge", "Matching pledge"]);\n  }\n  return options;\n}\n\n'''
+              if anchor not in text:
+                  raise SystemExit('Could not locate primary field functions')
+              text = text.replace(anchor, helpers + anchor, 1)
+
+          text = text.replace(
+              '''${selectField("coActStructure", "Structure", [\n      ["same-action", "Same action"],\n      ["complementary-roles", "Complementary roles"],\n    ])}''',
+              '${selectField("coActStructure", "Structure", coActStructureOptions())}',
+          )
+          text = text.replace(
+              '''${selectField("allocationMode", "Allocation", [\n      ["equal-share", "Equal shares"],\n      ["flexible-contribution", "Flexible contributions"],\n      ["custom-split", "Custom split"],\n      ["matching-pledge", "Matching pledge"],\n    ])}''',
+              '${selectField("allocationMode", "Allocation", coFundAllocationOptions())}',
+          )
+          client.write_text(text)
+          PY
+
+      - run: npm ci
+
+      - name: Focused group, policy, server, and review-record contracts
+        run: >-
+          node --import tsx --test
+          src/lib/create-interface/group-contribution.test.ts
+          src/lib/create-interface/group-contribution-draft.test.ts
+          src/lib/create-interface/group-contribution-client.test.ts
+          src/lib/create-interface/group-contribution-payload.test.ts
+          src/lib/create-interface/group-contribution-shape.test.ts
+          src/lib/create-interface/group-contribution-draft-sanitize.test.ts
+          src/lib/create-interface/group-contribution-flags.test.ts
+          src/lib/create-interface/group-contribution-server.test.ts
+          src/lib/create-interface/group-contribution-form-data.test.ts
+          src/lib/create-interface/group-contribution-selected-policies.test.ts
+          src/lib/create-interface/group-contribution-review-record.test.ts
+
+      - name: Focused lint
+        run: npx eslint src/instrumentation-client.ts src/lib/create-interface/group-contribution*.ts tests/create-group-contribution-proposal.spec.ts
+
+      - name: Absolute TypeScript
+        run: npx tsc --noEmit
+
+      - name: Complete tests
+        run: npm test
+
+      - name: Complete lint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Rendered desktop/mobile proposal checks
+        run: npx playwright test tests/create-group-contribution-proposal.spec.ts --project=chromium
+
+      - name: Inspect real persistence binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -RIn --include='*.ts' --include='*.tsx' \
+            -E 'buildGroupContributionReviewRecordFragment|validateGroupContribution(FormData|Proposal)ForPersistence' \
+            src \
+            | grep -Ev 'group-contribution-(server|form-data|review-record)(\.test)?\.ts' \
+            > /tmp/non-test-call-sites.txt || true
+
+      - name: Verify branch did not move
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$FEATURE_BRANCH"
+          test "$(git rev-parse origin/$FEATURE_BRANCH)" = "$BASE_HEAD"
+
+      - name: Remove temporary controllers and commit hardened candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          find .github/workflows -maxdepth 1 -type f -name 'co-act-co-fund-*' -delete
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if ! git diff --cached --quiet; then
+            git commit -m 'Harden proposal-only Co-Act and Co-Fund review terms'
+            git push origin HEAD:"$FEATURE_BRANCH"
+          fi
+
+      - name: Comment exact result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$FEATURE_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [[ -z "$pr" ]]; then exit 0; fi
+          if [[ -s /tmp/non-test-call-sites.txt ]]; then
+            binding='A non-test persistence call site exists and must be inspected on the exact preview candidate.'
+          else
+            binding='No non-test persistence call site exists yet; authoritative review-record binding remains the final implementation blocker.'
+          fi
+          gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body "Edge-safe payload sizing, malformed FormData rejection, client-visible subtype flags, and private canonical review-record fragments are now covered. Focused and complete gates plus rendered desktop/mobile checks passed before temporary controllers were removed. ${binding} Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. The PR remains draft; no production promotion occurred."
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$FEATURE_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          if [[ -n "$pr" ]]; then
+            gh pr comment "$pr" --repo "$GITHUB_REPOSITORY" --body "The final proposal-only hardening gate failed on \`${GITHUB_SHA}\`; the draft remains blocked. Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          fi
