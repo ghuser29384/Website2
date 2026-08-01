@@ -36,11 +36,13 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
-      - name: Verify and materialize the exact candidate
+      - name: Verify and materialize the non-workflow candidate
         shell: bash
         run: |
           set -euo pipefail
           # The payload includes the matcher-first / creator-default lifecycle repair and regression.
+          # Workflow files are installed separately through the GitHub API because GITHUB_TOKEN
+          # cannot create or update workflow files.
 
           git fetch origin main
           git merge-base --is-ancestor "$EXPECTED_BASE" HEAD
@@ -73,7 +75,7 @@ jobs:
           )
           echo "$PAYLOAD_SHA256  /tmp/direct-upgrade-candidate.tgz" | sha256sum -c -
 
-          cat > /tmp/expected-direct-upgrade-paths.txt <<'EOF'
+          cat > /tmp/expected-archive-paths.txt <<'EOF'
           .env.example
           .github/workflows/direct-donation-upgrade-gates.yml
           .github/workflows/direct-donation-upgrade-qa.yml
@@ -101,28 +103,58 @@ jobs:
           supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
           supabase/tests/direct_verified_donation_upgrade.sql
           EOF
-          sort -o /tmp/expected-direct-upgrade-paths.txt /tmp/expected-direct-upgrade-paths.txt
+          sort -o /tmp/expected-archive-paths.txt /tmp/expected-archive-paths.txt
 
           tar -tzf /tmp/direct-upgrade-candidate.tgz \
             | sed 's#^\./##' \
             | sed '/\/$/d' \
-            | sort -u > /tmp/archive-direct-upgrade-paths.txt
-          diff -u /tmp/expected-direct-upgrade-paths.txt /tmp/archive-direct-upgrade-paths.txt
+            | sort -u > /tmp/archive-paths.txt
+          diff -u /tmp/expected-archive-paths.txt /tmp/archive-paths.txt
 
           tar -xzf /tmp/direct-upgrade-candidate.tgz -C .
           rm -rf "$payload_dir"
-          rm -f .github/workflows/materialize-direct-donation-upgrade.yml
-          sed -i 's/[[:space:]]\+$//' .github/workflows/direct-donation-upgrade-gates.yml
+          rm -f \
+            .github/workflows/direct-donation-upgrade-gates.yml \
+            .github/workflows/direct-donation-upgrade-qa.yml
 
           node --check scripts/vercel-project-config.mjs
           node --check scripts/vercel-project-config.test.mjs
 
+          cat > /tmp/expected-index-paths.txt <<'EOF'
+          .env.example
+          .github/workflows/materialize-direct-donation-upgrade.yml
+          docs/direct-verified-donation-upgrade.md
+          scripts/vercel-project-config.mjs
+          scripts/vercel-project-config.test.mjs
+          src/app/admin/donation-upgrades/page.tsx
+          src/app/admin/page.tsx
+          src/app/api/connectors/every-org/[secret]/route.ts
+          src/app/api/donation-upgrades/nonprofits/search/route.ts
+          src/app/api/jobs/donation-upgrades/route.ts
+          src/app/connectors/page.tsx
+          src/app/direct-donation-upgrade-actions.ts
+          src/app/donation-upgrades/[offerId]/page.tsx
+          src/app/donation-upgrades/page.tsx
+          src/app/sitemap.ts
+          src/app/trades/new/conditional-donation.tsx
+          src/components/donation-upgrades/direct-upgrade-deadline-field.tsx
+          src/components/donation-upgrades/every-org-nonprofit-selector.tsx
+          src/lib/direct-donation-upgrade-data.ts
+          src/lib/direct-donation-upgrade-source-contract.test.ts
+          src/lib/direct-donation-upgrade-webhook.ts
+          src/lib/direct-donation-upgrade.test.ts
+          src/lib/direct-donation-upgrade.ts
+          supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
+          supabase/tests/direct_verified_donation_upgrade.sql
+          EOF
+          sort -o /tmp/expected-index-paths.txt /tmp/expected-index-paths.txt
+
           git add -A
           git diff --cached --check "$EXPECTED_BASE"
-          git diff --cached --name-only "$EXPECTED_BASE" | sort -u > /tmp/index-direct-upgrade-paths.txt
-          diff -u /tmp/expected-direct-upgrade-paths.txt /tmp/index-direct-upgrade-paths.txt
+          git diff --cached --name-only "$EXPECTED_BASE" | sort -u > /tmp/index-paths.txt
+          diff -u /tmp/expected-index-paths.txt /tmp/index-paths.txt
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Implement direct verified Donation Upgrade'
+          git commit -m 'Implement direct verified Donation Upgrade source'
           git push origin "HEAD:${TARGET_BRANCH}"
