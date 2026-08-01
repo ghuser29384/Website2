@@ -32,7 +32,7 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
-      - name: Make the rendered form smoke independent of a service-role credential
+      - name: Prepare and test the service-role-independent rendered QA patch
         shell: bash
         run: |
           set -euo pipefail
@@ -155,7 +155,14 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
             src/app/trades/new/conditional-donation.tsx \
-            src/lib/direct-donation-upgrade-source-contract.test.ts \
-            .github/workflows/direct-donation-upgrade-rendered-qa.yml
+            src/lib/direct-donation-upgrade-source-contract.test.ts
           git commit -m 'Decouple Direct Donation Upgrade rendered QA from service-role data'
           git push origin HEAD:feature/direct-verified-donation-upgrade-20260731
+
+      - name: Upload the exact validated permanent workflow replacement
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-upgrade-rendered-qa-workflow-replacement-${{ github.run_id }}
+          path: .github/workflows/direct-donation-upgrade-rendered-qa.yml
+          if-no-files-found: error
+          retention-days: 3
