@@ -23,6 +23,7 @@ def verify_source(text: str) -> None:
         "This is arithmetic, not a forecast of other contributors.",
         "Moving the slider does not save a pledge or authorize payment.",
         "formatGapShare",
+        "  .mobile-sheet {\n    display: block;",
         '<div><h3>Share of the current gap</h3><p>Your proposed pledge divided by the current gap.',
     ]
     forbidden = [
@@ -48,11 +49,18 @@ def materialize_source() -> None:
     already_materialized = (
         "Preview your conditional pledge" in text
         and "formatGapShare" in text
+        and "  .mobile-sheet {\n    display: block;" in text
         and "TEST YOUR PLEDGE" not in text
         and "<h3>Pivotality</h3>" not in text
     )
 
     if not already_materialized:
+        text = replace_once(
+            text,
+            "  .mobile-sheet {\n    position: fixed;",
+            "  .mobile-sheet {\n    display: block;\n    position: fixed;",
+            "mobile sheet display override",
+        )
         text = replace_once(
             text,
             "const formatMoney = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);\nconst clamp = (value, min, max) => Math.min(max, Math.max(min, value));",
@@ -148,6 +156,10 @@ test("sub-one-percent gap shares retain meaningful precision", () => {
   assert.match(source, /percent < 1[\\s\\S]*toFixed\\(2\\)/);
   assert.match(source, /pledge \\/ metrics\\.gap/);
   assert.match(source, /pledge \\/ activeMetrics\\.gap/);
+});
+
+test("the mobile inspector sheet overrides the hidden desktop inspector rule", () => {
+  assert.match(source, /\\.mobile-sheet \\{\\s*display: block;/);
 });
 ''',
         encoding="utf-8",
