@@ -1,0 +1,83 @@
+# Temporary controller: close without merge after the target branch is repaired.
+name: Repair Feed-to-Create browser assertion timing
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/repair-feed-create-browser-assertion-20260801.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-feed-create-browser-assertion-20260801
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the target product branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/feed-create-phase1-20260730
+          fetch-depth: 0
+
+      - name: Move the privacy assertion to the rendered review step
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/feed-create-phase1-authenticated.spec.ts")
+          source = path.read_text(encoding="utf-8")
+
+          early = '''  await expect(page.getByText("These confirmations are stored; the Feed match score and reasons are not.")).toBeVisible();
+'''
+          if source.count(early) != 1:
+              raise SystemExit("Expected exactly one premature privacy assertion.")
+          source = source.replace(early, "", 1)
+
+          anchor = '''  const review = page.locator("section").filter({
+    has: page.getByRole("heading", { name: "Confirm each material field separately." }),
+  });
+'''
+          replacement = anchor + '''  await expect(
+    review.getByText(
+      "These confirmations are stored; the Feed match score and reasons are not.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+'''
+          if source.count(anchor) != 1:
+              raise SystemExit("Expected exactly one imported-review locator anchor.")
+          source = source.replace(anchor, replacement, 1)
+
+          if source.count("These confirmations are stored; the Feed match score and reasons are not.") != 1:
+              raise SystemExit("Privacy assertion must occur exactly once in the browser suite.")
+
+          path.write_text(source, encoding="utf-8")
+          PY
+
+          git diff --check
+          test "$(git diff --name-only)" = "tests/feed-create-phase1-authenticated.spec.ts"
+          grep -Fq 'review.getByText(' tests/feed-create-phase1-authenticated.spec.ts
+
+      - name: Commit and push the focused test repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add tests/feed-create-phase1-authenticated.spec.ts
+          test "$(git diff --cached --name-only)" = "tests/feed-create-phase1-authenticated.spec.ts"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Fix Feed-to-Create browser assertion timing'
+          if ! git push origin HEAD:feature/feed-create-phase1-20260730; then
+            git pull --rebase origin feature/feed-create-phase1-20260730
+            git push origin HEAD:feature/feed-create-phase1-20260730
+          fi
