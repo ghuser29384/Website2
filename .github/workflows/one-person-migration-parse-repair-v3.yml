@@ -1,4 +1,4 @@
-name: One-person migration lock repair v2
+name: One-person migration lock repair v3
 
 on:
   issue_comment:
@@ -10,7 +10,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: one-person-migration-lock-repair
+  group: one-person-migration-lock-repair-v3-379
   cancel-in-progress: false
 
 env:
@@ -26,7 +26,7 @@ jobs:
       github.repository == 'ghuser29384/Website2' &&
       github.event.issue.pull_request != null &&
       github.event.issue.number == 379 &&
-      github.event.comment.body == '/repair-one-person-migration-lock-20260801-v2'
+      github.event.comment.body == '/repair-one-person-migration-lock-20260801-v3'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -148,7 +148,7 @@ create extension if not exists pgcrypto with schema extensions;'''
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "One-person migration lock repair v2 failed in run \`$GITHUB_RUN_ID\`. No feature push occurred unless the exact-head, single-file diff, rollback-only compilation, and force-with-lease guards all passed."
+          gh pr comment 379 --repo "$GITHUB_REPOSITORY" --body "One-person migration lock repair v3 failed in run \`$GITHUB_RUN_ID\`. No feature push occurred unless the exact-head, single-file diff, rollback-only compilation, and force-with-lease guards all passed."
 
       - name: Remove temporary controllers
         if: always()
