@@ -89,3 +89,5 @@ test("transactional QA covers live derivation, stale and changed state, RLS, and
     assert.match(regression, new RegExp(required.replaceAll(".", "\\."), "i"));
   }
 });
+
+// This comment deliberately retriggers the branch-local one-time type-repair workflow.
