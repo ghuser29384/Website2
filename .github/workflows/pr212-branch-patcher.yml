@@ -16,17 +16,17 @@ concurrency:
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'Temporarily add PR 212 branch patcher'
+    if: github.event.head_commit.message == 'Trigger PR 212 branch patcher'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       GH_TOKEN: ${{ github.token }}
-      EXPECTED_PARENT: c224595fe13b5fe39a1690938208d0a482714df1
+      EXPECTED_PARENT: 27f20385cbc717521c8dacd0a885753c5adf8650
       TARGET_BRANCH: feat/institutional-trade-system
       PATCHER_PATH: .github/workflows/pr212-branch-patcher.yml
       QA_WORKFLOW_PATH: .github/workflows/institutional-trade-qa.yml
     steps:
-      - name: Check out the exact branch-patcher commit
+      - name: Check out the exact branch-patcher trigger commit
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -43,7 +43,7 @@ jobs:
           fi
           changed="$(git diff --name-only HEAD^ HEAD)"
           if [[ "$changed" != "$PATCHER_PATH" ]]; then
-            echo "The patcher commit contained unexpected changes: $changed" >&2
+            echo "The patcher trigger commit contained unexpected changes: $changed" >&2
             exit 1
           fi
 
@@ -165,7 +165,7 @@ jobs:
           final_head="$(git rev-parse HEAD)"
           git push origin "HEAD:${TARGET_BRANCH}"
           gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-current-main-integration -->
-          Integrated current main \`$integrated_main\` into PR #212 and pushed durable QA-gate head \`$final_head\`. The full institutional QA workflow was triggered by this push. No production database migration or institutional feature activation was attempted."
+          Integrated current main \`$integrated_main\` into PR #212 and pushed durable QA-gate head \`$final_head\`. A connector-originated trigger commit will start the full exact-head institutional QA workflow. No production database migration or institutional feature activation was attempted."
 
       - name: Report branch-patcher failure
         if: failure()
