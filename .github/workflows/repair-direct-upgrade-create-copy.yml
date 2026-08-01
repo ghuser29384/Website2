@@ -1,0 +1,158 @@
+name: Repair Direct Donation Upgrade Create copy
+
+on:
+  push:
+    branches:
+      - feature/direct-verified-donation-upgrade-20260731
+    paths:
+      - .github/workflows/repair-direct-upgrade-create-copy.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-direct-upgrade-create-copy
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/direct-verified-donation-upgrade-20260731
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Replace stale authorization copy with direct-commitment copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          integration = Path('src/lib/create-interface/common-ground-integration.ts')
+          text = integration.read_text()
+          anchor = '''const REQUEST_COPY = [
+            "Choose Commitment, Skill, or Fund. Fund includes pledge-swaps, donation redirects, conditional donations, and public-goods pools.",
+            "Choose Commitment, Skill, or Fund. Fund includes swaps, redirects, Donation Upgrades, shared-project pools, and threshold pools.",
+          ] as const;
+          '''
+          insertion = anchor + '''
+          const DIRECT_UPGRADE_COPY = [
+            [
+              "Authorize a fallback donation that changes destination—or becomes a larger match—when someone adds money.",
+              "Commit to an original donation. If someone adds money, you both donate directly to the upgraded recipient.",
+            ],
+            [
+              "<strong>Authorize inside Create</strong>",
+              "<strong>Commit inside Create</strong>",
+            ],
+            [
+              "No money is held now. The next step shows the exact matched and fallback branches before any payment method is saved.",
+              "No payment information is collected now. The next step freezes both recipients, both amounts, and the deadline.",
+            ],
+            [
+              'note: "Set the fallback donation, the matched destination, the added amount, and the deadline before authorizing."',
+              'note: "Set the original recipient, upgraded recipient, both amounts, and the deadline before publishing the commitment."',
+            ],
+            [
+              "Continue to choose both destinations, both amounts, and the deadline. You will see the exact future-charge terms before authorizing.",
+              "Choose both recipients, both amounts, and the deadline. No payment information is collected now; each participant donates directly after the outcome is fixed.",
+            ],
+          ] as const;
+          '''
+          if text.count(anchor) != 1:
+              raise SystemExit('Could not find the unique REQUEST_COPY constant.')
+          text = text.replace(anchor, insertion)
+
+          transform_anchor = '''  integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");
+          '''
+          transform_replacement = '''  for (const [oldValue, newValue] of DIRECT_UPGRADE_COPY) {
+            integrated = replaceExactlyOnce(
+              integrated,
+              oldValue,
+              newValue,
+              "direct Donation Upgrade copy",
+            );
+          }
+          integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");
+          '''
+          if text.count(transform_anchor) != 1:
+              raise SystemExit('Could not find the unique fund-kicker transform.')
+          integration.write_text(text.replace(transform_anchor, transform_replacement))
+
+          test_path = Path('src/lib/create-interface/common-ground-integration.test.ts')
+          test_text = test_path.read_text()
+          test_anchor = '''  assert.match(integrated, /Donation Upgrade/);
+            assert.doesNotMatch(integrated, />Conditional donation</);
+            assert.doesNotMatch(integrated, /Set up a conditional donation\./);
+          '''
+          test_replacement = '''  assert.match(integrated, /Donation Upgrade/);
+            assert.doesNotMatch(integrated, />Conditional donation</);
+            assert.doesNotMatch(integrated, /Set up a conditional donation\./);
+            assert.match(
+              integrated,
+              /Commit to an original donation\. If someone adds money, you both donate directly to the upgraded recipient\./,
+            );
+            assert.match(integrated, /Commit inside Create/);
+            assert.match(
+              integrated,
+              /No payment information is collected now\. The next step freezes both recipients, both amounts, and the deadline\./,
+            );
+            assert.match(
+              integrated,
+              /each participant donates directly after the outcome is fixed\./,
+            );
+            assert.doesNotMatch(
+              integrated,
+              /Authorize a fallback donation|Authorize inside Create|future-charge terms|before any payment method is saved/,
+            );
+          '''
+          if test_text.count(test_anchor) != 1:
+              raise SystemExit('Could not find the common-ground copy assertion anchor.')
+          test_path.write_text(test_text.replace(test_anchor, test_replacement))
+
+          contract_path = Path('src/lib/create-interface/source-contract.test.ts')
+          contract_text = contract_path.read_text()
+          contract_anchor = '''  assert.match(html, /Donation Upgrade/);
+            assert.doesNotMatch(html, />Conditional donation</);
+            assert.match(html, /data-fund-mode="conditional"/);
+          '''
+          contract_replacement = '''  assert.match(html, /Donation Upgrade/);
+            assert.doesNotMatch(html, />Conditional donation</);
+            assert.match(html, /data-fund-mode="conditional"/);
+            assert.match(html, /Commit inside Create/);
+            assert.match(html, /each participant donates directly after the outcome is fixed\./);
+            assert.doesNotMatch(
+              html,
+              /Authorize a fallback donation|Authorize inside Create|future-charge terms|before any payment method is saved/,
+            );
+          '''
+          if contract_text.count(contract_anchor) != 1:
+              raise SystemExit('Could not find the Create source-contract assertion anchor.')
+          contract_path.write_text(contract_text.replace(contract_anchor, contract_replacement))
+          PY
+
+          git diff --check
+          npm ci
+          node --import tsx --test \
+            src/lib/create-interface/common-ground-integration.test.ts \
+            src/lib/create-interface/source-contract.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts
+          npx eslint \
+            src/lib/create-interface/common-ground-integration.ts \
+            src/lib/create-interface/common-ground-integration.test.ts \
+            src/lib/create-interface/source-contract.test.ts
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            src/lib/create-interface/common-ground-integration.ts \
+            src/lib/create-interface/common-ground-integration.test.ts \
+            src/lib/create-interface/source-contract.test.ts
+          git commit -m 'Update Create copy for direct Donation Upgrade'
+          git push origin HEAD:feature/direct-verified-donation-upgrade-20260731
