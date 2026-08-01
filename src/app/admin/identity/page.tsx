@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import { evaluateAdminOperatorAccess } from "@/lib/admin";
 import { loadBackgroundAccountSecuritySummary } from "@/lib/background-account-security";
 import { getViewer } from "@/lib/app-data";
@@ -106,7 +107,7 @@ export default async function AdminIdentityPage({
                   <tr key={session.session_id}>
                     <td className={styles.code}>{session.session_id}</td>
                     <td>{session.purpose}</td><td>{session.state}</td>
-                    <td>{new Date(session.expires_at).toLocaleString()}</td>
+                    <td><LocalDateTime fallback="—" value={session.expires_at} /></td>
                   </tr>
                 ))}
                 {!pending.length ? <tr><td colSpan={4}>No pending sessions.</td></tr> : null}
