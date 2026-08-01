@@ -1,0 +1,268 @@
+name: Materialize Discover pledge clarity
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+
+concurrency:
+  group: discover-pledge-clarity-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  materialize:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/discover-pledge-clarity-20260801'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Guard exact branch and synchronize main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "fix/discover-pledge-clarity-20260801"
+          git fetch origin main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-edit origin/main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Replace pivotality copy with exact mechanical pledge preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("src/discover/moral-trade-discover.source.html")
+          text = path.read_text()
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{label}: expected one match, found {count}")
+              text = text.replace(old, new)
+
+          replace_once(
+              "const formatMoney = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);\nconst clamp = (value, min, max) => Math.min(max, Math.max(min, value));",
+              "const formatMoney = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);\nconst formatGapShare = (share) => {\n  const percent = Math.max(0, Number(share) * 100);\n  if (!Number.isFinite(percent) || percent === 0) return '0%';\n  if (percent < 1) return `${percent.toFixed(2)}%`;\n  if (percent < 10) return `${percent.toFixed(1)}%`;\n  return `${Math.round(percent)}%`;\n};\nconst clamp = (value, min, max) => Math.min(max, Math.max(min, value));",
+              "gap-share formatter",
+          )
+
+          replace_once(
+              "Select any pool to inspect pivotality, failure conditions, authorization expiry, and exact proof.",
+              "Select any pool to inspect its current gap, failure conditions, authorization expiry, and exact proof.",
+              "radar instruction",
+          )
+
+          replace_once(
+              '''            <span>TEST YOUR PLEDGE</span><b>${formatMoney(pledge)}</b><input type="range" min="0" max="${Math.max(10, Math.min(250, activeMetrics.gap))}" step="5" value="${pledge}" data-pledge-range data-pool-id="${active.id}" aria-label="Conditional pledge amount for ${escapeHtml(active.title)}" />
+            <span>${formatMoney(afterGap)} remains if activated with your pledge</span><button data-action="pledge" data-id="${active.id}">Pledge conditionally →</button>''',
+              '''            <span>PREVIEW YOUR PLEDGE</span><b>${formatMoney(pledge)}</b><input type="range" min="0" max="${Math.max(10, Math.min(250, activeMetrics.gap))}" step="5" value="${pledge}" data-pledge-range data-pool-id="${active.id}" aria-label="Conditional pledge amount for ${escapeHtml(active.title)}" />
+            <span>${formatMoney(afterGap)} remains · ${formatGapShare(activeMetrics.gap > 0 ? pledge / activeMetrics.gap : 1)} of current gap</span><button data-action="pledge" data-id="${active.id}">Continue with a conditional pledge →</button>''',
+              "radar pledge preview",
+          )
+
+          pattern = re.compile(
+              r"function renderPoolInspector\(state, item\) \{.*?\n\}\n\nfunction renderPersonInspector",
+              re.S,
+          )
+          replacement = '''function renderPoolInspector(state, item) {
+            const metrics = derivePoolMetrics(item);
+            const pledge = state.pledgeAmounts[item.id] ?? Math.min(10, metrics.gap);
+            const afterGap = Math.max(0, metrics.gap - pledge);
+            const gapShare = metrics.gap > 0 ? pledge / metrics.gap : 1;
+            return `<div class="inspector-kicker">${causeName(item.causeId)} · ${metrics.statusLabel}</div><h2>${escapeHtml(item.title)}</h2><p class="inspector-subtitle">${formatMoney(item.funded)} of ${formatMoney(item.threshold)} conditionally committed · ${item.contributors} contributors</p>
+              <section class="inspector-section"><h3>Preview your conditional pledge</h3><div class="pool-pledge-box"><div class="detail-grid"><div class="detail-stat"><b>${formatMoney(pledge)}</b><span>Your proposed conditional pledge</span></div><div class="detail-stat"><b>${formatMoney(afterGap)}</b><span>Remaining after your pledge</span></div></div><input type="range" min="0" max="${Math.max(10, Math.min(250, metrics.gap))}" step="5" value="${pledge}" data-pledge-range data-pool-id="${item.id}" aria-label="Conditional pledge amount for ${escapeHtml(item.title)}" /><div class="pledge-result"><span>${formatGapShare(gapShare)} of current gap</span><span>${formatMoney(afterGap)} remains</span></div><p class="inspector-subtitle">Moving the slider does not save a pledge or authorize payment.</p></div></section>
+              <section class="inspector-section"><h3>What your pledge changes</h3><dl class="integrity-list"><div class="integrity-row"><dt>Activation consequence</dt><dd>${escapeHtml(item.changes)}</dd></div><div class="integrity-row"><dt>Share of the current gap</dt><dd>Your pledge would close ${formatGapShare(gapShare)} of the current ${formatMoney(metrics.gap)} gap, leaving ${formatMoney(afterGap)}. This is arithmetic, not a forecast of other contributors.</dd></div><div class="integrity-row"><dt>If the threshold is missed</dt><dd>${escapeHtml(item.failure)}</dd></div><div class="integrity-row"><dt>Authorization expires</dt><dd>${formatDate(item.authorizationExpires)}. No charge occurs after expiry without renewed consent.</dd></div><div class="integrity-row"><dt>Verification</dt><dd>${escapeHtml(item.proof)}</dd></div></dl></section>
+              <section class="inspector-section"><h3>Analytical position</h3><p class="inspector-subtitle">${Math.round(metrics.gapRatio * 100)}% of the threshold remains · ${metrics.urgencyDays} days to deadline · ${metrics.statusLabel}. Position is calculated from those terms.</p><button class="quiet-btn" data-action="open-method" data-method="threshold">How calculated →</button></section>
+              <div class="inspector-actions"><button class="primary-btn wide" data-action="pledge" data-id="${item.id}">Continue with a conditional ${formatMoney(pledge)} pledge →</button><button class="outline-btn" data-action="toggle-compare" data-id="${item.id}">${state.compareIds.includes(item.id) ? 'Remove compare' : 'Add compare'}</button><button class="outline-btn" data-action="bookmark" data-id="${item.id}">${state.bookmarked.includes(item.id) ? 'Saved ◆' : 'Save ◇'}</button></div>`;
+          }
+
+          function renderPersonInspector'''
+          text, count = pattern.subn(replacement, text)
+          if count != 1:
+              raise SystemExit(f"pool inspector: expected one function match, found {count}")
+
+          for forbidden in [
+              "TEST YOUR PLEDGE",
+              "Low pivotality",
+              "Moderate pivotality",
+              "High pivotality",
+              "How likely am I to be pivotal?",
+              "inspect pivotality",
+          ]:
+              if forbidden in text:
+                  raise SystemExit(f"forbidden pledge copy remained: {forbidden}")
+
+          path.write_text(text)
+          PY
+
+          cat > src/discover-pledge-clarity.test.ts <<'EOF'
+          import assert from "node:assert/strict";
+          import { readFileSync } from "node:fs";
+          import test from "node:test";
+
+          const source = readFileSync("src/discover/moral-trade-discover.source.html", "utf8");
+
+          test("Discover presents exact mechanical pledge arithmetic without calling it pivotality", () => {
+            for (const required of [
+              "PREVIEW YOUR PLEDGE",
+              "Preview your conditional pledge",
+              "Share of the current gap",
+              "This is arithmetic, not a forecast of other contributors.",
+              "Moving the slider does not save a pledge or authorize payment.",
+              "formatGapShare",
+            ]) {
+              assert.ok(source.includes(required), `missing pledge-clarity contract: ${required}`);
+            }
+
+            for (const forbidden of [
+              "TEST YOUR PLEDGE",
+              "Low pivotality",
+              "Moderate pivotality",
+              "High pivotality",
+              "How likely am I to be pivotal?",
+              "inspect pivotality",
+            ]) {
+              assert.equal(source.includes(forbidden), false, `misleading pledge copy remained: ${forbidden}`);
+            }
+          });
+
+          test("sub-one-percent gap shares retain meaningful precision", () => {
+            assert.match(source, /percent < 1[\s\S]*toFixed\(2\)/);
+            assert.match(source, /pledge \/ metrics\.gap/);
+            assert.match(source, /pledge \/ activeMetrics\.gap/);
+          });
+          EOF
+
+          cat > tests/discover-pledge-clarity.spec.ts <<'EOF'
+          import { expect, test } from "@playwright/test";
+
+          const discoverUrl = "/discover?domain=pools&view=threshold&query=Find+pools&selected=pool-wild-research&selectedType=pool#discover";
+
+          async function setWildResearchPledge(page: Parameters<typeof test>[0]["page"], amount: number) {
+            const sliders = page.locator('[data-pledge-range][data-pool-id="pool-wild-research"]');
+            await expect(sliders.first()).toBeVisible();
+            await sliders.last().evaluate((element, value) => {
+              const input = element as HTMLInputElement;
+              input.value = String(value);
+              input.dispatchEvent(new Event("input", { bubbles: true }));
+            }, amount);
+          }
+
+          test("desktop pool inspector shows exact mechanical pledge arithmetic", async ({ page }) => {
+            const pageErrors: string[] = [];
+            page.on("pageerror", (error) => pageErrors.push(error.message));
+
+            await page.goto(discoverUrl);
+            await expect(page.getByRole("heading", { name: /Wild-animal-suffering priority research pool/i })).toBeVisible();
+            await expect(page.getByRole("heading", { name: "Preview your conditional pledge" })).toBeVisible();
+            await setWildResearchPledge(page, 35);
+
+            await expect(page.getByText("0.43% of current gap", { exact: true }).first()).toBeVisible();
+            await expect(page.getByText("$8,165 remains", { exact: true }).first()).toBeVisible();
+            await expect(page.getByText("Moving the slider does not save a pledge or authorize payment.", { exact: true })).toBeVisible();
+            await expect(page.getByText(/pivotality/i)).toHaveCount(0);
+            await expect(page.getByText(/How likely am I to be pivotal/i)).toHaveCount(0);
+            expect(pageErrors).toEqual([]);
+
+            await page.screenshot({ path: "test-results/discover-pledge-clarity-desktop.png", fullPage: true });
+          });
+
+          test("mobile pool inspector preserves the same explanation without horizontal overflow", async ({ page }) => {
+            await page.setViewportSize({ width: 390, height: 844 });
+            await page.goto(discoverUrl);
+            await expect(page.getByRole("heading", { name: "Preview your conditional pledge" })).toBeVisible();
+            await setWildResearchPledge(page, 35);
+            await expect(page.getByText("0.43% of current gap", { exact: true }).first()).toBeVisible();
+
+            const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+            expect(overflow).toBeLessThanOrEqual(1);
+            await page.screenshot({ path: "test-results/discover-pledge-clarity-mobile.png", fullPage: true });
+          });
+          EOF
+
+      - name: Repack and verify deterministic Discover payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/pack-discover-payload.mjs
+          npm run verify:discover
+
+      - name: Run focused and complete repository gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/discover-pledge-clarity.test.ts
+          npm test
+          npm run lint -- --quiet
+          npm run build
+
+      - name: Run rendered desktop and mobile gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npx playwright test tests/discover-pledge-clarity.spec.ts --reporter=line
+
+      - name: Check exact diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git status --short
+
+      - name: Upload rendered evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-pledge-clarity-${{ github.run_id }}
+          path: |
+            test-results/discover-pledge-clarity-*.png
+            test-results/**/trace.zip
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish reviewed source and remove materializer
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add \
+            src/discover/moral-trade-discover.source.html \
+            public/moral-trade-discover.html \
+            public/discover/payload \
+            src/discover-pledge-clarity.test.ts \
+            tests/discover-pledge-clarity.spec.ts
+          git rm .github/workflows/discover-pledge-clarity-materialize.yml
+          git commit -m "Clarify conditional pledge preview"
+          git push origin HEAD:fix/discover-pledge-clarity-20260801
