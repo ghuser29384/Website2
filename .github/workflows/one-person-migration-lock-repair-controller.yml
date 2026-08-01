@@ -1,11 +1,8 @@
 name: Repair one-person migration lock acquisition
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/one-person-migration-lock-repair-controller.yml"
+  issue_comment:
+    types: [created]
 
 permissions:
   contents: write
@@ -16,14 +13,19 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CLEAN_MAIN_SHA: ec537e88e7faf036748c93a695c83d8191485647
   FEATURE_SHA: 0d2cafa8e7bf464c24e2614ded8722d6226ac1cf
   FEATURE_BRANCH: feature/one-person-one-account-20260731
   CONTROLLER_PATH: .github/workflows/one-person-migration-lock-repair-controller.yml
   PR_NUMBER: "379"
+  TRIGGER: /repair-one-person-migration-lock-20260801-v1
 
 jobs:
   repair:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.issue.pull_request != null &&
+      github.event.issue.number == 379 &&
+      github.event.comment.body == '/repair-one-person-migration-lock-20260801-v1'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -34,17 +36,17 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Verify the trigger and feature refs are exact
+      - name: Verify the feature ref is exact
         shell: bash
         run: |
           set -euo pipefail
-          git fetch --no-tags origin \
-            "+refs/heads/main:refs/remotes/origin/main" \
-            "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
-          test "$(git rev-parse "$GITHUB_SHA^1")" = "$CLEAN_MAIN_SHA"
-          test "$(git diff --name-only "$CLEAN_MAIN_SHA" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          git fetch --no-tags origin "+refs/heads/$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
           test "$(git rev-parse HEAD)" = "$FEATURE_SHA"
           test "$(git rev-parse "refs/remotes/origin/$FEATURE_BRANCH")" = "$FEATURE_SHA"
+          test "$(git ls-remote origin "refs/heads/$FEATURE_BRANCH" | awk '{print $1}')" = "$FEATURE_SHA"
+          test ! -e .github/one-person-bootstrap
+          test ! -e .github/workflows/materialize-one-person-account.yml
 
       - name: Add bounded deadlock-safe relation lock acquisition
         shell: bash
@@ -100,6 +102,7 @@ create extension if not exists pgcrypto with schema extensions;"""
           grep -n "one_person_migration_relation_locks" supabase/migrations/20260731072000_one_person_one_account.sql
           git diff --check
           test "$(git diff --name-only)" = "supabase/migrations/20260731072000_one_person_one_account.sql"
+          test "$(grep -cF '$one_person_migration_relation_locks$' supabase/migrations/20260731072000_one_person_one_account.sql)" -eq 2
 
       - name: Commit and push the focused repair
         id: push_repair
@@ -109,8 +112,11 @@ create extension if not exists pgcrypto with schema extensions;"""
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add supabase/migrations/20260731072000_one_person_one_account.sql
+          test "$(git diff --cached --name-only)" = "supabase/migrations/20260731072000_one_person_one_account.sql"
+          git diff --cached --check
           git commit -m "Harden one-person migration lock acquisition"
           repaired_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$FEATURE_SHA"
           remote_feature="$(git ls-remote origin "refs/heads/$FEATURE_BRANCH" | awk '{print $1}')"
           test "$remote_feature" = "$FEATURE_SHA"
           git push --force-with-lease="refs/heads/$FEATURE_BRANCH:$FEATURE_SHA" \
