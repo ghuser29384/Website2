@@ -112,6 +112,7 @@ jobs:
           tar -xzf /tmp/direct-upgrade-candidate.tgz -C .
           rm -rf "$payload_dir"
           rm -f .github/workflows/materialize-direct-donation-upgrade.yml
+          sed -i 's/[[:space:]]\+$//' .github/workflows/direct-donation-upgrade-gates.yml
 
           node --check scripts/vercel-project-config.mjs
           node --check scripts/vercel-project-config.test.mjs
