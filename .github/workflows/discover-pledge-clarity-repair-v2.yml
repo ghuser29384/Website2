@@ -1,0 +1,103 @@
+name: Repair Discover pledge clarity materializer v2
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+
+permissions:
+  contents: write
+
+concurrency:
+  group: discover-pledge-clarity-repair-v2-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'fix/discover-pledge-clarity-20260801'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Repair methodology and mobile rendered gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "fix/discover-pledge-clarity-20260801"
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('.github/workflows/discover-pledge-clarity-materialize.yml')
+          text = path.read_text()
+
+          old_method = '<div><h3>Pivotality</h3><p>Your pledge divided by the current gap. It shows how much of the known gap you close, not how likely other contributors are to act.</p></div>'
+          new_method = '<div><h3>Share of the current gap</h3><p>Your proposed pledge divided by the current gap. It shows how much of the known gap you close, not how likely other contributors are to act.</p></div>'
+          if text.count(old_method) != 1:
+              raise SystemExit(f'expected one threshold-methodology label, found {text.count(old_method)}')
+          text = text.replace(old_method, new_method)
+
+          old_forbidden = '              "How likely am I to be pivotal?",\n              "inspect pivotality",'
+          new_forbidden = '              "How likely am I to be pivotal?",\n              "<h3>Pivotality</h3>",\n              "inspect pivotality",'
+          if text.count(old_forbidden) != 2:
+              raise SystemExit(f'expected two forbidden-copy lists, found {text.count(old_forbidden)}')
+          text = text.replace(old_forbidden, new_forbidden)
+
+          old_slider = '''            const sliders = page.locator('[data-pledge-range][data-pool-id="pool-wild-research"]');
+            await expect(sliders.first()).toBeVisible();
+            await sliders.last().evaluate((element, value) => {'''
+          new_slider = '''            const slider = page.locator('[data-pledge-range][data-pool-id="pool-wild-research"]:visible').last();
+            await expect(slider).toBeVisible();
+            await slider.evaluate((element, value) => {'''
+          if text.count(old_slider) != 1:
+              raise SystemExit(f'expected one pledge-slider helper, found {text.count(old_slider)}')
+          text = text.replace(old_slider, new_slider)
+
+          mobile_pattern = re.compile(
+              r'(?P<indent>[ \t]+)const inspectorTrigger = page\.getByRole\("button", \{ name: "Open selection inspector" \}\);\n'
+              r'(?P=indent)await expect\(inspectorTrigger\)\.toBeVisible\(\);\n'
+              r'(?P=indent)await inspectorTrigger\.click\(\);\n'
+              r'(?P=indent)await expect\(page\.getByRole\("heading", \{ name: "Preview your conditional pledge" \}\)\)\.toBeVisible\(\);\n'
+              r'(?P=indent)await setWildResearchPledge\(page, 35\);\n'
+              r'(?P=indent)await expect\(page\.getByText\("0\.43% of current gap", \{ exact: true \}\)\.first\(\)\)\.toBeVisible\(\);\n\n'
+              r'(?P=indent)const sheet = page\.locator\("\.inspector\.mobile-sheet"\);\n'
+              r'(?P=indent)await expect\(sheet\)\.toBeVisible\(\);'
+          )
+          mobile_replacement = (
+              r'\g<indent>const sheet = page.locator(".inspector.mobile-sheet");\n'
+              r'\g<indent>await expect(sheet).toBeVisible();\n'
+              r'\g<indent>await expect(sheet.getByRole("heading", { name: "Preview your conditional pledge" })).toBeVisible();\n'
+              r'\g<indent>await setWildResearchPledge(page, 35);\n'
+              r'\g<indent>await expect(sheet.getByText("0.43% of current gap", { exact: true }).first()).toBeVisible();'
+          )
+          text, mobile_count = mobile_pattern.subn(mobile_replacement, text)
+          if mobile_count != 1:
+              raise SystemExit(f'expected one mobile test block, found {mobile_count}')
+
+          path.write_text(text)
+          PY
+
+      - name: Publish repaired materializer and remove this workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/discover-pledge-clarity-materialize.yml
+          git rm .github/workflows/discover-pledge-clarity-repair-v2.yml
+          git diff --cached --check
+          git commit -m "Repair Discover pledge clarity rendered QA"
+          git push origin HEAD:fix/discover-pledge-clarity-20260801
