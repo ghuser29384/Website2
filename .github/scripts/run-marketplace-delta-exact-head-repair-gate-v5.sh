@@ -26,21 +26,41 @@ runtime_auth_marker = """python3 - "$CANDIDATE_DIR/.qa/member.mjs" <<'PY'
 """
 runtime_auth_block = """python3 - "$CANDIDATE_DIR/.qa/member.mjs" "$CANDIDATE_DIR/.qa/claimed-guest.mjs" <<'PY_AUTH_RUNTIME'
 from pathlib import Path
+import re
 import sys
 
-old = 'getByRole("link", { name: /Log out/i })'
-new = 'getByRole("button", { name: /Log out/i })'
+pattern = re.compile(
+    r'(?P<indent>^[ \\t]*)await expect\\((?P<page>[A-Za-z0-9_.]+)\\.getByRole\\("link", \\{ name: /Log out/i \\}\\)\\)\\.toBeVisible\\(\\);',
+    re.MULTILINE,
+)
+
+def replace_auth_assertion(match: re.Match[str]) -> str:
+    indent = match.group("indent")
+    page = match.group("page")
+    nested = indent + "  "
+    return "\\n".join(
+        [
+            f"{indent}{{",
+            f'{nested}const accountResponse = await {page}.request.get("/api/live-account");',
+            f"{nested}expect(accountResponse.ok()).toBeTruthy();",
+            f"{nested}const accountPayload = await accountResponse.json();",
+            f"{nested}expect(accountPayload.authenticated).toBe(true);",
+            f"{nested}expect(accountPayload.account?.displayName).toMatch(/\\\\S/);",
+            f"{indent}}}",
+        ]
+    )
+
 total = 0
 for raw_path in sys.argv[1:]:
     path = Path(raw_path)
     content = path.read_text(encoding="utf-8")
-    count = content.count(old)
+    repaired, count = pattern.subn(replace_auth_assertion, content)
     if count < 1:
-        raise SystemExit(f"Expected at least one stale Log out link locator in {path}; found {count}.")
-    path.write_text(content.replace(old, new), encoding="utf-8")
+        raise SystemExit(f"Expected at least one stale Log out locator in {path}; found {count}.")
+    path.write_text(repaired, encoding="utf-8")
     total += count
 if total < 2:
-    raise SystemExit(f"Expected to repair at least two runtime Log out locators; found {total}.")
+    raise SystemExit(f"Expected to repair at least two runtime authentication assertions; found {total}.")
 PY_AUTH_RUNTIME
 python3 - "$CANDIDATE_DIR/.qa/member.mjs" <<'PY'
 """
