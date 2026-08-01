@@ -1,0 +1,84 @@
+name: Temporary release classification current-main sync
+
+on:
+  push:
+    branches:
+      - chore/required-release-classification-check-20260801
+    paths:
+      - .github/workflows/temporary-release-classification-sync.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: temporary-release-classification-current-main-sync
+  cancel-in-progress: false
+
+jobs:
+  sync-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard exact repository and branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/chore/required-release-classification-check-20260801'
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+
+      - name: Merge the current default branch
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git fetch origin main
+          base_sha="$(git rev-parse origin/main)"
+          git merge --no-edit "$base_sha"
+          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Run parser and workflow validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/validate-release-pr-body.mjs
+          node --test \
+            scripts/validate-release-pr-body.test.mjs \
+            scripts/release-classification-workflow-contract.test.mjs
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) or abort("invalid YAML: #{path}") }' \
+            .github/workflows/release-classification.yml \
+            .github/workflows/release-classification-self-test.yml
+
+      - name: Verify main stayed pinned
+        env:
+          PINNED_BASE: ${{ steps.base.outputs.base_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          test "$(git rev-parse origin/main)" = "$PINNED_BASE"
+
+      - name: Remove the temporary controller and publish the tested branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/temporary-release-classification-sync.yml
+          git add -A
+          git diff --cached --check
+          git commit -m 'Remove temporary release classification sync controller'
+          git push origin HEAD:refs/heads/chore/required-release-classification-check-20260801
