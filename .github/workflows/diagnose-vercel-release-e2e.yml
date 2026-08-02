@@ -42,6 +42,8 @@ jobs:
         id: e2e
         shell: bash
         env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
           PLAYWRIGHT_HTML_OPEN: never
         run: |
           set +e
@@ -49,10 +51,11 @@ jobs:
           status=$?
           set -e
           {
-            echo '### Exact gated-release E2E diagnostic'
+            echo '### Local-origin gated-release E2E diagnostic'
             echo
             echo "- Exit code: \`$status\`"
             echo "- Head: \`${{ github.event.pull_request.head.sha }}\`"
+            echo "- Browser origin: \`http://127.0.0.1:3210\`"
             echo
             echo '```text'
             grep -E '(^|[[:space:]])([0-9]+ failed|[0-9]+ passed|[0-9]+ skipped|Error:|TimeoutError:|tests/[^:]+\.spec\.ts:[0-9]+)' release-e2e.log | tail -n 160 || true
