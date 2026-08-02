@@ -17,7 +17,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: fix/vercel-release-exact-validation-evidence-20260802
-  TARGET_SHA: 6caa3f935c2765cf6fb445ba7a439f8890578ff2
+  TARGET_SHA: 52d2b59f50d5b7968da5a612442a65537df2c8b2
   BASE_SHA: 43a791175b34e279adbb4d5a946addb723ed8622
   FEATURE_SHA: 3e3a53432ae43d0044f3c6f35c7cd9c47edc8e77
 
@@ -73,22 +73,22 @@ jobs:
             {"id":30746019006,"workflow":"Direct verified Donation Upgrade rendered QA","gate":"rendered"},
             {"id":30746019025,"workflow":"Direct verified Donation Upgrade isolated QA","gate":"database"}
           ]'
-          printf '%s' "$validation_runs" \
-            | jq -e '
-                type == "array"
-                and length >= 3
-                and all(.[];
-                  type == "object"
-                  and ((keys | sort) == ["gate", "id", "workflow"])
-                  and (.id | type == "number" and . > 0 and . == floor)
-                  and (.workflow | type == "string" and length > 0)
-                  and (.gate
-                    | type == "string"
-                    and test("^(classification|engineering|rendered|database|compatibility|security)$"))
-                )
-                and (([.[].id] | length) == ([.[].id] | unique | length))
-                and ((["classification", "engineering", "rendered"] - [.[].gate]) | length == 0)
-              ' > release-validation-requirements.json
+          printf '%s' "$validation_runs" > release-validation-requirements.json
+          jq -e '
+            type == "array"
+            and length >= 3
+            and all(.[];
+              type == "object"
+              and ((keys | sort) == ["gate", "id", "workflow"])
+              and (.id | type == "number" and . > 0 and . == floor)
+              and (.workflow | type == "string" and length > 0)
+              and (.gate
+                | type == "string"
+                and test("^(classification|engineering|rendered|database|compatibility|security)$"))
+            )
+            and (([.[].id] | length) == ([.[].id] | unique | length))
+            and ((["classification", "engineering", "rendered"] - [.[].gate]) | length == 0)
+          ' release-validation-requirements.json > /dev/null
 
           : > release-validation-readback.ndjson
           while IFS= read -r requirement; do
