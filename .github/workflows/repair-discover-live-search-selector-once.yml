@@ -1,0 +1,154 @@
+name: One-time Discover live-search selector repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/repair-discover-live-search-selector-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-discover-live-search-selector-once
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/repair-discover-live-search-selector-once.yml
+  TARGET_BRANCH: fix/discover-live-search-mobile-selector-20260802
+  EXPECTED_HEAD: d8decc58c9cb643e930a89c9357e84873e439190
+  TEST_PATH: tests/discover-live-search.spec.ts
+
+jobs:
+  repair:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out exact target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard exact repository and target head
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          git diff --quiet
+
+      - name: Remove one-time controller from main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-time Discover live-search selector repair controller' \
+            --arg sha "$blob_sha" \
+            --arg branch main \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Scope the mobile assertion to the single live result
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/discover-live-search.spec.ts')
+          text = path.read_text(encoding='utf-8')
+          old = '''    const offerSide = page.locator('[data-exchange-side="offer"]');
+          const returnSide = page.locator('[data-exchange-side="return"]');
+          await expect(offerSide).toBeVisible();
+          await expect(returnSide).toBeVisible();'''.replace('          ', '')
+          new = '''    const liveResult = page.locator('.transaction-list [data-live-record="true"]');
+          await expect(liveResult).toHaveCount(1);
+          const offerSide = liveResult.locator('[data-exchange-side="offer"]');
+          const returnSide = liveResult.locator('[data-exchange-side="return"]');
+          await expect(offerSide).toBeVisible();
+          await expect(returnSide).toBeVisible();'''.replace('          ', '')
+          if text.count(old) != 1:
+              raise SystemExit(f'unexpected selector block inventory: {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          test "$(git diff --name-only | sed '/^$/d')" = "$TEST_PATH"
+          git diff --check
+          grep -Fq 'const liveResult = page.locator' "$TEST_PATH"
+          grep -Fq 'await expect(liveResult).toHaveCount(1);' "$TEST_PATH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Lint the repaired test
+        run: npx eslint "$TEST_PATH"
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run complete live-search Playwright regression
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test "$TEST_PATH" --reporter=line 2>&1 | tee discover-live-search-selector-repair.log
+
+      - name: Commit and push exact repository-only repair
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$TEST_PATH"
+          test "$(git diff --cached --name-only | sed '/^$/d')" = "$TEST_PATH"
+          git diff --cached --check
+          git commit -m 'Scope live-search mobile assertions to one result'
+          candidate_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_HEAD"
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_HEAD" origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Upload focused repair evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-live-search-selector-repair-${{ github.run_id }}
+          path: |
+            discover-live-search-selector-repair.log
+            test-results/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report outcome to PR 402
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "${{ job.status }}" == 'success' ]]; then
+            gh pr comment 402 --repo "$GITHUB_REPOSITORY" --body "The current-main rendered failure was isolated to a strict Playwright selector that matched every visible exchange card at 320×568. A separate repository-only repair now scopes the assertion to the single live result and passed the complete live-search Playwright file. Candidate: \`${{ steps.publish.outputs.candidate_sha }}\`. Evidence: $run_url"
+          else
+            gh pr comment 402 --repo "$GITHUB_REPOSITORY" --body "The separate current-main live-search selector repair did not complete successfully. PR #402 remains blocked. Evidence: $run_url"
+          fi
+
+      - name: Enforce successful publication
+        if: always()
+        shell: bash
+        run: test "${{ job.status }}" = 'success'
