@@ -1,0 +1,157 @@
+name: One-time Vercel billing recovery
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/vercel-invoice-recovery-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: vercel-invoice-recovery-once
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/vercel-invoice-recovery-once.yml
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  CANONICAL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  DUPLICATE_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+  VERCEL_CLI_VERSION: 50.38.1
+
+jobs:
+  recover:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out the exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Guard exact one-time scope and credentials
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_ACTOR" = 'ghuser29384'
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          test -n "$VERCEL_TOKEN"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+          test -f scripts/vercel-admin-cost-controls.mjs
+
+      - name: Remove the one-time controller from main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-time Vercel billing recovery controller' \
+            --arg sha "$blob_sha" \
+            --arg branch main \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE \
+                "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" \
+                --input - >/dev/null
+
+      - name: Capture redacted before-state audit
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_COST_CONTROL_MODE: audit
+          VERCEL_COST_CONTROL_REPORT: vercel-recovery-before.json
+        run: node scripts/vercel-admin-cost-controls.mjs
+
+      - name: Apply canonical resource controls, remove obsolete projects, and unpause production
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_COST_CONTROL_MODE: apply
+          VERCEL_COST_CONTROL_REPORT: vercel-recovery-apply.json
+          DELETE_OBSOLETE_PROJECTS: 'true'
+          RESUME_CANONICAL_PROJECT: 'true'
+        run: node scripts/vercel-admin-cost-controls.mjs
+
+      - name: Disconnect website2 from GitHub while preserving project and domains
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const report = JSON.parse(await readFile('vercel-recovery-before.json', 'utf8'));
+          process.exit(report.duplicate?.link == null ? 0 : 1);
+          NODE
+          then
+            echo 'website2 was already disconnected from Git.'
+          else
+            mkdir -p .vercel
+            printf '{"orgId":"%s","projectId":"%s"}\n' \
+              "$VERCEL_ORG_ID" "$DUPLICATE_PROJECT_ID" > .vercel/project.json
+            printf 'y\n' | npx --yes "vercel@$VERCEL_CLI_VERSION" git disconnect \
+              --token="$VERCEL_TOKEN" \
+              --scope=ellen-s
+          fi
+
+      - name: Verify canonical live state, cost controls, disconnect, and obsolete-project absence
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_COST_CONTROL_MODE: verify
+          VERCEL_COST_CONTROL_REPORT: vercel-recovery-after.json
+          REQUIRE_WEBSITE2_DISCONNECTED: 'true'
+          REQUIRE_OBSOLETE_ABSENT: 'true'
+          REQUIRE_CANONICAL_LIVE: 'true'
+        run: node scripts/vercel-admin-cost-controls.mjs
+
+      - name: Smoke-test canonical production routes
+        shell: bash
+        env:
+          VERCEL_COST_CONTROL_MODE: smoke
+          VERCEL_COST_CONTROL_REPORT: vercel-recovery-smoke.json
+          VERCEL_PRODUCTION_BASE_URL: https://www.moraltrade.org
+          VERCEL_PRODUCTION_SMOKE_ATTEMPTS: '30'
+          VERCEL_PRODUCTION_SMOKE_INTERVAL_MS: '10000'
+          VERCEL_PRODUCTION_SMOKE_TIMEOUT_MS: '15000'
+        run: node scripts/vercel-admin-cost-controls.mjs
+
+      - name: Upload redacted recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-invoice-recovery-${{ github.run_id }}
+          path: vercel-recovery-*.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report verified result to PR 422
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "${{ job.status }}" == 'success' ]]; then
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "Vercel billing recovery is verified after invoice payment. The canonical moraltrade-site project is live with Standard builds, serialized queueing, and paid elastic concurrency disabled; website2 is Git-disconnected while its project and domains are preserved; the six allowlisted obsolete projects are absent; and canonical production route smoke checks passed. Evidence: $run_url"
+          else
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "The post-payment Vercel recovery run did not complete all required verification. No restoration-complete claim is made. Inspect redacted evidence and logs: $run_url"
+          fi
+
+      - name: Enforce complete verification
+        if: always()
+        shell: bash
+        run: test "${{ job.status }}" = 'success'
