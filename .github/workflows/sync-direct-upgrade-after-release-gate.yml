@@ -1,0 +1,85 @@
+name: Sync Direct Donation Upgrade after release-gate repair
+
+on:
+  push:
+    branches:
+      - ops/direct-upgrade-preview-after-release-gate-20260802
+    paths:
+      - .github/workflows/sync-direct-upgrade-after-release-gate.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sync-direct-upgrade-after-release-gate-20260802
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/sync-direct-upgrade-after-release-gate.yml
+  RELEASE_REPAIR_SHA: f22c8adbc3236822df81e52c5888bc281996019f
+  EXPECTED_FEATURE_SHA: 3e3a53421628b35923619c295db336c85884e7a4
+  FEATURE_BRANCH: feature/direct-verified-donation-upgrade-20260731
+
+jobs:
+  sync:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out and guard the one-file controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Verify the repair is merged and the controller is isolated
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')" = "$CONTROLLER_PATH"
+          git merge-base --is-ancestor "$RELEASE_REPAIR_SHA" HEAD^
+          git show HEAD^:.github/workflows/vercel-release.yml | grep -F 'rendered_verification_run_id:' >/dev/null
+          git show HEAD^:.github/workflows/vercel-release.yml | grep -F 'Run read-only canonical route smoke against the deployment' >/dev/null
+
+      - name: Merge current main into the exact feature branch
+        id: sync
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Create and push the guarded merge commit
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_SHA"
+          git fetch origin main --no-tags
+          main_sha="$(git rev-parse origin/main)"
+          git merge-base --is-ancestor "$RELEASE_REPAIR_SHA" "$main_sha"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git merge --no-edit origin/main
+          candidate_sha="$(git rev-parse HEAD)"
+          test "$candidate_sha" != "$EXPECTED_FEATURE_SHA"
+          git merge-base --is-ancestor "$main_sha" "$candidate_sha"
+          git diff --check "$main_sha" "$candidate_sha"
+          git push origin "HEAD:refs/heads/$FEATURE_BRANCH"
+
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Record the synchronized candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MAIN_SHA: ${{ steps.merge.outputs.main_sha }}
+          CANDIDATE_SHA: ${{ steps.merge.outputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          gh pr comment 418 --repo "$GITHUB_REPOSITORY" --body "Synchronized the Direct Donation Upgrade branch with current \`main\` after merging the repository-only Vercel release-gate repair. Main: \`$MAIN_SHA\`. New feature candidate: \`$CANDIDATE_SHA\`. No application, database, payment, or Vercel deployment occurred in this synchronization step. Exact-head gates must run again before the release-preview branch can move."
