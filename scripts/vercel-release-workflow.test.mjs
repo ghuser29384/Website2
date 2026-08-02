@@ -69,6 +69,18 @@ test("deployment requires immutable exact-head validation evidence", async () =>
     /\["classification", "engineering", "rendered"\] - \[\.\[\]\.gate\]/,
   );
   assert.match(validation, /\[\.\[\]\.id\] \| unique/);
+  assert.match(
+    validation,
+    /printf '%s' "\$VALIDATION_RUNS" > "\$requirements_file"/,
+  );
+  assert.match(
+    validation,
+    /' "\$requirements_file" > \/dev\/null/,
+  );
+  assert.doesNotMatch(
+    validation,
+    /jq -e[\s\S]*> "\$requirements_file"\n\s*\n\s*: > "\$readback_file"/,
+  );
 });
 
 test("quality gates and exact validation complete before an immutable prebuilt deployment", async () => {
