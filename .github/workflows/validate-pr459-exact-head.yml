@@ -1,0 +1,79 @@
+name: Validate PR 459 exact head
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/validate-pr459-exact-head.yml
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CANDIDATE_SHA: 802767cb2a28bc787f280be414cf86d0b005a21c
+      CANDIDATE_BASE: 64cc15e443544a8fdc648f8f39c46d368eee1adb
+
+    steps:
+      - name: Check out the exact PR 459 head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Guard the immutable candidate and exact diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git diff --check "$CANDIDATE_BASE"...HEAD
+          changed="$(git diff --name-only "$CANDIDATE_BASE"...HEAD | sort)"
+          expected="$(printf '%s\n' '.github/workflows/vercel-release.yml' 'scripts/vercel-release-workflow.test.mjs')"
+          test "$changed" = "$expected"
+          printf '%s\n' "$changed" | tee pr459-changed-files.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run the focused workflow source-contract test
+        run: node --test scripts/vercel-release-workflow.test.mjs | tee pr459-focused-test.log
+
+      - name: Run the complete Vercel controls suite
+        run: npm run test:vercel-controls | tee pr459-vercel-controls.log
+
+      - name: Record exact-head evidence
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### PR 459 exact-head validation'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Base: \`$CANDIDATE_BASE\`"
+            echo '- Commands: `node --test scripts/vercel-release-workflow.test.mjs`; `npm run test:vercel-controls`'
+            echo '- Diff guard: exactly the gated-release workflow and its source-contract test'
+          } | tee pr459-validation-summary.md
+
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr459-exact-head-${{ github.run_id }}
+          path: |
+            pr459-changed-files.txt
+            pr459-focused-test.log
+            pr459-vercel-controls.log
+            pr459-validation-summary.md
+          if-no-files-found: warn
+          retention-days: 14
