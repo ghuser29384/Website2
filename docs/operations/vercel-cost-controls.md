@@ -39,6 +39,10 @@ into an issue, pull request, workflow input, build log, or chat.
 5. Enable `resume_production` only after the team budget permits service to
    resume.
 
+The `website2` disconnect is idempotent. If the audit proves that its Git link
+is already absent, the workflow performs no disconnect mutation and still
+verifies the disconnected state.
+
 The cleanup deliberately disconnects rather than deletes `website2`. Its
 existing custom domains remain attached to their current deployment, avoiding
 an accidental domain outage. Move or retire those domains in a separate,
@@ -46,6 +50,49 @@ explicit domain migration after deciding which brand names should remain live.
 
 The six deletion targets are hard-coded by both project ID and name. Deletion
 fails closed if a project has a custom domain or its identity has changed.
+
+## Billing-blocked recovery
+
+When the canonical domain returns HTTP 402 with `DEPLOYMENT_DISABLED`, first
+confirm whether Vercel reports `resource_creation_blocked` because of an overdue
+balance. Repository safeguards can still be prepared while billing is blocked,
+but Vercel may reject project PATCH, unpause, and other account mutations until
+the balance and payment method are resolved.
+
+Before payment:
+
+1. Keep automatic Vercel Git deployments disabled.
+2. Confirm that `website2` is disconnected and the six obsolete projects are
+   absent.
+3. Record the last known-good production deployment and its immutable Git SHA.
+4. Do not create extra preview or production builds merely to test whether the
+   billing block has cleared.
+
+After payment has cleared:
+
+1. Run **Vercel administrative cost controls** in `audit` mode and inspect the
+   artifact.
+2. Run it in `apply` mode with confirmation
+   `APPLY-VERCEL-COST-CONTROLS`, keeping `disconnect_website2` and
+   `delete_obsolete_projects` enabled and setting `resume_production` to true.
+3. The workflow must verify all of the following before it succeeds:
+   - the canonical project reports `live: true`;
+   - Standard builds are active;
+   - paid elastic concurrency is disabled;
+   - the build queue is serialized;
+   - `website2` remains Git-disconnected;
+   - all six obsolete projects remain absent;
+   - the canonical root and Commitments Portfolio, Ledger, Completed, and
+     Calendar routes return HTTP 200;
+   - all Commitments routes render the expected signed-out privacy state and
+     resolve to one production deployment ID.
+4. Inspect `vercel-cost-controls-*.json` and
+   `vercel-production-smoke.json` before reporting restoration complete.
+5. Perform a separate post-release runtime-log and 5xx review. The workflow's
+   HTTP smoke is necessary, but it does not replace the runtime-log audit.
+
+A successful unpause API response alone is not sufficient evidence of service
+restoration.
 
 ## Release process
 

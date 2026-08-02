@@ -43,6 +43,7 @@ env:
   CANONICAL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
   DUPLICATE_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
   VERCEL_CLI_VERSION: 50.38.1
+  VERCEL_PRODUCTION_BASE_URL: https://www.moraltrade.org
 
 jobs:
   administer:
@@ -120,6 +121,18 @@ jobs:
           VERCEL_COST_CONTROL_REPORT: vercel-cost-controls-after.json
           REQUIRE_WEBSITE2_DISCONNECTED: ${{ inputs.disconnect_website2 }}
           REQUIRE_OBSOLETE_ABSENT: ${{ inputs.delete_obsolete_projects }}
+          REQUIRE_CANONICAL_LIVE: ${{ inputs.resume_production }}
+        run: node scripts/vercel-admin-cost-controls.mjs
+
+      - name: Smoke-test the canonical production routes after resume
+        if: inputs.mode == 'apply' && inputs.resume_production
+        shell: bash
+        env:
+          VERCEL_COST_CONTROL_MODE: smoke
+          VERCEL_COST_CONTROL_REPORT: vercel-production-smoke.json
+          VERCEL_PRODUCTION_SMOKE_ATTEMPTS: 30
+          VERCEL_PRODUCTION_SMOKE_INTERVAL_MS: 10000
+          VERCEL_PRODUCTION_SMOKE_TIMEOUT_MS: 15000
         run: node scripts/vercel-admin-cost-controls.mjs
 
       - name: Upload redacted administrative evidence
@@ -127,7 +140,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vercel-cost-controls-${{ github.run_id }}
-          path: vercel-cost-controls-*.json
+          path: |
+            vercel-cost-controls-*.json
+            vercel-production-smoke.json
           if-no-files-found: error
           retention-days: 30
 
@@ -145,4 +160,9 @@ jobs:
             echo "- website2 disconnect requested: \`${{ inputs.disconnect_website2 }}\`"
             echo "- Obsolete-project deletion requested: \`${{ inputs.delete_obsolete_projects }}\`"
             echo "- Production resume requested: \`${{ inputs.resume_production }}\`"
+            echo "- Live-state and canonical-route verification required: \`${{ inputs.mode == 'apply' && inputs.resume_production }}\`"
+            if [[ -f vercel-production-smoke.json ]]; then
+              echo "- Canonical route smoke passed: \`$(jq -r '.passed' vercel-production-smoke.json)\`"
+              echo "- Observed production deployment: \`$(jq -r '.deploymentIds | join(", ")' vercel-production-smoke.json)\`"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
