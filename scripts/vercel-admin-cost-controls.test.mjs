@@ -41,6 +41,16 @@ test("canonical verification fails closed when settings or live state are wrong"
   };
 
   assert.equal(verifyCanonicalSettings(canonical), true);
+  assert.equal(
+    verifyCanonicalSettings({
+      ...canonical,
+      resourceConfig: {
+        ...canonical.resourceConfig,
+        elasticConcurrencyEnabled: null,
+      },
+    }),
+    true,
+  );
   assert.equal(verifyCanonicalLive(canonical), true);
   assert.throws(
     () => verifyCanonicalLive({ ...canonical, live: false }),
