@@ -1,0 +1,105 @@
+name: Verify PR 459 once
+
+on:
+  push:
+    branches:
+      - fix/vercel-release-browser-env-20260802
+    paths:
+      - .github/workflows/verify-pr459-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: verify-pr459-once
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      DIRECT_DONATION_UPGRADES_ENABLED: "false"
+      DIRECT_DONATION_UPGRADE_MODE: disabled
+
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/vercel-release-browser-env-20260802
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard current-main ancestry and intended scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          test "$(git merge-base HEAD origin/main)" = "$(git rev-parse origin/main)"
+          git diff --name-only origin/main...HEAD | sort > /tmp/actual-precleanup.txt
+          printf '%s\n' \
+            .github/workflows/vercel-release.yml \
+            .github/workflows/verify-pr459-once.yml \
+            scripts/vercel-release-workflow.test.mjs \
+            | sort > /tmp/expected-precleanup.txt
+          diff -u /tmp/expected-precleanup.txt /tmp/actual-precleanup.txt
+
+      - name: Remove one-time controller before validation
+        run: rm .github/workflows/verify-pr459-once.yml
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Focused release-workflow contract
+        run: node --test scripts/vercel-release-workflow.test.mjs
+
+      - name: Complete repository tests
+        run: npm test
+
+      - name: Repository-wide ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Optimized production build
+        run: npm run build
+
+      - name: Exact current-main diff hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --name-only origin/main | sort > /tmp/actual-files.txt
+          printf '%s\n' \
+            .github/workflows/vercel-release.yml \
+            scripts/vercel-release-workflow.test.mjs \
+            | sort > /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+      - name: Commit cleanup and report evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/verify-pr459-once.yml
+          git commit -m 'Remove one-time PR 459 verifier'
+          git push origin HEAD:fix/vercel-release-browser-env-20260802
+          gh pr comment 459 --repo "$GITHUB_REPOSITORY" --body "Exact current-main repository gates passed. The release browser stage is bound to Playwright's local origin and the source contract prevents production-origin regression. Focused workflow tests, the complete repository suite, ESLint, TypeScript, optimized build, and exact two-file diff hygiene passed. Evidence: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
