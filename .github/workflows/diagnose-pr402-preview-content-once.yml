@@ -1,0 +1,313 @@
+name: Diagnose PR 402 protected Preview content once
+
+on:
+  push:
+    branches:
+      - ops/diagnose-pr402-preview-content-20260802
+    paths:
+      - .github/workflows/diagnose-pr402-preview-content-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: diagnose-pr402-preview-content-once
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      OPS_BRANCH: ops/diagnose-pr402-preview-content-20260802
+      WORKFLOW_PATH: .github/workflows/diagnose-pr402-preview-content-once.yml
+      RESULT_PATH: .ops-evidence/pr402-preview-content-diagnosis.json
+      TARGET_BRANCH: fix/discover-pledge-clarity-20260801
+      EXPECTED_HEAD: 134d89d3ddefcbb96a5f06af99edf95175420985
+      PREVIEW_DEPLOYMENT_ID: dpl_CGM9aM2j3DxnE3JYRMrNnPcsTLZZ
+      PREVIEW_URL: https://moraltrade-site-bee27bhgs-ellen-s.vercel.app
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+
+    steps:
+      - name: Check out exact PR 402 head
+        uses: actions/checkout@v4
+        with:
+          ref: fix/discover-pledge-clarity-20260801
+          fetch-depth: 0
+
+      - name: Guard exact source and Preview identity
+        id: guard
+        continue-on-error: true
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          test -n "$VERCEL_TOKEN"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$PREVIEW_DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            > /tmp/pr402-deployment.json
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const deployment = JSON.parse(fs.readFileSync('/tmp/pr402-deployment.json', 'utf8'));
+          const id = deployment.id ?? deployment.uid;
+          const state = deployment.readyState ?? deployment.state;
+          const sha = deployment.meta?.githubCommitSha;
+          if (id !== process.env.PREVIEW_DEPLOYMENT_ID) throw new Error(`Wrong deployment: ${id}`);
+          if (state !== 'READY') throw new Error(`Deployment is not READY: ${state}`);
+          if (deployment.target != null) throw new Error(`Expected Preview target: ${deployment.target}`);
+          if (sha !== process.env.EXPECTED_HEAD) throw new Error(`Wrong deployed SHA: ${sha}`);
+          fs.writeFileSync('/tmp/pr402-deployment-evidence.json', JSON.stringify({
+            deploymentId: id,
+            commit: sha,
+            state,
+            target: deployment.target ?? null,
+            url: process.env.PREVIEW_URL,
+          }, null, 2));
+          NODE
+
+      - name: Use Node 24
+        if: steps.guard.outcome == 'success'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        id: install
+        if: steps.guard.outcome == 'success'
+        continue-on-error: true
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Create temporary Vercel automation bypass
+        id: bypass
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret="$(python3 - <<'PY'
+          import secrets, string
+          alphabet = string.ascii_letters + string.digits
+          print(''.join(secrets.choice(alphabet) for _ in range(32)))
+          PY
+          )"
+          test "${#secret}" -eq 32
+          echo "::add-mask::$secret"
+          printf '%s' "$secret" > /tmp/pr402-bypass-secret
+          jq -n --arg secret "$secret" \
+            '{generate:{secret:$secret,note:"Temporary PR 402 Preview content diagnosis"}}' \
+            > /tmp/pr402-generate-bypass.json
+          curl --fail --silent --show-error \
+            --request PATCH \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/pr402-generate-bypass.json \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/protection-bypass?teamId=$VERCEL_ORG_ID" \
+            > /tmp/pr402-generate-bypass-response.json
+          rm -f /tmp/pr402-generate-bypass.json /tmp/pr402-generate-bypass-response.json
+
+      - name: Capture final URL, body text, headings, errors, and screenshot
+        id: capture
+        if: steps.bypass.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret="$(cat /tmp/pr402-bypass-secret)"
+          echo "::add-mask::$secret"
+          VERCEL_AUTOMATION_BYPASS_SECRET="$secret" node --input-type=module <<'NODE' 2>&1 | tee /tmp/pr402-content-diagnosis.log
+          import fs from 'node:fs';
+          import { chromium } from '@playwright/test';
+
+          const base = process.env.PREVIEW_URL;
+          const secret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+          const path = '/discover?domain=pools&view=threshold&query=Find+pools&selected=pool-wild-research&selectedType=pool#discover';
+          const target = new URL(path, base).href;
+          const origin = new URL(base).origin;
+          const result = {
+            requestedUrl: target,
+            navigationStatus: null,
+            finalUrl: null,
+            title: null,
+            bodyText: null,
+            headings: [],
+            selectors: {},
+            pageErrors: [],
+            consoleErrors: [],
+            failedSameOriginRequests: [],
+            badSameOriginResponses: [],
+            cookies: [],
+          };
+
+          const browser = await chromium.launch();
+          const context = await browser.newContext({
+            viewport: { width: 1440, height: 900 },
+            extraHTTPHeaders: {
+              'x-vercel-protection-bypass': secret,
+              'x-vercel-set-bypass-cookie': 'true',
+            },
+          });
+          const page = await context.newPage();
+          page.on('pageerror', error => result.pageErrors.push(error.message));
+          page.on('console', message => {
+            if (message.type() === 'error') result.consoleErrors.push(message.text());
+          });
+          page.on('requestfailed', request => {
+            if (request.url().startsWith(origin)) {
+              result.failedSameOriginRequests.push(`${request.method()} ${request.url()} ${request.failure()?.errorText ?? ''}`);
+            }
+          });
+          page.on('response', response => {
+            if (response.url().startsWith(origin) && response.status() >= 400) {
+              result.badSameOriginResponses.push(`${response.status()} ${response.request().method()} ${response.url()}`);
+            }
+          });
+
+          try {
+            const response = await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            result.navigationStatus = response?.status() ?? null;
+            await page.waitForTimeout(8000);
+            result.finalUrl = page.url();
+            result.title = await page.title();
+            const body = await page.locator('body').innerText().catch(() => '');
+            result.bodyText = body.replace(/\s+/g, ' ').trim().slice(0, 6000);
+            result.headings = (await page.locator('h1,h2,h3,[role="heading"]').allInnerTexts())
+              .map(text => text.replace(/\s+/g, ' ').trim())
+              .filter(Boolean)
+              .slice(0, 80);
+            result.selectors = {
+              expectedPoolHeading: await page.getByRole('heading', { name: /Wild-animal-suffering priority research pool/i }).count(),
+              pledgePreviewHeading: await page.getByRole('heading', { name: 'Preview your conditional pledge' }).count(),
+              discoverHeading: await page.getByRole('heading', { name: /Discover/i }).count(),
+              loginHeading: await page.getByRole('heading', { name: /log in|sign in/i }).count(),
+              vercelHeading: await page.getByRole('heading', { name: /Vercel/i }).count(),
+              mobileSheet: await page.locator('.inspector.mobile-sheet').count(),
+              poolCard: await page.locator('[data-pool-id="pool-wild-research"]').count(),
+              pledgeSlider: await page.locator('[data-pledge-range][data-pool-id="pool-wild-research"]').count(),
+              notFoundText: await page.getByText(/not found|404/i).count(),
+              deploymentDisabledText: await page.getByText(/DEPLOYMENT_DISABLED|Payment Required/i).count(),
+            };
+            result.cookies = (await context.cookies())
+              .map(cookie => ({ name: cookie.name, domain: cookie.domain, path: cookie.path }))
+              .slice(0, 30);
+            await page.screenshot({ path: '/tmp/pr402-content-diagnosis.png', fullPage: true });
+          } catch (error) {
+            result.captureError = error instanceof Error ? error.message : String(error);
+            result.finalUrl = page.url();
+            const body = await page.locator('body').innerText().catch(() => '');
+            result.bodyText = body.replace(/\s+/g, ' ').trim().slice(0, 6000);
+            await page.screenshot({ path: '/tmp/pr402-content-diagnosis.png', fullPage: true }).catch(() => {});
+          } finally {
+            fs.writeFileSync('/tmp/pr402-content-diagnosis.json', JSON.stringify(result, null, 2));
+            await context.close();
+            await browser.close();
+          }
+          NODE
+
+      - name: Revoke temporary Vercel automation bypass
+        id: revoke
+        if: always() && steps.bypass.outcome == 'success'
+        continue-on-error: true
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret="$(cat /tmp/pr402-bypass-secret)"
+          echo "::add-mask::$secret"
+          jq -n --arg secret "$secret" \
+            '{revoke:{secret:$secret,regenerate:false}}' \
+            > /tmp/pr402-revoke-bypass.json
+          curl --fail --silent --show-error \
+            --request PATCH \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/pr402-revoke-bypass.json \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/protection-bypass?teamId=$VERCEL_ORG_ID" \
+            > /tmp/pr402-revoke-bypass-response.json
+          rm -f /tmp/pr402-bypass-secret /tmp/pr402-revoke-bypass.json /tmp/pr402-revoke-bypass-response.json
+
+      - name: Upload complete diagnosis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr402-preview-content-diagnosis-${{ github.run_id }}
+          path: |
+            /tmp/pr402-deployment-evidence.json
+            /tmp/pr402-content-diagnosis.json
+            /tmp/pr402-content-diagnosis.log
+            /tmp/pr402-content-diagnosis.png
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Persist sanitized diagnosis, remove controller, and report
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GUARD_OUTCOME: ${{ steps.guard.outcome }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          BYPASS_OUTCOME: ${{ steps.bypass.outcome }}
+          CAPTURE_OUTCOME: ${{ steps.capture.outcome }}
+          REVOKE_OUTCOME: ${{ steps.revoke.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const result = {
+            runId: process.env.GITHUB_RUN_ID,
+            runUrl: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            deploymentId: process.env.PREVIEW_DEPLOYMENT_ID,
+            commit: process.env.EXPECTED_HEAD,
+            outcomes: {
+              guard: process.env.GUARD_OUTCOME,
+              install: process.env.INSTALL_OUTCOME,
+              bypass: process.env.BYPASS_OUTCOME,
+              capture: process.env.CAPTURE_OUTCOME,
+              revoke: process.env.REVOKE_OUTCOME,
+            },
+          };
+          for (const path of ['/tmp/pr402-deployment-evidence.json', '/tmp/pr402-content-diagnosis.json']) {
+            if (fs.existsSync(path)) Object.assign(result, JSON.parse(fs.readFileSync(path, 'utf8')));
+          }
+          fs.writeFileSync('/tmp/pr402-final-content-diagnosis.json', JSON.stringify(result, null, 2));
+          NODE
+
+          content="$(base64 -w0 /tmp/pr402-final-content-diagnosis.json)"
+          jq -n \
+            --arg message 'Record PR 402 Preview content diagnosis' \
+            --arg content "$content" \
+            --arg branch "$OPS_BRANCH" \
+            '{message:$message,content:$content,branch:$branch}' \
+            > /tmp/pr402-result-create.json
+          gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$RESULT_PATH" \
+            --input /tmp/pr402-result-create.json >/dev/null
+
+          workflow_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$WORKFLOW_PATH?ref=$OPS_BRANCH" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-time PR 402 Preview content diagnostic' \
+            --arg sha "$workflow_sha" \
+            --arg branch "$OPS_BRANCH" \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            > /tmp/pr402-workflow-delete.json
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$WORKFLOW_PATH" \
+            --input /tmp/pr402-workflow-delete.json >/dev/null
+
+          body_excerpt="$(node -e "const d=require('/tmp/pr402-final-content-diagnosis.json'); process.stdout.write((d.bodyText ?? '').slice(0,500).replace(/[\r\n]+/g,' '))")"
+          final_url="$(node -e "const d=require('/tmp/pr402-final-content-diagnosis.json'); process.stdout.write(d.finalUrl ?? '')")"
+          selectors="$(node -e "const d=require('/tmp/pr402-final-content-diagnosis.json'); process.stdout.write(JSON.stringify(d.selectors ?? {}))")"
+          gh pr comment 402 --repo "$GITHUB_REPOSITORY" --body "Protected Preview content diagnosis completed for \`$EXPECTED_HEAD\` on \`$PREVIEW_DEPLOYMENT_ID\`. Outcomes: guard=$GUARD_OUTCOME, install=$INSTALL_OUTCOME, bypass=$BYPASS_OUTCOME, capture=$CAPTURE_OUTCOME, revoke=$REVOKE_OUTCOME. Final URL: \`$final_url\`. Selector counts: \`$selectors\`. Body excerpt: \`$body_excerpt\`. No merge or production release is authorized by this diagnostic. Evidence: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+      - name: Enforce bypass revocation only
+        run: test '${{ steps.revoke.outcome }}' = 'success'
