@@ -1,0 +1,141 @@
+name: One-time final post-payment Vercel smoke
+
+on:
+  push:
+    branches:
+      - ops/vercel-canonical-git-disconnect-20260802
+    paths:
+      - .github/workflows/vercel-post-payment-final-smoke-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: vercel-post-payment-final-smoke-once
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/vercel-post-payment-final-smoke-once.yml
+  CONTROLLER_BRANCH: ops/vercel-canonical-git-disconnect-20260802
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out exact operations commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Guard exact one-file operations scope
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = "refs/heads/$CONTROLLER_BRANCH"
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          test -n "$VERCEL_TOKEN"
+          test -f scripts/vercel-admin-cost-controls.mjs
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+      - name: Remove the controller from its operations branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=$CONTROLLER_BRANCH" --jq .sha)"
+          jq -n --arg message 'Remove one-time final post-payment Vercel smoke controller' --arg sha "$blob_sha" --arg branch "$CONTROLLER_BRANCH" '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Verify canonical and duplicate control-plane state
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          for pair in \
+            'canonical:prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7:moraltrade-site' \
+            'duplicate:prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK:website2'
+          do
+            kind="${pair%%:*}"
+            rest="${pair#*:}"
+            project_id="${rest%%:*}"
+            project_name="${rest#*:}"
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header 'Accept: application/json' \
+              "https://api.vercel.com/v9/projects/$project_id?teamId=$VERCEL_ORG_ID" \
+              > "/tmp/$kind.json"
+            jq '{
+              id,
+              name,
+              link: (if .link == null then null else {type: .link.type, org: .link.org, repo: .link.repo, productionBranch: .link.productionBranch} end),
+              resourceConfig: {
+                buildMachineType: .resourceConfig.buildMachineType,
+                elasticConcurrencyEnabled: .resourceConfig.elasticConcurrencyEnabled,
+                buildQueue: (.resourceConfig.buildQueue.configuration // .resourceConfig.buildQueue)
+              }
+            }' "/tmp/$kind.json" > "vercel-final-$kind.json"
+            test "$(jq -r .id "vercel-final-$kind.json")" = "$project_id"
+            test "$(jq -r .name "vercel-final-$kind.json")" = "$project_name"
+            test "$(jq -r '.link == null' "vercel-final-$kind.json")" = 'true'
+          done
+
+          test "$(jq -r .resourceConfig.buildMachineType vercel-final-canonical.json)" = 'standard'
+          test "$(jq -r .resourceConfig.buildQueue vercel-final-canonical.json)" = 'WAIT_FOR_NAMESPACE_QUEUE'
+          test "$(jq -r '.resourceConfig.elasticConcurrencyEnabled != true' vercel-final-canonical.json)" = 'true'
+
+      - name: Run canonical production smoke with exact tab validation
+        shell: bash
+        env:
+          VERCEL_COST_CONTROL_MODE: smoke
+          VERCEL_COST_CONTROL_REPORT: vercel-final-production-smoke.json
+          VERCEL_PRODUCTION_BASE_URL: https://www.moraltrade.org
+          VERCEL_PRODUCTION_SMOKE_ATTEMPTS: '12'
+          VERCEL_PRODUCTION_SMOKE_INTERVAL_MS: '5000'
+          VERCEL_PRODUCTION_SMOKE_TIMEOUT_MS: '15000'
+        run: node scripts/vercel-admin-cost-controls.mjs
+
+      - name: Upload redacted final recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-post-payment-final-${{ github.run_id }}
+          path: |
+            vercel-final-canonical.json
+            vercel-final-duplicate.json
+            vercel-final-production-smoke.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report verified completion to PR 422
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "${{ job.status }}" == 'success' ]]; then
+            deployment_ids="$(jq -r '.deploymentIds | join(", ")' vercel-final-production-smoke.json)"
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "Post-payment Vercel recovery is fully verified. Both moraltrade-site and website2 are Git-disconnected; the canonical project uses Standard builds, serialized namespace queueing, and no enabled elastic concurrency; obsolete test projects remain absent from the earlier verified cleanup; and the root plus Portfolio, Ledger, Completed, and Calendar production routes passed exact-state checks on deployment \`$deployment_ids\`. Manual exact-SHA GitHub Actions release is now the only deployment path. Evidence: $run_url"
+          else
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "Final post-payment Vercel control-plane or canonical route smoke verification failed. No completion claim is made. Evidence: $run_url"
+          fi
+
+      - name: Enforce verified completion
+        if: always()
+        shell: bash
+        run: test "${{ job.status }}" = 'success'
