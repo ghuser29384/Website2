@@ -1,0 +1,53 @@
+{
+  "runId": "30747079389",
+  "runUrl": "https://github.com/ghuser29384/Website2/actions/runs/30747079389",
+  "deploymentId": "dpl_CGM9aM2j3DxnE3JYRMrNnPcsTLZZ",
+  "commit": "134d89d3ddefcbb96a5f06af99edf95175420985",
+  "outcomes": {
+    "guard": "success",
+    "install": "success",
+    "bypass": "success",
+    "capture": "success",
+    "revoke": "success"
+  },
+  "state": "READY",
+  "target": null,
+  "url": "https://moraltrade-site-bee27bhgs-ellen-s.vercel.app",
+  "requestedUrl": "https://moraltrade-site-bee27bhgs-ellen-s.vercel.app/discover?domain=pools&view=threshold&query=Find+pools&selected=pool-wild-research&selectedType=pool#discover",
+  "navigationStatus": 200,
+  "finalUrl": "https://moraltrade-site-bee27bhgs-ellen-s.vercel.app/discover?domain=pools&view=list&q=Find+pools#discover",
+  "title": "Moral Trade — Discover",
+  "bodyText": "Moral Trade Now Discover Offer Activity Account • DOMAINS Offers 0 Pools 0 People 11 VIEWS List Value field Threshold FILTERS SAVED SEARCHES 24 NEW Reset discovery state → Discover where value can move. Explore causes, exact terms, trust routes, and pooled activation without losing the state of your search. TODAY August 2, 2026 Describe what you want to find Search Live pools checked 12:06 PM. 0 exact matches. Domain: Pools × 0 matching pools SORT Best fit Closest to activation Greatest leverage Deadline risk Smallest remaining gap Most contributors Standalone threshold pools Live standalone threshold-funded moral public goods matching the active hard constraints. No active pools match “Find pools” The active hard constraints produced no exact live result. No unrelated record has been counted as a match. • Domain: Pools Search Offers (0) Search People (11) Clear search ← Back to results WILD ANIMAL SUFFERING · ON TRACK Wild-animal-suffering priority research pool $16,800 of $25,000 conditionally committed · 21 contributors PREVIEW YOUR CONDITIONAL PLEDGE $10 Your proposed conditional pledge $8,190 Remaining after your pledge 0.12% of current gap $8,190 remains Moving the slider does not save a pledge or authorize payment. WHAT YOUR PLEDGE CHANGES ACTIVATION CONSEQUENCE Research staff are contracted and the priority study begins. SHARE OF THE CURRENT GAP Your pledge would close 0.12% of the current $8,200 gap, leaving $8,190. This is arithmetic, not a forecast of other contributors. IF THE THRESHOLD IS MISSED Pledges lapse if the threshold is not reached. AUTHORIZATION EXPIRES Aug 16. No charge occurs after expiry without renewed consent. VERIFICATION Milestone plan, grantee verification, and public allocation report ANALYTICAL POSITION 33% of the threshold remains · 13 days to deadline · On track. Position is calculated from those terms. How calculated → Continue with a conditional $10 pledge → Add compare Save ◇",
+  "headings": [
+    "Discover where value can move.",
+    "Standalone threshold pools",
+    "No active pools match “Find pools”",
+    "Wild-animal-suffering priority research pool",
+    "PREVIEW YOUR CONDITIONAL PLEDGE",
+    "WHAT YOUR PLEDGE CHANGES",
+    "ANALYTICAL POSITION"
+  ],
+  "selectors": {
+    "expectedPoolHeading": 1,
+    "pledgePreviewHeading": 1,
+    "discoverHeading": 1,
+    "loginHeading": 0,
+    "vercelHeading": 0,
+    "mobileSheet": 0,
+    "poolCard": 1,
+    "pledgeSlider": 1,
+    "notFoundText": 0,
+    "deploymentDisabledText": 0
+  },
+  "pageErrors": [],
+  "consoleErrors": [],
+  "failedSameOriginRequests": [],
+  "badSameOriginResponses": [],
+  "cookies": [
+    {
+      "name": "_vercel_jwt",
+      "domain": "moraltrade-site-bee27bhgs-ellen-s.vercel.app",
+      "path": "/"
+    }
+  ]
+}
