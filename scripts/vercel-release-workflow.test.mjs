@@ -62,6 +62,21 @@ test("quality gates complete before an immutable prebuilt deployment", async () 
   assert.match(source, /--prebuilt/);
 });
 
+test("the rendered release gate binds the app to Playwright's local canonical origin", async () => {
+  const source = await workflow();
+  const start = source.indexOf("- name: Run complete rendered browser gate");
+  const end = source.indexOf("- name: Link only the canonical Vercel project", start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const browserGate = source.slice(start, end);
+
+  assert.match(browserGate, /NEXT_PUBLIC_SITE_URL: http:\/\/127\.0\.0\.1:3210/);
+  assert.match(browserGate, /SITE_URL: http:\/\/127\.0\.0\.1:3210/);
+  assert.match(browserGate, /PLAYWRIGHT_HTML_OPEN: never/);
+  assert.match(browserGate, /npm run test:e2e -- --reporter=line/);
+  assert.doesNotMatch(browserGate, /https:\/\/www\.moraltrade\.org/);
+});
+
 test("the release requires a repository secret rather than embedding credentials", async () => {
   const source = await workflow();
   assert.match(source, /secrets\.VERCEL_TOKEN/);

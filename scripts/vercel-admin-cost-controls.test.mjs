@@ -11,6 +11,7 @@ import {
   isVercelManagedDomain,
   runProductionSmoke,
   safeProjectSummary,
+  selectReadyProductionDeployment,
   validateDisposableProject,
   verifyCanonicalLive,
   verifyCanonicalSettings,
@@ -28,11 +29,24 @@ test("canonical settings select Standard builds and serialized free concurrency"
   });
 });
 
-test("canonical verification fails closed when settings or live state are wrong", () => {
+test("canonical verification accepts normalized disabled readback and a READY production deployment", () => {
   const canonical = {
     id: CANONICAL_PROJECT.id,
     name: CANONICAL_PROJECT.name,
-    live: true,
+    live: false,
+    domains: ["moraltrade.org", "www.moraltrade.org"],
+    latestDeployment: {
+      id: "dpl_newer_preview",
+      readyState: "READY",
+      target: null,
+      createdAt: 300,
+    },
+    productionDeployment: {
+      id: "dpl_current_production",
+      readyState: "READY",
+      target: "production",
+      createdAt: 200,
+    },
     resourceConfig: {
       buildMachineType: "standard",
       elasticConcurrencyEnabled: false,
@@ -42,9 +56,26 @@ test("canonical verification fails closed when settings or live state are wrong"
 
   assert.equal(verifyCanonicalSettings(canonical), true);
   assert.equal(verifyCanonicalLive(canonical), true);
+  assert.equal(
+    verifyCanonicalSettings({
+      ...canonical,
+      resourceConfig: {
+        ...canonical.resourceConfig,
+        elasticConcurrencyEnabled: null,
+      },
+    }),
+    true,
+  );
   assert.throws(
-    () => verifyCanonicalLive({ ...canonical, live: false }),
-    /not live/,
+    () =>
+      verifyCanonicalSettings({
+        ...canonical,
+        resourceConfig: {
+          buildMachineType: "standard",
+          buildQueue: "WAIT_FOR_NAMESPACE_QUEUE",
+        },
+      }),
+    /readback is missing/,
   );
   assert.throws(
     () =>
@@ -55,7 +86,63 @@ test("canonical verification fails closed when settings or live state are wrong"
           elasticConcurrencyEnabled: true,
         },
       }),
-    /concurrency remains enabled/,
+    /concurrency is not disabled/,
+  );
+  assert.throws(
+    () =>
+      verifyCanonicalLive({
+        ...canonical,
+        productionDeployment: {
+          ...canonical.productionDeployment,
+          readyState: "BUILDING",
+        },
+      }),
+    /not operational/,
+  );
+  assert.throws(
+    () =>
+      verifyCanonicalLive({
+        ...canonical,
+        domains: ["moraltrade.org"],
+      }),
+    /not operational/,
+  );
+});
+
+test("production deployment selection ignores newer previews and non-ready production deployments", () => {
+  assert.deepEqual(
+    selectReadyProductionDeployment([
+      {
+        id: "dpl_newer_preview",
+        readyState: "READY",
+        target: null,
+        createdAt: 400,
+      },
+      {
+        id: "dpl_building_production",
+        readyState: "BUILDING",
+        target: "production",
+        createdAt: 350,
+      },
+      {
+        uid: "dpl_older_production",
+        state: "READY",
+        target: "production",
+        created: 100,
+      },
+      {
+        id: "dpl_current_production",
+        readyState: "READY",
+        target: "production",
+        createdAt: 200,
+      },
+    ]),
+    {
+      id: "dpl_current_production",
+      readyState: "READY",
+      target: "production",
+      createdAt: 200,
+    },
   );
 });
 
@@ -99,12 +186,12 @@ test("project deletion fails closed on identity or custom-domain mismatch", () =
   );
 });
 
-test("audit summaries redact environment-variable values and other secrets", () => {
+test("audit summaries redact secrets and keep preview and production deployment identities separate", () => {
   const summary = safeProjectSummary(
     {
       id: CANONICAL_PROJECT.id,
       name: CANONICAL_PROJECT.name,
-      live: true,
+      live: false,
       framework: "nextjs",
       link: {
         type: "github",
@@ -117,16 +204,38 @@ test("audit summaries redact environment-variable values and other secrets", () 
       env: [{ key: "DATABASE_URL", value: "must-not-leak" }],
       resourceConfig: {
         buildMachineType: "standard",
-        elasticConcurrencyEnabled: false,
+        elasticConcurrencyEnabled: null,
         buildQueue: { configuration: "WAIT_FOR_NAMESPACE_QUEUE" },
       },
       speedInsights: { enabledAt: 1 },
       webAnalytics: { enabledAt: 1 },
       latestDeployments: [
-        { id: "dpl_1", readyState: "READY", target: "production" },
+        {
+          id: "dpl_newer_preview",
+          readyState: "READY",
+          target: null,
+          createdAt: 300,
+        },
       ],
     },
-    [{ name: "moraltrade.org" }],
+    [
+      { name: "moraltrade.org" },
+      { name: "www.moraltrade.org" },
+    ],
+    [
+      {
+        id: "dpl_building_production",
+        readyState: "BUILDING",
+        target: "production",
+        createdAt: 250,
+      },
+      {
+        id: "dpl_current_production",
+        readyState: "READY",
+        target: "production",
+        createdAt: 200,
+      },
+    ],
   );
 
   const serialized = JSON.stringify(summary);
@@ -134,6 +243,12 @@ test("audit summaries redact environment-variable values and other secrets", () 
   assert.doesNotMatch(serialized, /secret-credential-id/);
   assert.match(serialized, /moraltrade\.org/);
   assert.equal(summary.resourceConfig.buildMachineType, "standard");
+  assert.equal(summary.resourceConfig.elasticConcurrencyEnabled, null);
+  assert.equal(summary.latestDeployment.id, "dpl_newer_preview");
+  assert.equal(
+    summary.productionDeployment.id,
+    "dpl_current_production",
+  );
 });
 
 test("the deletion allowlist is narrow, immutable, and excludes live projects", () => {
