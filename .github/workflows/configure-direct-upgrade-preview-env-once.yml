@@ -1,0 +1,86 @@
+name: Configure Direct Donation Upgrade preview environment once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/configure-direct-upgrade-preview-env-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: configure-direct-upgrade-preview-env-once
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/configure-direct-upgrade-preview-env-once.yml
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  RELEASE_BRANCH: release/vercel-preview
+
+jobs:
+  configure:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Guard and remove one-time controller
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha)"
+          jq -n --arg message 'Remove one-time Direct Donation Upgrade preview environment controller' --arg sha "$blob_sha" --arg branch main '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Upsert branch-scoped fail-closed preview variables
+        id: env
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          payload="$(jq -n --arg branch "$RELEASE_BRANCH" '[
+            {key:"DIRECT_DONATION_UPGRADES_ENABLED",value:"true",type:"encrypted",target:["preview"],gitBranch:$branch,comment:"Direct Donation Upgrade exact release-preview surface"},
+            {key:"DIRECT_DONATION_UPGRADE_MODE",value:"staging",type:"encrypted",target:["preview"],gitBranch:$branch,comment:"Every.org staging only; canonical production rejects this mode"},
+            {key:"DIRECT_DONATION_UPGRADE_QA_FIXTURES",value:"true",type:"encrypted",target:["preview"],gitBranch:$branch,comment:"Deterministic Homeward Pet and GiveWell rendered preview fixtures"},
+            {key:"CONDITIONAL_PAYMENTS_MODE",value:"disabled",type:"encrypted",target:["preview"],gitBranch:$branch,comment:"Managed payment rail remains fail-closed"},
+            {key:"TRADE_DONATION_POOL_ENABLED",value:"false",type:"encrypted",target:["preview"],gitBranch:$branch,comment:"Pooled settlement remains disabled"},
+            {key:"TRADE_DONATION_POOL_MODE",value:"disabled",type:"encrypted",target:["preview"],gitBranch:$branch,comment:"Pooled settlement remains disabled"}
+          ]')"
+          response="$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --url "https://api.vercel.com/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_TEAM_ID&upsert=true" \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data "$payload")"
+          failed_count="$(jq '[.failed[]?] | length' <<<"$response")"
+          test "$failed_count" = '0'
+          created_count="$(jq 'if .created then (if (.created|type)=="array" then (.created|length) else 1 end) else 0 end' <<<"$response")"
+          test "$created_count" -ge 1
+          printf '{"branch":"%s","configuredKeys":%s,"failed":0}\n' \
+            "$RELEASE_BRANCH" \
+            "$(jq '[.created[]?.key, .created.key] | map(select(. != null)) | unique' <<<"$response")" \
+            | tee preview-env-evidence.json
+
+      - name: Record configuration boundary
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr comment 418 --repo "$GITHUB_REPOSITORY" --body "Configured branch-scoped Vercel Preview flags for \`release/vercel-preview\`: Direct Donation Upgrade staging fixtures enabled; managed conditional payments and pooled settlement explicitly disabled. Provider webhook and metadata secrets remain absent, so commitment publication and checkout stay fail-closed until the Every.org staging setup is completed. No production environment variable was changed."
