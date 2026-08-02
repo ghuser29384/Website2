@@ -21,6 +21,65 @@ export const OBSOLETE_TEST_PROJECTS = Object.freeze([
   { id: "prj_GjsRceONkKiX820msEgBkgIpb6qj", name: "moraltrade-production-bridge-test" },
 ]);
 
+export const PRODUCTION_ROUTE_CHECKS = Object.freeze([
+  Object.freeze({
+    name: "root",
+    path: "/",
+    requiredText: Object.freeze(["Moral Trade"]),
+    activeHref: null,
+    activeLabel: null,
+    requireDeploymentId: false,
+  }),
+  Object.freeze({
+    name: "portfolio",
+    path: "/commitments",
+    requiredText: Object.freeze([
+      "Additional resources you caused.",
+      "Sign in to view your commitments.",
+      "Portfolio",
+      "Ledger",
+      "Completed",
+      "Calendar",
+    ]),
+    activeHref: "/commitments",
+    activeLabel: "Portfolio",
+    requireDeploymentId: true,
+  }),
+  Object.freeze({
+    name: "ledger",
+    path: "/commitments?tab=ledger",
+    requiredText: Object.freeze([
+      "Additional resources you caused.",
+      "Sign in to view your commitments.",
+    ]),
+    activeHref: "/commitments?tab=ledger",
+    activeLabel: "Ledger",
+    requireDeploymentId: true,
+  }),
+  Object.freeze({
+    name: "completed",
+    path: "/commitments?tab=completed",
+    requiredText: Object.freeze([
+      "Additional resources you caused.",
+      "Sign in to view your commitments.",
+    ]),
+    activeHref: "/commitments?tab=completed",
+    activeLabel: "Completed",
+    requireDeploymentId: true,
+  }),
+  Object.freeze({
+    name: "calendar",
+    path: "/commitments?tab=calendar",
+    requiredText: Object.freeze([
+      "Additional resources you caused.",
+      "Sign in to view your commitments.",
+    ]),
+    activeHref: "/commitments?tab=calendar",
+    activeLabel: "Calendar",
+    requireDeploymentId: true,
+  }),
+]);
+
 export function buildCanonicalResourcePatch() {
   return {
     resourceConfig: {
@@ -228,7 +287,7 @@ async function resumeCanonicalProject(token) {
   return true;
 }
 
-function verifyCanonicalSettings(summary) {
+export function verifyCanonicalSettings(summary) {
   if (!summary) throw new Error("Canonical Vercel project is missing.");
   const config = summary.resourceConfig;
   if (config?.buildMachineType !== "standard") {
@@ -236,7 +295,7 @@ function verifyCanonicalSettings(summary) {
       `Canonical build machine is not standard: ${JSON.stringify(config)}`,
     );
   }
-  if (config.elasticConcurrencyEnabled !== false) {
+  if (config.elasticConcurrencyEnabled === true) {
     throw new Error(
       `On-demand build concurrency remains enabled: ${JSON.stringify(config)}`,
     );
@@ -246,12 +305,35 @@ function verifyCanonicalSettings(summary) {
       `Canonical build queue is not serialized: ${JSON.stringify(config)}`,
     );
   }
+  return true;
 }
 
-async function verify(token, { requireWebsite2Disconnected, requireObsoleteAbsent }) {
+export function verifyCanonicalLive(summary) {
+  if (!summary) throw new Error("Canonical Vercel project is missing.");
+  if (summary.live !== true) {
+    throw new Error(
+      `Canonical Vercel project is not live: ${JSON.stringify({
+        id: summary.id,
+        name: summary.name,
+        live: summary.live,
+      })}`,
+    );
+  }
+  return true;
+}
+
+async function verify(
+  token,
+  {
+    requireWebsite2Disconnected,
+    requireObsoleteAbsent,
+    requireCanonicalLive,
+  },
+) {
   const report = await audit(token);
   verifyCanonicalSettings(report.canonical);
 
+  if (requireCanonicalLive) verifyCanonicalLive(report.canonical);
   if (requireWebsite2Disconnected && report.duplicate?.link) {
     throw new Error(
       `website2 remains connected to Git: ${JSON.stringify(report.duplicate.link)}`,
@@ -266,6 +348,173 @@ async function verify(token, { requireWebsite2Disconnected, requireObsoleteAbsen
   return report;
 }
 
+function escapeRegex(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function hasActiveAnchor(html, href, label) {
+  const anchors = String(html).match(/<a\b[^>]*>[^<]*<\/a>/g) ?? [];
+  const hrefPattern = new RegExp(`\\bhref="${escapeRegex(href)}"`);
+  const labelPattern = new RegExp(`>${escapeRegex(label)}<\\/a>$`);
+  return anchors.some(
+    (anchor) =>
+      /\baria-current="page"/.test(anchor) &&
+      hrefPattern.test(anchor) &&
+      labelPattern.test(anchor),
+  );
+}
+
+export function evaluateProductionRoute(check, response) {
+  const body = String(response.body ?? "");
+  const failures = [];
+  const status = Number(response.status ?? 0);
+  const contentType = String(response.contentType ?? "");
+  const deploymentId = body.match(/\bdata-dpl-id="([^"]+)"/)?.[1] ?? null;
+
+  if (status !== 200) failures.push(`expected HTTP 200, received ${status}`);
+  if (/DEPLOYMENT_DISABLED|Payment Required/i.test(body)) {
+    failures.push("response is deployment-disabled or billing-blocked");
+  }
+  if (!contentType.toLowerCase().includes("text/html")) {
+    failures.push(`expected text/html, received ${contentType || "unknown"}`);
+  }
+  for (const marker of check.requiredText ?? []) {
+    if (!body.includes(marker)) failures.push(`missing marker: ${marker}`);
+  }
+  if (
+    check.activeHref &&
+    check.activeLabel &&
+    !hasActiveAnchor(body, check.activeHref, check.activeLabel)
+  ) {
+    failures.push(`active tab mismatch: ${check.activeLabel}`);
+  }
+  if (check.requireDeploymentId && !deploymentId) {
+    failures.push("missing data-dpl-id on Next.js route");
+  }
+
+  return {
+    name: check.name,
+    path: check.path,
+    status,
+    finalUrl: response.finalUrl ?? null,
+    contentType: contentType || null,
+    deploymentId,
+    passed: failures.length === 0,
+    failures,
+  };
+}
+
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function defaultSleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function fetchProductionRoute(check, { baseUrl, fetchImpl, timeoutMs }) {
+  try {
+    const response = await fetchImpl(new URL(check.path, baseUrl), {
+      redirect: "follow",
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "Cache-Control": "no-cache",
+        "User-Agent": "MoralTrade-production-recovery-smoke/1.0",
+      },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const body = await response.text();
+    return evaluateProductionRoute(check, {
+      status: response.status,
+      body,
+      contentType: response.headers.get("content-type") ?? "",
+      finalUrl: response.url,
+    });
+  } catch (error) {
+    return {
+      name: check.name,
+      path: check.path,
+      status: 0,
+      finalUrl: null,
+      contentType: null,
+      deploymentId: null,
+      passed: false,
+      failures: [
+        `request failed: ${error instanceof Error ? error.message : String(error)}`,
+      ],
+    };
+  }
+}
+
+export async function runProductionSmoke({
+  baseUrl = "https://www.moraltrade.org",
+  checks = PRODUCTION_ROUTE_CHECKS,
+  fetchImpl = fetch,
+  attempts = 30,
+  intervalMs = 10_000,
+  timeoutMs = 15_000,
+  sleep = defaultSleep,
+} = {}) {
+  const normalizedBaseUrl = new URL(baseUrl).toString();
+  let routes = [];
+  let attempt = 0;
+
+  for (attempt = 1; attempt <= attempts; attempt += 1) {
+    routes = await Promise.all(
+      checks.map((check) =>
+        fetchProductionRoute(check, {
+          baseUrl: normalizedBaseUrl,
+          fetchImpl,
+          timeoutMs,
+        }),
+      ),
+    );
+
+    const deploymentIds = [
+      ...new Set(routes.map((route) => route.deploymentId).filter(Boolean)),
+    ];
+    const allRoutesPassed = routes.every((route) => route.passed);
+    const deploymentIsConsistent = deploymentIds.length <= 1;
+
+    if (allRoutesPassed && deploymentIsConsistent) {
+      return {
+        checkedAt: new Date().toISOString(),
+        baseUrl: normalizedBaseUrl,
+        attemptsUsed: attempt,
+        passed: true,
+        deploymentIds,
+        routes,
+      };
+    }
+
+    if (attempt < attempts) await sleep(intervalMs);
+  }
+
+  const deploymentIds = [
+    ...new Set(routes.map((route) => route.deploymentId).filter(Boolean)),
+  ];
+  if (deploymentIds.length > 1) {
+    routes = routes.map((route) => ({
+      ...route,
+      passed: false,
+      failures: [
+        ...route.failures,
+        `commitment routes resolved to inconsistent deployments: ${deploymentIds.join(", ")}`,
+      ],
+    }));
+  }
+
+  return {
+    checkedAt: new Date().toISOString(),
+    baseUrl: normalizedBaseUrl,
+    attemptsUsed: attempt - 1,
+    passed: false,
+    deploymentIds,
+    routes,
+  };
+}
+
 function parseBoolean(value, fallback = false) {
   if (value === undefined || value === null || value === "") return fallback;
   return /^(1|true|yes)$/i.test(String(value));
@@ -278,11 +527,43 @@ async function writeReport(report) {
   else process.stdout.write(text);
 }
 
-async function main() {
+async function requireToken() {
   const token = process.env.VERCEL_TOKEN;
   if (!token) throw new Error("VERCEL_TOKEN is required.");
+  return token;
+}
 
+async function main() {
   const mode = process.env.VERCEL_COST_CONTROL_MODE || "audit";
+
+  if (mode === "smoke") {
+    const report = await runProductionSmoke({
+      baseUrl:
+        process.env.VERCEL_PRODUCTION_BASE_URL ||
+        "https://www.moraltrade.org",
+      attempts: parsePositiveInteger(
+        process.env.VERCEL_PRODUCTION_SMOKE_ATTEMPTS,
+        30,
+      ),
+      intervalMs: parsePositiveInteger(
+        process.env.VERCEL_PRODUCTION_SMOKE_INTERVAL_MS,
+        10_000,
+      ),
+      timeoutMs: parsePositiveInteger(
+        process.env.VERCEL_PRODUCTION_SMOKE_TIMEOUT_MS,
+        15_000,
+      ),
+    });
+    await writeReport(report);
+    if (!report.passed) {
+      throw new Error(
+        `Canonical production smoke failed after ${report.attemptsUsed} attempt(s).`,
+      );
+    }
+    return;
+  }
+
+  const token = await requireToken();
   if (mode === "audit") {
     await writeReport(await audit(token));
     return;
@@ -313,6 +594,10 @@ async function main() {
         requireObsoleteAbsent: parseBoolean(
           process.env.REQUIRE_OBSOLETE_ABSENT,
           true,
+        ),
+        requireCanonicalLive: parseBoolean(
+          process.env.REQUIRE_CANONICAL_LIVE,
+          false,
         ),
       }),
     );

@@ -30,11 +30,23 @@ test("the workflow preserves the canonical project and disconnects only website2
   assert.doesNotMatch(source, /project rm moraltrade-site/);
 });
 
-test("audit, apply, and verification evidence are all retained without credentials", async () => {
+test("resuming production requires live-state and exact canonical-route checks", async () => {
+  const source = await workflow();
+  assert.match(source, /REQUIRE_CANONICAL_LIVE: \$\{\{ inputs\.resume_production \}\}/);
+  assert.match(source, /Smoke-test the canonical production routes after resume/);
+  assert.match(source, /inputs\.mode == 'apply' && inputs\.resume_production/);
+  assert.match(source, /VERCEL_COST_CONTROL_MODE: smoke/);
+  assert.match(source, /VERCEL_PRODUCTION_BASE_URL: https:\/\/www\.moraltrade\.org/);
+  assert.match(source, /VERCEL_PRODUCTION_SMOKE_ATTEMPTS: 30/);
+  assert.match(source, /vercel-production-smoke\.json/);
+});
+
+test("audit, apply, verification, and smoke evidence are retained without credentials", async () => {
   const source = await workflow();
   assert.match(source, /VERCEL_COST_CONTROL_MODE: audit/);
   assert.match(source, /VERCEL_COST_CONTROL_MODE: apply/);
   assert.match(source, /VERCEL_COST_CONTROL_MODE: verify/);
+  assert.match(source, /VERCEL_COST_CONTROL_MODE: smoke/);
   assert.match(source, /actions\/upload-artifact@v4/);
   assert.match(source, /secrets\.VERCEL_TOKEN/);
   assert.doesNotMatch(source, /tok_[A-Za-z0-9_-]+/);
