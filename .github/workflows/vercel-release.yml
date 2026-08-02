@@ -19,8 +19,13 @@ on:
         description: Full 40-character commit SHA proved by the repository gates
         required: true
         type: string
+      rendered_verification_run_id:
+        description: Exact successful trusted rendered-QA workflow run for expected_sha
+        required: true
+        type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -31,6 +36,7 @@ env:
   VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
   VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
   RELEASE_PREVIEW_BRANCH: release/vercel-preview
+  TRUSTED_RENDERED_WORKFLOW_ID: '324968062'
   VERCEL_CLI_VERSION: 50.38.1
 
 jobs:
@@ -95,16 +101,36 @@ jobs:
           npx tsc --noEmit
           npm run build
 
-      - name: Run complete rendered browser gate
+      - name: Verify exact trusted rendered QA evidence
+        id: rendered_evidence
         shell: bash
         env:
-          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
-          SITE_URL: http://127.0.0.1:3210
-          PLAYWRIGHT_HTML_OPEN: never
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          GH_TOKEN: ${{ github.token }}
+          RENDERED_VERIFICATION_RUN_ID: ${{ inputs.rendered_verification_run_id }}
         run: |
           set -euo pipefail
-          npx playwright install --with-deps chromium
-          npm run test:e2e -- --reporter=line
+          [[ "$RENDERED_VERIFICATION_RUN_ID" =~ ^[0-9]+$ ]]
+
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RENDERED_VERIFICATION_RUN_ID")"
+          test "$(jq -r '.repository.full_name' <<<"$run_json")" = "$GITHUB_REPOSITORY"
+          test "$(jq -r '.workflow_id' <<<"$run_json")" = "$TRUSTED_RENDERED_WORKFLOW_ID"
+          test "$(jq -r '.head_sha' <<<"$run_json")" = "$EXPECTED_SHA"
+          test "$(jq -r '.status' <<<"$run_json")" = 'completed'
+          test "$(jq -r '.conclusion' <<<"$run_json")" = 'success'
+
+          jobs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RENDERED_VERIFICATION_RUN_ID/jobs?per_page=100")"
+          jq -e '.jobs[] | select(.name == "rendered-smoke" and .status == "completed" and .conclusion == "success")' \
+            <<<"$jobs_json" >/dev/null
+
+          workflow_name="$(jq -r '.name' <<<"$run_json")"
+          workflow_url="$(jq -r '.html_url' <<<"$run_json")"
+          test -n "$workflow_name"
+          test -n "$workflow_url"
+          echo "workflow_name=$workflow_name" >> "$GITHUB_OUTPUT"
+          echo "workflow_url=$workflow_url" >> "$GITHUB_OUTPUT"
+          printf 'Verified rendered QA: %s (%s) for %s\n' \
+            "$workflow_name" "$workflow_url" "$EXPECTED_SHA"
 
       - name: Link only the canonical Vercel project
         shell: bash
@@ -164,6 +190,60 @@ jobs:
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
           printf 'Deployment URL: %s\n' "$deployment_url"
 
+      - name: Run read-only canonical route smoke against the deployment
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOYMENT_URL" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app/?$ ]]
+          : > release-route-smoke.tsv
+
+          smoke_route() {
+            local route="$1"
+            local label="$2"
+            local body="release-smoke-${label}.html"
+            local headers="release-smoke-${label}.headers"
+            local code='000'
+
+            for attempt in $(seq 1 30); do
+              code="$(curl --location --silent --show-error \
+                --connect-timeout 10 --max-time 30 \
+                --output "$body" --dump-header "$headers" \
+                --write-out '%{http_code}' \
+                "${DEPLOYMENT_URL%/}${route}" || true)"
+              if [[ "$code" =~ ^[23][0-9][0-9]$ ]]; then
+                break
+              fi
+              sleep 4
+            done
+
+            [[ "$code" =~ ^[23][0-9][0-9]$ ]]
+            test -s "$body"
+            if grep -Eiq 'DEPLOYMENT_DISABLED|Application error|Internal Server Error|FUNCTION_INVOCATION_FAILED' "$body"; then
+              echo "Deployment error marker found on $route" >&2
+              exit 1
+            fi
+            printf '%s\t%s\t%s\t%s\n' \
+              "$label" "$route" "$code" "$(sha256sum "$body" | awk '{print $1}')" \
+              | tee -a release-route-smoke.tsv
+          }
+
+          smoke_route '/' root
+          smoke_route '/create?structure=conditional-donation' create
+          smoke_route '/donation-upgrades' donation-upgrades
+
+      - name: Upload immutable release smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-vercel-release-${{ inputs.target }}-${{ inputs.expected_sha }}
+          path: |
+            release-route-smoke.tsv
+            release-smoke-*.headers
+            release-smoke-*.html
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Record immutable release evidence
         shell: bash
         run: |
@@ -175,6 +255,8 @@ jobs:
             echo "- Ref: \`${{ inputs.ref }}\`"
             echo "- Commit: \`${{ inputs.expected_sha }}\`"
             echo "- Project: \`$VERCEL_PROJECT_ID\`"
+            echo "- Rendered QA: ${{ steps.rendered_evidence.outputs.workflow_name }} — ${{ steps.rendered_evidence.outputs.workflow_url }}"
             echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
             echo '- Build location: GitHub Actions (`vercel build` + `vercel deploy --prebuilt`)'
+            echo '- Post-deployment verification: read-only canonical route smoke with response-body hashes'
           } >> "$GITHUB_STEP_SUMMARY"
