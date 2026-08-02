@@ -92,22 +92,22 @@ jobs:
           readback_file="$RUNNER_TEMP/release-validation-readback.ndjson"
           evidence_file="$RUNNER_TEMP/release-validation-evidence.json"
 
-          printf '%s' "$VALIDATION_RUNS" \
-            | jq -e '
-                type == "array"
-                and length >= 3
-                and all(.[];
-                  type == "object"
-                  and ((keys | sort) == ["gate", "id", "workflow"])
-                  and (.id | type == "number" and . > 0 and . == floor)
-                  and (.workflow | type == "string" and length > 0)
-                  and (.gate
-                    | type == "string"
-                    and test("^(classification|engineering|rendered|database|compatibility|security)$"))
-                )
-                and (([.[].id] | length) == ([.[].id] | unique | length))
-                and ((["classification", "engineering", "rendered"] - [.[].gate]) | length == 0)
-              ' > "$requirements_file"
+          printf '%s' "$VALIDATION_RUNS" > "$requirements_file"
+          jq -e '
+            type == "array"
+            and length >= 3
+            and all(.[];
+              type == "object"
+              and ((keys | sort) == ["gate", "id", "workflow"])
+              and (.id | type == "number" and . > 0 and . == floor)
+              and (.workflow | type == "string" and length > 0)
+              and (.gate
+                | type == "string"
+                and test("^(classification|engineering|rendered|database|compatibility|security)$"))
+            )
+            and (([.[].id] | length) == ([.[].id] | unique | length))
+            and ((["classification", "engineering", "rendered"] - [.[].gate]) | length == 0)
+          ' "$requirements_file" > /dev/null
 
           : > "$readback_file"
           while IFS= read -r requirement; do
