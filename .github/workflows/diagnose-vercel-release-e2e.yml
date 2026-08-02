@@ -1,0 +1,101 @@
+name: Diagnose gated Vercel release E2E
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/diagnose-vercel-release-e2e.yml
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: diagnose-vercel-release-e2e-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+
+    steps:
+      - name: Check out exact diagnostic head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run the exact release browser command and capture diagnostics
+        id: e2e
+        shell: bash
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set +e
+          npm run test:e2e -- --reporter=line > release-e2e.log 2>&1
+          status=$?
+          set -e
+          {
+            echo '### Exact gated-release E2E diagnostic'
+            echo
+            echo "- Exit code: \`$status\`"
+            echo "- Head: \`${{ github.event.pull_request.head.sha }}\`"
+            echo
+            echo '```text'
+            grep -E '(^|[[:space:]])([0-9]+ failed|[0-9]+ passed|[0-9]+ skipped|Error:|TimeoutError:|tests/[^:]+\.spec\.ts:[0-9]+)' release-e2e.log | tail -n 160 || true
+            echo '```'
+            echo
+            echo '<details><summary>Final 180 log lines</summary>'
+            echo
+            echo '```text'
+            tail -n 180 release-e2e.log
+            echo '```'
+            echo '</details>'
+          } > release-e2e-summary.md
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('release-e2e-summary.md')
+          text = path.read_text(errors='replace')
+          if len(text) > 60000:
+              text = text[:58000] + '\n\n[truncated]\n'
+          path.write_text(text)
+          PY
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Comment concise diagnostic
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh pr comment "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY" --body-file release-e2e-summary.md
+
+      - name: Upload full diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-release-e2e-diagnostic-${{ github.run_id }}
+          path: |
+            release-e2e.log
+            release-e2e-summary.md
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Preserve command result
+        if: always()
+        shell: bash
+        run: exit "${{ steps.e2e.outputs.status || 1 }}"
