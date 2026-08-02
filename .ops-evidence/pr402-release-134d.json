@@ -1,0 +1,27 @@
+{
+  "runId": "30746443176",
+  "runUrl": "https://github.com/ghuser29384/Website2/actions/runs/30746443176",
+  "commit": "134d89d3ddefcbb96a5f06af99edf95175420985",
+  "main": "43a791175b34e279adbb4d5a946addb723ed8622",
+  "outcomes": {
+    "guard": "success",
+    "install": "success",
+    "gates": "success",
+    "localBrowser": "success",
+    "vercelBuild": "success",
+    "deploy": "success",
+    "bypass": "success",
+    "remoteBrowser": "failure",
+    "revoke": "success"
+  },
+  "deploymentId": "dpl_CGM9aM2j3DxnE3JYRMrNnPcsTLZZ",
+  "url": "https://moraltrade-site-bee27bhgs-ellen-s.vercel.app",
+  "state": "READY",
+  "target": null,
+  "status": "failed",
+  "desktop": null,
+  "mobile390x844": null,
+  "errors": [
+    "locator.waitFor: Timeout 30000ms exceeded.\nCall log:\n  - waiting for getByRole('heading', { name: /Wild-animal-suffering priority research pool/i }) to be visible\n"
+  ]
+}
