@@ -1,0 +1,280 @@
+name: One-time inspect exact PR 402 preview
+
+on:
+  push:
+    branches:
+      - ops/inspect-pr402-preview-20260802
+    paths:
+      - .github/workflows/inspect-pr402-existing-preview-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: inspect-pr402-existing-preview-once
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/inspect-pr402-existing-preview-once.yml
+  CONTROLLER_BRANCH: ops/inspect-pr402-preview-20260802
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  DEPLOYMENT_ID: dpl_2m4vCJej3NGzY3dfpxa2JUmK6Pwr
+  DEPLOYMENT_URL: https://moraltrade-site-o9tplekqr-ellen-s.vercel.app
+  EXPECTED_HEAD: b4f2443b95ce32f9c28ad007d7524c6498252bd6
+
+jobs:
+  inspect:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out exact operations commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Guard exact one-file operations scope and credentials
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = "refs/heads/$CONTROLLER_BRANCH"
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          test -n "$VERCEL_TOKEN"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+      - name: Remove one-time controller from its operations branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=$CONTROLLER_BRANCH" --jq .sha)"
+          jq -n --arg message 'Remove one-time exact PR 402 preview inspector' --arg sha "$blob_sha" --arg branch "$CONTROLLER_BRANCH" '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Wait for exact deployment readiness and verify immutable identity
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          ready=false
+          for attempt in $(seq 1 360); do
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              --header 'Accept: application/json' \
+              "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+              > /tmp/pr402-deployment-raw.json
+            state="$(jq -r '.readyState // .state // empty' /tmp/pr402-deployment-raw.json)"
+            if [[ "$state" == 'READY' ]]; then
+              ready=true
+              break
+            fi
+            if [[ "$state" == 'ERROR' || "$state" == 'CANCELED' ]]; then
+              echo "Deployment entered terminal state: $state" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          test "$ready" = true
+          jq '{
+            id: (.uid // .id),
+            name,
+            url,
+            readyState,
+            target,
+            projectId,
+            source,
+            meta: {
+              githubCommitSha: .meta.githubCommitSha,
+              githubCommitRef: .meta.githubCommitRef,
+              gitDirty: .meta.gitDirty
+            }
+          }' /tmp/pr402-deployment-raw.json > pr402-existing-preview-deployment.json
+          test "$(jq -r .id pr402-existing-preview-deployment.json)" = "$DEPLOYMENT_ID"
+          test "$(jq -r .projectId pr402-existing-preview-deployment.json)" = "$VERCEL_PROJECT_ID"
+          test "$(jq -r .readyState pr402-existing-preview-deployment.json)" = 'READY'
+          test "$(jq -r .meta.githubCommitSha pr402-existing-preview-deployment.json)" = "$EXPECTED_HEAD"
+
+      - name: Generate a masked temporary automation bypass
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          bypass_secret="$(openssl rand -hex 16)"
+          test "${#bypass_secret}" -eq 32
+          echo "::add-mask::$bypass_secret"
+          printf '%s' "$bypass_secret" > /tmp/pr402-vercel-bypass-secret
+          jq -n --arg secret "$bypass_secret" \
+            '{generate:{secret:$secret,note:"Temporary exact PR 402 preview inspection"}}' \
+            > /tmp/pr402-generate-bypass.json
+          http_status="$(curl --silent --show-error \
+            --output /tmp/pr402-generate-bypass-response.json \
+            --write-out '%{http_code}' \
+            --request PATCH \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data-binary @/tmp/pr402-generate-bypass.json \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/protection-bypass?teamId=$VERCEL_ORG_ID")"
+          test "$http_status" = '200'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Inspect exact protected desktop and mobile preview behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          export VERCEL_AUTOMATION_BYPASS_SECRET="$(cat /tmp/pr402-vercel-bypass-secret)"
+          mkdir -p test-results
+          node --input-type=module <<'NODE'
+          import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
+
+          const base = process.env.DEPLOYMENT_URL;
+          const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+          const route = '/discover?domain=pools&view=threshold&query=Find+pools&selected=pool-wild-research&selectedType=pool#discover';
+          if (!base || !bypass) throw new Error('Missing preview URL or protection bypass.');
+
+          const browser = await chromium.launch();
+          const evidence = {
+            deploymentId: process.env.DEPLOYMENT_ID,
+            deploymentUrl: base,
+            commit: process.env.EXPECTED_HEAD,
+            checks: [],
+          };
+
+          async function inspect(name, viewport, mobile) {
+            const context = await browser.newContext({
+              viewport,
+              extraHTTPHeaders: {
+                'x-vercel-protection-bypass': bypass,
+                'x-vercel-set-bypass-cookie': 'true',
+              },
+            });
+            await context.addCookies([{ name: 'mt_walkthrough_seen', value: '1', url: base, sameSite: 'Lax' }]);
+            const page = await context.newPage();
+            const pageErrors = [];
+            const consoleErrors = [];
+            page.on('pageerror', (error) => pageErrors.push(error.message));
+            page.on('console', (message) => {
+              if (message.type() === 'error') consoleErrors.push(message.text());
+            });
+
+            await page.goto(base + route, { waitUntil: 'networkidle', timeout: 60000 });
+            await page.getByRole('heading', { name: 'Preview your conditional pledge' }).waitFor({ state: 'visible' });
+            if (mobile) await page.locator('.inspector.mobile-sheet').waitFor({ state: 'visible' });
+
+            const slider = page.locator('[data-pledge-range][data-pool-id="pool-wild-research"]:visible').last();
+            await slider.waitFor({ state: 'visible' });
+            await slider.evaluate((element) => {
+              element.value = '35';
+              element.dispatchEvent(new Event('input', { bubbles: true }));
+            });
+
+            await page.getByText('0.43% of current gap', { exact: true }).first().waitFor({ state: 'visible' });
+            await page.getByText('$8,165 remains', { exact: true }).first().waitFor({ state: 'visible' });
+            await page.getByText('Moving the slider does not save a pledge or authorize payment.', { exact: true }).waitFor({ state: 'visible' });
+            if (await page.getByText(/pivotality/i).count()) throw new Error(`${name}: pivotality copy remains`);
+
+            const overflow = await page.locator('html').evaluate((element) => element.scrollWidth - element.clientWidth);
+            if (overflow > 1) throw new Error(`${name}: document overflow ${overflow}`);
+            if (mobile) {
+              const sheet = page.locator('.inspector.mobile-sheet');
+              const box = await sheet.boundingBox();
+              if (!box || box.x < -1 || box.x + box.width > viewport.width + 1) {
+                throw new Error(`${name}: mobile sheet is outside the viewport`);
+              }
+              const sheetOverflow = await sheet.evaluate((element) => element.scrollWidth - element.clientWidth);
+              if (sheetOverflow > 1) throw new Error(`${name}: mobile sheet overflow ${sheetOverflow}`);
+            }
+            if (pageErrors.length) throw new Error(`${name}: page errors: ${pageErrors.join(' | ')}`);
+            if (consoleErrors.length) throw new Error(`${name}: console errors: ${consoleErrors.join(' | ')}`);
+
+            const screenshot = `test-results/pr402-exact-preview-${name}.png`;
+            await page.screenshot({ path: screenshot, fullPage: true });
+            evidence.checks.push({ name, viewport, overflow, pageErrors, consoleErrors, screenshot, ok: true });
+            await context.close();
+          }
+
+          try {
+            await inspect('desktop-1440x1000', { width: 1440, height: 1000 }, false);
+            await inspect('mobile-390x844', { width: 390, height: 844 }, true);
+          } finally {
+            await browser.close();
+          }
+          await writeFile('pr402-existing-preview-evidence.json', JSON.stringify(evidence, null, 2) + '\n');
+          NODE
+
+      - name: Revoke the temporary automation bypass
+        if: always()
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -f /tmp/pr402-vercel-bypass-secret || exit 0
+          bypass_secret="$(cat /tmp/pr402-vercel-bypass-secret)"
+          echo "::add-mask::$bypass_secret"
+          jq -n --arg secret "$bypass_secret" \
+            '{revoke:{secret:$secret,regenerate:false}}' \
+            > /tmp/pr402-revoke-bypass.json
+          http_status="$(curl --silent --show-error \
+            --output /tmp/pr402-revoke-bypass-response.json \
+            --write-out '%{http_code}' \
+            --request PATCH \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --header 'Content-Type: application/json' \
+            --data-binary @/tmp/pr402-revoke-bypass.json \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/protection-bypass?teamId=$VERCEL_ORG_ID")"
+          test "$http_status" = '200'
+          rm -f /tmp/pr402-vercel-bypass-secret /tmp/pr402-generate-bypass.json /tmp/pr402-revoke-bypass.json
+
+      - name: Upload exact protected-preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr402-exact-protected-preview-${{ github.run_id }}
+          path: |
+            pr402-existing-preview-deployment.json
+            pr402-existing-preview-evidence.json
+            test-results/**
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report protected-preview result to PR 402
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "${{ job.status }}" == 'success' ]]; then
+            gh pr comment 402 --repo "$GITHUB_REPOSITORY" --body "Exact protected canonical preview inspection passed for \`$EXPECTED_HEAD\` on deployment \`$DEPLOYMENT_ID\`. Desktop 1440×1000 and mobile 390×844 both show \`$35\`, \`$8,165 remains\`, \`0.43% of current gap\`, the non-authorization caveat, no pivotality copy, no overflow, and no browser or console errors. A temporary automation bypass was generated only for this inspection and revoked afterward. Preview: $DEPLOYMENT_URL Evidence: $run_url"
+          else
+            gh pr comment 402 --repo "$GITHUB_REPOSITORY" --body "Exact protected canonical preview inspection failed for \`$EXPECTED_HEAD\` on deployment \`$DEPLOYMENT_ID\`. PR #402 remains draft and unmerged. Any temporary bypass was revoked in the always step. Evidence: $run_url"
+          fi
+
+      - name: Enforce verified exact preview
+        if: always()
+        shell: bash
+        run: test "${{ job.status }}" = 'success'
