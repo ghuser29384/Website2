@@ -1,0 +1,171 @@
+name: Finalize Direct Donation Upgrade preview evidence
+
+on:
+  push:
+    branches:
+      - ops/finalize-direct-upgrade-preview-evidence-20260802
+    paths:
+      - .github/workflows/finalize-direct-upgrade-preview-evidence-20260802.yml
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: finalize-direct-upgrade-preview-evidence-20260802
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/finalize-direct-upgrade-preview-evidence-20260802.yml
+  RELEASE_REPAIR_SHA: f22c8adbc3236822df81e52c5888bc281996019f
+  FEATURE_BRANCH: feature/direct-verified-donation-upgrade-20260731
+  RELEASE_BRANCH: release/vercel-preview
+  EVIDENCE_BRANCH: evidence/direct-upgrade-preview-20260802
+  RECEIPT_PATH: direct-upgrade-preview-20260802.json
+  AUDIT_PATH: direct-upgrade-preview-runtime-audit-20260802.json
+  FEATURE_PR: '418'
+
+jobs:
+  finalize:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Check out and guard the one-file finalizer
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Verify finalizer isolation and merged release repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')" = "$CONTROLLER_PATH"
+          git merge-base --is-ancestor "$RELEASE_REPAIR_SHA" HEAD^
+
+      - name: Wait for matching final preview and runtime receipts
+        id: evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 7200))
+          while true; do
+            if (( SECONDS >= deadline )); then
+              echo 'Timed out waiting for matching schema-2 receipts.' >&2
+              exit 1
+            fi
+
+            receipt_encoded="$(gh api "repos/$GITHUB_REPOSITORY/contents/$RECEIPT_PATH?ref=$EVIDENCE_BRANCH" --jq '.content' 2>/dev/null | tr -d '\n' || true)"
+            audit_encoded="$(gh api "repos/$GITHUB_REPOSITORY/contents/$AUDIT_PATH?ref=$EVIDENCE_BRANCH" --jq '.content' 2>/dev/null | tr -d '\n' || true)"
+            if [[ -z "$receipt_encoded" || -z "$audit_encoded" ]]; then
+              sleep 20
+              continue
+            fi
+            printf '%s' "$receipt_encoded" | base64 -d > "$RECEIPT_PATH"
+            printf '%s' "$audit_encoded" | base64 -d > "$AUDIT_PATH"
+
+            if python3 - <<'PY'
+          import json
+          from pathlib import Path
+          receipt=json.loads(Path('direct-upgrade-preview-20260802.json').read_text(encoding='utf-8'))
+          audit=json.loads(Path('direct-upgrade-preview-runtime-audit-20260802.json').read_text(encoding='utf-8'))
+          assert receipt['schemaVersion'] == 2
+          assert audit['schemaVersion'] == 2
+          assert receipt['candidateSha'] == audit['candidateSha']
+          assert receipt['includedMainSha'] == audit['includedMainSha']
+          assert receipt['deploymentUrl'] == audit['deployment']['url']
+          assert receipt['gatedRelease']['runId'] == audit['gatedReleaseRunId']
+          assert receipt['gatedRelease']['conclusion'] == 'success'
+          assert receipt['releaseClassification']['state'] == 'success'
+          assert len(receipt['exactHeadGates']) == 7
+          assert len(receipt['routeSmoke']) == 3
+          assert audit['result'] == 'pass'
+          assert audit['deployment']['readyState'] == 'READY'
+          assert audit['deployment']['target'] != 'production'
+          assert len(audit['freshRouteAudit']['routes']) == 3
+          aggregate=audit['aggregate']
+          for key in (
+              'runtime5xxCount','runtimeExplicitErrorCount','runtimeMarkerErrorCount',
+              'deploymentEvent5xxCount','deploymentEventExplicitErrorCount'):
+              assert aggregate[key] == 0
+          safety=receipt['safetyBoundary']
+          assert safety['productionDirectModeEnabled'] is False
+          assert safety['managedStripeEnabled'] is False
+          assert safety['pooledSettlementEnabled'] is False
+          assert safety['providerStagingSecretsVerified'] is False
+          assert safety['paymentOrDonationCreatedByThisRun'] is False
+          PY
+            then
+              candidate_sha="$(jq -r '.candidateSha' "$RECEIPT_PATH")"
+              main_sha="$(jq -r '.includedMainSha' "$RECEIPT_PATH")"
+              deployment_url="$(jq -r '.deploymentUrl' "$RECEIPT_PATH")"
+              release_run_id="$(jq -r '.gatedRelease.runId' "$RECEIPT_PATH")"
+              runtime_records="$(jq -r '.aggregate.runtimeRecordCount' "$AUDIT_PATH")"
+              event_records="$(jq -r '.aggregate.deploymentEventCount' "$AUDIT_PATH")"
+
+              git fetch origin main "$FEATURE_BRANCH" "$RELEASE_BRANCH" --no-tags --force
+              test "$(git rev-parse "origin/$FEATURE_BRANCH")" = "$candidate_sha"
+              test "$(git rev-parse "origin/$RELEASE_BRANCH")" = "$candidate_sha"
+              test "$(git rev-parse origin/main)" = "$main_sha"
+              test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$FEATURE_PR" --jq '.head.sha')" = "$candidate_sha"
+              test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$FEATURE_PR" --jq '.draft')" = 'true'
+              break
+            fi
+            sleep 20
+          done
+
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "release_run_id=$release_run_id" >> "$GITHUB_OUTPUT"
+          echo "runtime_records=$runtime_records" >> "$GITHUB_OUTPUT"
+          echo "event_records=$event_records" >> "$GITHUB_OUTPUT"
+
+      - name: Publish final fail-closed status on PR 418
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.evidence.outputs.candidate_sha }}
+          MAIN_SHA: ${{ steps.evidence.outputs.main_sha }}
+          DEPLOYMENT_URL: ${{ steps.evidence.outputs.deployment_url }}
+          RELEASE_RUN_ID: ${{ steps.evidence.outputs.release_run_id }}
+          RUNTIME_RECORDS: ${{ steps.evidence.outputs.runtime_records }}
+          EVENT_RECORDS: ${{ steps.evidence.outputs.event_records }}
+        run: |
+          set -euo pipefail
+          receipt_url="https://github.com/$GITHUB_REPOSITORY/blob/$EVIDENCE_BRANCH/$RECEIPT_PATH"
+          audit_url="https://github.com/$GITHUB_REPOSITORY/blob/$EVIDENCE_BRANCH/$AUDIT_PATH"
+          body="$(cat <<EOF
+          ### Final preview gate complete — PR remains draft
+
+          - Exact feature and preview SHA: \`$CANDIDATE_SHA\`
+          - Included current main: \`$MAIN_SHA\`
+          - Gated release run: \`$RELEASE_RUN_ID\`
+          - Immutable preview: $DEPLOYMENT_URL
+          - Preview receipt: $receipt_url
+          - Runtime audit: $audit_url
+          - Runtime records inspected: \`$RUNTIME_RECORDS\`
+          - Deployment events inspected: \`$EVENT_RECORDS\`
+
+          Seven exact-head feature workflows, release classification, the immutable prebuilt Vercel preview, three initial route hashes, three fresh route probes, canonical project/team identity, READY non-production state, and zero aggregate 5xx/explicit-error/known-failure records have passed.
+
+          **Fail-closed boundary:** production Direct Donation Upgrade remains disabled; managed Stripe and pooled settlement remain disabled; no payment, donation, transfer, refund, mandate, or settlement was created.
+
+          **Remaining external gate:** obtain verified Every.org staging credentials and webhook registration outside chat, then complete one normal-human-browser staging donation and verify the authoritative webhook, recipient, amount, metadata, and replay handling. PR #418 must remain draft and unmerged until that provider exercise passes.
+          EOF
+          )"
+          gh pr comment "$FEATURE_PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Upload final evidence copies
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-upgrade-finalized-preview-evidence-${{ steps.evidence.outputs.candidate_sha }}
+          path: |
+            ${{ env.RECEIPT_PATH }}
+            ${{ env.AUDIT_PATH }}
+          if-no-files-found: error
+          retention-days: 30
