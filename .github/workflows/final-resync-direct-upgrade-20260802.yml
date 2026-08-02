@@ -1,0 +1,97 @@
+name: Final resync Direct Donation Upgrade
+
+on:
+  push:
+    branches:
+      - ops/final-resync-direct-upgrade-20260802
+    paths:
+      - .github/workflows/final-resync-direct-upgrade-20260802.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: final-resync-direct-upgrade-20260802
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/final-resync-direct-upgrade-20260802.yml
+  RELEASE_REPAIR_SHA: f22c8adbc3236822df81e52c5888bc281996019f
+  FEATURE_BRANCH: feature/direct-verified-donation-upgrade-20260731
+  FEATURE_PR: '418'
+
+jobs:
+  sync:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out and guard the one-file controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Verify controller isolation and merged release repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')" = "$CONTROLLER_PATH"
+          git merge-base --is-ancestor "$RELEASE_REPAIR_SHA" HEAD^
+          git show HEAD^:.github/workflows/vercel-release.yml | grep -F 'rendered_verification_run_id:' >/dev/null
+          git show HEAD^:.github/workflows/vercel-release.yml | grep -F 'Run read-only canonical route smoke against the deployment' >/dev/null
+
+      - name: Check out the live feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Merge current main under a force-with-lease guard
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main "$FEATURE_BRANCH" --no-tags --force
+          old_feature_sha="$(git rev-parse "origin/$FEATURE_BRANCH")"
+          test "$(git rev-parse HEAD)" = "$old_feature_sha"
+          main_sha="$(git rev-parse origin/main)"
+          git merge-base --is-ancestor "$RELEASE_REPAIR_SHA" "$main_sha"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git merge-base --is-ancestor "$main_sha" "$old_feature_sha"; then
+            candidate_sha="$old_feature_sha"
+            changed='false'
+          else
+            git merge --no-edit "$main_sha"
+            candidate_sha="$(git rev-parse HEAD)"
+            git merge-base --is-ancestor "$main_sha" "$candidate_sha"
+            git diff --check "$main_sha" "$candidate_sha"
+            git push --force-with-lease="refs/heads/$FEATURE_BRANCH:$old_feature_sha" \
+              origin "HEAD:refs/heads/$FEATURE_BRANCH"
+            changed='true'
+          fi
+
+          remote_sha="$(git ls-remote origin "refs/heads/$FEATURE_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$candidate_sha"
+          echo "old_feature_sha=$old_feature_sha" >> "$GITHUB_OUTPUT"
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+
+      - name: Record final synchronization boundary
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OLD_FEATURE_SHA: ${{ steps.merge.outputs.old_feature_sha }}
+          MAIN_SHA: ${{ steps.merge.outputs.main_sha }}
+          CANDIDATE_SHA: ${{ steps.merge.outputs.candidate_sha }}
+          CHANGED: ${{ steps.merge.outputs.changed }}
+        run: |
+          set -euo pipefail
+          gh pr comment "$FEATURE_PR" --repo "$GITHUB_REPOSITORY" --body "Final guarded synchronization completed. Previous feature head: \`$OLD_FEATURE_SHA\`; current main: \`$MAIN_SHA\`; synchronized candidate: \`$CANDIDATE_SHA\`; merge commit created: \`$CHANGED\`. The candidate contains the merged exact-rendered-evidence Vercel release repair. No deployment, database mutation, payment, donation, or settlement occurred in this synchronization step."
