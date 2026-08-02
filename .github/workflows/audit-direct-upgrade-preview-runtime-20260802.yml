@@ -1,0 +1,447 @@
+name: Audit Direct Donation Upgrade preview runtime
+
+on:
+  push:
+    branches:
+      - ops/audit-direct-upgrade-preview-runtime-20260802
+    paths:
+      - .github/workflows/audit-direct-upgrade-preview-runtime-20260802.yml
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: audit-direct-upgrade-preview-runtime-20260802
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/audit-direct-upgrade-preview-runtime-20260802.yml
+  RELEASE_REPAIR_SHA: f22c8adbc3236822df81e52c5888bc281996019f
+  EVIDENCE_BRANCH: evidence/direct-upgrade-preview-20260802
+  RECEIPT_PATH: direct-upgrade-preview-20260802.json
+  AUDIT_PATH: direct-upgrade-preview-runtime-audit-20260802.json
+  FEATURE_PR: '418'
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+
+jobs:
+  audit:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Check out and guard the one-file runtime auditor
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Verify auditor isolation and merged release repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')" = "$CONTROLLER_PATH"
+          git merge-base --is-ancestor "$RELEASE_REPAIR_SHA" HEAD^
+          git show HEAD^:.github/workflows/vercel-release.yml | grep -F 'rendered_verification_run_id:' >/dev/null
+          git show HEAD^:.github/workflows/vercel-release.yml | grep -F 'Run read-only canonical route smoke against the deployment' >/dev/null
+
+      - name: Wait for and validate the immutable preview receipt
+        id: receipt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 7200))
+          while true; do
+            if (( SECONDS >= deadline )); then
+              echo "Timed out waiting for $EVIDENCE_BRANCH/$RECEIPT_PATH" >&2
+              exit 1
+            fi
+            encoded="$(gh api "repos/$GITHUB_REPOSITORY/contents/$RECEIPT_PATH?ref=$EVIDENCE_BRANCH" --jq '.content' 2>/dev/null | tr -d '\n' || true)"
+            if [[ -z "$encoded" ]]; then
+              sleep 20
+              continue
+            fi
+            printf '%s' "$encoded" | base64 -d > "$RECEIPT_PATH"
+            if python3 - <<'PY'
+          import json
+          from pathlib import Path
+          p = Path('direct-upgrade-preview-20260802.json')
+          data = json.loads(p.read_text(encoding='utf-8'))
+          assert data['schemaVersion'] == 1
+          assert len(data['candidateSha']) == 40
+          assert data['gatedRelease']['conclusion'] == 'success'
+          assert len(data['exactHeadGates']) == 7
+          assert len(data['routeSmoke']) == 3
+          assert data['safetyBoundary']['managedStripeEnabled'] is False
+          assert data['safetyBoundary']['pooledSettlementEnabled'] is False
+          assert data['safetyBoundary']['paymentOrDonationCreatedByThisRun'] is False
+          assert data['deploymentUrl'].startswith('https://')
+          PY
+            then
+              break
+            fi
+            sleep 20
+          done
+
+          candidate_sha="$(jq -r '.candidateSha' "$RECEIPT_PATH")"
+          deployment_url="$(jq -r '.deploymentUrl' "$RECEIPT_PATH")"
+          release_run_id="$(jq -r '.gatedRelease.runId' "$RECEIPT_PATH")"
+          [[ "$candidate_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app/?$ ]]
+          [[ "$release_run_id" =~ ^[0-9]+$ ]]
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "release_run_id=$release_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve and validate the canonical Vercel deployment
+        id: deployment
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.receipt.outputs.deployment_url }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          deployment_host="${DEPLOYMENT_URL#https://}"
+          deployment_host="${deployment_host%/}"
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_host?teamId=$VERCEL_TEAM_ID" \
+            --output deployment.json
+
+          deployment_id="$(jq -r '.id // .uid // empty' deployment.json)"
+          project_id="$(jq -r '.projectId // .project.id // empty' deployment.json)"
+          ready_state="$(jq -r '.readyState // .state // empty' deployment.json)"
+          resolved_host="$(jq -r '.url // empty' deployment.json)"
+          created_at="$(jq -r '.createdAt // .created // empty' deployment.json)"
+          target="$(jq -r 'if .target == null then "preview" else .target end' deployment.json)"
+
+          test -n "$deployment_id"
+          test "$project_id" = "$VERCEL_PROJECT_ID"
+          test "$ready_state" = 'READY'
+          test "$resolved_host" = "$deployment_host"
+          test "$target" != 'production'
+          [[ "$created_at" =~ ^[0-9]+$ ]]
+
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_host=$deployment_host" >> "$GITHUB_OUTPUT"
+          echo "created_at=$created_at" >> "$GITHUB_OUTPUT"
+          echo "target=$target" >> "$GITHUB_OUTPUT"
+
+      - name: Generate fresh read-only route traffic
+        id: routes
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.receipt.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          audit_nonce="$(date -u +%s)"
+          audit_started_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          : > runtime-audit-routes.tsv
+
+          request_route() {
+            local route="$1"
+            local separator="$2"
+            local label="$3"
+            local body="runtime-audit-${label}.html"
+            local headers="runtime-audit-${label}.headers"
+            local code='000'
+            local url="${DEPLOYMENT_URL%/}${route}${separator}mt_runtime_audit=${audit_nonce}-${label}"
+
+            for _ in $(seq 1 20); do
+              code="$(curl --location --silent --show-error --compressed \
+                --user-agent 'MoralTrade-Preview-Runtime-Audit/20260802' \
+                --connect-timeout 10 --max-time 30 \
+                --output "$body" --dump-header "$headers" \
+                --write-out '%{http_code}' \
+                "$url" || true)"
+              if [[ "$code" =~ ^[23][0-9][0-9]$ ]]; then
+                break
+              fi
+              sleep 3
+            done
+
+            [[ "$code" =~ ^[23][0-9][0-9]$ ]]
+            test -s "$body"
+            if grep -Eiq 'DEPLOYMENT_DISABLED|Application error|Internal Server Error|FUNCTION_INVOCATION_FAILED' "$body"; then
+              echo "Runtime error marker found on $route" >&2
+              exit 1
+            fi
+            printf '%s\t%s\t%s\t%s\n' \
+              "$label" "$route" "$code" "$(sha256sum "$body" | awk '{print $1}')" \
+              | tee -a runtime-audit-routes.tsv
+          }
+
+          request_route '/' '?' root
+          request_route '/create?structure=conditional-donation' '&' create
+          request_route '/donation-upgrades' '?' donation-upgrades
+          test "$(wc -l < runtime-audit-routes.tsv | tr -d ' ')" = '3'
+          echo "audit_nonce=$audit_nonce" >> "$GITHUB_OUTPUT"
+          echo "audit_started_at=$audit_started_at" >> "$GITHUB_OUTPUT"
+          sleep 15
+
+      - name: Fetch deployment events and runtime logs
+        id: logs
+        shell: bash
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          runtime_status="$(curl --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --output runtime-logs.raw \
+            --write-out '%{http_code}' \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/deployments/$DEPLOYMENT_ID/runtime-logs?teamId=$VERCEL_TEAM_ID&limit=1000")"
+          test "$runtime_status" = '200'
+
+          events_status="$(curl --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            --output deployment-events.raw \
+            --write-out '%{http_code}' \
+            "https://api.vercel.com/v3/deployments/$DEPLOYMENT_ID/events?teamId=$VERCEL_TEAM_ID&direction=backward&follow=0&limit=1000")"
+          test "$events_status" = '200'
+          test -s runtime-logs.raw
+          test -s deployment-events.raw
+          echo "runtime_http_status=$runtime_status" >> "$GITHUB_OUTPUT"
+          echo "events_http_status=$events_status" >> "$GITHUB_OUTPUT"
+
+      - name: Aggregate logs without publishing raw request data
+        id: aggregate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          ERROR_MARKERS = (
+              'DEPLOYMENT_DISABLED',
+              'FUNCTION_INVOCATION_FAILED',
+              'Internal Server Error',
+              'Application error',
+          )
+
+          def records(path: str):
+              text = Path(path).read_text(encoding='utf-8', errors='replace').strip()
+              if not text:
+                  return []
+              try:
+                  value = json.loads(text)
+              except json.JSONDecodeError:
+                  result = []
+                  for line in text.splitlines():
+                      line = line.strip()
+                      if not line:
+                          continue
+                      try:
+                          result.append(json.loads(line))
+                      except json.JSONDecodeError:
+                          result.append({'message': line})
+                  return result
+              if isinstance(value, list):
+                  return value
+              if isinstance(value, dict):
+                  for key in ('logs', 'data', 'events', 'results', 'items'):
+                      candidate = value.get(key)
+                      if isinstance(candidate, list):
+                          return candidate
+                  return [value]
+              return [{'value': value}]
+
+          def all_strings(value):
+              if isinstance(value, str):
+                  yield value
+              elif isinstance(value, dict):
+                  for item in value.values():
+                      yield from all_strings(item)
+              elif isinstance(value, list):
+                  for item in value:
+                      yield from all_strings(item)
+
+          def status_codes(value):
+              found = []
+              if isinstance(value, dict):
+                  for key, item in value.items():
+                      normalized = key.lower().replace('_', '')
+                      if normalized in {'status', 'statuscode', 'httpstatus', 'responsecode'}:
+                          try:
+                              code = int(item)
+                          except (TypeError, ValueError):
+                              pass
+                          else:
+                              if 100 <= code <= 599:
+                                  found.append(code)
+                      found.extend(status_codes(item))
+              elif isinstance(value, list):
+                  for item in value:
+                      found.extend(status_codes(item))
+              return found
+
+          def explicit_error(value):
+              if not isinstance(value, dict):
+                  return False
+              for key in ('level', 'severity', 'type'):
+                  item = value.get(key)
+                  if isinstance(item, str) and item.lower() in {'error', 'fatal', 'panic'}:
+                      return True
+              return False
+
+          runtime = records('runtime-logs.raw')
+          events = records('deployment-events.raw')
+          runtime_5xx = sum(any(code >= 500 for code in status_codes(item)) for item in runtime)
+          runtime_explicit_errors = sum(explicit_error(item) for item in runtime)
+          runtime_marker_errors = sum(
+              any(marker in text for marker in ERROR_MARKERS for text in all_strings(item))
+              for item in runtime
+          )
+          event_explicit_errors = sum(explicit_error(item) for item in events)
+          event_5xx = sum(any(code >= 500 for code in status_codes(item)) for item in events)
+
+          summary = {
+              'runtimeRecordCount': len(runtime),
+              'runtime5xxCount': runtime_5xx,
+              'runtimeExplicitErrorCount': runtime_explicit_errors,
+              'runtimeMarkerErrorCount': runtime_marker_errors,
+              'deploymentEventCount': len(events),
+              'deploymentEvent5xxCount': event_5xx,
+              'deploymentEventExplicitErrorCount': event_explicit_errors,
+          }
+          Path('runtime-log-aggregate.json').write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          assert runtime_5xx == 0
+          assert runtime_explicit_errors == 0
+          assert runtime_marker_errors == 0
+          assert event_5xx == 0
+          assert event_explicit_errors == 0
+          PY
+          python3 -m json.tool runtime-log-aggregate.json >/dev/null
+          echo "runtime_record_count=$(jq -r '.runtimeRecordCount' runtime-log-aggregate.json)" >> "$GITHUB_OUTPUT"
+          echo "event_count=$(jq -r '.deploymentEventCount' runtime-log-aggregate.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Build non-sensitive runtime audit receipt
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.receipt.outputs.candidate_sha }}
+          DEPLOYMENT_URL: ${{ steps.receipt.outputs.deployment_url }}
+          RELEASE_RUN_ID: ${{ steps.receipt.outputs.release_run_id }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          DEPLOYMENT_TARGET: ${{ steps.deployment.outputs.target }}
+          DEPLOYMENT_CREATED_AT: ${{ steps.deployment.outputs.created_at }}
+          AUDIT_NONCE: ${{ steps.routes.outputs.audit_nonce }}
+          AUDIT_STARTED_AT: ${{ steps.routes.outputs.audit_started_at }}
+          RUNTIME_HTTP_STATUS: ${{ steps.logs.outputs.runtime_http_status }}
+          EVENTS_HTTP_STATUS: ${{ steps.logs.outputs.events_http_status }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          routes = []
+          with Path('runtime-audit-routes.tsv').open(newline='') as handle:
+              for label, route, status, sha256 in csv.reader(handle, delimiter='\t'):
+                  routes.append({
+                      'label': label,
+                      'route': route,
+                      'httpStatus': int(status),
+                      'bodySha256': sha256,
+                  })
+
+          aggregate = json.loads(Path('runtime-log-aggregate.json').read_text(encoding='utf-8'))
+          receipt = {
+              'schemaVersion': 1,
+              'recordedAt': datetime.now(timezone.utc).isoformat(),
+              'repository': os.environ['GITHUB_REPOSITORY'],
+              'candidateSha': os.environ['CANDIDATE_SHA'],
+              'gatedReleaseRunId': int(os.environ['RELEASE_RUN_ID']),
+              'deployment': {
+                  'id': os.environ['DEPLOYMENT_ID'],
+                  'url': os.environ['DEPLOYMENT_URL'],
+                  'projectId': 'prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7',
+                  'teamId': 'team_ySu6sF3Uho1E1GnJtCQPVEuJ',
+                  'readyState': 'READY',
+                  'target': os.environ['DEPLOYMENT_TARGET'],
+                  'createdAt': int(os.environ['DEPLOYMENT_CREATED_AT']),
+              },
+              'freshRouteAudit': {
+                  'startedAt': os.environ['AUDIT_STARTED_AT'],
+                  'nonce': os.environ['AUDIT_NONCE'],
+                  'routes': routes,
+              },
+              'providerApi': {
+                  'runtimeLogsHttpStatus': int(os.environ['RUNTIME_HTTP_STATUS']),
+                  'deploymentEventsHttpStatus': int(os.environ['EVENTS_HTTP_STATUS']),
+              },
+              'aggregate': aggregate,
+              'rawLogsPublished': False,
+              'result': 'pass',
+          }
+          Path(os.environ['AUDIT_PATH']).write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          PY
+          python3 -m json.tool "$AUDIT_PATH" >/dev/null
+
+      - name: Commit runtime audit only to the evidence branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          content="$(base64 -w 0 "$AUDIT_PATH")"
+          existing_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$AUDIT_PATH?ref=$EVIDENCE_BRANCH" --jq '.sha' 2>/dev/null || true)"
+          if [[ -n "$existing_sha" ]]; then
+            jq -n \
+              --arg message 'Update Direct Donation Upgrade preview runtime audit' \
+              --arg content "$content" \
+              --arg branch "$EVIDENCE_BRANCH" \
+              --arg sha "$existing_sha" \
+              '{message:$message,content:$content,branch:$branch,sha:$sha}'
+          else
+            jq -n \
+              --arg message 'Record Direct Donation Upgrade preview runtime audit' \
+              --arg content "$content" \
+              --arg branch "$EVIDENCE_BRANCH" \
+              '{message:$message,content:$content,branch:$branch}'
+          fi \
+            | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$AUDIT_PATH" --input - >/dev/null
+
+          remote_content="$(gh api "repos/$GITHUB_REPOSITORY/contents/$AUDIT_PATH?ref=$EVIDENCE_BRANCH" --jq '.content' | tr -d '\n' | base64 -d)"
+          test "$(printf '%s' "$remote_content" | sha256sum | awk '{print $1}')" = "$(sha256sum "$AUDIT_PATH" | awk '{print $1}')"
+
+      - name: Link the runtime audit from the feature PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.receipt.outputs.candidate_sha }}
+          DEPLOYMENT_URL: ${{ steps.receipt.outputs.deployment_url }}
+          RUNTIME_RECORD_COUNT: ${{ steps.aggregate.outputs.runtime_record_count }}
+          EVENT_COUNT: ${{ steps.aggregate.outputs.event_count }}
+        run: |
+          set -euo pipefail
+          audit_url="https://github.com/$GITHUB_REPOSITORY/blob/$EVIDENCE_BRANCH/$AUDIT_PATH"
+          gh pr comment "$FEATURE_PR" --repo "$GITHUB_REPOSITORY" --body "Vercel runtime audit passed for preview candidate \`$CANDIDATE_SHA\`: $audit_url. Canonical project and team identity matched, deployment state was READY and non-production, three fresh route requests returned 2xx/3xx without deployment-error markers, and the provider log/event aggregates contained zero 5xx, explicit-error, fatal, or known runtime-failure records. Runtime records inspected: \`$RUNTIME_RECORD_COUNT\`; deployment events inspected: \`$EVENT_COUNT\`. Raw logs were not published. Deployment: $DEPLOYMENT_URL."
+
+      - name: Upload non-sensitive audit evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-upgrade-preview-runtime-audit-${{ steps.receipt.outputs.candidate_sha }}
+          path: |
+            ${{ env.AUDIT_PATH }}
+            runtime-audit-routes.tsv
+            runtime-log-aggregate.json
+          if-no-files-found: error
+          retention-days: 30
