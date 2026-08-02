@@ -1,0 +1,113 @@
+name: Dispatch exact Direct Donation Upgrade preview once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/dispatch-direct-upgrade-preview-once.yml
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dispatch-direct-upgrade-preview-once
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/dispatch-direct-upgrade-preview-once.yml
+  RELEASE_BRANCH: release/vercel-preview
+  EXPECTED_SHA: 1d296a3e94ef8a37bca256b266cdbb89ccc5e5bf
+
+jobs:
+  dispatch:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Check out controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Guard exact immutable release branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+          remote_sha="$(git ls-remote origin "refs/heads/$RELEASE_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$EXPECTED_SHA"
+          test "${#EXPECTED_SHA}" -eq 40
+
+      - name: Remove one-time controller from main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-time Direct Donation Upgrade preview dispatcher' \
+            --arg sha "$blob_sha" \
+            --arg branch main \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE \
+                "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" \
+                --input - >/dev/null
+
+      - name: Dispatch and wait for gated preview release
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run vercel-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f target=preview \
+            -f ref="$RELEASE_BRANCH" \
+            -f expected_sha="$EXPECTED_SHA"
+
+          run_id=''
+          for attempt in $(seq 1 90); do
+            run_id="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow vercel-release.yml \
+              --event workflow_dispatch \
+              --limit 30 \
+              --json databaseId,createdAt \
+              --jq "map(select(.createdAt >= \"$started_at\")) | sort_by(.createdAt) | last | .databaseId // empty")"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 2
+          done
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$run_id" >> "$GITHUB_OUTPUT"
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status --interval 15
+
+      - name: Record preview result on PR 418
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url='${{ steps.release.outputs.run_url }}'
+          if [[ '${{ steps.release.outcome }}' == 'success' ]]; then
+            gh pr comment 418 --repo "$GITHUB_REPOSITORY" --body "Exact Vercel preview release passed for Direct Donation Upgrade head \`$EXPECTED_SHA\` from \`$RELEASE_BRANCH\`. Gated release evidence: $run_url. Direct mode and the managed Stripe rail remained disabled during build and deployment."
+          else
+            gh pr comment 418 --repo "$GITHUB_REPOSITORY" --body "The exact Direct Donation Upgrade Vercel preview release did not pass. No preview-verified or production-ready claim is made. Inspect: ${run_url:-$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID}"
+            exit 1
+          fi
