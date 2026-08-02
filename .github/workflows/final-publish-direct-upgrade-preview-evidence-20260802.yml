@@ -1,0 +1,331 @@
+name: Final publish Direct Donation Upgrade preview evidence
+
+on:
+  push:
+    branches:
+      - ops/final-publish-direct-upgrade-preview-evidence-20260802
+    paths:
+      - .github/workflows/final-publish-direct-upgrade-preview-evidence-20260802.yml
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+  statuses: read
+
+concurrency:
+  group: final-publish-direct-upgrade-preview-evidence-20260802
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/final-publish-direct-upgrade-preview-evidence-20260802.yml
+  RELEASE_REPAIR_SHA: f22c8adbc3236822df81e52c5888bc281996019f
+  FEATURE_BRANCH: feature/direct-verified-donation-upgrade-20260731
+  RELEASE_BRANCH: release/vercel-preview
+  EVIDENCE_BRANCH: evidence/direct-upgrade-preview-20260802
+  EVIDENCE_PATH: direct-upgrade-preview-20260802.json
+  FEATURE_PR: '418'
+  GATED_RELEASE_WORKFLOW: vercel-release.yml
+
+jobs:
+  publish:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Check out and guard the one-file evidence publisher
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Verify publisher isolation and merged release repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')" = "$CONTROLLER_PATH"
+          git merge-base --is-ancestor "$RELEASE_REPAIR_SHA" HEAD^
+          git show HEAD^:.github/workflows/vercel-release.yml | grep -F 'rendered_verification_run_id:' >/dev/null
+          git show HEAD^:.github/workflows/vercel-release.yml | grep -F 'Run read-only canonical route smoke against the deployment' >/dev/null
+
+      - name: Wait for identical stable feature and preview refs
+        id: candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 7200))
+          previous=''
+          stable=0
+          while true; do
+            if (( SECONDS >= deadline )); then
+              echo 'Timed out waiting for identical final feature and preview refs.' >&2
+              exit 1
+            fi
+
+            git fetch origin main "$FEATURE_BRANCH" "$RELEASE_BRANCH" --no-tags --force
+            feature_sha="$(git rev-parse "origin/$FEATURE_BRANCH")"
+            release_sha="$(git rev-parse "origin/$RELEASE_BRANCH")"
+            main_sha="$(git rev-parse origin/main)"
+            pr_sha="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$FEATURE_PR" --jq '.head.sha')"
+
+            if [[ "$feature_sha" != "$release_sha" || "$feature_sha" != "$pr_sha" ]]; then
+              previous=''
+              stable=0
+              sleep 20
+              continue
+            fi
+
+            git merge-base --is-ancestor "$RELEASE_REPAIR_SHA" "$feature_sha"
+            git merge-base --is-ancestor "$main_sha" "$feature_sha"
+            test "$(git ls-tree -r --name-only "$feature_sha" | grep -Ec '^\.github/direct-upgrade-(release|final-gates)-trigger-20260802$' || true)" = '0'
+            git diff --check "$main_sha" "$feature_sha"
+
+            if [[ "$feature_sha" = "$previous" ]]; then
+              stable=$((stable + 1))
+            else
+              previous="$feature_sha"
+              stable=1
+            fi
+            if (( stable >= 3 )); then
+              break
+            fi
+            sleep 20
+          done
+
+          echo "candidate_sha=$feature_sha" >> "$GITHUB_OUTPUT"
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Reconfirm seven exact-head workflow gates
+        id: gates
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 7200))
+          : > final-exact-head-runs.tsv
+          rendered_run_id=''
+
+          while IFS='|' read -r workflow_id label; do
+            while true; do
+              if (( SECONDS >= deadline )); then
+                echo "Timed out waiting for $label on $CANDIDATE_SHA" >&2
+                exit 1
+              fi
+              runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?per_page=100")"
+              run="$(jq -c --arg sha "$CANDIDATE_SHA" '[.workflow_runs[]? | select(.head_sha == $sha or any(.pull_requests[]?; .head.sha == $sha))] | sort_by(.created_at) | last // empty' <<<"$runs")"
+              if [[ -z "$run" ]]; then
+                sleep 20
+                continue
+              fi
+              status="$(jq -r '.status' <<<"$run")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$run")"
+              run_id="$(jq -r '.id' <<<"$run")"
+              run_url="$(jq -r '.html_url' <<<"$run")"
+              if [[ "$status" != 'completed' ]]; then
+                sleep 20
+                continue
+              fi
+              test "$conclusion" = 'success'
+              printf '%s\t%s\t%s\t%s\n' "$workflow_id" "$label" "$run_id" "$run_url" | tee -a final-exact-head-runs.tsv
+              [[ "$workflow_id" = '324968062' ]] && rendered_run_id="$run_id"
+              break
+            done
+          done <<'WORKFLOWS'
+          324958317|Direct verified Donation Upgrade engineering gates
+          324958752|Direct verified Donation Upgrade isolated QA
+          324968062|Direct verified Donation Upgrade rendered QA
+          321431264|Moral Trade Create adapter gates
+          325052727|Vercel build ownership policy
+          313452115|Create route visual QA
+          323143327|Compact Co-Fund UI compatibility
+          WORKFLOWS
+
+          test "$(wc -l < final-exact-head-runs.tsv | tr -d ' ')" = '7'
+          test -n "$rendered_run_id"
+          echo "rendered_run_id=$rendered_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Reconfirm exact-head release classification
+        id: classification
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          status_json="$(gh api "repos/$GITHUB_REPOSITORY/commits/$CANDIDATE_SHA/status")"
+          classification="$(jq -c '[.statuses[]? | select(.context == "release-classification")] | first // empty' <<<"$status_json")"
+          test -n "$classification"
+          test "$(jq -r '.state' <<<"$classification")" = 'success'
+          echo "target_url=$(jq -r '.target_url' <<<"$classification")" >> "$GITHUB_OUTPUT"
+
+      - name: Locate successful exact-candidate gated preview
+        id: release
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          workflow_id="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$GATED_RELEASE_WORKFLOW" --jq '.id')"
+          expected_name="gated-vercel-release-preview-$CANDIDATE_SHA"
+          deadline=$((SECONDS + 7200))
+          release_run_id=''
+          release_run_url=''
+          artifact_id=''
+
+          while true; do
+            if (( SECONDS >= deadline )); then
+              echo "Timed out waiting for $expected_name" >&2
+              exit 1
+            fi
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?event=workflow_dispatch&per_page=50")"
+            while IFS=$'\t' read -r run_id run_url; do
+              [[ -n "$run_id" ]] || continue
+              artifacts="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100")"
+              match="$(jq -c --arg name "$expected_name" '[.artifacts[]? | select(.name == $name and (.expired | not))] | first // empty' <<<"$artifacts")"
+              if [[ -n "$match" ]]; then
+                release_run_id="$run_id"
+                release_run_url="$run_url"
+                artifact_id="$(jq -r '.id' <<<"$match")"
+                break
+              fi
+            done < <(jq -r '[.workflow_runs[]? | select(.status == "completed" and .conclusion == "success")] | sort_by(.created_at) | reverse | .[] | [.id, .html_url] | @tsv' <<<"$runs")
+            [[ -n "$release_run_id" ]] && break
+            sleep 20
+          done
+
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$release_run_id")"
+          test "$(jq -r '.status' <<<"$run")" = 'completed'
+          test "$(jq -r '.conclusion' <<<"$run")" = 'success'
+          echo "release_run_id=$release_run_id" >> "$GITHUB_OUTPUT"
+          echo "release_run_url=$release_run_url" >> "$GITHUB_OUTPUT"
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$expected_name" >> "$GITHUB_OUTPUT"
+
+      - name: Download and validate route-smoke artifact
+        id: smoke
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ steps.release.outputs.release_run_id }}
+          ARTIFACT_NAME: ${{ steps.release.outputs.artifact_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p final-preview-smoke
+          gh run download "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$ARTIFACT_NAME" --dir final-preview-smoke
+          test -s final-preview-smoke/release-route-smoke.tsv
+          test "$(wc -l < final-preview-smoke/release-route-smoke.tsv | tr -d ' ')" = '3'
+          awk -F '\t' 'NF != 4 {exit 1} $1 !~ /^(root|create|donation-upgrades)$/ {exit 1} $3 !~ /^[23][0-9][0-9]$/ {exit 1} $4 !~ /^[0-9a-f]{64}$/ {exit 1}' final-preview-smoke/release-route-smoke.tsv
+          test "$(cut -f1 final-preview-smoke/release-route-smoke.tsv | sort -u | wc -l | tr -d ' ')" = '3'
+
+          gh run view "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY" --log > final-preview-smoke/release-run.log
+          deployment_url="$(grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app/?' final-preview-smoke/release-run.log | tail -n 1)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+\.vercel\.app/?$ ]]
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Build final immutable JSON receipt
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          MAIN_SHA: ${{ steps.candidate.outputs.main_sha }}
+          RENDERED_RUN_ID: ${{ steps.gates.outputs.rendered_run_id }}
+          CLASSIFICATION_URL: ${{ steps.classification.outputs.target_url }}
+          RELEASE_RUN_ID: ${{ steps.release.outputs.release_run_id }}
+          RELEASE_RUN_URL: ${{ steps.release.outputs.release_run_url }}
+          ARTIFACT_ID: ${{ steps.release.outputs.artifact_id }}
+          ARTIFACT_NAME: ${{ steps.release.outputs.artifact_name }}
+          DEPLOYMENT_URL: ${{ steps.smoke.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import csv, json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          gates=[]
+          with Path('final-exact-head-runs.tsv').open(newline='') as h:
+              for workflow_id,name,run_id,url in csv.reader(h, delimiter='\t'):
+                  gates.append({'workflowId':int(workflow_id),'name':name,'runId':int(run_id),'url':url,'conclusion':'success'})
+          routes=[]
+          with Path('final-preview-smoke/release-route-smoke.tsv').open(newline='') as h:
+              for label,route,status,sha256 in csv.reader(h, delimiter='\t'):
+                  routes.append({'label':label,'route':route,'httpStatus':int(status),'bodySha256':sha256})
+          receipt={
+              'schemaVersion':2,
+              'recordedAt':datetime.now(timezone.utc).isoformat(),
+              'repository':os.environ['GITHUB_REPOSITORY'],
+              'featurePullRequest':418,
+              'candidateSha':os.environ['CANDIDATE_SHA'],
+              'includedMainSha':os.environ['MAIN_SHA'],
+              'releaseBranch':'release/vercel-preview',
+              'deploymentUrl':os.environ['DEPLOYMENT_URL'],
+              'exactHeadGates':gates,
+              'releaseClassification':{'state':'success','url':os.environ['CLASSIFICATION_URL']},
+              'renderedQaRunId':int(os.environ['RENDERED_RUN_ID']),
+              'gatedRelease':{
+                  'runId':int(os.environ['RELEASE_RUN_ID']),
+                  'url':os.environ['RELEASE_RUN_URL'],
+                  'conclusion':'success',
+                  'artifactId':int(os.environ['ARTIFACT_ID']),
+                  'artifactName':os.environ['ARTIFACT_NAME'],
+              },
+              'routeSmoke':routes,
+              'safetyBoundary':{
+                  'productionDirectModeEnabled':False,
+                  'managedStripeEnabled':False,
+                  'pooledSettlementEnabled':False,
+                  'providerStagingSecretsVerified':False,
+                  'paymentOrDonationCreatedByThisRun':False,
+              },
+          }
+          Path(os.environ['EVIDENCE_PATH']).write_text(json.dumps(receipt,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          PY
+          python3 -m json.tool "$EVIDENCE_PATH" >/dev/null
+
+      - name: Commit receipt only to evidence branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          content="$(base64 -w 0 "$EVIDENCE_PATH")"
+          existing_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$EVIDENCE_PATH?ref=$EVIDENCE_BRANCH" --jq '.sha' 2>/dev/null || true)"
+          if [[ -n "$existing_sha" ]]; then
+            jq -n --arg message 'Update final Direct Donation Upgrade preview evidence' --arg content "$content" --arg branch "$EVIDENCE_BRANCH" --arg sha "$existing_sha" '{message:$message,content:$content,branch:$branch,sha:$sha}'
+          else
+            jq -n --arg message 'Record final Direct Donation Upgrade preview evidence' --arg content "$content" --arg branch "$EVIDENCE_BRANCH" '{message:$message,content:$content,branch:$branch}'
+          fi | gh api --method PUT "repos/$GITHUB_REPOSITORY/contents/$EVIDENCE_PATH" --input - >/dev/null
+          remote="$(gh api "repos/$GITHUB_REPOSITORY/contents/$EVIDENCE_PATH?ref=$EVIDENCE_BRANCH" --jq '.content' | tr -d '\n' | base64 -d)"
+          test "$(printf '%s' "$remote" | sha256sum | awk '{print $1}')" = "$(sha256sum "$EVIDENCE_PATH" | awk '{print $1}')"
+
+      - name: Link final receipt from PR 418
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          DEPLOYMENT_URL: ${{ steps.smoke.outputs.deployment_url }}
+          RELEASE_RUN_URL: ${{ steps.release.outputs.release_run_url }}
+        run: |
+          set -euo pipefail
+          receipt_url="https://github.com/$GITHUB_REPOSITORY/blob/$EVIDENCE_BRANCH/$EVIDENCE_PATH"
+          gh pr comment "$FEATURE_PR" --repo "$GITHUB_REPOSITORY" --body "Final immutable preview receipt recorded for candidate \`$CANDIDATE_SHA\`: $receipt_url. It binds seven exact-head feature workflows, successful release classification, the gated prebuilt preview, three route-response hashes, and the unchanged no-payment safety boundary. Gated release: $RELEASE_RUN_URL. Deployment: $DEPLOYMENT_URL."
+
+      - name: Upload final receipt bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-upgrade-final-preview-receipt-${{ steps.candidate.outputs.candidate_sha }}
+          path: |
+            ${{ env.EVIDENCE_PATH }}
+            final-exact-head-runs.tsv
+            final-preview-smoke/release-route-smoke.tsv
+            final-preview-smoke/release-smoke-*.headers
+            final-preview-smoke/release-smoke-*.html
+          if-no-files-found: error
+          retention-days: 30
