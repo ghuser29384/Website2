@@ -1,0 +1,45 @@
+name: One-time observe PR 402 protected-preview verifier
+
+on:
+  push:
+    branches:
+      - ops/observe-pr402-verifier-20260802
+    paths:
+      - .github/workflows/observe-pr402-preview-verifier-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  observe:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CONTROLLER_PATH: .github/workflows/observe-pr402-preview-verifier-once.yml
+      CONTROLLER_BRANCH: ops/observe-pr402-verifier-20260802
+      TARGET_BRANCH: ops/verify-pr402-preview-final-20260802
+    steps:
+      - name: Remove observer controller
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=$CONTROLLER_BRANCH" --jq .sha)"
+          jq -n --arg message 'Remove one-time PR 402 verifier observer' --arg sha "$blob_sha" --arg branch "$CONTROLLER_BRANCH" '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Snapshot verifier run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs="$(gh run list --repo "$GITHUB_REPOSITORY" --branch "$TARGET_BRANCH" --limit 10 --json databaseId,name,displayTitle,status,conclusion,createdAt,updatedAt,url,headSha,event)"
+          printf '%s\n' "$runs" > /tmp/verifier-runs.json
+          latest="$(jq -c 'sort_by(.createdAt) | reverse | .[0] // {}' <<<"$runs")"
+          test "$(jq -r '.databaseId // empty' <<<"$latest")" != ''
+          gh pr comment 402 --repo "$GITHUB_REPOSITORY" --body "PR #402 protected-preview verifier run snapshot: \`$latest\`. This observer changes no feature or production state. Evidence: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
