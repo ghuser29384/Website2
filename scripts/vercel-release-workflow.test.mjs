@@ -66,6 +66,10 @@ test("deployment requires immutable exact-head validation evidence", async () =>
   assert.match(validation, /test "\$actual_conclusion" = 'success'/);
   assert.match(
     validation,
+    /pull_request\|pull_request_target\|push\|workflow_dispatch/,
+  );
+  assert.match(
+    validation,
     /\["classification", "engineering", "rendered"\] - \[\.\[\]\.gate\]/,
   );
   assert.match(validation, /\[\.\[\]\.id\] \| unique/);
