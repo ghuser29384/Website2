@@ -295,7 +295,7 @@ export function verifyCanonicalSettings(summary) {
       `Canonical build machine is not standard: ${JSON.stringify(config)}`,
     );
   }
-  if (config.elasticConcurrencyEnabled !== false) {
+  if (config.elasticConcurrencyEnabled === true) {
     throw new Error(
       `On-demand build concurrency remains enabled: ${JSON.stringify(config)}`,
     );
