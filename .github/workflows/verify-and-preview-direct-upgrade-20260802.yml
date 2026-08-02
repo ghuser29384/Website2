@@ -1,0 +1,306 @@
+name: Verify and preview Direct Donation Upgrade
+
+on:
+  push:
+    branches:
+      - ops/verify-and-preview-direct-upgrade-20260802
+    paths:
+      - .github/workflows/verify-and-preview-direct-upgrade-20260802.yml
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: verify-and-preview-direct-upgrade-20260802
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/verify-and-preview-direct-upgrade-20260802.yml
+  RELEASE_REPAIR_SHA: f22c8adbc3236822df81e52c5888bc281996019f
+  FEATURE_BRANCH: feature/direct-verified-donation-upgrade-20260731
+  RELEASE_BRANCH: release/vercel-preview
+  FEATURE_PR: '418'
+  GATED_RELEASE_WORKFLOW: vercel-release.yml
+
+jobs:
+  verify-and-preview:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Check out and guard the one-file controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Verify release repair is merged and controller is isolated
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')" = "$CONTROLLER_PATH"
+          git merge-base --is-ancestor "$RELEASE_REPAIR_SHA" HEAD^
+          git show HEAD^:.github/workflows/vercel-release.yml | grep -F 'rendered_verification_run_id:' >/dev/null
+          git show HEAD^:.github/workflows/vercel-release.yml | grep -F 'Run read-only canonical route smoke against the deployment' >/dev/null
+
+      - name: Check out the final synchronized feature candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Freeze and guard the exact candidate
+        id: candidate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch origin main "$RELEASE_BRANCH" --no-tags
+          candidate_sha="$(git rev-parse HEAD)"
+          main_sha="$(git rev-parse origin/main)"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$FEATURE_PR" --jq '.head.sha')" = "$candidate_sha"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$FEATURE_PR" --jq '.head.ref')" = "$FEATURE_BRANCH"
+          git merge-base --is-ancestor "$RELEASE_REPAIR_SHA" "$candidate_sha"
+          git merge-base --is-ancestor "$main_sha" "$candidate_sha"
+          test ! -e .github/direct-upgrade-release-trigger-20260802
+          git diff --check "$main_sha" "$candidate_sha"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "main_sha=$main_sha" >> "$GITHUB_OUTPUT"
+          printf 'Frozen candidate %s containing main %s\n' "$candidate_sha" "$main_sha"
+
+      - name: Wait for every exact-head feature gate
+        id: gates
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 7200))
+          : > direct-upgrade-exact-head-runs.tsv
+          rendered_run_id=''
+
+          while IFS='|' read -r workflow_id label; do
+            test -n "$workflow_id"
+            while true; do
+              if (( SECONDS >= deadline )); then
+                echo "Timed out waiting for $label on $CANDIDATE_SHA" >&2
+                exit 1
+              fi
+
+              runs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?per_page=100")"
+              run_json="$(jq -c --arg sha "$CANDIDATE_SHA" '
+                [
+                  .workflow_runs[]?
+                  | select(
+                      .head_sha == $sha
+                      or any(.pull_requests[]?; .head.sha == $sha)
+                    )
+                ]
+                | sort_by(.created_at)
+                | last // empty
+              ' <<<"$runs_json")"
+
+              if [[ -z "$run_json" ]]; then
+                sleep 20
+                continue
+              fi
+
+              status="$(jq -r '.status' <<<"$run_json")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
+              run_id="$(jq -r '.id' <<<"$run_json")"
+              run_url="$(jq -r '.html_url' <<<"$run_json")"
+
+              if [[ "$status" != 'completed' ]]; then
+                sleep 20
+                continue
+              fi
+
+              if [[ "$conclusion" != 'success' ]]; then
+                echo "$label run $run_id completed with $conclusion" >&2
+                gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs" \
+                  --jq '.jobs[] | [.name, .status, .conclusion] | @tsv' >&2 || true
+                exit 1
+              fi
+
+              printf '%s\t%s\t%s\t%s\n' "$workflow_id" "$label" "$run_id" "$run_url" \
+                | tee -a direct-upgrade-exact-head-runs.tsv
+              if [[ "$workflow_id" = '324968062' ]]; then
+                rendered_run_id="$run_id"
+              fi
+              break
+            done
+          done <<'WORKFLOWS'
+          324958317|Direct verified Donation Upgrade engineering gates
+          324958752|Direct verified Donation Upgrade isolated QA
+          324968062|Direct verified Donation Upgrade rendered QA
+          321431264|Moral Trade Create adapter gates
+          325052727|Vercel build ownership policy
+          313452115|Create route visual QA
+          323143327|Compact Co-Fund UI compatibility
+          WORKFLOWS
+
+          test -n "$rendered_run_id"
+          test "$(wc -l < direct-upgrade-exact-head-runs.tsv | tr -d ' ')" = '7'
+          echo "rendered_run_id=$rendered_run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Advance only the designated release-preview branch
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          old_release_sha="$(git ls-remote origin "refs/heads/$RELEASE_BRANCH" | awk '{print $1}')"
+          test -n "$old_release_sha"
+          git merge-base --is-ancestor "$old_release_sha" "$CANDIDATE_SHA"
+          git push origin "$CANDIDATE_SHA:refs/heads/$RELEASE_BRANCH"
+          remote_release_sha="$(git ls-remote origin "refs/heads/$RELEASE_BRANCH" | awk '{print $1}')"
+          test "$remote_release_sha" = "$CANDIDATE_SHA"
+
+      - name: Dispatch the corrected immutable Vercel preview
+        id: release
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+          RENDERED_RUN_ID: ${{ steps.gates.outputs.rendered_run_id }}
+        run: |
+          set -euo pipefail
+          workflow_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$GATED_RELEASE_WORKFLOW")"
+          workflow_id="$(jq -r '.id' <<<"$workflow_json")"
+          test -n "$workflow_id"
+          dispatched_after="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          jq -n \
+            --arg ref 'main' \
+            --arg target 'preview' \
+            --arg release_ref "$RELEASE_BRANCH" \
+            --arg expected_sha "$CANDIDATE_SHA" \
+            --arg rendered_run_id "$RENDERED_RUN_ID" \
+            '{
+              ref: $ref,
+              inputs: {
+                target: $target,
+                ref: $release_ref,
+                expected_sha: $expected_sha,
+                rendered_verification_run_id: $rendered_run_id
+              }
+            }' \
+            | gh api --method POST \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/dispatches" \
+                --input - >/dev/null
+
+          release_run_json=''
+          for _ in $(seq 1 60); do
+            runs_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?event=workflow_dispatch&branch=main&per_page=30")"
+            release_run_json="$(jq -c --arg after "$dispatched_after" '
+              [
+                .workflow_runs[]?
+                | select(.created_at >= $after)
+              ]
+              | sort_by(.created_at)
+              | first // empty
+            ' <<<"$runs_json")"
+            if [[ -n "$release_run_json" ]]; then
+              break
+            fi
+            sleep 5
+          done
+          test -n "$release_run_json"
+
+          release_run_id="$(jq -r '.id' <<<"$release_run_json")"
+          release_run_url="$(jq -r '.html_url' <<<"$release_run_json")"
+          test -n "$release_run_id"
+          test -n "$release_run_url"
+          echo "release_run_id=$release_run_id" >> "$GITHUB_OUTPUT"
+          echo "release_run_url=$release_run_url" >> "$GITHUB_OUTPUT"
+          printf 'Dispatched gated preview run %s: %s\n' "$release_run_id" "$release_run_url"
+
+      - name: Require the gated preview and route-smoke artifact to pass
+        id: preview
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ steps.release.outputs.release_run_id }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 7200))
+          while true; do
+            if (( SECONDS >= deadline )); then
+              echo "Timed out waiting for gated preview run $RELEASE_RUN_ID" >&2
+              exit 1
+            fi
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID")"
+            status="$(jq -r '.status' <<<"$run_json")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
+            if [[ "$status" != 'completed' ]]; then
+              sleep 20
+              continue
+            fi
+            if [[ "$conclusion" != 'success' ]]; then
+              echo "Gated preview run $RELEASE_RUN_ID completed with $conclusion" >&2
+              gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/jobs" \
+                --jq '.jobs[] | [.name, .status, .conclusion] | @tsv' >&2 || true
+              exit 1
+            fi
+            break
+          done
+
+          artifacts_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/artifacts?per_page=100")"
+          expected_name="gated-vercel-release-preview-$CANDIDATE_SHA"
+          artifact_json="$(jq -c --arg name "$expected_name" '
+            [.artifacts[]? | select(.name == $name and (.expired | not))] | first // empty
+          ' <<<"$artifacts_json")"
+          test -n "$artifact_json"
+          artifact_id="$(jq -r '.id' <<<"$artifact_json")"
+          artifact_url="$(jq -r '.archive_download_url' <<<"$artifact_json")"
+          test -n "$artifact_id"
+          test -n "$artifact_url"
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+
+      - name: Record immutable preview evidence on the feature PR
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          MAIN_SHA: ${{ steps.candidate.outputs.main_sha }}
+          RENDERED_RUN_ID: ${{ steps.gates.outputs.rendered_run_id }}
+          RELEASE_RUN_ID: ${{ steps.release.outputs.release_run_id }}
+          RELEASE_RUN_URL: ${{ steps.release.outputs.release_run_url }}
+          ARTIFACT_ID: ${{ steps.preview.outputs.artifact_id }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          runs_markdown="$(awk -F '\t' '{printf "- %s: run `%s` — %s\n", $2, $3, $4}' direct-upgrade-exact-head-runs.tsv)"
+          body="$(cat <<EOF
+          ### Immutable Donation Upgrade preview created
+
+          - Candidate: \`$CANDIDATE_SHA\`
+          - Included main: \`$MAIN_SHA\`
+          - Exact rendered-QA run: \`$RENDERED_RUN_ID\`
+          - Gated Vercel preview run: \`$RELEASE_RUN_ID\` — $RELEASE_RUN_URL
+          - Route-smoke artifact ID: \`$ARTIFACT_ID\`
+
+          All seven exact-head feature gates passed before \`release/vercel-preview\` advanced:
+
+          $runs_markdown
+
+          The gated workflow then verified the exact rendered-QA run, rebuilt and uploaded one immutable prebuilt artifact to the canonical Vercel project, and passed read-only smoke checks for \`/\`, \`/create?structure=conditional-donation\`, and \`/donation-upgrades\`. Direct provider secrets remain a separate external gate; managed Stripe and pooled settlement remain disabled.
+          EOF
+          )"
+          gh pr comment "$FEATURE_PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Upload orchestration evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-upgrade-preview-orchestration-${{ steps.candidate.outputs.candidate_sha }}
+          path: direct-upgrade-exact-head-runs.tsv
+          if-no-files-found: error
+          retention-days: 30
