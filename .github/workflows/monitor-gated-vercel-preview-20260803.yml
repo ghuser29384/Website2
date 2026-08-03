@@ -1,0 +1,43 @@
+name: Temporary gated Vercel release monitor
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/monitor-gated-vercel-preview-20260803.yml"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Capture current gated release runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p gated-vercel-release-monitor
+          gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow vercel-release.yml \
+            --event workflow_dispatch \
+            --limit 20 \
+            --json databaseId,status,conclusion,createdAt,updatedAt,headBranch,headSha,url,displayTitle,event \
+            > gated-vercel-release-monitor/runs.json
+          run_id="$(jq -r 'sort_by(.createdAt) | last | .databaseId // empty' gated-vercel-release-monitor/runs.json)"
+          test -n "$run_id"
+          gh run view "$run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,status,conclusion,createdAt,updatedAt,headBranch,headSha,url,jobs \
+            > gated-vercel-release-monitor/latest-run.json
+
+      - name: Upload monitor output
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-vercel-release-monitor-20260803
+          path: gated-vercel-release-monitor
+          retention-days: 2
