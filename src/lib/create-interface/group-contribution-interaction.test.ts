@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 
+// Prevent a capture-phase compatibility shim from regaining ownership of
+// state-changing controls inside the Create iframe's Shadow DOM.
 const instrumentation = readFileSync("src/instrumentation-client.ts", "utf8");
 const client = readFileSync(
   "src/lib/create-interface/group-contribution-client.ts",
