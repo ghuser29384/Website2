@@ -13,12 +13,12 @@ permissions:
   issues: write
 
 concurrency:
-  group: co-act-co-fund-review-summary-loop-repair
+  group: co-act-co-fund-review-summary-loop-repair-v4
   cancel-in-progress: false
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v2-20260801
-  EXPECTED_PARENT: a37ef77ecbfd9ee3672fd5cde1df0702418ac84b
+  EXPECTED_PARENT: 507bb8c6b4b4a2c206705cf872f94f3c5bb85e4a
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-review-summary-loop-repair.yml
 
 jobs:
@@ -118,6 +118,7 @@ jobs:
             );
           });
           '''
+          interaction_test = interaction_test.replace(r'\"', '"')
           lines = interaction_test.splitlines()
           normalized_lines = [line[10:] if line.startswith('          ') else line for line in lines]
           Path('src/lib/create-interface/group-contribution-interaction.test.ts').write_text(
@@ -197,4 +198,4 @@ jobs:
           gh pr comment 420 --repo "$GITHUB_REPOSITORY" --body \
             "The bounded review-summary observer-loop repair failed in Actions run \`$GITHUB_RUN_ID\`. No product repair was pushed unless the exact-head guard, focused contracts, lint, TypeScript, production build, and four-case real-iframe Playwright suite all passed."
 
-# Trigger v3: 2026-08-03T15:34Z
+# Trigger v4: 2026-08-03T15:38Z
