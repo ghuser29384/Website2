@@ -194,8 +194,8 @@
     } else if (deadlineTime <= Date.now() + 30 * 60 * 1000) {
       calculationBlockers.push("Use a deadline at least 30 minutes away.");
     }
-    if (participants.length < 2 || participants.length > 8) {
-      calculationBlockers.push("Use 2–8 participants.");
+    if (participants.length < 2 || participants.length > 100) {
+      calculationBlockers.push("Use 2–100 participants.");
     }
 
     const parsed = participants.map((participant, index) => {
@@ -301,6 +301,8 @@
 
     $("#commonGroundParticipantCount").textContent =
       `${state.commonGroundParticipants.length} participants`;
+    const addButton = $("#addCommonGroundParticipant");
+    if (addButton) addButton.disabled = state.commonGroundParticipants.length >= 100;
     list.innerHTML = state.commonGroundParticipants
       .map((participant, index) => {
         const privateValue = Number(privateValueBps.get(participant.id) || 0);
@@ -382,7 +384,7 @@
   }
 
   function addParticipant() {
-    if (state.commonGroundParticipants.length >= 8) return;
+    if (state.commonGroundParticipants.length >= 100) return;
     const id = `cg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
     state.commonGroundParticipants.push({
       id,

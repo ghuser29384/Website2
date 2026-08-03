@@ -109,3 +109,33 @@ test("requires the Common Ground target to match the single public threshold", (
     /one threshold equal to its shared target/i,
   );
 });
+
+test("accepts the universal Co-Fund participant ceiling of 100", () => {
+  const input = commonGroundPayload();
+  input.pool.commonGround.participants = Array.from({ length: 100 }, (_, index) => ({
+    id: `cg-${index + 1}`,
+    name: `Participant ${index + 1}`,
+    defaultProject: `Default project ${index + 1}`,
+    budgetCents: 1_000_000,
+    contributionCents: 10_000,
+  }));
+
+  const result = validateCreatePayload(input);
+  assert.equal(result.poolTerms?.commonGround?.participants.length, 100);
+});
+
+test("rejects a Co-Fund with more than 100 participants", () => {
+  const input = commonGroundPayload();
+  input.pool.commonGround.participants = Array.from({ length: 101 }, (_, index) => ({
+    id: `cg-${index + 1}`,
+    name: `Participant ${index + 1}`,
+    defaultProject: `Default project ${index + 1}`,
+    budgetCents: 1_000_000,
+    contributionCents: 1,
+  }));
+
+  assert.throws(
+    () => validateCreatePayload(input),
+    /between two and 100 participants/i,
+  );
+});

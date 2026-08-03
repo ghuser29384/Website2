@@ -11,6 +11,19 @@ const commonGroundScript = readFileSync(
   "utf8",
 );
 const route = readFileSync("src/app/api/create/publish/route.ts", "utf8");
+const createValidation = readFileSync(
+  "src/lib/create-interface/validation.ts",
+  "utf8",
+);
+const createPersistence = readFileSync(
+  "src/lib/create-interface/persistence.ts",
+  "utf8",
+);
+const groupClient = readFileSync(
+  "src/lib/create-interface/group-contribution-client.ts",
+  "utf8",
+);
+const instrumentationClient = readFileSync("src/instrumentation-client.ts", "utf8");
 const page = readFileSync("src/app/trades/new/page.tsx", "utf8");
 const frame = readFileSync("src/components/create/create-interface-frame.tsx", "utf8");
 const receiptPage = readFileSync(
@@ -69,6 +82,8 @@ test("the accepted Create interface is mounted with Donation Upgrade and compact
   assert.match(commonGroundScript, /Private value estimates stay in this tab/);
   assert.match(commonGroundScript, /privateValueEstimatesStored:\s*false/);
   assert.match(commonGroundScript, /participantGainChecked:\s*true/);
+  assert.match(commonGroundScript, /participants\.length > 100/);
+  assert.match(commonGroundScript, /commonGroundParticipants\.length >= 100/);
   assert.doesNotThrow(() => new Function(commonGroundScript));
 });
 
@@ -113,4 +128,19 @@ test("the API validates, authenticates, and uses the atomic database adapter", (
   assert.match(migration, /public_goods_failure_bonus_enabled[\s\S]*false/);
   assert.match(migration, /pending_underwriting/);
   assert.match(migration, /immutable after the first accepted pledge/i);
+});
+
+
+test("proposal-only group terms are integrated into the real iframe and authoritative write boundary", () => {
+  assert.match(instrumentationClient, /startGroupContributionEnhancement/);
+  assert.match(groupClient, /iframe\[data-create-interface-frame='true'\]/);
+  assert.match(groupClient, /requestUrl\.pathname !== "\/api\/create\/publish"/);
+  assert.match(groupClient, /groupContributionTerms: proposal/);
+  assert.match(groupClient, /data-mt-group-contribution-review/);
+  assert.match(createValidation, /validateGroupContributionProposalForPersistence/);
+  assert.match(createValidation, /authoritativeGroupContributionOptions/);
+  assert.match(createValidation, /optionKey: `\$\{offer\.id\}:\$\{index \+ 1\}`/);
+  assert.match(createValidation, /visibility: "private-review"/);
+  assert.match(createPersistence, /groupContributionReviewRecord/);
+  assert.doesNotMatch(createPersistence, /paymentIntent|clientSecret|publishIdentities/);
 });

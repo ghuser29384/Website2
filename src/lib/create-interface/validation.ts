@@ -4,6 +4,16 @@ import {
   CREATE_FORMULA_LANGUAGE_VERSION,
   validateTimingFormula,
 } from "./formula";
+import { readGroupContributionProposalFlags } from "./group-contribution-flags";
+import type { GroupContributionProposalPayload } from "./group-contribution-payload";
+import {
+  GROUP_CONTRIBUTION_REVIEW_RECORD_KEY,
+  type GroupContributionReviewRecordFragment,
+} from "./group-contribution-review-record";
+import {
+  validateGroupContributionProposalForPersistence,
+  type AuthoritativeProposalOption,
+} from "./group-contribution-server";
 import {
   CREATE_INTERFACE_VERSION,
   CREATE_SUBMISSION_KINDS,
@@ -241,8 +251,8 @@ function validateCommonGround(raw: unknown): NonNullable<ValidatedCreatePoolTerm
   if (input.participantGainChecked !== true || input.baselineConfirmed !== true) {
     throw new Error("Co-Fund gain and no-pool baseline confirmations are required.");
   }
-  if (!Array.isArray(input.participants) || input.participants.length < 2 || input.participants.length > 8) {
-    throw new Error("A Co-Fund requires between two and eight participants.");
+  if (!Array.isArray(input.participants) || input.participants.length < 2 || input.participants.length > 100) {
+    throw new Error("A Co-Fund requires between two and 100 participants.");
   }
 
   const seen = new Set<string>();
@@ -525,12 +535,58 @@ function parsePayload(raw: unknown): MoralTradeCreatePayload {
     existingPoolCurrency: optionalText(input.existingPoolCurrency, 16),
     offers: input.offers as CreateOfferContribution[],
     pool: input.pool == null ? null : input.pool as MoralTradeCreatePayload["pool"],
+    groupContributionTerms: input.groupContributionTerms ?? null,
   };
+}
+
+function authoritativeGroupContributionOptions(
+  offers: CreateOfferContribution[],
+): AuthoritativeProposalOption[] {
+  return offers.flatMap((offer) =>
+    offer.options.map((_, index) => ({
+      optionKey: `${offer.id}:${index + 1}`,
+      contributionKind: offer.id === "money" ? "financial" : "nonfinancial",
+    })),
+  );
+}
+
+function validateGroupContributionReviewTerms(
+  raw: unknown,
+  offers: CreateOfferContribution[],
+): {
+  terms: GroupContributionProposalPayload;
+  reviewRecord: GroupContributionReviewRecordFragment | null;
+} {
+  const rawField = raw == null ? null : JSON.stringify(raw);
+  const validated = validateGroupContributionProposalForPersistence({
+    rawField,
+    authoritativeOptions: authoritativeGroupContributionOptions(offers),
+    flags: readGroupContributionProposalFlags(),
+  });
+  if (!validated.ok) {
+    const details = validated.issues
+      .slice(0, 6)
+      .map((issue) => `${issue.path || "groupContributionTerms"}: ${issue.message}`)
+      .join(" ");
+    throw new Error(`Group-contribution terms are invalid. ${details}`.trim());
+  }
+
+  const reviewRecord = validated.value.options.length > 0
+    ? {
+        [GROUP_CONTRIBUTION_REVIEW_RECORD_KEY]: {
+          visibility: "private-review" as const,
+          execution: "proposal-only" as const,
+          canonicalJson: validated.canonicalJson,
+        },
+      }
+    : null;
+
+  return { terms: validated.value, reviewRecord };
 }
 
 export function validateCreatePayload(raw: unknown): ValidatedCreatePayload {
   const serialized = JSON.stringify(raw);
-  if (Buffer.byteLength(serialized, "utf8") > MAX_PAYLOAD_BYTES) {
+  if (new TextEncoder().encode(serialized).byteLength > MAX_PAYLOAD_BYTES) {
     throw new Error("The Create submission is too large.");
   }
   const source = parsePayload(raw);
@@ -557,6 +613,14 @@ export function validateCreatePayload(raw: unknown): ValidatedCreatePayload {
     throw new Error("A directly created pool cannot include reciprocal contribution options.");
   }
   const offeredSummary = directPool ? "No reciprocal contribution required." : summarizeOffers(offeredTerms);
+  const groupContribution = validateGroupContributionReviewTerms(
+    source.groupContributionTerms,
+    offeredTerms,
+  );
+  const canonicalSource: MoralTradeCreatePayload = {
+    ...source,
+    groupContributionTerms: groupContribution.terms,
+  };
   const poolTerms = directPool ? validatePool(source.pool) : null;
   if (directPool && !source.pool) throw new Error("Direct pool terms are required.");
   if (!directPool && source.pool) throw new Error("Pool terms may only be supplied for direct pool creation.");
@@ -574,7 +638,7 @@ export function validateCreatePayload(raw: unknown): ValidatedCreatePayload {
 
   const payloadHash = createHash("sha256").update(serialized).digest("hex");
   return {
-    source,
+    source: canonicalSource,
     kind,
     cause: source.cause,
     requestedAction: source.requestAction,
@@ -584,6 +648,8 @@ export function validateCreatePayload(raw: unknown): ValidatedCreatePayload {
     existingPoolAmountCents,
     existingPoolCurrency,
     poolTerms,
+    groupContributionTerms: groupContribution.terms,
+    groupContributionReviewRecord: groupContribution.reviewRecord,
     payloadHash,
   };
 }
