@@ -1,4 +1,4 @@
-name: Repair Co-Act and Co-Fund review-summary observer loop
+name: Diagnose remaining Co-Act and Co-Fund browser failures
 
 on:
   push:
@@ -8,53 +8,48 @@ on:
       - ".github/workflows/co-act-co-fund-review-summary-loop-repair.yml"
 
 permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+  contents: read
 
 concurrency:
-  group: co-act-co-fund-review-summary-loop-repair-v5
+  group: co-act-co-fund-browser-diagnostic-v6
   cancel-in-progress: false
 
 env:
-  TARGET_BRANCH: feature/co-act-co-fund-create-v2-20260801
-  EXPECTED_PARENT: 1671e129096a3b0d24f23e66d76eebbeddbe028d
+  EXPECTED_PARENT: d12acd66f2c9e7e2021040e7a2e14b0c4621b3ab
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-review-summary-loop-repair.yml
 
 jobs:
-  repair:
+  diagnose:
     if: >-
       github.repository == 'ghuser29384/Website2' &&
       github.ref == 'refs/heads/feature/co-act-co-fund-create-v2-20260801'
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
 
     steps:
-      - name: Check out exact trigger
+      - name: Check out exact diagnostic trigger
         uses: actions/checkout@v4
         with:
           ref: feature/co-act-co-fund-create-v2-20260801
           fetch-depth: 0
-          persist-credentials: true
 
-      - name: Verify exact one-file controller trigger
+      - name: Verify exact one-file trigger
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
           test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
 
-      - name: Make the review projection idempotent
+      - name: Apply the proven observer-loop fix in the diagnostic worktree
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          client_path = Path('src/lib/create-interface/group-contribution-client.ts')
-          client = client_path.read_text(encoding='utf-8')
+          path = Path('src/lib/create-interface/group-contribution-client.ts')
+          text = path.read_text(encoding='utf-8')
           old = '''function renderReviewSummaries(payload: GroupContributionProposalPayload): void {
             const doc = createDocument();
             const summaryOffers = doc.querySelector<HTMLElement>("#summaryOffers");
@@ -69,134 +64,155 @@ jobs:
             if (summaryOffers.dataset.mtGroupContributionSignature === projectionSignature) return;
             summaryOffers.dataset.mtGroupContributionSignature = projectionSignature;
           '''
-          if client.count(old) != 1:
-              raise SystemExit(f'unexpected review-summary function inventory: {client.count(old)}')
-          client_path.write_text(client.replace(old, new, 1), encoding='utf-8')
-
-          interaction_test = r'''import assert from "node:assert/strict";
-          import { existsSync, readFileSync } from "node:fs";
-          import test from "node:test";
-
-          // Prevent a capture-phase compatibility shim from regaining ownership of
-          // state-changing controls inside the Create iframe's Shadow DOM.
-          const instrumentation = readFileSync("src/instrumentation-client.ts", "utf8");
-          const client = readFileSync(
-            "src/lib/create-interface/group-contribution-client.ts",
-            "utf8",
-          );
-
-          test("group controls use one authoritative event path and defer only rendering", () => {
-            assert.equal(
-              existsSync("src/lib/create-interface/group-contribution-interaction-stability.ts"),
-              false,
-            );
-            assert.doesNotMatch(instrumentation, /InteractionStability|interaction-stability/);
-            assert.match(client, /const pendingRenders = new WeakMap<MountedOption, number>\(\);/);
-
-            const modeListener = client.indexOf('button.addEventListener("click"');
-            const normalized = client.indexOf(
-              "entry.state = normalizeDraft(entry.state);",
-              modeListener,
-            );
-            const persisted = client.indexOf("writeProposalPayload();", normalized);
-            const scheduled = client.indexOf("scheduleMountedOptionRender(entry);", persisted);
-
-            assert.ok(modeListener >= 0);
-            assert.ok(normalized > modeListener);
-            assert.ok(persisted > normalized);
-            assert.ok(scheduled > persisted);
-            assert.match(client, /if \(rerender\) scheduleMountedOptionRender\(entry\);/);
-            assert.match(
-              client,
-              /function scheduleMountedOptionRender[\s\S]*targetWindow\.setTimeout[\s\S]*renderMountedOption\(entry\);[\s\S]*\}, 0\);/,
-            );
-
-            // Observer-triggered rescans must not rewrite an unchanged review projection.
-            assert.match(
-              client,
-              /const projectionSignature = JSON\.stringify\(payload\);[\s\S]*mtGroupContributionSignature === projectionSignature[\s\S]*mtGroupContributionSignature = projectionSignature/,
-            );
-          });
-          '''
-          lines = interaction_test.splitlines()
-          normalized_lines = [line[10:] if line.startswith('          ') else line for line in lines]
-          output = '\n'.join(normalized_lines).rstrip() + '\n'
-          output = output.replace('\\"', '"')
-          Path('src/lib/create-interface/group-contribution-interaction.test.ts').write_text(
-              output,
-              encoding='utf-8',
-          )
+          if text.count(old) != 1:
+              raise SystemExit(f'unexpected review-summary inventory: {text.count(old)}')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
           PY
 
-          git rm "$CONTROLLER_PATH"
-          git diff --check
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run focused contracts
-        run: >-
-          node --import tsx --test
-          src/lib/create-interface/group-contribution*.test.ts
-          src/lib/create-interface/persistence.test.ts
-          src/lib/create-interface/source-contract.test.ts
-          src/lib/create-interface/validation.test.ts
-
-      - name: Run changed-file lint and TypeScript
+      - name: Write targeted browser diagnostic
         shell: bash
         run: |
-          set -euo pipefail
-          npx eslint \
-            src/lib/create-interface/group-contribution-client.ts \
-            src/lib/create-interface/group-contribution-interaction.test.ts
-          npx tsc --noEmit
+          cat > tests/co-act-co-fund-browser-diagnostic.spec.ts <<'TS'
+          import { test, type FrameLocator, type Page, type Route } from "@playwright/test";
 
-      - name: Build production application
-        env:
-          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
-          VERCEL: "1"
-          VERCEL_ENV: preview
-        run: npm run build
+          const RESUME_KEY = "moral_trade_create_resume_v1";
+          const GROUP_KEY = "mt:create:group-contribution-drafts:v1";
 
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
+          async function openConcreteOfferStep(page: Page): Promise<FrameLocator> {
+            await page.goto("/trades/new");
+            await page.waitForLoadState("domcontentloaded");
+            const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await create.getByRole("button", { name: "Future flourishing" }).click();
+            await create.locator('[data-request-kind="commitment"]').click();
+            await create.getByLabel("What commitment do you want?").fill(
+              "Not eat meat for one meal per week",
+            );
+            await create.locator("#continueRequest").click();
+            await create.getByRole("button", { name: "A behavior change" }).click();
+            await create.getByRole("button", { name: "Money" }).click();
+            await create.locator("#continueOffers").click();
+            await create
+              .locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="action"]')
+              .fill("Avoid meat for one meal per week");
+            await create
+              .locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]')
+              .fill("once per week for 12 weeks");
+            await create
+              .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]')
+              .fill("5.00");
+            await create
+              .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]')
+              .fill("Existential Risk Research Project");
+            return create;
+          }
 
-      - name: Run exact real-iframe proposal workflow
+          function behaviorHost(create: FrameLocator) {
+            return create.locator(
+              '[data-offer-entry-block][data-offer-id="behavior"] + [data-mt-group-contribution-host]',
+            );
+          }
+
+          function fundingHost(create: FrameLocator) {
+            return create.locator(
+              '[data-offer-entry-block][data-offer-id="money"] + [data-mt-group-contribution-host]',
+            );
+          }
+
+          test("records the incomplete Co-Fund Shadow DOM state", async ({ page }) => {
+            const create = await openConcreteOfferStep(page);
+            const host = fundingHost(create);
+            await host.getByRole("button", { name: "Fund together" }).click();
+            await page.waitForTimeout(750);
+            const snapshot = await host.evaluate((element, keys) => {
+              const root = element.shadowRoot;
+              return {
+                html: root?.innerHTML ?? null,
+                text: root?.textContent ?? null,
+                validationHtml: root?.querySelector<HTMLElement>("[data-validation]")?.innerHTML ?? null,
+                buttons: [...(root?.querySelectorAll<HTMLElement>("[data-mode]") ?? [])].map((button) => ({
+                  mode: button.dataset.mode,
+                  pressed: button.getAttribute("aria-pressed"),
+                })),
+                groupDrafts: localStorage.getItem(keys.group),
+              };
+            }, { group: GROUP_KEY });
+            console.log(`COFUND_DIAGNOSTIC=${JSON.stringify(snapshot)}`);
+          });
+
+          test("records storage and active screens across the authentication handoff", async ({ page }) => {
+            await page.route("**/api/create/publish", async (route: Route) => {
+              await route.fulfill({
+                status: 401,
+                contentType: "application/json",
+                body: JSON.stringify({
+                  ok: false,
+                  requiresAuth: true,
+                  message: "Sign in to submit this Create record.",
+                  loginUrl: "/trades/new?resume=create",
+                }),
+              });
+            });
+
+            const create = await openConcreteOfferStep(page);
+            const coAct = behaviorHost(create);
+            await coAct.getByRole("button", { name: "Act together" }).click();
+            await coAct.getByLabel("Yes, include the counterparty").check();
+            await coAct.getByLabel("Maximum participants").fill("17");
+            await create.locator("#reviewOffers").click();
+            await create.locator("label.publish-confirm").click();
+
+            const beforeFrame = await create.locator("body").evaluate((_, keys) => ({
+              resume: sessionStorage.getItem(keys.resume),
+              group: localStorage.getItem(keys.group),
+              heading: document.querySelector<HTMLElement>("#summaryHeading")?.textContent ?? null,
+              active: [...document.querySelectorAll<HTMLElement>("[id^='screen']")]
+                .filter((node) => !node.hidden)
+                .map((node) => node.id),
+            }), { resume: RESUME_KEY, group: GROUP_KEY });
+            const beforeTop = await page.evaluate((key) => sessionStorage.getItem(key), RESUME_KEY);
+            console.log(`AUTH_BEFORE_FRAME=${JSON.stringify(beforeFrame)}`);
+            console.log(`AUTH_BEFORE_TOP=${JSON.stringify(beforeTop)}`);
+
+            await create.getByRole("button", { name: /Submit for review/ }).click();
+            await page.waitForURL(/\/trades\/new\?resume=create$/);
+            await page.waitForTimeout(1250);
+
+            const resumed = page.frameLocator('iframe[title="Moral Trade Create"]');
+            const afterFrame = await resumed.locator("body").evaluate((_, keys) => ({
+              resume: sessionStorage.getItem(keys.resume),
+              group: localStorage.getItem(keys.group),
+              heading: document.querySelector<HTMLElement>("#summaryHeading")?.textContent ?? null,
+              active: [...document.querySelectorAll<HTMLElement>("[id^='screen']")]
+                .filter((node) => !node.hidden)
+                .map((node) => node.id),
+              bodyPrefix: document.body.innerText.slice(0, 600),
+            }), { resume: RESUME_KEY, group: GROUP_KEY });
+            const afterTop = await page.evaluate((key) => sessionStorage.getItem(key), RESUME_KEY);
+            console.log(`AUTH_AFTER_FRAME=${JSON.stringify(afterFrame)}`);
+            console.log(`AUTH_AFTER_TOP=${JSON.stringify(afterTop)}`);
+          });
+          TS
+          sed -i 's/^          //' tests/co-act-co-fund-browser-diagnostic.spec.ts
+
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run diagnostic
         env:
           CREATE_ROUTE_CAPTURE: "1"
-        run: npx playwright test tests/create-group-contribution-proposal.spec.ts
+        run: npx playwright test tests/co-act-co-fund-browser-diagnostic.spec.ts --reporter=line
 
-      - name: Commit and publish proven repair
-        shell: bash
-        run: |
-          set -euo pipefail
-          git add -A
-          cat > /tmp/expected-paths.txt <<'EOF'
-          .github/workflows/co-act-co-fund-review-summary-loop-repair.yml
-          src/lib/create-interface/group-contribution-client.ts
-          src/lib/create-interface/group-contribution-interaction.test.ts
-          EOF
-          sed -i 's/^          //' /tmp/expected-paths.txt
-          sort -u /tmp/expected-paths.txt -o /tmp/expected-paths.txt
-          git diff --cached --name-only | sort -u > /tmp/actual-paths.txt
-          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
-          git diff --cached --check
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: co-act-co-fund-browser-diagnostic-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 7
 
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m 'Prevent Co-Act and Co-Fund review observer loops'
-          test "$(git rev-parse HEAD^)" = "$GITHUB_SHA"
-          test ! -e "$CONTROLLER_PATH"
-          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$GITHUB_SHA" \
-            origin "HEAD:refs/heads/$TARGET_BRANCH"
-
-      - name: Report controller failure
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          gh pr comment 420 --repo "$GITHUB_REPOSITORY" --body \
-            "The bounded review-summary observer-loop repair failed in Actions run \`$GITHUB_RUN_ID\`. No product repair was pushed unless the exact-head guard, focused contracts, lint, TypeScript, production build, and four-case real-iframe Playwright suite all passed."
-
-# Trigger v5: 2026-08-03T15:41Z
+# Diagnostic trigger: 2026-08-03T15:50Z
