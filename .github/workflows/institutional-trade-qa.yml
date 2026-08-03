@@ -117,6 +117,7 @@ jobs:
             src/institutional-authorization-snapshot.test.ts \
             src/institutional-individual-capacity.test.ts \
             src/institutional-product-completeness.test.ts \
+            src/institutional-pool-record-trigger.test.ts \
             src/institutional-trade-migration.test.ts \
             src/institutional-trade-wiring.test.ts \
             src/lib/institutional-trade.test.ts \
@@ -124,25 +125,46 @@ jobs:
           node --check .github/scripts/institutional-trade-qa-e2e.mjs
           node --check .github/scripts/pr212-targeted-regression-qa.mjs
 
-      - name: Compile and apply institutional migration atomically to isolated QA
+      - name: Compile and apply institutional migrations atomically to isolated QA
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p institutional-qa-artifacts
-          migration=supabase/migrations/20260726123000_institutional_trade_system.sql
-          sha256sum "$migration" | tee institutional-qa-artifacts/institutional-migration.sha256
+          base_migration=supabase/migrations/20260726123000_institutional_trade_system.sql
+          additive_migration=supabase/migrations/20260731173000_fix_institutional_pool_record_status_access.sql
+          sha256sum "$base_migration" "$additive_migration" | tee institutional-qa-artifacts/institutional-migrations.sha256
           present="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select to_regclass('public.institutional_organizations') is not null")"
           if [[ "$present" == "t" ]]; then
-            echo "Institutional schema already exists in isolated QA; verifying exact inventory instead of replaying the forward migration."
-          else
-            echo "Compiling every migration statement inside a rollback-only transaction."
+            echo "Compiling the idempotent additive institutional migration inside a rollback-only transaction."
             psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL
           begin;
-          \i $migration
+          \i $additive_migration
           rollback;
           SQL
-            echo "Applying the migration in one transaction to isolated QA only."
-            psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction --file "$migration"
+            echo "Applying the additive institutional migration atomically to isolated QA."
+            psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction --file "$additive_migration"
+          else
+            echo "Compiling the complete ordered institutional migration chain inside a rollback-only transaction."
+            psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL
+          begin;
+          \i $base_migration
+          \i $additive_migration
+          rollback;
+          SQL
+            echo "Applying the complete ordered institutional migration chain atomically to isolated QA only."
+            psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL
+          begin;
+          \i $base_migration
+          \i $additive_migration
+          commit;
+          SQL
+          fi
+          psql "$QA_SUPABASE_DB_URL" -Atqc "select pg_get_functiondef('public.institutional_validate_pool_record()'::regprocedure)" \
+            | tee institutional-qa-artifacts/institutional-pool-trigger-definition.sql \
+            | grep -F "to_jsonb(new)->>'status'" >/dev/null
+          if grep -Eiq '(^|[^[:alnum:]_])new\.status([^[:alnum:]_]|$)' institutional-qa-artifacts/institutional-pool-trigger-definition.sql; then
+            echo "The isolated-QA trigger definition directly dereferences NEW.status." >&2
+            exit 1
           fi
           psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off <<'SQL' | tee institutional-qa-artifacts/institutional-schema-inventory.txt
           do $$
