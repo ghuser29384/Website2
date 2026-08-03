@@ -105,26 +105,18 @@ jobs:
           ''',
           )
 
-          replace_once(
-              "src/lib/create-interface/group-contribution.ts",
-              '''  if (visibility === "invitation-only" && value.membersSeeAfterJoining !== true) {
-            addIssue(
-              issues,
-              "identity.membersSeeAfterJoining",
-              "invalid-value",
-              "Invitation-only members see one another after joining",
-            );
-            }
-          }
-          ''',
-              '''  if (visibility === "invitation-only" && value.membersSeeAfterJoining !== true) {
-            addIssue(
-              issues,
-              "identity.membersSeeAfterJoining",
-              "invalid-value",
-              "Invitation-only members see one another after joining",
-            );
-            }
+          identity_path = Path("src/lib/create-interface/group-contribution.ts")
+          identity_text = identity_path.read_text()
+          invitation_anchor = (
+              '  if (visibility === "invitation-only" && '
+              'value.membersSeeAfterJoining !== true) {'
+          )
+          start = identity_text.index(invitation_anchor)
+          function_end = identity_text.index("\n}\n\nfunction validateCoFund", start)
+          function_body = identity_text[start:function_end]
+          if "identity.publicAfterSuccessfulCompletion" in function_body:
+              raise SystemExit("Invitation-only completion-publication invariant already exists")
+          completion_invariant = '''
             if (
               visibility === "invitation-only" &&
               value.publicAfterSuccessfulCompletion !== true
@@ -136,21 +128,33 @@ jobs:
                 "Invitation-only participant identities become public only after successful completion",
               );
             }
-          }
-          ''',
+          '''
+          identity_path.write_text(
+              identity_text[:function_end] + completion_invariant + identity_text[function_end:]
           )
 
-          Path("src/lib/create-interface/group-contribution-client-stability.test.ts").open("a").write(
-              '''\n\ntest("review summaries are idempotent so their observer cannot self-trigger forever", () => {
+          def append_once(path: str, marker: str, addition: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if marker in text:
+                  raise SystemExit(f"{path}: test marker already exists")
+              file.write_text(text.rstrip() + "\n\n" + addition.strip() + "\n")
+
+          append_once(
+              "src/lib/create-interface/group-contribution-client-stability.test.ts",
+              "review summaries are idempotent so their observer cannot self-trigger forever",
+              r'''test("review summaries are idempotent so their observer cannot self-trigger forever", () => {
             const review = functionBody("renderReviewSummaries");
             assert.match(review, /mtGroupContributionReviewFingerprint/);
             assert.match(review, /=== fingerprint/);
             assert.match(review, /existing\?\.remove\(\)/);
-          });\n'''
+          });''',
           )
 
-          Path("src/lib/create-interface/group-contribution-flags.test.ts").open("a").write(
-              '''\n\ntest("malformed explicit feature-flag values fail closed", () => {
+          append_once(
+              "src/lib/create-interface/group-contribution-flags.test.ts",
+              "malformed explicit feature-flag values fail closed",
+              '''test("malformed explicit feature-flag values fail closed", () => {
             const flags = readGroupContributionProposalFlags({
               NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS: "maybe",
               NEXT_PUBLIC_MORAL_TRADE_CO_FUND_PROPOSALS: "unexpected",
@@ -166,11 +170,13 @@ jobs:
             assert.equal(permitsCoFundAllocation(flags, "flexible-contribution"), false);
             assert.equal(permitsCoFundAllocation(flags, "custom-split"), false);
             assert.equal(permitsCoFundAllocation(flags, "matching-pledge"), false);
-          });\n'''
+          });''',
           )
 
-          Path("src/lib/create-interface/group-contribution.test.ts").open("a").write(
-              '''\n\ntest("requires invitation-only identities to become public only after successful completion", () => {
+          append_once(
+              "src/lib/create-interface/group-contribution.test.ts",
+              "requires invitation-only identities to become public only after successful completion",
+              '''test("requires invitation-only identities to become public only after successful completion", () => {
             const base = validCoAct();
             const proposal = {
               ...base,
@@ -189,7 +195,7 @@ jobs:
                 ),
               );
             }
-          });\n'''
+          });''',
           )
           PY
 
