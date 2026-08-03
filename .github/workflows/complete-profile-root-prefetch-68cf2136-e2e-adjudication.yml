@@ -86,11 +86,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git status --porcelain --untracked-files=no | grep -q . && {
-            echo "Tracked workspace changed during the exact-base test." >&2
-            git status --short >&2
+          git restore --source=HEAD --worktree next-env.d.ts
+          tracked_changes="$(git status --porcelain --untracked-files=no)"
+          if [[ -n "$tracked_changes" ]]; then
+            echo "Unexpected tracked workspace changes remained after the exact-base test." >&2
+            printf '%s\n' "$tracked_changes" >&2
             exit 1
-          } || true
+          fi
           git checkout --detach "$CANDIDATE_SHA"
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
           test -d node_modules/@playwright/test
