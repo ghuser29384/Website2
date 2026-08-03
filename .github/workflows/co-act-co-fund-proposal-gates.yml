@@ -32,9 +32,10 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:
-      - name: Check out exact candidate
+      - name: Check out exact candidate head
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Set up Node.js
@@ -70,16 +71,25 @@ jobs:
           VERCEL_ENV: preview
         run: npm run build
 
-      - name: Verify clean exact diff and absence of temporary machinery
+      - name: Verify event-base ancestry, clean diff, and absence of temporary machinery
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          git fetch origin main
-          git merge-base --is-ancestor origin/main HEAD || {
-            echo 'Candidate is behind current main; synchronize it before treating this run as release evidence.' >&2
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA="$PR_BASE_SHA"
+            git cat-file -e "$BASE_SHA^{commit}"
+          else
+            git fetch origin main
+            BASE_SHA="$(git rev-parse origin/main)"
+          fi
+          git merge-base --is-ancestor "$BASE_SHA" HEAD || {
+            echo "Candidate does not contain its recorded base $BASE_SHA." >&2
             exit 1
           }
-          git diff --check origin/main...HEAD
+          git diff --check "$BASE_SHA"...HEAD
           test ! -e .github/co-act-co-fund-product-payload
           test ! -e .github/workflows/materialize-co-act-co-fund-product.yml
           test ! -e .github/workflows/co-act-co-fund-source-export.yml
