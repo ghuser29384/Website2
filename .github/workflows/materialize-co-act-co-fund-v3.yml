@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - name: Check out the exact materializer commit
+      - name: Check out the exact materializer branch
         uses: actions/checkout@v4
         with:
           ref: feature/co-act-co-fund-create-v3-20260803
@@ -30,7 +30,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "92cb9d1eb08f9784be0353dd920c0784984e9a22"
+          BASE_SHA="92cb9d1eb08f9784be0353dd920c0784984e9a22"
+          git fetch origin main
+          test "$(git merge-base HEAD origin/main)" = "$BASE_SHA"
           cat .github/co-act-co-fund-v3-payload/part-* > /tmp/coact-v3-patch.b64
           echo "eda2828276ff161d1ed36c397b513d3f8071dea0a1581bc4fc608d6739e1e183  /tmp/coact-v3-patch.b64" | sha256sum -c -
           base64 --decode /tmp/coact-v3-patch.b64 > /tmp/coact-v3-patch.tar.xz
@@ -84,11 +86,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          BASE_SHA="92cb9d1eb08f9784be0353dd920c0784984e9a22"
           rm -rf .github/co-act-co-fund-v3-payload
           git rm .github/workflows/materialize-co-act-co-fund-v3.yml
           git add -A
           git diff --cached --check
-          git diff --cached --name-only | sort > /tmp/candidate-manifest.txt
+          git diff --cached --name-only "$BASE_SHA" | sort > /tmp/candidate-manifest.txt
           diff -u /tmp/expected-manifest.txt /tmp/candidate-manifest.txt
           test ! -e .github/co-act-co-fund-v3-payload
           test ! -e .github/workflows/materialize-co-act-co-fund-v3.yml
