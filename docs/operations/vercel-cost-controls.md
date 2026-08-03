@@ -120,16 +120,28 @@ in GitHub Actions only and receive no Vercel deployment.
 
 ## Spend management
 
+Vercel's supported configuration path for the team spend amount is the team
+dashboard. It currently documents no supported REST API or CLI command for
+creating or updating this team-level amount. An Owner or Billing-role user must
+open **Team Settings → Billing → Spend Management** and configure it there.
+
 Set a notification-oriented monthly on-demand spend amount of **$40** initially:
 
-- 50% (`$20`): email and SMS warning;
-- 75% (`$30`): email and SMS escalation;
-- 100% (`$40`): urgent email/SMS and operational review.
+- 50% (`$20`): web and email warning;
+- 75% (`$30`): web and email escalation;
+- 100% (`$40`): urgent web and email alert, optional SMS alert, and operational
+  review.
 
-Do **not** configure the spend amount to pause production. Automatic Git and
-preview deployments are already structurally disabled, so a cost anomaly
-should trigger investigation rather than take the public website offline.
-Raise the amount only after inspecting the resource-level usage breakdown.
+Vercel supports SMS for the 100% threshold only. Each Owner or Billing-role user
+must configure their own notification channels under **My Notifications**.
+
+Do **not** enable **Pause production deployment** for this spend amount.
+Automatic Git deployments and ordinary preview deployments are already
+structurally disabled, so a cost anomaly should trigger investigation rather
+than take the public website offline. An optional spend-management webhook may
+notify operators or invoke additional non-production suppression, but it must
+not pause the canonical production project. Raise the amount only after
+inspecting the resource-level usage breakdown.
 
 ## Observability and add-ons
 
