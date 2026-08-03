@@ -1,0 +1,418 @@
+name: Complete Profile existing preview CLI smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/complete-profile-existing-preview-cli-smoke-68cf2136.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: complete-profile-existing-preview-cli-smoke-68cf2136
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      BASE_SHA: eb71dce7990d1476fc6e4731e1bcd7f3afd640f9
+      CANDIDATE_SHA: 68cf2136ce62b823024963e83503f7af96f229ee
+      PRODUCT_PR: "405"
+      EXACT_GATE_CONTEXT: QA / Complete Profile root-prefetch exact gates
+      ADJUDICATION_CONTEXT: QA / Complete Profile E2E adjudication
+      STATUS_CONTEXT: QA / Complete Profile CLI preview smoke
+      PREVIEW_ORIGIN: https://moraltrade-site-lrdrmt7ma-ellen-s.vercel.app
+      PREVIEW_DEPLOYMENT_ID: dpl_FXWVBnyi4cq6WAQDW22h3HrQs9uM
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      EVIDENCE_DIR: complete-profile-cli-preview-evidence
+
+    steps:
+      - name: Mark the exact preview smoke pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Authenticating to and testing the immutable preview on desktop and mobile" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Guard immutable release inputs and prerequisite evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+
+          compare="$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${CANDIDATE_SHA}")"
+          test "$(jq -r .status <<<"$compare")" = 'ahead'
+          test "$(jq -r .ahead_by <<<"$compare")" = '1'
+          test "$(jq -r .behind_by <<<"$compare")" = '0'
+          jq -r '.files[].filename' <<<"$compare" | sort > /tmp/actual-files.txt
+          printf '%s\n' \
+            '.github/scripts/complete-profile-production-canary.mjs' \
+            'src/components/profile/complete-profile-review.tsx' \
+            'tests/complete-profile-review.spec.ts' \
+            | sort > /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+          statuses="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${CANDIDATE_SHA}/status")"
+          latest_state() {
+            jq -r --arg context "$1" \
+              '[.statuses[] | select(.context == $context)] | sort_by(.updated_at) | last | .state // empty' \
+              <<<"$statuses"
+          }
+          test "$(latest_state "$EXACT_GATE_CONTEXT")" = 'success'
+          test "$(latest_state "$ADJUDICATION_CONTEXT")" = 'success'
+
+      - name: Check out the immutable product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Verify exact checkout and initialize evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          mkdir -p "$EVIDENCE_DIR" .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Verify the existing exact READY preview deployment
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          detail="$(curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            "https://api.vercel.com/v13/deployments/${PREVIEW_DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}")"
+          state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$detail")"
+          deployment_id="$(jq -r '.uid // .id // empty' <<<"$detail")"
+          project_id="$(jq -r '.projectId // .project.id // empty' <<<"$detail")"
+          target="$(jq -r '.target // "preview"' <<<"$detail")"
+          deployed_sha="$(jq -r '.meta.githubCommitSha // empty' <<<"$detail")"
+          deployment_url="https://$(jq -r '.url // empty' <<<"$detail")"
+          test "$state" = 'READY'
+          test "$deployment_id" = "$PREVIEW_DEPLOYMENT_ID"
+          test "$project_id" = "$VERCEL_PROJECT_ID"
+          test "$target" != 'production'
+          test "$deployed_sha" = "$CANDIDATE_SHA"
+          test "$deployment_url" = "$PREVIEW_ORIGIN"
+          jq -n \
+            --arg expectedSha "$CANDIDATE_SHA" \
+            --arg deploymentUrl "$deployment_url" \
+            --arg deploymentId "$deployment_id" \
+            --arg projectId "$project_id" \
+            --arg state "$state" \
+            --arg target "$target" \
+            --arg deployedSha "$deployed_sha" \
+            '{expectedSha:$expectedSha,deploymentUrl:$deploymentUrl,deploymentId:$deploymentId,projectId:$projectId,state:$state,target:$target,deployedSha:$deployedSha}' \
+            > "$EVIDENCE_DIR/deployment.json"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npm ci; then break; fi
+            if [[ "$attempt" == '3' ]]; then exit 1; fi
+            sleep $((attempt * 20))
+          done
+          npx playwright install --with-deps chromium
+
+      - name: Prime protected preview access with Vercel CLI
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          rm -f /tmp/vercel-preview-cookies.txt /tmp/vercel-preview-prime.html
+          npx --yes vercel@58.4.4 curl --url "${PREVIEW_ORIGIN}/complete-profile" \
+            -H 'x-vercel-set-bypass-cookie: true' \
+            -H 'Cookie: mt_walkthrough_seen=1' \
+            -L \
+            -c /tmp/vercel-preview-cookies.txt \
+            -o /tmp/vercel-preview-prime.html \
+            --fail-with-body
+          test -s /tmp/vercel-preview-prime.html
+          test -s /tmp/vercel-preview-cookies.txt
+          if grep -Fq 'vercel.com/login' /tmp/vercel-preview-prime.html; then
+            echo 'Vercel CLI authentication still reached the login surface.' >&2
+            exit 1
+          fi
+          cookie_count="$(awk 'BEGIN{n=0} (!/^#/ || /^#HttpOnly_/) && NF>=7 {n++} END{print n}' /tmp/vercel-preview-cookies.txt)"
+          test "$cookie_count" -gt 0
+          jq -n --arg cookieCount "$cookie_count" \
+            '{authenticated:true,cookieCount:($cookieCount|tonumber)}' \
+            > "$EVIDENCE_DIR/access-prime.json"
+
+      - name: Run exact preview first-time, desktop, and mobile diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .qa "$EVIDENCE_DIR"
+          cat > .qa/complete-profile-cli-preview-smoke.mjs <<'SCRIPT'
+          import assert from "node:assert/strict";
+          import { mkdir, readFile, writeFile } from "node:fs/promises";
+          import { chromium } from "@playwright/test";
+
+          const origin = process.env.PREVIEW_ORIGIN;
+          const outputDir = process.env.EVIDENCE_DIR;
+          assert.ok(origin && outputDir);
+          await mkdir(outputDir, { recursive: true });
+
+          function parseNetscapeCookies(text) {
+            const cookies = [];
+            for (const rawLine of text.split(/\r?\n/)) {
+              if (!rawLine || (rawLine.startsWith("#") && !rawLine.startsWith("#HttpOnly_"))) continue;
+              const httpOnly = rawLine.startsWith("#HttpOnly_");
+              const line = httpOnly ? rawLine.slice("#HttpOnly_".length) : rawLine;
+              const fields = line.split("\t");
+              if (fields.length < 7) continue;
+              const [domain, , path, secure, expires, name, value] = fields;
+              const cookie = {
+                name,
+                value,
+                domain,
+                path: path || "/",
+                secure: secure === "TRUE",
+                httpOnly,
+                sameSite: "Lax",
+              };
+              const expiresNumber = Number(expires);
+              if (Number.isFinite(expiresNumber) && expiresNumber > 0) cookie.expires = expiresNumber;
+              cookies.push(cookie);
+            }
+            return cookies;
+          }
+
+          const authCookies = parseNetscapeCookies(
+            await readFile("/tmp/vercel-preview-cookies.txt", "utf8"),
+          );
+          assert.ok(authCookies.length > 0, "No Vercel authentication cookies were primed");
+
+          const browser = await chromium.launch({ headless: true });
+          const report = {
+            status: "running",
+            expectedSha: process.env.CANDIDATE_SHA,
+            expectedDeploymentId: process.env.PREVIEW_DEPLOYMENT_ID,
+            previewOrigin: origin,
+            checkedAt: new Date().toISOString(),
+            primedCookieNames: authCookies.map((cookie) => cookie.name),
+            scenarios: [],
+          };
+
+          async function createContext(viewport, returning) {
+            const context = await browser.newContext({ viewport });
+            await context.addCookies(authCookies);
+            if (returning) {
+              await context.addCookies([
+                { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
+              ]);
+            }
+            return context;
+          }
+
+          function diagnostics(name) {
+            return {
+              name,
+              rootRscRequests: [],
+              pageErrors: [],
+              consoleErrors: [],
+              failedRequests: [],
+              expectedPrefetchAborts: [],
+              httpErrors: [],
+            };
+          }
+
+          function isExpectedPrefetchAbort(request) {
+            const failure = request.failure();
+            if (failure?.errorText !== "net::ERR_ABORTED" || request.isNavigationRequest()) return false;
+            const url = new URL(request.url());
+            const headers = request.headers();
+            return (
+              url.origin === origin &&
+              request.method() === "GET" &&
+              request.resourceType() === "fetch" &&
+              (url.searchParams.has("_rsc") ||
+                headers["next-router-prefetch"] === "1" ||
+                headers.rsc === "1" ||
+                Object.hasOwn(headers, "next-url"))
+            );
+          }
+
+          function attach(page, result) {
+            page.on("pageerror", (error) => result.pageErrors.push(error.message));
+            page.on("console", (message) => {
+              if (message.type() === "error") {
+                result.consoleErrors.push({ text: message.text(), location: message.location() });
+              }
+            });
+            page.on("request", (request) => {
+              const url = new URL(request.url());
+              if (url.origin === origin && url.pathname === "/" && url.searchParams.has("_rsc")) {
+                result.rootRscRequests.push(request.url());
+              }
+            });
+            page.on("requestfailed", (request) => {
+              if (new URL(request.url()).origin !== origin) return;
+              const record = {
+                url: request.url(),
+                method: request.method(),
+                resourceType: request.resourceType(),
+                errorText: request.failure()?.errorText ?? "unknown",
+              };
+              if (isExpectedPrefetchAbort(request)) result.expectedPrefetchAborts.push(record);
+              else result.failedRequests.push(record);
+            });
+            page.on("response", (response) => {
+              if (new URL(response.url()).origin === origin && response.status() >= 400) {
+                result.httpErrors.push({ status: response.status(), url: response.url() });
+              }
+            });
+          }
+
+          function assertClean(result) {
+            assert.deepEqual(result.rootRscRequests, [], `Root RSC requests: ${JSON.stringify(result.rootRscRequests)}`);
+            assert.deepEqual(result.pageErrors, [], `Page errors: ${JSON.stringify(result.pageErrors)}`);
+            assert.deepEqual(result.consoleErrors, [], `Console errors: ${JSON.stringify(result.consoleErrors)}`);
+            assert.deepEqual(result.failedRequests, [], `Failed requests: ${JSON.stringify(result.failedRequests)}`);
+            assert.deepEqual(result.httpErrors, [], `HTTP errors: ${JSON.stringify(result.httpErrors)}`);
+          }
+
+          try {
+            {
+              const result = diagnostics("first-time-desktop");
+              const context = await createContext({ width: 1440, height: 1000 }, false);
+              const page = await context.newPage();
+              attach(page, result);
+              await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+              await page.waitForURL((url) => url.origin === origin && url.pathname === "/walkthrough", { timeout: 60_000 });
+              const seenCookie = (await context.cookies(origin)).find((cookie) => cookie.name === "mt_walkthrough_seen");
+              assert.equal(seenCookie?.value, "1");
+              await page.waitForTimeout(1_000);
+              await page.screenshot({ path: `${outputDir}/first-time-desktop.png`, fullPage: true });
+              assertClean(result);
+              result.finalUrl = page.url();
+              result.status = "passed";
+              report.scenarios.push(result);
+              await context.close();
+            }
+
+            {
+              const result = diagnostics("returning-desktop");
+              const context = await createContext({ width: 1440, height: 1000 }, true);
+              const page = await context.newPage();
+              attach(page, result);
+              const response = await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+              assert.ok(response && response.status() < 400);
+              await page.waitForURL((url) => url.origin === origin && url.pathname === "/complete-profile", { timeout: 60_000 });
+              await page.getByRole("heading", { name: "Spend 100 sparks of attention." }).waitFor({ state: "visible", timeout: 60_000 });
+              await page.getByLabel("Profile setup: priorities").waitFor({ state: "visible", timeout: 60_000 });
+              assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
+              await page.waitForTimeout(1_500);
+              await page.getByRole("button", { name: "Save profile" }).click();
+              const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
+              await dialog.waitFor({ state: "visible", timeout: 30_000 });
+              assert.match((await dialog.textContent()) ?? "", /Saving does not create or publish an offer\./);
+              await page.waitForTimeout(500);
+              await page.screenshot({ path: `${outputDir}/returning-desktop.png`, fullPage: true });
+              assertClean(result);
+              result.finalUrl = page.url();
+              result.status = "passed";
+              report.scenarios.push(result);
+              await context.close();
+            }
+
+            {
+              const result = diagnostics("returning-mobile");
+              const context = await createContext({ width: 390, height: 844 }, true);
+              const page = await context.newPage();
+              attach(page, result);
+              const response = await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+              assert.ok(response && response.status() < 400);
+              await page.waitForURL((url) => url.origin === origin && url.pathname === "/complete-profile", { timeout: 60_000 });
+              await page.getByLabel("80 of 100 attention points assigned").waitFor({ state: "visible", timeout: 60_000 });
+              await page.waitForTimeout(1_500);
+              await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
+              await page.getByRole("button", { name: "Decrease Space governance" }).waitFor({ state: "visible", timeout: 30_000 });
+              const dimensions = await page.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                documentWidth: document.documentElement.scrollWidth,
+              }));
+              assert.ok(dimensions.documentWidth <= dimensions.viewportWidth, `Mobile overflow: ${JSON.stringify(dimensions)}`);
+              await page.waitForTimeout(500);
+              await page.screenshot({ path: `${outputDir}/returning-mobile.png`, fullPage: true });
+              assertClean(result);
+              result.finalUrl = page.url();
+              result.dimensions = dimensions;
+              result.status = "passed";
+              report.scenarios.push(result);
+              await context.close();
+            }
+            report.status = "passed";
+          } catch (error) {
+            report.status = "failed";
+            report.failure = error instanceof Error ? error.stack : String(error);
+            throw error;
+          } finally {
+            await writeFile(`${outputDir}/preview-smoke-report.json`, `${JSON.stringify(report, null, 2)}\n`);
+            await browser.close();
+          }
+          SCRIPT
+          node .qa/complete-profile-cli-preview-smoke.mjs
+
+      - name: Upload exact preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-profile-cli-preview-evidence-68cf2136
+          path: complete-profile-cli-preview-evidence
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Publish the exact preview smoke result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="CLI-authenticated exact preview passed first-time, desktop, and mobile diagnostics"
+          else
+            state=failure
+            description="CLI-authenticated exact preview smoke failed; inspect evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
