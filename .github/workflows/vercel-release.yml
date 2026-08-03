@@ -19,9 +19,16 @@ on:
         description: Full 40-character commit SHA proved by the repository gates
         required: true
         type: string
+      validation_runs:
+        description: Compact JSON array of successful exact-head validation workflow runs
+        required: true
+        type: string
 
 permissions:
+  actions: read
+  checks: read
   contents: read
+  statuses: read
 
 concurrency:
   group: gated-vercel-${{ inputs.target }}
@@ -72,6 +79,108 @@ jobs:
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
 
+      - name: Require successful exact-head validation runs
+        id: validations
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          GH_TOKEN: ${{ github.token }}
+          VALIDATION_RUNS: ${{ inputs.validation_runs }}
+        run: |
+          set -euo pipefail
+          requirements_file="$RUNNER_TEMP/release-validation-requirements.json"
+          readback_file="$RUNNER_TEMP/release-validation-readback.ndjson"
+          evidence_file="$RUNNER_TEMP/release-validation-evidence.json"
+
+          printf '%s' "$VALIDATION_RUNS" > "$requirements_file"
+          jq -e '
+            type == "array"
+            and length >= 3
+            and all(.[];
+              type == "object"
+              and ((keys | sort) == ["gate", "id", "workflow"])
+              and (.id | type == "number" and . > 0 and . == floor)
+              and (.workflow | type == "string" and length > 0)
+              and (.gate
+                | type == "string"
+                and test("^(classification|engineering|rendered|database|compatibility|security)$"))
+            )
+            and (([.[].id] | length) == ([.[].id] | unique | length))
+            and ((["classification", "engineering", "rendered"] - [.[].gate]) | length == 0)
+          ' "$requirements_file" > /dev/null
+
+          : > "$readback_file"
+          while IFS= read -r requirement; do
+            run_id="$(jq -r '.id' <<<"$requirement")"
+            expected_workflow="$(jq -r '.workflow' <<<"$requirement")"
+            gate="$(jq -r '.gate' <<<"$requirement")"
+            run_json="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+
+            actual_repository="$(jq -r '.repository.full_name // ""' <<<"$run_json")"
+            actual_head_repository="$(jq -r '.head_repository.full_name // .repository.full_name // ""' <<<"$run_json")"
+            actual_sha="$(jq -r '.head_sha // ""' <<<"$run_json")"
+            actual_workflow="$(jq -r '.name // ""' <<<"$run_json")"
+            actual_status="$(jq -r '.status // ""' <<<"$run_json")"
+            actual_conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
+            actual_event="$(jq -r '.event // ""' <<<"$run_json")"
+            actual_attempt="$(jq -r '.run_attempt // 1' <<<"$run_json")"
+            actual_url="$(jq -r '.html_url // ""' <<<"$run_json")"
+
+            test "$actual_repository" = "$GITHUB_REPOSITORY"
+            test "$actual_head_repository" = "$GITHUB_REPOSITORY"
+            test "$actual_sha" = "$EXPECTED_SHA"
+            test "$actual_workflow" = "$expected_workflow"
+            test "$actual_status" = 'completed'
+            test "$actual_conclusion" = 'success'
+            case "$actual_event" in
+              pull_request|pull_request_target|push|workflow_dispatch)
+                ;;
+              *)
+                echo "Unsupported validation event for run $run_id: $actual_event" >&2
+                exit 1
+                ;;
+            esac
+
+            jq -n \
+              --arg gate "$gate" \
+              --arg workflow "$actual_workflow" \
+              --arg sha "$actual_sha" \
+              --arg event "$actual_event" \
+              --arg url "$actual_url" \
+              --argjson id "$run_id" \
+              --argjson attempt "$actual_attempt" \
+              '{
+                gate: $gate,
+                workflow: $workflow,
+                id: $id,
+                attempt: $attempt,
+                headSha: $sha,
+                event: $event,
+                conclusion: "success",
+                url: $url
+              }' >> "$readback_file"
+          done < <(jq -c '.[]' "$requirements_file")
+
+          jq -s 'sort_by(.gate, .workflow, .id)' "$readback_file" > "$evidence_file"
+          test "$(jq 'length' "$evidence_file")" = "$(jq 'length' "$requirements_file")"
+          echo "evidence_file=$evidence_file" >> "$GITHUB_OUTPUT"
+
+          {
+            echo '### Exact-head validation evidence'
+            echo
+            jq -r '.[] | "- \(.gate): \(.workflow) run `\(.id)` (attempt \(.attempt))"' "$evidence_file"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload exact-head validation evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-vercel-validation-${{ github.run_id }}
+          path: ${{ steps.validations.outputs.evidence_file }}
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -94,17 +203,6 @@ jobs:
           npm run lint -- --quiet
           npx tsc --noEmit
           npm run build
-
-      - name: Run complete rendered browser gate
-        shell: bash
-        env:
-          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
-          SITE_URL: http://127.0.0.1:3210
-          PLAYWRIGHT_HTML_OPEN: never
-        run: |
-          set -euo pipefail
-          npx playwright install --with-deps chromium
-          npm run test:e2e -- --reporter=line
 
       - name: Link only the canonical Vercel project
         shell: bash
@@ -177,4 +275,5 @@ jobs:
             echo "- Project: \`$VERCEL_PROJECT_ID\`"
             echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
             echo '- Build location: GitHub Actions (`vercel build` + `vercel deploy --prebuilt`)'
+            echo '- Exact-head validation evidence: `gated-vercel-validation-${{ github.run_id }}`'
           } >> "$GITHUB_STEP_SUMMARY"
