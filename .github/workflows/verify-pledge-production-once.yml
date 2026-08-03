@@ -1,0 +1,341 @@
+name: Verify pledge clarity in current production once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/verify-pledge-production-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: verify-pledge-production-once
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PRODUCT_SHA: 979726c0a479843eca3c727512b477a340ebe9c6
+  EXPECTED_DEPLOYMENT_ID: dpl_9P5dYaWwVDpPLEGDrKhKXzviYR46
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  CONTROLLER_PATH: .github/workflows/verify-pledge-production-once.yml
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact repository and tree-neutral controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_ACTOR" = 'ghuser29384'
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$EXPECTED_PRODUCT_SHA" HEAD
+          changed_commit="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed_commit" = "$CONTROLLER_PATH"
+          changed_since_product="$(git diff --name-only "$EXPECTED_PRODUCT_SHA" HEAD | sed '/^$/d')"
+          test "$changed_since_product" = "$CONTROLLER_PATH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        id: install
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Verify exact production deployment and pledge behavior
+        id: production
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          curl --fail-with-body --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$EXPECTED_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID&withGitRepoInfo=true" \
+            > pledge-production-deployment.json
+          jq -e --arg id "$EXPECTED_DEPLOYMENT_ID" '(.id // .uid) == $id' pledge-production-deployment.json >/dev/null
+          jq -e '(.readyState // .state) == "READY"' pledge-production-deployment.json >/dev/null
+          jq -e '.target == "production"' pledge-production-deployment.json >/dev/null
+          jq -e --arg project "$VERCEL_PROJECT_ID" '.projectId == $project' pledge-production-deployment.json >/dev/null
+          jq -e --arg sha "$EXPECTED_PRODUCT_SHA" '.meta.githubCommitSha == $sha' pledge-production-deployment.json >/dev/null
+          jq -e '(.alias // []) | index("moraltrade.org") != null and index("www.moraltrade.org") != null' pledge-production-deployment.json >/dev/null
+
+          cat > .github/scripts/verify-pledge-production-runtime.mjs <<'NODE'
+          import assert from "node:assert/strict";
+          import { mkdir, writeFile } from "node:fs/promises";
+          import { chromium } from "@playwright/test";
+
+          const outputDir = "pledge-clarity-production-canary";
+          await mkdir(outputDir, { recursive: true });
+          const origins = ["https://moraltrade.org", "https://www.moraltrade.org"];
+          const suffix = "/discover?domain=pools&view=threshold&query=Find+pools&selected=pool-wild-research&selectedType=pool#discover";
+          const report = {
+            expectedSha: process.env.EXPECTED_PRODUCT_SHA,
+            expectedDeploymentId: process.env.EXPECTED_DEPLOYMENT_ID,
+            checkedAt: new Date().toISOString(),
+            scenarios: [],
+          };
+          const browser = await chromium.launch({ headless: true });
+
+          function isMoralTradeUrl(rawUrl) {
+            try {
+              const hostname = new URL(rawUrl).hostname;
+              return hostname === "moraltrade.org" || hostname === "www.moraltrade.org";
+            } catch {
+              return false;
+            }
+          }
+
+          function isExpectedPrefetchAbort(request) {
+            const failure = request.failure();
+            if (
+              failure?.errorText !== "net::ERR_ABORTED" ||
+              request.isNavigationRequest() ||
+              !isMoralTradeUrl(request.url())
+            ) {
+              return false;
+            }
+            const url = new URL(request.url());
+            const headers = request.headers();
+            return (
+              request.method() === "GET" &&
+              request.resourceType() === "fetch" &&
+              (url.searchParams.has("_rsc") ||
+                headers["next-router-prefetch"] === "1" ||
+                headers.rsc === "1" ||
+                Object.hasOwn(headers, "next-url"))
+            );
+          }
+
+          async function runScenario(origin, mobile) {
+            const id = `${new URL(origin).hostname}-${mobile ? "mobile" : "desktop"}`;
+            const context = await browser.newContext({
+              viewport: mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 },
+            });
+            const page = await context.newPage();
+            const state = {
+              id,
+              origin,
+              mobile,
+              pageErrors: [],
+              consoleErrors: [],
+              failedRequests: [],
+              expectedPrefetchAborts: [],
+              httpErrors: [],
+            };
+
+            page.on("pageerror", (error) => state.pageErrors.push(error.message));
+            page.on("console", (message) => {
+              if (message.type() === "error") state.consoleErrors.push(message.text());
+            });
+            page.on("requestfailed", (request) => {
+              if (!isMoralTradeUrl(request.url())) return;
+              const record = {
+                url: request.url(),
+                method: request.method(),
+                resourceType: request.resourceType(),
+                errorText: request.failure()?.errorText ?? "unknown",
+              };
+              if (isExpectedPrefetchAbort(request)) state.expectedPrefetchAborts.push(record);
+              else state.failedRequests.push(record);
+            });
+            page.on("response", (response) => {
+              if (!isMoralTradeUrl(response.url()) || response.status() < 400) return;
+              state.httpErrors.push({
+                status: response.status(),
+                url: response.url(),
+                method: response.request().method(),
+                resourceType: response.request().resourceType(),
+              });
+            });
+
+            const response = await page.goto(origin + suffix, {
+              waitUntil: "domcontentloaded",
+              timeout: 120_000,
+            });
+            assert.ok(response && response.status() < 400, `${id}: initial route returned ${response?.status()}`);
+            await page
+              .getByRole("heading", { name: /Wild-animal-suffering priority research pool/i })
+              .waitFor({ state: "visible", timeout: 60_000 });
+
+            const scope = mobile ? page.locator(".inspector.mobile-sheet") : page;
+            if (mobile) await scope.waitFor({ state: "visible", timeout: 60_000 });
+            await scope
+              .getByRole("heading", { name: "Preview your conditional pledge" })
+              .waitFor({ state: "visible", timeout: 60_000 });
+
+            const slider = page
+              .locator('[data-pledge-range][data-pool-id="pool-wild-research"]:visible')
+              .last();
+            await slider.waitFor({ state: "visible", timeout: 60_000 });
+            await slider.evaluate((element) => {
+              element.value = "35";
+              element.dispatchEvent(new Event("input", { bubbles: true }));
+            });
+
+            await scope
+              .getByText("0.43% of current gap", { exact: true })
+              .first()
+              .waitFor({ state: "visible", timeout: 30_000 });
+            await scope
+              .getByText("$8,165 remains", { exact: true })
+              .first()
+              .waitFor({ state: "visible", timeout: 30_000 });
+            await scope
+              .getByText("Moving the slider does not save a pledge or authorize payment.", {
+                exact: true,
+              })
+              .waitFor({ state: "visible", timeout: 30_000 });
+            assert.equal(
+              await page.getByText(/pivotality/i).count(),
+              0,
+              `${id}: obsolete pivotality language remains`,
+            );
+            assert.equal(
+              await page.getByText(/How likely am I to be pivotal/i).count(),
+              0,
+              `${id}: obsolete pivotality prompt remains`,
+            );
+
+            if (mobile) {
+              const overflow = await page.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                documentWidth: document.documentElement.scrollWidth,
+              }));
+              assert.ok(
+                overflow.documentWidth <= overflow.viewportWidth + 1,
+                `${id}: document overflow ${JSON.stringify(overflow)}`,
+              );
+              const sheetOverflow = await scope.evaluate(
+                (element) => element.scrollWidth - element.clientWidth,
+              );
+              assert.ok(sheetOverflow <= 1, `${id}: sheet overflow ${sheetOverflow}`);
+              state.overflow = overflow;
+            }
+
+            await page.waitForTimeout(1_000);
+            assert.deepEqual(state.pageErrors, [], `${id}: page errors ${JSON.stringify(state.pageErrors)}`);
+            assert.deepEqual(
+              state.consoleErrors,
+              [],
+              `${id}: console errors ${JSON.stringify(state.consoleErrors)}`,
+            );
+            assert.deepEqual(
+              state.failedRequests,
+              [],
+              `${id}: failed requests ${JSON.stringify(state.failedRequests)}`,
+            );
+            assert.deepEqual(
+              state.httpErrors,
+              [],
+              `${id}: HTTP errors ${JSON.stringify(state.httpErrors)}`,
+            );
+
+            await page.screenshot({
+              path: `${outputDir}/${id}.png`,
+              fullPage: true,
+            });
+            state.finalUrl = page.url();
+            state.status = "passed";
+            report.scenarios.push(state);
+            await context.close();
+          }
+
+          try {
+            for (const origin of origins) {
+              await runScenario(origin, false);
+              await runScenario(origin, true);
+            }
+            report.status = "passed";
+          } catch (error) {
+            report.status = "failed";
+            report.failure = error instanceof Error ? error.stack : String(error);
+            throw error;
+          } finally {
+            await writeFile(
+              `${outputDir}/report.json`,
+              `${JSON.stringify(report, null, 2)}\n`,
+            );
+            await browser.close();
+          }
+          NODE
+
+          EXPECTED_PRODUCT_SHA="$EXPECTED_PRODUCT_SHA" \
+          EXPECTED_DEPLOYMENT_ID="$EXPECTED_DEPLOYMENT_ID" \
+            node .github/scripts/verify-pledge-production-runtime.mjs
+
+      - name: Upload pledge production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pledge-production-verification-${{ github.run_id }}
+          path: |
+            pledge-production-deployment.json
+            pledge-clarity-production-canary
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report exact outcome to PR 402
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          PRODUCTION_OUTCOME: ${{ steps.production.outcome }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "$INSTALL_OUTCOME" == 'success' && "$PRODUCTION_OUTCOME" == 'success' ]]; then
+            gh pr comment 402 --repo "$GITHUB_REPOSITORY" --body "Corrected exact production verification passed on canonical deployment \`$EXPECTED_DEPLOYMENT_ID\` for merged product SHA \`$EXPECTED_PRODUCT_SHA\`. Apex and www desktop/mobile checks confirmed the Wild-animal-suffering pool, \`$35\`, \`$8,165 remains\`, \`0.43% of current gap\`, the non-authorization caveat, no pivotality language, a visible mobile sheet, and no page, console, same-site request, HTTP, or overflow failures. The preceding verifier's failure was solely Node package resolution from a script placed in \`/tmp\`; this run executes the same assertions from the repository module tree. Evidence: $run_url"
+          else
+            gh pr comment 402 --repo "$GITHUB_REPOSITORY" --body "Corrected current-production pledge verification did not pass completely. Install outcome: \`$INSTALL_OUTCOME\`; production outcome: \`$PRODUCTION_OUTCOME\`. No production-success claim is made. Evidence: $run_url"
+          fi
+
+      - name: Remove one-time controller
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$blob_sha" ]]; then
+            jq -n \
+              --arg message 'Remove one-time pledge production verifier' \
+              --arg sha "$blob_sha" \
+              --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
+
+      - name: Enforce verified production state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ steps.install.outcome }}' = 'success'
+          test '${{ steps.production.outcome }}' = 'success'
