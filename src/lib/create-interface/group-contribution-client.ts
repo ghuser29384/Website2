@@ -82,6 +82,7 @@ declare global {
 }
 
 const mounted = new Map<string, MountedOption>();
+const pendingRenders = new WeakMap<MountedOption, number>();
 let observer: MutationObserver | null = null;
 let parentObserver: MutationObserver | null = null;
 let activeWindow: Window | null = null;
@@ -766,8 +767,9 @@ function installShadowListeners(entry: MountedOption): void {
       entry.state.mode = mode;
       entry.state.primaryText =
         readPrimaryText(entry.card, entry.underlying) || entry.state.primaryText;
-      renderMountedOption(entry);
+      entry.state = normalizeDraft(entry.state);
       writeProposalPayload();
+      scheduleMountedOptionRender(entry);
     });
   });
 
@@ -779,7 +781,7 @@ function installShadowListeners(entry: MountedOption): void {
         entry.state = normalizeDraft(entry.state);
         persistDrafts();
         writeProposalPayload();
-        if (rerender) renderMountedOption(entry);
+        if (rerender) scheduleMountedOptionRender(entry);
         else updateValidationStatus(entry);
       };
       control.addEventListener("input", () => update(false));
@@ -798,6 +800,21 @@ function installShadowListeners(entry: MountedOption): void {
       updateValidationStatus(entry);
     });
   });
+}
+
+function scheduleMountedOptionRender(entry: MountedOption): void {
+  const targetWindow = entry.host.ownerDocument.defaultView;
+  if (!targetWindow) return;
+
+  const pending = pendingRenders.get(entry);
+  if (pending !== undefined) targetWindow.clearTimeout(pending);
+
+  const timer = targetWindow.setTimeout(() => {
+    pendingRenders.delete(entry);
+    if (mounted.get(entry.key) !== entry || !entry.host.isConnected) return;
+    renderMountedOption(entry);
+  }, 0);
+  pendingRenders.set(entry, timer);
 }
 
 function updateStateFromControl(
