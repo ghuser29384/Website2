@@ -1,0 +1,224 @@
+name: Apply Co-Act review observer and policy repairs v2
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - synchronize
+      - reopened
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v3-20260803
+    paths:
+      - .github/workflows/fix-co-act-review-observer-loop-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-co-act-review-observer-loop-v2
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v3-20260803
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply exact reviewed repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected exactly one replacement target, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          replace_once(
+              "src/lib/create-interface/group-contribution-client.ts",
+              '''function renderReviewSummaries(payload: GroupContributionProposalPayload): void {
+            const doc = createDocument();
+            const summaryOffers = doc.querySelector<HTMLElement>("#summaryOffers");
+            if (!summaryOffers) return;
+
+            summaryOffers
+              .querySelector<HTMLElement>("[data-mt-group-contribution-review]")
+              ?.remove();
+            if (payload.options.length === 0) return;
+
+            const container = doc.createElement("section");
+            container.setAttribute("data-mt-group-contribution-review", "true");
+          ''',
+              '''function renderReviewSummaries(payload: GroupContributionProposalPayload): void {
+            const doc = createDocument();
+            const summaryOffers = doc.querySelector<HTMLElement>("#summaryOffers");
+            if (!summaryOffers) return;
+
+            const existing = summaryOffers.querySelector<HTMLElement>(
+              "[data-mt-group-contribution-review]",
+            );
+            const fingerprint = JSON.stringify(payload.options);
+            if (existing?.dataset.mtGroupContributionReviewFingerprint === fingerprint) {
+              return;
+            }
+
+            existing?.remove();
+            if (payload.options.length === 0) return;
+
+            const container = doc.createElement("section");
+            container.setAttribute("data-mt-group-contribution-review", "true");
+            container.dataset.mtGroupContributionReviewFingerprint = fingerprint;
+          ''',
+          )
+
+          replace_once(
+              "src/lib/create-interface/group-contribution-flags.ts",
+              '''function readFlag(value: string | undefined, defaultValue: boolean): boolean {
+            if (value === undefined || value.trim() === "") return defaultValue;
+            const normalized = value.trim().toLowerCase();
+            if (["1", "true", "yes", "on", "enabled"].includes(normalized)) return true;
+            if (["0", "false", "no", "off", "disabled"].includes(normalized)) return false;
+            return defaultValue;
+          }
+          ''',
+              '''function readFlag(value: string | undefined, defaultValue: boolean): boolean {
+            if (value === undefined || value.trim() === "") return defaultValue;
+            const normalized = value.trim().toLowerCase();
+            if (["1", "true", "yes", "on", "enabled"].includes(normalized)) return true;
+            if (["0", "false", "no", "off", "disabled"].includes(normalized)) return false;
+            return false;
+          }
+          ''',
+          )
+
+          identity_path = Path("src/lib/create-interface/group-contribution.ts")
+          identity_text = identity_path.read_text()
+          invitation_anchor = (
+              '  if (visibility === "invitation-only" && '
+              'value.membersSeeAfterJoining !== true) {'
+          )
+          start = identity_text.index(invitation_anchor)
+          function_end = identity_text.index("\n}\n\nfunction validateCoFund", start)
+          function_body = identity_text[start:function_end]
+          if "identity.publicAfterSuccessfulCompletion" in function_body:
+              raise SystemExit("Invitation-only completion-publication invariant already exists")
+          completion_invariant = '''
+            if (
+              visibility === "invitation-only" &&
+              value.publicAfterSuccessfulCompletion !== true
+            ) {
+              addIssue(
+                issues,
+                "identity.publicAfterSuccessfulCompletion",
+                "invalid-value",
+                "Invitation-only participant identities become public only after successful completion",
+              );
+            }
+          '''
+          identity_path.write_text(
+              identity_text[:function_end] + completion_invariant + identity_text[function_end:]
+          )
+
+          def append_once(path: str, marker: str, addition: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if marker in text:
+                  raise SystemExit(f"{path}: test marker already exists")
+              file.write_text(text.rstrip() + "\n\n" + addition.strip() + "\n")
+
+          append_once(
+              "src/lib/create-interface/group-contribution-client-stability.test.ts",
+              "review summaries are idempotent so their observer cannot self-trigger forever",
+              r'''test("review summaries are idempotent so their observer cannot self-trigger forever", () => {
+            const review = functionBody("renderReviewSummaries");
+            assert.match(review, /mtGroupContributionReviewFingerprint/);
+            assert.match(review, /=== fingerprint/);
+            assert.match(review, /existing\?\.remove\(\)/);
+          });''',
+          )
+
+          append_once(
+              "src/lib/create-interface/group-contribution-flags.test.ts",
+              "malformed explicit feature-flag values fail closed",
+              '''test("malformed explicit feature-flag values fail closed", () => {
+            const flags = readGroupContributionProposalFlags({
+              NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS: "maybe",
+              NEXT_PUBLIC_MORAL_TRADE_CO_FUND_PROPOSALS: "unexpected",
+              NEXT_PUBLIC_MORAL_TRADE_CO_ACT_COMPLEMENTARY_ROLES: "2",
+              NEXT_PUBLIC_MORAL_TRADE_CO_FUND_FLEXIBLE: "enable-ish",
+              NEXT_PUBLIC_MORAL_TRADE_CO_FUND_CUSTOM_SPLIT: "unknown",
+              NEXT_PUBLIC_MORAL_TRADE_CO_FUND_MATCHING: "perhaps",
+            });
+
+            assert.equal(permitsGroupContributionMode(flags, "co-act"), false);
+            assert.equal(permitsGroupContributionMode(flags, "co-fund"), false);
+            assert.equal(permitsCoActStructure(flags, "complementary-roles"), false);
+            assert.equal(permitsCoFundAllocation(flags, "flexible-contribution"), false);
+            assert.equal(permitsCoFundAllocation(flags, "custom-split"), false);
+            assert.equal(permitsCoFundAllocation(flags, "matching-pledge"), false);
+          });''',
+          )
+
+          append_once(
+              "src/lib/create-interface/group-contribution.test.ts",
+              "requires invitation-only identities to become public only after successful completion",
+              '''test("requires invitation-only identities to become public only after successful completion", () => {
+            const base = validCoAct();
+            const proposal = {
+              ...base,
+              visibility: "invitation-only" as const,
+              identity: {
+                ...base.identity,
+                publicAfterSuccessfulCompletion: false,
+              },
+            };
+            const result = validateGroupContributionTerms(proposal, "nonfinancial");
+            assert.equal(result.ok, false);
+            if (!result.ok) {
+              assert(
+                result.issues.some(
+                  (issue) => issue.path === "identity.publicAfterSuccessfulCompletion",
+                ),
+              );
+            }
+          });''',
+          )
+          PY
+
+          git diff --check
+          grep -q 'mtGroupContributionReviewFingerprint' src/lib/create-interface/group-contribution-client.ts
+          grep -q 'malformed explicit feature-flag values fail closed' src/lib/create-interface/group-contribution-flags.test.ts
+          grep -q 'identities to become public only after successful completion' src/lib/create-interface/group-contribution.test.ts
+
+      - name: Remove all one-time repair workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm \
+            .github/workflows/fix-co-act-review-observer-loop.yml \
+            .github/workflows/fix-co-act-review-observer-loop-v2.yml
+          git add -A
+          git diff --cached --check
+
+      - name: Commit and push the clean repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Fix Co-Act review observer loop and fail closed'
+          git push origin HEAD:feature/co-act-co-fund-create-v3-20260803
