@@ -12,32 +12,58 @@ permissions:
 jobs:
   monitor:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
+    env:
+      GATED_RUN_ID: "30778656416"
+      OUTPUT_DIR: gated-vercel-release-monitor
+
     steps:
-      - name: Capture current gated release runs
+      - name: Capture failed gated release diagnostics
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p gated-vercel-release-monitor
-          gh run list \
-            --repo "$GITHUB_REPOSITORY" \
-            --workflow vercel-release.yml \
-            --event workflow_dispatch \
-            --limit 20 \
-            --json databaseId,status,conclusion,createdAt,updatedAt,headBranch,headSha,url,displayTitle,event \
-            > gated-vercel-release-monitor/runs.json
-          run_id="$(jq -r 'sort_by(.createdAt) | last | .databaseId // empty' gated-vercel-release-monitor/runs.json)"
-          test -n "$run_id"
-          gh run view "$run_id" \
+          mkdir -p "$OUTPUT_DIR/artifacts"
+
+          gh run view "$GATED_RUN_ID" \
             --repo "$GITHUB_REPOSITORY" \
             --json databaseId,status,conclusion,createdAt,updatedAt,headBranch,headSha,url,jobs \
-            > gated-vercel-release-monitor/latest-run.json
+            > "$OUTPUT_DIR/run.json"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GATED_RUN_ID}/artifacts?per_page=100" \
+            > "$OUTPUT_DIR/artifacts.json"
+
+          set +e
+          gh run view "$GATED_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --log-failed \
+            > "$OUTPUT_DIR/failed.log" 2>&1
+          log_status=$?
+
+          gh run download "$GATED_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir "$OUTPUT_DIR/artifacts" \
+            > "$OUTPUT_DIR/artifact-download.log" 2>&1
+          download_status=$?
+          set -e
+
+          printf 'log_status=%s\ndownload_status=%s\n' "$log_status" "$download_status" \
+            > "$OUTPUT_DIR/collection-status.txt"
+
+          tail -n 1600 "$OUTPUT_DIR/failed.log" > "$OUTPUT_DIR/failed-tail.log" || true
+          grep -n -E 'Error|ERROR|error|FAILED|failed|Failure|Timeout|timed out|expect\(|Assertion|assert|[0-9]+ failed|›' \
+            "$OUTPUT_DIR/failed.log" > "$OUTPUT_DIR/failure-index.txt" || true
+
+          find "$OUTPUT_DIR" -maxdepth 4 -type f -printf '%p\t%s bytes\n' \
+            | sort > "$OUTPUT_DIR/inventory.txt"
+
+          test -s "$OUTPUT_DIR/run.json"
+          test -s "$OUTPUT_DIR/failed.log"
 
       - name: Upload monitor output
         uses: actions/upload-artifact@v4
         with:
-          name: gated-vercel-release-monitor-20260803
+          name: gated-vercel-release-failure-diagnostics-20260803
           path: gated-vercel-release-monitor
-          retention-days: 2
+          retention-days: 3
