@@ -1,4 +1,4 @@
-name: Complete Profile exact preview deployment gate v2
+name: Complete Profile existing exact preview smoke
 
 on:
   pull_request:
@@ -11,27 +11,28 @@ permissions:
   statuses: write
 
 concurrency:
-  group: complete-profile-exact-preview-deploy-68cf2136-v2
+  group: complete-profile-existing-exact-preview-smoke-68cf2136
   cancel-in-progress: false
 
 jobs:
-  deploy-and-smoke:
+  smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 100
+    timeout-minutes: 60
     env:
       BASE_SHA: eb71dce7990d1476fc6e4731e1bcd7f3afd640f9
       CANDIDATE_SHA: 68cf2136ce62b823024963e83503f7af96f229ee
       PRODUCT_PR: "405"
-      STATUS_CONTEXT: QA / Complete Profile exact preview deployment
       EXACT_GATE_CONTEXT: QA / Complete Profile root-prefetch exact gates
       ADJUDICATION_CONTEXT: QA / Complete Profile E2E adjudication
+      STATUS_CONTEXT: QA / Complete Profile existing exact preview smoke
+      PREVIEW_ORIGIN: https://moraltrade-site-lrdrmt7ma-ellen-s.vercel.app
+      PREVIEW_DEPLOYMENT_ID: dpl_FXWVBnyi4cq6WAQDW22h3HrQs9uM
       VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
       VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
-      VERCEL_CLI_VERSION: 50.38.1
       EVIDENCE_DIR: complete-profile-exact-preview-evidence
 
     steps:
-      - name: Mark the exact preview gate pending
+      - name: Mark the exact preview smoke pending
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -40,7 +41,7 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
             -f state=pending \
             -f context="$STATUS_CONTEXT" \
-            -f description="Building the immutable candidate and testing its canonical Vercel preview" \
+            -f description="Testing the existing immutable preview on desktop and mobile" \
             -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Guard the product PR, current main, exact diff, and prerequisite evidence
@@ -50,14 +51,13 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
-          mkdir -p "$EVIDENCE_DIR"
 
           product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
           test "$(jq -r .state <<<"$product_pr")" = 'open'
           test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
           test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
 
-          current_main="$(git ls-remote "https://github.com/${GITHUB_REPOSITORY}.git" refs/heads/main | cut -f1)"
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
           test "$current_main" = "$BASE_SHA"
 
           compare="$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${CANDIDATE_SHA}")"
@@ -84,25 +84,61 @@ jobs:
           test "$exact_state" = 'success'
           test "$adjudication_state" = 'success'
 
-          files_json="$(jq -c '[.files[].filename]' <<<"$compare")"
-          jq -n \
-            --arg baseSha "$BASE_SHA" \
-            --arg candidateSha "$CANDIDATE_SHA" \
-            --arg currentMain "$current_main" \
-            --arg exactGate "$exact_state" \
-            --arg adjudication "$adjudication_state" \
-            --argjson files "$files_json" \
-            '{baseSha:$baseSha,candidateSha:$candidateSha,currentMain:$currentMain,exactGate:$exactGate,adjudication:$adjudication,files:$files}' \
-            > "$EVIDENCE_DIR/guards.json"
-
       - name: Check out the immutable product candidate
         uses: actions/checkout@v4
         with:
           ref: ${{ env.CANDIDATE_SHA }}
           fetch-depth: 1
 
-      - name: Verify the exact checkout
-        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Verify exact checkout and initialize evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          jq -n \
+            --arg baseSha "$BASE_SHA" \
+            --arg candidateSha "$CANDIDATE_SHA" \
+            --arg previewOrigin "$PREVIEW_ORIGIN" \
+            --arg previewDeploymentId "$PREVIEW_DEPLOYMENT_ID" \
+            '{baseSha:$baseSha,candidateSha:$candidateSha,previewOrigin:$previewOrigin,previewDeploymentId:$previewDeploymentId}' \
+            > "$EVIDENCE_DIR/inputs.json"
+
+      - name: Verify the existing exact READY preview deployment
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          detail="$(curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            "https://api.vercel.com/v13/deployments/${PREVIEW_DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}")"
+
+          state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$detail")"
+          deployment_id="$(jq -r '.uid // .id // empty' <<<"$detail")"
+          project_id="$(jq -r '.projectId // .project.id // empty' <<<"$detail")"
+          target="$(jq -r '.target // "preview"' <<<"$detail")"
+          deployed_sha="$(jq -r '.meta.githubCommitSha // empty' <<<"$detail")"
+          deployment_url="https://$(jq -r '.url // empty' <<<"$detail")"
+
+          test "$state" = 'READY'
+          test "$deployment_id" = "$PREVIEW_DEPLOYMENT_ID"
+          test "$project_id" = "$VERCEL_PROJECT_ID"
+          test "$target" != 'production'
+          test "$deployed_sha" = "$CANDIDATE_SHA"
+          test "$deployment_url" = "$PREVIEW_ORIGIN"
+
+          jq -n \
+            --arg expectedSha "$CANDIDATE_SHA" \
+            --arg deploymentUrl "$deployment_url" \
+            --arg deploymentId "$deployment_id" \
+            --arg projectId "$project_id" \
+            --arg state "$state" \
+            --arg target "$target" \
+            --arg deployedSha "$deployed_sha" \
+            '{expectedSha:$expectedSha,deploymentUrl:$deploymentUrl,deploymentId:$deploymentId,projectId:$projectId,state:$state,target:$target,deployedSha:$deployedSha}' \
+            > "$EVIDENCE_DIR/deployment.json"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -110,116 +146,16 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install exact dependencies
+      - name: Install exact dependencies and Chromium
         shell: bash
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            if npm ci; then exit 0; fi
+            if npm ci; then break; fi
             if [[ "$attempt" == '3' ]]; then exit 1; fi
             sleep $((attempt * 20))
           done
-
-      - name: Reconfirm the changed rendered surface
-        env:
-          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
-          SITE_URL: http://127.0.0.1:3210
-          PLAYWRIGHT_HTML_OPEN: never
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --check .github/scripts/complete-profile-production-canary.mjs
           npx playwright install --with-deps chromium
-          npx playwright test tests/complete-profile-review.spec.ts --reporter=line
-
-      - name: Link only the canonical Vercel project
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$VERCEL_TOKEN"
-          mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' \
-            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
-
-      - name: Build the exact preview on GitHub Actions compute
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_GIT_COMMIT_SHA: ${{ env.CANDIDATE_SHA }}
-          VERCEL_GIT_COMMIT_REF: fix/complete-profile-root-prefetch-20260801
-          VERCEL_GIT_REPO_SLUG: Website2
-          VERCEL_GIT_REPO_OWNER: ghuser29384
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
-            --yes --environment=preview --token="$VERCEL_TOKEN"
-          npx --yes "vercel@$VERCEL_CLI_VERSION" build --token="$VERCEL_TOKEN"
-
-      - name: Upload the exact prebuilt preview once
-        id: deploy
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_GIT_COMMIT_SHA: ${{ env.CANDIDATE_SHA }}
-          VERCEL_GIT_COMMIT_REF: fix/complete-profile-root-prefetch-20260801
-          VERCEL_GIT_REPO_SLUG: Website2
-          VERCEL_GIT_REPO_OWNER: ghuser29384
-        shell: bash
-        run: |
-          set -euo pipefail
-          deployment_output="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
-            --prebuilt --token="$VERCEL_TOKEN" \
-            2> >(tee "$EVIDENCE_DIR/vercel-deploy.stderr" >&2))"
-          deployment_url="$(printf '%s\n' "$deployment_output" | grep -E '^https://[^ ]+\.vercel\.app/?$' | tail -1)"
-          test -n "$deployment_url"
-          deployment_url="${deployment_url%/}"
-          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
-          printf '%s\n' "$deployment_url" > "$EVIDENCE_DIR/deployment-url.txt"
-
-      - name: Verify the exact READY preview deployment in Vercel
-        id: deployment
-        env:
-          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
-          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          deployment_host="${DEPLOYMENT_URL#https://}"
-          detail=''
-          for attempt in $(seq 1 60); do
-            detail="$(curl -fsS \
-              -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
-              "https://api.vercel.com/v13/deployments/${deployment_host}?teamId=${VERCEL_ORG_ID}")"
-            state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$detail")"
-            [[ "$state" == 'READY' ]] && break
-            if [[ "$state" == 'ERROR' || "$state" == 'CANCELED' ]]; then exit 1; fi
-            sleep 5
-          done
-
-          state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$detail")"
-          deployment_id="$(jq -r '.uid // .id // empty' <<<"$detail")"
-          project_id="$(jq -r '.projectId // .project.id // empty' <<<"$detail")"
-          target="$(jq -r '.target // "preview"' <<<"$detail")"
-          deployed_sha="$(jq -r '.meta.githubCommitSha // empty' <<<"$detail")"
-          test "$state" = 'READY'
-          test -n "$deployment_id"
-          test "$project_id" = "$VERCEL_PROJECT_ID"
-          test "$target" != 'production'
-          if [[ -n "$deployed_sha" ]]; then test "$deployed_sha" = "$CANDIDATE_SHA"; fi
-
-          echo "PREVIEW_ORIGIN=${DEPLOYMENT_URL}" >> "$GITHUB_ENV"
-          echo "PREVIEW_DEPLOYMENT_ID=${deployment_id}" >> "$GITHUB_ENV"
-          jq -n \
-            --arg expectedSha "$CANDIDATE_SHA" \
-            --arg deploymentUrl "$DEPLOYMENT_URL" \
-            --arg deploymentId "$deployment_id" \
-            --arg projectId "$project_id" \
-            --arg state "$state" \
-            --arg target "$target" \
-            --arg deployedSha "$deployed_sha" \
-            '{expectedSha:$expectedSha,deploymentUrl:$deploymentUrl,deploymentId:$deploymentId,projectId:$projectId,state:$state,target:$target,deployedSha:($deployedSha|select(length>0))}' \
-            > "$EVIDENCE_DIR/deployment.json"
 
       - name: Generate and verify a one-run Vercel automation bypass
         env:
@@ -229,26 +165,33 @@ jobs:
           set -euo pipefail
           secret="$(openssl rand -hex 16)"
           echo "::add-mask::$secret"
-          payload="$(jq -cn --arg secret "$secret" '{generate:{secret:$secret,note:"Complete Profile exact preview 68cf2136"}}')"
+          payload="$(jq -cn --arg secret "$secret" '{generate:{secret:$secret,note:"Complete Profile exact preview smoke 68cf2136"}}')"
           curl -fsS -X PATCH \
             "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/protection-bypass?teamId=${VERCEL_ORG_ID}" \
             -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
             -H 'Content-Type: application/json' \
             --data "$payload" > /tmp/vercel-bypass-generate.json
-          jq -e '.protectionBypass | type == "object" and length > 0' /tmp/vercel-bypass-generate.json >/dev/null
+          jq -e '.protectionBypass | type == "object" and length > 0' \
+            /tmp/vercel-bypass-generate.json >/dev/null
           echo "VERCEL_AUTOMATION_BYPASS_SECRET=$secret" >> "$GITHUB_ENV"
 
           ready=false
           for attempt in $(seq 1 30); do
             headers="$(mktemp)"
-            status="$(curl -sS -o /tmp/preview-probe.html -D "$headers" -w '%{http_code}' \
+            set +e
+            status="$(curl -sS \
+              -o /tmp/preview-probe.html \
+              -D "$headers" \
+              -w '%{http_code}' \
               -H "x-vercel-protection-bypass: ${secret}" \
               -H 'x-vercel-set-bypass-cookie: true' \
               -H 'Cookie: mt_walkthrough_seen=1' \
               "${PREVIEW_ORIGIN}/complete-profile")"
+            curl_status=$?
+            set -e
             vercel_error="$(awk 'BEGIN{IGNORECASE=1} /^x-vercel-error:/{sub(/\r$/, "", $2); print $2}' "$headers" | tail -1)"
             rm -f "$headers"
-            if [[ "$status" =~ ^2[0-9][0-9]$ && -z "$vercel_error" ]]; then
+            if [[ "$curl_status" -eq 0 && "$status" =~ ^2[0-9][0-9]$ && -z "$vercel_error" ]]; then
               ready=true
               jq -n --arg status "$status" --arg attempt "$attempt" \
                 '{status:($status|tonumber),attempt:($attempt|tonumber),bypassVerified:true}' \
@@ -259,12 +202,12 @@ jobs:
           done
           test "$ready" = true
 
-      - name: Run exact preview diagnostics
+      - name: Run exact preview first-time, desktop, and mobile diagnostics
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p .qa "$EVIDENCE_DIR"
-          cat > .qa/complete-profile-preview-smoke.mjs <<'SCRIPT'
+          cat > .qa/complete-profile-existing-preview-smoke.mjs <<'SCRIPT'
           import assert from "node:assert/strict";
           import { mkdir, writeFile } from "node:fs/promises";
           import { chromium } from "@playwright/test";
@@ -285,8 +228,8 @@ jobs:
             scenarios: [],
           };
 
-          async function context(viewport, returning) {
-            const result = await browser.newContext({
+          async function createContext(viewport, returning) {
+            const context = await browser.newContext({
               viewport,
               extraHTTPHeaders: {
                 "x-vercel-protection-bypass": bypass,
@@ -294,68 +237,105 @@ jobs:
               },
             });
             if (returning) {
-              await result.addCookies([{ name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" }]);
+              await context.addCookies([
+                { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
+              ]);
             }
-            return result;
+            return context;
           }
 
-          function diagnostics(name) {
-            return { name, rootRscRequests: [], pageErrors: [], consoleErrors: [], failedRequests: [], expectedPrefetchAborts: [], httpErrors: [] };
+          function makeDiagnostics(name) {
+            return {
+              name,
+              rootRscRequests: [],
+              pageErrors: [],
+              consoleErrors: [],
+              failedRequests: [],
+              expectedPrefetchAborts: [],
+              httpErrors: [],
+            };
           }
 
-          function isExpectedAbort(request) {
+          function isExpectedPrefetchAbort(request) {
             const failure = request.failure();
             if (failure?.errorText !== "net::ERR_ABORTED" || request.isNavigationRequest()) return false;
             const url = new URL(request.url());
             const headers = request.headers();
-            return url.origin === origin && request.method() === "GET" && request.resourceType() === "fetch" &&
-              (url.searchParams.has("_rsc") || headers["next-router-prefetch"] === "1" || headers.rsc === "1" || Object.hasOwn(headers, "next-url"));
+            return (
+              url.origin === origin &&
+              request.method() === "GET" &&
+              request.resourceType() === "fetch" &&
+              (url.searchParams.has("_rsc") ||
+                headers["next-router-prefetch"] === "1" ||
+                headers.rsc === "1" ||
+                Object.hasOwn(headers, "next-url"))
+            );
           }
 
-          function attach(page, result) {
+          function attachDiagnostics(page, result) {
             page.on("pageerror", (error) => result.pageErrors.push(error.message));
             page.on("console", (message) => {
-              if (message.type() === "error") result.consoleErrors.push({ text: message.text(), location: message.location() });
+              if (message.type() === "error") {
+                result.consoleErrors.push({ text: message.text(), location: message.location() });
+              }
             });
             page.on("request", (request) => {
               const url = new URL(request.url());
-              if (url.origin === origin && url.pathname === "/" && url.searchParams.has("_rsc")) result.rootRscRequests.push(request.url());
+              if (url.origin === origin && url.pathname === "/" && url.searchParams.has("_rsc")) {
+                result.rootRscRequests.push(request.url());
+              }
             });
             page.on("requestfailed", (request) => {
               if (new URL(request.url()).origin !== origin) return;
-              const record = { url: request.url(), method: request.method(), resourceType: request.resourceType(), errorText: request.failure()?.errorText ?? "unknown" };
-              if (isExpectedAbort(request)) result.expectedPrefetchAborts.push(record); else result.failedRequests.push(record);
+              const record = {
+                url: request.url(),
+                method: request.method(),
+                resourceType: request.resourceType(),
+                errorText: request.failure()?.errorText ?? "unknown",
+              };
+              if (isExpectedPrefetchAbort(request)) result.expectedPrefetchAborts.push(record);
+              else result.failedRequests.push(record);
             });
             page.on("response", (response) => {
-              if (new URL(response.url()).origin === origin && response.status() >= 400) result.httpErrors.push({ status: response.status(), url: response.url() });
+              if (new URL(response.url()).origin === origin && response.status() >= 400) {
+                result.httpErrors.push({ status: response.status(), url: response.url() });
+              }
             });
           }
 
-          function clean(result) {
-            assert.deepEqual(result.rootRscRequests, []);
-            assert.deepEqual(result.pageErrors, []);
-            assert.deepEqual(result.consoleErrors, []);
-            assert.deepEqual(result.failedRequests, []);
-            assert.deepEqual(result.httpErrors, []);
+          function assertClean(result) {
+            assert.deepEqual(result.rootRscRequests, [], `Root RSC requests: ${JSON.stringify(result.rootRscRequests)}`);
+            assert.deepEqual(result.pageErrors, [], `Page errors: ${JSON.stringify(result.pageErrors)}`);
+            assert.deepEqual(result.consoleErrors, [], `Console errors: ${JSON.stringify(result.consoleErrors)}`);
+            assert.deepEqual(result.failedRequests, [], `Failed requests: ${JSON.stringify(result.failedRequests)}`);
+            assert.deepEqual(result.httpErrors, [], `HTTP errors: ${JSON.stringify(result.httpErrors)}`);
           }
 
           try {
             {
-              const result = diagnostics("first-time-desktop");
-              const ctx = await context({ width: 1440, height: 1000 }, false);
-              const page = await ctx.newPage(); attach(page, result);
+              const result = makeDiagnostics("first-time-desktop");
+              const context = await createContext({ width: 1440, height: 1000 }, false);
+              const page = await context.newPage();
+              attachDiagnostics(page, result);
               await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
               await page.waitForURL((url) => url.origin === origin && url.pathname === "/walkthrough", { timeout: 60_000 });
-              const cookie = (await ctx.cookies(origin)).find((item) => item.name === "mt_walkthrough_seen");
+              await page.getByText("Welcome to Moral Trade", { exact: true }).first().waitFor({ state: "visible", timeout: 60_000 });
+              const cookie = (await context.cookies(origin)).find((item) => item.name === "mt_walkthrough_seen");
               assert.equal(cookie?.value, "1");
               await page.waitForTimeout(1_000);
               await page.screenshot({ path: `${outputDir}/first-time-desktop.png`, fullPage: true });
-              clean(result); result.finalUrl = page.url(); result.status = "passed"; report.scenarios.push(result); await ctx.close();
+              assertClean(result);
+              result.finalUrl = page.url();
+              result.status = "passed";
+              report.scenarios.push(result);
+              await context.close();
             }
+
             {
-              const result = diagnostics("returning-desktop");
-              const ctx = await context({ width: 1440, height: 1000 }, true);
-              const page = await ctx.newPage(); attach(page, result);
+              const result = makeDiagnostics("returning-desktop");
+              const context = await createContext({ width: 1440, height: 1000 }, true);
+              const page = await context.newPage();
+              attachDiagnostics(page, result);
               const response = await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
               assert.ok(response && response.status() < 400);
               await page.waitForURL((url) => url.origin === origin && url.pathname === "/complete-profile", { timeout: 60_000 });
@@ -369,12 +349,18 @@ jobs:
               assert.match((await dialog.textContent()) ?? "", /Saving does not create or publish an offer\./);
               await page.waitForTimeout(500);
               await page.screenshot({ path: `${outputDir}/returning-desktop.png`, fullPage: true });
-              clean(result); result.finalUrl = page.url(); result.status = "passed"; report.scenarios.push(result); await ctx.close();
+              assertClean(result);
+              result.finalUrl = page.url();
+              result.status = "passed";
+              report.scenarios.push(result);
+              await context.close();
             }
+
             {
-              const result = diagnostics("returning-mobile");
-              const ctx = await context({ width: 390, height: 844 }, true);
-              const page = await ctx.newPage(); attach(page, result);
+              const result = makeDiagnostics("returning-mobile");
+              const context = await createContext({ width: 390, height: 844 }, true);
+              const page = await context.newPage();
+              attachDiagnostics(page, result);
               const response = await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
               assert.ok(response && response.status() < 400);
               await page.waitForURL((url) => url.origin === origin && url.pathname === "/complete-profile", { timeout: 60_000 });
@@ -382,21 +368,32 @@ jobs:
               await page.waitForTimeout(1_500);
               await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
               await page.getByRole("button", { name: "Decrease Space governance" }).waitFor({ state: "visible", timeout: 30_000 });
-              const dimensions = await page.evaluate(() => ({ viewportWidth: innerWidth, documentWidth: document.documentElement.scrollWidth }));
-              assert.ok(dimensions.documentWidth <= dimensions.viewportWidth);
+              const dimensions = await page.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                documentWidth: document.documentElement.scrollWidth,
+              }));
+              assert.ok(dimensions.documentWidth <= dimensions.viewportWidth, `Mobile overflow: ${JSON.stringify(dimensions)}`);
               await page.waitForTimeout(500);
               await page.screenshot({ path: `${outputDir}/returning-mobile.png`, fullPage: true });
-              clean(result); result.finalUrl = page.url(); result.dimensions = dimensions; result.status = "passed"; report.scenarios.push(result); await ctx.close();
+              assertClean(result);
+              result.finalUrl = page.url();
+              result.dimensions = dimensions;
+              result.status = "passed";
+              report.scenarios.push(result);
+              await context.close();
             }
+
             report.status = "passed";
           } catch (error) {
-            report.status = "failed"; report.failure = error instanceof Error ? error.stack : String(error); throw error;
+            report.status = "failed";
+            report.failure = error instanceof Error ? error.stack : String(error);
+            throw error;
           } finally {
             await writeFile(`${outputDir}/preview-smoke-report.json`, `${JSON.stringify(report, null, 2)}\n`);
             await browser.close();
           }
           SCRIPT
-          node .qa/complete-profile-preview-smoke.mjs
+          node .qa/complete-profile-existing-preview-smoke.mjs
 
       - name: Upload exact preview evidence
         if: always()
@@ -421,7 +418,7 @@ jobs:
             -H 'Content-Type: application/json' \
             --data "$payload" > /tmp/vercel-bypass-revoke.json
 
-      - name: Publish the exact preview result
+      - name: Publish the exact preview smoke result
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -431,10 +428,10 @@ jobs:
           set -euo pipefail
           if [[ "$JOB_STATUS" == 'success' ]]; then
             state=success
-            description="Exact canonical preview passed first-time, desktop, and mobile diagnostics"
+            description="Existing exact preview passed first-time, desktop, and mobile diagnostics"
           else
             state=failure
-            description="Exact Complete Profile preview deployment gate failed; inspect evidence"
+            description="Existing exact preview smoke failed; inspect evidence"
           fi
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
             -f state="$state" \
