@@ -83,7 +83,13 @@ jobs:
           test ! -e .github/co-act-co-fund-product-payload
           test ! -e .github/workflows/materialize-co-act-co-fund-product.yml
           test ! -e .github/workflows/co-act-co-fund-source-export.yml
-          if find .github/workflows -maxdepth 1 -type f \( -name 'co-act-co-fund-finalize-*' -o -name 'co-act-co-fund-hardening-*' -o -name 'co-act-co-fund-policy-finalizer-*' -o -name 'co-act-co-fund-proposal-gate-*' \) | grep -q .; then
+          if find .github/workflows -maxdepth 1 -type f \( \
+            -name 'co-act-co-fund-finalize-*.yml' -o \
+            -name 'co-act-co-fund-hardening-*.yml' -o \
+            -name 'co-act-co-fund-policy-finalizer-*.yml' -o \
+            -name 'co-act-co-fund-proposal-gate.yml' -o \
+            -name 'co-act-co-fund-proposal-gate-v*.yml' \
+          \) | grep -q .; then
             echo 'Temporary Co-Act/Co-Fund controller remains in the candidate.' >&2
             exit 1
           fi
