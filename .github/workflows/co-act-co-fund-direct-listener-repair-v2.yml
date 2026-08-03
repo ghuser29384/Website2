@@ -1,0 +1,217 @@
+name: Repair Co-Act and Co-Fund direct Shadow DOM listeners v2
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v2-20260801
+    paths:
+      - ".github/workflows/co-act-co-fund-direct-listener-repair-v2.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: co-act-co-fund-direct-listener-repair-v2
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/co-act-co-fund-create-v2-20260801
+  EXPECTED_PARENT: 4d2147a940314c0cd4874d87c18c2907a4637108
+  CONTROLLER_PATH: .github/workflows/co-act-co-fund-direct-listener-repair-v2.yml
+
+jobs:
+  repair:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.ref == 'refs/heads/feature/co-act-co-fund-create-v2-20260801'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v2-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify the exact one-file trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
+          test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
+
+      - name: Move interaction ownership into the component listeners
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          client_path = Path('src/lib/create-interface/group-contribution-client.ts')
+          client = client_path.read_text(encoding='utf-8')
+
+          replacements = [
+              (
+                  'const mounted = new Map<string, MountedOption>();\nlet observer: MutationObserver | null = null;',
+                  'const mounted = new Map<string, MountedOption>();\nconst pendingRenders = new WeakMap<MountedOption, number>();\nlet observer: MutationObserver | null = null;',
+                  'mounted-state declarations',
+              ),
+              (
+                  '''    button.addEventListener("click", () => {
+            const mode = button.dataset.mode as GroupDraftMode;
+            entry.state.mode = mode;
+            entry.state.primaryText =
+              readPrimaryText(entry.card, entry.underlying) || entry.state.primaryText;
+            renderMountedOption(entry);
+            writeProposalPayload();
+          });''',
+                  '''    button.addEventListener("click", () => {
+            const mode = button.dataset.mode as GroupDraftMode;
+            entry.state.mode = mode;
+            entry.state.primaryText =
+              readPrimaryText(entry.card, entry.underlying) || entry.state.primaryText;
+            entry.state = normalizeDraft(entry.state);
+            writeProposalPayload();
+            scheduleMountedOptionRender(entry);
+          });''',
+                  'mode-button listener',
+              ),
+              (
+                  '''        if (rerender) renderMountedOption(entry);
+                  else updateValidationStatus(entry);''',
+                  '''        if (rerender) scheduleMountedOptionRender(entry);
+                  else updateValidationStatus(entry);''',
+                  'field rerender path',
+              ),
+          ]
+
+          for old, new, label in replacements:
+              if client.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one {label}; found {client.count(old)}')
+              client = client.replace(old, new, 1)
+
+          anchor = '''function updateStateFromControl(
+            state: GroupContributionDraftState,'''
+          helper = '''function scheduleMountedOptionRender(entry: MountedOption): void {
+            const targetWindow = entry.host.ownerDocument.defaultView;
+            if (!targetWindow) return;
+
+            const pending = pendingRenders.get(entry);
+            if (pending !== undefined) targetWindow.clearTimeout(pending);
+
+            const timer = targetWindow.setTimeout(() => {
+              pendingRenders.delete(entry);
+              if (mounted.get(entry.key) !== entry || !entry.host.isConnected) return;
+              renderMountedOption(entry);
+            }, 0);
+            pendingRenders.set(entry, timer);
+          }
+
+          function updateStateFromControl(
+            state: GroupContributionDraftState,'''
+          if client.count(anchor) != 1:
+              raise SystemExit(f'Expected one state-control insertion point; found {client.count(anchor)}')
+          client = client.replace(anchor, helper, 1)
+          client_path.write_text(client, encoding='utf-8')
+
+          Path('src/instrumentation-client.ts').write_text(
+              'import { startGroupContributionEnhancement } from "./lib/create-interface/group-contribution-client";\n\n'
+              'startGroupContributionEnhancement();\n',
+              encoding='utf-8',
+          )
+
+          Path('src/lib/create-interface/group-contribution-interaction.test.ts').write_text(
+              '''import assert from "node:assert/strict";
+          import { existsSync, readFileSync } from "node:fs";
+          import test from "node:test";
+
+          const instrumentation = readFileSync("src/instrumentation-client.ts", "utf8");
+          const client = readFileSync(
+            "src/lib/create-interface/group-contribution-client.ts",
+            "utf8",
+          );
+
+          test("group controls use one authoritative event path and defer only rendering", () => {
+            assert.equal(
+              existsSync("src/lib/create-interface/group-contribution-interaction-stability.ts"),
+              false,
+            );
+            assert.doesNotMatch(instrumentation, /InteractionStability|interaction-stability/);
+            assert.match(client, /const pendingRenders = new WeakMap<MountedOption, number>\(\);/);
+
+            const modeListener = client.indexOf('button.addEventListener("click"');
+            const normalized = client.indexOf(
+              "entry.state = normalizeDraft(entry.state);",
+              modeListener,
+            );
+            const persisted = client.indexOf("writeProposalPayload();", normalized);
+            const scheduled = client.indexOf("scheduleMountedOptionRender(entry);", persisted);
+
+            assert.ok(modeListener >= 0);
+            assert.ok(normalized > modeListener);
+            assert.ok(persisted > normalized);
+            assert.ok(scheduled > persisted);
+            assert.match(client, /if \(rerender\) scheduleMountedOptionRender\(entry\);/);
+            assert.match(
+              client,
+              /function scheduleMountedOptionRender[\s\S]*targetWindow\.setTimeout[\s\S]*renderMountedOption\(entry\);[\s\S]*\}, 0\);/,
+            );
+          });
+          ''',
+              encoding='utf-8',
+          )
+          PY
+
+          rm -f \
+            src/lib/create-interface/group-contribution-interaction-stability.ts \
+            src/lib/create-interface/group-contribution-interaction-stability.test.ts
+          git rm "$CONTROLLER_PATH"
+          git diff --check
+
+      - name: Run focused contracts, ESLint, and TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test \
+            src/lib/create-interface/group-contribution*.test.ts \
+            src/lib/create-interface/persistence.test.ts \
+            src/lib/create-interface/source-contract.test.ts \
+            src/lib/create-interface/validation.test.ts
+          npx eslint \
+            src/instrumentation-client.ts \
+            src/lib/create-interface/group-contribution-client.ts \
+            src/lib/create-interface/group-contribution-interaction.test.ts
+          npx tsc --noEmit
+
+      - name: Commit and publish the bounded repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          cat > /tmp/expected-paths.txt <<'EOF'
+          .github/workflows/co-act-co-fund-direct-listener-repair-v2.yml
+          src/instrumentation-client.ts
+          src/lib/create-interface/group-contribution-client.ts
+          src/lib/create-interface/group-contribution-interaction-stability.test.ts
+          src/lib/create-interface/group-contribution-interaction-stability.ts
+          src/lib/create-interface/group-contribution-interaction.test.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected-paths.txt
+          sort -u /tmp/expected-paths.txt -o /tmp/expected-paths.txt
+          git diff --cached --name-only | sort -u > /tmp/actual-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+          git diff --cached --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Use direct Co-Act and Co-Fund Shadow DOM listeners'
+          test "$(git rev-parse HEAD^)" = "$GITHUB_SHA"
+          test ! -e "$CONTROLLER_PATH"
+          test ! -e src/lib/create-interface/group-contribution-interaction-stability.ts
+          test ! -e src/lib/create-interface/group-contribution-interaction-stability.test.ts
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$GITHUB_SHA" \
+            origin "HEAD:refs/heads/$TARGET_BRANCH"
