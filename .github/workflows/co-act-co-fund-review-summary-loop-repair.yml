@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
+  issues: write
 
 concurrency:
   group: co-act-co-fund-review-summary-loop-repair
@@ -16,7 +18,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v2-20260801
-  EXPECTED_PARENT: cb53c8d4c3dab77f1b137c84dbf9106a916fa592
+  EXPECTED_PARENT: a19f88a58e6fc9446910eaf84c4132bbd42b071e
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-review-summary-loop-repair.yml
 
 jobs:
@@ -149,3 +151,14 @@ jobs:
           test ! -e "$CONTROLLER_PATH"
           git push --force-with-lease="refs/heads/$TARGET_BRANCH:$GITHUB_SHA" \
             origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+      - name: Report controller failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 420 --repo "$GITHUB_REPOSITORY" --body \
+            "The bounded review-summary observer-loop repair failed in Actions run \`$GITHUB_RUN_ID\`. No product repair was pushed unless the exact-head guard, focused contracts, lint, TypeScript, production build, and four-case real-iframe Playwright suite all passed."
+
+# Trigger v2: 2026-08-03T15:27Z
