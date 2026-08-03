@@ -1,0 +1,189 @@
+name: Validate Vercel release exact evidence repair
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/validate-vercel-release-evidence.yml
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: validate-vercel-release-evidence
+  cancel-in-progress: true
+
+env:
+  TARGET_BRANCH: fix/vercel-release-exact-validation-evidence-20260802
+  TARGET_SHA: 7111d963ee1726624f6fcb68990fbf17e8f012a1
+  BASE_SHA: 43a791175b34e279adbb4d5a946addb723ed8622
+  FEATURE_SHA: 3e3a53432ae43d0044f3c6f35c7cd9c47edc8e77
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+
+    steps:
+      - name: Check out the exact repair head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_SHA }}
+          fetch-depth: 0
+
+      - name: Guard exact branch, base, and two-file diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          git fetch origin main "$TARGET_BRANCH"
+          test "$(git rev-parse origin/main)" = "$BASE_SHA"
+          remote_sha="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$TARGET_SHA"
+          git diff --check "$BASE_SHA"...HEAD
+          git diff --name-only "$BASE_SHA"...HEAD | sort | tee release-repair-changed-files.txt
+          diff -u <(printf '%s\n' \
+            '.github/workflows/vercel-release.yml' \
+            'scripts/vercel-release-workflow.test.mjs') \
+            release-repair-changed-files.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused release workflow source contracts
+        run: node --test scripts/vercel-release-workflow.test.mjs | tee release-repair-focused.log
+
+      - name: Prove exact-head validation readback against real successful runs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          validation_runs='[
+            {"id":30746018141,"workflow":"Release classification","gate":"classification"},
+            {"id":30746019003,"workflow":"Direct verified Donation Upgrade gates","gate":"engineering"},
+            {"id":30746019006,"workflow":"Direct verified Donation Upgrade rendered QA","gate":"rendered"},
+            {"id":30746019025,"workflow":"Direct verified Donation Upgrade isolated QA","gate":"database"}
+          ]'
+          printf '%s' "$validation_runs" > release-validation-requirements.json
+          jq -e '
+            type == "array"
+            and length >= 3
+            and all(.[];
+              type == "object"
+              and ((keys | sort) == ["gate", "id", "workflow"])
+              and (.id | type == "number" and . > 0 and . == floor)
+              and (.workflow | type == "string" and length > 0)
+              and (.gate
+                | type == "string"
+                and test("^(classification|engineering|rendered|database|compatibility|security)$"))
+            )
+            and (([.[].id] | length) == ([.[].id] | unique | length))
+            and ((["classification", "engineering", "rendered"] - [.[].gate]) | length == 0)
+          ' release-validation-requirements.json > /dev/null
+
+          : > release-validation-readback.ndjson
+          while IFS= read -r requirement; do
+            run_id="$(jq -r '.id' <<<"$requirement")"
+            expected_workflow="$(jq -r '.workflow' <<<"$requirement")"
+            gate="$(jq -r '.gate' <<<"$requirement")"
+            run_json="$(gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+
+            actual_repository="$(jq -r '.repository.full_name // ""' <<<"$run_json")"
+            actual_head_repository="$(jq -r '.head_repository.full_name // .repository.full_name // ""' <<<"$run_json")"
+            actual_sha="$(jq -r '.head_sha // ""' <<<"$run_json")"
+            actual_workflow="$(jq -r '.name // ""' <<<"$run_json")"
+            actual_status="$(jq -r '.status // ""' <<<"$run_json")"
+            actual_conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
+            actual_event="$(jq -r '.event // ""' <<<"$run_json")"
+            actual_attempt="$(jq -r '.run_attempt // 1' <<<"$run_json")"
+            actual_url="$(jq -r '.html_url // ""' <<<"$run_json")"
+
+            test "$actual_repository" = "$GITHUB_REPOSITORY"
+            test "$actual_head_repository" = "$GITHUB_REPOSITORY"
+            test "$actual_sha" = "$FEATURE_SHA"
+            test "$actual_workflow" = "$expected_workflow"
+            test "$actual_status" = completed
+            test "$actual_conclusion" = success
+            case "$actual_event" in
+              pull_request|pull_request_target|push|workflow_dispatch) ;;
+              *) exit 1 ;;
+            esac
+
+            jq -n \
+              --arg gate "$gate" \
+              --arg workflow "$actual_workflow" \
+              --arg sha "$actual_sha" \
+              --arg event "$actual_event" \
+              --arg url "$actual_url" \
+              --argjson id "$run_id" \
+              --argjson attempt "$actual_attempt" \
+              '{
+                gate: $gate,
+                workflow: $workflow,
+                id: $id,
+                attempt: $attempt,
+                headSha: $sha,
+                event: $event,
+                conclusion: "success",
+                url: $url
+              }' >> release-validation-readback.ndjson
+          done < <(jq -c '.[]' release-validation-requirements.json)
+
+          jq -s 'sort_by(.gate, .workflow, .id)' \
+            release-validation-readback.ndjson \
+            | tee release-validation-evidence.json
+          test "$(jq 'length' release-validation-evidence.json)" = '4'
+
+      - name: Run complete repository tests
+        run: npm test | tee release-repair-repository-tests.log
+
+      - name: Run repository-wide ESLint
+        run: npm run lint -- --quiet | tee release-repair-lint.log
+
+      - name: Run absolute TypeScript
+        run: npx tsc --noEmit | tee release-repair-typecheck.log
+
+      - name: Build the optimized application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build | tee release-repair-build.log
+
+      - name: Upload exact validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-release-evidence-repair-${{ github.run_id }}
+          path: |
+            release-repair-changed-files.txt
+            release-repair-focused.log
+            release-validation-requirements.json
+            release-validation-evidence.json
+            release-repair-repository-tests.log
+            release-repair-lint.log
+            release-repair-typecheck.log
+            release-repair-build.log
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record success on the repair pull request
+        if: success()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment 465 --repo "$GITHUB_REPOSITORY" --body \
+            "Exact-head repository validation passed at \`$TARGET_SHA\`: focused release contracts, real GitHub Actions evidence readback for classification/engineering/rendered/database gates, complete repository tests, repository-wide ESLint, absolute TypeScript, optimized build, and exact two-file diff hygiene. Validation run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"

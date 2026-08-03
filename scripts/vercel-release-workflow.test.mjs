@@ -32,53 +32,97 @@ test("the workflow targets only the canonical project", async () => {
   assert.doesNotMatch(source, /prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK/);
 });
 
-test("quality gates complete before an immutable prebuilt deployment", async () => {
+test("deployment requires immutable exact-head validation evidence", async () => {
   const source = await workflow();
+  assert.match(source, /validation_runs:/);
+  assert.match(source, /actions: read/);
+  assert.match(source, /checks: read/);
+  assert.match(source, /statuses: read/);
+
+  const validationIndex = source.indexOf(
+    "- name: Require successful exact-head validation runs",
+  );
+  const buildIndex = source.indexOf(
+    "- name: Build the Vercel artifact on GitHub Actions compute",
+  );
+  const deployIndex = source.indexOf(
+    "- name: Upload the already-built artifact exactly once",
+  );
+
+  assert.notEqual(validationIndex, -1);
+  assert.ok(validationIndex < buildIndex);
+  assert.ok(validationIndex < deployIndex);
+
+  const validation = source.slice(
+    validationIndex,
+    source.indexOf("- name: Upload exact-head validation evidence", validationIndex),
+  );
+  assert.match(validation, /actions\/runs\/\$run_id/);
+  assert.match(validation, /actual_head_repository/);
+  assert.match(validation, /actual_sha/);
+  assert.match(validation, /actual_workflow/);
+  assert.match(validation, /actual_conclusion/);
+  assert.match(validation, /test "\$actual_sha" = "\$EXPECTED_SHA"/);
+  assert.match(validation, /test "\$actual_conclusion" = 'success'/);
+  assert.match(
+    validation,
+    /\["classification", "engineering", "rendered"\] - \[\.\[\]\.gate\]/,
+  );
+  assert.match(validation, /\[\.\[\]\.id\] \| unique/);
+});
+
+test("quality gates and exact validation complete before an immutable prebuilt deployment", async () => {
+  const source = await workflow();
+  const validationIndex = source.indexOf(
+    "- name: Require successful exact-head validation runs",
+  );
   const testIndex = source.indexOf("npm test");
   const lintIndex = source.indexOf("npm run lint -- --quiet");
   const typeIndex = source.indexOf("npx tsc --noEmit");
   const appBuildIndex = source.indexOf("npm run build");
-  const browserIndex = source.indexOf("npm run test:e2e -- --reporter=line");
   const vercelBuildIndex = source.indexOf('"vercel@$VERCEL_CLI_VERSION" build');
   const deployIndex = source.indexOf('"vercel@$VERCEL_CLI_VERSION" deploy');
 
   for (const index of [
+    validationIndex,
     testIndex,
     lintIndex,
     typeIndex,
     appBuildIndex,
-    browserIndex,
     vercelBuildIndex,
     deployIndex,
   ]) {
     assert.notEqual(index, -1);
   }
+  assert.ok(validationIndex < deployIndex);
   assert.ok(testIndex < deployIndex);
   assert.ok(lintIndex < deployIndex);
   assert.ok(typeIndex < deployIndex);
   assert.ok(appBuildIndex < deployIndex);
-  assert.ok(browserIndex < deployIndex);
   assert.ok(vercelBuildIndex < deployIndex);
   assert.match(source, /--prebuilt/);
 });
 
-test("the rendered release gate binds the app to Playwright's local canonical origin", async () => {
+test("the generic release job does not rerun the environment-dependent full Playwright suite", async () => {
   const source = await workflow();
-  const start = source.indexOf("- name: Run complete rendered browser gate");
-  const end = source.indexOf("- name: Link only the canonical Vercel project", start);
-  assert.notEqual(start, -1);
-  assert.notEqual(end, -1);
-  const browserGate = source.slice(start, end);
-
-  assert.match(browserGate, /NEXT_PUBLIC_SITE_URL: http:\/\/127\.0\.0\.1:3210/);
-  assert.match(browserGate, /SITE_URL: http:\/\/127\.0\.0\.1:3210/);
-  assert.match(browserGate, /PLAYWRIGHT_HTML_OPEN: never/);
-  assert.match(browserGate, /npm run test:e2e -- --reporter=line/);
-  assert.doesNotMatch(browserGate, /https:\/\/www\.moraltrade\.org/);
+  assert.doesNotMatch(source, /npm run test:e2e -- --reporter=line/);
+  assert.doesNotMatch(source, /npx playwright install/);
+  assert.match(source, /gate: \$gate/);
+  assert.match(source, /workflow: \$workflow/);
+  assert.match(source, /headSha: \$sha/);
 });
 
-test("the release requires a repository secret rather than embedding credentials", async () => {
+test("validation evidence is retained independently of the deployment artifact", async () => {
+  const source = await workflow();
+  assert.match(source, /actions\/upload-artifact@v4/);
+  assert.match(source, /gated-vercel-validation-\$\{\{ github\.run_id \}\}/);
+  assert.match(source, /retention-days: 30/);
+  assert.match(source, /if-no-files-found: error/);
+});
+
+test("the release requires repository secrets rather than embedding credentials", async () => {
   const source = await workflow();
   assert.match(source, /secrets\.VERCEL_TOKEN/);
   assert.doesNotMatch(source, /tok_[A-Za-z0-9_-]+/);
+  assert.doesNotMatch(source, /SUPABASE_SERVICE_ROLE_KEY/);
 });
