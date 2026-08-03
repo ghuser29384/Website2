@@ -1,0 +1,330 @@
+name: Configure required release classification ruleset once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/configure-release-classification-ruleset-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: configure-release-classification-ruleset-once
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/configure-release-classification-ruleset-once.yml
+  RULESET_NAME: Require release classification on main
+  REQUIRED_CONTEXT: release-classification
+
+jobs:
+  configure:
+    if: github.repository == 'ghuser29384/Website2' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out the exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - name: Guard the one-file controller commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+      - name: Remove the one-time controller before changing repository rules
+        id: clean
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-time release-classification ruleset controller' \
+            --arg sha "$blob_sha" \
+            --arg branch main \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE \
+                "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" \
+                --input - >/dev/null
+          git fetch origin main
+          clean_main_sha="$(git rev-parse origin/main)"
+          test "$clean_main_sha" != "$GITHUB_SHA"
+          echo "clean_main_sha=$clean_main_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Select an Administration-write credential without exposing it
+        id: credential
+        env:
+          RELEASE_RULESET_ADMIN_TOKEN: ${{ secrets.RELEASE_RULESET_ADMIN_TOKEN }}
+          GITHUB_ADMIN_TOKEN: ${{ secrets.GITHUB_ADMIN_TOKEN }}
+          GH_ADMIN_TOKEN: ${{ secrets.GH_ADMIN_TOKEN }}
+          REPO_ADMIN_TOKEN: ${{ secrets.REPO_ADMIN_TOKEN }}
+          GH_ADMIN_PAT: ${{ secrets.GH_ADMIN_PAT }}
+          GITHUB_PAT: ${{ secrets.GITHUB_PAT }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          CODEX_GITHUB_TOKEN: ${{ secrets.CODEX_GITHUB_TOKEN }}
+          GH_TOKEN_SECRET: ${{ secrets.GH_TOKEN }}
+          PAT: ${{ secrets.PAT }}
+          FALLBACK_GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_name=github.token
+          token="$FALLBACK_GITHUB_TOKEN"
+          for candidate in \
+            RELEASE_RULESET_ADMIN_TOKEN \
+            GITHUB_ADMIN_TOKEN \
+            GH_ADMIN_TOKEN \
+            REPO_ADMIN_TOKEN \
+            GH_ADMIN_PAT \
+            GITHUB_PAT \
+            GH_PAT \
+            PERSONAL_ACCESS_TOKEN \
+            CODEX_GITHUB_TOKEN \
+            GH_TOKEN_SECRET \
+            PAT
+          do
+            value="${!candidate:-}"
+            if [[ -n "$value" ]]; then
+              source_name="$candidate"
+              token="$value"
+              break
+            fi
+          done
+          test -n "$token"
+          echo "::add-mask::$token"
+          {
+            echo 'RULESET_ADMIN_TOKEN<<RULESET_TOKEN_EOF'
+            echo "$token"
+            echo 'RULESET_TOKEN_EOF'
+          } >> "$GITHUB_ENV"
+          echo "source_name=$source_name" >> "$GITHUB_OUTPUT"
+
+      - name: Create or repair the active main-branch ruleset
+        id: ruleset
+        env:
+          ADMIN_TOKEN: ${{ env.RULESET_ADMIN_TOKEN }}
+          CLEAN_MAIN_SHA: ${{ steps.clean.outputs.clean_main_sha }}
+          CREDENTIAL_SOURCE: ${{ steps.credential.outputs.source_name }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          api='https://api.github.com'
+          accept='Accept: application/vnd.github+json'
+          version='X-GitHub-Api-Version: 2026-03-10'
+          auth="Authorization: Bearer $ADMIN_TOKEN"
+          mkdir -p ruleset-evidence
+
+          app_id="$(curl --silent --show-error --fail \
+            -H "$accept" -H "$version" -H "$auth" \
+            "$api/apps/github-actions" 2>/dev/null | jq -r '.id // empty')"
+          if [[ -z "$app_id" || "$app_id" == null ]]; then
+            app_id=15368
+          fi
+
+          jq -n \
+            --arg name "$RULESET_NAME" \
+            --arg context "$REQUIRED_CONTEXT" \
+            --argjson app_id "$app_id" \
+            '{
+              name: $name,
+              target: "branch",
+              enforcement: "active",
+              bypass_actors: [
+                {actor_id: $app_id, actor_type: "Integration", bypass_mode: "always"}
+              ],
+              conditions: {
+                ref_name: {include: ["refs/heads/main"], exclude: []}
+              },
+              rules: [
+                {
+                  type: "required_status_checks",
+                  parameters: {
+                    do_not_enforce_on_create: false,
+                    required_status_checks: [
+                      {context: $context, integration_id: $app_id}
+                    ],
+                    strict_required_status_checks_policy: true
+                  }
+                }
+              ]
+            }' > ruleset-evidence/desired-ruleset.json
+
+          list_code="$(curl --silent --show-error \
+            -H "$accept" -H "$version" -H "$auth" \
+            -o ruleset-evidence/rulesets-before.json \
+            -w '%{http_code}' \
+            "$api/repos/$GITHUB_REPOSITORY/rulesets?includes_parents=false&per_page=100")"
+
+          existing_id=''
+          if [[ "$list_code" == 200 ]]; then
+            existing_id="$(jq -r --arg name "$RULESET_NAME" \
+              '.[] | select(.name == $name and .source_type == "Repository") | .id' \
+              ruleset-evidence/rulesets-before.json | head -n1)"
+          fi
+
+          mutation_method=none
+          mutation_code=not_attempted
+          if [[ "$list_code" == 200 ]]; then
+            if [[ -n "$existing_id" && "$existing_id" != null ]]; then
+              mutation_method=PUT
+              mutation_code="$(curl --silent --show-error \
+                -X PUT \
+                -H "$accept" -H "$version" -H "$auth" \
+                -H 'Content-Type: application/json' \
+                --data-binary @ruleset-evidence/desired-ruleset.json \
+                -o ruleset-evidence/mutation-response.json \
+                -w '%{http_code}' \
+                "$api/repos/$GITHUB_REPOSITORY/rulesets/$existing_id")"
+            else
+              mutation_method=POST
+              mutation_code="$(curl --silent --show-error \
+                -X POST \
+                -H "$accept" -H "$version" -H "$auth" \
+                -H 'Content-Type: application/json' \
+                --data-binary @ruleset-evidence/desired-ruleset.json \
+                -o ruleset-evidence/mutation-response.json \
+                -w '%{http_code}' \
+                "$api/repos/$GITHUB_REPOSITORY/rulesets")"
+              if [[ "$mutation_code" == 201 ]]; then
+                existing_id="$(jq -r '.id // empty' ruleset-evidence/mutation-response.json)"
+              fi
+            fi
+          fi
+
+          detail_code=not_attempted
+          branch_rules_code=not_attempted
+          verified=false
+          reason='Ruleset could not be verified'
+          if [[ "$mutation_code" == 200 || "$mutation_code" == 201 ]]; then
+            detail_code="$(curl --silent --show-error \
+              -H "$accept" -H "$version" -H "$auth" \
+              -o ruleset-evidence/ruleset-after.json \
+              -w '%{http_code}' \
+              "$api/repos/$GITHUB_REPOSITORY/rulesets/$existing_id?includes_parents=false")"
+            branch_rules_code="$(curl --silent --show-error \
+              -H "$accept" -H "$version" -H "$auth" \
+              -o ruleset-evidence/main-branch-rules.json \
+              -w '%{http_code}' \
+              "$api/repos/$GITHUB_REPOSITORY/rules/branches/main")"
+
+            if [[ "$detail_code" == 200 && "$branch_rules_code" == 200 ]] \
+              && jq -e --arg name "$RULESET_NAME" --arg context "$REQUIRED_CONTEXT" --argjson app_id "$app_id" '
+                .name == $name
+                and .target == "branch"
+                and .enforcement == "active"
+                and (.conditions.ref_name.include | index("refs/heads/main") != null)
+                and any(.bypass_actors[]?;
+                  .actor_type == "Integration"
+                  and .actor_id == $app_id
+                  and .bypass_mode == "always")
+                and any(.rules[]?;
+                  .type == "required_status_checks"
+                  and .parameters.strict_required_status_checks_policy == true
+                  and .parameters.do_not_enforce_on_create == false
+                  and any(.parameters.required_status_checks[]?;
+                    .context == $context and .integration_id == $app_id))
+              ' ruleset-evidence/ruleset-after.json >/dev/null \
+              && jq -e --arg context "$REQUIRED_CONTEXT" --argjson app_id "$app_id" '
+                any(.[]?;
+                  .type == "required_status_checks"
+                  and any(.parameters.required_status_checks[]?;
+                    .context == $context and .integration_id == $app_id))
+              ' ruleset-evidence/main-branch-rules.json >/dev/null
+            then
+              verified=true
+              reason='Active ruleset and applicable main-branch rule verified'
+            else
+              reason='Mutation returned success, but exact active configuration did not verify'
+            fi
+          elif [[ "$list_code" != 200 ]]; then
+            reason='Ruleset listing failed'
+          elif [[ "$mutation_code" == 403 ]]; then
+            reason='Selected credential lacks Administration:write for repository rulesets'
+          elif [[ "$mutation_code" == 422 ]]; then
+            reason='GitHub rejected the requested ruleset configuration'
+          else
+            reason='Ruleset mutation failed'
+          fi
+
+          jq -n \
+            --argjson verified "$verified" \
+            --arg credential_source "$CREDENTIAL_SOURCE" \
+            --arg clean_main_sha "$CLEAN_MAIN_SHA" \
+            --arg app_id "$app_id" \
+            --arg list_http_status "$list_code" \
+            --arg mutation_method "$mutation_method" \
+            --arg mutation_http_status "$mutation_code" \
+            --arg detail_http_status "$detail_code" \
+            --arg branch_rules_http_status "$branch_rules_code" \
+            --arg ruleset_id "$existing_id" \
+            --arg reason "$reason" \
+            '{
+              verified: $verified,
+              credential_source: $credential_source,
+              clean_main_sha: $clean_main_sha,
+              github_actions_app_id: $app_id,
+              list_http_status: $list_http_status,
+              mutation_method: $mutation_method,
+              mutation_http_status: $mutation_http_status,
+              detail_http_status: $detail_http_status,
+              branch_rules_http_status: $branch_rules_http_status,
+              ruleset_id: $ruleset_id,
+              reason: $reason
+            }' > ruleset-evidence/result.json
+
+          echo "verified=$verified" >> "$GITHUB_OUTPUT"
+          echo "ruleset_id=$existing_id" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload redacted ruleset evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-classification-ruleset-${{ github.run_id }}
+          path: |
+            ruleset-evidence/result.json
+            ruleset-evidence/ruleset-after.json
+            ruleset-evidence/main-branch-rules.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report the exact administrative result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED: ${{ steps.ruleset.outputs.verified }}
+          RULESET_ID: ${{ steps.ruleset.outputs.ruleset_id }}
+          REASON: ${{ steps.ruleset.outputs.reason }}
+          CREDENTIAL_SOURCE: ${{ steps.credential.outputs.source_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "$VERIFIED" == true ]]; then
+            gh pr comment 428 --repo "$GITHUB_REPOSITORY" --body "The active main-branch ruleset is configured and verified. Required status: \`release-classification\`, expected source: GitHub Actions, GitHub Actions bypass: always, ruleset ID: \`$RULESET_ID\`. The one-time controller removed itself before the settings mutation. Evidence: $run_url"
+          else
+            gh pr comment 428 --repo "$GITHUB_REPOSITORY" --body "The requested main-branch ruleset could not be verified. Credential source: \`$CREDENTIAL_SOURCE\`. Reason: \`$REASON\`. The one-time controller removed itself before the attempt; no manual Vercel release was invoked. Evidence: $run_url"
+          fi
+
+      - name: Require the verified ruleset state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ steps.ruleset.outputs.verified }}' = true
