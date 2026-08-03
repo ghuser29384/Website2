@@ -1,0 +1,242 @@
+name: Complete Profile production finalization
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/complete-profile-production-finalize-979726c0.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: complete-profile-production-finalization-979726c0
+  cancel-in-progress: false
+
+jobs:
+  verify-production:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      MERGE_SHA: 979726c0a479843eca3c727512b477a340ebe9c6
+      CANDIDATE_SHA: 68cf2136ce62b823024963e83503f7af96f229ee
+      PRODUCT_PR: "405"
+      DEPLOYMENT_ID: dpl_9P5dYaWwVDpPLEGDrKhKXzviYR46
+      DEPLOYMENT_ORIGIN: https://moraltrade-site-20zhqkj3f-ellen-s.vercel.app
+      EXACT_GATE_CONTEXT: QA / Complete Profile root-prefetch exact gates
+      ADJUDICATION_CONTEXT: QA / Complete Profile E2E adjudication
+      PREVIEW_CONTEXT: QA / Complete Profile CLI preview smoke
+      STATUS_CONTEXT: QA / Complete Profile production finalization
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      CANONICAL_ORIGIN: https://www.moraltrade.org
+      APEX_ORIGIN: https://moraltrade.org
+      CANARY_OUTPUT_DIR: complete-profile-production-finalization-evidence
+
+    steps:
+      - name: Mark production finalization pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${MERGE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Verifying the exact live deployment and running the permanent Complete Profile canary" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Guard immutable release identity and prerequisite evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'closed'
+          test "$(jq -r .merged <<<"$product_pr")" = 'true'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .merge_commit_sha <<<"$product_pr")" = "$MERGE_SHA"
+
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          ancestry="$(gh api "repos/${GITHUB_REPOSITORY}/compare/${MERGE_SHA}...${current_main}")"
+          status="$(jq -r .status <<<"$ancestry")"
+          behind="$(jq -r .behind_by <<<"$ancestry")"
+          [[ "$status" == 'identical' || "$status" == 'ahead' ]]
+          test "$behind" = '0'
+
+          statuses="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${CANDIDATE_SHA}/status")"
+          latest_state() {
+            jq -r --arg context "$1" \
+              '[.statuses[] | select(.context == $context)] | sort_by(.updated_at) | last | .state // empty' \
+              <<<"$statuses"
+          }
+          test "$(latest_state "$EXACT_GATE_CONTEXT")" = 'success'
+          test "$(latest_state "$ADJUDICATION_CONTEXT")" = 'success'
+          test "$(latest_state "$PREVIEW_CONTEXT")" = 'success'
+
+      - name: Check out the immutable merged release
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.MERGE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove the merged tree equals the validated candidate tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$MERGE_SHA"
+          git fetch --depth=1 origin "$CANDIDATE_SHA"
+          git diff --quiet "$CANDIDATE_SHA" "$MERGE_SHA"
+          mkdir -p "$CANARY_OUTPUT_DIR"
+          jq -n \
+            --arg mergeSha "$MERGE_SHA" \
+            --arg candidateSha "$CANDIDATE_SHA" \
+            '{mergeSha:$mergeSha,candidateSha:$candidateSha,treesEquivalent:true}' \
+            > "$CANARY_OUTPUT_DIR/identity.json"
+
+      - name: Verify exact deployment, aliases, and latest production binding
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+
+          detail="$(curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}")"
+          latest="$(curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&target=production&limit=20&teamId=${VERCEL_ORG_ID}")"
+
+          state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$detail")"
+          deployment_id="$(jq -r '.uid // .id // empty' <<<"$detail")"
+          project_id="$(jq -r '.projectId // .project.id // empty' <<<"$detail")"
+          target="$(jq -r '.target // empty' <<<"$detail")"
+          deployed_sha="$(jq -r '.meta.githubCommitSha // empty' <<<"$detail")"
+          deployment_origin="https://$(jq -r '.url // empty' <<<"$detail")"
+          latest_id="$(jq -r '.deployments[0].uid // .deployments[0].id // empty' <<<"$latest")"
+          latest_state="$(jq -r '.deployments[0].state // empty' <<<"$latest")"
+          latest_sha="$(jq -r '.deployments[0].meta.githubCommitSha // empty' <<<"$latest")"
+
+          test "$state" = 'READY'
+          test "$deployment_id" = "$DEPLOYMENT_ID"
+          test "$project_id" = "$VERCEL_PROJECT_ID"
+          test "$target" = 'production'
+          test "$deployed_sha" = "$MERGE_SHA"
+          test "$deployment_origin" = "$DEPLOYMENT_ORIGIN"
+          test "$latest_id" = "$DEPLOYMENT_ID"
+          test "$latest_state" = 'READY'
+          test "$latest_sha" = "$MERGE_SHA"
+          jq -e --arg alias 'moraltrade.org' '.alias | index($alias) != null' <<<"$detail" >/dev/null
+          jq -e --arg alias 'www.moraltrade.org' '.alias | index($alias) != null' <<<"$detail" >/dev/null
+
+          jq -n \
+            --arg expectedSha "$MERGE_SHA" \
+            --arg deploymentId "$deployment_id" \
+            --arg deploymentOrigin "$deployment_origin" \
+            --arg projectId "$project_id" \
+            --arg state "$state" \
+            --arg target "$target" \
+            --arg latestProductionId "$latest_id" \
+            --arg latestProductionSha "$latest_sha" \
+            --argjson aliases "$(jq -c '.alias' <<<"$detail")" \
+            '{expectedSha:$expectedSha,deploymentId:$deploymentId,deploymentOrigin:$deploymentOrigin,projectId:$projectId,state:$state,target:$target,latestProductionId:$latestProductionId,latestProductionSha:$latestProductionSha,aliases:$aliases,verified:true}' \
+            > "$CANARY_OUTPUT_DIR/deployment-binding.json"
+
+      - name: Verify both public production domains
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          www_status="$(curl -sS --max-time 60 \
+            --cookie 'mt_walkthrough_seen=1' \
+            -D "$CANARY_OUTPUT_DIR/www-returning.headers" \
+            -o "$CANARY_OUTPUT_DIR/www-returning.html" \
+            -w '%{http_code}' \
+            "$CANONICAL_ORIGIN/complete-profile")"
+          apex_status="$(curl -sS --max-time 60 \
+            -D "$CANARY_OUTPUT_DIR/apex.headers" \
+            -o /dev/null \
+            -w '%{http_code}' \
+            "$APEX_ORIGIN/complete-profile")"
+
+          tr -d '\r' < "$CANARY_OUTPUT_DIR/www-returning.headers" \
+            > "$CANARY_OUTPUT_DIR/www-returning.normalized.headers"
+          tr -d '\r' < "$CANARY_OUTPUT_DIR/apex.headers" \
+            > "$CANARY_OUTPUT_DIR/apex.normalized.headers"
+
+          test "$www_status" = '200'
+          grep -Fq 'Spend 100 sparks of attention.' "$CANARY_OUTPUT_DIR/www-returning.html"
+          grep -Fqx 'x-matched-path: /complete-profile' "$CANARY_OUTPUT_DIR/www-returning.normalized.headers"
+          test "$apex_status" = '308'
+          grep -Eq '^location: https://www\.moraltrade\.org/complete-profile([?].*)?$' \
+            "$CANARY_OUTPUT_DIR/apex.normalized.headers"
+
+          jq -n \
+            --arg expectedSha "$MERGE_SHA" \
+            --arg expectedDeploymentId "$DEPLOYMENT_ID" \
+            --arg wwwStatus "$www_status" \
+            --arg apexStatus "$apex_status" \
+            '{expectedSha:$expectedSha,expectedDeploymentId:$expectedDeploymentId,wwwStatus:($wwwStatus|tonumber),apexStatus:($apexStatus|tonumber),verified:true}' \
+            > "$CANARY_OUTPUT_DIR/domain-verification.json"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npm ci 2>&1 | tee "$CANARY_OUTPUT_DIR/npm-ci.log"; then break; fi
+            if [[ "$attempt" == '3' ]]; then exit 1; fi
+            sleep $((attempt * 20))
+          done
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$CANARY_OUTPUT_DIR/playwright-install.log"
+
+      - name: Run the permanent six-scenario Complete Profile canary
+        env:
+          EXPECTED_SHA: ${{ env.MERGE_SHA }}
+          EXPECTED_DEPLOYMENT_ID: ${{ env.DEPLOYMENT_ID }}
+        shell: bash
+        run: node .github/scripts/complete-profile-production-canary.mjs
+
+      - name: Upload finalization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-profile-production-finalization-979726c0
+          path: complete-profile-production-finalization-evidence
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish production finalization result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="Exact live deployment passed alias verification and all six Complete Profile canary scenarios"
+          else
+            state=failure
+            description="Complete Profile production finalization failed; inspect exact evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${MERGE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
