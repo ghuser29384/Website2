@@ -9,13 +9,15 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
+  issues: write
 
 concurrency:
-  group: co-act-co-fund-browser-diagnostic-v6
+  group: co-act-co-fund-browser-diagnostic-v7
   cancel-in-progress: false
 
 env:
-  EXPECTED_PARENT: d12acd66f2c9e7e2021040e7a2e14b0c4621b3ab
+  EXPECTED_PARENT: 25c484f6da8ec9af6e14d2e9cf694f876b399c7a
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-review-summary-loop-repair.yml
 
 jobs:
@@ -215,4 +217,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-# Diagnostic trigger: 2026-08-03T15:50Z
+      - name: Report diagnostic result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 420 --repo "$GITHUB_REPOSITORY" --body \
+            "Co-Act/Co-Fund remaining-browser diagnostic completed with job status \`${{ job.status }}\` in Actions run \`$GITHUB_RUN_ID\`. The decoded job log contains the \`COFUND_DIAGNOSTIC\`, \`AUTH_BEFORE_*\`, and \`AUTH_AFTER_*\` snapshots."
+
+# Diagnostic trigger v2: 2026-08-03T15:54Z
