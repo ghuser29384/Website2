@@ -47,3 +47,10 @@ test("instrumentation starts only the structurally stable enhancement", () => {
   assert.match(instrumentation, /startGroupContributionEnhancement\(\)/);
   assert.doesNotMatch(instrumentation, /InteractionStability|installGroupContributionInteractionStability/);
 });
+
+test("review summaries are idempotent so their observer cannot self-trigger forever", () => {
+  const review = functionBody("renderReviewSummaries");
+  assert.match(review, /mtGroupContributionReviewFingerprint/);
+  assert.match(review, /=== fingerprint/);
+  assert.match(review, /existing\?\.remove\(\)/);
+});

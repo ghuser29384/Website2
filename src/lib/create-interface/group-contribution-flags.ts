@@ -70,5 +70,5 @@ function readFlag(value: string | undefined, defaultValue: boolean): boolean {
   const normalized = value.trim().toLowerCase();
   if (["1", "true", "yes", "on", "enabled"].includes(normalized)) return true;
   if (["0", "false", "no", "off", "disabled"].includes(normalized)) return false;
-  return defaultValue;
+  return false;
 }

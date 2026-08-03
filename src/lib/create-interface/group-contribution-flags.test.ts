@@ -38,3 +38,21 @@ test("mode flags can disable one mechanism without disabling the other", () => {
   assert.equal(permitsGroupContributionMode(flags, "co-act"), false);
   assert.equal(permitsGroupContributionMode(flags, "co-fund"), true);
 });
+
+test("malformed explicit feature-flag values fail closed", () => {
+  const flags = readGroupContributionProposalFlags({
+    NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS: "maybe",
+    NEXT_PUBLIC_MORAL_TRADE_CO_FUND_PROPOSALS: "unexpected",
+    NEXT_PUBLIC_MORAL_TRADE_CO_ACT_COMPLEMENTARY_ROLES: "2",
+    NEXT_PUBLIC_MORAL_TRADE_CO_FUND_FLEXIBLE: "enable-ish",
+    NEXT_PUBLIC_MORAL_TRADE_CO_FUND_CUSTOM_SPLIT: "unknown",
+    NEXT_PUBLIC_MORAL_TRADE_CO_FUND_MATCHING: "perhaps",
+  });
+
+  assert.equal(permitsGroupContributionMode(flags, "co-act"), false);
+  assert.equal(permitsGroupContributionMode(flags, "co-fund"), false);
+  assert.equal(permitsCoActStructure(flags, "complementary-roles"), false);
+  assert.equal(permitsCoFundAllocation(flags, "flexible-contribution"), false);
+  assert.equal(permitsCoFundAllocation(flags, "custom-split"), false);
+  assert.equal(permitsCoFundAllocation(flags, "matching-pledge"), false);
+});

@@ -1009,13 +1009,20 @@ function renderReviewSummaries(payload: GroupContributionProposalPayload): void 
   const summaryOffers = doc.querySelector<HTMLElement>("#summaryOffers");
   if (!summaryOffers) return;
 
-  summaryOffers
-    .querySelector<HTMLElement>("[data-mt-group-contribution-review]")
-    ?.remove();
+  const existing = summaryOffers.querySelector<HTMLElement>(
+    "[data-mt-group-contribution-review]",
+  );
+  const fingerprint = JSON.stringify(payload.options);
+  if (existing?.dataset.mtGroupContributionReviewFingerprint === fingerprint) {
+    return;
+  }
+
+  existing?.remove();
   if (payload.options.length === 0) return;
 
   const container = doc.createElement("section");
   container.setAttribute("data-mt-group-contribution-review", "true");
+  container.dataset.mtGroupContributionReviewFingerprint = fingerprint;
   container.setAttribute("aria-label", "Proposed group contribution terms");
   container.style.cssText =
     "margin-top:12px;border-top:1px solid #c6c0b5;padding-top:10px;display:grid;gap:8px";

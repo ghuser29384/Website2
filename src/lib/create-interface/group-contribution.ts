@@ -806,6 +806,18 @@ function validateIdentity(
       "Invitation-only members see one another after joining",
     );
   }
+  if (
+    visibility === "invitation-only" &&
+    value.publicAfterSuccessfulCompletion !== true
+  ) {
+    addIssue(
+      issues,
+      "identity.publicAfterSuccessfulCompletion",
+      "invalid-value",
+      "Invitation-only participant identities become public only after successful completion",
+    );
+  }
+
 }
 
 function validateCoFund(value: Record<string, unknown>, issues: ValidationIssue[]): void {

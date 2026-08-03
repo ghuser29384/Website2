@@ -287,3 +287,24 @@ test("generates deterministic compact summaries", () => {
     "$50 target · $5 each · 10 funded slots.",
   );
 });
+
+test("requires invitation-only identities to become public only after successful completion", () => {
+  const base = validCoAct();
+  const proposal = {
+    ...base,
+    visibility: "invitation-only" as const,
+    identity: {
+      ...base.identity,
+      publicAfterSuccessfulCompletion: false,
+    },
+  };
+  const result = validateGroupContributionTerms(proposal, "nonfinancial");
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert(
+      result.issues.some(
+        (issue) => issue.path === "identity.publicAfterSuccessfulCompletion",
+      ),
+    );
+  }
+});
