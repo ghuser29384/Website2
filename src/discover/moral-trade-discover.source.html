@@ -745,6 +745,7 @@ button:focus-visible, [role="button"]:focus-visible, input:focus-visible, select
   .graph-instruction { font-size: 11px; }
   .inspector { display: none; }
   .mobile-sheet {
+    display: block;
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 91; max-height: 84vh; background: var(--paper-strong); border-top: 1px solid var(--ink); border-radius: 16px 16px 0 0; box-shadow: 0 -18px 50px rgba(0,0,0,.2); overflow: auto; padding-bottom: env(safe-area-inset-bottom); animation: sheet-in .18s ease-out;
   }
   .mobile-sheet::before { content: ""; display: block; width: 44px; height: 4px; border-radius: 2px; background: #bbb; margin: 9px auto 0; }
@@ -2628,6 +2629,13 @@ const causeName = (id) => causeAreas.find((cause) => cause.id === id)?.name || i
 const currentView = (state) => state.viewByDomain[state.domain];
 const viewKey = (state) => `${state.domain}:${currentView(state)}`;
 const formatMoney = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value);
+const formatGapShare = (share) => {
+  const percent = Math.max(0, Number(share) * 100);
+  if (!Number.isFinite(percent) || percent === 0) return '0%';
+  if (percent < 1) return `${percent.toFixed(2)}%`;
+  if (percent < 10) return `${percent.toFixed(1)}%`;
+  return `${Math.round(percent)}%`;
+};
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 function announce(message) {
@@ -3039,8 +3047,8 @@ function renderThreshold(state) {
           <span class="ring-label near">NEAR THRESHOLD</span><span class="ring-label ontrack">ON TRACK</span><span class="ring-label far">LARGER GAP</span>
           ${bubbles}
           <div class="threshold-center">
-            <span>TEST YOUR PLEDGE</span><b>${formatMoney(pledge)}</b><input type="range" min="0" max="${Math.max(10, Math.min(250, activeMetrics.gap))}" step="5" value="${pledge}" data-pledge-range data-pool-id="${active.id}" aria-label="Conditional pledge amount for ${escapeHtml(active.title)}" />
-            <span>${formatMoney(afterGap)} remains if activated with your pledge</span><button data-action="pledge" data-id="${active.id}">Pledge conditionally →</button>
+            <span>PREVIEW YOUR PLEDGE</span><b>${formatMoney(pledge)}</b><input type="range" min="0" max="${Math.max(10, Math.min(250, activeMetrics.gap))}" step="5" value="${pledge}" data-pledge-range data-pool-id="${active.id}" aria-label="Conditional pledge amount for ${escapeHtml(active.title)}" />
+            <span>${formatMoney(afterGap)} remains · ${formatGapShare(activeMetrics.gap > 0 ? pledge / activeMetrics.gap : 1)} of current gap</span><button data-action="pledge" data-id="${active.id}">Continue with a conditional pledge →</button>
           </div>
         </div>
       </div>
@@ -3051,7 +3059,7 @@ function renderThreshold(state) {
         <div class="metric-card"><b>Bubble size</b><span>Total pool scale, shown with a bounded logarithmic scale.</span></div>
       </aside>
     </div>
-    <div class="graph-instruction"><span>Select any pool to inspect pivotality, failure conditions, authorization expiry, and exact proof.</span>${graphAccessibleListButton()}</div>
+    <div class="graph-instruction"><span>Select any pool to inspect its current gap, failure conditions, authorization expiry, and exact proof.</span>${graphAccessibleListButton()}</div>
   </section>`;
 }
 
@@ -3346,13 +3354,13 @@ function renderOfferInspector(state, item) {
 function renderPoolInspector(state, item) {
   const metrics = derivePoolMetrics(item);
   const pledge = state.pledgeAmounts[item.id] ?? Math.min(10, metrics.gap);
-  const pivotalShare = metrics.gap > 0 ? pledge / metrics.gap : 1;
-  const pivotalLabel = pivotalShare >= .5 ? 'High' : pivotalShare >= .15 ? 'Moderate' : 'Low';
+  const afterGap = Math.max(0, metrics.gap - pledge);
+  const gapShare = metrics.gap > 0 ? pledge / metrics.gap : 1;
   return `<div class="inspector-kicker">${causeName(item.causeId)} · ${metrics.statusLabel}</div><h2>${escapeHtml(item.title)}</h2><p class="inspector-subtitle">${formatMoney(item.funded)} of ${formatMoney(item.threshold)} conditionally committed · ${item.contributors} contributors</p>
-    <section class="inspector-section"><h3>Test your pledge</h3><div class="pool-pledge-box"><div class="detail-grid"><div class="detail-stat"><b>${formatMoney(pledge)}</b><span>Your conditional pledge</span></div><div class="detail-stat"><b>${formatMoney(Math.max(0, metrics.gap - pledge))}</b><span>Remaining after your pledge</span></div></div><input type="range" min="0" max="${Math.max(10, Math.min(250, metrics.gap))}" step="5" value="${pledge}" data-pledge-range data-pool-id="${item.id}" /><div class="pledge-result"><span>${pivotalLabel} pivotality</span><span>${Math.round(pivotalShare * 100)}% of current gap</span></div></div></section>
-    <section class="inspector-section"><h3>What your pledge changes</h3><dl class="integrity-list"><div class="integrity-row"><dt>Activation consequence</dt><dd>${escapeHtml(item.changes)}</dd></div><div class="integrity-row"><dt>How likely am I to be pivotal?</dt><dd>${pivotalLabel}. This pledge closes ${Math.round(pivotalShare * 100)}% of the current gap. This is a mechanical share, not a forecast of other contributors.</dd></div><div class="integrity-row"><dt>If the threshold is missed</dt><dd>${escapeHtml(item.failure)}</dd></div><div class="integrity-row"><dt>Authorization expires</dt><dd>${formatDate(item.authorizationExpires)}. No charge occurs after expiry without renewed consent.</dd></div><div class="integrity-row"><dt>Verification</dt><dd>${escapeHtml(item.proof)}</dd></div></dl></section>
+    <section class="inspector-section"><h3>Preview your conditional pledge</h3><div class="pool-pledge-box"><div class="detail-grid"><div class="detail-stat"><b>${formatMoney(pledge)}</b><span>Your proposed conditional pledge</span></div><div class="detail-stat"><b>${formatMoney(afterGap)}</b><span>Remaining after your pledge</span></div></div><input type="range" min="0" max="${Math.max(10, Math.min(250, metrics.gap))}" step="5" value="${pledge}" data-pledge-range data-pool-id="${item.id}" aria-label="Conditional pledge amount for ${escapeHtml(item.title)}" /><div class="pledge-result"><span>${formatGapShare(gapShare)} of current gap</span><span>${formatMoney(afterGap)} remains</span></div><p class="inspector-subtitle">Moving the slider does not save a pledge or authorize payment.</p></div></section>
+    <section class="inspector-section"><h3>What your pledge changes</h3><dl class="integrity-list"><div class="integrity-row"><dt>Activation consequence</dt><dd>${escapeHtml(item.changes)}</dd></div><div class="integrity-row"><dt>Share of the current gap</dt><dd>Your pledge would close ${formatGapShare(gapShare)} of the current ${formatMoney(metrics.gap)} gap, leaving ${formatMoney(afterGap)}. This is arithmetic, not a forecast of other contributors.</dd></div><div class="integrity-row"><dt>If the threshold is missed</dt><dd>${escapeHtml(item.failure)}</dd></div><div class="integrity-row"><dt>Authorization expires</dt><dd>${formatDate(item.authorizationExpires)}. No charge occurs after expiry without renewed consent.</dd></div><div class="integrity-row"><dt>Verification</dt><dd>${escapeHtml(item.proof)}</dd></div></dl></section>
     <section class="inspector-section"><h3>Analytical position</h3><p class="inspector-subtitle">${Math.round(metrics.gapRatio * 100)}% of the threshold remains · ${metrics.urgencyDays} days to deadline · ${metrics.statusLabel}. Position is calculated from those terms.</p><button class="quiet-btn" data-action="open-method" data-method="threshold">How calculated →</button></section>
-    <div class="inspector-actions"><button class="primary-btn wide" data-action="pledge" data-id="${item.id}">Pledge ${formatMoney(pledge)} conditionally →</button><button class="outline-btn" data-action="toggle-compare" data-id="${item.id}">${state.compareIds.includes(item.id) ? 'Remove compare' : 'Add compare'}</button><button class="outline-btn" data-action="bookmark" data-id="${item.id}">${state.bookmarked.includes(item.id) ? 'Saved ◆' : 'Save ◇'}</button></div>`;
+    <div class="inspector-actions"><button class="primary-btn wide" data-action="pledge" data-id="${item.id}">Continue with a conditional ${formatMoney(pledge)} pledge →</button><button class="outline-btn" data-action="toggle-compare" data-id="${item.id}">${state.compareIds.includes(item.id) ? 'Remove compare' : 'Add compare'}</button><button class="outline-btn" data-action="bookmark" data-id="${item.id}">${state.bookmarked.includes(item.id) ? 'Saved ◆' : 'Save ◇'}</button></div>`;
 }
 
 function renderPersonInspector(state, item) {
@@ -3395,7 +3403,7 @@ function renderMethodModal(state) {
   const value = state.methodOpen === 'value';
   return `<div class="overlay-scrim" data-action="close-overlay"></div><section class="modal dialog-surface" role="dialog" aria-modal="true" aria-labelledby="method-title">
     <div class="modal-head"><div><h2 id="method-title">${value ? 'How the Value field is calculated' : 'How the Threshold radar is calculated'}</h2><p>Transparent comparison logic. These positions are decision aids, not acceptance or impact probabilities.</p></div><button class="modal-close" data-action="close-overlay" aria-label="Close methodology">×</button></div>
-    ${value ? `<div class="method-formula">Estimated burden = money component (35%) + time (25%) + behavioral friction (20%) + verification burden (20%)<br>Supported expected value = impact estimate × evidence confidence × value alignment</div><div class="method-grid"><div><h3>What is factual</h3><p>Money, time, proof requirements, deadline, and verification source come from the listed terms. Each is shown in the opportunity inspector.</p></div><div><h3>What is estimated</h3><p>Impact, evidence confidence, value alignment, and behavioral friction are bounded comparison inputs. Labels such as “Lower burden” avoid implying false precision.</p></div><div><h3>Scale treatment</h3><p>All components are capped before combination so an unusually large money or time term does not erase every other consideration.</p></div><div><h3>What the chart does not claim</h3><p>It does not predict acceptance, guarantee impact, or establish moral permissibility. Integrity and third-party effects remain separate review fields.</p></div></div>` : `<div class="method-formula">Radius = 86px + (remaining gap ÷ threshold) × 205px<br>Angle = deadline urgency mapped clockwise across a 45-day horizon<br>Bubble size = bounded logarithmic scale of total threshold<br>Border state = near threshold, on track, at risk, or verification unavailable</div><div class="method-grid"><div><h3>Near threshold</h3><p>10% or less of the threshold remains. This is a mechanical funding state, not a forecast that activation will occur.</p></div><div><h3>At risk</h3><p>A large remaining share combined with a short deadline. Verification outages are shown separately with a dashed red border.</p></div><div><h3>Pivotality</h3><p>Your pledge divided by the current gap. It shows how much of the known gap you close, not how likely other contributors are to act.</p></div><div><h3>Failure semantics</h3><p>Every pool inspector states what happens if the threshold is missed and when authorization expires.</p></div></div>`}
+    ${value ? `<div class="method-formula">Estimated burden = money component (35%) + time (25%) + behavioral friction (20%) + verification burden (20%)<br>Supported expected value = impact estimate × evidence confidence × value alignment</div><div class="method-grid"><div><h3>What is factual</h3><p>Money, time, proof requirements, deadline, and verification source come from the listed terms. Each is shown in the opportunity inspector.</p></div><div><h3>What is estimated</h3><p>Impact, evidence confidence, value alignment, and behavioral friction are bounded comparison inputs. Labels such as “Lower burden” avoid implying false precision.</p></div><div><h3>Scale treatment</h3><p>All components are capped before combination so an unusually large money or time term does not erase every other consideration.</p></div><div><h3>What the chart does not claim</h3><p>It does not predict acceptance, guarantee impact, or establish moral permissibility. Integrity and third-party effects remain separate review fields.</p></div></div>` : `<div class="method-formula">Radius = 86px + (remaining gap ÷ threshold) × 205px<br>Angle = deadline urgency mapped clockwise across a 45-day horizon<br>Bubble size = bounded logarithmic scale of total threshold<br>Border state = near threshold, on track, at risk, or verification unavailable</div><div class="method-grid"><div><h3>Near threshold</h3><p>10% or less of the threshold remains. This is a mechanical funding state, not a forecast that activation will occur.</p></div><div><h3>At risk</h3><p>A large remaining share combined with a short deadline. Verification outages are shown separately with a dashed red border.</p></div><div><h3>Share of the current gap</h3><p>Your proposed pledge divided by the current gap. It shows how much of the known gap you close, not how likely other contributors are to act.</p></div><div><h3>Failure semantics</h3><p>Every pool inspector states what happens if the threshold is missed and when authorization expires.</p></div></div>`}
   </section>`;
 }
 

@@ -1,0 +1,180 @@
+name: Gated Vercel release
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Deployment environment
+        required: true
+        type: choice
+        options:
+          - preview
+          - production
+      ref:
+        description: Exact approved branch to release
+        required: true
+        type: string
+        default: main
+      expected_sha:
+        description: Full 40-character commit SHA proved by the repository gates
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gated-vercel-${{ inputs.target }}
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  RELEASE_PREVIEW_BRANCH: release/vercel-preview
+  VERCEL_CLI_VERSION: 50.38.1
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out the exact approved candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+          fetch-depth: 0
+
+      - name: Guard repository, branch, and immutable candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "${{ inputs.expected_sha }}" = "$(git rev-parse HEAD)"
+          test "${#EXPECTED_SHA}" -eq 40
+          remote_sha="$(git ls-remote origin "refs/heads/${{ inputs.ref }}" | awk '{print $1}')"
+          test "$remote_sha" = "${{ inputs.expected_sha }}"
+
+          case "${{ inputs.target }}" in
+            production)
+              test "${{ inputs.ref }}" = 'main'
+              ;;
+            preview)
+              test "${{ inputs.ref }}" = "$RELEASE_PREVIEW_BRANCH"
+              ;;
+            *)
+              echo 'Unsupported release target.' >&2
+              exit 1
+              ;;
+          esac
+
+          git diff --check HEAD^
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run complete repository quality gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+
+      - name: Run complete rendered browser gate
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium
+          npm run test:e2e -- --reporter=line
+
+      - name: Link only the canonical Vercel project
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull exact deployment environment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes \
+            --environment="${{ inputs.target }}" \
+            --token="$VERCEL_TOKEN"
+
+      - name: Build the Vercel artifact on GitHub Actions compute
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ '${{ inputs.target }}' == 'production' ]]; then
+            npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+              --prod \
+              --token="$VERCEL_TOKEN"
+          else
+            npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+              --token="$VERCEL_TOKEN"
+          fi
+
+      - name: Upload the already-built artifact exactly once
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ '${{ inputs.target }}' == 'production' ]]; then
+            deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+              --prebuilt \
+              --prod \
+              --token="$VERCEL_TOKEN")"
+          else
+            deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+              --prebuilt \
+              --token="$VERCEL_TOKEN")"
+          fi
+          test -n "$deployment_url"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          printf 'Deployment URL: %s\n' "$deployment_url"
+
+      - name: Record immutable release evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Gated Vercel release'
+            echo
+            echo "- Target: \`${{ inputs.target }}\`"
+            echo "- Ref: \`${{ inputs.ref }}\`"
+            echo "- Commit: \`${{ inputs.expected_sha }}\`"
+            echo "- Project: \`$VERCEL_PROJECT_ID\`"
+            echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
+            echo '- Build location: GitHub Actions (`vercel build` + `vercel deploy --prebuilt`)'
+          } >> "$GITHUB_STEP_SUMMARY"

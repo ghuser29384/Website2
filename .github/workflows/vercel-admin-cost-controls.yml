@@ -1,0 +1,168 @@
+name: Vercel administrative cost controls
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Audit is read-only; apply changes Vercel account state
+        required: true
+        type: choice
+        options:
+          - audit
+          - apply
+        default: audit
+      confirmation:
+        description: Type APPLY-VERCEL-COST-CONTROLS when mode is apply
+        required: false
+        type: string
+      disconnect_website2:
+        description: Disconnect the duplicate website2 project from GitHub
+        required: true
+        type: boolean
+        default: true
+      delete_obsolete_projects:
+        description: Delete the six domainless one-use Moral Trade test projects
+        required: true
+        type: boolean
+        default: true
+      resume_production:
+        description: Attempt to unpause moraltrade-site after controls are applied
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vercel-administrative-cost-controls
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  CANONICAL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  DUPLICATE_PROJECT_ID: prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK
+  VERCEL_CLI_VERSION: 50.38.1
+  VERCEL_PRODUCTION_BASE_URL: https://www.moraltrade.org
+
+jobs:
+  administer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out the current default branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Guard authorization and secret availability
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test -n "$VERCEL_TOKEN"
+          if [[ '${{ inputs.mode }}' == 'apply' ]]; then
+            test '${{ inputs.confirmation }}' = 'APPLY-VERCEL-COST-CONTROLS'
+          fi
+
+      - name: Capture redacted before-state audit
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_COST_CONTROL_MODE: audit
+          VERCEL_COST_CONTROL_REPORT: vercel-cost-controls-before.json
+        run: node scripts/vercel-admin-cost-controls.mjs
+
+      - name: Apply Standard builds, serialized concurrency, optional cleanup, and optional resume
+        if: inputs.mode == 'apply'
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_COST_CONTROL_MODE: apply
+          VERCEL_COST_CONTROL_REPORT: vercel-cost-controls-apply.json
+          DELETE_OBSOLETE_PROJECTS: ${{ inputs.delete_obsolete_projects }}
+          RESUME_CANONICAL_PROJECT: ${{ inputs.resume_production }}
+        run: node scripts/vercel-admin-cost-controls.mjs
+
+      - name: Disconnect website2 from the GitHub repository
+        if: inputs.mode == 'apply' && inputs.disconnect_website2
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const report = JSON.parse(await readFile('vercel-cost-controls-before.json', 'utf8'));
+          process.exit(report.duplicate?.link == null ? 0 : 1);
+          NODE
+          then
+            echo 'website2 is already disconnected from Git; no mutation required.'
+            exit 0
+          fi
+
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$DUPLICATE_PROJECT_ID" > .vercel/project.json
+          printf 'y\n' | npx --yes "vercel@$VERCEL_CLI_VERSION" git disconnect \
+            --token="$VERCEL_TOKEN" \
+            --scope=ellen-s
+
+      - name: Verify the applied Vercel account state
+        if: inputs.mode == 'apply'
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_COST_CONTROL_MODE: verify
+          VERCEL_COST_CONTROL_REPORT: vercel-cost-controls-after.json
+          REQUIRE_WEBSITE2_DISCONNECTED: ${{ inputs.disconnect_website2 }}
+          REQUIRE_OBSOLETE_ABSENT: ${{ inputs.delete_obsolete_projects }}
+          REQUIRE_CANONICAL_LIVE: ${{ inputs.resume_production }}
+        run: node scripts/vercel-admin-cost-controls.mjs
+
+      - name: Smoke-test the canonical production routes after resume
+        if: inputs.mode == 'apply' && inputs.resume_production
+        shell: bash
+        env:
+          VERCEL_COST_CONTROL_MODE: smoke
+          VERCEL_COST_CONTROL_REPORT: vercel-production-smoke.json
+          VERCEL_PRODUCTION_SMOKE_ATTEMPTS: 30
+          VERCEL_PRODUCTION_SMOKE_INTERVAL_MS: 10000
+          VERCEL_PRODUCTION_SMOKE_TIMEOUT_MS: 15000
+        run: node scripts/vercel-admin-cost-controls.mjs
+
+      - name: Upload redacted administrative evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-cost-controls-${{ github.run_id }}
+          path: |
+            vercel-cost-controls-*.json
+            vercel-production-smoke.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Summarize the control plane
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### Vercel administrative cost controls'
+            echo
+            echo "- Mode: \`${{ inputs.mode }}\`"
+            echo '- Canonical project: `moraltrade-site`'
+            echo "- Standard build machine requested: \`${{ inputs.mode == 'apply' }}\`"
+            echo "- Paid on-demand build concurrency disabled: \`${{ inputs.mode == 'apply' }}\`"
+            echo "- website2 disconnect requested: \`${{ inputs.disconnect_website2 }}\`"
+            echo "- Obsolete-project deletion requested: \`${{ inputs.delete_obsolete_projects }}\`"
+            echo "- Production resume requested: \`${{ inputs.resume_production }}\`"
+            echo "- Live-state and canonical-route verification required: \`${{ inputs.mode == 'apply' && inputs.resume_production }}\`"
+            if [[ -f vercel-production-smoke.json ]]; then
+              echo "- Canonical route smoke passed: \`$(jq -r '.passed' vercel-production-smoke.json)\`"
+              echo "- Observed production deployment: \`$(jq -r '.deploymentIds | join(", ")' vercel-production-smoke.json)\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
