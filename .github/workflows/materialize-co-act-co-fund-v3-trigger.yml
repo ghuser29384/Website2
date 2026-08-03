@@ -6,6 +6,13 @@ on:
       - feature/co-act-co-fund-create-v3-20260803
     paths:
       - .github/workflows/materialize-co-act-co-fund-v3-trigger.yml
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
 
 permissions:
   contents: write
@@ -16,6 +23,7 @@ concurrency:
 
 jobs:
   materialize:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
