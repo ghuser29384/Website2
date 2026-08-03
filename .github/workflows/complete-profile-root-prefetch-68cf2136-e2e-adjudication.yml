@@ -16,7 +16,7 @@ concurrency:
 jobs:
   adjudicate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 70
     env:
       BASE_SHA: eb71dce7990d1476fc6e4731e1bcd7f3afd640f9
       CANDIDATE_SHA: 68cf2136ce62b823024963e83503f7af96f229ee
@@ -50,6 +50,11 @@ jobs:
           git fetch --depth=1 origin "$CANDIDATE_SHA"
           git diff --quiet "$BASE_SHA" "$CANDIDATE_SHA" -- package.json package-lock.json playwright.config.ts
           mkdir -p "$EVIDENCE_DIR"
+          jq -n \
+            --arg baseSha "$BASE_SHA" \
+            --arg candidateSha "$CANDIDATE_SHA" \
+            '{baseSha:$baseSha,candidateSha:$candidateSha,dependencyInputsIdentical:true}' \
+            > "$EVIDENCE_DIR/inputs.json"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -77,14 +82,19 @@ jobs:
             --workers=1 \
             --reporter=line 2>&1 | tee "$EVIDENCE_DIR/base-trade-controls.log"
 
-      - name: Check out exact candidate
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.CANDIDATE_SHA }}
-          fetch-depth: 1
-
-      - name: Verify exact candidate
-        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Switch to the exact candidate without cleaning dependencies or evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --porcelain --untracked-files=no | grep -q . && {
+            echo "Tracked workspace changed during the exact-base test." >&2
+            git status --short >&2
+            exit 1
+          } || true
+          git checkout --detach "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test -d node_modules/@playwright/test
+          test -s "$EVIDENCE_DIR/base-trade-controls.log"
 
       - name: Repeat the unmatched test on the exact candidate
         env:
