@@ -1,0 +1,109 @@
+name: Materialize current-main Co-Act and Co-Fund reconstruction trigger
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v3-20260803
+    paths:
+      - .github/workflows/materialize-co-act-co-fund-v3-trigger.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-co-act-co-fund-v3-trigger
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact materializer branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v3-20260803
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify and extract the reviewed reconstruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="92cb9d1eb08f9784be0353dd920c0784984e9a22"
+          git fetch origin main
+          test "$(git merge-base HEAD origin/main)" = "$BASE_SHA"
+          cat .github/co-act-co-fund-v3-payload/part-* > /tmp/coact-v3-patch.b64
+          echo "eda2828276ff161d1ed36c397b513d3f8071dea0a1581bc4fc608d6739e1e183  /tmp/coact-v3-patch.b64" | sha256sum -c -
+          base64 --decode /tmp/coact-v3-patch.b64 > /tmp/coact-v3-patch.tar.xz
+          echo "bc6a4c0a93247da42e6528439d7fb4d166d42796adb569e7310ab092393bef9e  /tmp/coact-v3-patch.tar.xz" | sha256sum -c -
+          tar -tJf /tmp/coact-v3-patch.tar.xz | sed 's#^\./##' | sort > /tmp/actual-manifest.txt
+          cat > /tmp/expected-manifest.txt <<'EOF'
+          .github/workflows/co-act-co-fund-proposal-gates.yml
+          docs/co-act-co-fund-create-spec.md
+          docs/co-act-co-fund-current-main-audit.md
+          public/moral-trade-create/common-ground.js
+          src/instrumentation-client.ts
+          src/lib/create-interface/common-ground-validation.test.ts
+          src/lib/create-interface/group-contribution-client-stability.test.ts
+          src/lib/create-interface/group-contribution-client.test.ts
+          src/lib/create-interface/group-contribution-client.ts
+          src/lib/create-interface/group-contribution-draft-sanitize.test.ts
+          src/lib/create-interface/group-contribution-draft-sanitize.ts
+          src/lib/create-interface/group-contribution-draft.test.ts
+          src/lib/create-interface/group-contribution-draft.ts
+          src/lib/create-interface/group-contribution-flags.test.ts
+          src/lib/create-interface/group-contribution-flags.ts
+          src/lib/create-interface/group-contribution-payload.test.ts
+          src/lib/create-interface/group-contribution-payload.ts
+          src/lib/create-interface/group-contribution-review-record.ts
+          src/lib/create-interface/group-contribution-selected-policies.test.ts
+          src/lib/create-interface/group-contribution-server.test.ts
+          src/lib/create-interface/group-contribution-server.ts
+          src/lib/create-interface/group-contribution-shape.test.ts
+          src/lib/create-interface/group-contribution-shape.ts
+          src/lib/create-interface/group-contribution.test.ts
+          src/lib/create-interface/group-contribution.ts
+          src/lib/create-interface/persistence.test.ts
+          src/lib/create-interface/persistence.ts
+          src/lib/create-interface/source-contract.test.ts
+          src/lib/create-interface/types.ts
+          src/lib/create-interface/validation.test.ts
+          src/lib/create-interface/validation.ts
+          tests/create-group-contribution-proposal.spec.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected-manifest.txt
+          sort -o /tmp/expected-manifest.txt /tmp/expected-manifest.txt
+          diff -u /tmp/expected-manifest.txt /tmp/actual-manifest.txt
+          if grep -Eq '(^/|(^|/)\.\.(/|$))' /tmp/actual-manifest.txt; then
+            echo "Unsafe archive path" >&2
+            exit 1
+          fi
+          tar -xJf /tmp/coact-v3-patch.tar.xz
+          git diff --check
+
+      - name: Remove all temporary materialization machinery
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE_SHA="92cb9d1eb08f9784be0353dd920c0784984e9a22"
+          rm -rf .github/co-act-co-fund-v3-payload
+          git rm \
+            .github/workflows/materialize-co-act-co-fund-v3.yml \
+            .github/workflows/materialize-co-act-co-fund-v3-trigger.yml
+          git add -A
+          git diff --cached --check
+          git diff --cached --name-only "$BASE_SHA" | sort > /tmp/candidate-manifest.txt
+          diff -u /tmp/expected-manifest.txt /tmp/candidate-manifest.txt
+          test ! -e .github/co-act-co-fund-v3-payload
+          test ! -e .github/workflows/materialize-co-act-co-fund-v3.yml
+          test ! -e .github/workflows/materialize-co-act-co-fund-v3-trigger.yml
+
+      - name: Commit the clean reconstruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Reconstruct proposal-only Co-Act and Co-Fund on current Create'
+          git push origin HEAD:feature/co-act-co-fund-create-v3-20260803
