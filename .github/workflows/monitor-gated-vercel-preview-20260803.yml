@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
-      GATED_RUN_ID: "30778656416"
+      GATED_RUN_ID: "30778634962"
       OUTPUT_DIR: gated-vercel-release-monitor
 
     steps:
@@ -55,15 +55,17 @@ jobs:
           grep -n -E 'Error|ERROR|error|FAILED|failed|Failure|Timeout|timed out|expect\(|Assertion|assert|[0-9]+ failed|›' \
             "$OUTPUT_DIR/failed.log" > "$OUTPUT_DIR/failure-index.txt" || true
 
-          find "$OUTPUT_DIR" -maxdepth 4 -type f -printf '%p\t%s bytes\n' \
+          find "$OUTPUT_DIR" -maxdepth 5 -type f -printf '%p\t%s bytes\n' \
             | sort > "$OUTPUT_DIR/inventory.txt"
 
           test -s "$OUTPUT_DIR/run.json"
           test -s "$OUTPUT_DIR/failed.log"
 
       - name: Upload monitor output
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gated-vercel-release-failure-diagnostics-20260803
           path: gated-vercel-release-monitor
+          if-no-files-found: ignore
           retention-days: 3
