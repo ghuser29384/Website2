@@ -1,0 +1,151 @@
+name: Repair Co-Act and Co-Fund review-summary observer loop
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v2-20260801
+    paths:
+      - ".github/workflows/co-act-co-fund-review-summary-loop-repair.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: co-act-co-fund-review-summary-loop-repair
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/co-act-co-fund-create-v2-20260801
+  EXPECTED_PARENT: cb53c8d4c3dab77f1b137c84dbf9106a916fa592
+  CONTROLLER_PATH: .github/workflows/co-act-co-fund-review-summary-loop-repair.yml
+
+jobs:
+  repair:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.ref == 'refs/heads/feature/co-act-co-fund-create-v2-20260801'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out exact trigger
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v2-20260801
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact one-file controller trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
+          test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
+
+      - name: Make the review projection idempotent
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          client_path = Path('src/lib/create-interface/group-contribution-client.ts')
+          client = client_path.read_text(encoding='utf-8')
+          old = '''function renderReviewSummaries(payload: GroupContributionProposalPayload): void {
+            const doc = createDocument();
+            const summaryOffers = doc.querySelector<HTMLElement>("#summaryOffers");
+            if (!summaryOffers) return;
+          '''
+          new = '''function renderReviewSummaries(payload: GroupContributionProposalPayload): void {
+            const doc = createDocument();
+            const summaryOffers = doc.querySelector<HTMLElement>("#summaryOffers");
+            if (!summaryOffers) return;
+
+            const projectionSignature = JSON.stringify(payload);
+            if (summaryOffers.dataset.mtGroupContributionSignature === projectionSignature) return;
+            summaryOffers.dataset.mtGroupContributionSignature = projectionSignature;
+          '''
+          if client.count(old) != 1:
+              raise SystemExit(f'unexpected review-summary function inventory: {client.count(old)}')
+          client_path.write_text(client.replace(old, new, 1), encoding='utf-8')
+
+          test_path = Path('src/lib/create-interface/group-contribution-interaction.test.ts')
+          test = test_path.read_text(encoding='utf-8')
+          anchor = '''  assert.match(
+            client,
+            /function scheduleMountedOptionRender[\\s\\S]*targetWindow\\.setTimeout[\\s\\S]*renderMountedOption\\(entry\\);[\\s\\S]*\\}, 0\\);/,
+          );
+          '''
+          replacement = anchor + '''  assert.match(
+            client,
+            /const projectionSignature = JSON\\.stringify\\(payload\\);[\\s\\S]*mtGroupContributionSignature === projectionSignature[\\s\\S]*mtGroupContributionSignature = projectionSignature/,
+          );
+          '''
+          if test.count(anchor) != 1:
+              raise SystemExit(f'unexpected interaction-test anchor inventory: {test.count(anchor)}')
+          test_path.write_text(test.replace(anchor, replacement, 1), encoding='utf-8')
+          PY
+
+          git rm "$CONTROLLER_PATH"
+          git diff --check
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused contracts
+        run: >-
+          node --import tsx --test
+          src/lib/create-interface/group-contribution*.test.ts
+          src/lib/create-interface/persistence.test.ts
+          src/lib/create-interface/source-contract.test.ts
+          src/lib/create-interface/validation.test.ts
+
+      - name: Run changed-file lint and TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx eslint \
+            src/lib/create-interface/group-contribution-client.ts \
+            src/lib/create-interface/group-contribution-interaction.test.ts
+          npx tsc --noEmit
+
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run exact real-iframe proposal workflow
+        env:
+          CREATE_ROUTE_CAPTURE: "1"
+        run: npx playwright test tests/create-group-contribution-proposal.spec.ts
+
+      - name: Commit and publish proven repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          cat > /tmp/expected-paths.txt <<'EOF'
+          .github/workflows/co-act-co-fund-review-summary-loop-repair.yml
+          src/lib/create-interface/group-contribution-client.ts
+          src/lib/create-interface/group-contribution-interaction.test.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected-paths.txt
+          sort -u /tmp/expected-paths.txt -o /tmp/expected-paths.txt
+          git diff --cached --name-only | sort -u > /tmp/actual-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+          git diff --cached --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Prevent Co-Act and Co-Fund review observer loops'
+          test "$(git rev-parse HEAD^)" = "$GITHUB_SHA"
+          test ! -e "$CONTROLLER_PATH"
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$GITHUB_SHA" \
+            origin "HEAD:refs/heads/$TARGET_BRANCH"
