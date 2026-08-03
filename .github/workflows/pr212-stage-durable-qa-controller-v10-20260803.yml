@@ -1,0 +1,103 @@
+name: PR 212 stage durable QA controller v10
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/pr212-stage-durable-qa-v10-trigger.txt
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-stage-durable-qa-controller-v10-20260803
+  cancel-in-progress: false
+
+jobs:
+  stage:
+    if: contains(github.event.head_commit.message, 'Trigger PR 212 staged durable QA v10')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: feat/institutional-trade-system
+      EXPECTED_HEAD: 6baaab3cab205a604ae34f8ca997348f582db2fa
+      QA_WORKFLOW_PATH: .github/workflows/institutional-trade-qa.yml
+      PATCH_SCRIPT: .github/scripts/pr212_patch_durable_qa.py
+      STAGED_PATH: .github/pr212-staged/institutional-trade-qa.yml.txt
+      TRIGGER_PATH: .github/pr212-stage-durable-qa-v10-trigger.txt
+      V10_PATH: .github/workflows/pr212-stage-durable-qa-controller-v10-20260803.yml
+    steps:
+      - name: Check out exact feature head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Generate and publish a non-workflow staging blob
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git rev-parse HEAD)"
+          [[ "$current" == "$EXPECTED_HEAD" ]] || {
+            echo "Feature head moved: expected $EXPECTED_HEAD, found $current" >&2
+            exit 1
+          }
+          test -s "$QA_WORKFLOW_PATH"
+          test -s "$PATCH_SCRIPT"
+          cp "$QA_WORKFLOW_PATH" /tmp/institutional-trade-qa.original.yml
+          python -m py_compile "$PATCH_SCRIPT"
+          python "$PATCH_SCRIPT"
+          grep -Fq 'src/institutional-pool-record-trigger.test.ts' "$QA_WORKFLOW_PATH"
+          grep -Fq '20260731173000_fix_institutional_pool_record_status_access.sql' "$QA_WORKFLOW_PATH"
+          grep -Fq 'institutional-pool-trigger-definition.sql' "$QA_WORKFLOW_PATH"
+          mkdir -p "$(dirname "$STAGED_PATH")"
+          cp "$QA_WORKFLOW_PATH" "$STAGED_PATH"
+          cp /tmp/institutional-trade-qa.original.yml "$QA_WORKFLOW_PATH"
+          git diff --exit-code -- "$QA_WORKFLOW_PATH"
+          git diff --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$STAGED_PATH"
+          git commit -m 'Stage durable institutional QA workflow content'
+          staged_head="$(git rev-parse HEAD)"
+          remote="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          [[ "$remote" == "$EXPECTED_HEAD" ]] || {
+            echo "Feature branch advanced concurrently to $remote" >&2
+            exit 1
+          }
+          git push origin "HEAD:${TARGET_BRANCH}"
+          echo "staged_head=$staged_head" >> "$GITHUB_OUTPUT"
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-staged-durable-qa-v10 -->
+          Staged the generated durable institutional QA workflow as a non-workflow blob at exact feature head \`$staged_head\`. PR #212 remains draft and unmerged. Production database state, custody, payouts, and institutional feature flags were not changed."
+
+      - name: Report staging failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-staged-durable-qa-v10-failure -->
+          The staged durable QA controller v10 failed at run [$GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID). PR #212 remains draft and unmerged. No production database migration, custody, payout, or institutional feature activation occurred."
+
+      - name: Remove this temporary controller and trigger from main
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in "$TRIGGER_PATH" "$V10_PATH"; do
+            sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=main" --jq .sha 2>/dev/null || true)"
+            if [[ -n "$sha" ]]; then
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$path" \
+                -f message="Remove temporary $(basename "$path")" \
+                -f sha="$sha" \
+                -f branch=main >/dev/null
+            fi
+          done
