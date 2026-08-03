@@ -6,9 +6,17 @@ const workflowPath = new URL(
   "../.github/workflows/vercel-release.yml",
   import.meta.url,
 );
+const completeProfileCanaryPath = new URL(
+  "../.github/workflows/complete-profile-production-canary.yml",
+  import.meta.url,
+);
 
 async function workflow() {
   return readFile(workflowPath, "utf8");
+}
+
+async function completeProfileCanary() {
+  return readFile(completeProfileCanaryPath, "utf8");
 }
 
 test("Vercel releases are manual and never run on ordinary pushes or pull requests", async () => {
@@ -81,4 +89,54 @@ test("the release requires a repository secret rather than embedding credentials
   const source = await workflow();
   assert.match(source, /secrets\.VERCEL_TOKEN/);
   assert.doesNotMatch(source, /tok_[A-Za-z0-9_-]+/);
+});
+
+test("the Complete Profile canary monitors the live deployment rather than every main commit", async () => {
+  const source = await completeProfileCanary();
+
+  assert.match(source, /schedule:/);
+  assert.match(source, /workflow_dispatch:/);
+  assert.doesNotMatch(source, /^\s{2}push:/m);
+  assert.match(source, /REQUESTED_SHA: \$\{\{ inputs\.expected_sha \}\}/);
+  assert.match(source, /select\(\(\$sha == ""\) or \(\.meta\.githubCommitSha == \$sha\)\)/);
+  assert.match(source, /ref: \$\{\{ steps\.deployment\.outputs\.expected_sha \}\}/);
+  assert.match(source, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/);
+});
+
+test("the Complete Profile canary binds custom domains through Vercel aliases, not page HTML", async () => {
+  const source = await completeProfileCanary();
+
+  assert.match(source, /api\.vercel\.com\/v13\/deployments\/\$\{EXPECTED_DEPLOYMENT_ID\}/);
+  assert.match(source, /--arg alias 'moraltrade\.org'/);
+  assert.match(source, /--arg alias 'www\.moraltrade\.org'/);
+  assert.match(source, /\(\.alias \/\/ \[\]\) \| index\(\$alias\) != null/);
+  assert.doesNotMatch(
+    source,
+    /grep -Fq "\$EXPECTED_DEPLOYMENT_ID" "\$CANARY_OUTPUT_DIR\/www-returning\.html"/,
+  );
+  assert.match(source, /grep -Fq 'Spend 100 sparks of attention\.'/);
+  assert.match(source, /grep -Fqx 'x-matched-path: \/complete-profile'/);
+  assert.match(source, /\[\[ "\$apex_status" == '308' \]\]/);
+});
+
+test("the Complete Profile canary runs the permanent browser script only after exact alias verification", async () => {
+  const source = await completeProfileCanary();
+  const domainIndex = source.indexOf(
+    "- name: Verify the exact deployment through both production domains",
+  );
+  const browserIndex = source.indexOf(
+    "- name: Run the rendered first-time and returning-user canary",
+  );
+
+  assert.notEqual(domainIndex, -1);
+  assert.notEqual(browserIndex, -1);
+  assert.ok(domainIndex < browserIndex);
+  assert.match(
+    source.slice(browserIndex),
+    /node \.github\/scripts\/complete-profile-production-canary\.mjs/,
+  );
+  assert.match(
+    source,
+    /Exact live production deployment passed all six Complete Profile canary scenarios/,
+  );
 });
