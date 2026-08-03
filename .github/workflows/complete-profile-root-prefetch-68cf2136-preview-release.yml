@@ -1,0 +1,501 @@
+name: Complete Profile root-prefetch exact preview release
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/complete-profile-root-prefetch-68cf2136-preview-release.yml"
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: complete-profile-root-prefetch-68cf2136-preview-release
+  cancel-in-progress: false
+
+jobs:
+  preview-release-and-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      EXPECTED_SHA: 68cf2136ce62b823024963e83503f7af96f229ee
+      PRODUCT_BRANCH: fix/complete-profile-root-prefetch-20260801
+      RELEASE_BRANCH: release/vercel-preview
+      STATUS_CONTEXT: QA / Complete Profile exact preview smoke
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      EVIDENCE_DIR: complete-profile-root-prefetch-preview-evidence
+
+    steps:
+      - name: Check out the temporary controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Guard exact candidate, current main, release ref, and repository gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "${#EXPECTED_SHA}" -eq 40
+
+          product_head="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/405" --jq .head.sha)"
+          test "$product_head" = "$EXPECTED_SHA"
+
+          release_head="$(git ls-remote origin "refs/heads/${RELEASE_BRANCH}" | awk '{print $1}')"
+          test "$release_head" = "$EXPECTED_SHA"
+
+          compare="$(gh api "repos/${GITHUB_REPOSITORY}/compare/main...${EXPECTED_SHA}")"
+          test "$(jq -r .status <<<"$compare")" = 'ahead'
+          test "$(jq -r .ahead_by <<<"$compare")" = '1'
+          test "$(jq -r .behind_by <<<"$compare")" = '0'
+
+          exact_gate="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${EXPECTED_SHA}/status" \
+            --jq '[.statuses[] | select(.context == "QA / Complete Profile root-prefetch exact gates")] | sort_by(.updated_at) | last | .state // empty')"
+          test "$exact_gate" = 'success'
+
+          mkdir -p "$EVIDENCE_DIR"
+          jq -n \
+            --arg expectedSha "$EXPECTED_SHA" \
+            --arg productHead "$product_head" \
+            --arg releaseHead "$release_head" \
+            --arg compareStatus "$(jq -r .status <<<"$compare")" \
+            --arg exactGate "$exact_gate" \
+            '{expectedSha:$expectedSha,productHead:$productHead,releaseHead:$releaseHead,compareStatus:$compareStatus,exactGate:$exactGate}' \
+            > "$EVIDENCE_DIR/pre-dispatch-guards.json"
+
+      - name: Mark exact preview smoke pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Dispatching the gated exact preview and running desktop/mobile diagnostics" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Dispatch and wait for the official gated Vercel preview
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "started_at=$started_at" >> "$GITHUB_OUTPUT"
+
+          gh workflow run vercel-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f target=preview \
+            -f ref="$RELEASE_BRANCH" \
+            -f expected_sha="$EXPECTED_SHA"
+
+          run_id=''
+          for attempt in $(seq 1 90); do
+            run_id="$(gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow vercel-release.yml \
+              --event workflow_dispatch \
+              --limit 30 \
+              --json databaseId,createdAt \
+              --jq "map(select(.createdAt >= \"$started_at\")) | sort_by(.createdAt) | last | .databaseId // empty")"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 2
+          done
+          test -n "$run_id"
+
+          run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${run_id}"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$run_url" > "$EVIDENCE_DIR/official-release-run-url.txt"
+
+          gh run watch "$run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --exit-status \
+            --interval 15
+
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log \
+            > "$EVIDENCE_DIR/official-release.log"
+
+      - name: Resolve and verify the exact READY preview deployment
+        id: deployment
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+
+          deployment_url="$(grep -Eo 'https://[A-Za-z0-9][A-Za-z0-9-]*\.vercel\.app' \
+            "$EVIDENCE_DIR/official-release.log" | tail -1)"
+          test -n "$deployment_url"
+          deployment_host="${deployment_url#https://}"
+
+          detail="$(curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            "https://api.vercel.com/v13/deployments/${deployment_host}?teamId=${VERCEL_ORG_ID}")"
+
+          state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$detail")"
+          deployment_id="$(jq -r '.uid // .id // empty' <<<"$detail")"
+          project_id="$(jq -r '.projectId // .project.id // empty' <<<"$detail")"
+          target="$(jq -r '.target // "preview"' <<<"$detail")"
+          deployed_sha="$(jq -r '.meta.githubCommitSha // empty' <<<"$detail")"
+
+          test "$state" = 'READY'
+          test -n "$deployment_id"
+          test "$project_id" = "$VERCEL_PROJECT_ID"
+          test "$target" != 'production'
+          if [[ -n "$deployed_sha" ]]; then
+            test "$deployed_sha" = "$EXPECTED_SHA"
+          fi
+
+          echo "PREVIEW_ORIGIN=$deployment_url" >> "$GITHUB_ENV"
+          echo "PREVIEW_DEPLOYMENT_ID=$deployment_id" >> "$GITHUB_ENV"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+          jq -n \
+            --arg expectedSha "$EXPECTED_SHA" \
+            --arg deploymentUrl "$deployment_url" \
+            --arg deploymentId "$deployment_id" \
+            --arg projectId "$project_id" \
+            --arg state "$state" \
+            --arg target "$target" \
+            --arg deployedSha "$deployed_sha" \
+            --arg releaseRun "${{ steps.release.outputs.run_url }}" \
+            '{expectedSha:$expectedSha,deploymentUrl:$deploymentUrl,deploymentId:$deploymentId,projectId:$projectId,state:$state,target:$target,deployedSha:($deployedSha|select(length>0)),releaseRun:$releaseRun}' \
+            > "$EVIDENCE_DIR/deployment.json"
+
+      - name: Generate and verify one-run Vercel automation bypass
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          secret="$(openssl rand -hex 16)"
+          echo "::add-mask::$secret"
+          payload="$(jq -cn --arg secret "$secret" '{generate:{secret:$secret,note:"Complete Profile exact preview smoke 2026-08-03"}}')"
+          curl -fsS -X PATCH \
+            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/protection-bypass?teamId=${VERCEL_ORG_ID}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            -H 'Content-Type: application/json' \
+            --data "$payload" \
+            > /tmp/vercel-bypass-generate.json
+          jq -e '.protectionBypass | type == "object" and length > 0' \
+            /tmp/vercel-bypass-generate.json >/dev/null
+          echo "VERCEL_AUTOMATION_BYPASS_SECRET=$secret" >> "$GITHUB_ENV"
+
+          ready=false
+          for attempt in $(seq 1 30); do
+            headers="$(mktemp)"
+            set +e
+            status="$(curl -sS \
+              -o /tmp/complete-profile-preview-probe.html \
+              -D "$headers" \
+              -w '%{http_code}' \
+              -H "x-vercel-protection-bypass: ${secret}" \
+              -H 'x-vercel-set-bypass-cookie: true' \
+              -H 'Cookie: mt_walkthrough_seen=1' \
+              "${PREVIEW_ORIGIN}/complete-profile")"
+            curl_status=$?
+            set -e
+            vercel_error="$(awk 'BEGIN{IGNORECASE=1} /^x-vercel-error:/{sub(/\r$/, "", $2); print $2}' "$headers" | tail -1)"
+            rm -f "$headers"
+            if [[ "$curl_status" -eq 0 && "$status" =~ ^2[0-9][0-9]$ && -z "$vercel_error" ]]; then
+              ready=true
+              jq -n \
+                --arg status "$status" \
+                --arg attempt "$attempt" \
+                '{status:($status|tonumber),attempt:($attempt|tonumber),bypassVerified:true}' \
+                > "$EVIDENCE_DIR/protection-bypass-probe.json"
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" = true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Check out the exact product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 1
+
+      - name: Verify exact product checkout and install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          for attempt in 1 2 3; do
+            if npm ci; then exit 0; fi
+            if [[ "$attempt" == '3' ]]; then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run exact-preview desktop and mobile diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .qa "$EVIDENCE_DIR"
+          cat > .qa/complete-profile-root-prefetch-preview-smoke.mjs <<'SCRIPT'
+          import assert from "node:assert/strict";
+          import { mkdir, writeFile } from "node:fs/promises";
+          import { chromium } from "@playwright/test";
+
+          const origin = process.env.PREVIEW_ORIGIN;
+          const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+          const expectedSha = process.env.EXPECTED_SHA;
+          const expectedDeploymentId = process.env.PREVIEW_DEPLOYMENT_ID;
+          const outputDir = process.env.EVIDENCE_DIR;
+          assert.ok(origin && bypassSecret && expectedSha && expectedDeploymentId && outputDir);
+
+          await mkdir(outputDir, { recursive: true });
+          const browser = await chromium.launch({ headless: true });
+          const report = {
+            status: "running",
+            expectedSha,
+            expectedDeploymentId,
+            previewOrigin: origin,
+            checkedAt: new Date().toISOString(),
+            scenarios: [],
+          };
+
+          async function createContext(viewport, returning) {
+            const context = await browser.newContext({ viewport });
+            await context.route(`${origin}/**`, async (route) => {
+              await route.continue({
+                headers: {
+                  ...route.request().headers(),
+                  "x-vercel-protection-bypass": bypassSecret,
+                  "x-vercel-set-bypass-cookie": "true",
+                },
+              });
+            });
+            if (returning) {
+              await context.addCookies([
+                { name: "mt_walkthrough_seen", value: "1", url: origin, sameSite: "Lax" },
+              ]);
+            }
+            return context;
+          }
+
+          function isSameOrigin(urlString) {
+            return new URL(urlString).origin === origin;
+          }
+
+          function isExpectedPrefetchAbort(request) {
+            const failure = request.failure();
+            if (failure?.errorText !== "net::ERR_ABORTED" || request.isNavigationRequest()) {
+              return false;
+            }
+            const url = new URL(request.url());
+            const headers = request.headers();
+            return (
+              url.origin === origin &&
+              request.method() === "GET" &&
+              request.resourceType() === "fetch" &&
+              (url.searchParams.has("_rsc") ||
+                headers["next-router-prefetch"] === "1" ||
+                headers.rsc === "1" ||
+                Object.hasOwn(headers, "next-url"))
+            );
+          }
+
+          function makeState(name) {
+            return {
+              name,
+              rootRscRequests: [],
+              pageErrors: [],
+              consoleErrors: [],
+              failedRequests: [],
+              expectedPrefetchAborts: [],
+              httpErrors: [],
+            };
+          }
+
+          function attachDiagnostics(page, state) {
+            page.on("pageerror", (error) => state.pageErrors.push(error.message));
+            page.on("console", (message) => {
+              if (message.type() === "error") {
+                state.consoleErrors.push({ text: message.text(), location: message.location() });
+              }
+            });
+            page.on("request", (request) => {
+              const url = new URL(request.url());
+              if (url.origin === origin && url.pathname === "/" && url.searchParams.has("_rsc")) {
+                state.rootRscRequests.push(request.url());
+              }
+            });
+            page.on("requestfailed", (request) => {
+              if (!isSameOrigin(request.url())) return;
+              const record = {
+                url: request.url(),
+                method: request.method(),
+                resourceType: request.resourceType(),
+                errorText: request.failure()?.errorText ?? "unknown",
+              };
+              if (isExpectedPrefetchAbort(request)) state.expectedPrefetchAborts.push(record);
+              else state.failedRequests.push(record);
+            });
+            page.on("response", (response) => {
+              if (isSameOrigin(response.url()) && response.status() >= 400) {
+                state.httpErrors.push({ status: response.status(), url: response.url() });
+              }
+            });
+          }
+
+          function assertClean(state) {
+            assert.deepEqual(state.rootRscRequests, [], `Root RSC requests: ${state.rootRscRequests.join(" | ")}`);
+            assert.deepEqual(state.pageErrors, [], `Page errors: ${state.pageErrors.join(" | ")}`);
+            assert.deepEqual(state.consoleErrors, [], `Console errors: ${JSON.stringify(state.consoleErrors)}`);
+            assert.deepEqual(state.failedRequests, [], `Failed requests: ${JSON.stringify(state.failedRequests)}`);
+            assert.deepEqual(state.httpErrors, [], `HTTP errors: ${JSON.stringify(state.httpErrors)}`);
+          }
+
+          try {
+            {
+              const state = makeState("first-time-desktop");
+              const context = await createContext({ width: 1440, height: 1000 }, false);
+              const page = await context.newPage();
+              attachDiagnostics(page, state);
+              await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+              await page.waitForURL((url) => url.origin === origin && url.pathname === "/walkthrough", { timeout: 60_000 });
+              const seenCookie = (await context.cookies(origin)).find((cookie) => cookie.name === "mt_walkthrough_seen");
+              assert.equal(seenCookie?.value, "1", "First-time route did not record Walkthrough visibility");
+              await page.waitForTimeout(1_000);
+              await page.screenshot({ path: `${outputDir}/first-time-desktop.png`, fullPage: true });
+              assertClean(state);
+              state.finalUrl = page.url();
+              state.status = "passed";
+              report.scenarios.push(state);
+              await context.close();
+            }
+
+            {
+              const state = makeState("returning-desktop");
+              const context = await createContext({ width: 1440, height: 1000 }, true);
+              const page = await context.newPage();
+              attachDiagnostics(page, state);
+              const response = await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+              assert.ok(response && response.status() < 400, "Returning desktop route returned no clean response");
+              await page.waitForURL((url) => url.origin === origin && url.pathname === "/complete-profile", { timeout: 60_000 });
+              await page.getByRole("heading", { name: "Spend 100 sparks of attention." }).waitFor({ state: "visible", timeout: 60_000 });
+              await page.getByLabel("Profile setup: priorities").waitFor({ state: "visible", timeout: 60_000 });
+              assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
+              await page.waitForTimeout(1_500);
+              await page.getByRole("button", { name: "Save profile" }).click();
+              const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
+              await dialog.waitFor({ state: "visible", timeout: 30_000 });
+              assert.match((await dialog.textContent()) ?? "", /Saving does not create or publish an offer\./);
+              await page.waitForTimeout(500);
+              await page.screenshot({ path: `${outputDir}/returning-desktop.png`, fullPage: true });
+              assertClean(state);
+              state.finalUrl = page.url();
+              state.status = "passed";
+              report.scenarios.push(state);
+              await context.close();
+            }
+
+            {
+              const state = makeState("returning-mobile");
+              const context = await createContext({ width: 390, height: 844 }, true);
+              const page = await context.newPage();
+              attachDiagnostics(page, state);
+              const response = await page.goto(`${origin}/complete-profile`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+              assert.ok(response && response.status() < 400, "Returning mobile route returned no clean response");
+              await page.waitForURL((url) => url.origin === origin && url.pathname === "/complete-profile", { timeout: 60_000 });
+              await page.getByLabel("80 of 100 attention points assigned").waitFor({ state: "visible", timeout: 60_000 });
+              await page.waitForTimeout(1_500);
+              await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
+              await page.getByRole("button", { name: "Decrease Space governance" }).waitFor({ state: "visible", timeout: 30_000 });
+              const dimensions = await page.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                documentWidth: document.documentElement.scrollWidth,
+              }));
+              assert.ok(dimensions.documentWidth <= dimensions.viewportWidth, `Mobile overflow: ${JSON.stringify(dimensions)}`);
+              await page.waitForTimeout(500);
+              await page.screenshot({ path: `${outputDir}/returning-mobile.png`, fullPage: true });
+              assertClean(state);
+              state.finalUrl = page.url();
+              state.dimensions = dimensions;
+              state.status = "passed";
+              report.scenarios.push(state);
+              await context.close();
+            }
+
+            report.status = "passed";
+          } catch (error) {
+            report.status = "failed";
+            report.failure = error instanceof Error ? error.stack : String(error);
+            throw error;
+          } finally {
+            await writeFile(`${outputDir}/preview-smoke-report.json`, `${JSON.stringify(report, null, 2)}\n`);
+            await browser.close();
+          }
+          SCRIPT
+          node .qa/complete-profile-root-prefetch-preview-smoke.mjs
+
+      - name: Upload exact-preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-profile-root-prefetch-preview-evidence-68cf2136
+          path: complete-profile-root-prefetch-preview-evidence
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Revoke one-run Vercel automation bypass
+        if: always() && env.VERCEL_AUTOMATION_BYPASS_SECRET != ''
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(jq -cn --arg secret "$VERCEL_AUTOMATION_BYPASS_SECRET" '{revoke:{secret:$secret,regenerate:false}}')"
+          curl -fsS -X PATCH \
+            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/protection-bypass?teamId=${VERCEL_ORG_ID}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            -H 'Content-Type: application/json' \
+            --data "$payload" \
+            > /tmp/vercel-bypass-revoke.json
+
+      - name: Publish exact-preview result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="Exact gated preview passed first-time, desktop, and mobile diagnostics"
+          else
+            state=failure
+            description="Complete Profile exact preview gate failed; inspect workflow evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
