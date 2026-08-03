@@ -1,0 +1,177 @@
+name: PR 212 durable QA patcher v3
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pr212-durable-qa-controller-v3-push-20260803.yml
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-durable-qa-controller-v3-20260803
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'Run PR 212 durable QA patcher v3'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: feat/institutional-trade-system
+      EXPECTED_HEAD: 31ce92969cc4d43b52657633125e33595ef79610
+      QA_WORKFLOW_PATH: .github/workflows/institutional-trade-qa.yml
+      CONTROLLER_PATH: .github/workflows/pr212-durable-qa-controller-v3-push-20260803.yml
+      SUPERSEDED_CONTROLLER_PATH: .github/workflows/pr212-durable-qa-controller-v2-20260803.yml
+    steps:
+      - name: Check out exact feature head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Patch, validate, and publish durable QA workflow
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(git rev-parse HEAD)"
+          [[ "$current" == "$EXPECTED_HEAD" ]] || {
+            echo "Feature head moved: expected $EXPECTED_HEAD, found $current" >&2
+            exit 1
+          }
+          for required in \
+            "$QA_WORKFLOW_PATH" \
+            src/institutional-pool-record-trigger.test.ts \
+            supabase/migrations/20260726123000_institutional_trade_system.sql \
+            supabase/migrations/20260731173000_fix_institutional_pool_record_status_access.sql; do
+            test -s "$required" || { echo "Missing required file: $required" >&2; exit 1; }
+          done
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/institutional-trade-qa.yml')
+          text = path.read_text()
+
+          regression = "            src/institutional-pool-record-trigger.test.ts \\\n"
+          if regression not in text:
+              anchor = "            src/institutional-product-completeness.test.ts \\\n"
+              if text.count(anchor) != 1:
+                  raise SystemExit('Could not locate the source-contract test insertion point.')
+              text = text.replace(anchor, anchor + regression, 1)
+
+          old_title = '      - name: Compile and apply institutional migration atomically to isolated QA\n'
+          new_title = '      - name: Compile and apply institutional migrations atomically to isolated QA\n'
+          if old_title in text:
+              text = text.replace(old_title, new_title, 1)
+          elif new_title not in text:
+              raise SystemExit('Could not locate the institutional migration step title.')
+
+          start_marker = '          migration=supabase/migrations/20260726123000_institutional_trade_system.sql\n'
+          inventory_marker = '          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -P pager=off <<\'SQL\' | tee institutional-qa-artifacts/institutional-schema-inventory.txt\n'
+          start = text.find(start_marker)
+          end = text.find(inventory_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit('Could not locate the institutional migration replay block.')
+
+          replacement = '''          base_migration=supabase/migrations/20260726123000_institutional_trade_system.sql
+          additive_migration=supabase/migrations/20260731173000_fix_institutional_pool_record_status_access.sql
+          sha256sum "$base_migration" "$additive_migration" | tee institutional-qa-artifacts/institutional-migrations.sha256
+          present="$(psql "$QA_SUPABASE_DB_URL" -Atqc "select to_regclass('public.institutional_organizations') is not null")"
+          if [[ "$present" == "t" ]]; then
+            echo "Compiling the idempotent additive institutional migration inside a rollback-only transaction."
+            psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL
+          begin;
+          \\i $additive_migration
+          rollback;
+          SQL
+            echo "Applying the additive institutional migration atomically to isolated QA."
+            psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 --single-transaction --file "$additive_migration"
+          else
+            echo "Compiling the complete ordered institutional migration chain inside a rollback-only transaction."
+            psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL
+          begin;
+          \\i $base_migration
+          \\i $additive_migration
+          rollback;
+          SQL
+            echo "Applying the complete ordered institutional migration chain atomically to isolated QA only."
+            psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<SQL
+          begin;
+          \\i $base_migration
+          \\i $additive_migration
+          commit;
+          SQL
+          fi
+          psql "$QA_SUPABASE_DB_URL" -Atqc "select pg_get_functiondef('public.institutional_validate_pool_record()'::regprocedure)" \
+            | tee institutional-qa-artifacts/institutional-pool-trigger-definition.sql \
+            | grep -F "to_jsonb(new)->>'status'" >/dev/null
+          if grep -Eiq '(^|[^[:alnum:]_])new\.status([^[:alnum:]_]|$)' institutional-qa-artifacts/institutional-pool-trigger-definition.sql; then
+            echo "The isolated-QA trigger definition directly dereferences NEW.status." >&2
+            exit 1
+          fi
+'''
+          text = text[:start] + replacement + text[end:]
+          required_markers = [
+              'src/institutional-pool-record-trigger.test.ts',
+              '20260726123000_institutional_trade_system.sql',
+              '20260731173000_fix_institutional_pool_record_status_access.sql',
+              'institutional-pool-trigger-definition.sql',
+          ]
+          missing = [item for item in required_markers if item not in text]
+          if missing:
+              raise SystemExit(f'Durable QA workflow is missing markers: {missing}')
+          path.write_text(text)
+          PY
+
+          node --import tsx --test src/institutional-pool-record-trigger.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          node --check .github/scripts/pr212-targeted-regression-qa.mjs
+          git diff --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$QA_WORKFLOW_PATH"
+          git commit -m 'Make institutional QA migration replay durable'
+          final_head="$(git rev-parse HEAD)"
+          remote="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          [[ "$remote" == "$EXPECTED_HEAD" ]] || {
+            echo "Feature branch advanced concurrently to $remote" >&2
+            exit 1
+          }
+          git push origin "HEAD:${TARGET_BRANCH}"
+          echo "final_head=$final_head" >> "$GITHUB_OUTPUT"
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-durable-qa-patcher-v3 -->
+          Published durable institutional QA head \`$final_head\`. The exact-head isolated-QA workflow was triggered by the push. PR #212 remains draft and unmerged; production database state, custody, payouts, and institutional feature flags were not changed."
+
+      - name: Report patcher failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-durable-qa-patcher-v3-failure -->
+          PR #212 durable QA patcher v3 failed at run [$GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID). PR #212 remains draft and unmerged. No production database migration, custody, payout, or institutional feature activation occurred."
+
+      - name: Remove temporary controllers from main
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in "$CONTROLLER_PATH" "$SUPERSEDED_CONTROLLER_PATH"; do
+            sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=main" --jq .sha 2>/dev/null || true)"
+            if [[ -n "$sha" ]]; then
+              gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$path" \
+                -f message="Remove temporary $(basename "$path")" \
+                -f sha="$sha" \
+                -f branch=main >/dev/null
+            fi
+          done
