@@ -1,11 +1,6 @@
 name: Materialize current-main Co-Act and Co-Fund reconstruction trigger
 
 on:
-  push:
-    branches:
-      - feature/co-act-co-fund-create-v3-20260803
-    paths:
-      - .github/workflows/materialize-co-act-co-fund-v3-trigger.yml
   pull_request:
     branches:
       - main
@@ -23,7 +18,7 @@ concurrency:
 
 jobs:
   materialize:
-    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -90,24 +85,28 @@ jobs:
           tar -xJf /tmp/coact-v3-patch.tar.xz
           git diff --check
 
-      - name: Remove all temporary materialization machinery
+      - name: Remove temporary and separately staged workflow files
         shell: bash
         run: |
           set -euo pipefail
           BASE_SHA="92cb9d1eb08f9784be0353dd920c0784984e9a22"
           rm -rf .github/co-act-co-fund-v3-payload
+          rm -f .github/workflows/co-act-co-fund-proposal-gates.yml
           git rm \
             .github/workflows/materialize-co-act-co-fund-v3.yml \
             .github/workflows/materialize-co-act-co-fund-v3-trigger.yml
+          grep -v '^\.github/workflows/co-act-co-fund-proposal-gates\.yml$' \
+            /tmp/expected-manifest.txt > /tmp/expected-product-manifest.txt
           git add -A
           git diff --cached --check
           git diff --cached --name-only "$BASE_SHA" | sort > /tmp/candidate-manifest.txt
-          diff -u /tmp/expected-manifest.txt /tmp/candidate-manifest.txt
+          diff -u /tmp/expected-product-manifest.txt /tmp/candidate-manifest.txt
           test ! -e .github/co-act-co-fund-v3-payload
           test ! -e .github/workflows/materialize-co-act-co-fund-v3.yml
           test ! -e .github/workflows/materialize-co-act-co-fund-v3-trigger.yml
+          test ! -e .github/workflows/co-act-co-fund-proposal-gates.yml
 
-      - name: Commit the clean reconstruction
+      - name: Commit the clean product reconstruction
         shell: bash
         run: |
           set -euo pipefail
