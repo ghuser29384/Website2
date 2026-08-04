@@ -1,0 +1,157 @@
+name: Roll back Metaphilosophy route regression once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/rollback-metaphilosophy-route-regression-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: rollback-metaphilosophy-route-regression-once
+  cancel-in-progress: false
+
+env:
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_2Aq2qYbFw85GBMRLXdfyTIwvEXhZ
+  GOOD_DEPLOYMENT_ID: dpl_Cce9VRWFcEz8SD6fGiTiD2ELxopC
+  BAD_DEPLOYMENT_ID: dpl_BfAn5QWYKhxUriZSypZ1imkxMNHf
+  CONTROLLER_PATH: .github/workflows/rollback-metaphilosophy-route-regression-once.yml
+
+jobs:
+  rollback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Guard exact repository and one-file controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_ACTOR" = 'ghuser29384'
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+      - name: Verify regression and roll back production traffic
+        id: rollback
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+
+          curl --fail-with-body --silent --show-error -H "$auth" \
+            "https://api.vercel.com/v13/deployments/$GOOD_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" \
+            > good-deployment.json
+          curl --fail-with-body --silent --show-error -H "$auth" \
+            "https://api.vercel.com/v13/deployments/$BAD_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" \
+            > bad-deployment.json
+          jq -e --arg project "$VERCEL_PROJECT_ID" --arg id "$GOOD_DEPLOYMENT_ID" \
+            '(.id // .uid) == $id and .projectId == $project and (.readyState // .state) == "READY" and .target == "production"' \
+            good-deployment.json >/dev/null
+          jq -e --arg project "$VERCEL_PROJECT_ID" --arg id "$BAD_DEPLOYMENT_ID" \
+            '(.id // .uid) == $id and .projectId == $project and (.readyState // .state) == "READY" and .target == "production"' \
+            bad-deployment.json >/dev/null
+
+          before_status="$(curl --silent --show-error --output /tmp/research-before.txt --write-out '%{http_code}' https://www.metaphilosophy.org/research/)"
+          test "$before_status" = '404'
+
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "$auth" \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/rollback/$GOOD_DEPLOYMENT_ID?teamId=$VERCEL_TEAM_ID" \
+            > rollback-response.json
+
+          for attempt in {1..30}; do
+            root_status="$(curl --silent --show-error --output /tmp/root-after.txt --write-out '%{http_code}' https://www.metaphilosophy.org/)"
+            research_status="$(curl --silent --show-error --output /tmp/research-after.txt --write-out '%{http_code}' https://www.metaphilosophy.org/research/)"
+            arguments_status="$(curl --silent --show-error --output /tmp/arguments-after.txt --write-out '%{http_code}' https://www.metaphilosophy.org/arguments/)"
+            contribute_status="$(curl --silent --show-error --output /tmp/contribute-after.txt --write-out '%{http_code}' https://www.metaphilosophy.org/contribute)"
+            if [[ "$root_status" == '200' && "$research_status" == '200' && "$arguments_status" == '200' && "$contribute_status" == '200' ]]; then
+              break
+            fi
+            sleep 5
+          done
+
+          test "$root_status" = '200'
+          test "$research_status" = '200'
+          test "$arguments_status" = '200'
+          test "$contribute_status" = '200'
+          grep -qi 'Metaphilosophy' /tmp/root-after.txt
+          grep -qi 'research' /tmp/research-after.txt
+          grep -qi 'argument' /tmp/arguments-after.txt
+          grep -qi 'reviewer\|contribut' /tmp/contribute-after.txt
+
+          jq -n \
+            --arg status passed \
+            --arg goodDeployment "$GOOD_DEPLOYMENT_ID" \
+            --arg badDeployment "$BAD_DEPLOYMENT_ID" \
+            --arg rootStatus "$root_status" \
+            --arg researchStatus "$research_status" \
+            --arg argumentsStatus "$arguments_status" \
+            --arg contributeStatus "$contribute_status" \
+            '{status:$status,goodDeployment:$goodDeployment,badDeployment:$badDeployment,rootStatus:$rootStatus,researchStatus:$researchStatus,argumentsStatus:$argumentsStatus,contributeStatus:$contributeStatus}' \
+            > rollback-verification.json
+
+      - name: Upload rollback evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: metaphilosophy-route-rollback-${{ github.run_id }}
+          path: |
+            good-deployment.json
+            bad-deployment.json
+            rollback-response.json
+            rollback-verification.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record rollback on Metaphilosophy cost-control PR
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ '${{ steps.rollback.outcome }}' == 'success' ]]; then
+            gh pr comment 18 --repo ghuser29384/RL-for-Conceptual-Reasoning --body "Production traffic was rolled back from \`$BAD_DEPLOYMENT_ID\` to known-good deployment \`$GOOD_DEPLOYMENT_ID\` after the merged release exposed a route regression: \`/research/\` returned 404 because current \`main\` lacked the richer route configuration carried by draft PR #17. After rollback, root, Research, Arguments, and Contribute returned 200. The cost-control design remains valid, but its route-preserving hotfix must pass before it is redeployed. Evidence: $run_url"
+          fi
+
+      - name: Remove one-time controller with verdict
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ '${{ steps.rollback.outcome }}' == 'success' ]]; then
+            message='Remove one-time Metaphilosophy route rollback controller after PASS'
+          else
+            message='Remove one-time Metaphilosophy route rollback controller after FAIL'
+          fi
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$blob_sha" ]]; then
+            jq -n --arg message "$message" --arg sha "$blob_sha" --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
+
+      - name: Enforce rollback success
+        if: always()
+        run: test '${{ steps.rollback.outcome }}' = 'success'
