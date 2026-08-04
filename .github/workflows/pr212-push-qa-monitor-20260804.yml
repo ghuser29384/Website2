@@ -25,7 +25,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TARGET_BRANCH: feat/institutional-trade-system
       EXPECTED_HEAD: dbbb0afbb42ef9a1636be073bb1d47343badd98b
-      QA_WORKFLOW: institutional-trade-qa.yml
+      QA_WORKFLOW_NAME: Institutional trade QA
     steps:
       - name: Verify the exact PR head
         shell: bash
@@ -43,19 +43,22 @@ jobs:
         run: |
           set -euo pipefail
           run_id=""
-          for attempt in $(seq 1 120); do
+          for attempt in $(seq 1 240); do
             runs="$(gh run list \
               --repo "$GITHUB_REPOSITORY" \
-              --workflow "$QA_WORKFLOW" \
               --branch "$TARGET_BRANCH" \
               --event push \
-              --limit 50 \
-              --json databaseId,headSha,status,conclusion,createdAt,url)"
-            run_id="$(jq -r --arg head "$EXPECTED_HEAD" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' <<<"$runs")"
+              --limit 100 \
+              --json databaseId,headSha,status,conclusion,createdAt,url,name,workflowName)"
+            run_id="$(jq -r \
+              --arg head "$EXPECTED_HEAD" \
+              --arg workflow "$QA_WORKFLOW_NAME" \
+              '[.[] | select(.headSha == $head and ((.workflowName // .name) == $workflow))] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' \
+              <<<"$runs")"
             if [[ -n "$run_id" ]]; then
               break
             fi
-            sleep 10
+            sleep 15
           done
           if [[ -z "$run_id" ]]; then
             echo "Could not locate a push-triggered Institutional trade QA run for $EXPECTED_HEAD" >&2
