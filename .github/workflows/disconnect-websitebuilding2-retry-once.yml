@@ -1,0 +1,232 @@
+name: Retry duplicate websitebuilding2 Git disconnect once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/disconnect-websitebuilding2-retry-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: disconnect-websitebuilding2-retry-once
+  cancel-in-progress: false
+
+env:
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  DUPLICATE_PROJECT_ID: prj_fS6CHvUz6OL0hSLDhujuXGDuaVtg
+  RETAINED_PROJECT_ID: prj_nYsdGDl1zVtUNoD4YtrUVoBg1Hp5
+  EXPECTED_REPO_ID: '1161498603'
+  VERCEL_CLI_VERSION: 50.38.1
+  CONTROLLER_PATH: .github/workflows/disconnect-websitebuilding2-retry-once.yml
+
+jobs:
+  disconnect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Guard exact repository and one-file controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_ACTOR" = 'ghuser29384'
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+      - name: Read and validate both project identities
+        id: preflight
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          curl --fail-with-body --silent --show-error -H "$auth" \
+            "https://api.vercel.com/v9/projects/$DUPLICATE_PROJECT_ID?teamId=$VERCEL_ORG_ID" \
+            > duplicate-before.json
+          curl --fail-with-body --silent --show-error -H "$auth" \
+            "https://api.vercel.com/v9/projects/$RETAINED_PROJECT_ID?teamId=$VERCEL_ORG_ID" \
+            > retained-before.json
+          curl --fail-with-body --silent --show-error -H "$auth" \
+            "https://api.vercel.com/v9/projects/$DUPLICATE_PROJECT_ID/domains?teamId=$VERCEL_ORG_ID&limit=100" \
+            > duplicate-domains-before.json
+
+          node --input-type=module <<'NODE'
+          import { readFile } from 'node:fs/promises';
+          const duplicate = JSON.parse(await readFile('duplicate-before.json', 'utf8'));
+          const retained = JSON.parse(await readFile('retained-before.json', 'utf8'));
+          const domains = JSON.parse(await readFile('duplicate-domains-before.json', 'utf8'));
+          const expectedRepoId = Number(process.env.EXPECTED_REPO_ID);
+
+          if (duplicate.id !== process.env.DUPLICATE_PROJECT_ID || duplicate.name !== 'websitebuilding2') {
+            throw new Error(`Duplicate project identity mismatch: ${JSON.stringify({ id: duplicate.id, name: duplicate.name })}`);
+          }
+          if (retained.id !== process.env.RETAINED_PROJECT_ID || retained.name !== 'normativity') {
+            throw new Error(`Retained project identity mismatch: ${JSON.stringify({ id: retained.id, name: retained.name })}`);
+          }
+          const acceptableLink = (link) =>
+            link == null ||
+            (link.type === 'github' &&
+              link.org === 'ghuser29384' &&
+              Number(link.repoId) === expectedRepoId &&
+              String(link.repo).toLowerCase() === 'websitebuilding2');
+          if (!acceptableLink(duplicate.link)) {
+            throw new Error(`Unexpected duplicate Git link: ${JSON.stringify(duplicate.link)}`);
+          }
+          if (!acceptableLink(retained.link) || retained.link == null) {
+            throw new Error(`Retained normativity project lost or changed its Git link: ${JSON.stringify(retained.link)}`);
+          }
+          const names = (domains.domains ?? [])
+            .map((entry) => typeof entry === 'string' ? entry : entry?.name)
+            .filter(Boolean);
+          const custom = names.filter((name) => !String(name).toLowerCase().endsWith('.vercel.app'));
+          if (custom.length) throw new Error(`websitebuilding2 has custom domains: ${custom.join(', ')}`);
+          NODE
+
+      - name: Disconnect duplicate from a matching WebsiteBuilding2 Git context
+        if: steps.preflight.outcome == 'success'
+        id: disconnect
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if jq -e '.link == null' duplicate-before.json >/dev/null; then
+            echo 'websitebuilding2 is already Git-disconnected.'
+            exit 0
+          fi
+
+          workdir="$RUNNER_TEMP/websitebuilding2-disconnect"
+          rm -rf "$workdir"
+          mkdir -p "$workdir/.vercel"
+          git -C "$workdir" init
+          git -C "$workdir" remote add origin https://github.com/ghuser29384/WebsiteBuilding2.git
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$DUPLICATE_PROJECT_ID" > "$workdir/.vercel/project.json"
+
+          (
+            cd "$workdir"
+            printf 'y\n' | npx --yes "vercel@$VERCEL_CLI_VERSION" git disconnect \
+              --token="$VERCEL_TOKEN" \
+              --scope=ellen-s
+          ) 2>&1 | tee disconnect-output.txt
+
+      - name: Verify duplicate disconnected and normativity preserved
+        if: steps.preflight.outcome == 'success' && steps.disconnect.outcome == 'success'
+        id: verify
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer $VERCEL_TOKEN"
+          curl --fail-with-body --silent --show-error -H "$auth" \
+            "https://api.vercel.com/v9/projects/$DUPLICATE_PROJECT_ID?teamId=$VERCEL_ORG_ID" \
+            > duplicate-after.json
+          curl --fail-with-body --silent --show-error -H "$auth" \
+            "https://api.vercel.com/v9/projects/$RETAINED_PROJECT_ID?teamId=$VERCEL_ORG_ID" \
+            > retained-after.json
+
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from 'node:fs/promises';
+          const duplicate = JSON.parse(await readFile('duplicate-after.json', 'utf8'));
+          const retained = JSON.parse(await readFile('retained-after.json', 'utf8'));
+          if (duplicate.link != null) {
+            throw new Error(`websitebuilding2 remains Git-connected: ${JSON.stringify(duplicate.link)}`);
+          }
+          if (
+            retained.link?.type !== 'github' ||
+            retained.link?.org !== 'ghuser29384' ||
+            Number(retained.link?.repoId) !== Number(process.env.EXPECTED_REPO_ID) ||
+            String(retained.link?.repo).toLowerCase() !== 'websitebuilding2'
+          ) {
+            throw new Error(`normativity Git link changed: ${JSON.stringify(retained.link)}`);
+          }
+          await writeFile(
+            'websitebuilding2-disconnect-result.json',
+            JSON.stringify({
+              status: 'passed',
+              duplicateProject: duplicate.id,
+              duplicateGitDisconnected: true,
+              retainedProject: retained.id,
+              retainedGitConnectionPreserved: true,
+            }, null, 2) + '\n',
+          );
+          NODE
+
+      - name: Upload redacted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: websitebuilding2-disconnect-retry-${{ github.run_id }}
+          path: |
+            duplicate-before.json
+            duplicate-domains-before.json
+            retained-before.json
+            disconnect-output.txt
+            duplicate-after.json
+            retained-after.json
+            websitebuilding2-disconnect-result.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report exact result to Vercel cost-control PR
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ '${{ steps.preflight.outcome }}' == 'success' && '${{ steps.disconnect.outcome }}' == 'success' && '${{ steps.verify.outcome }}' == 'success' ]]; then
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "The duplicate \`websitebuilding2\` project is now Git-disconnected. The retained \`normativity\` project remains connected to \`ghuser29384/WebsiteBuilding2\`, and no custom domain was removed. The retry used a local Git context matching the connected repository, correcting the first attempt's context mismatch. Evidence: $run_url"
+          else
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "The duplicate \`websitebuilding2\` Git-disconnect retry did not pass all preflight, mutation, and readback checks. No disconnected-state claim is made. Evidence: $run_url"
+          fi
+
+      - name: Remove one-time controller with verdict
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ '${{ steps.preflight.outcome }}' == 'success' && '${{ steps.disconnect.outcome }}' == 'success' && '${{ steps.verify.outcome }}' == 'success' ]]; then
+            message='Remove one-time websitebuilding2 disconnect retry after PASS'
+          else
+            message='Remove one-time websitebuilding2 disconnect retry after FAIL'
+          fi
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$blob_sha" ]]; then
+            jq -n \
+              --arg message "$message" \
+              --arg sha "$blob_sha" \
+              --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
+
+      - name: Enforce disconnected archive state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ steps.preflight.outcome }}' = 'success'
+          test '${{ steps.disconnect.outcome }}' = 'success'
+          test '${{ steps.verify.outcome }}' = 'success'
