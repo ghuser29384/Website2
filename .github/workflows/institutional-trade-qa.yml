@@ -289,6 +289,18 @@ jobs:
                   "42804",
                   "target type is different type than source type",
               ),
+              (
+                  "public.record_person_verification_result_v1",
+                  "warning",
+                  "42804",
+                  "target type is different type than source type",
+              ),
+              (
+                  "public.cleanup_one_person_qa_fixture_v1",
+                  "warning",
+                  "42804",
+                  "target type is different type than source type",
+              ),
           }
 
           if observed != expected_preexisting:
