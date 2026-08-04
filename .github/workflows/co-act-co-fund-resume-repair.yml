@@ -1,0 +1,355 @@
+name: Repair Co-Act and Co-Fund authentication resume
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v3-20260803
+    paths:
+      - ".github/workflows/co-act-co-fund-resume-repair.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: co-act-co-fund-resume-repair
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
+  EXPECTED_PARENT: 39d31d9fc81aeecbc182250c4bc7dc9eb3298c8a
+  CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
+
+jobs:
+  repair:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.ref == 'refs/heads/feature/co-act-co-fund-create-v3-20260803'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Check out exact trigger
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v3-20260803
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact one-file controller trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
+          test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
+
+      - name: Persist and restore the proposal-only group snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          client_path = Path('src/lib/create-interface/group-contribution-client.ts')
+          client = client_path.read_text(encoding='utf-8')
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global client
+              count = client.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one {label}; found {count}')
+              client = client.replace(old, new, 1)
+
+          replace_once(
+              'import { sanitizeGroupContributionDraft } from "./group-contribution-draft-sanitize";\n',
+              'import { sanitizeGroupContributionDraft } from "./group-contribution-draft-sanitize";\n'
+              'import { parseGroupContributionProposalPayload } from "./group-contribution-payload";\n',
+              'resume parser import',
+          )
+          replace_once(
+              'const STORAGE_KEY = "mt:create:group-contribution-drafts:v1";\n'
+              'const PAYLOAD_FIELD = "groupContributionTerms";',
+              'const STORAGE_KEY = "mt:create:group-contribution-drafts:v1";\n'
+              'const RESUME_STORAGE_KEY = "mt:create:group-contribution-resume:v1";\n'
+              'const PAYLOAD_FIELD = "groupContributionTerms";',
+              'resume storage key',
+          )
+          replace_once(
+              'let scanQueued = false;\nlet submitGuardInstalled = false;',
+              'let scanQueued = false;\n'
+              'let submitGuardInstalled = false;\n'
+              'let resumedProposal: GroupContributionProposalPayload | null = null;',
+              'resume state declaration',
+          )
+          replace_once(
+              '  activeWindow = targetWindow;\n'
+              '  activeDocument = targetDocument;\n'
+              '  scanQueued = false;',
+              '  activeWindow = targetWindow;\n'
+              '  activeDocument = targetDocument;\n'
+              '  resumedProposal = readStoredResumeProposal();\n'
+              '  scanQueued = false;',
+              'resume activation',
+          )
+          replace_once(
+              '  const root = locateOfferStepRoot();\n'
+              '  if (!root) return;\n\n'
+              '  const candidates = locateOptionCards(root);',
+              '  const root = locateOfferStepRoot();\n'
+              '  if (!root) {\n'
+              '    if (resumedProposal) writeProposalPayload(false);\n'
+              '    return;\n'
+              '  }\n\n'
+              '  const candidates = locateOptionCards(root);',
+              'summary-screen scan fallback',
+          )
+          replace_once(
+              'function readProposalPayload(): GroupContributionProposalPayload {\n'
+              '  const options: ProposalOptionPayload[] = [];',
+              'function readProposalPayload(): GroupContributionProposalPayload {\n'
+              '  if (mounted.size === 0 && resumedProposal) return resumedProposal;\n\n'
+              '  const options: ProposalOptionPayload[] = [];',
+              'resume payload fallback',
+          )
+          replace_once(
+              'function writeProposalPayload(): void {\n'
+              '  persistDrafts();',
+              'function writeProposalPayload(persistCurrentDrafts = true): void {\n'
+              '  if (persistCurrentDrafts) persistDrafts();',
+              'conditional draft persistence',
+          )
+          replace_once(
+              '    return originalFetch(input, {\n'
+              '      ...init,\n'
+              '      body: JSON.stringify({ ...payload, groupContributionTerms: proposal }),\n'
+              '    });',
+              '    persistResumeProposal(proposal);\n'
+              '    const response = await originalFetch(input, {\n'
+              '      ...init,\n'
+              '      body: JSON.stringify({ ...payload, groupContributionTerms: proposal }),\n'
+              '    });\n'
+              '    if (response.ok) clearResumeProposal();\n'
+              '    return response;',
+              'publish resume lifecycle',
+          )
+
+          persist_anchor = 'function persistDrafts(): void {\n'
+          helpers = '''function isResumeRequest(): boolean {
+            try {
+              return new URL(window.location.href).searchParams.get("resume") === "create";
+            } catch {
+              return false;
+            }
+          }
+
+          function persistResumeProposal(proposal: GroupContributionProposalPayload): void {
+            if (proposal.options.length === 0) return;
+            try {
+              window.sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(proposal));
+              resumedProposal = proposal;
+            } catch {
+              // Resume persistence is best effort. The server remains authoritative.
+            }
+          }
+
+          function clearResumeProposal(): void {
+            resumedProposal = null;
+            try {
+              window.sessionStorage.removeItem(RESUME_STORAGE_KEY);
+            } catch {
+              // The successful submission is already durable even if local cleanup fails.
+            }
+          }
+
+          function readStoredResumeProposal(): GroupContributionProposalPayload | null {
+            if (!isResumeRequest()) return null;
+            try {
+              const raw = window.sessionStorage.getItem(RESUME_STORAGE_KEY);
+              if (!raw) return null;
+
+              const parsed = JSON.parse(raw) as unknown;
+              if (!isRecord(parsed) || !Array.isArray(parsed.options)) return null;
+
+              const contributionKinds = new Map<string, UnderlyingContributionKind>();
+              for (const candidate of parsed.options) {
+                if (
+                  !isRecord(candidate) ||
+                  typeof candidate.optionKey !== "string" ||
+                  !isRecord(candidate.terms)
+                ) {
+                  return null;
+                }
+                if (candidate.terms.mode === "co-act") {
+                  contributionKinds.set(candidate.optionKey, "nonfinancial");
+                } else if (candidate.terms.mode === "co-fund") {
+                  contributionKinds.set(candidate.optionKey, "financial");
+                } else {
+                  return null;
+                }
+              }
+
+              const result = parseGroupContributionProposalPayload(raw, contributionKinds);
+              return result.ok && result.value.options.length > 0 ? result.value : null;
+            } catch {
+              return null;
+            }
+          }
+
+          function persistDrafts(): void {
+          '''
+          if client.count(persist_anchor) != 1:
+              raise SystemExit(f'Expected one resume-helper insertion point; found {client.count(persist_anchor)}')
+          client = client.replace(persist_anchor, helpers, 1)
+          client_path.write_text(client, encoding='utf-8')
+
+          browser_path = Path('tests/create-group-contribution-proposal.spec.ts')
+          browser = browser_path.read_text(encoding='utf-8')
+          old_duration = '  await coAct.getByLabel("Duration").fill("12 weeks");'
+          new_duration = '  await coAct.getByRole("textbox", { name: "Duration", exact: true }).fill("12 weeks");'
+          if browser.count(old_duration) != 1:
+              raise SystemExit(f'Expected one ambiguous Duration locator; found {browser.count(old_duration)}')
+          browser = browser.replace(old_duration, new_duration, 1)
+
+          old_resume = '''  const resumedCoAct = behaviorHost(resumed);
+            await expect(resumedCoAct.getByRole("button", { name: "Act together" })).toHaveAttribute(
+              "aria-pressed",
+              "true",
+            );
+            await expect(resumedCoAct.getByLabel("Maximum participants")).toHaveValue("17");
+            await expect(resumedCoAct.getByLabel("Yes, include the counterparty")).toBeChecked();
+            await expect(resumed.getByText("CO-ACT · PROPOSAL ONLY")).toBeVisible();
+          '''
+          new_resume = '''  await expect(resumed.getByText("Proposed group terms", { exact: true })).toBeVisible();
+            const resumedCoAct = resumed.locator(
+              '[data-mt-group-contribution-review-option="behavior:1"]',
+            );
+            await expect(resumedCoAct).toContainText("CO-ACT · PROPOSAL ONLY");
+            await expect(resumedCoAct).toContainText("avoid meat for one meal per week");
+
+            const resumedPayloadRaw = await resumed
+              .locator("input[name='groupContributionTerms']")
+              .inputValue();
+            const resumedPayload = JSON.parse(resumedPayloadRaw) as {
+              execution: string;
+              options: Array<{
+                optionKey: string;
+                terms: {
+                  mode: string;
+                  participantLimit: number;
+                  counterpartyParticipation: string;
+                };
+              }>;
+            };
+            const resumedTerms = resumedPayload.options.find(
+              (option) => option.optionKey === "behavior:1",
+            )?.terms;
+            expect(resumedPayload.execution).toBe("proposal-only");
+            expect(resumedTerms?.mode).toBe("co-act");
+            expect(resumedTerms?.participantLimit).toBe(17);
+            expect(resumedTerms?.counterpartyParticipation).toBe("explicitly-included");
+          '''
+          if browser.count(old_resume) != 1:
+              raise SystemExit(f'Expected one stale resume assertion block; found {browser.count(old_resume)}')
+          browser = browser.replace(old_resume, new_resume, 1)
+          browser_path.write_text(browser, encoding='utf-8')
+
+          stability_path = Path('src/lib/create-interface/group-contribution-client-stability.test.ts')
+          stability = stability_path.read_text(encoding='utf-8')
+          stability += '''\n
+test("authentication resume restores a validated proposal without rebuilding hidden offer controls", () => {
+            const scan = functionBody("scanForOptions");
+            assert.match(scan, /if \(!root\)[\\s\\S]*resumedProposal[\\s\\S]*writeProposalPayload\(false\)/);
+
+            const payload = functionBody("readProposalPayload");
+            assert.match(payload, /mounted\.size === 0 && resumedProposal/);
+
+            const publish = functionBody("installPublishBridge");
+            assert.match(publish, /persistResumeProposal\(proposal\)/);
+            assert.match(publish, /response\.ok[\\s\\S]*clearResumeProposal\(\)/);
+
+            const restore = functionBody("readStoredResumeProposal");
+            assert.match(restore, /parseGroupContributionProposalPayload/);
+            assert.match(restore, /result\.ok/);
+          });
+          '''
+          stability_path.write_text(stability, encoding='utf-8')
+          PY
+
+          git rm "$CONTROLLER_PATH"
+          git diff --check
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused contracts
+        run: >-
+          node --import tsx --test
+          src/lib/create-interface/group-contribution*.test.ts
+          src/lib/create-interface/persistence.test.ts
+          src/lib/create-interface/source-contract.test.ts
+          src/lib/create-interface/validation.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run ESLint and TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx eslint \
+            src/lib/create-interface/group-contribution-client.ts \
+            src/lib/create-interface/group-contribution-client-stability.test.ts \
+            tests/create-group-contribution-proposal.spec.ts
+          npx tsc --noEmit
+
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run exact real-iframe proposal workflow
+        env:
+          CREATE_ROUTE_CAPTURE: "1"
+        run: npx playwright test tests/create-group-contribution-proposal.spec.ts
+
+      - name: Commit and publish proven repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add -A
+          cat > /tmp/expected-paths.txt <<'EOF'
+          .github/workflows/co-act-co-fund-resume-repair.yml
+          src/lib/create-interface/group-contribution-client-stability.test.ts
+          src/lib/create-interface/group-contribution-client.ts
+          tests/create-group-contribution-proposal.spec.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected-paths.txt
+          sort -u /tmp/expected-paths.txt -o /tmp/expected-paths.txt
+          git diff --cached --name-only | sort -u > /tmp/actual-paths.txt
+          diff -u /tmp/expected-paths.txt /tmp/actual-paths.txt
+          git diff --cached --check
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Restore Co-Act and Co-Fund terms after authentication'
+          test "$(git rev-parse HEAD^)" = "$GITHUB_SHA"
+          test ! -e "$CONTROLLER_PATH"
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$GITHUB_SHA" \
+            origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+      - name: Report controller failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body \
+            "The bounded Co-Act/Co-Fund authentication-resume repair failed in Actions run \`$GITHUB_RUN_ID\`. No durable repair was pushed unless focused and repository tests, ESLint, TypeScript, production build, and the complete real-iframe Playwright suite all passed."
