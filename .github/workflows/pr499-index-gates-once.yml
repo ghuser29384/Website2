@@ -1,0 +1,217 @@
+name: PR 499 exact index gates
+
+on:
+  push:
+    branches:
+      - qa/pr499-index-gates-20260804
+    paths:
+      - .github/workflows/pr499-index-gates-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr499-index-gates-once
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: qa/pr499-index-gates-20260804
+  CONTROLLER_PATH: .github/workflows/pr499-index-gates-once.yml
+  TARGET_BRANCH: fix/pledge-impact-forecast-pool-proposal-index-20260804
+  EXPECTED_HEAD: 90c756bedbff0798659515a5de0838bae4e887a3
+  EXPECTED_MAIN: c1f5ed6f24fd5cddbd31baa857842a96be8ae0a1
+  QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+  MIGRATION_PATH: supabase/migrations/20260804033000_mpgf_pledge_impact_forecast_pool_proposal_index.sql
+  TEST_PATH: supabase/tests/mpgf_pledge_impact_forecast_pool_proposal_index.sql
+
+jobs:
+  gate:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard exact head, current main, and two-file diff
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git merge-base HEAD origin/main)" = "$EXPECTED_MAIN"
+          printf '%s\n' "$MIGRATION_PATH" "$TEST_PATH" | sort > expected-files.txt
+          git diff --name-only origin/main HEAD | sort > actual-files.txt
+          diff -u expected-files.txt actual-files.txt
+          git diff --check origin/main HEAD
+          grep -Fq 'create index if not exists mpgf_pledge_impact_forecast_pool_proposal_idx' "$MIGRATION_PATH"
+          grep -Fq "array['pool_proposal_id']::text[]" "$TEST_PATH"
+          git hash-object "$MIGRATION_PATH" | tee migration-blob.txt
+          sha256sum "$MIGRATION_PATH" | tee migration-sha256.txt
+
+      - name: Remove one-time controller from its QA branch
+        id: self-delete
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=$CONTROLLER_BRANCH" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-time PR 499 index gate controller' \
+            --arg sha "$blob_sha" \
+            --arg branch "$CONTROLLER_BRANCH" \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        id: install
+        run: npm ci
+
+      - name: Run complete repository quality gates
+        id: quality
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: preview
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: 'false'
+          TRADE_DONATION_POOL_MODE: disabled
+          DIRECT_DONATION_UPGRADES_ENABLED: 'false'
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          npm test 2>&1 | tee repository-tests.log
+          npm run lint -- --quiet 2>&1 | tee eslint.log
+          npx tsc --noEmit 2>&1 | tee typescript.log
+          npm run build 2>&1 | tee build.log
+
+      - name: Validate exact Moral Trade QA target
+        id: qa-target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          if os.environ['QA_PROJECT_REF'] not in (parsed.username or ''):
+              raise SystemExit('Refusing a database URL outside exact Moral Trade QA.')
+          if parsed.hostname != 'aws-0-us-west-1.pooler.supabase.com':
+              raise SystemExit(f'Refusing unexpected database host: {parsed.hostname}')
+          if parsed.port != 5432 or parsed.path != '/postgres':
+              raise SystemExit('Refusing unexpected QA database connection parameters.')
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Run rollback-only exact migration and SQL regression
+        id: qa
+        shell: bash
+        run: |
+          set -euo pipefail
+          before_counts="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+            "select concat_ws(',', (select count(*) from public.mpgf_pledge_impact_pool_map), (select count(*) from public.mpgf_pledge_impact_forecast_snapshots), (select count(*) from public.mpgf_pledge_impact_forecast_audit_events));")"
+          test "$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+            "select to_regclass('public.mpgf_pledge_impact_forecast_pool_proposal_idx') is null;")" = 't'
+
+          {
+            printf 'begin;\n'
+            cat "$MIGRATION_PATH"
+            sed '1{/^[[:space:]]*begin;[[:space:]]*$/d}; $ {/^[[:space:]]*rollback;[[:space:]]*$/d}' "$TEST_PATH"
+            printf '\nrollback;\n'
+          } > rollback-index-regression.sql
+
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file rollback-index-regression.sql \
+            2>&1 | tee qa-index-regression.log
+
+          test "$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+            "select to_regclass('public.mpgf_pledge_impact_forecast_pool_proposal_idx') is null;")" = 't'
+          after_counts="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+            "select concat_ws(',', (select count(*) from public.mpgf_pledge_impact_pool_map), (select count(*) from public.mpgf_pledge_impact_forecast_snapshots), (select count(*) from public.mpgf_pledge_impact_forecast_audit_events));")"
+          test "$after_counts" = "$before_counts"
+          jq -n \
+            --arg status passed \
+            --arg before "$before_counts" \
+            --arg after "$after_counts" \
+            '{status:$status,rollbackOnly:true,indexAbsentAfterRollback:true,rowCountsBefore:$before,rowCountsAfter:$after,noMappingForecastOrAuditWrites:true}' \
+            > qa-index-evidence.json
+
+      - name: Upload exact gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr499-index-gates-${{ github.run_id }}
+          path: |
+            expected-files.txt
+            actual-files.txt
+            migration-blob.txt
+            migration-sha256.txt
+            repository-tests.log
+            eslint.log
+            typescript.log
+            build.log
+            rollback-index-regression.sql
+            qa-index-regression.log
+            qa-index-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report exact gate result to PR 499
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "${{ steps.guard.outcome }}" == 'success' \
+             && "${{ steps.self-delete.outcome }}" == 'success' \
+             && "${{ steps.install.outcome }}" == 'success' \
+             && "${{ steps.quality.outcome }}" == 'success' \
+             && "${{ steps.qa-target.outcome }}" == 'success' \
+             && "${{ steps.qa.outcome }}" == 'success' ]]; then
+            gh pr comment 499 --repo "$GITHUB_REPOSITORY" --body "Exact-head gates passed for \`$EXPECTED_HEAD\`: exact two-file diff, complete repository tests, ESLint, TypeScript, production build, exact QA-target guard, and rollback-only migration/index regression. QA row counts were unchanged and no mapping, forecast, or audit rows were written. Evidence: $run_url"
+          else
+            gh pr comment 499 --repo "$GITHUB_REPOSITORY" --body "Exact-head gates failed for \`$EXPECTED_HEAD\`. PR #499 remains draft and no production migration is authorized. Evidence: $run_url"
+          fi
+
+      - name: Enforce all exact-head gates
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.guard.outcome }}" = 'success'
+          test "${{ steps.self-delete.outcome }}" = 'success'
+          test "${{ steps.install.outcome }}" = 'success'
+          test "${{ steps.quality.outcome }}" = 'success'
+          test "${{ steps.qa-target.outcome }}" = 'success'
+          test "${{ steps.qa.outcome }}" = 'success'
