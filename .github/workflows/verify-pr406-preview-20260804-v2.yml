@@ -1,0 +1,298 @@
+name: Verify exact PR 406 Preview dpl_4bq once
+
+on:
+  push:
+    branches:
+      - ops/verify-pr406-preview-20260804-v2
+    paths:
+      - .github/workflows/verify-pr406-preview-20260804-v2.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: verify-pr406-preview-20260804-v2
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/verify-pr406-preview-20260804-v2
+  CONTROLLER_PATH: .github/workflows/verify-pr406-preview-20260804-v2.yml
+  FEATURE_BRANCH: feature/pledge-impact-live-foundation-20260801
+  EXPECTED_FEATURE_HEAD: a1af0fb465c2a77182a25df443f61e8fba5aa666
+  EXPECTED_MAIN: bd56b364ef91d17e4f7baed90236d904fb5c8452
+  EXPECTED_DEPLOYMENT_ID: dpl_4bqiaKsoDTfqKsuLqbFnRnLpkUz4
+  EXPECTED_DEPLOYMENT_HOST: moraltrade-site-dk3ijz1ma-ellen-s.vercel.app
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out controller branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard immutable repository and deployment identity
+        id: guard
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          test "$(git branch --show-current)" = "$CONTROLLER_BRANCH"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN"
+          test "$(git ls-remote origin "refs/heads/$FEATURE_BRANCH" | awk '{print $1}')" = "$EXPECTED_FEATURE_HEAD"
+
+          git fetch --no-tags origin \
+            "main:refs/remotes/origin/main" \
+            "$FEATURE_BRANCH:refs/remotes/origin/$FEATURE_BRANCH"
+          test "$(git merge-base "origin/$FEATURE_BRANCH" origin/main)" = "$EXPECTED_MAIN"
+
+          cat > expected-files.txt <<'EOF'
+          .github/workflows/pledge-impact-live-foundation-gates.yml
+          src/app/api/mpgf/pledge-impact/route.ts
+          src/lib/mpgf/pledge-impact-live-integration.test.ts
+          src/lib/mpgf/pledge-impact-live-server.ts
+          src/lib/mpgf/pledge-impact-live.test.ts
+          src/lib/mpgf/pledge-impact-live.ts
+          supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql
+          supabase/tests/mpgf_pledge_impact_live_foundation.sql
+          EOF
+          sort -o expected-files.txt expected-files.txt
+          git diff --name-only origin/main "origin/$FEATURE_BRANCH" | sort > actual-files.txt
+          diff -u expected-files.txt actual-files.txt
+          git diff --check origin/main "origin/$FEATURE_BRANCH"
+
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$EXPECTED_DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            > deployment.json
+
+          test "$(jq -r '.id // .uid // empty' deployment.json)" = "$EXPECTED_DEPLOYMENT_ID"
+          test "$(jq -r '.projectId // .project.id // empty' deployment.json)" = "$VERCEL_PROJECT_ID"
+          test "$(jq -r '.url // empty' deployment.json)" = "$EXPECTED_DEPLOYMENT_HOST"
+          test "$(jq -r '.readyState // .state // empty' deployment.json)" = 'READY'
+          test "$(jq -r '.target // "preview"' deployment.json)" = 'preview'
+          test "$(jq -r '.meta.githubCommitSha // empty' deployment.json)" = "$EXPECTED_FEATURE_HEAD"
+
+      - name: Remove this one-time controller from its operations branch
+        id: self-delete
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=$CONTROLLER_BRANCH" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-time PR 406 Preview verifier' \
+            --arg sha "$blob_sha" \
+            --arg branch "$CONTROLLER_BRANCH" \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Create temporary Vercel automation bypass
+        id: bypass
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          secret="$(python3 - <<'PY'
+          import secrets
+          import string
+          alphabet = string.ascii_letters + string.digits
+          print(''.join(secrets.choice(alphabet) for _ in range(32)))
+          PY
+          )"
+          test "${#secret}" -eq 32
+          echo "::add-mask::$secret"
+          printf '%s' "$secret" > /tmp/pr406-preview-bypass-secret
+          jq -n --arg secret "$secret" \
+            '{generate:{secret:$secret,note:"Temporary exact PR 406 Preview API verification"}}' \
+            > /tmp/pr406-preview-bypass-create.json
+          curl --fail --silent --show-error \
+            --request PATCH \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/pr406-preview-bypass-create.json \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/protection-bypass?teamId=$VERCEL_ORG_ID" \
+            > /tmp/pr406-preview-bypass-create-response.json
+          rm -f /tmp/pr406-preview-bypass-create.json /tmp/pr406-preview-bypass-create-response.json
+
+      - name: Verify exact protected Preview API contract
+        id: api
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          mkdir -p evidence
+          secret="$(cat /tmp/pr406-preview-bypass-secret)"
+          echo "::add-mask::$secret"
+          base="https://$EXPECTED_DEPLOYMENT_HOST"
+
+          request() {
+            local name="$1"
+            local method="$2"
+            local url="$3"
+            local curl_exit=0
+            curl --silent --show-error \
+              --request "$method" \
+              --max-time 45 \
+              -H "x-vercel-protection-bypass: $secret" \
+              -H 'x-vercel-set-bypass-cookie: true' \
+              -H 'Accept: application/json' \
+              --dump-header "evidence/$name.headers" \
+              --output "evidence/$name.body" \
+              --write-out '%{http_code}' \
+              "$url" > "evidence/$name.status" || curl_exit=$?
+            printf '%s\n' "$curl_exit" > "evidence/$name.curl-exit"
+            printf '%s: curl=%s http=%s\n' \
+              "$name" "$curl_exit" "$(cat "evidence/$name.status" 2>/dev/null || true)"
+          }
+
+          valid_url="$base/api/mpgf/pledge-impact?pool=pool-preview-unmapped&pledgeCents=3500"
+          request valid GET "$valid_url"
+          request malformed-pool GET "$base/api/mpgf/pledge-impact?pool=bad&pledgeCents=3500"
+          request invalid-amount GET "$base/api/mpgf/pledge-impact?pool=pool-preview-unmapped&pledgeCents=3.5"
+          request missing-amount GET "$base/api/mpgf/pledge-impact?pool=pool-preview-unmapped"
+          request post POST "$valid_url"
+
+          failure=0
+          assert_equal() {
+            local actual="$1"
+            local expected="$2"
+            local label="$3"
+            if [[ "$actual" != "$expected" ]]; then
+              printf 'FAIL %s: expected %q, got %q\n' "$label" "$expected" "$actual" >&2
+              failure=1
+            fi
+          }
+
+          for name in valid malformed-pool invalid-amount missing-amount post; do
+            assert_equal "$(cat "evidence/$name.curl-exit")" '0' "$name curl exit"
+          done
+          assert_equal "$(cat evidence/valid.status)" '200' 'valid HTTP status'
+          assert_equal "$(cat evidence/malformed-pool.status)" '400' 'malformed pool HTTP status'
+          assert_equal "$(cat evidence/invalid-amount.status)" '400' 'invalid amount HTTP status'
+          assert_equal "$(cat evidence/missing-amount.status)" '400' 'missing amount HTTP status'
+          assert_equal "$(cat evidence/post.status)" '405' 'POST method boundary'
+
+          tr -d '\r' < evidence/valid.headers > evidence/valid.headers.normalized
+          cache_control="$(awk 'BEGIN{IGNORECASE=1} /^cache-control:/ {sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' evidence/valid.headers.normalized)"
+          if [[ "$cache_control" != *private* || "$cache_control" != *no-store* ]]; then
+            printf 'FAIL valid Cache-Control: %s\n' "$cache_control" >&2
+            failure=1
+          fi
+
+          if ! jq -e . evidence/valid.body >/dev/null 2>&1; then
+            echo 'FAIL valid response is not JSON' >&2
+            failure=1
+          else
+            assert_equal "$(jq -r '.status // empty' evidence/valid.body)" 'unavailable' 'valid fail-closed status'
+            assert_equal "$(jq -r '.experimental | tostring' evidence/valid.body)" 'true' 'experimental flag'
+            assert_equal "$(jq -r '.poolPublicKey // empty' evidence/valid.body)" 'pool-preview-unmapped' 'pool key echo'
+            assert_equal "$(jq -r '.pledgeCents | tostring' evidence/valid.body)" '3500' 'pledge cents echo'
+            assert_equal "$(jq -r '(.mechanicalEffect == null) | tostring' evidence/valid.body)" 'true' 'no mechanical estimate without live pool'
+            reason="$(jq -r '.reason // empty' evidence/valid.body)"
+            if [[ "$reason" != 'pool_not_live' && "$reason" != 'service_unavailable' ]]; then
+              printf 'FAIL fail-closed reason: %s\n' "$reason" >&2
+              failure=1
+            fi
+          fi
+
+          for name in malformed-pool invalid-amount missing-amount; do
+            if ! jq -e '.error | type == "string" and length > 0' "evidence/$name.body" >/dev/null 2>&1; then
+              printf 'FAIL %s error response\n' "$name" >&2
+              failure=1
+            fi
+          done
+
+          jq -n \
+            --arg status "$([[ "$failure" -eq 0 ]] && echo passed || echo failed)" \
+            --arg deploymentId "$EXPECTED_DEPLOYMENT_ID" \
+            --arg deploymentHost "$EXPECTED_DEPLOYMENT_HOST" \
+            --arg commit "$EXPECTED_FEATURE_HEAD" \
+            --arg cacheControl "$cache_control" \
+            --arg reason "${reason:-unreadable}" \
+            --argjson validHttp "$(cat evidence/valid.status 2>/dev/null || echo 0)" \
+            --argjson malformedHttp "$(cat evidence/malformed-pool.status 2>/dev/null || echo 0)" \
+            --argjson invalidAmountHttp "$(cat evidence/invalid-amount.status 2>/dev/null || echo 0)" \
+            --argjson missingAmountHttp "$(cat evidence/missing-amount.status 2>/dev/null || echo 0)" \
+            --argjson postHttp "$(cat evidence/post.status 2>/dev/null || echo 0)" \
+            '{status:$status,deploymentId:$deploymentId,deploymentHost:$deploymentHost,commit:$commit,cacheControl:$cacheControl,failClosedReason:$reason,validHttp:$validHttp,malformedHttp:$malformedHttp,invalidAmountHttp:$invalidAmountHttp,missingAmountHttp:$missingAmountHttp,postHttp:$postHttp,noProductionMappingPublished:true,noNumericalForecastPublished:true}' \
+            > evidence/report.json
+
+          exit "$failure"
+
+      - name: Revoke temporary Vercel automation bypass
+        id: revoke
+        if: always() && steps.bypass.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          secret="$(cat /tmp/pr406-preview-bypass-secret)"
+          echo "::add-mask::$secret"
+          jq -n --arg secret "$secret" \
+            '{revoke:{secret:$secret,regenerate:false}}' \
+            > /tmp/pr406-preview-bypass-revoke.json
+          curl --fail --silent --show-error \
+            --request PATCH \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/pr406-preview-bypass-revoke.json \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/protection-bypass?teamId=$VERCEL_ORG_ID" \
+            > /tmp/pr406-preview-bypass-revoke-response.json
+          rm -f \
+            /tmp/pr406-preview-bypass-secret \
+            /tmp/pr406-preview-bypass-revoke.json \
+            /tmp/pr406-preview-bypass-revoke-response.json
+
+      - name: Upload immutable verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr406-preview-verification-${{ github.run_id }}
+          path: |
+            expected-files.txt
+            actual-files.txt
+            deployment.json
+            evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report verification result to PR 406
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "${{ steps.guard.outcome }}" == 'success' && "${{ steps.api.outcome }}" == 'success' && "${{ steps.revoke.outcome }}" == 'success' ]]; then
+            reason="$(jq -r .failClosedReason evidence/report.json)"
+            gh pr comment 406 --repo "$GITHUB_REPOSITORY" --body "Corrected exact-Preview verification passed for \`$EXPECTED_FEATURE_HEAD\` on deployment \`$EXPECTED_DEPLOYMENT_ID\`. The deployment remains READY, Preview-targeted, and bound to the canonical \`moraltrade-site\` project. The read API returned HTTP 200 with \`private, no-store\`, failed closed with \`$reason\`, rejected malformed pool and amount inputs with HTTP 400, rejected POST with HTTP 405, and published no production pool mapping or numerical forecast. The temporary protection bypass was revoked. Evidence: $run_url"
+          else
+            gh pr comment 406 --repo "$GITHUB_REPOSITORY" --body "Corrected exact-Preview verification failed for \`$EXPECTED_FEATURE_HEAD\`. PR #406 remains draft and unmerged; production mapping and numerical forecast publication remain disabled. Evidence: $run_url"
+          fi
+
+      - name: Enforce immutable verification and cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.guard.outcome }}" = 'success'
+          test "${{ steps.self-delete.outcome }}" = 'success'
+          test "${{ steps.bypass.outcome }}" = 'success'
+          test "${{ steps.api.outcome }}" = 'success'
+          test "${{ steps.revoke.outcome }}" = 'success'
