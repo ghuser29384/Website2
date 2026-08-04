@@ -262,6 +262,45 @@ for old, new, expected, label in html_replacements:
     html = html.replace(old, new)
 html_path.write_text(html, encoding="utf-8")
 
+frame_path = Path("src/components/create/create-interface-frame.tsx")
+frame = frame_path.read_text(encoding="utf-8")
+old_frame_expression = (
+    'const resumeExpression =\n'
+    '  \'const shouldResume = new URLSearchParams(window.location.search).get("resume") === "create";\';'
+)
+new_frame_expression = (
+    'const resumeExpression =\n'
+    '  /const shouldResume\\s*=\\s*(?:new URLSearchParams\\(window\\.location\\.search\\)|createDraftResumeRequestUrl\\(\\)\\.searchParams)\\.get\\("resume"\\)\\s*===\\s*"create";/;'
+)
+if frame.count(old_frame_expression) != 1:
+    raise SystemExit("Expected one exact-string Create resume expression")
+frame = frame.replace(old_frame_expression, new_frame_expression, 1)
+
+old_frame_guard = '  if (!createInterfaceSource.includes(resumeExpression)) {'
+new_frame_guard = '  if (!resumeExpression.test(createInterfaceSource)) {'
+if frame.count(old_frame_guard) != 1:
+    raise SystemExit("Expected one brittle Create resume-expression guard")
+frame = frame.replace(old_frame_guard, new_frame_guard, 1)
+
+old_frame_replacement = (
+    '  return createInterfaceSource.replace(\n'
+    '    resumeExpression,\n'
+    '    `const shouldResume = true || new URLSearchParams(window.location.search).get("resume") === "create";`,\n'
+    '  );'
+)
+new_frame_replacement = (
+    '  return createInterfaceSource.replace(\n'
+    '    resumeExpression,\n'
+    '    "const shouldResume = true;",\n'
+    '  );'
+)
+if frame.count(old_frame_replacement) != 1:
+    raise SystemExit("Expected one brittle Create resume-expression replacement")
+frame_path.write_text(
+    frame.replace(old_frame_replacement, new_frame_replacement, 1),
+    encoding="utf-8",
+)
+
 source_contract_path = Path("src/lib/create-interface/source-contract.test.ts")
 source_contract = source_contract_path.read_text(encoding="utf-8")
 old_storage_assertion = (
@@ -280,6 +319,21 @@ if source_contract.count(old_storage_assertion) != 1:
 source_contract = source_contract.replace(
     old_storage_assertion,
     new_storage_assertions,
+    1,
+)
+old_frame_assertion = (
+    '  assert.match(frame, /The Moral Trade Create resume contract could not be located/);\n'
+)
+new_frame_assertions = (
+    old_frame_assertion
+    + '  assert.match(frame, /resumeExpression\\.test\\(createInterfaceSource\\)/);\n'
+    + '  assert.match(frame, /createInterfaceSource\\.replace\\([\\s\\S]*resumeExpression[\\s\\S]*const shouldResume = true/);\n'
+)
+if source_contract.count(old_frame_assertion) != 1:
+    raise SystemExit("Expected one Create resume fail-closed source assertion")
+source_contract = source_contract.replace(
+    old_frame_assertion,
+    new_frame_assertions,
     1,
 )
 source_contract_path.write_text(source_contract, encoding="utf-8")
