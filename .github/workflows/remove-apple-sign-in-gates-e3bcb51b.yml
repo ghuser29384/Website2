@@ -1,0 +1,195 @@
+name: Remove Apple sign-in exact gates e3bcb51b
+
+on:
+  push:
+    branches:
+      - qa/remove-apple-sign-in-gates-e3bcb51b
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      CI: "1"
+      NODE_OPTIONS: "--max-old-space-size=6144"
+      PRODUCT_BASE_SHA: dff426440c5829575defc34a7f02ed97f1ac353b
+      PRODUCT_CANDIDATE_SHA: e3bcb51b494af5c4f1debbee961c4eda45f8e95b
+    steps:
+      - name: Check out immutable product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Verify immutable identity and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_CANDIDATE_SHA"
+          git cat-file -e "$PRODUCT_BASE_SHA^{commit}"
+          git diff --check "$PRODUCT_BASE_SHA" "$PRODUCT_CANDIDATE_SHA"
+          printf '%s\n' \
+            'src/lib/auth-provider-settings.test.ts' \
+            'src/lib/auth-provider-settings.ts' \
+            > /tmp/expected-files.txt
+          git diff --name-only "$PRODUCT_BASE_SHA" "$PRODUCT_CANDIDATE_SHA" | sort > /tmp/actual-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Run focused provider-policy regression
+        run: node --import tsx --test src/lib/auth-provider-settings.test.ts
+
+      - name: Run complete source test suite
+        run: npm test
+
+      - name: Run ESLint
+        run: npm run lint -- --quiet
+
+      - name: Run TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Create rendered authentication regression
+        shell: bash
+        run: |
+          mkdir -p artifacts/remove-apple-sign-in .tmp
+          cat > .tmp/remove-apple-sign-in.mjs <<'EOF'
+          import assert from "node:assert/strict";
+          import { writeFile } from "node:fs/promises";
+          import { chromium } from "@playwright/test";
+
+          const appUrl = "http://127.0.0.1:3000";
+          const routes = ["/login", "/signup"];
+          const variants = [
+            { name: "desktop", viewport: { width: 1440, height: 1000 } },
+            { name: "mobile", viewport: { width: 390, height: 844 } },
+          ];
+          const report = [];
+
+          const browser = await chromium.launch();
+          try {
+            for (const route of routes) {
+              for (const variant of variants) {
+                const context = await browser.newContext({ viewport: variant.viewport });
+                const page = await context.newPage();
+                page.setDefaultTimeout(20_000);
+                const consoleErrors = [];
+                const pageErrors = [];
+
+                page.on("console", (message) => {
+                  if (message.type() === "error") {
+                    consoleErrors.push(message.text());
+                  }
+                });
+                page.on("pageerror", (error) => {
+                  pageErrors.push(error.message);
+                });
+
+                const response = await page.goto(`${appUrl}${route}`, {
+                  waitUntil: "domcontentloaded",
+                });
+                assert.ok(response, `${route} ${variant.name}: no response`);
+                assert.equal(response.status(), 200, `${route} ${variant.name}: non-200 response`);
+                await page.getByRole("link", { name: "Continue with email" }).waitFor({
+                  state: "visible",
+                });
+
+                const bodyText = await page.locator("body").innerText();
+                assert.match(bodyText, /Moral Trade/);
+                assert.doesNotMatch(bodyText, /Continue with Apple|Opening Apple/i);
+                assert.equal(
+                  await page.getByRole("button", { name: /Apple/i }).count(),
+                  0,
+                  `${route} ${variant.name}: Apple button is still rendered`,
+                );
+                assert.equal(
+                  await page.locator('input[name="provider"][value="apple"]').count(),
+                  0,
+                  `${route} ${variant.name}: Apple provider form is still in the DOM`,
+                );
+                assert.equal(
+                  await page.locator("nextjs-portal, [data-nextjs-dialog-overlay]").count(),
+                  0,
+                  `${route} ${variant.name}: framework error overlay rendered`,
+                );
+                assert.deepEqual(pageErrors, [], `${route} ${variant.name}: page errors`);
+                assert.deepEqual(consoleErrors, [], `${route} ${variant.name}: console errors`);
+
+                const screenshot = `artifacts/remove-apple-sign-in/${route.slice(1)}-${variant.name}.png`;
+                await page.screenshot({ path: screenshot, fullPage: false });
+                report.push({
+                  route,
+                  variant: variant.name,
+                  status: response.status(),
+                  title: await page.title(),
+                  url: page.url(),
+                  appleButtons: 0,
+                  appleProviderInputs: 0,
+                  consoleErrors,
+                  pageErrors,
+                  screenshot,
+                });
+                await context.close();
+              }
+            }
+          } finally {
+            await browser.close();
+          }
+
+          await writeFile(
+            "artifacts/remove-apple-sign-in/report.json",
+            `${JSON.stringify(report, null, 2)}\n`,
+          );
+          EOF
+
+      - name: Start production server
+        shell: bash
+        run: |
+          nohup npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/remove-apple-next.log 2>&1 &
+          echo $! > /tmp/remove-apple-next.pid
+          for attempt in $(seq 1 120); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/remove-apple-next.log
+          exit 1
+
+      - name: Run desktop and mobile rendered checks
+        run: node .tmp/remove-apple-sign-in.mjs
+
+      - name: Stop production server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f /tmp/remove-apple-next.pid ]]; then
+            kill "$(cat /tmp/remove-apple-next.pid)" 2>/dev/null || true
+          fi
+
+      - name: Upload exact release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remove-apple-sign-in-e3bcb51b-evidence
+          path: |
+            artifacts/remove-apple-sign-in
+            /tmp/remove-apple-next.log
+          if-no-files-found: warn
+          retention-days: 14
