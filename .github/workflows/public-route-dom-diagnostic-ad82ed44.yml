@@ -1,0 +1,92 @@
+name: Public route DOM diagnostic ad82ed44
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/public-route-dom-diagnostic-ad82ed44.yml"
+      - "tests/public-route-dom-diagnostic-ad82ed44.spec.ts"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-route-dom-diagnostic-ad82ed44
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: ad82ed44628deeadef038c21f2d9a36fa60f9da3
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+  EVIDENCE_DIR: public-route-dom-diagnostic-ad82ed44
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out the exact diagnostic head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Guard the immutable product base and diagnostic-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = '${{ github.event.pull_request.head.sha }}'
+          git fetch --depth=1 origin "$BASE_SHA"
+          actual="$(git diff --name-only "$BASE_SHA" HEAD | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/public-route-dom-diagnostic-ad82ed44.yml' \
+            'tests/public-route-dom-diagnostic-ad82ed44.spec.ts' | sort)"
+          test "$actual" = "$expected"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Capture landmark lifecycle, hidden ancestry, hydration, and request evidence
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test tests/public-route-dom-diagnostic-ad82ed44.spec.ts \
+            --workers=1 --reporter=line 2>&1 | tee public-route-dom-diagnostic-ad82ed44.log
+
+      - name: Summarize the diagnostic
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Public-route DOM diagnostic'
+            echo
+            echo "- Immutable product base: \`$BASE_SHA\`"
+            echo "- Route reports: \`$(find "$EVIDENCE_DIR" -maxdepth 1 -name '*.json' | wc -l)\`"
+            echo "- Screenshots: \`$(find "$EVIDENCE_DIR" -maxdepth 1 -name '*.png' | wc -l)\`"
+            echo "- Hydration diagnostics: \`$(grep -RIl 'hydrated but some attributes' "$EVIDENCE_DIR" | wc -l)\` route files"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-route-dom-diagnostic-ad82ed44
+          path: |
+            public-route-dom-diagnostic-ad82ed44
+            public-route-dom-diagnostic-ad82ed44.log
+            test-results
+          if-no-files-found: error
+          retention-days: 14
