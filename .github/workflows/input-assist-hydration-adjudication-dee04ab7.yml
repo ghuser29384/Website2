@@ -1,0 +1,361 @@
+name: Input assist hydration adjudication dee04ab7
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/input-assist-hydration-adjudication-dee04ab7.yml"
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: input-assist-hydration-adjudication-dee04ab7
+  cancel-in-progress: false
+
+env:
+  PRODUCT_BASE_SHA: 366d8a067fd92a19ca51a799287d8bc1d53223bb
+  CANDIDATE_SHA: dee04ab7381dc1806ec838139f6f3f1033401b3e
+  PRODUCT_PR: "510"
+  STATUS_CONTEXT: QA / Input assist hydration adjudication
+  BASELINE_RUN_ID: "30877175677"
+  EVIDENCE_DIR: input-assist-hydration-adjudication-dee04ab7
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  adjudicate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Mark immutable adjudication pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Repeating the cart route on exact base and candidate, then rerunning the full differential" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Guard product PR identity and immutable scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
+
+          actual_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          expected_files="$(printf '%s\n' \
+            'src/app/layout.tsx' \
+            'src/lib/input-assist-hydration.test.ts' \
+            'tests/input-assist-hydration.spec.ts' | sort)"
+          test "$actual_files" = "$expected_files"
+
+      - name: Check out the immutable candidate and fetch the product base
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove exact identities and candidate differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git fetch --depth=1 origin "$PRODUCT_BASE_SHA"
+          actual_files="$(git diff --name-only "$PRODUCT_BASE_SHA" "$CANDIDATE_SHA" | sort)"
+          expected_files="$(printf '%s\n' \
+            'src/app/layout.tsx' \
+            'src/lib/input-assist-hydration.test.ts' \
+            'tests/input-assist-hydration.spec.ts' | sort)"
+          test "$actual_files" = "$expected_files"
+          git diff --check "$PRODUCT_BASE_SHA" "$CANDIDATE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$PRODUCT_BASE_SHA" > "$EVIDENCE_DIR/product-base-sha.txt"
+          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
+          git diff --stat "$PRODUCT_BASE_SHA" "$CANDIDATE_SHA" > "$EVIDENCE_DIR/diff-stat.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Repeat the cart transition ten times on the exact product base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --force "$PRODUCT_BASE_SHA"
+          test "$(git rev-parse HEAD)" = "$PRODUCT_BASE_SHA"
+          rm -rf .next
+          npx playwright test tests/public-routes.spec.ts \
+            --grep 'signed-out /cart resolves away from the loading shell' \
+            --workers=1 --repeat-each=10 --reporter=json \
+            > "$EVIDENCE_DIR/base-cart-report.json" \
+            2> "$EVIDENCE_DIR/base-cart.stderr.log"
+          jq -e '.stats.expected == 10 and .stats.unexpected == 0 and .stats.flaky == 0' \
+            "$EVIDENCE_DIR/base-cart-report.json" >/dev/null
+
+      - name: Repeat the cart transition ten times on the immutable candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --force "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          rm -rf .next
+          npx playwright test tests/public-routes.spec.ts \
+            --grep 'signed-out /cart resolves away from the loading shell' \
+            --workers=1 --repeat-each=10 --reporter=json \
+            > "$EVIDENCE_DIR/candidate-cart-report.json" \
+            2> "$EVIDENCE_DIR/candidate-cart.stderr.log"
+          jq -e '.stats.expected == 10 and .stats.unexpected == 0 and .stats.flaky == 0' \
+            "$EVIDENCE_DIR/candidate-cart-report.json" >/dev/null
+
+      - name: Reconfirm the focused candidate hydration regression
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test tests/input-assist-hydration.spec.ts \
+            --workers=1 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/focused-hydration.log"
+
+      - name: Rerun the complete immutable candidate suite
+        shell: bash
+        run: |
+          set -uo pipefail
+          rm -rf .next
+          set +e
+          npx playwright test --reporter=json \
+            > "$EVIDENCE_DIR/candidate-report.json" \
+            2> "$EVIDENCE_DIR/candidate-playwright.stderr.log"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$EVIDENCE_DIR/candidate-exit-status.txt"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const dir = process.env.EVIDENCE_DIR;
+          const report = JSON.parse(fs.readFileSync(path.join(dir, 'candidate-report.json'), 'utf8'));
+          const failures = [];
+
+          function resultErrors(test) {
+            const errors = [];
+            for (const result of test?.results ?? []) {
+              if (result.status === 'passed' || result.status === 'skipped') continue;
+              for (const error of result.errors ?? []) {
+                const text = String(error?.message ?? error?.stack ?? error ?? '').trim();
+                if (text) errors.push(text.slice(0, 6000));
+              }
+            }
+            return errors;
+          }
+
+          function visitSuite(suite, ancestors = []) {
+            const nextAncestors = suite?.title ? [...ancestors, suite.title] : ancestors;
+            for (const spec of suite?.specs ?? []) {
+              const failedTests = (spec.tests ?? []).filter((test) =>
+                (test.results ?? []).some((result) =>
+                  !['passed', 'skipped'].includes(result.status),
+                ),
+              );
+              if (spec.ok === false || failedTests.length > 0) {
+                failures.push({
+                  file: spec.file ?? '',
+                  line: spec.line ?? 0,
+                  column: spec.column ?? 0,
+                  title: [...nextAncestors, spec.title ?? ''].filter(Boolean).join(' › '),
+                  errors: failedTests.flatMap(resultErrors),
+                });
+              }
+            }
+            for (const child of suite?.suites ?? []) visitSuite(child, nextAncestors);
+          }
+
+          for (const suite of report.suites ?? []) visitSuite(suite, []);
+          const unique = [];
+          const seen = new Set();
+          for (const failure of failures) {
+            const key = `${failure.file}:${failure.line}:${failure.column} › ${failure.title}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            unique.push({ key, ...failure });
+          }
+          unique.sort((a, b) => a.key.localeCompare(b.key));
+
+          const hydrationPattern = /hydrated but some attributes of the server rendered HTML didn't match|Hydration failed because the server rendered HTML didn't match/;
+          const hydrationFailures = unique.filter((failure) =>
+            failure.errors.some((error) => hydrationPattern.test(error)),
+          );
+          const summary = {
+            candidateSha: process.env.CANDIDATE_SHA,
+            exitStatus: Number(fs.readFileSync(path.join(dir, 'candidate-exit-status.txt'), 'utf8').trim()),
+            stats: report.stats ?? null,
+            failureCount: unique.length,
+            hydrationMismatchCount: hydrationFailures.length,
+            hydrationFailures: hydrationFailures.map((failure) => failure.key),
+          };
+
+          fs.writeFileSync(path.join(dir, 'candidate-failures.json'), `${JSON.stringify(unique, null, 2)}\n`);
+          fs.writeFileSync(path.join(dir, 'candidate-summary.json'), `${JSON.stringify(summary, null, 2)}\n`);
+          fs.writeFileSync(
+            path.join(dir, 'candidate-failures.txt'),
+            `${unique.map((failure) => failure.key).join('\n')}${unique.length ? '\n' : ''}`,
+          );
+          console.log(JSON.stringify(summary, null, 2));
+          NODE
+
+      - name: Download the immutable three-run baseline evidence
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ghuser29384/Website2
+          run-id: ${{ env.BASELINE_RUN_ID }}
+          pattern: playwright-baseline-*-ad82ed44
+          path: baseline-artifacts
+          merge-multiple: false
+
+      - name: Require a clean adjudicated full-suite differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const modes = ['default-a', 'default-b', 'serial'];
+          const baseline = {};
+          const baselineUnion = new Set();
+          const hydrationPattern = /hydrated but some attributes of the server rendered HTML didn't match|Hydration failed because the server rendered HTML didn't match/;
+
+          for (const mode of modes) {
+            const dir = path.join('baseline-artifacts', `playwright-baseline-${mode}-ad82ed44`);
+            const summary = JSON.parse(fs.readFileSync(path.join(dir, 'summary.json'), 'utf8'));
+            const failures = JSON.parse(fs.readFileSync(path.join(dir, 'failures.json'), 'utf8'));
+            for (const failure of failures) baselineUnion.add(failure.key);
+            baseline[mode] = {
+              ...summary,
+              hydrationMismatchCount: failures.filter((failure) =>
+                (failure.errors ?? []).some((error) => hydrationPattern.test(error)),
+              ).length,
+            };
+          }
+
+          const evidenceDir = process.env.EVIDENCE_DIR;
+          const candidateSummary = JSON.parse(
+            fs.readFileSync(path.join(evidenceDir, 'candidate-summary.json'), 'utf8'),
+          );
+          const candidateFailures = JSON.parse(
+            fs.readFileSync(path.join(evidenceDir, 'candidate-failures.json'), 'utf8'),
+          );
+          const candidateKeys = new Set(candidateFailures.map((failure) => failure.key));
+          const newFailures = candidateFailures
+            .filter((failure) => !baselineUnion.has(failure.key))
+            .map((failure) => failure.key)
+            .sort();
+          const baselineFailuresAbsent = [...baselineUnion]
+            .filter((key) => !candidateKeys.has(key))
+            .sort();
+
+          const baseCart = JSON.parse(
+            fs.readFileSync(path.join(evidenceDir, 'base-cart-report.json'), 'utf8'),
+          ).stats;
+          const candidateCart = JSON.parse(
+            fs.readFileSync(path.join(evidenceDir, 'candidate-cart-report.json'), 'utf8'),
+          ).stats;
+
+          const comparison = {
+            baselineRunId: process.env.BASELINE_RUN_ID,
+            baselineProductSha: 'ad82ed44628deeadef038c21f2d9a36fa60f9da3',
+            candidateSha: process.env.CANDIDATE_SHA,
+            baseline,
+            baselineUnionFailureCount: baselineUnion.size,
+            cartAdjudication: { base: baseCart, candidate: candidateCart },
+            candidate: candidateSummary,
+            newFailureCount: newFailures.length,
+            newFailures,
+            baselineFailuresAbsentCount: baselineFailuresAbsent.length,
+            baselineFailuresAbsent,
+            passed:
+              baseCart.expected === 10 &&
+              baseCart.unexpected === 0 &&
+              candidateCart.expected === 10 &&
+              candidateCart.unexpected === 0 &&
+              newFailures.length === 0 &&
+              candidateSummary.hydrationMismatchCount === 0 &&
+              candidateSummary.failureCount <= baselineUnion.size,
+          };
+
+          fs.writeFileSync(
+            path.join(evidenceDir, 'adjudication-comparison.json'),
+            `${JSON.stringify(comparison, null, 2)}\n`,
+          );
+          console.log(JSON.stringify(comparison, null, 2));
+          if (!comparison.passed) process.exit(1);
+          NODE
+
+          {
+            echo '## Input-assist hydration adjudication'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Base cart repeats: \`$(jq -r '.cartAdjudication.base.expected' "$EVIDENCE_DIR/adjudication-comparison.json")/10\`"
+            echo "- Candidate cart repeats: \`$(jq -r '.cartAdjudication.candidate.expected' "$EVIDENCE_DIR/adjudication-comparison.json")/10\`"
+            echo "- Candidate full-suite failures: \`$(jq -r '.candidate.failureCount' "$EVIDENCE_DIR/adjudication-comparison.json")\`"
+            echo "- New failures: \`$(jq -r '.newFailureCount' "$EVIDENCE_DIR/adjudication-comparison.json")\`"
+            echo "- Hydration mismatches: \`$(jq -r '.candidate.hydrationMismatchCount' "$EVIDENCE_DIR/adjudication-comparison.json")\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload adjudication evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: input-assist-hydration-adjudication-dee04ab7
+          path: input-assist-hydration-adjudication-dee04ab7
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish adjudication result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="Exact cart adjudication and full-suite differential passed with zero hydration mismatches"
+          else
+            state=failure
+            description="Input-assist hydration adjudication failed; inspect exact evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
