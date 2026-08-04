@@ -1,0 +1,100 @@
+name: Release classification merge bootstrap PR 501
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: release-classification-merge-bootstrap-pr501-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  STATUS_CONTEXT: release-classification
+
+jobs:
+  validate:
+    name: Bootstrap release classification on merge candidate
+    if: >-
+      github.event.pull_request.number == 501 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'ops/pr212-qa-monitor-v11-controller-20260803'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Publish pending status on the merge candidate
+        id: pending
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg state pending \
+            --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg description "Bootstrapping trusted release classification" \
+            --arg context "$STATUS_CONTEXT" \
+            '{state:$state,target_url:$target_url,description:$description,context:$context}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$MERGE_SHA" --input - >/dev/null
+
+      - name: Check out the current trusted base branch
+        id: checkout
+        continue-on-error: true
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Set up Node.js
+        id: setup
+        if: steps.checkout.outcome == 'success'
+        continue-on-error: true
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate the pull request body with trusted base code
+        id: policy
+        if: steps.checkout.outcome == 'success' && steps.setup.outcome == 'success'
+        continue-on-error: true
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/validate-release-pr-body.mjs
+
+      - name: Publish the final required status on the merge candidate
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ github.sha }}
+          PENDING_OUTCOME: ${{ steps.pending.outcome }}
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          SETUP_OUTCOME: ${{ steps.setup.outcome }}
+          POLICY_OUTCOME: ${{ steps.policy.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state=success
+          description="Release classification policy passed"
+          if [[ "$PENDING_OUTCOME" != success || "$CHECKOUT_OUTCOME" != success || "$SETUP_OUTCOME" != success || "$POLICY_OUTCOME" != success ]]; then
+            state=failure
+            description="Release classification policy failed"
+          fi
+
+          jq -n \
+            --arg state "$state" \
+            --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg description "$description" \
+            --arg context "$STATUS_CONTEXT" \
+            '{state:$state,target_url:$target_url,description:$description,context:$context}' \
+            | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$MERGE_SHA" --input - >/dev/null
+
+          [[ "$state" == success ]]
