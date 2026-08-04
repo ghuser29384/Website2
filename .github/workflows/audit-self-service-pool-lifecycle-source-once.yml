@@ -1,0 +1,102 @@
+name: Audit self-service pool lifecycle source once
+
+on:
+  push:
+    branches:
+      - audit/self-service-pool-lifecycle-source-20260804
+    paths:
+      - .github/workflows/audit-self-service-pool-lifecycle-source-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: audit-self-service-pool-lifecycle-source-20260804
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: audit/self-service-pool-lifecycle-source-20260804
+  CONTROLLER_PATH: .github/workflows/audit-self-service-pool-lifecycle-source-once.yml
+  PRODUCT_COMMIT: 7b52271d54e11f4335741c679336da4ae7b50292
+
+jobs:
+  audit:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out the audited product commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_COMMIT }}
+          fetch-depth: 0
+
+      - name: Guard the immutable product source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_COMMIT"
+          git show --stat --oneline HEAD | tee audited-commit.txt
+
+      - name: Inventory lifecycle routes, source, schema, tests, and workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p audit-evidence/selected
+
+          find src/app -type f -print | sort > audit-evidence/app-route-files.txt
+          find src -type f -print | sort > audit-evidence/src-files.txt
+          find supabase -type f -print | sort > audit-evidence/supabase-files.txt
+          find .github -type f -print | sort > audit-evidence/github-files.txt
+
+          pattern='mpgf_pool_proposals|moral_trade_create_pool_terms|mpgf_pledges|approved_as_candidate|pending_review|submitted_at|reviewed_by|reviewed_at|first_accepted_pledge_at|state_transition_logs|operational_events|completion_gate|production_verification|public_goods_deadline_at|pool proposal|submit for review|terms_locked|publish|published|succeed|success|lapse|lapsed|expired'
+
+          git grep -n -I -E "$pattern" -- src supabase .github \
+            > audit-evidence/lifecycle-grep.txt || true
+          git grep -l -I -E "$pattern" -- src supabase .github \
+            | sort -u > audit-evidence/selected-files.txt || true
+
+          while IFS= read -r file; do
+            test -n "$file" || continue
+            mkdir -p "audit-evidence/selected/$(dirname "$file")"
+            cp "$file" "audit-evidence/selected/$file"
+          done < audit-evidence/selected-files.txt
+
+          git grep -n -I -E 'from\(["'"']mpgf_pool_proposals["'"']\)|\.from\(["'"']mpgf_pool_proposals["'"']\)|rpc\(["'"'].*mpgf|mpgf_pool_proposals' -- src \
+            > audit-evidence/runtime-data-access.txt || true
+          git grep -n -I -E 'createServerClient|createServiceClient|service_role|SUPABASE_SERVICE_ROLE_KEY' -- src \
+            > audit-evidence/runtime-privilege-paths.txt || true
+          git grep -n -I -E 'submit|review|approve|publish|pledge|success|lapse|expire|audit' -- src/app \
+            > audit-evidence/app-lifecycle-copy-and-actions.txt || true
+
+          jq -n \
+            --arg commit "$PRODUCT_COMMIT" \
+            --argjson selectedFiles "$(wc -l < audit-evidence/selected-files.txt)" \
+            --argjson grepLines "$(wc -l < audit-evidence/lifecycle-grep.txt)" \
+            --argjson routeFiles "$(wc -l < audit-evidence/app-route-files.txt)" \
+            '{commit:$commit,selectedFiles:$selectedFiles,lifecycleGrepLines:$grepLines,routeFiles:$routeFiles}' \
+            > audit-evidence/source-inventory-summary.json
+
+      - name: Remove the one-time controller from its audit branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=$CONTROLLER_BRANCH" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-time self-service lifecycle source auditor' \
+            --arg sha "$blob_sha" \
+            --arg branch "$CONTROLLER_BRANCH" \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Upload immutable lifecycle source evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-service-pool-lifecycle-source-${{ github.run_id }}
+          path: |
+            audited-commit.txt
+            audit-evidence/
+          if-no-files-found: error
+          retention-days: 30
