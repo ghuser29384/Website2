@@ -1,6 +1,11 @@
 name: Remove Apple sign-in exact gates e3bcb51b
 
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/remove-apple-sign-in-gates-e3bcb51b.yml
   push:
     branches:
       - qa/remove-apple-sign-in-gates-e3bcb51b
