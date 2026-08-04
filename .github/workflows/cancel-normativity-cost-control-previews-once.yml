@@ -1,0 +1,129 @@
+name: Cancel Normativity cost-control Preview records once
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/cancel-normativity-cost-control-previews-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cancel-normativity-cost-control-previews-once
+  cancel-in-progress: false
+
+env:
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_nYsdGDl1zVtUNoD4YtrUVoBg1Hp5
+  EXPECTED_REF: chore/vercel-cost-controls-20260804
+  CONTROLLER_PATH: .github/workflows/cancel-normativity-cost-control-previews-once.yml
+
+jobs:
+  cancel:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Guard exact repository and controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_ACTOR" = 'ghuser29384'
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+      - name: Cancel exact Normativity preview records
+        id: cancel
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          ids=(
+            dpl_9zyvzHwzbaBvGu1CfH81Jir6YxDr
+            dpl_DMaSBSzGqgSvzw6PMiu2nYcQnbFn
+            dpl_7AforWLnHo7TryrwzWT51E9idFe6
+            dpl_BrQYUNQpWr97KJCXBZ12G2SypMed
+          )
+          : > normativity-preview-cancellations.jsonl
+          for id in "${ids[@]}"; do
+            before="$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$id?teamId=$VERCEL_TEAM_ID")"
+            test "$(jq -r .projectId <<<"$before")" = "$VERCEL_PROJECT_ID"
+            test "$(jq -r '.target // "preview"' <<<"$before")" = 'preview'
+            test "$(jq -r '.meta.githubCommitRef // ""' <<<"$before")" = "$EXPECTED_REF"
+            state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$before")"
+            if [[ "$state" == 'QUEUED' || "$state" == 'BUILDING' || "$state" == 'INITIALIZING' ]]; then
+              curl --fail-with-body --silent --show-error \
+                -X PATCH \
+                -H "Authorization: Bearer $VERCEL_TOKEN" \
+                "https://api.vercel.com/v12/deployments/$id/cancel?teamId=$VERCEL_TEAM_ID" \
+                > "cancel-$id.json"
+              action=cancelled
+            else
+              printf '%s\n' "$before" > "cancel-$id.json"
+              action=already_terminal
+            fi
+            jq -n --arg id "$id" --arg before "$state" --arg action "$action" \
+              '{id:$id,before:$before,action:$action}' >> normativity-preview-cancellations.jsonl
+          done
+
+          sleep 5
+          for id in "${ids[@]}"; do
+            after="$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$id?teamId=$VERCEL_TEAM_ID")"
+            state="$(jq -r '.readyState // .state // "UNKNOWN"' <<<"$after")"
+            if [[ "$state" != 'CANCELED' && "$state" != 'ERROR' ]]; then
+              echo "Deployment $id remained $state" >&2
+              exit 1
+            fi
+          done
+          jq -s '.' normativity-preview-cancellations.jsonl > normativity-preview-cancellations.json
+
+      - name: Upload cancellation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: normativity-preview-cancellations-${{ github.run_id }}
+          path: |
+            normativity-preview-cancellations.jsonl
+            normativity-preview-cancellations.json
+            cancel-*.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Remove one-time controller with verdict
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ '${{ steps.cancel.outcome }}' == 'success' ]]; then
+            message='Remove one-time Normativity Preview cancellation controller after PASS'
+          else
+            message='Remove one-time Normativity Preview cancellation controller after FAIL'
+          fi
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$blob_sha" ]]; then
+            jq -n --arg message "$message" --arg sha "$blob_sha" --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
+
+      - name: Enforce cancellation success
+        if: always()
+        run: test '${{ steps.cancel.outcome }}' = 'success'
