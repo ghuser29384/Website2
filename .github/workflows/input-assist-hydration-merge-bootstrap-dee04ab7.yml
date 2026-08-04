@@ -36,7 +36,6 @@ jobs:
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test '${{ github.event.pull_request.head.ref }}' = 'qa/input-assist-hydration-merge-bootstrap-dee04ab7'
           test '${{ github.event.pull_request.base.ref }}' = 'main'
-          mkdir -p "$EVIDENCE_DIR"
 
       - name: Check out trusted current main
         uses: actions/checkout@v4
@@ -51,6 +50,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
 
           current_main="$(git rev-parse HEAD)"
           test "$current_main" = "$EXPECTED_MAIN_SHA"
