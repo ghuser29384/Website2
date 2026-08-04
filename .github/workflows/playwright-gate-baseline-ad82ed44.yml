@@ -1,0 +1,298 @@
+name: Playwright gate immutable baseline ad82ed44
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/playwright-gate-baseline-ad82ed44.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playwright-gate-baseline-ad82ed44
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: ad82ed44628deeadef038c21f2d9a36fa60f9da3
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  baseline:
+    name: full-suite-${{ matrix.mode }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: default-a
+            workers: ""
+          - mode: default-b
+            workers: ""
+          - mode: serial
+            workers: "--workers=1"
+
+    steps:
+      - name: Check out the immutable current-main baseline
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASE_SHA }}
+          fetch-depth: 1
+
+      - name: Guard immutable identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run the complete rendered suite and retain machine-readable evidence
+        id: run
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+          WORKERS_ARG: ${{ matrix.workers }}
+        run: |
+          set -uo pipefail
+          evidence="playwright-baseline-${MODE}"
+          mkdir -p "$evidence"
+          printf '%s\n' "$BASE_SHA" > "$evidence/base-sha.txt"
+          printf '%s\n' "$MODE" > "$evidence/mode.txt"
+
+          set +e
+          if [[ -n "$WORKERS_ARG" ]]; then
+            npx playwright test "$WORKERS_ARG" --reporter=json \
+              > "$evidence/report.json" \
+              2> "$evidence/playwright.stderr.log"
+          else
+            npx playwright test --reporter=json \
+              > "$evidence/report.json" \
+              2> "$evidence/playwright.stderr.log"
+          fi
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$evidence/exit-status.txt"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+          EVIDENCE_DIR="$evidence" node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const dir = process.env.EVIDENCE_DIR;
+          const reportPath = path.join(dir, 'report.json');
+          const failures = [];
+          let report;
+
+          function resultErrors(test) {
+            const errors = [];
+            for (const result of test?.results ?? []) {
+              if (result.status === 'passed' || result.status === 'skipped') continue;
+              for (const error of result.errors ?? []) {
+                const text = String(error?.message ?? error?.stack ?? error ?? '').trim();
+                if (text) errors.push(text.slice(0, 4000));
+              }
+            }
+            return errors;
+          }
+
+          function visitSuite(suite, ancestors = []) {
+            const nextAncestors = suite?.title ? [...ancestors, suite.title] : ancestors;
+            for (const spec of suite?.specs ?? []) {
+              const failedTests = (spec.tests ?? []).filter((test) =>
+                (test.results ?? []).some((result) =>
+                  !['passed', 'skipped'].includes(result.status),
+                ),
+              );
+              if (spec.ok === false || failedTests.length > 0) {
+                const errors = failedTests.flatMap(resultErrors);
+                failures.push({
+                  file: spec.file ?? '',
+                  line: spec.line ?? 0,
+                  column: spec.column ?? 0,
+                  title: [...nextAncestors, spec.title ?? ''].filter(Boolean).join(' › '),
+                  errors,
+                });
+              }
+            }
+            for (const child of suite?.suites ?? []) visitSuite(child, nextAncestors);
+          }
+
+          try {
+            report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            for (const suite of report.suites ?? []) visitSuite(suite, []);
+          } catch (error) {
+            fs.writeFileSync(
+              path.join(dir, 'report-parse-error.txt'),
+              `${error?.stack ?? error}\n`,
+            );
+          }
+
+          const unique = [];
+          const seen = new Set();
+          for (const failure of failures) {
+            const key = `${failure.file}:${failure.line}:${failure.column} › ${failure.title}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            unique.push({ key, ...failure });
+          }
+          unique.sort((a, b) => a.key.localeCompare(b.key));
+
+          const summary = {
+            baseSha: fs.readFileSync(path.join(dir, 'base-sha.txt'), 'utf8').trim(),
+            mode: fs.readFileSync(path.join(dir, 'mode.txt'), 'utf8').trim(),
+            exitStatus: Number(fs.readFileSync(path.join(dir, 'exit-status.txt'), 'utf8').trim()),
+            stats: report?.stats ?? null,
+            failureCount: unique.length,
+          };
+
+          fs.writeFileSync(path.join(dir, 'failures.json'), `${JSON.stringify(unique, null, 2)}\n`);
+          fs.writeFileSync(path.join(dir, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`);
+          fs.writeFileSync(
+            path.join(dir, 'failures.txt'),
+            `${unique.map((failure) => failure.key).join('\n')}${unique.length ? '\n' : ''}`,
+          );
+          console.log(JSON.stringify(summary, null, 2));
+          NODE
+
+      - name: Publish run summary
+        if: always()
+        shell: bash
+        env:
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          evidence="playwright-baseline-${MODE}"
+          {
+            echo "### Full Playwright baseline: ${MODE}"
+            echo
+            echo "- Immutable SHA: \`$BASE_SHA\`"
+            echo "- Exit status: \`$(cat "$evidence/exit-status.txt")\`"
+            echo "- Parsed failures: \`$(jq -r '.failureCount' "$evidence/summary.json")\`"
+            echo "- Stats: \`$(jq -c '.stats' "$evidence/summary.json")\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable baseline evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-baseline-${{ matrix.mode }}-ad82ed44
+          path: playwright-baseline-${{ matrix.mode }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Preserve the truthful gate result
+        if: always()
+        shell: bash
+        env:
+          PLAYWRIGHT_STATUS: ${{ steps.run.outputs.status }}
+        run: |
+          set -euo pipefail
+          test -n "$PLAYWRIGHT_STATUS"
+          test "$PLAYWRIGHT_STATUS" = '0'
+
+  compare:
+    name: compare immutable baseline runs
+    if: always()
+    needs: baseline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Download all baseline evidence
+        uses: actions/download-artifact@v4
+        with:
+          pattern: playwright-baseline-*-ad82ed44
+          path: downloaded
+          merge-multiple: false
+
+      - name: Compare stability and serial behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p comparison
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const modes = ['default-a', 'default-b', 'serial'];
+          const runs = {};
+          for (const mode of modes) {
+            const dir = path.join('downloaded', `playwright-baseline-${mode}-ad82ed44`, `playwright-baseline-${mode}`);
+            const summary = JSON.parse(fs.readFileSync(path.join(dir, 'summary.json'), 'utf8'));
+            const failures = JSON.parse(fs.readFileSync(path.join(dir, 'failures.json'), 'utf8'));
+            runs[mode] = { summary, failures, keys: new Set(failures.map((failure) => failure.key)) };
+          }
+
+          const union = [...new Set(modes.flatMap((mode) => [...runs[mode].keys]))].sort();
+          const rows = union.map((key) => ({
+            key,
+            defaultA: runs['default-a'].keys.has(key),
+            defaultB: runs['default-b'].keys.has(key),
+            serial: runs.serial.keys.has(key),
+          }));
+
+          const stableAll = rows.filter((row) => row.defaultA && row.defaultB && row.serial).map((row) => row.key);
+          const stableDefaultOnly = rows.filter((row) => row.defaultA && row.defaultB && !row.serial).map((row) => row.key);
+          const serialOnly = rows.filter((row) => !row.defaultA && !row.defaultB && row.serial).map((row) => row.key);
+          const variable = rows.filter((row) => new Set([row.defaultA, row.defaultB, row.serial]).size > 1).map((row) => row.key);
+          const defaultFlakes = rows.filter((row) => row.defaultA !== row.defaultB).map((row) => row.key);
+
+          const comparison = {
+            baseSha: process.env.BASE_SHA,
+            runs: Object.fromEntries(modes.map((mode) => [mode, runs[mode].summary])),
+            unionFailureCount: union.length,
+            stableAcrossAllCount: stableAll.length,
+            stableDefaultOnlyCount: stableDefaultOnly.length,
+            serialOnlyCount: serialOnly.length,
+            variableCount: variable.length,
+            defaultFlakeCount: defaultFlakes.length,
+            stableAcrossAll: stableAll,
+            stableDefaultOnly,
+            serialOnly,
+            variable,
+            defaultFlakes,
+            matrix: rows,
+          };
+
+          fs.writeFileSync('comparison/comparison.json', `${JSON.stringify(comparison, null, 2)}\n`);
+          fs.writeFileSync('comparison/stable-across-all.txt', `${stableAll.join('\n')}${stableAll.length ? '\n' : ''}`);
+          fs.writeFileSync('comparison/stable-default-only.txt', `${stableDefaultOnly.join('\n')}${stableDefaultOnly.length ? '\n' : ''}`);
+          fs.writeFileSync('comparison/default-flakes.txt', `${defaultFlakes.join('\n')}${defaultFlakes.length ? '\n' : ''}`);
+          fs.writeFileSync('comparison/variable.txt', `${variable.join('\n')}${variable.length ? '\n' : ''}`);
+          console.log(JSON.stringify(comparison, null, 2));
+          NODE
+
+          {
+            echo '### Immutable full-suite comparison'
+            echo
+            echo "- SHA: \`$BASE_SHA\`"
+            echo "- Default A failures: \`$(jq -r '.runs["default-a"].failureCount' comparison/comparison.json)\`"
+            echo "- Default B failures: \`$(jq -r '.runs["default-b"].failureCount' comparison/comparison.json)\`"
+            echo "- Serial failures: \`$(jq -r '.runs.serial.failureCount' comparison/comparison.json)\`"
+            echo "- Stable across all modes: \`$(jq -r '.stableAcrossAllCount' comparison/comparison.json)\`"
+            echo "- Default-run flakes: \`$(jq -r '.defaultFlakeCount' comparison/comparison.json)\`"
+            echo "- Default-only failures: \`$(jq -r '.stableDefaultOnlyCount' comparison/comparison.json)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload comparison
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-baseline-comparison-ad82ed44
+          path: comparison
+          if-no-files-found: error
+          retention-days: 14
