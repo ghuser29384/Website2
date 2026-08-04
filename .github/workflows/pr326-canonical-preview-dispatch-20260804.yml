@@ -1,0 +1,123 @@
+name: Dispatch canonical preview for PR 326 exact candidate
+
+on:
+  push:
+    branches:
+      - qa/marketplace-delta-exact-head-repair-20260731
+    paths:
+      - ".github/workflows/pr326-canonical-preview-dispatch-20260804.yml"
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr326-canonical-preview-dispatch-20260804
+  cancel-in-progress: false
+
+jobs:
+  dispatch-and-observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      PRODUCT_PR: '326'
+      PRODUCT_SHA: 3f6abe2e830eaca3903fa1040dd05a1ed34ae4ef
+      RELEASE_BRANCH: release/vercel-preview
+      RELEASE_WORKFLOW: vercel-release.yml
+      CONTROLLER_PATH: .github/workflows/pr326-canonical-preview-dispatch-20260804.yml
+    steps:
+      - name: Verify immutable product and release refs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PRODUCT_PR")"
+          test "$(jq -r '.state' <<<"$pr_json")" = open
+          test "$(jq -r '.head.sha' <<<"$pr_json")" = "$PRODUCT_SHA"
+          release_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$RELEASE_BRANCH" --jq .object.sha)"
+          test "$release_sha" = "$PRODUCT_SHA"
+
+      - name: Dispatch the trusted canonical preview workflow
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          jq -n \
+            --arg ref main \
+            --arg target preview \
+            --arg release_ref "$RELEASE_BRANCH" \
+            --arg expected_sha "$PRODUCT_SHA" \
+            '{ref:$ref,inputs:{target:$target,ref:$release_ref,expected_sha:$expected_sha}}' \
+            > "$RUNNER_TEMP/dispatch.json"
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/dispatches" \
+            --input "$RUNNER_TEMP/dispatch.json"
+          echo "dispatched_at=$dispatched_at" >> "$GITHUB_OUTPUT"
+
+      - name: Locate and observe the exact release run
+        id: observe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISPATCHED_AT: ${{ steps.dispatch.outputs.dispatched_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id=""
+          for _ in $(seq 1 60); do
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=30")"
+            run_id="$(jq -r --arg since "$DISPATCHED_AT" '
+              [.workflow_runs[]
+               | select(.created_at >= $since)
+               | select(.event == "workflow_dispatch")]
+              | sort_by(.created_at)
+              | reverse
+              | .[0].id // empty
+            ' <<<"$runs")"
+            if [[ -n "$run_id" ]]; then break; fi
+            sleep 5
+          done
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" \
+            --body "Canonical prebuilt preview dispatch started for exact candidate \`$PRODUCT_SHA\`: Gated Vercel release run \`$run_id\`."
+          gh pr comment 359 --repo "$GITHUB_REPOSITORY" \
+            --body "Canonical prebuilt preview dispatch for PR #326 exact candidate \`$PRODUCT_SHA\`: release run \`$run_id\`."
+
+          for _ in $(seq 1 720); do
+            run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            status="$(jq -r '.status' <<<"$run")"
+            conclusion="$(jq -r '.conclusion // "pending"' <<<"$run")"
+            echo "release_run=$run_id status=$status conclusion=$conclusion"
+            if [[ "$status" == completed ]]; then
+              gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" \
+                --body "Canonical prebuilt preview run \`$run_id\` completed with conclusion **$conclusion** for exact candidate \`$PRODUCT_SHA\`."
+              echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+              [[ "$conclusion" == success ]]
+              exit
+            fi
+            sleep 10
+          done
+          echo "Release run did not complete within the observation window." >&2
+          exit 1
+
+      - name: Remove temporary dispatch controller
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=qa/marketplace-delta-exact-head-repair-20260731" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$sha" ]]; then
+            jq -n \
+              --arg message 'Remove temporary PR 326 preview dispatcher' \
+              --arg sha "$sha" \
+              --arg branch 'qa/marketplace-delta-exact-head-repair-20260731' \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
