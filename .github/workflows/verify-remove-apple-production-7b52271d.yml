@@ -93,6 +93,13 @@ jobs:
           const report = [];
           const browser = await chromium.launch();
 
+          function readDeploymentId(html) {
+            const match = html.match(
+              /\bdata-dpl-id=(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i,
+            );
+            return match?.[1] ?? match?.[2] ?? match?.[3] ?? null;
+          }
+
           try {
             for (const origin of origins) {
               for (const route of routes) {
@@ -113,6 +120,14 @@ jobs:
                   );
                   assert.ok(response, `${origin}${route} ${variant.name}: no response`);
                   assert.equal(response.status(), 200);
+                  const responseHtml = await response.text();
+                  const deploymentId = readDeploymentId(responseHtml);
+                  assert.equal(
+                    deploymentId,
+                    expectedDeploymentId,
+                    `${origin}${route} ${variant.name}: wrong production deployment`,
+                  );
+
                   await page.getByRole("link", { name: "Continue with email" }).waitFor({
                     state: "visible",
                   });
@@ -131,10 +146,6 @@ jobs:
                     await page.locator("nextjs-portal, [data-nextjs-dialog-overlay]").count(),
                     0,
                   );
-                  const deploymentId = await page.evaluate(() =>
-                    document.documentElement.getAttribute("data-dpl-id"),
-                  );
-                  assert.equal(deploymentId, expectedDeploymentId);
                   assert.deepEqual(consoleErrors, []);
                   assert.deepEqual(pageErrors, []);
 
@@ -157,6 +168,10 @@ jobs:
                     pageErrors,
                     screenshot,
                   });
+                  await writeFile(
+                    "artifacts/verify-remove-apple-production/report.json",
+                    `${JSON.stringify(report, null, 2)}\n`,
+                  );
                   await context.close();
                 }
               }
@@ -164,11 +179,6 @@ jobs:
           } finally {
             await browser.close();
           }
-
-          await writeFile(
-            "artifacts/verify-remove-apple-production/report.json",
-            `${JSON.stringify(report, null, 2)}\n`,
-          );
           EOF
           node .tmp/verify-remove-apple-production.mjs
 
