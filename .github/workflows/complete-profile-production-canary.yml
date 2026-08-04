@@ -3,9 +3,18 @@ name: Complete Profile production canary
 on:
   pull_request:
     paths:
+      - ".github/scripts/complete-profile-canary-diagnostics.mjs"
       - ".github/scripts/complete-profile-production-canary.mjs"
       - ".github/workflows/complete-profile-production-canary.yml"
+      - "scripts/complete-profile-canary-diagnostics.test.mjs"
       - "scripts/vercel-release-workflow.test.mjs"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/scripts/complete-profile-canary-diagnostics.mjs"
+      - ".github/scripts/complete-profile-production-canary.mjs"
+      - ".github/workflows/complete-profile-production-canary.yml"
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
@@ -35,8 +44,11 @@ jobs:
       - name: Parse and test the permanent canary controls
         run: |
           set -euo pipefail
+          node --check .github/scripts/complete-profile-canary-diagnostics.mjs
           node --check .github/scripts/complete-profile-production-canary.mjs
-          node --test scripts/vercel-release-workflow.test.mjs
+          node --test \
+            scripts/complete-profile-canary-diagnostics.test.mjs \
+            scripts/vercel-release-workflow.test.mjs
           ruby -e 'require "yaml"; YAML.parse_file(ARGV.fetch(0)) or abort("invalid YAML")' \
             .github/workflows/complete-profile-production-canary.yml
 
@@ -45,6 +57,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
+      CONTROL_SHA: ${{ github.sha }}
       STATUS_CONTEXT: QA / Complete Profile production canary
       VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
       VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
@@ -53,6 +66,18 @@ jobs:
       CANARY_OUTPUT_DIR: complete-profile-production-canary
 
     steps:
+      - name: Check out the exact monitor control revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CONTROL_SHA }}
+          fetch-depth: 0
+
+      - name: Verify the exact monitor control checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CONTROL_SHA"
+
       - name: Resolve the READY production deployment currently serving both canonical aliases
         id: deployment
         env:
@@ -62,10 +87,8 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN_VALUE"
-
-          resolution_dir="$RUNNER_TEMP/complete-profile-production-canary-resolution"
-          rm -rf "$resolution_dir"
-          mkdir -p "$resolution_dir/aliases"
+          rm -rf "$CANARY_OUTPUT_DIR"
+          mkdir -p "$CANARY_OUTPUT_DIR/aliases"
 
           selected_detail=''
           deployment_id=''
@@ -79,7 +102,7 @@ jobs:
 
             for alias_name in moraltrade.org www.moraltrade.org; do
               alias_key="${alias_name//./-}"
-              alias_path="$resolution_dir/aliases/${alias_key}.json"
+              alias_path="$CANARY_OUTPUT_DIR/aliases/${alias_key}.json"
               alias_api="https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}"
 
               if ! curl -fsS \
@@ -116,7 +139,7 @@ jobs:
             fi
 
             deployment_id="$apex_deployment_id"
-            detail_path="$resolution_dir/deployment-detail.json"
+            detail_path="$CANARY_OUTPUT_DIR/deployment-detail.json"
             detail_api="https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_TEAM_ID}"
 
             if ! curl -fsS \
@@ -162,7 +185,14 @@ jobs:
           test "$deployment_url" != 'https://'
           test -n "$expected_sha"
 
+          if ! git cat-file -e "${expected_sha}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$expected_sha"
+          fi
+          git cat-file -e "${expected_sha}^{commit}"
+          git merge-base --is-ancestor "$expected_sha" "$CONTROL_SHA"
+
           jq -n \
+            --arg controlSha "$CONTROL_SHA" \
             --arg expectedSha "$expected_sha" \
             --arg deploymentId "$deployment_id" \
             --arg deploymentUrl "$deployment_url" \
@@ -171,6 +201,7 @@ jobs:
             --arg canonicalDeploymentId "$canonical_deployment_id" \
             --argjson deployment "$(cat "$selected_detail")" '
               {
+                controlSha: $controlSha,
                 expectedSha: $expectedSha,
                 deploymentId: $deploymentId,
                 deploymentUrl: $deploymentUrl,
@@ -188,7 +219,7 @@ jobs:
                   sha: $deployment.meta.githubCommitSha
                 }
               }
-            ' > "$resolution_dir/deployment.json"
+            ' > "$CANARY_OUTPUT_DIR/deployment.json"
 
           {
             echo "deployment_id=$deployment_id"
@@ -209,29 +240,13 @@ jobs:
             -f description="Verifying the deployment currently serving both production aliases" \
             -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
-      - name: Check out the exact deployed commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ steps.deployment.outputs.expected_sha }}
-          fetch-depth: 1
-
-      - name: Verify the exact checkout and restore resolution evidence
-        env:
-          EXPECTED_SHA: ${{ steps.deployment.outputs.expected_sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
-          mkdir -p "$CANARY_OUTPUT_DIR"
-          cp -R "$RUNNER_TEMP/complete-profile-production-canary-resolution/." "$CANARY_OUTPUT_DIR/"
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
 
-      - name: Install dependencies
+      - name: Install monitor dependencies
         run: npm ci
 
       - name: Install Chromium
@@ -345,11 +360,13 @@ jobs:
           fi
 
           jq -n \
+            --arg controlSha "$CONTROL_SHA" \
             --arg expectedSha "$EXPECTED_SHA" \
             --arg expectedDeploymentId "$EXPECTED_DEPLOYMENT_ID" \
             --arg wwwStatus "$www_status" \
             --arg apexStatus "$apex_status" '
               {
+                controlSha: $controlSha,
                 expectedSha: $expectedSha,
                 expectedDeploymentId: $expectedDeploymentId,
                 wwwStatus: ($wwwStatus | tonumber),
@@ -416,9 +433,11 @@ jobs:
             ' "$detail_path" >/dev/null
 
           jq -n \
+            --arg controlSha "$CONTROL_SHA" \
             --arg expectedSha "$EXPECTED_SHA" \
             --arg expectedDeploymentId "$EXPECTED_DEPLOYMENT_ID" '
               {
+                controlSha: $controlSha,
                 expectedSha: $expectedSha,
                 expectedDeploymentId: $expectedDeploymentId,
                 aliasesStillCurrent: true,
@@ -436,12 +455,14 @@ jobs:
           {
             echo '## Complete Profile production canary'
             echo
-            echo "- Commit: \`$EXPECTED_SHA\`"
+            echo "- Monitor control: \`$CONTROL_SHA\`"
+            echo "- Deployed commit: \`$EXPECTED_SHA\`"
             echo "- Deployment: \`$EXPECTED_DEPLOYMENT_ID\`"
             if [[ -f "$CANARY_OUTPUT_DIR/report.json" ]]; then
               echo "- Result: \`$(jq -r '.status // "unknown"' "$CANARY_OUTPUT_DIR/report.json")\`"
               echo "- Scenarios passed: \`$(jq '[.scenarios[] | select(.status == "passed")] | length' "$CANARY_OUTPUT_DIR/report.json")/6\`"
               echo "- Expected cancelled prefetches: \`$(jq -r '.expectedPrefetchAbortCount // 0' "$CANARY_OUTPUT_DIR/report.json")\`"
+              echo "- Expected first-time navigation cancellations: \`$(jq -r '.expectedNavigationAbortCount // 0' "$CANARY_OUTPUT_DIR/report.json")\`"
             else
               echo '- Result: `failed before the rendered canary`'
             fi
@@ -451,7 +472,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: complete-profile-production-canary-${{ steps.deployment.outputs.expected_sha }}
+          name: complete-profile-production-canary-${{ steps.deployment.outputs.expected_sha || github.sha }}
           path: complete-profile-production-canary
           if-no-files-found: error
           retention-days: 14

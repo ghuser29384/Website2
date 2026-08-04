@@ -94,26 +94,41 @@ test("the release requires a repository secret rather than embedding credentials
   assert.doesNotMatch(source, /tok_[A-Za-z0-9_-]+/);
 });
 
-test("the Complete Profile canary monitors live aliases rather than every main commit", async () => {
+test("the Complete Profile canary runs after control changes without treating them as deployments", async () => {
   const source = await completeProfileCanary();
+  const pushStart = source.indexOf("  push:");
+  const scheduleStart = source.indexOf("  schedule:");
 
+  assert.notEqual(pushStart, -1);
+  assert.notEqual(scheduleStart, -1);
+  const pushTrigger = source.slice(pushStart, scheduleStart);
+  assert.match(pushTrigger, /branches:\n\s+- main/);
+  assert.match(pushTrigger, /paths:/);
+  assert.match(pushTrigger, /complete-profile-canary-diagnostics\.mjs/);
+  assert.match(pushTrigger, /complete-profile-production-canary\.mjs/);
+  assert.match(pushTrigger, /complete-profile-production-canary\.yml/);
+  assert.doesNotMatch(pushTrigger, /src\//);
+  assert.doesNotMatch(pushTrigger, /supabase\//);
   assert.match(source, /schedule:/);
   assert.match(source, /workflow_dispatch:/);
-  assert.doesNotMatch(source, /^\s{2}push:/m);
-  assert.match(source, /REQUESTED_SHA: \$\{\{ inputs\.expected_sha \}\}/);
-  assert.match(
-    source,
-    /for alias_name in moraltrade\.org www\.moraltrade\.org; do/,
-  );
-  assert.match(source, /api\.vercel\.com\/v4\/aliases\/\$\{alias_name\}/);
-  assert.doesNotMatch(source, /api\.vercel\.com\/v6\/deployments\?/);
-  assert.match(source, /ref: \$\{\{ steps\.deployment\.outputs\.expected_sha \}\}/);
-  assert.match(source, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/);
+});
+
+test("the Complete Profile canary keeps monitor control separate from the deployed app revision", async () => {
+  const source = await completeProfileCanary();
+
+  assert.match(source, /CONTROL_SHA: \$\{\{ github\.sha \}\}/);
+  assert.match(source, /ref: \$\{\{ env\.CONTROL_SHA \}\}/);
+  assert.match(source, /test "\$\(git rev-parse HEAD\)" = "\$CONTROL_SHA"/);
+  assert.match(source, /git merge-base --is-ancestor "\$expected_sha" "\$CONTROL_SHA"/);
+  assert.doesNotMatch(source, /ref: \$\{\{ steps\.deployment\.outputs\.expected_sha \}\}/);
+  assert.match(source, /run: node \.github\/scripts\/complete-profile-production-canary\.mjs/);
 });
 
 test("the Complete Profile canary proves current ownership from both alias records", async () => {
   const source = await completeProfileCanary();
 
+  assert.match(source, /for alias_name in moraltrade\.org www\.moraltrade\.org; do/);
+  assert.match(source, /api\.vercel\.com\/v4\/aliases\/\$\{alias_name\}/);
   assert.match(
     source,
     /deploymentId \/\/ \.deployment\.id \/\/ \.deployment\.uid \/\/ empty/,
@@ -127,10 +142,7 @@ test("the Complete Profile canary proves current ownership from both alias recor
   assert.match(source, /\(\.target == "production"\)/);
   assert.match(source, /\(\(\.readyState \/\/ \.state \/\/ ""\) == "READY"\)/);
   assert.match(source, /\(\(\.aliasError \/\/ null\) == null\)/);
-  assert.doesNotMatch(
-    source,
-    /\(\.alias \/\/ \[\]\) \| index\(\$alias\) != null/,
-  );
+  assert.doesNotMatch(source, /api\.vercel\.com\/v6\/deployments\?/);
   assert.doesNotMatch(
     source,
     /grep -Fq "\$EXPECTED_DEPLOYMENT_ID" "\$CANARY_OUTPUT_DIR\/www-returning\.html"/,
@@ -184,6 +196,13 @@ test("the rendered canary runs between current-alias checks", async () => {
     source,
     /Exact live production deployment passed all six Complete Profile canary scenarios/,
   );
+});
+
+test("the canary reports the narrowly expected first-time navigation cancellation", async () => {
+  const source = await completeProfileCanary();
+
+  assert.match(source, /Expected first-time navigation cancellations/);
+  assert.match(source, /expectedNavigationAbortCount/);
 });
 
 test("pull-request checks cannot cancel a production monitor", async () => {
