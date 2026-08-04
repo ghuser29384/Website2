@@ -49,7 +49,7 @@ test("Supabase OAuth provider settings use the checked-in public defaults withou
   }
 });
 
-test("Supabase OAuth provider settings mirror enabled external providers", async () => {
+test("Supabase OAuth provider settings omit product-disabled providers", async () => {
   const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const previousKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
@@ -59,7 +59,7 @@ test("Supabase OAuth provider settings mirror enabled external providers", async
     assert.equal(input, "https://example.supabase.co/auth/v1/settings");
     assert.equal((init?.headers as Record<string, string>).apikey, "publishable-test-key");
     return new Response(
-      JSON.stringify({ external: { google: true, apple: false, facebook: true } }),
+      JSON.stringify({ external: { google: true, apple: true, facebook: true } }),
       { status: 200 },
     );
   };

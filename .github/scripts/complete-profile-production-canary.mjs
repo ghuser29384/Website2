@@ -1,16 +1,23 @@
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "@playwright/test";
+import { isExpectedFirstTimeStandardsAbort } from "./complete-profile-canary-diagnostics.mjs";
 
+const controlSha = process.env.CONTROL_SHA;
 const expectedSha = process.env.EXPECTED_SHA;
 const expectedDeploymentId = process.env.EXPECTED_DEPLOYMENT_ID;
 const canonicalOrigin = process.env.CANONICAL_ORIGIN ?? "https://www.moraltrade.org";
 const apexOrigin = process.env.APEX_ORIGIN ?? "https://moraltrade.org";
 const outputDir = process.env.CANARY_OUTPUT_DIR ?? "complete-profile-production-canary";
 
-assert.ok(expectedSha, "EXPECTED_SHA is required");
+assert.match(controlSha ?? "", /^[0-9a-f]{40}$/, "CONTROL_SHA is required");
+assert.match(expectedSha ?? "", /^[0-9a-f]{40}$/, "EXPECTED_SHA is required");
 assert.ok(expectedDeploymentId, "EXPECTED_DEPLOYMENT_ID is required");
-assert.notEqual(expectedDeploymentId, "null", "EXPECTED_DEPLOYMENT_ID must be a real deployment ID");
+assert.notEqual(
+  expectedDeploymentId,
+  "null",
+  "EXPECTED_DEPLOYMENT_ID must be a real deployment ID",
+);
 
 const entries = [
   { id: "apex", origin: apexOrigin },
@@ -36,8 +43,8 @@ function makeState(entry, flow) {
     consoleErrors: [],
     failedRequests: [],
     expectedPrefetchAborts: [],
+    expectedNavigationAborts: [],
     unexpectedHttpErrors: [],
-    knownRootPrefetch404s: [],
   };
 }
 
@@ -60,20 +67,6 @@ function isExpectedPrefetchAbort(request) {
   );
 }
 
-function isKnownRootPrefetch404(response) {
-  if (response.status() !== 404) return false;
-
-  const url = new URL(response.url());
-  const headers = response.request().headers();
-  const isRootRscPrefetch =
-    url.pathname === "/" &&
-    url.searchParams.has("_rsc") &&
-    (headers["next-router-prefetch"] === "1" ||
-      Boolean(headers["next-router-segment-prefetch"]));
-
-  return isMoralTradeUrl(response.url()) && isRootRscPrefetch;
-}
-
 function attachDiagnostics(page, state) {
   page.on("pageerror", (error) => state.pageErrors.push(error.message));
   page.on("console", (message) => {
@@ -90,12 +83,15 @@ function attachDiagnostics(page, state) {
       url: request.url(),
       method: request.method(),
       resourceType: request.resourceType(),
+      isNavigationRequest: request.isNavigationRequest(),
       errorText: request.failure()?.errorText ?? "unknown",
       headers: request.headers(),
     };
 
     if (isExpectedPrefetchAbort(request)) {
       state.expectedPrefetchAborts.push(record);
+    } else if (isExpectedFirstTimeStandardsAbort(record, state.flow)) {
+      state.expectedNavigationAborts.push(record);
     } else {
       state.failedRequests.push(record);
     }
@@ -111,24 +107,11 @@ function attachDiagnostics(page, state) {
       headers: response.request().headers(),
     };
 
-    if (isKnownRootPrefetch404(response)) {
-      state.knownRootPrefetch404s.push(record);
-    } else {
-      state.unexpectedHttpErrors.push(record);
-    }
+    state.unexpectedHttpErrors.push(record);
   });
 }
 
 function assertNoFatalDiagnostics(state) {
-  const knownPrefetchUrls = new Set(state.knownRootPrefetch404s.map((item) => item.url));
-  const unexpectedConsoleErrors = state.consoleErrors.filter((item) => {
-    const url = item.location?.url ?? "";
-    return !(
-      knownPrefetchUrls.has(url) &&
-      /Failed to load resource: the server responded with a status of 404/i.test(item.text)
-    );
-  });
-
   assert.deepEqual(state.pageErrors, [], `Page errors: ${state.pageErrors.join(" | ")}`);
   assert.deepEqual(
     state.failedRequests,
@@ -141,9 +124,9 @@ function assertNoFatalDiagnostics(state) {
     `Unexpected same-site HTTP errors: ${JSON.stringify(state.unexpectedHttpErrors)}`,
   );
   assert.deepEqual(
-    unexpectedConsoleErrors,
+    state.consoleErrors,
     [],
-    `Unexpected console errors: ${JSON.stringify(unexpectedConsoleErrors)}`,
+    `Unexpected console errors: ${JSON.stringify(state.consoleErrors)}`,
   );
 }
 
@@ -175,6 +158,7 @@ async function settleDiagnostics(page) {
 
 const browser = await chromium.launch({ headless: true });
 const report = {
+  controlSha,
   expectedSha,
   expectedDeploymentId,
   canonicalOrigin,
@@ -324,8 +308,8 @@ try {
     (total, scenario) => total + scenario.expectedPrefetchAborts.length,
     0,
   );
-  report.knownRootPrefetch404Count = report.scenarios.reduce(
-    (total, scenario) => total + scenario.knownRootPrefetch404s.length,
+  report.expectedNavigationAbortCount = report.scenarios.reduce(
+    (total, scenario) => total + scenario.expectedNavigationAborts.length,
     0,
   );
 } catch (error) {

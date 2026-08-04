@@ -313,8 +313,10 @@ for (const viewport of [
     await openDiscover(page);
     await page.locator("#command-input").fill("Wild animal suffering");
     await page.getByRole("button", { name: "Search", exact: true }).click();
-    const offerSide = page.locator('[data-exchange-side="offer"]');
-    const returnSide = page.locator('[data-exchange-side="return"]');
+    const liveResult = page.locator('.transaction-list [data-live-record="true"]');
+    await expect(liveResult).toHaveCount(1);
+    const offerSide = liveResult.locator('[data-exchange-side="offer"]');
+    const returnSide = liveResult.locator('[data-exchange-side="return"]');
     await expect(offerSide).toBeVisible();
     await expect(returnSide).toBeVisible();
     const [offerBox, returnBox] = await Promise.all([offerSide.boundingBox(), returnSide.boundingBox()]);
