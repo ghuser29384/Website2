@@ -1,0 +1,71 @@
+name: Verify canonical preview uses isolated Moral Trade QA
+
+on:
+  push:
+    branches:
+      - qa/marketplace-delta-exact-head-repair-20260731
+    paths:
+      - ".github/workflows/verify-canonical-preview-qa-env-20260804.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      EXPECTED_QA_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      CONTROLLER_PATH: .github/workflows/verify-canonical-preview-qa-env-20260804.yml
+    steps:
+      - name: Pull and compare the canonical preview environment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          test -n "$QA_SUPABASE_PUBLISHABLE_KEY"
+          test -n "$QA_SUPABASE_SERVICE_ROLE_KEY"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          env_file="$RUNNER_TEMP/canonical-preview.env"
+          npx --yes vercel@50.38.1 env pull "$env_file" \
+            --yes \
+            --environment=preview \
+            --token="$VERCEL_TOKEN" >/dev/null
+          set -a
+          source "$env_file"
+          set +a
+          url_match=false
+          publishable_match=false
+          service_role_match=false
+          [[ "${NEXT_PUBLIC_SUPABASE_URL:-}" == "$EXPECTED_QA_URL" ]] && url_match=true
+          [[ "${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" == "$QA_SUPABASE_PUBLISHABLE_KEY" ]] && publishable_match=true
+          [[ "${SUPABASE_SERVICE_ROLE_KEY:-}" == "$QA_SUPABASE_SERVICE_ROLE_KEY" ]] && service_role_match=true
+          rm -f "$env_file"
+          body="Canonical \`moraltrade-site\` preview environment audit: QA URL match=\`$url_match\`, publishable-key match=\`$publishable_match\`, service-role match=\`$service_role_match\`. No environment value was changed."
+          gh pr comment 326 --repo "$GITHUB_REPOSITORY" --body "$body"
+          [[ "$url_match" == true ]]
+          [[ "$publishable_match" == true ]]
+          [[ "$service_role_match" == true ]]
+
+      - name: Remove temporary environment auditor
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=qa/marketplace-delta-exact-head-repair-20260731" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$sha" ]]; then
+            jq -n --arg message 'Remove temporary canonical preview environment auditor' --arg sha "$sha" --arg branch 'qa/marketplace-delta-exact-head-repair-20260731' '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
