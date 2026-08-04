@@ -75,8 +75,8 @@ jobs:
       - name: Run canonical desktop and mobile production matrix
         shell: bash
         run: |
-          mkdir -p artifacts/verify-remove-apple-production/screenshots
-          cat > /tmp/verify-remove-apple-production.mjs <<'EOF'
+          mkdir -p artifacts/verify-remove-apple-production/screenshots .tmp
+          cat > .tmp/verify-remove-apple-production.mjs <<'EOF'
           import assert from "node:assert/strict";
           import { writeFile } from "node:fs/promises";
           import { chromium } from "@playwright/test";
@@ -170,7 +170,7 @@ jobs:
             `${JSON.stringify(report, null, 2)}\n`,
           );
           EOF
-          node /tmp/verify-remove-apple-production.mjs
+          node .tmp/verify-remove-apple-production.mjs
 
       - name: Upload canonical production evidence
         if: always()
