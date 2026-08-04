@@ -83,7 +83,11 @@ async function createUser(role, displayName) {
     email,
     password,
     email_confirm: true,
-    user_metadata: { display_name: displayName },
+    user_metadata: {
+      display_name: displayName,
+      qa_fixture: true,
+      one_person_qa_run_id: runId,
+    },
   });
   if (result.error || !result.data.user) throw result.error || new Error(`Could not create ${role}.`);
   const user = { id: result.data.user.id, email, displayName, role, mfa: null };
@@ -1229,6 +1233,8 @@ async function ensureMfa(page, user) {
   assert.ok(user.mfa?.secret, `Missing test MFA secret for ${user.role}.`);
   await page.goto(`${baseUrl}/dashboard#account-security`);
   const panel = page.locator("article#account-security");
+  await panel.waitFor({ state: "attached", timeout: 30_000 });
+  await panel.scrollIntoViewIfNeeded();
   await panel.waitFor({ state: "visible", timeout: 30_000 });
   if (/Session level\s*aal2/i.test(await panel.innerText())) return;
   const verifyForm = panel.locator("form").filter({ has: page.getByRole("button", { name: "Verify session" }) });
@@ -1885,11 +1891,14 @@ async function cleanup() {
   if (createdUserIds.length) {
     const audits = await admin.from("institutional_audit_events").delete().in("actor_profile_id", createdUserIds);
     if (audits.error) throw audits.error;
-    const profiles = await admin.from("profiles").delete().in("id", createdUserIds);
-    if (profiles.error) throw profiles.error;
     for (const id of createdUserIds) {
-      const result = await admin.auth.admin.deleteUser(id);
-      if (result.error && !/not found/i.test(result.error.message)) throw result.error;
+      const result = await admin.rpc("cleanup_one_person_qa_fixture_v1", {
+        p_profile_id: id,
+        p_qa_run_id: runId,
+      });
+      if (result.error) {
+        throw new Error(`cleanup_one_person_qa_fixture_v1 ${id}: ${result.error.message}`);
+      }
     }
   }
 }
