@@ -1,0 +1,343 @@
+name: Input assist hydration exact gates dee04ab7
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/input-assist-hydration-gates-dee04ab7.yml"
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: input-assist-hydration-gates-dee04ab7
+  cancel-in-progress: false
+
+env:
+  PRODUCT_BASE_SHA: 366d8a067fd92a19ca51a799287d8bc1d53223bb
+  CANDIDATE_SHA: dee04ab7381dc1806ec838139f6f3f1033401b3e
+  PRODUCT_PR: "510"
+  STATUS_CONTEXT: QA / Input assist hydration exact gates
+  BASELINE_RUN_ID: "30877175677"
+  EVIDENCE_DIR: input-assist-hydration-evidence-dee04ab7
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  exact-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Mark the immutable candidate pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Running exact source, rendered, and full-suite differential gates" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Guard product PR identity and exact scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
+
+          actual_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          expected_files="$(printf '%s\n' \
+            'src/app/layout.tsx' \
+            'src/lib/input-assist-hydration.test.ts' \
+            'tests/input-assist-hydration.spec.ts' | sort)"
+          test "$actual_files" = "$expected_files"
+
+      - name: Check out the immutable product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove immutable identity and exact base differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git fetch --depth=1 origin "$PRODUCT_BASE_SHA"
+          actual_files="$(git diff --name-only "$PRODUCT_BASE_SHA" "$CANDIDATE_SHA" | sort)"
+          expected_files="$(printf '%s\n' \
+            'src/app/layout.tsx' \
+            'src/lib/input-assist-hydration.test.ts' \
+            'tests/input-assist-hydration.spec.ts' | sort)"
+          test "$actual_files" = "$expected_files"
+          git diff --check "$PRODUCT_BASE_SHA" "$CANDIDATE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          git diff --stat "$PRODUCT_BASE_SHA" "$CANDIDATE_SHA" > "$EVIDENCE_DIR/diff-stat.txt"
+          printf '%s\n' "$PRODUCT_BASE_SHA" > "$EVIDENCE_DIR/product-base-sha.txt"
+          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"; then exit 0; fi
+            if [[ "$attempt" == '3' ]]; then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run source, lint, type, and production-build gates
+        shell: bash
+        run: |
+          set -o pipefail
+          node --import tsx --test src/lib/input-assist-hydration.test.ts \
+            2>&1 | tee "$EVIDENCE_DIR/focused-source-test.log"
+          npm test 2>&1 | tee "$EVIDENCE_DIR/source-tests.log"
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+          npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/build.log"
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Repeat the focused hydration regression
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test tests/input-assist-hydration.spec.ts \
+            --workers=1 --repeat-each=3 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/focused-playwright.log"
+
+      - name: Run the complete rendered suite and retain its truthful result
+        id: full_suite
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          npx playwright test --reporter=json \
+            > "$EVIDENCE_DIR/candidate-report.json" \
+            2> "$EVIDENCE_DIR/candidate-playwright.stderr.log"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$EVIDENCE_DIR/candidate-exit-status.txt"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const dir = process.env.EVIDENCE_DIR;
+          const reportPath = path.join(dir, 'candidate-report.json');
+          const failures = [];
+          let report;
+
+          function resultErrors(test) {
+            const errors = [];
+            for (const result of test?.results ?? []) {
+              if (result.status === 'passed' || result.status === 'skipped') continue;
+              for (const error of result.errors ?? []) {
+                const text = String(error?.message ?? error?.stack ?? error ?? '').trim();
+                if (text) errors.push(text.slice(0, 6000));
+              }
+            }
+            return errors;
+          }
+
+          function visitSuite(suite, ancestors = []) {
+            const nextAncestors = suite?.title ? [...ancestors, suite.title] : ancestors;
+            for (const spec of suite?.specs ?? []) {
+              const failedTests = (spec.tests ?? []).filter((test) =>
+                (test.results ?? []).some((result) =>
+                  !['passed', 'skipped'].includes(result.status),
+                ),
+              );
+              if (spec.ok === false || failedTests.length > 0) {
+                failures.push({
+                  file: spec.file ?? '',
+                  line: spec.line ?? 0,
+                  column: spec.column ?? 0,
+                  title: [...nextAncestors, spec.title ?? ''].filter(Boolean).join(' › '),
+                  errors: failedTests.flatMap(resultErrors),
+                });
+              }
+            }
+            for (const child of suite?.suites ?? []) visitSuite(child, nextAncestors);
+          }
+
+          report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          for (const suite of report.suites ?? []) visitSuite(suite, []);
+
+          const unique = [];
+          const seen = new Set();
+          for (const failure of failures) {
+            const key = `${failure.file}:${failure.line}:${failure.column} › ${failure.title}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            unique.push({ key, ...failure });
+          }
+          unique.sort((a, b) => a.key.localeCompare(b.key));
+
+          const hydrationPattern = /hydrated but some attributes of the server rendered HTML didn't match|Hydration failed because the server rendered HTML didn't match/;
+          const hydrationFailures = unique.filter((failure) =>
+            failure.errors.some((error) => hydrationPattern.test(error)),
+          );
+          const summary = {
+            candidateSha: process.env.CANDIDATE_SHA,
+            exitStatus: Number(fs.readFileSync(path.join(dir, 'candidate-exit-status.txt'), 'utf8').trim()),
+            stats: report.stats ?? null,
+            failureCount: unique.length,
+            hydrationMismatchCount: hydrationFailures.length,
+            hydrationFailures: hydrationFailures.map((failure) => failure.key),
+          };
+
+          fs.writeFileSync(path.join(dir, 'candidate-failures.json'), `${JSON.stringify(unique, null, 2)}\n`);
+          fs.writeFileSync(path.join(dir, 'candidate-summary.json'), `${JSON.stringify(summary, null, 2)}\n`);
+          fs.writeFileSync(
+            path.join(dir, 'candidate-failures.txt'),
+            `${unique.map((failure) => failure.key).join('\n')}${unique.length ? '\n' : ''}`,
+          );
+          console.log(JSON.stringify(summary, null, 2));
+          NODE
+
+      - name: Download the three-run immutable baseline evidence
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ghuser29384/Website2
+          run-id: ${{ env.BASELINE_RUN_ID }}
+          pattern: playwright-baseline-*-ad82ed44
+          path: baseline-artifacts
+          merge-multiple: false
+
+      - name: Enforce the exact full-suite differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const modes = ['default-a', 'default-b', 'serial'];
+          const baseline = {};
+          const baselineUnion = new Set();
+          const hydrationPattern = /hydrated but some attributes of the server rendered HTML didn't match|Hydration failed because the server rendered HTML didn't match/;
+
+          for (const mode of modes) {
+            const dir = path.join('baseline-artifacts', `playwright-baseline-${mode}-ad82ed44`);
+            const summary = JSON.parse(fs.readFileSync(path.join(dir, 'summary.json'), 'utf8'));
+            const failures = JSON.parse(fs.readFileSync(path.join(dir, 'failures.json'), 'utf8'));
+            for (const failure of failures) baselineUnion.add(failure.key);
+            baseline[mode] = {
+              ...summary,
+              hydrationMismatchCount: failures.filter((failure) =>
+                (failure.errors ?? []).some((error) => hydrationPattern.test(error)),
+              ).length,
+            };
+          }
+
+          const evidenceDir = process.env.EVIDENCE_DIR;
+          const candidateSummary = JSON.parse(
+            fs.readFileSync(path.join(evidenceDir, 'candidate-summary.json'), 'utf8'),
+          );
+          const candidateFailures = JSON.parse(
+            fs.readFileSync(path.join(evidenceDir, 'candidate-failures.json'), 'utf8'),
+          );
+          const candidateKeys = new Set(candidateFailures.map((failure) => failure.key));
+          const newFailures = candidateFailures
+            .filter((failure) => !baselineUnion.has(failure.key))
+            .map((failure) => failure.key)
+            .sort();
+          const baselineFailuresAbsent = [...baselineUnion]
+            .filter((key) => !candidateKeys.has(key))
+            .sort();
+
+          const comparison = {
+            baselineRunId: process.env.BASELINE_RUN_ID,
+            baselineProductSha: 'ad82ed44628deeadef038c21f2d9a36fa60f9da3',
+            candidateSha: process.env.CANDIDATE_SHA,
+            baseline,
+            baselineUnionFailureCount: baselineUnion.size,
+            candidate: candidateSummary,
+            newFailureCount: newFailures.length,
+            newFailures,
+            baselineFailuresAbsentCount: baselineFailuresAbsent.length,
+            baselineFailuresAbsent,
+            passed:
+              newFailures.length === 0 &&
+              candidateSummary.hydrationMismatchCount === 0 &&
+              candidateSummary.failureCount <= baselineUnion.size,
+          };
+
+          fs.writeFileSync(
+            path.join(evidenceDir, 'full-suite-comparison.json'),
+            `${JSON.stringify(comparison, null, 2)}\n`,
+          );
+          console.log(JSON.stringify(comparison, null, 2));
+          if (!comparison.passed) process.exit(1);
+          NODE
+
+          {
+            echo '## Input-assist hydration exact gates'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Baseline union failures: \`$(jq -r '.baselineUnionFailureCount' "$EVIDENCE_DIR/full-suite-comparison.json")\`"
+            echo "- Candidate failures: \`$(jq -r '.candidate.failureCount' "$EVIDENCE_DIR/full-suite-comparison.json")\`"
+            echo "- New failures: \`$(jq -r '.newFailureCount' "$EVIDENCE_DIR/full-suite-comparison.json")\`"
+            echo "- Candidate hydration mismatches: \`$(jq -r '.candidate.hydrationMismatchCount' "$EVIDENCE_DIR/full-suite-comparison.json")\`"
+            echo "- Baseline failures absent in this run: \`$(jq -r '.baselineFailuresAbsentCount' "$EVIDENCE_DIR/full-suite-comparison.json")\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload exact gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: input-assist-hydration-gates-dee04ab7
+          path: input-assist-hydration-evidence-dee04ab7
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish the immutable candidate result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="Exact gates passed with zero new full-suite failures and zero hydration mismatches"
+          else
+            state=failure
+            description="Input-assist hydration exact gates failed; inspect the immutable evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
