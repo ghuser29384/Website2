@@ -1,0 +1,150 @@
+name: Sync PR 326 with current main and trigger exact gate (one-shot)
+
+on:
+  push:
+    branches:
+      - qa/marketplace-delta-exact-head-repair-20260731
+    paths:
+      - ".github/workflows/pr326-sync-current-main-one-shot-20260804.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr326-sync-current-main-one-shot-20260804
+  cancel-in-progress: true
+
+jobs:
+  synchronize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      PRODUCT_BRANCH: agent/marketplace-delta-current-main-20260729
+      QA_BRANCH: qa/marketplace-delta-exact-head-repair-20260731
+      TRIGGER_PATH: .github/qa/marketplace-delta-cleanup-now
+    steps:
+      - name: Check out QA controller branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Merge current main into PR 326 and trigger the exact evidence gate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          post_comment() {
+            local body="$1"
+            jq -n --arg body "$body" '{body:$body}' > "$RUNNER_TEMP/comment.json"
+            curl --fail-with-body --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$RUNNER_TEMP/comment.json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/326/comments" \
+              --output /dev/null
+          }
+
+          trigger_gate() {
+            local main_sha="$1"
+            local product_sha="$2"
+            local api_url="https://api.github.com/repos/$GITHUB_REPOSITORY/contents/$TRIGGER_PATH"
+            local current="$RUNNER_TEMP/current-trigger.json"
+            curl --fail-with-body --silent --show-error --get \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              --data-urlencode "ref=$QA_BRANCH" \
+              "$api_url" --output "$current"
+            local blob_sha content payload
+            blob_sha="$(jq -r '.sha' "$current")"
+            content="audit-trigger-main-${main_sha}-product-${product_sha}-one-shot-${GITHUB_RUN_ID}"
+            payload="$RUNNER_TEMP/trigger-payload.json"
+            jq -n \
+              --arg message "Trigger exact-head marketplace audit for synchronized PR 326" \
+              --arg content "$(printf '%s\n' "$content" | base64 -w0)" \
+              --arg sha "$blob_sha" \
+              --arg branch "$QA_BRANCH" \
+              '{message:$message,content:$content,sha:$sha,branch:$branch}' > "$payload"
+            curl --fail-with-body --silent --show-error \
+              --request PUT \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              --header "Content-Type: application/json" \
+              --data-binary "@$payload" \
+              "$api_url" --output /dev/null
+          }
+
+          post_comment "Started one-shot synchronization for PR #326: coordinator run ${GITHUB_RUN_ID}."
+
+          last_pair=""
+          stable_intervals=0
+          for tick in $(seq 1 40); do
+            git fetch --no-tags origin main "$PRODUCT_BRANCH"
+            main_sha="$(git rev-parse origin/main)"
+            product_sha="$(git rev-parse "origin/$PRODUCT_BRANCH")"
+
+            pr_json="$RUNNER_TEMP/pr-326.json"
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $GITHUB_TOKEN" \
+              --header "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/pulls/326" \
+              --output "$pr_json"
+            [[ "$(jq -r '.state' "$pr_json")" == "open" ]]
+            [[ "$(jq -r '.base.ref' "$pr_json")" == "main" ]]
+            [[ "$(jq -r '.head.ref' "$pr_json")" == "$PRODUCT_BRANCH" ]]
+            [[ "$(jq -r '.head.sha' "$pr_json")" == "$product_sha" ]]
+
+            if ! git merge-base --is-ancestor "$main_sha" "$product_sha"; then
+              before="$product_sha"
+              git checkout -B "$PRODUCT_BRANCH" "origin/$PRODUCT_BRANCH"
+              if ! git merge --no-ff --no-edit "$main_sha" -m "Merge current main into marketplace delta PR"; then
+                git merge --abort || true
+                post_comment "One-shot synchronization run ${GITHUB_RUN_ID} stopped: current main does not merge cleanly into PR #326. No branch update was pushed."
+                exit 1
+              fi
+              git diff --check "$before...HEAD"
+              merged="$(git rev-parse HEAD)"
+
+              git fetch --no-tags origin main "$PRODUCT_BRANCH"
+              if [[ "$(git rev-parse origin/main)" != "$main_sha" ]] || \
+                 [[ "$(git rev-parse "origin/$PRODUCT_BRANCH")" != "$before" ]]; then
+                git reset --hard "origin/$PRODUCT_BRANCH"
+                last_pair=""
+                stable_intervals=0
+                sleep 15
+                continue
+              fi
+
+              git push --force-with-lease="refs/heads/$PRODUCT_BRANCH:$before" \
+                origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+              product_sha="$merged"
+              post_comment "Synced PR #326 with main \`$main_sha\` via merge commit \`$product_sha\` in one-shot run ${GITHUB_RUN_ID}."
+              last_pair=""
+              stable_intervals=0
+            fi
+
+            pair="${main_sha}:${product_sha}"
+            if [[ "$pair" == "$last_pair" ]]; then
+              stable_intervals=$((stable_intervals + 1))
+            else
+              last_pair="$pair"
+              stable_intervals=0
+            fi
+
+            echo "Observed pair $pair; stable intervals ${stable_intervals}/4."
+            if (( stable_intervals >= 4 )); then
+              trigger_gate "$main_sha" "$product_sha"
+              post_comment "Triggered a new exact-head marketplace evidence run for main \`$main_sha\` and PR head \`$product_sha\` after a stable window."
+              exit 0
+            fi
+            sleep 15
+          done
+
+          post_comment "One-shot synchronization run ${GITHUB_RUN_ID} timed out before main and PR #326 remained stable long enough to trigger the evidence gate."
+          exit 1
