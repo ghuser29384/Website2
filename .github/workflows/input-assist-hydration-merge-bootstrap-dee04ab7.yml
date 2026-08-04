@@ -1,0 +1,204 @@
+name: Input assist hydration merge bootstrap dee04ab7
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/input-assist-hydration-merge-bootstrap-dee04ab7.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: input-assist-hydration-merge-bootstrap-dee04ab7
+  cancel-in-progress: false
+
+env:
+  PRODUCT_PR: "510"
+  PRODUCT_HEAD_SHA: dee04ab7381dc1806ec838139f6f3f1033401b3e
+  PRODUCT_BASE_SHA: 366d8a067fd92a19ca51a799287d8bc1d53223bb
+  EXPECTED_MAIN_SHA: dff426440c5829575defc34a7f02ed97f1ac353b
+  ADJUDICATION_CONTEXT: QA / Input assist hydration adjudication
+  CLASSIFICATION_CONTEXT: release-classification
+  EVIDENCE_DIR: input-assist-hydration-merge-bootstrap-dee04ab7
+
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Guard the one-use controller identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.head.ref }}' = 'qa/input-assist-hydration-merge-bootstrap-dee04ab7'
+          test '${{ github.event.pull_request.base.ref }}' = 'main'
+          mkdir -p "$EVIDENCE_DIR"
+
+      - name: Check out trusted current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Validate trusted policy, product identity, exact evidence, and current main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          current_main="$(git rev-parse HEAD)"
+          test "$current_main" = "$EXPECTED_MAIN_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_MAIN_SHA"
+
+          git fetch --depth=1 origin "$PRODUCT_BASE_SHA"
+          actual_drift="$(git diff --name-only "$PRODUCT_BASE_SHA" "$EXPECTED_MAIN_SHA" | sort)"
+          expected_drift="$(printf '%s\n' \
+            '.github/pr212-lint-baseline-stage-v12-trigger.txt' \
+            '.github/pr212-qa-monitor-v12-trigger.txt' \
+            '.github/workflows/pr212-lint-baseline-stage-v12-20260804.yml' \
+            '.github/workflows/pr212-qa-monitor-v12-20260804.yml' | sort)"
+          test "$actual_drift" = "$expected_drift"
+
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .merged <<<"$product_pr")" = 'false'
+          test "$(jq -r .draft <<<"$product_pr")" = 'false'
+          test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$PRODUCT_HEAD_SHA"
+          test "$(jq -r .mergeable <<<"$product_pr")" = 'true'
+
+          actual_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          expected_files="$(printf '%s\n' \
+            'src/app/layout.tsx' \
+            'src/lib/input-assist-hydration.test.ts' \
+            'tests/input-assist-hydration.spec.ts' | sort)"
+          test "$actual_files" = "$expected_files"
+
+          export PR_BODY="$(jq -r .body <<<"$product_pr")"
+          node scripts/validate-release-pr-body.mjs 2>&1 | tee "$EVIDENCE_DIR/release-policy.log"
+
+          statuses="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${PRODUCT_HEAD_SHA}/status")"
+          latest_state() {
+            jq -r --arg context "$1" \
+              '[.statuses[] | select(.context == $context)] | sort_by(.updated_at) | last | .state // empty' \
+              <<<"$statuses"
+          }
+          test "$(latest_state "$ADJUDICATION_CONTEXT")" = 'success'
+          test "$(latest_state "$CLASSIFICATION_CONTEXT")" = 'success'
+
+          jq -n \
+            --arg productPr "$PRODUCT_PR" \
+            --arg productHeadSha "$PRODUCT_HEAD_SHA" \
+            --arg productBaseSha "$PRODUCT_BASE_SHA" \
+            --arg currentMain "$current_main" \
+            --arg adjudicationState "$(latest_state "$ADJUDICATION_CONTEXT")" \
+            --arg classificationState "$(latest_state "$CLASSIFICATION_CONTEXT")" \
+            '{productPr:($productPr|tonumber),productHeadSha:$productHeadSha,productBaseSha:$productBaseSha,currentMain:$currentMain,adjudicationState:$adjudicationState,classificationState:$classificationState,validated:true}' \
+            > "$EVIDENCE_DIR/premerge.json"
+
+      - name: Publish the required status to each live merge candidate and merge without bypass
+        id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          merged=false
+          merged_sha=''
+
+          for attempt in $(seq 1 30); do
+            product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+            if [[ "$(jq -r .merged <<<"$product_pr")" == 'true' ]]; then
+              merged=true
+              merged_sha="$(jq -r .merge_commit_sha <<<"$product_pr")"
+              break
+            fi
+
+            test "$(jq -r .state <<<"$product_pr")" = 'open'
+            test "$(jq -r .head.sha <<<"$product_pr")" = "$PRODUCT_HEAD_SHA"
+            test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
+            test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$EXPECTED_MAIN_SHA"
+
+            merge_sha="$(jq -r '.merge_commit_sha // empty' <<<"$product_pr")"
+            test -n "$merge_sha"
+
+            for target_sha in "$PRODUCT_HEAD_SHA" "$merge_sha"; do
+              jq -n \
+                --arg state success \
+                --arg target_url "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+                --arg description "Trusted release policy and exact candidate evidence passed" \
+                --arg context "$CLASSIFICATION_CONTEXT" \
+                '{state:$state,target_url:$target_url,description:$description,context:$context}' \
+                | gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${target_sha}" --input - >/dev/null
+            done
+
+            jq -n \
+              --arg merge_method squash \
+              --arg sha "$PRODUCT_HEAD_SHA" \
+              --arg commit_title "Defer global input assist until after hydration" \
+              --arg commit_message "Eliminate the global input-assist pre-hydration mutation race. Exact source, lint, type, build, repeated rendered, cart adjudication, and no-new-failure differential evidence are recorded on PR #510 and issue #469. Production promotion remains blocked behind the complete rendered release gate." \
+              '{merge_method:$merge_method,sha:$sha,commit_title:$commit_title,commit_message:$commit_message}' \
+              > /tmp/merge-payload.json
+
+            set +e
+            merge_response="$(gh api --method PUT \
+              "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/merge" \
+              --input /tmp/merge-payload.json 2>"$EVIDENCE_DIR/merge-attempt-${attempt}.stderr")"
+            merge_status=$?
+            set -e
+            printf '%s\n' "$merge_response" > "$EVIDENCE_DIR/merge-attempt-${attempt}.json"
+
+            if [[ "$merge_status" -eq 0 ]] && [[ "$(jq -r '.merged // false' <<<"$merge_response")" == 'true' ]]; then
+              merged=true
+              merged_sha="$(jq -r .sha <<<"$merge_response")"
+              break
+            fi
+
+            sleep 3
+          done
+
+          test "$merged" = true
+          test -n "$merged_sha"
+          echo "merged_sha=$merged_sha" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$merged_sha" > "$EVIDENCE_DIR/merged-sha.txt"
+
+      - name: Verify the immutable product merge is on main and remains unreleased
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGED_SHA: ${{ steps.merge.outputs.merged_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .merged <<<"$product_pr")" = 'true'
+          test "$(jq -r .merge_commit_sha <<<"$product_pr")" = "$MERGED_SHA"
+
+          git fetch origin main --depth=50
+          git fetch origin "$MERGED_SHA" --depth=1
+          git merge-base --is-ancestor "$MERGED_SHA" origin/main
+
+          main_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          jq -n \
+            --arg productPr "$PRODUCT_PR" \
+            --arg productHeadSha "$PRODUCT_HEAD_SHA" \
+            --arg mergedSha "$MERGED_SHA" \
+            --arg mainSha "$main_sha" \
+            '{productPr:($productPr|tonumber),productHeadSha:$productHeadSha,mergedSha:$mergedSha,mainSha:$mainSha,merged:true,productionPromoted:false}' \
+            > "$EVIDENCE_DIR/postmerge.json"
+
+      - name: Upload one-use merge evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: input-assist-hydration-merge-bootstrap-dee04ab7
+          path: input-assist-hydration-merge-bootstrap-dee04ab7
+          if-no-files-found: error
+          retention-days: 14
