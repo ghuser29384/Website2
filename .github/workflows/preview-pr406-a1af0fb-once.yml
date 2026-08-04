@@ -1,0 +1,429 @@
+name: One-time exact PR 406 canonical preview a1af0fb
+
+on:
+  push:
+    branches:
+      - ops/preview-pr406-a1af0fb-20260804
+    paths:
+      - .github/workflows/preview-pr406-a1af0fb-once.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: preview-pr406-a1af0fb-once
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/preview-pr406-a1af0fb-once.yml
+  CONTROLLER_BRANCH: ops/preview-pr406-a1af0fb-20260804
+  TARGET_BRANCH: feature/pledge-impact-live-foundation-20260801
+  EXPECTED_HEAD: a1af0fb465c2a77182a25df443f61e8fba5aa666
+  EXPECTED_MAIN: bd56b364ef91d17e4f7baed90236d904fb5c8452
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+  MIGRATION_VERSION: '20260801030000'
+  MIGRATION_BLOB: c83ab30d7a84b2c97a70181fb5ba909cbebb75f4
+
+jobs:
+  preview:
+    if: github.repository == 'ghuser29384/Website2'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact PR 406 head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Guard exact head, current main, and intended diff
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN"
+          test "$(git merge-base HEAD origin/main)" = "$EXPECTED_MAIN"
+          cat > /tmp/expected-files.txt <<'EOF'
+          .github/workflows/pledge-impact-live-foundation-gates.yml
+          src/app/api/mpgf/pledge-impact/route.ts
+          src/lib/mpgf/pledge-impact-live-integration.test.ts
+          src/lib/mpgf/pledge-impact-live-server.ts
+          src/lib/mpgf/pledge-impact-live.test.ts
+          src/lib/mpgf/pledge-impact-live.ts
+          supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql
+          supabase/tests/mpgf_pledge_impact_live_foundation.sql
+          EOF
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          git diff --name-only origin/main HEAD | sort > /tmp/actual-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+          git diff --check origin/main HEAD
+          test "$(git rev-parse "HEAD:supabase/migrations/20260801030000_mpgf_pledge_impact_live_foundation.sql")" = "$MIGRATION_BLOB"
+
+      - name: Remove the one-time controller from its operations branch
+        id: self-delete
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=$CONTROLLER_BRANCH" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-time exact PR 406 preview controller' \
+            --arg sha "$blob_sha" \
+            --arg branch "$CONTROLLER_BRANCH" \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run exact repository quality gates
+        id: quality
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: preview
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: 'false'
+          TRADE_DONATION_POOL_MODE: disabled
+          DIRECT_DONATION_UPGRADES_ENABLED: 'false'
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          node --import tsx --test \
+            src/lib/mpgf/pledge-impact-live.test.ts \
+            src/lib/mpgf/pledge-impact-live-integration.test.ts \
+            2>&1 | tee pr406-preview-focused-tests.log
+          npm test 2>&1 | tee pr406-preview-repository-tests.log
+          npm run lint -- --quiet 2>&1 | tee pr406-preview-eslint.log
+          npx tsc --noEmit 2>&1 | tee pr406-preview-typescript.log
+          npm run build 2>&1 | tee pr406-preview-build.log
+
+      - name: Validate exact MoralTrade QA target
+        id: qa-target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          if os.environ['QA_PROJECT_REF'] not in (parsed.username or ''):
+              raise SystemExit('Refusing a database URL outside exact MoralTrade QA.')
+          if parsed.hostname != 'aws-0-us-west-1.pooler.supabase.com':
+              raise SystemExit(f'Refusing unexpected database host: {parsed.hostname}')
+          if parsed.port != 5432 or parsed.path != '/postgres':
+              raise SystemExit('Refusing unexpected QA database connection parameters.')
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Re-run exact persistent QA SQL regression
+        id: qa-regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          registered="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+            "select count(*) from supabase_migrations.schema_migrations where version = '$MIGRATION_VERSION';")"
+          test "$registered" = '1'
+          marker="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+            "select coalesce(statements[1], '') from supabase_migrations.schema_migrations where version = '$MIGRATION_VERSION';")"
+          [[ "$marker" == *"$MIGRATION_BLOB"* ]]
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_pledge_impact_live_foundation.sql \
+            2>&1 | tee pr406-preview-qa-regression.log
+
+      - name: Link only the canonical Vercel project
+        id: link
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull preview environment and build on GitHub Actions
+        id: vercel-build
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes \
+            --environment=preview \
+            --token="$VERCEL_TOKEN" \
+            --scope=ellen-s
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+            --token="$VERCEL_TOKEN" \
+            --scope=ellen-s 2>&1 | tee pr406-preview-vercel-build.log
+
+      - name: Deploy exact prebuilt Preview and verify identity
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          raw="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+            --prebuilt \
+            --token="$VERCEL_TOKEN" \
+            --scope=ellen-s 2>&1 | tee pr406-preview-vercel-deploy.log)"
+          clean="$(printf '%s\n' "$raw" | sed -r 's/\x1B\[[0-9;]*[mK]//g')"
+          deployment_url="$(printf '%s\n' "$clean" | grep -Eo 'https://[A-Za-z0-9.-]+\.vercel\.app' | tail -n1)"
+          test -n "$deployment_url"
+          host="${deployment_url#https://}"
+          printf '%s\n' "$deployment_url" > pr406-preview-url.txt
+
+          state=''
+          for attempt in $(seq 1 120); do
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$host?teamId=$VERCEL_ORG_ID" \
+              > pr406-preview-deployment.json
+            state="$(jq -r '.readyState // .state // empty' pr406-preview-deployment.json)"
+            if [[ "$state" == 'READY' ]]; then break; fi
+            if [[ "$state" == 'ERROR' || "$state" == 'CANCELED' ]]; then
+              echo "Deployment terminal state: $state" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          test "$state" = 'READY'
+
+          deployment_id="$(jq -r '.id // .uid // empty' pr406-preview-deployment.json)"
+          project_id="$(jq -r '.projectId // .project.id // empty' pr406-preview-deployment.json)"
+          deployed_sha="$(jq -r '.meta.githubCommitSha // empty' pr406-preview-deployment.json)"
+          target="$(jq -r '.target // "preview"' pr406-preview-deployment.json)"
+          test -n "$deployment_id"
+          test "$project_id" = "$VERCEL_PROJECT_ID"
+          test "$deployed_sha" = "$EXPECTED_HEAD"
+          [[ "$target" == 'preview' || "$target" == 'null' ]]
+
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          jq -n \
+            --arg deploymentId "$deployment_id" \
+            --arg deploymentUrl "$deployment_url" \
+            --arg commit "$deployed_sha" \
+            --arg state "$state" \
+            --arg projectId "$project_id" \
+            '{deploymentId:$deploymentId,deploymentUrl:$deploymentUrl,commit:$commit,state:$state,target:"preview",projectId:$projectId}' \
+            > pr406-preview-deployment-evidence.json
+
+      - name: Create temporary Vercel automation bypass
+        id: bypass
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          secret="$(python3 - <<'PY'
+          import secrets
+          import string
+          alphabet = string.ascii_letters + string.digits
+          print(''.join(secrets.choice(alphabet) for _ in range(32)))
+          PY
+          )"
+          test "${#secret}" -eq 32
+          echo "::add-mask::$secret"
+          printf '%s' "$secret" > /tmp/pr406-bypass-secret
+          jq -n --arg secret "$secret" \
+            '{generate:{secret:$secret,note:"Temporary PR 406 exact preview QA"}}' \
+            > /tmp/pr406-generate-bypass.json
+          curl --fail --silent --show-error \
+            --request PATCH \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/pr406-generate-bypass.json \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/protection-bypass?teamId=$VERCEL_ORG_ID" \
+            > /tmp/pr406-generate-bypass-response.json
+          rm -f /tmp/pr406-generate-bypass.json /tmp/pr406-generate-bypass-response.json
+
+      - name: Verify fail-closed no-store Preview API and method boundary
+        id: verify
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.deploy.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          secret="$(cat /tmp/pr406-bypass-secret)"
+          echo "::add-mask::$secret"
+          common_headers=(
+            -H "x-vercel-protection-bypass: $secret"
+            -H 'x-vercel-set-bypass-cookie: true'
+          )
+
+          root_status="$(curl --silent --show-error --location \
+            "${common_headers[@]}" \
+            --output pr406-preview-root.html \
+            --write-out '%{http_code}' \
+            --max-time 45 \
+            "$PREVIEW_URL")"
+          test "$root_status" = '200'
+          grep -Fq 'Moral Trade' pr406-preview-root.html
+
+          valid_url="$PREVIEW_URL/api/mpgf/pledge-impact?pool=pool-preview-unmapped&pledgeCents=3500"
+          curl --silent --show-error --location \
+            "${common_headers[@]}" \
+            --dump-header pr406-preview-api.headers \
+            --output pr406-preview-api.json \
+            --write-out '%{http_code}' \
+            "$valid_url" > pr406-preview-api.status
+          test "$(cat pr406-preview-api.status)" = '200'
+          grep -Eiq '^cache-control:.*private.*no-store' pr406-preview-api.headers
+          test "$(jq -r .status pr406-preview-api.json)" = 'unavailable'
+          test "$(jq -r .experimental pr406-preview-api.json)" = 'true'
+          test "$(jq -r .poolPublicKey pr406-preview-api.json)" = 'pool-preview-unmapped'
+          test "$(jq -r '.mechanicalEffect == null' pr406-preview-api.json)" = 'true'
+          reason="$(jq -r .reason pr406-preview-api.json)"
+          [[ "$reason" == 'pool_not_live' || "$reason" == 'service_unavailable' ]]
+
+          curl --silent --show-error --location \
+            "${common_headers[@]}" \
+            --output pr406-preview-malformed.json \
+            --write-out '%{http_code}' \
+            "$PREVIEW_URL/api/mpgf/pledge-impact?pool=bad&pledgeCents=3500" \
+            > pr406-preview-malformed.status
+          test "$(cat pr406-preview-malformed.status)" = '400'
+
+          curl --silent --show-error --location \
+            "${common_headers[@]}" \
+            --output pr406-preview-invalid-amount.json \
+            --write-out '%{http_code}' \
+            "$PREVIEW_URL/api/mpgf/pledge-impact?pool=pool-preview-unmapped&pledgeCents=3.5" \
+            > pr406-preview-invalid-amount.status
+          test "$(cat pr406-preview-invalid-amount.status)" = '400'
+
+          curl --silent --show-error --location \
+            "${common_headers[@]}" \
+            --request POST \
+            --output pr406-preview-post.json \
+            --write-out '%{http_code}' \
+            "$valid_url" > pr406-preview-post.status
+          test "$(cat pr406-preview-post.status)" = '405'
+
+          jq -n \
+            --arg previewUrl "$PREVIEW_URL" \
+            --arg deploymentId "${{ steps.deploy.outputs.deployment_id }}" \
+            --arg commit "$EXPECTED_HEAD" \
+            --arg reason "$reason" \
+            --arg cacheControl "$(grep -Ei '^cache-control:' pr406-preview-api.headers | tr -d '\r' | head -n1)" \
+            '{status:"passed",previewUrl:$previewUrl,deploymentId:$deploymentId,commit:$commit,available:false,reason:$reason,cacheControl:$cacheControl,malformedStatus:400,invalidAmountStatus:400,postStatus:405,noProductionMappingPublished:true,noNumericalForecastPublished:true}' \
+            > pr406-preview-evidence.json
+
+      - name: Revoke temporary Vercel automation bypass
+        id: revoke
+        if: always() && steps.bypass.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          secret="$(cat /tmp/pr406-bypass-secret)"
+          echo "::add-mask::$secret"
+          jq -n --arg secret "$secret" \
+            '{revoke:{secret:$secret,regenerate:false}}' \
+            > /tmp/pr406-revoke-bypass.json
+          curl --fail --silent --show-error \
+            --request PATCH \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/pr406-revoke-bypass.json \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/protection-bypass?teamId=$VERCEL_ORG_ID" \
+            > /tmp/pr406-revoke-bypass-response.json
+          rm -f /tmp/pr406-bypass-secret /tmp/pr406-revoke-bypass.json /tmp/pr406-revoke-bypass-response.json
+
+      - name: Upload exact Preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr406-exact-preview-${{ github.run_id }}
+          path: |
+            pr406-preview-url.txt
+            pr406-preview-deployment.json
+            pr406-preview-deployment-evidence.json
+            pr406-preview-evidence.json
+            pr406-preview-focused-tests.log
+            pr406-preview-repository-tests.log
+            pr406-preview-eslint.log
+            pr406-preview-typescript.log
+            pr406-preview-build.log
+            pr406-preview-qa-regression.log
+            pr406-preview-vercel-build.log
+            pr406-preview-vercel-deploy.log
+            pr406-preview-api.headers
+            pr406-preview-api.json
+            pr406-preview-api.status
+            pr406-preview-malformed.json
+            pr406-preview-malformed.status
+            pr406-preview-invalid-amount.json
+            pr406-preview-invalid-amount.status
+            pr406-preview-post.json
+            pr406-preview-post.status
+            /tmp/expected-files.txt
+            /tmp/actual-files.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Report exact Preview result to PR 406
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          if [[ "${{ steps.verify.outcome }}" == 'success' && "${{ steps.revoke.outcome }}" == 'success' ]]; then
+            preview_url="$(cat pr406-preview-url.txt)"
+            deployment_id="$(jq -r .deploymentId pr406-preview-evidence.json)"
+            reason="$(jq -r .reason pr406-preview-evidence.json)"
+            gh pr comment 406 --repo "$GITHUB_REPOSITORY" --body "Exact canonical Preview gates passed for \`$EXPECTED_HEAD\`. The current-main eight-file diff, focused and complete repository tests, ESLint, absolute TypeScript, production build, exact persistent-QA SQL regression, canonical Vercel deployment identity, and remote API boundary all passed. Deployment \`$deployment_id\` is READY and Preview-targeted. The API is private/no-store, rejects malformed input and POST mutation, publishes no production pool mapping or numerical forecast, and fails closed with \`$reason\`. Preview: $preview_url Evidence: $run_url"
+          else
+            gh pr comment 406 --repo "$GITHUB_REPOSITORY" --body "Exact canonical Preview gates failed for \`$EXPECTED_HEAD\`. PR #406 remains draft and unmerged; production mapping and numerical forecast publication remain disabled. Evidence: $run_url"
+          fi
+
+      - name: Enforce verified exact Preview and bypass cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.guard.outcome }}" = 'success'
+          test "${{ steps.quality.outcome }}" = 'success'
+          test "${{ steps.qa-regression.outcome }}" = 'success'
+          test "${{ steps.deploy.outcome }}" = 'success'
+          test "${{ steps.verify.outcome }}" = 'success'
+          test "${{ steps.revoke.outcome }}" = 'success'
