@@ -18,7 +18,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: ed6213cf4df1e6983cf131a6e0460e177b455ec4
+  EXPECTED_PARENT: cc3ccd18ab012b5fa12be8db55c3c62697564f08
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
   REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
 
@@ -48,11 +48,36 @@ jobs:
           test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
           test -f "$REPAIR_SCRIPT"
 
+      - name: Record bounded repair start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started bounded blocker repair in Actions run \`$GITHUB_RUN_ID\` at controller commit \`$GITHUB_SHA\`. The workflow will push source changes only if focused contracts, the full test suite, ESLint, TypeScript, the production build, and the exact rendered Playwright workflow all pass. The PR remains draft; no merge or deployment is authorized."
+
       - name: Apply bounded source repair
         shell: bash
         run: |
           set -euo pipefail
           python3 "$REPAIR_SCRIPT"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("public/moral-trade-create/index.html")
+          source = path.read_text(encoding="utf-8")
+          old = 'CREATE_DRAFT_STORAGE.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify({ ...state, published: false }));'
+          new = '''CREATE_DRAFT_STORAGE.setItem(
+                  CREATE_DRAFT_STORAGE_KEY,
+                  JSON.stringify({ ...state, step: 4, offerPhase: "details", published: false }),
+                );'''
+          count = source.count(old)
+          if count != 1:
+              raise SystemExit(f"Expected exactly one authentication resume snapshot; found {count}")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
+
           git rm "$CONTROLLER_PATH" "$REPAIR_SCRIPT"
 
           cat > /tmp/expected-files <<'EOF'
@@ -150,7 +175,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Resolved the two rendered blockers on commit \`$REPAIR_SHA\`: Co-Fund monetary inputs now remain stable across sequential edits, and proposal-only Co-Act/Co-Fund state survives the authentication handoff through top-level session storage. Focused contracts, complete tests, ESLint, TypeScript, production build, and the exact four-test Playwright workflow all passed. The PR remains draft and proposal-only; it was not merged or deployed."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Resolved the rendered blockers on commit \`$REPAIR_SHA\`: Co-Fund monetary inputs remain stable across sequential edits, and proposal-only Co-Act/Co-Fund state returns to the final review screen after the authentication handoff. Focused contracts, complete tests, ESLint, TypeScript, production build, and the exact four-test Playwright workflow all passed. The PR remains draft and proposal-only; it was not merged or deployed."
+
+      - name: Record bounded repair failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Bounded blocker repair run \`$GITHUB_RUN_ID\` failed before a source commit was pushed. The draft branch therefore remains at the controller commit. Failure evidence is attached to the run where available; no merge or deployment occurred."
 
       - name: Upload failure evidence
         if: failure()
