@@ -131,8 +131,57 @@ function safeLink(link) {
   };
 }
 
-export function safeProjectSummary(project, domains = []) {
+function safeDeploymentSummary(deployment) {
+  if (!deployment || typeof deployment !== "object") return null;
+  const id = deployment.id ?? deployment.uid ?? null;
+  if (!id) return null;
+  return {
+    id,
+    readyState: deployment.readyState ?? deployment.state ?? null,
+    target: deployment.target ?? null,
+    createdAt: deployment.createdAt ?? deployment.created ?? null,
+  };
+}
+
+export function selectReadyProductionDeployment(deployments = []) {
+  return (
+    deployments
+      .map(safeDeploymentSummary)
+      .filter(
+        (deployment) =>
+          deployment?.readyState === "READY" &&
+          deployment.target === "production",
+      )
+      .sort(
+        (left, right) =>
+          Number(right.createdAt ?? 0) - Number(left.createdAt ?? 0),
+      )[0] ?? null
+  );
+}
+
+export function safeProjectSummary(
+  project,
+  domains = [],
+  productionDeployments = [],
+) {
   if (!project) return null;
+  const resourceConfig = project.resourceConfig
+    ? {
+        buildMachineType: project.resourceConfig.buildMachineType ?? null,
+        buildQueue:
+          project.resourceConfig.buildQueue?.configuration ?? null,
+        ...(Object.hasOwn(
+          project.resourceConfig,
+          "elasticConcurrencyEnabled",
+        )
+          ? {
+              elasticConcurrencyEnabled:
+                project.resourceConfig.elasticConcurrencyEnabled,
+            }
+          : {}),
+      }
+    : null;
+
   return {
     id: project.id,
     name: project.name,
@@ -143,25 +192,14 @@ export function safeProjectSummary(project, domains = []) {
       .map((entry) => (typeof entry === "string" ? entry : entry?.name))
       .filter(Boolean)
       .sort(),
-    resourceConfig: project.resourceConfig
-      ? {
-          buildMachineType: project.resourceConfig.buildMachineType ?? null,
-          elasticConcurrencyEnabled:
-            project.resourceConfig.elasticConcurrencyEnabled ?? null,
-          buildQueue:
-            project.resourceConfig.buildQueue?.configuration ?? null,
-        }
-      : null,
+    resourceConfig,
     speedInsightsEnabled: Boolean(project.speedInsights?.enabledAt),
     webAnalyticsEnabled: Boolean(project.webAnalytics?.enabledAt),
-    latestDeployment: project.latestDeployments?.[0]
-      ? {
-          id: project.latestDeployments[0].id,
-          readyState: project.latestDeployments[0].readyState,
-          target: project.latestDeployments[0].target ?? null,
-          createdAt: project.latestDeployments[0].createdAt ?? null,
-        }
-      : null,
+    latestDeployment: safeDeploymentSummary(
+      project.latestDeployments?.[0],
+    ),
+    productionDeployment:
+      selectReadyProductionDeployment(productionDeployments),
   };
 }
 
@@ -217,7 +255,19 @@ async function getDomains(token, id, { allow404 = false } = {}) {
   return response?.domains ?? [];
 }
 
-async function inspectProject(token, expected, { allow404 = false } = {}) {
+async function getProductionDeployments(token, id) {
+  const response = await request(
+    `/v6/deployments?projectId=${encodeURIComponent(id)}&target=production&limit=20`,
+    { token },
+  );
+  return response?.deployments ?? [];
+}
+
+async function inspectProject(
+  token,
+  expected,
+  { allow404 = false, includeProductionDeployments = false } = {},
+) {
   const project = await getProject(token, expected.id, { allow404 });
   if (!project) return null;
   if (project.id !== expected.id || project.name !== expected.name) {
@@ -229,11 +279,24 @@ async function inspectProject(token, expected, { allow404 = false } = {}) {
     );
   }
   const domains = await getDomains(token, expected.id);
-  return { project, domains, summary: safeProjectSummary(project, domains) };
+  const productionDeployments = includeProductionDeployments
+    ? await getProductionDeployments(token, expected.id)
+    : [];
+  return {
+    project,
+    domains,
+    summary: safeProjectSummary(
+      project,
+      domains,
+      productionDeployments,
+    ),
+  };
 }
 
 async function audit(token) {
-  const canonical = await inspectProject(token, CANONICAL_PROJECT);
+  const canonical = await inspectProject(token, CANONICAL_PROJECT, {
+    includeProductionDeployments: true,
+  });
   const duplicate = await inspectProject(token, DUPLICATE_PROJECT, {
     allow404: true,
   });
@@ -295,9 +358,17 @@ export function verifyCanonicalSettings(summary) {
       `Canonical build machine is not standard: ${JSON.stringify(config)}`,
     );
   }
-  if (config.elasticConcurrencyEnabled === true) {
+  if (!Object.hasOwn(config, "elasticConcurrencyEnabled")) {
     throw new Error(
-      `On-demand build concurrency remains enabled: ${JSON.stringify(config)}`,
+      `On-demand build concurrency readback is missing: ${JSON.stringify(config)}`,
+    );
+  }
+  if (
+    config.elasticConcurrencyEnabled !== false &&
+    config.elasticConcurrencyEnabled !== null
+  ) {
+    throw new Error(
+      `On-demand build concurrency is not disabled: ${JSON.stringify(config)}`,
     );
   }
   if (config.buildQueue !== "WAIT_FOR_NAMESPACE_QUEUE") {
@@ -310,12 +381,24 @@ export function verifyCanonicalSettings(summary) {
 
 export function verifyCanonicalLive(summary) {
   if (!summary) throw new Error("Canonical Vercel project is missing.");
-  if (summary.live !== true) {
+  const productionDeployment = summary.productionDeployment;
+  const domains = new Set(summary.domains ?? []);
+  const canonicalAliasesAssigned =
+    domains.has("moraltrade.org") &&
+    domains.has("www.moraltrade.org");
+  const productionIsReady =
+    Boolean(productionDeployment?.id) &&
+    productionDeployment.readyState === "READY" &&
+    productionDeployment.target === "production";
+
+  if (!productionIsReady || !canonicalAliasesAssigned) {
     throw new Error(
-      `Canonical Vercel project is not live: ${JSON.stringify({
+      `Canonical Vercel project is not operational: ${JSON.stringify({
         id: summary.id,
         name: summary.name,
         live: summary.live,
+        productionDeployment: productionDeployment ?? null,
+        domains: [...domains].sort(),
       })}`,
     );
   }

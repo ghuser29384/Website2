@@ -396,7 +396,12 @@ export function CompleteProfileReview({
         />
 
         <header className={styles.profileHeader}>
-          <Link aria-label="Moral Trade home" className={styles.brandLockup} href="/">
+          <Link
+            aria-label="Moral Trade home"
+            className={styles.brandLockup}
+            href="/"
+            prefetch={false}
+          >
             <MoralMark />
             <span>Moral Trade</span>
           </Link>

@@ -97,6 +97,10 @@ jobs:
 
       - name: Run complete rendered browser gate
         shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
         run: |
           set -euo pipefail
           npx playwright install --with-deps chromium
