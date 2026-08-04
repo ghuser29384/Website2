@@ -30,7 +30,10 @@ test("only main and the designated release-preview branch can deploy", async () 
   const source = await workflow();
   assert.match(source, /RELEASE_PREVIEW_BRANCH: release\/vercel-preview/);
   assert.match(source, /test "\$\{\{ inputs\.ref \}\}" = 'main'/);
-  assert.match(source, /test "\$\{\{ inputs\.ref \}\}" = "\$RELEASE_PREVIEW_BRANCH"/);
+  assert.match(
+    source,
+    /test "\$\{\{ inputs\.ref \}\}" = "\$RELEASE_PREVIEW_BRANCH"/,
+  );
   assert.match(source, /test "\$remote_sha" = "\$\{\{ inputs\.expected_sha \}\}"/);
 });
 
@@ -91,52 +94,103 @@ test("the release requires a repository secret rather than embedding credentials
   assert.doesNotMatch(source, /tok_[A-Za-z0-9_-]+/);
 });
 
-test("the Complete Profile canary monitors the live deployment rather than every main commit", async () => {
+test("the Complete Profile canary monitors live aliases rather than every main commit", async () => {
   const source = await completeProfileCanary();
 
   assert.match(source, /schedule:/);
   assert.match(source, /workflow_dispatch:/);
   assert.doesNotMatch(source, /^\s{2}push:/m);
   assert.match(source, /REQUESTED_SHA: \$\{\{ inputs\.expected_sha \}\}/);
-  assert.match(source, /select\(\(\$sha == ""\) or \(\.meta\.githubCommitSha == \$sha\)\)/);
+  assert.match(
+    source,
+    /for alias_name in moraltrade\.org www\.moraltrade\.org; do/,
+  );
+  assert.match(source, /api\.vercel\.com\/v4\/aliases\/\$\{alias_name\}/);
+  assert.doesNotMatch(source, /api\.vercel\.com\/v6\/deployments\?/);
   assert.match(source, /ref: \$\{\{ steps\.deployment\.outputs\.expected_sha \}\}/);
   assert.match(source, /test "\$\(git rev-parse HEAD\)" = "\$EXPECTED_SHA"/);
 });
 
-test("the Complete Profile canary binds custom domains through Vercel aliases, not page HTML", async () => {
+test("the Complete Profile canary proves current ownership from both alias records", async () => {
   const source = await completeProfileCanary();
 
-  assert.match(source, /api\.vercel\.com\/v13\/deployments\/\$\{EXPECTED_DEPLOYMENT_ID\}/);
-  assert.match(source, /--arg alias 'moraltrade\.org'/);
-  assert.match(source, /--arg alias 'www\.moraltrade\.org'/);
-  assert.match(source, /\(\.alias \/\/ \[\]\) \| index\(\$alias\) != null/);
+  assert.match(
+    source,
+    /deploymentId \/\/ \.deployment\.id \/\/ \.deployment\.uid \/\/ empty/,
+  );
+  assert.match(source, /resolved_project.*projectId \/\/ empty/);
+  assert.match(
+    source,
+    /\[\[ "\$apex_deployment_id" != "\$canonical_deployment_id" \]\]/,
+  );
+  assert.match(source, /api\.vercel\.com\/v13\/deployments\/\$\{deployment_id\}/);
+  assert.match(source, /\(\.target == "production"\)/);
+  assert.match(source, /\(\(\.readyState \/\/ \.state \/\/ ""\) == "READY"\)/);
+  assert.match(source, /\(\(\.aliasError \/\/ null\) == null\)/);
+  assert.doesNotMatch(
+    source,
+    /\(\.alias \/\/ \[\]\) \| index\(\$alias\) != null/,
+  );
   assert.doesNotMatch(
     source,
     /grep -Fq "\$EXPECTED_DEPLOYMENT_ID" "\$CANARY_OUTPUT_DIR\/www-returning\.html"/,
   );
+});
+
+test("route behavior remains an independent canary gate", async () => {
+  const source = await completeProfileCanary();
+
   assert.match(source, /grep -Fq 'Spend 100 sparks of attention\.'/);
   assert.match(source, /grep -Fqx 'x-matched-path: \/complete-profile'/);
   assert.match(source, /\[\[ "\$apex_status" == '308' \]\]/);
+  assert.match(
+    source,
+    /\^location: https:\/\/www\\\.moraltrade\\\.org\/complete-profile/,
+  );
 });
 
-test("the Complete Profile canary runs the permanent browser script only after exact alias verification", async () => {
+test("the rendered canary runs between current-alias checks", async () => {
   const source = await completeProfileCanary();
-  const domainIndex = source.indexOf(
-    "- name: Verify the exact deployment through both production domains",
+  const preBrowserIndex = source.indexOf(
+    "- name: Verify current alias ownership and both production routes",
   );
   const browserIndex = source.indexOf(
     "- name: Run the rendered first-time and returning-user canary",
   );
+  const postBrowserIndex = source.indexOf(
+    "- name: Reconfirm current alias ownership after the rendered canary",
+  );
+  const publishIndex = source.indexOf("- name: Publish the canary result");
 
-  assert.notEqual(domainIndex, -1);
-  assert.notEqual(browserIndex, -1);
-  assert.ok(domainIndex < browserIndex);
+  for (const index of [
+    preBrowserIndex,
+    browserIndex,
+    postBrowserIndex,
+    publishIndex,
+  ]) {
+    assert.notEqual(index, -1);
+  }
+  assert.ok(preBrowserIndex < browserIndex);
+  assert.ok(browserIndex < postBrowserIndex);
+  assert.ok(postBrowserIndex < publishIndex);
+
+  const postBrowserSource = source.slice(postBrowserIndex, publishIndex);
+  assert.match(postBrowserSource, /api\.vercel\.com\/v4\/aliases\/\$\{alias_name\}/);
   assert.match(
-    source.slice(browserIndex),
-    /node \.github\/scripts\/complete-profile-production-canary\.mjs/,
+    postBrowserSource,
+    /api\.vercel\.com\/v13\/deployments\/\$\{EXPECTED_DEPLOYMENT_ID\}/,
   );
   assert.match(
     source,
     /Exact live production deployment passed all six Complete Profile canary scenarios/,
+  );
+});
+
+test("pull-request checks cannot cancel a production monitor", async () => {
+  const source = await completeProfileCanary();
+
+  assert.match(
+    source,
+    /group: complete-profile-production-canary-\$\{\{ github\.event_name == 'pull_request' && github\.event\.pull_request\.number \|\| 'production' \}\}/,
   );
 });
