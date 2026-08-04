@@ -18,7 +18,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: 0ce0cb2abd9789815b979c73db467886437712b1
+  EXPECTED_PARENT: ada3cb9f7fcb616391f94d501e131f9b6e4e0d48
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
   REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
 
@@ -65,17 +65,38 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("public/moral-trade-create/index.html")
-          source = path.read_text(encoding="utf-8")
-          old = 'CREATE_DRAFT_STORAGE.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify({ ...state, published: false }));'
-          new = '''CREATE_DRAFT_STORAGE.setItem(
+          html_path = Path("public/moral-trade-create/index.html")
+          html = html_path.read_text(encoding="utf-8")
+          old_snapshot = 'CREATE_DRAFT_STORAGE.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify({ ...state, published: false }));'
+          new_snapshot = '''CREATE_DRAFT_STORAGE.setItem(
                   CREATE_DRAFT_STORAGE_KEY,
                   JSON.stringify({ ...state, step: 4, offerPhase: "details", published: false }),
                 );'''
-          count = source.count(old)
-          if count != 1:
-              raise SystemExit(f"Expected exactly one authentication resume snapshot; found {count}")
-          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          snapshot_count = html.count(old_snapshot)
+          if snapshot_count != 1:
+              raise SystemExit(
+                  f"Expected exactly one authentication resume snapshot; found {snapshot_count}"
+              )
+          html_path.write_text(html.replace(old_snapshot, new_snapshot, 1), encoding="utf-8")
+
+          contract_path = Path("src/lib/create-interface/source-contract.test.ts")
+          contract = contract_path.read_text(encoding="utf-8")
+          old_assertion = (
+              '  assert.match(html, /CREATE_DRAFT_STORAGE\\.setItem\\(CREATE_DRAFT_STORAGE_KEY/);\n'
+          )
+          new_assertions = (
+              '  assert.match(html, /CREATE_DRAFT_STORAGE\\.setItem\\(\\s*CREATE_DRAFT_STORAGE_KEY/);\n'
+              '  assert.match(html, /step: 4, offerPhase: "details", published: false/);\n'
+          )
+          assertion_count = contract.count(old_assertion)
+          if assertion_count != 1:
+              raise SystemExit(
+                  f"Expected exactly one single-line resume-storage assertion; found {assertion_count}"
+              )
+          contract_path.write_text(
+              contract.replace(old_assertion, new_assertions, 1),
+              encoding="utf-8",
+          )
           PY
 
           git rm "$CONTROLLER_PATH" "$REPAIR_SCRIPT"
