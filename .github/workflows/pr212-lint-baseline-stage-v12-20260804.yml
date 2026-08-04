@@ -71,26 +71,32 @@ jobs:
           staged = Path(os.environ["STAGED_PATH"])
           text = source.read_text()
 
-          anchor = '''              (
-                  "public.moral_trade_create_submit_service",
-                  "warning",
-                  "42804",
-                  "target type is different type than source type",
-              ),
-'''
-          additions = '''              (
-                  "public.record_person_verification_result_v1",
-                  "warning",
-                  "42804",
-                  "target type is different type than source type",
-              ),
-              (
-                  "public.cleanup_one_person_qa_fixture_v1",
-                  "warning",
-                  "42804",
-                  "target type is different type than source type",
-              ),
-'''
+          anchor = "\n".join(
+              [
+                  "              (",
+                  '                  "public.moral_trade_create_submit_service",',
+                  '                  "warning",',
+                  '                  "42804",',
+                  '                  "target type is different type than source type",',
+                  "              ),",
+              ]
+          ) + "\n"
+          additions = "\n".join(
+              [
+                  "              (",
+                  '                  "public.record_person_verification_result_v1",',
+                  '                  "warning",',
+                  '                  "42804",',
+                  '                  "target type is different type than source type",',
+                  "              ),",
+                  "              (",
+                  '                  "public.cleanup_one_person_qa_fixture_v1",',
+                  '                  "warning",',
+                  '                  "42804",',
+                  '                  "target type is different type than source type",',
+                  "              ),",
+              ]
+          ) + "\n"
 
           markers = (
               "public.record_person_verification_result_v1",
@@ -113,7 +119,7 @@ jobs:
               raise SystemExit("Institutional fail-closed lint gate was unexpectedly altered or missing.")
           if patched.count("if observed != expected_preexisting") != 1:
               raise SystemExit("Exact pre-existing lint-baseline comparison was unexpectedly altered or missing.")
-          if patched.replace(additions, "", 1) != text and present == (False, False):
+          if present == (False, False) and patched.replace(additions, "", 1) != text:
               raise SystemExit("The generated workflow differs by more than the two observed baseline tuples.")
 
           staged.write_text(patched)
