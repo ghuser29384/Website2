@@ -18,7 +18,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: 77e1ce309da9c98279d4ef02f98270916bc86525
+  EXPECTED_PARENT: 2718b2bbb36dc4dd4798ff579f9d1063e287f7bd
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
   REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
 
@@ -54,7 +54,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started the final bounded authentication-resume repair in Actions run \`$GITHUB_RUN_ID\` at controller commit \`$GITHUB_SHA\`. The workflow will push source changes only if focused contracts, the full test suite, ESLint, TypeScript, the production build, and the exact rendered Playwright workflow all pass. The PR remains draft; no merge or deployment is authorized."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started bounded iframe-remount-safe authentication-resume repair in Actions run \`$GITHUB_RUN_ID\` at controller commit \`$GITHUB_SHA\`. The workflow will push source changes only if focused contracts, the full test suite, ESLint, TypeScript, the production build, and the exact rendered Playwright workflow all pass. The PR remains draft; no merge or deployment is authorized."
 
       - name: Apply bounded source repair
         shell: bash
@@ -64,6 +64,7 @@ jobs:
 
           python3 - <<'PY'
           from pathlib import Path
+          from textwrap import dedent
 
           html_path = Path("public/moral-trade-create/index.html")
           html = html_path.read_text(encoding="utf-8")
@@ -80,72 +81,23 @@ jobs:
               )
           html = html.replace(old_snapshot, new_snapshot, 1)
 
-          old_resume_guard = (
-              '    function restoreDraftForResume() {\n'
-              '      const shouldResume = new URLSearchParams(window.location.search).get("resume") === "create";\n'
-              '      if (!shouldResume) return false;'
+          old_restore_cleanup = (
+              '        Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });\n'
+              '        CREATE_DRAFT_STORAGE.removeItem(CREATE_DRAFT_STORAGE_KEY);\n'
+              '        return true;'
           )
-          new_resume_guard = (
-              '    function createDraftResumeRequestUrl() {\n'
-              '      try {\n'
-              '        if (window.top && window.top !== window) return new URL(window.top.location.href);\n'
-              '      } catch {}\n'
-              '      try {\n'
-              '        return new URL(document.baseURI);\n'
-              '      } catch {\n'
-              '        return new URL(window.location.href);\n'
-              '      }\n'
-              '    }\n\n'
-              '    function restoreDraftForResume() {\n'
-              '      const shouldResume =\n'
-              '        createDraftResumeRequestUrl().searchParams.get("resume") === "create";\n'
-              '      if (!shouldResume) return false;'
+          new_restore_cleanup = (
+              '        Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });\n'
+              '        // Keep the snapshot until a durable receipt or explicit reset. The srcDoc iframe can remount during route hydration.\n'
+              '        return true;'
           )
-          resume_guard_count = html.count(old_resume_guard)
-          if resume_guard_count != 1:
+          cleanup_count = html.count(old_restore_cleanup)
+          if cleanup_count != 1:
               raise SystemExit(
-                  f"Expected exactly one iframe-local authentication resume guard; found {resume_guard_count}"
+                  f"Expected exactly one eager authentication-resume cleanup; found {cleanup_count}"
               )
-          html = html.replace(old_resume_guard, new_resume_guard, 1)
+          html = html.replace(old_restore_cleanup, new_restore_cleanup, 1)
           html_path.write_text(html, encoding="utf-8")
-
-          client_path = Path("src/lib/create-interface/group-contribution-client.ts")
-          client = client_path.read_text(encoding="utf-8")
-          old_client_resume = (
-              'function isResumeRequest(): boolean {\n'
-              '  try {\n'
-              '    return new URL(window.location.href).searchParams.get("resume") === "create";\n'
-              '  } catch {\n'
-              '    return false;\n'
-              '  }\n'
-              '}'
-          )
-          new_client_resume = (
-              'function isResumeRequest(): boolean {\n'
-              '  try {\n'
-              '    const href =\n'
-              '      window.top && window.top !== window\n'
-              '        ? window.top.location.href\n'
-              '        : window.location.href;\n'
-              '    return new URL(href).searchParams.get("resume") === "create";\n'
-              '  } catch {\n'
-              '    try {\n'
-              '      return new URL(window.location.href).searchParams.get("resume") === "create";\n'
-              '    } catch {\n'
-              '      return false;\n'
-              '    }\n'
-              '  }\n'
-              '}'
-          )
-          client_resume_count = client.count(old_client_resume)
-          if client_resume_count != 1:
-              raise SystemExit(
-                  f"Expected exactly one group-contribution resume request reader; found {client_resume_count}"
-              )
-          client_path.write_text(
-              client.replace(old_client_resume, new_client_resume, 1),
-              encoding="utf-8",
-          )
 
           contract_path = Path("src/lib/create-interface/source-contract.test.ts")
           contract = contract_path.read_text(encoding="utf-8")
@@ -155,52 +107,32 @@ jobs:
           new_assertions = (
               '  assert.match(html, /CREATE_DRAFT_STORAGE\\.setItem\\(\\s*CREATE_DRAFT_STORAGE_KEY/);\n'
               '  assert.match(html, /step: 4, offerPhase: "details", published: false/);\n'
-              '  assert.match(html, /function createDraftResumeRequestUrl/);\n'
-              '  assert.match(html, /window\\.top\\.location\\.href/);\n'
-              '  assert.match(html, /new URL\\(document\\.baseURI\\)/);\n'
-              '  assert.match(html, /createDraftResumeRequestUrl\\(\\)\\.searchParams\\.get\\("resume"\\)/);\n'
           )
           assertion_count = contract.count(old_assertion)
           if assertion_count != 1:
               raise SystemExit(
                   f"Expected exactly one single-line resume-storage assertion; found {assertion_count}"
               )
-          contract_path.write_text(
-              contract.replace(old_assertion, new_assertions, 1),
-              encoding="utf-8",
-          )
+          contract = contract.replace(old_assertion, new_assertions, 1)
 
-          stability_path = Path(
-              "src/lib/create-interface/group-contribution-client-stability.test.ts"
-          )
-          stability = stability_path.read_text(encoding="utf-8")
-          old_stability_tail = (
-              '  const restore = functionBody("readStoredResumeProposal");\n'
-              '  assert.match(restore, /parseGroupContributionProposalPayload/);\n'
-              '  assert.match(restore, /permitsGroupContributionMode/);\n'
-              '  assert.match(restore, /result\\.ok/);\n'
-              '});'
-          )
-          new_stability_tail = (
-              '  const resumeRequest = functionBody("isResumeRequest");\n'
-              '  assert.match(resumeRequest, /window\\.top/);\n'
-              '  assert.match(resumeRequest, /window\\.top\\.location\\.href/);\n'
-              '  assert.match(resumeRequest, /window\\.location\\.href/);\n\n'
-              '  const restore = functionBody("readStoredResumeProposal");\n'
-              '  assert.match(restore, /parseGroupContributionProposalPayload/);\n'
-              '  assert.match(restore, /permitsGroupContributionMode/);\n'
-              '  assert.match(restore, /result\\.ok/);\n'
-              '});'
-          )
-          stability_tail_count = stability.count(old_stability_tail)
-          if stability_tail_count != 1:
-              raise SystemExit(
-                  f"Expected exactly one authentication-resume stability tail; found {stability_tail_count}"
-              )
-          stability_path.write_text(
-              stability.replace(old_stability_tail, new_stability_tail, 1),
-              encoding="utf-8",
-          )
+          remount_test_name = "authentication resume snapshot survives an iframe remount until durable receipt"
+          if remount_test_name in contract:
+              raise SystemExit("The iframe-remount authentication-resume contract already exists")
+          contract += dedent('''\
+
+          test("authentication resume snapshot survives an iframe remount until durable receipt", () => {
+            const start = html.indexOf("function restoreDraftForResume()");
+            const end = html.indexOf("\\n    function renderSubmittedReceipt", start);
+            assert.ok(start >= 0 && end > start);
+            const restoreSource = html.slice(start, end);
+            assert.match(restoreSource, /Object\\.assign\\(state, saved/);
+            assert.doesNotMatch(
+              restoreSource,
+              /CREATE_DRAFT_STORAGE\\.removeItem\\(CREATE_DRAFT_STORAGE_KEY\\)/,
+            );
+          });
+          ''')
+          contract_path.write_text(contract, encoding="utf-8")
           PY
 
           git rm "$CONTROLLER_PATH" "$REPAIR_SCRIPT"
@@ -300,7 +232,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Resolved the rendered blockers on commit \`$REPAIR_SHA\`: Co-Fund monetary inputs remain stable across sequential edits, and proposal-only Co-Act/Co-Fund state returns to the final review screen after the authentication handoff. Focused contracts, complete tests, ESLint, TypeScript, production build, and the exact four-test Playwright workflow all passed. The PR remains draft and proposal-only; it was not merged or deployed."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Resolved the rendered blockers on commit \`$REPAIR_SHA\`: Co-Fund monetary inputs remain stable across sequential edits, and proposal-only Co-Act/Co-Fund state returns to the final review screen after the authentication handoff, including a srcDoc iframe remount during route hydration. Focused contracts, complete tests, ESLint, TypeScript, production build, and the exact four-test Playwright workflow all passed. The PR remains draft and proposal-only; it was not merged or deployed."
 
       - name: Record bounded repair failure
         if: failure()
@@ -309,7 +241,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Final bounded blocker repair run \`$GITHUB_RUN_ID\` failed before a source commit was pushed. The draft branch therefore remains at the controller commit. Failure evidence is attached to the run where available; no merge or deployment occurred."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Bounded iframe-remount-safe blocker repair run \`$GITHUB_RUN_ID\` failed before a source commit was pushed. The draft branch therefore remains at the controller commit. Failure evidence is attached to the run where available; no merge or deployment occurred."
 
       - name: Upload failure evidence
         if: failure()
