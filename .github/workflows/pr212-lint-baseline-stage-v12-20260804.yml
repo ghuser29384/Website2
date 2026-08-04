@@ -124,16 +124,17 @@ jobs:
           grep -Fq 'public.cleanup_one_person_qa_fixture_v1' "$STAGED_PATH"
           grep -Fq 'if institutional:' "$STAGED_PATH"
           grep -Fq 'if observed != expected_preexisting:' "$STAGED_PATH"
+          status=0
           diff -u "$QA_WORKFLOW_PATH" "$STAGED_PATH" | tee /tmp/pr212-lint-baseline-v12.diff || status=$?
-          [[ "${status:-1}" == "1" ]] || {
-            echo "Expected one narrow staged diff; diff exit was ${status:-0}." >&2
+          [[ "$status" == "1" ]] || {
+            echo "Expected one narrow staged diff; diff exit was $status." >&2
             exit 1
           }
           grep -Fq '+                  "public.record_person_verification_result_v1",' /tmp/pr212-lint-baseline-v12.diff
           grep -Fq '+                  "public.cleanup_one_person_qa_fixture_v1",' /tmp/pr212-lint-baseline-v12.diff
-          added="$(grep -c '^+' /tmp/pr212-lint-baseline-v12.diff)"
-          removed="$(grep -c '^-' /tmp/pr212-lint-baseline-v12.diff)"
-          [[ "$added" == "15" && "$removed" == "1" ]] || {
+          added="$(grep -Ec '^\+[^+]' /tmp/pr212-lint-baseline-v12.diff || true)"
+          removed="$(grep -Ec '^-[^-]' /tmp/pr212-lint-baseline-v12.diff || true)"
+          [[ "$added" == "12" && "$removed" == "0" ]] || {
             echo "Unexpected diff shape: added=$added removed=$removed" >&2
             cat /tmp/pr212-lint-baseline-v12.diff >&2
             exit 1
