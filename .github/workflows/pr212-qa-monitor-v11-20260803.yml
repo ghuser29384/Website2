@@ -28,7 +28,6 @@ jobs:
       EXPECTED_HEAD: 0f5c352cafaa6225665049a44f492ebad5ea2e4d
       QA_WORKFLOW_NAME: Institutional trade QA
       TRIGGER_PATH: .github/pr212-qa-monitor-v11-trigger.txt
-      CONTROLLER_PATH: .github/workflows/pr212-qa-monitor-v11-20260803.yml
     steps:
       - name: Confirm the exact draft PR head
         shell: bash
@@ -128,19 +127,18 @@ jobs:
           - Monitor run: [$GITHUB_RUN_ID]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)
           - PR #212 remains draft and unmerged. No production database migration, custody, payout, or institutional feature activation occurred."
 
-      - name: Remove temporary monitor and trigger from main
+      - name: Remove temporary trigger from main
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          set -euo pipefail
-          for path in "$TRIGGER_PATH" "$CONTROLLER_PATH"; do
-            sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$path?ref=main" --jq .sha 2>/dev/null || true)"
-            if [[ -n "$sha" ]]; then
-              gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$path" \
-                -f message="Remove temporary $(basename "$path")" \
-                -f sha="$sha" \
-                -f branch=main >/dev/null
-            fi
-          done
+          set +e
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$TRIGGER_PATH?ref=main" --jq .sha 2>/dev/null)"
+          if [[ -n "$sha" ]]; then
+            gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$TRIGGER_PATH" \
+              -f message="Remove temporary $(basename "$TRIGGER_PATH")" \
+              -f sha="$sha" \
+              -f branch=main >/dev/null
+          fi
+          exit 0
