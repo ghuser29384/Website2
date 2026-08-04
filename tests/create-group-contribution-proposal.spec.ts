@@ -111,7 +111,7 @@ test("integrates proposal-only Co-Act and Co-Fund terms into the real Create ifr
   await expect(coAct.getByText("Do this together?")).toBeVisible();
   await coAct.getByLabel("Yes, include the counterparty").check();
   await coAct.getByLabel("Maximum participants").fill("10");
-  await coAct.getByLabel("Duration").fill("12 weeks");
+  await coAct.getByRole("textbox", { name: "Duration", exact: true }).fill("12 weeks");
   await coAct.getByLabel("Frequency").fill("one meal per week");
   await expect(coAct.getByText("Group terms are complete for proposal review.")).toBeVisible();
 
@@ -208,6 +208,14 @@ test("restores proposal-only group terms after the Create authentication handoff
 
   const resumed = page.frameLocator('iframe[title="Moral Trade Create"]');
   await expect(resumed.getByRole("heading", { level: 1, name: "Ready for review." })).toBeVisible();
+  await expect(resumed.getByText("CO-ACT · PROPOSAL ONLY")).toBeVisible();
+
+  await resumed.getByRole("button", { name: "Change contributions" }).click();
+  await expect(
+    resumed.getByRole("heading", { level: 1, name: "What could you offer?" }),
+  ).toBeVisible();
+  await expect(resumed.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
+
   const resumedCoAct = behaviorHost(resumed);
   await expect(resumedCoAct.getByRole("button", { name: "Act together" })).toHaveAttribute(
     "aria-pressed",
@@ -215,7 +223,6 @@ test("restores proposal-only group terms after the Create authentication handoff
   );
   await expect(resumedCoAct.getByLabel("Maximum participants")).toHaveValue("17");
   await expect(resumedCoAct.getByLabel("Yes, include the counterparty")).toBeChecked();
-  await expect(resumed.getByText("CO-ACT · PROPOSAL ONLY")).toBeVisible();
 
   const submittedPayload = submissionCapture.payload;
   if (!submittedPayload) throw new Error("Expected the authentication handoff payload");
