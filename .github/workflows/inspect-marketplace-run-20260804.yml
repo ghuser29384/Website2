@@ -1,0 +1,46 @@
+name: Inspect current marketplace evidence workflow run
+
+on:
+  push:
+    branches:
+      - qa/marketplace-delta-exact-head-repair-20260731
+    paths:
+      - ".github/workflows/inspect-marketplace-run-20260804.yml"
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CONTROLLER_PATH: .github/workflows/inspect-marketplace-run-20260804.yml
+      TARGET_SHA: ed45843b4e345c6f60c400a4330b959b2a409fa1
+    steps:
+      - name: Report runs for the exact trigger commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$TARGET_SHA&per_page=100")"
+          rows="$(jq -r '.workflow_runs[] | [.id,.name,.event,.status,(.conclusion // "pending"),.head_sha,.created_at,.updated_at] | @tsv' <<<"$payload")"
+          if [[ -z "$rows" ]]; then rows='no matching runs found'; fi
+          body=$'Exact-trigger workflow inventory for `'$TARGET_SHA$'`:\n\n```text\n'"$rows"$'\n```'
+          gh pr comment 359 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Remove temporary inspector
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=qa/marketplace-delta-exact-head-repair-20260731" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$sha" ]]; then
+            jq -n --arg message 'Remove temporary marketplace run inspector' --arg sha "$sha" --arg branch 'qa/marketplace-delta-exact-head-repair-20260731' '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
