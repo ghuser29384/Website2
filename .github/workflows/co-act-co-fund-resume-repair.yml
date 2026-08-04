@@ -18,7 +18,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: cc3ccd18ab012b5fa12be8db55c3c62697564f08
+  EXPECTED_PARENT: 0ce0cb2abd9789815b979c73db467886437712b1
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
   REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
 
@@ -89,10 +89,10 @@ jobs:
           src/lib/create-interface/source-contract.test.ts
           tests/create-group-contribution-proposal.spec.ts
           EOF
-          git diff --name-only | sort > /tmp/actual-files
+          git diff HEAD --name-only | sort > /tmp/actual-files
           sort -o /tmp/expected-files /tmp/expected-files
           diff -u /tmp/expected-files /tmp/actual-files
-          git diff --check
+          git diff HEAD --check
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -140,7 +140,7 @@ jobs:
         run: |
           set -euo pipefail
           rm -rf test-results playwright-report
-          git diff --check
+          git diff HEAD --check
           cat > /tmp/expected-files <<'EOF'
           .github/scripts/co-act-co-fund-resolve-blocker.py
           .github/workflows/co-act-co-fund-resume-repair.yml
@@ -150,7 +150,7 @@ jobs:
           src/lib/create-interface/source-contract.test.ts
           tests/create-group-contribution-proposal.spec.ts
           EOF
-          git diff --name-only | sort > /tmp/actual-files
+          git diff HEAD --name-only | sort > /tmp/actual-files
           sort -o /tmp/expected-files /tmp/expected-files
           diff -u /tmp/expected-files /tmp/actual-files
           test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
