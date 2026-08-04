@@ -1,0 +1,168 @@
+name: Observe one-time Vercel team cleanup result
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/observe-vercel-team-cleanup-once.yml
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: observe-vercel-team-cleanup-once
+  cancel-in-progress: false
+
+env:
+  CLEANUP_SHA: 812a5dd9d7ac8e9caa165c06448ecd2660c44761
+  CONTROLLER_PATH: .github/workflows/observe-vercel-team-cleanup-once.yml
+
+jobs:
+  observe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out exact observer commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Guard exact repository and one-file observer scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_ACTOR" = 'ghuser29384'
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+      - name: Download and validate the cleanup artifact
+        id: result
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --commit "$CLEANUP_SHA" \
+            --event push \
+            --limit 100 \
+            --json databaseId,workflowName,status,conclusion,url,headSha,createdAt,updatedAt \
+            > vercel-cleanup-runs.json
+
+          jq -c \
+            '[.[] | select(.workflowName == "Apply one-time team-wide Vercel cost cleanup")] | sort_by(.databaseId) | last' \
+            vercel-cleanup-runs.json \
+            > vercel-cleanup-run.json
+
+          jq -e '. != null' vercel-cleanup-run.json >/dev/null
+          jq -e --arg sha "$CLEANUP_SHA" '.headSha == $sha' vercel-cleanup-run.json >/dev/null
+          jq -e '.status == "completed" and .conclusion == "success"' vercel-cleanup-run.json >/dev/null
+          run_id="$(jq -r .databaseId vercel-cleanup-run.json)"
+          artifact_name="vercel-team-cleanup-${run_id}"
+          mkdir -p vercel-cleanup-evidence
+          gh run download "$run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$artifact_name" \
+            --dir vercel-cleanup-evidence
+
+          result=vercel-cleanup-evidence/vercel-team-cleanup-result.json
+          before=vercel-cleanup-evidence/vercel-team-cleanup-before.json
+          after=vercel-cleanup-evidence/vercel-team-cleanup-after.json
+          test -s "$result"
+          test -s "$before"
+          test -s "$after"
+
+          jq -e '.verification | all(. == true)' "$result" >/dev/null
+          jq -e '([.deleted[] | select(.status == "deleted")] | length) == 10' "$result" >/dev/null
+          jq -e '.retainedProjectCount == 9' "$result" >/dev/null
+          jq -e '.patched | length == 9' "$result" >/dev/null
+          jq -e '.cleanup.verification | all(. == true)' "$after" >/dev/null
+          jq -e '.projects | length == 9' "$after" >/dev/null
+
+          jq -n \
+            --arg verdict passed \
+            --argjson run "$(cat vercel-cleanup-run.json)" \
+            --argjson result "$(cat "$result")" \
+            '{verdict:$verdict,run:$run,result:$result}' \
+            > vercel-cleanup-observer-result.json
+
+      - name: Write fail-closed observer result
+        if: steps.result.outcome != 'success'
+        shell: bash
+        run: |
+          jq -n \
+            --arg verdict failed \
+            --arg cleanupSha "$CLEANUP_SHA" \
+            '{verdict:$verdict,cleanupSha:$cleanupSha}' \
+            > vercel-cleanup-observer-result.json
+
+      - name: Upload observer evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-team-cleanup-observer-${{ github.run_id }}
+          path: |
+            vercel-cleanup-runs.json
+            vercel-cleanup-run.json
+            vercel-cleanup-evidence
+            vercel-cleanup-observer-result.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record cleanup outcome on the cost-control pull request
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          verdict="$(jq -r '.verdict // "failed"' vercel-cleanup-observer-result.json)"
+          observer_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          cleanup_url="$(jq -r '.run.url // empty' vercel-cleanup-observer-result.json)"
+          if [[ "$verdict" == 'passed' ]]; then
+            deleted="$(jq -r '[.result.deleted[] | select(.status == "deleted") | .name] | join(", ")' vercel-cleanup-observer-result.json)"
+            add_ons="$(jq -c '.result.enabledAddOns' vercel-cleanup-observer-result.json)"
+            members="$(jq -c '.result.paidMemberCandidates' vercel-cleanup-observer-result.json)"
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "## Team-wide Vercel cleanup completed\n\nThe one-time cleanup passed and was independently certified from its retained artifact. It deleted 10 exact-ID, domainless disposable projects: $deleted. All 9 retained projects now use Standard build machines, paid elastic concurrency is disabled, and the build queue is serialized. The team default build machine is Standard. The canonical project and legacy \`website2\` remain Git-disconnected, and no Vercel project remains connected to the \`Website2\` repository.\n\nEnabled analytics add-ons after cleanup: \`$add_ons\`\n\nNon-viewer team-member candidates after cleanup: \`$members\`\n\nCleanup run: $cleanup_url\nObserver evidence: $observer_url"
+          else
+            gh pr comment 422 --repo "$GITHUB_REPOSITORY" --body "The one-time team-wide Vercel cleanup could not be independently certified from its artifact. No complete-cleanup claim is made. Observer evidence: $observer_url"
+          fi
+
+      - name: Remove one-time observer with verdict
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          verdict="$(jq -r '.verdict // "failed"' vercel-cleanup-observer-result.json 2>/dev/null || echo failed)"
+          if [[ "$verdict" == 'passed' ]]; then
+            message='Remove one-time Vercel cleanup observer after PASS'
+          else
+            message='Remove one-time Vercel cleanup observer after FAIL'
+          fi
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=main" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$blob_sha" ]]; then
+            jq -n \
+              --arg message "$message" \
+              --arg sha "$blob_sha" \
+              --arg branch main \
+              '{message:$message,sha:$sha,branch:$branch}' \
+              | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+          fi
+
+      - name: Enforce artifact-grounded PASS
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(jq -r '.verdict // "failed"' vercel-cleanup-observer-result.json)" = 'passed'
