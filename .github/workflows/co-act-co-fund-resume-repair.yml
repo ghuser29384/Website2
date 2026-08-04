@@ -18,7 +18,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: 39d31d9fc81aeecbc182250c4bc7dc9eb3298c8a
+  EXPECTED_PARENT: fe1f9d65eba6964351f1c1352ac140241239e504
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
 
 jobs:
@@ -27,7 +27,7 @@ jobs:
       github.repository == 'ghuser29384/Website2' &&
       github.ref == 'refs/heads/feature/co-act-co-fund-create-v3-20260803'
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 75
 
     steps:
       - name: Check out exact trigger
@@ -46,28 +46,29 @@ jobs:
           test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
           test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
 
-      - name: Persist and restore the proposal-only group snapshot
+      - name: Implement durable authentication-resume preservation
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          from textwrap import dedent
 
-          client_path = Path('src/lib/create-interface/group-contribution-client.ts')
-          client = client_path.read_text(encoding='utf-8')
+          client_path = Path("src/lib/create-interface/group-contribution-client.ts")
+          client = client_path.read_text(encoding="utf-8")
 
           def replace_once(old: str, new: str, label: str) -> None:
               global client
               count = client.count(old)
               if count != 1:
-                  raise SystemExit(f'Expected exactly one {label}; found {count}')
+                  raise SystemExit(f"Expected exactly one {label}; found {count}")
               client = client.replace(old, new, 1)
 
           replace_once(
               'import { sanitizeGroupContributionDraft } from "./group-contribution-draft-sanitize";\n',
               'import { sanitizeGroupContributionDraft } from "./group-contribution-draft-sanitize";\n'
               'import { parseGroupContributionProposalPayload } from "./group-contribution-payload";\n',
-              'resume parser import',
+              "resume parser import",
           )
           replace_once(
               'const STORAGE_KEY = "mt:create:group-contribution-drafts:v1";\n'
@@ -75,14 +76,14 @@ jobs:
               'const STORAGE_KEY = "mt:create:group-contribution-drafts:v1";\n'
               'const RESUME_STORAGE_KEY = "mt:create:group-contribution-resume:v1";\n'
               'const PAYLOAD_FIELD = "groupContributionTerms";',
-              'resume storage key',
+              "resume storage key",
           )
           replace_once(
               'let scanQueued = false;\nlet submitGuardInstalled = false;',
               'let scanQueued = false;\n'
               'let submitGuardInstalled = false;\n'
               'let resumedProposal: GroupContributionProposalPayload | null = null;',
-              'resume state declaration',
+              "resume state declaration",
           )
           replace_once(
               '  activeWindow = targetWindow;\n'
@@ -92,7 +93,7 @@ jobs:
               '  activeDocument = targetDocument;\n'
               '  resumedProposal = readStoredResumeProposal();\n'
               '  scanQueued = false;',
-              'resume activation',
+              "resume activation",
           )
           replace_once(
               '  const root = locateOfferStepRoot();\n'
@@ -104,7 +105,7 @@ jobs:
               '    return;\n'
               '  }\n\n'
               '  const candidates = locateOptionCards(root);',
-              'summary-screen scan fallback',
+              "summary-screen scan fallback",
           )
           replace_once(
               'function readProposalPayload(): GroupContributionProposalPayload {\n'
@@ -112,14 +113,14 @@ jobs:
               'function readProposalPayload(): GroupContributionProposalPayload {\n'
               '  if (mounted.size === 0 && resumedProposal) return resumedProposal;\n\n'
               '  const options: ProposalOptionPayload[] = [];',
-              'resume payload fallback',
+              "resume payload fallback",
           )
           replace_once(
               'function writeProposalPayload(): void {\n'
               '  persistDrafts();',
               'function writeProposalPayload(persistCurrentDrafts = true): void {\n'
               '  if (persistCurrentDrafts) persistDrafts();',
-              'conditional draft persistence',
+              "conditional draft persistence",
           )
           replace_once(
               '    return originalFetch(input, {\n'
@@ -133,11 +134,12 @@ jobs:
               '    });\n'
               '    if (response.ok) clearResumeProposal();\n'
               '    return response;',
-              'publish resume lifecycle',
+              "publish resume lifecycle",
           )
 
           persist_anchor = 'function persistDrafts(): void {\n'
-          helpers = '''function isResumeRequest(): boolean {
+          helpers = dedent('''\
+          function isResumeRequest(): boolean {
             try {
               return new URL(window.location.href).searchParams.get("resume") === "create";
             } catch {
@@ -183,8 +185,10 @@ jobs:
                   return null;
                 }
                 if (candidate.terms.mode === "co-act") {
+                  if (!permitsGroupContributionMode(PROPOSAL_FLAGS, "co-act")) return null;
                   contributionKinds.set(candidate.optionKey, "nonfinancial");
                 } else if (candidate.terms.mode === "co-fund") {
+                  if (!permitsGroupContributionMode(PROPOSAL_FLAGS, "co-fund")) return null;
                   contributionKinds.set(candidate.optionKey, "financial");
                 } else {
                   return null;
@@ -199,30 +203,93 @@ jobs:
           }
 
           function persistDrafts(): void {
-          '''
+          ''')
           if client.count(persist_anchor) != 1:
-              raise SystemExit(f'Expected one resume-helper insertion point; found {client.count(persist_anchor)}')
+              raise SystemExit(
+                  f"Expected one resume-helper insertion point; found {client.count(persist_anchor)}"
+              )
           client = client.replace(persist_anchor, helpers, 1)
-          client_path.write_text(client, encoding='utf-8')
+          client_path.write_text(client, encoding="utf-8")
 
-          browser_path = Path('tests/create-group-contribution-proposal.spec.ts')
-          browser = browser_path.read_text(encoding='utf-8')
-          old_duration = '  await coAct.getByLabel("Duration").fill("12 weeks");'
-          new_duration = '  await coAct.getByRole("textbox", { name: "Duration", exact: true }).fill("12 weeks");'
-          if browser.count(old_duration) != 1:
-              raise SystemExit(f'Expected one ambiguous Duration locator; found {browser.count(old_duration)}')
-          browser = browser.replace(old_duration, new_duration, 1)
+          browser_path = Path("tests/create-group-contribution-proposal.spec.ts")
+          browser = browser_path.read_text(encoding="utf-8")
+          if 'getByRole("textbox", { name: "Duration", exact: true })' not in browser:
+              raise SystemExit("The exact Duration locator repair is missing")
 
-          old_resume = '''  const resumedCoAct = behaviorHost(resumed);
-            await expect(resumedCoAct.getByRole("button", { name: "Act together" })).toHaveAttribute(
-              "aria-pressed",
-              "true",
-            );
-            await expect(resumedCoAct.getByLabel("Maximum participants")).toHaveValue("17");
-            await expect(resumedCoAct.getByLabel("Yes, include the counterparty")).toBeChecked();
-            await expect(resumed.getByText("CO-ACT · PROPOSAL ONLY")).toBeVisible();
-          '''
-          new_resume = '''  await expect(resumed.getByText("Proposed group terms", { exact: true })).toBeVisible();
+          start_marker = 'test("restores proposal-only group terms after the Create authentication handoff"'
+          end_marker = 'test("blocks the real Create publish request while group terms are incomplete"'
+          start = browser.find(start_marker)
+          end = browser.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit("Could not isolate the authentication-resume browser test")
+
+          replacement = dedent('''\
+          test("restores proposal-only group terms after the Create authentication handoff", async ({
+            page,
+          }) => {
+            const submittedPayloads: Array<Record<string, unknown>> = [];
+            await page.route("**/api/create/publish", async (route: Route) => {
+              const payload = JSON.parse(route.request().postData() || "null") as Record<
+                string,
+                unknown
+              >;
+              submittedPayloads.push(payload);
+
+              if (submittedPayloads.length === 1) {
+                await route.fulfill({
+                  status: 401,
+                  contentType: "application/json",
+                  body: JSON.stringify({
+                    ok: false,
+                    requiresAuth: true,
+                    message: "Sign in to submit this Create record.",
+                    loginUrl: "/trades/new?resume=create",
+                  }),
+                });
+                return;
+              }
+
+              await route.fulfill({
+                status: 201,
+                contentType: "application/json",
+                body: JSON.stringify({
+                  ok: true,
+                  submission: {
+                    displayId: "create-group-auth-resume-test",
+                    canonicalUrl:
+                      "https://moraltrade.org/create/submissions/create-group-auth-resume-test",
+                    title: "Your submission is in review.",
+                    lede: "The resumed group terms are saved privately for review.",
+                    objectLabel: "Co-Act and Co-Fund proposal",
+                    visibility: "Private until approved",
+                    openStatus: "Pending Moral Trade review",
+                  },
+                }),
+              });
+            });
+
+            const create = await openConcreteOfferStep(page);
+            const coAct = behaviorHost(create);
+            await coAct.getByRole("button", { name: "Act together" }).click();
+            await coAct.getByLabel("Yes, include the counterparty").check();
+            await coAct.getByLabel("Maximum participants").fill("17");
+            await expect(
+              coAct.getByText("Group terms are complete for proposal review."),
+            ).toBeVisible();
+
+            await create.locator("#reviewOffers").click();
+            await create.locator("label.publish-confirm input[type='checkbox']").check();
+            await create.getByRole("button", { name: /Submit for review/ }).click();
+            await page.waitForURL(/\/trades\/new\?resume=create$/);
+
+            const resumed = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await expect(
+              resumed.getByRole("heading", { level: 1, name: "Ready for review." }),
+            ).toBeVisible();
+            await expect(
+              resumed.getByText("Proposed group terms", { exact: true }),
+            ).toBeVisible();
+
             const resumedCoAct = resumed.locator(
               '[data-mt-group-contribution-review-option="behavior:1"]',
             );
@@ -250,16 +317,42 @@ jobs:
             expect(resumedTerms?.mode).toBe("co-act");
             expect(resumedTerms?.participantLimit).toBe(17);
             expect(resumedTerms?.counterpartyParticipation).toBe("explicitly-included");
-          '''
-          if browser.count(old_resume) != 1:
-              raise SystemExit(f'Expected one stale resume assertion block; found {browser.count(old_resume)}')
-          browser = browser.replace(old_resume, new_resume, 1)
-          browser_path.write_text(browser, encoding='utf-8')
 
-          stability_path = Path('src/lib/create-interface/group-contribution-client-stability.test.ts')
-          stability = stability_path.read_text(encoding='utf-8')
-          stability += '''\n
-test("authentication resume restores a validated proposal without rebuilding hidden offer controls", () => {
+            await resumed.locator("label.publish-confirm input[type='checkbox']").check();
+            await resumed.getByRole("button", { name: /Submit for review/ }).click();
+            await expect(
+              resumed.getByText("Co-Act and Co-Fund proposal", { exact: true }),
+            ).toBeVisible();
+
+            expect(submittedPayloads).toHaveLength(2);
+            for (const submittedPayload of submittedPayloads) {
+              const groupTerms = submittedPayload.groupContributionTerms as {
+                execution: string;
+                options: Array<{ optionKey: string; terms: { mode: string } }>;
+              };
+              expect(groupTerms.execution).toBe("proposal-only");
+              expect(groupTerms.options[0]?.optionKey).toBe("behavior:1");
+              expect(groupTerms.options[0]?.terms.mode).toBe("co-act");
+            }
+          });
+
+          ''')
+          browser = browser[:start] + replacement + browser[end:]
+          browser_path.write_text(browser, encoding="utf-8")
+
+          stability_path = Path(
+              "src/lib/create-interface/group-contribution-client-stability.test.ts"
+          )
+          stability = stability_path.read_text(encoding="utf-8")
+          test_name = (
+              'test("authentication resume restores a validated proposal without rebuilding '
+              'hidden offer controls"'
+          )
+          if test_name in stability:
+              raise SystemExit("The authentication-resume stability test already exists")
+          stability += dedent('''\
+
+          test("authentication resume restores a validated proposal without rebuilding hidden offer controls", () => {
             const scan = functionBody("scanForOptions");
             assert.match(scan, /if \(!root\)[\\s\\S]*resumedProposal[\\s\\S]*writeProposalPayload\(false\)/);
 
@@ -272,10 +365,11 @@ test("authentication resume restores a validated proposal without rebuilding hid
 
             const restore = functionBody("readStoredResumeProposal");
             assert.match(restore, /parseGroupContributionProposalPayload/);
+            assert.match(restore, /permitsGroupContributionMode/);
             assert.match(restore, /result\.ok/);
           });
-          '''
-          stability_path.write_text(stability, encoding='utf-8')
+          ''')
+          stability_path.write_text(stability, encoding="utf-8")
           PY
 
           git rm "$CONTROLLER_PATH"
