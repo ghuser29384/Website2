@@ -1,0 +1,64 @@
+name: PR 212 push QA snapshot 20260804
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pr212-push-qa-snapshot-20260804.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: feat/institutional-trade-system
+      EXPECTED_HEAD: dbbb0afbb42ef9a1636be073bb1d47343badd98b
+      QA_WORKFLOW_NAME: Institutional trade QA
+    steps:
+      - name: Snapshot exact-head QA status
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(gh api "repos/${GITHUB_REPOSITORY}/branches/${TARGET_BRANCH}" --jq '.commit.sha')"
+          runs="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch "$TARGET_BRANCH" \
+            --event push \
+            --limit 100 \
+            --json databaseId,headSha,status,conclusion,createdAt,url,name,workflowName)"
+          selected="$(jq -c \
+            --arg head "$EXPECTED_HEAD" \
+            --arg workflow "$QA_WORKFLOW_NAME" \
+            '[.[] | select(.headSha == $head and ((.workflowName // .name) == $workflow))] | sort_by(.createdAt) | reverse | .[0] // {}' \
+            <<<"$runs")"
+          run_id="$(jq -r '.databaseId // empty' <<<"$selected")"
+          status="$(jq -r '.status // "not_found"' <<<"$selected")"
+          conclusion="$(jq -r '.conclusion // ""' <<<"$selected")"
+          url="$(jq -r '.url // ""' <<<"$selected")"
+          failed="none"
+          if [[ -n "$run_id" ]]; then
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json jobs > /tmp/jobs.json || printf '%s
+' '{"jobs":[]}' > /tmp/jobs.json
+            failed="$(jq -r '[.jobs[]? | .steps[]? | select(.conclusion == "failure") | .name] | unique | join(", ")' /tmp/jobs.json)"
+            if [[ -z "$failed" ]]; then failed="none"; fi
+          fi
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-push-qa-snapshot-20260804 -->
+          ## PR #212 exact-head QA snapshot
+
+          - Expected feature head: \`$EXPECTED_HEAD\`
+          - Current feature head: \`$actual\`
+          - Matching push QA run: ${url:-not found}
+          - Run ID: ${run_id:-not found}
+          - Status: **$status**
+          - Conclusion: **${conclusion:-pending or unavailable}**
+          - Failed steps currently reported: $failed
+
+          This is a repository-only status snapshot. PR #212 remains draft and unmerged. No production database, deployment, payment, custody, payout, or institutional feature-flag state was changed."
