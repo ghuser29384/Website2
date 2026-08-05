@@ -47,8 +47,29 @@
     }
   }
 
+  function resolveApplicationUrl(path) {
+    const candidates = [document.baseURI];
+    try {
+      if (window.parent !== window) candidates.push(window.parent.location.href);
+    } catch {
+      // A future cross-origin embedding cannot expose the parent URL. The current
+      // Create srcDoc frame is same-origin, and document.baseURI remains preferred.
+    }
+    candidates.push(window.location.href);
+
+    for (const base of candidates) {
+      try {
+        const url = new URL(path, base);
+        if (url.protocol === "http:" || url.protocol === "https:") return url;
+      } catch {
+        // about:srcdoc is not a hierarchical URL; continue to the inherited parent URL.
+      }
+    }
+    throw new Error("The Moral Trade application origin is unavailable.");
+  }
+
   async function requestDirectory(query, signal) {
-    const url = new URL(ENDPOINT, window.location.href);
+    const url = resolveApplicationUrl(ENDPOINT);
     if (query) url.searchParams.set("q", query);
     url.searchParams.set("limit", "12");
 
