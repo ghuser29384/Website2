@@ -13,12 +13,12 @@ permissions:
   issues: write
 
 concurrency:
-  group: co-act-co-fund-resolve-blocker-once
+  group: co-act-co-fund-resolve-blocker-${{ github.sha }}
   cancel-in-progress: false
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: ca05b25cfe40210c383df75cf3c1a98c1e24c8b3
+  EXPECTED_PARENT: 4a7a4a6b4021bd02f214bc0b3b4e4beeb6986303
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
   REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
   RESUME_CONTEXT_SCRIPT: .github/scripts/co-act-co-fund-resume-context-hotfix.py
@@ -261,4 +261,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-# Trigger exact top-level resume context ca05b25cfe40210c383df75cf3c1a98c1e24c8b3
+# Unique exact-head trigger 4a7a4a6b4021bd02f214bc0b3b4e4beeb6986303
