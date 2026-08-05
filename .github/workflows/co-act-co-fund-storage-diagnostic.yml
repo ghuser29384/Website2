@@ -1,0 +1,215 @@
+name: Diagnose Co-Act authentication storage handoff
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v3-20260803
+    paths:
+      - ".github/workflows/co-act-co-fund-storage-diagnostic.yml"
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: co-act-co-fund-storage-diagnostic-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PARENT: 50c5e91e005e1cc8556ae0d9484c7c73243d8cef
+  CONTROLLER_PATH: .github/workflows/co-act-co-fund-storage-diagnostic.yml
+
+jobs:
+  diagnose:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.ref == 'refs/heads/feature/co-act-co-fund-create-v3-20260803'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out exact diagnostic trigger
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v3-20260803
+          fetch-depth: 0
+
+      - name: Verify exact one-file trigger
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
+
+      - name: Apply the current bounded repair in the diagnostic worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/scripts/co-act-co-fund-resolve-blocker.py
+          python3 .github/scripts/co-act-co-fund-resume-context-hotfix.py
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("public/moral-trade-create/index.html")
+          source = path.read_text(encoding="utf-8")
+          old = 'CREATE_DRAFT_STORAGE.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify({ ...state, published: false }));'
+          new = '''CREATE_DRAFT_STORAGE.setItem(
+                  CREATE_DRAFT_STORAGE_KEY,
+                  JSON.stringify({ ...state, step: 4, offerPhase: "details", published: false }),
+                );'''
+          if source.count(old) != 1:
+              raise SystemExit(f"Expected one Create resume snapshot; found {source.count(old)}")
+          source = source.replace(old, new, 1)
+
+          old_cleanup = (
+              '        Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });\n'
+              '        CREATE_DRAFT_STORAGE.removeItem(CREATE_DRAFT_STORAGE_KEY);\n'
+              '        return true;'
+          )
+          new_cleanup = (
+              '        Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });\n'
+              '        return true;'
+          )
+          if source.count(old_cleanup) != 1:
+              raise SystemExit(f"Expected one eager Create resume cleanup; found {source.count(old_cleanup)}")
+          path.write_text(source.replace(old_cleanup, new_cleanup, 1), encoding="utf-8")
+          PY
+
+      - name: Write storage diagnostic
+        shell: bash
+        run: |
+          cat > tests/co-act-co-fund-storage-diagnostic.spec.ts <<'TS'
+          import { expect, test, type FrameLocator, type Page, type Route } from "@playwright/test";
+
+          const GROUP_KEY = "mt:create:group-contribution-drafts:v1";
+          const RESUME_PROPOSAL_KEY = "mt:create:group-contribution-resume:v1";
+          const RESUME_DRAFT_KEY = "mt:create:group-contribution-resume-drafts:v1";
+          const CREATE_RESUME_KEY = "moral_trade_create_resume_v1";
+
+          async function openConcreteOfferStep(page: Page): Promise<FrameLocator> {
+            await page.goto("/trades/new");
+            await page.waitForLoadState("domcontentloaded");
+            const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await expect(create.getByRole("heading", { level: 1, name: "What do you want to improve?" })).toBeVisible();
+            await create.getByRole("button", { name: "Future flourishing" }).click();
+            await create.locator('[data-request-kind="commitment"]').click();
+            await create.getByLabel("What commitment do you want?").fill("Not eat meat for one meal per week");
+            await create.locator("#continueRequest").click();
+            await create.getByRole("button", { name: "A behavior change" }).click();
+            await create.getByRole("button", { name: "Money" }).click();
+            await create.locator("#continueOffers").click();
+            await create.locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="action"]').fill("Avoid meat for one meal per week");
+            await create.locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]').fill("once per week for 12 weeks");
+            await create.locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]').fill("5.00");
+            await create.locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]').fill("Existential Risk Research Project");
+            await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
+            return create;
+          }
+
+          function behaviorHost(create: FrameLocator) {
+            return create.locator('[data-offer-entry-block][data-offer-id="behavior"] + [data-mt-group-contribution-host]');
+          }
+
+          async function dump(page: Page, create: FrameLocator, label: string) {
+            const top = await page.evaluate(({ proposal, drafts, createKey }) => ({
+              href: location.href,
+              proposal: sessionStorage.getItem(proposal),
+              drafts: sessionStorage.getItem(drafts),
+              create: sessionStorage.getItem(createKey),
+              localGroup: localStorage.getItem("mt:create:group-contribution-drafts:v1"),
+            }), { proposal: RESUME_PROPOSAL_KEY, drafts: RESUME_DRAFT_KEY, createKey: CREATE_RESUME_KEY });
+
+            const frame = await create.locator("body").evaluate((_, keys) => {
+              const publicDrafts = window.MoralTradeGroupContributions?.readDrafts?.() ?? null;
+              const hidden = document.querySelector<HTMLInputElement>("input[name='groupContributionTerms']")?.value ?? null;
+              const behavior = document.querySelector<HTMLElement>('[data-offer-entry-block][data-offer-id="behavior"]');
+              const host = behavior?.nextElementSibling as HTMLElement | null;
+              const shadow = host?.shadowRoot;
+              return {
+                href: location.href,
+                topHref: (() => { try { return window.top?.location.href ?? null; } catch { return "blocked"; } })(),
+                proposal: sessionStorage.getItem(keys.proposal),
+                drafts: sessionStorage.getItem(keys.drafts),
+                create: sessionStorage.getItem(keys.createKey),
+                localGroup: localStorage.getItem(keys.group),
+                publicDrafts,
+                hidden,
+                action: behavior?.querySelector<HTMLInputElement>('[data-offer-field="action"]')?.value ?? null,
+                duration: behavior?.querySelector<HTMLInputElement>('[data-offer-field="duration"]')?.value ?? null,
+                hostKey: host?.getAttribute("data-mt-group-contribution-host") ?? null,
+                modeButtons: [...(shadow?.querySelectorAll<HTMLButtonElement>("button[data-mode]") ?? [])].map((button) => ({ mode: button.dataset.mode, pressed: button.getAttribute("aria-pressed") })),
+                participantLimit: shadow?.querySelector<HTMLInputElement>('[data-field="participantLimit"]')?.value ?? null,
+                counterparty: shadow?.querySelector<HTMLInputElement>('[data-field="counterpartyParticipation"]')?.checked ?? null,
+                activeScreens: [...document.querySelectorAll<HTMLElement>("section.screen")].filter((node) => !node.hidden).map((node) => node.id),
+              };
+            }, { proposal: RESUME_PROPOSAL_KEY, drafts: RESUME_DRAFT_KEY, createKey: CREATE_RESUME_KEY, group: GROUP_KEY });
+            console.log(`MT_DIAG_${label}=${JSON.stringify({ top, frame })}`);
+          }
+
+          test("captures the Co-Act storage handoff", async ({ page }) => {
+            let submitted: unknown = null;
+            await page.route("**/api/create/publish", async (route: Route) => {
+              submitted = JSON.parse(route.request().postData() || "null");
+              await route.fulfill({
+                status: 401,
+                contentType: "application/json",
+                body: JSON.stringify({ ok: false, requiresAuth: true, message: "Sign in to submit this Create record.", loginUrl: "/trades/new?resume=create" }),
+              });
+            });
+
+            const create = await openConcreteOfferStep(page);
+            const coAct = behaviorHost(create);
+            await coAct.getByRole("button", { name: "Act together" }).click();
+            await coAct.getByLabel("Yes, include the counterparty").check();
+            await coAct.getByLabel("Maximum participants").fill("17");
+            await expect(coAct.getByText("Group terms are complete for proposal review.")).toBeVisible();
+            await dump(page, create, "BEFORE_REVIEW");
+
+            await create.locator("#reviewOffers").click();
+            await create.locator("label.publish-confirm").click();
+            await dump(page, create, "BEFORE_SUBMIT");
+            await create.getByRole("button", { name: /Submit for review/ }).click();
+            await page.waitForURL(/\/trades\/new\?resume=create$/);
+            console.log(`MT_DIAG_SUBMITTED=${JSON.stringify(submitted)}`);
+
+            const resumed = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await expect(resumed.getByRole("heading", { level: 1, name: "Ready for review." })).toBeVisible();
+            await dump(page, resumed, "RESUMED_SUMMARY");
+            await resumed.getByRole("button", { name: "Change contributions" }).click();
+            await expect(resumed.getByRole("heading", { level: 1, name: "What could you offer?" })).toBeVisible();
+            await expect(resumed.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
+            await dump(page, resumed, "RESUMED_DETAILS");
+          });
+          TS
+          sed -i 's/^          //' tests/co-act-co-fund-storage-diagnostic.spec.ts
+
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run exact storage diagnostic
+        env:
+          CREATE_ROUTE_CAPTURE: "1"
+        run: npx playwright test tests/co-act-co-fund-storage-diagnostic.spec.ts --reporter=line
+
+      - name: Report diagnostic result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "The exact Co-Act authentication storage diagnostic completed with job status \`${{ job.status }}\` in Actions run \`$GITHUB_RUN_ID\`. The job log contains the bounded \`MT_DIAG_*\` snapshots; no product source commit, merge, or deployment occurred."
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: co-act-co-fund-storage-diagnostic-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 7
