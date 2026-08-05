@@ -18,12 +18,13 @@ concurrency:
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: 40376b5ec57f1dfb7e55dfbfaefe7d5cde80715b
+  EXPECTED_PARENT: a98231184f2fbf945e3469188b181a94c5754b7f
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair-v2.yml
   OLD_CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
   DIAGNOSTIC_PATH: .github/workflows/inspect-coact-counterparty.yml
   BASE_REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
   RESUME_REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resume-context-hotfix.py
+  HYDRATION_SCRIPT: .github/scripts/co-act-co-fund-resume-proposal-hydration.py
 
 jobs:
   repair-and-prove:
@@ -51,6 +52,7 @@ jobs:
           test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
           test -f "$BASE_REPAIR_SCRIPT"
           test -f "$RESUME_REPAIR_SCRIPT"
+          test -f "$HYDRATION_SCRIPT"
           test -f "$OLD_CONTROLLER_PATH"
           test -f "$DIAGNOSTIC_PATH"
 
@@ -60,7 +62,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started hardened semantic-action and exact-draft authentication-resume repair in Actions run \`$GITHUB_RUN_ID\` at exact controller commit \`$GITHUB_SHA\`. Source changes will be pushed only if focused contracts, the complete repository suite, ESLint, TypeScript, the production build, and the four-case rendered Playwright workflow all pass. PR #477 remains draft; no merge or deployment is authorized."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started validated proposal-to-draft authentication-resume repair in Actions run \`$GITHUB_RUN_ID\` at exact controller commit \`$GITHUB_SHA\`. Source changes will be pushed only if focused contracts, the complete repository suite, ESLint, TypeScript, the production build, and the four-case rendered Playwright workflow all pass. PR #477 remains draft; no merge or deployment is authorized."
 
       - name: Apply bounded source repair
         shell: bash
@@ -68,6 +70,7 @@ jobs:
           set -euo pipefail
           python3 "$BASE_REPAIR_SCRIPT"
           python3 "$RESUME_REPAIR_SCRIPT"
+          python3 "$HYDRATION_SCRIPT"
 
           python3 - <<'PY'
           from pathlib import Path
@@ -140,6 +143,7 @@ jobs:
           git rm \
             "$BASE_REPAIR_SCRIPT" \
             "$RESUME_REPAIR_SCRIPT" \
+            "$HYDRATION_SCRIPT" \
             "$OLD_CONTROLLER_PATH" \
             "$CONTROLLER_PATH" \
             "$DIAGNOSTIC_PATH"
@@ -147,6 +151,7 @@ jobs:
           cat > /tmp/expected-files <<'EOF'
           .github/scripts/co-act-co-fund-resolve-blocker.py
           .github/scripts/co-act-co-fund-resume-context-hotfix.py
+          .github/scripts/co-act-co-fund-resume-proposal-hydration.py
           .github/workflows/co-act-co-fund-resume-repair-v2.yml
           .github/workflows/co-act-co-fund-resume-repair.yml
           .github/workflows/inspect-coact-counterparty.yml
@@ -212,6 +217,7 @@ jobs:
           cat > /tmp/expected-files <<'EOF'
           .github/scripts/co-act-co-fund-resolve-blocker.py
           .github/scripts/co-act-co-fund-resume-context-hotfix.py
+          .github/scripts/co-act-co-fund-resume-proposal-hydration.py
           .github/workflows/co-act-co-fund-resume-repair-v2.yml
           .github/workflows/co-act-co-fund-resume-repair.yml
           .github/workflows/inspect-coact-counterparty.yml
@@ -248,7 +254,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Resolved the rendered blockers on commit \`$REPAIR_SHA\`: semantic action text no longer falls through to duration/currency; Co-Fund numeric inputs remain stable; and the exact editable Co-Act/Co-Fund draft returns after authentication and srcDoc iframe remount. Focused contracts, the complete test suite, ESLint, TypeScript, production build, and the four-case rendered Playwright workflow passed. PR #477 remains draft and proposal-only; it was not merged or deployed."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Resolved the rendered blockers on commit \`$REPAIR_SHA\`: semantic action text no longer falls through to duration/currency; Co-Fund numeric inputs remain stable; and validated proposal terms rehydrate the editable Co-Act/Co-Fund draft after authentication and srcDoc iframe remount. Focused contracts, the complete test suite, ESLint, TypeScript, production build, and the four-case rendered Playwright workflow passed. PR #477 remains draft and proposal-only; it was not merged or deployed."
 
       - name: Record bounded failure
         if: failure()
@@ -256,7 +262,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Hardened rendered-blocker repair run \`$GITHUB_RUN_ID\` failed before a durable source commit was pushed. PR #477 remains draft and unmerged; no deployment occurred."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Validated proposal-to-draft repair run \`$GITHUB_RUN_ID\` failed before a durable source commit was pushed. PR #477 remains draft and unmerged; no deployment occurred."
 
       - name: Upload failure evidence
         if: failure()
