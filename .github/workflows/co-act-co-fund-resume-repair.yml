@@ -18,10 +18,11 @@ concurrency:
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: d6561445b9f3715af88c517eb77ddedbe0305104
+  EXPECTED_PARENT: 49b76ee4a3011ceaaecab03bc214ef911a9f4b58
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
   REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
   RESUME_CONTEXT_SCRIPT: .github/scripts/co-act-co-fund-resume-context-hotfix.py
+  DIAGNOSTIC_WORKFLOW: .github/workflows/inspect-coact-counterparty.yml
 
 jobs:
   repair-and-prove:
@@ -49,6 +50,7 @@ jobs:
           test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
           test -f "$REPAIR_SCRIPT"
           test -f "$RESUME_CONTEXT_SCRIPT"
+          test -f "$DIAGNOSTIC_WORKFLOW"
 
       - name: Record bounded repair start
         env:
@@ -56,7 +58,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started bounded server-safe top-level authentication-resume repair in Actions run \`$GITHUB_RUN_ID\` at controller commit \`$GITHUB_SHA\`. The workflow will push source changes only if focused contracts, the full test suite, ESLint, TypeScript, the production build, and the exact rendered Playwright workflow all pass. The PR remains draft; no merge or deployment is authorized."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started bounded semantic-action and exact-draft authentication-resume repair in Actions run \`$GITHUB_RUN_ID\` at controller commit \`$GITHUB_SHA\`. The workflow will push source changes only if focused contracts, the full test suite, ESLint, TypeScript, the production build, and the exact rendered Playwright workflow all pass. The PR remains draft; no merge or deployment is authorized."
 
       - name: Apply bounded source repair
         shell: bash
@@ -138,12 +140,13 @@ jobs:
           contract_path.write_text(contract, encoding="utf-8")
           PY
 
-          git rm "$CONTROLLER_PATH" "$REPAIR_SCRIPT" "$RESUME_CONTEXT_SCRIPT"
+          git rm "$CONTROLLER_PATH" "$REPAIR_SCRIPT" "$RESUME_CONTEXT_SCRIPT" "$DIAGNOSTIC_WORKFLOW"
 
           cat > /tmp/expected-files <<'EOF'
           .github/scripts/co-act-co-fund-resolve-blocker.py
           .github/scripts/co-act-co-fund-resume-context-hotfix.py
           .github/workflows/co-act-co-fund-resume-repair.yml
+          .github/workflows/inspect-coact-counterparty.yml
           public/moral-trade-create/index.html
           src/components/create/create-interface-frame.tsx
           src/lib/create-interface/group-contribution-client-stability.test.ts
@@ -207,6 +210,7 @@ jobs:
           .github/scripts/co-act-co-fund-resolve-blocker.py
           .github/scripts/co-act-co-fund-resume-context-hotfix.py
           .github/workflows/co-act-co-fund-resume-repair.yml
+          .github/workflows/inspect-coact-counterparty.yml
           public/moral-trade-create/index.html
           src/components/create/create-interface-frame.tsx
           src/lib/create-interface/group-contribution-client-stability.test.ts
@@ -239,7 +243,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Resolved the rendered blockers on commit \`$REPAIR_SHA\`: Co-Fund monetary inputs remain stable across sequential edits, and proposal-only Co-Act/Co-Fund state returns to the final review screen after the authentication handoff, including a srcDoc iframe remount during route hydration. Focused contracts, complete tests, ESLint, TypeScript, production build, and the exact four-test Playwright workflow all passed. The PR remains draft and proposal-only; it was not merged or deployed."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Resolved the rendered blockers on commit \`$REPAIR_SHA\`: semantic action text no longer falls through to duration/currency, Co-Fund monetary inputs remain stable across sequential edits, and the exact editable Co-Act/Co-Fund draft returns after authentication and srcDoc iframe remount. Focused contracts, complete tests, ESLint, TypeScript, production build, and the exact four-test Playwright workflow all passed. The PR remains draft and proposal-only; it was not merged or deployed."
 
       - name: Record bounded repair failure
         if: failure()
@@ -248,7 +252,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Bounded server-safe top-level-context blocker repair run \`$GITHUB_RUN_ID\` failed before a source commit was pushed. The draft branch therefore remains at the controller commit. Failure evidence is attached to the run where available; no merge or deployment occurred."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Bounded semantic-action and exact-draft blocker repair run \`$GITHUB_RUN_ID\` failed before a source commit was pushed. The draft branch therefore remains at the controller commit. Failure evidence is attached to the run where available; no merge or deployment occurred."
 
       - name: Upload failure evidence
         if: failure()
@@ -261,4 +265,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-# Retry lazy server-safe resume context d6561445b9f3715af88c517eb77ddedbe0305104
+# Exact semantic-action and draft-snapshot repair 49b76ee4a3011ceaaecab03bc214ef911a9f4b58
