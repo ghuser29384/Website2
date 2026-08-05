@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CREATE_INTERFACE_VERSION } from "./types";
+import { CREATE_INTERFACE_VERSION, type MoralTradeCreatePayload } from "./types";
 import { validateCreatePayload } from "./validation";
 
 function futureDeadline() {
@@ -48,7 +48,7 @@ function creatorTerms() {
   } as const;
 }
 
-function commonGroundPayload() {
+function commonGroundPayload(): MoralTradeCreatePayload {
   return {
     interfaceVersion: CREATE_INTERFACE_VERSION,
     submissionKey: "create-unit-common-ground",
@@ -99,6 +99,7 @@ function commonGroundPayload() {
       activationRule:
         "Every selected participant must accept, enter their own private terms, and unanimously confirm the final allocation before the Co-Fund can open.",
     },
+    groupContributionTerms: null,
   };
 }
 
@@ -124,8 +125,8 @@ test("validates a participant-bound proposal with an open allocation", () => {
 
 test("accepts an organizer-only creator who is not counted as a participant", () => {
   const input = commonGroundPayload();
-  input.pool.commonGround.creatorParticipation = "organizer-only";
-  input.pool.commonGround.participants = [
+  input.pool!.commonGround!.creatorParticipation = "organizer-only";
+  input.pool!.commonGround!.participants = [
     { target: accountTarget(2), participantTerms: null },
     { target: externalTarget(3), participantTerms: null },
   ];
@@ -140,11 +141,11 @@ test("accepts an organizer-only creator who is not counted as a participant", ()
 
 test("rejects free-text identity and creator-entered terms for another participant", () => {
   const freeText = commonGroundPayload();
-  Object.assign(freeText.pool.commonGround.participants[1], { name: "Typed but not selected" });
+  Object.assign(freeText.pool!.commonGround!.participants[1], { name: "Typed but not selected" });
   assert.throws(() => validateCreatePayload(freeText), /unsupported or private field/i);
 
   const impersonatedTerms = commonGroundPayload();
-  impersonatedTerms.pool.commonGround.participants[1].participantTerms = creatorTerms();
+  impersonatedTerms.pool!.commonGround!.participants[1].participantTerms = creatorTerms();
   assert.throws(
     () => validateCreatePayload(impersonatedTerms),
     /cannot enter another participant's private or financial terms/i,
@@ -153,21 +154,21 @@ test("rejects free-text identity and creator-entered terms for another participa
 
 test("rejects duplicate account identities and creator-state mismatches", () => {
   const duplicate = commonGroundPayload();
-  duplicate.pool.commonGround.participants[1].target = {
+  duplicate.pool!.commonGround!.participants[1].target = {
     ...accountTarget(1),
     rowId: "cg-account-duplicate",
   };
   assert.throws(() => validateCreatePayload(duplicate), /same account cannot be added twice/i);
 
   const missingCreator = commonGroundPayload();
-  missingCreator.pool.commonGround.participants[0].target = accountTarget(1);
-  missingCreator.pool.commonGround.participants[0].participantTerms = null;
+  missingCreator.pool!.commonGround!.participants[0].target = accountTarget(1);
+  missingCreator.pool!.commonGround!.participants[0].participantTerms = null;
   assert.throws(() => validateCreatePayload(missingCreator), /participating creator/i);
 });
 
 test("requires the Co-Fund target to match the single public threshold", () => {
   const input = commonGroundPayload();
-  input.pool.thresholds[0].amount = "9000";
+  input.pool!.thresholds[0]!.amount = "9000";
 
   assert.throws(
     () => validateCreatePayload(input),
@@ -177,8 +178,8 @@ test("requires the Co-Fund target to match the single public threshold", () => {
 
 test("accepts the universal Co-Fund participant ceiling of 100", () => {
   const input = commonGroundPayload();
-  input.pool.commonGround.creatorParticipation = "organizer-only";
-  input.pool.commonGround.participants = Array.from({ length: 100 }, (_, index) => ({
+  input.pool!.commonGround!.creatorParticipation = "organizer-only";
+  input.pool!.commonGround!.participants = Array.from({ length: 100 }, (_, index) => ({
     target: externalTarget(index + 1),
     participantTerms: null,
   }));
@@ -189,8 +190,8 @@ test("accepts the universal Co-Fund participant ceiling of 100", () => {
 
 test("rejects a Co-Fund with more than 100 participants", () => {
   const input = commonGroundPayload();
-  input.pool.commonGround.creatorParticipation = "organizer-only";
-  input.pool.commonGround.participants = Array.from({ length: 101 }, (_, index) => ({
+  input.pool!.commonGround!.creatorParticipation = "organizer-only";
+  input.pool!.commonGround!.participants = Array.from({ length: 101 }, (_, index) => ({
     target: externalTarget(index + 1),
     participantTerms: null,
   }));
