@@ -47,6 +47,8 @@ function pledgePayloadWithCoAct() {
     "Research wild animal suffering",
   );
   draft.mode = "co-act";
+  draft.creatorParticipation = "organizer-only";
+  draft.participants = [];
   draft.counterpartyParticipation = "explicitly-excluded";
   draft.duration = "one month";
   draft.frequency = "one brief";

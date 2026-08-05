@@ -18,6 +18,8 @@ function validatedCoActProposal() {
     "Avoid meat for one meal per week",
   );
   draft.mode = "co-act";
+  draft.creatorParticipation = "organizer-only";
+  draft.participants = [];
   draft.counterpartyParticipation = "explicitly-included";
   draft.duration = "12 weeks";
   draft.frequency = "one meal per week";
