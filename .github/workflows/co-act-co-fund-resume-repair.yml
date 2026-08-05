@@ -18,7 +18,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: 0c5d5a0dae084694c8fb6783087b099eb084a40a
+  EXPECTED_PARENT: d6561445b9f3715af88c517eb77ddedbe0305104
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
   REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
   RESUME_CONTEXT_SCRIPT: .github/scripts/co-act-co-fund-resume-context-hotfix.py
@@ -56,7 +56,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started bounded top-level-context authentication-resume repair in Actions run \`$GITHUB_RUN_ID\` at controller commit \`$GITHUB_SHA\`. The workflow will push source changes only if focused contracts, the full test suite, ESLint, TypeScript, the production build, and the exact rendered Playwright workflow all pass. The PR remains draft; no merge or deployment is authorized."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started bounded server-safe top-level authentication-resume repair in Actions run \`$GITHUB_RUN_ID\` at controller commit \`$GITHUB_SHA\`. The workflow will push source changes only if focused contracts, the full test suite, ESLint, TypeScript, the production build, and the exact rendered Playwright workflow all pass. The PR remains draft; no merge or deployment is authorized."
 
       - name: Apply bounded source repair
         shell: bash
@@ -248,7 +248,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Bounded top-level-context blocker repair run \`$GITHUB_RUN_ID\` failed before a source commit was pushed. The draft branch therefore remains at the controller commit. Failure evidence is attached to the run where available; no merge or deployment occurred."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Bounded server-safe top-level-context blocker repair run \`$GITHUB_RUN_ID\` failed before a source commit was pushed. The draft branch therefore remains at the controller commit. Failure evidence is attached to the run where available; no merge or deployment occurred."
 
       - name: Upload failure evidence
         if: failure()
@@ -261,4 +261,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-# Retry robust top-level resume context 0c5d5a0dae084694c8fb6783087b099eb084a40a
+# Retry lazy server-safe resume context d6561445b9f3715af88c517eb77ddedbe0305104
