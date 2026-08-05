@@ -4,20 +4,20 @@ from textwrap import dedent
 client_path = Path("src/lib/create-interface/group-contribution-client.ts")
 client = client_path.read_text(encoding="utf-8")
 
-old_mount_state = dedent('''\
-  const saved = readStoredDrafts().drafts[key];
-  const state = saved
-    ? sanitizeStoredDraft(saved, key, underlying)
-    : defaultGroupContributionDraft(key, underlying, readPrimaryText(card, underlying));
-''')
-new_mount_state = dedent('''\
-  const resumed = draftFromResumedProposal(key, underlying);
-  const saved = readStoredDrafts().drafts[key];
-  const state = resumed ??
-    (saved
-      ? sanitizeStoredDraft(saved, key, underlying)
-      : defaultGroupContributionDraft(key, underlying, readPrimaryText(card, underlying)));
-''')
+old_mount_state = (
+    "  const saved = readStoredDrafts().drafts[key];\n"
+    "  const state = saved\n"
+    "    ? sanitizeStoredDraft(saved, key, underlying)\n"
+    "    : defaultGroupContributionDraft(key, underlying, readPrimaryText(card, underlying));\n"
+)
+new_mount_state = (
+    "  const resumed = draftFromResumedProposal(key, underlying);\n"
+    "  const saved = readStoredDrafts().drafts[key];\n"
+    "  const state = resumed ??\n"
+    "    (saved\n"
+    "      ? sanitizeStoredDraft(saved, key, underlying)\n"
+    "      : defaultGroupContributionDraft(key, underlying, readPrimaryText(card, underlying)));\n"
+)
 if client.count(old_mount_state) != 1:
     raise SystemExit(
         f"Expected one stored-draft mount block; found {client.count(old_mount_state)}"
@@ -209,10 +209,15 @@ test("validated authentication resume hydrates the editable group draft before f
   assert.match(hydrate, /applyCoFundTermsToDraft\(state, option\.terms\)/);
   assert.match(hydrate, /sanitizeStoredDraft\(state, optionKey, underlying\)/);
 
+  const common = functionBody("applyCommonTermsToDraft");
+  assert.match(common, /state\.participantLimit = terms\.participantLimit/);
+  assert.match(common, /state\.visibility = terms\.visibility/);
+  assert.match(common, /terms\.eligibility/);
+
   const coAct = functionBody("applyCoActTermsToDraft");
   assert.match(coAct, /state\.mode = "co-act"/);
-  assert.match(coAct, /state\.participantLimit/);
   assert.match(coAct, /state\.counterpartyParticipation = terms\.counterpartyParticipation/);
+  assert.match(coAct, /state\.minimumParticipants = terms\.activation\.minimumParticipants/);
 
   const coFund = functionBody("applyCoFundTermsToDraft");
   assert.match(coFund, /state\.mode = "co-fund"/);
