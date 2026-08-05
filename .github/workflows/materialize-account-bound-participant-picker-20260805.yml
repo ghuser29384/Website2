@@ -31,7 +31,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          test "$(git branch --show-current)" = "feature/account-bound-participant-picker-20260805"
+          branch="$(git branch --show-current)"
+          echo "branch=$branch"
+          test "$branch" = "feature/account-bound-participant-picker-20260805"
 
           declare -A expected=(
             [00]=323e663d64d4b7121b1edaa009e9bd6f32f08c17
@@ -46,20 +48,26 @@ jobs:
             file=".github/account-bound-participant-picker.patch.xz.b64.${suffix}"
             test -f "$file"
             actual="$(git hash-object "$file")"
+            echo "$file actual=$actual expected=${expected[$suffix]}"
             test "$actual" = "${expected[$suffix]}"
           done
 
           cat .github/account-bound-participant-picker.patch.xz.b64.0* \
             | base64 --decode > /tmp/account-bound-participant-picker.patch.xz
+          echo "compressed_bytes=$(wc -c < /tmp/account-bound-participant-picker.patch.xz)"
           xz --test /tmp/account-bound-participant-picker.patch.xz
           xz --decompress --stdout /tmp/account-bound-participant-picker.patch.xz \
             > /tmp/account-bound-participant-picker.patch
+          echo "patch_bytes=$(wc -c < /tmp/account-bound-participant-picker.patch)"
 
           awk '/^diff --git a\// {path=$3; sub(/^a\//, "", path); print path}' \
             /tmp/account-bound-participant-picker.patch \
             | sort -u > /tmp/account-bound-participant-picker.paths
 
-          test "$(wc -l < /tmp/account-bound-participant-picker.paths)" -eq 52
+          path_count="$(wc -l < /tmp/account-bound-participant-picker.paths)"
+          echo "durable_patch_path_count=$path_count"
+          cat /tmp/account-bound-participant-picker.paths
+          test "$path_count" -eq 52
 
           while IFS= read -r path; do
             case "$path" in
@@ -79,6 +87,7 @@ jobs:
 
           git apply --check /tmp/account-bound-participant-picker.patch
           git apply --index /tmp/account-bound-participant-picker.patch
+          echo "patch_applied=true"
 
       - name: Remove all temporary materialization files
         shell: bash
@@ -101,7 +110,10 @@ jobs:
           git diff --cached --check
 
           git diff --cached --name-only | sort -u > /tmp/staged-paths
-          test "$(wc -l < /tmp/staged-paths)" -eq 60
+          staged_count="$(wc -l < /tmp/staged-paths)"
+          echo "staged_path_count=$staged_count"
+          cat /tmp/staged-paths
+          test "$staged_count" -eq 60
 
           durable_count="$(comm -23 \
             <(sort /tmp/staged-paths) \
@@ -115,6 +127,7 @@ jobs:
               .github/workflows/export-account-bound-participant-picker-source-20260805.yml \
               .github/workflows/materialize-account-bound-participant-picker-20260805.yml | sort) \
             | wc -l)"
+          echo "durable_staged_count=$durable_count"
           test "$durable_count" -eq 52
 
           git status --short
