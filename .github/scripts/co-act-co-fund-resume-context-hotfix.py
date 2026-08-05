@@ -14,7 +14,8 @@ function isResumeRequest(): boolean {
 }
 ''')
 new_resume_context = dedent('''\
-function createResumeStorage(): Storage {
+function resumeStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
   try {
     if (window.top && window.top !== window) return window.top.sessionStorage;
   } catch {
@@ -23,9 +24,8 @@ function createResumeStorage(): Storage {
   return window.sessionStorage;
 }
 
-const RESUME_STORAGE = createResumeStorage();
-
-function resumeRequestUrl(): URL {
+function resumeRequestUrl(): URL | null {
+  if (typeof window === "undefined") return null;
   try {
     if (window.top && window.top !== window) {
       return new URL(window.top.location.href);
@@ -38,7 +38,7 @@ function resumeRequestUrl(): URL {
 
 function isResumeRequest(): boolean {
   try {
-    return resumeRequestUrl().searchParams.get("resume") === "create";
+    return resumeRequestUrl()?.searchParams.get("resume") === "create";
   } catch {
     return false;
   }
@@ -53,17 +53,17 @@ client = client.replace(old_resume_context, new_resume_context, 1)
 storage_replacements = [
     (
         "window.sessionStorage.setItem(RESUME_STORAGE_KEY",
-        "RESUME_STORAGE.setItem(RESUME_STORAGE_KEY",
+        "resumeStorage()?.setItem(RESUME_STORAGE_KEY",
         "resume proposal write",
     ),
     (
         "window.sessionStorage.getItem(RESUME_STORAGE_KEY",
-        "RESUME_STORAGE.getItem(RESUME_STORAGE_KEY",
+        "resumeStorage()?.getItem(RESUME_STORAGE_KEY",
         "resume proposal read",
     ),
     (
         "window.sessionStorage.removeItem(RESUME_STORAGE_KEY",
-        "RESUME_STORAGE.removeItem(RESUME_STORAGE_KEY",
+        "resumeStorage()?.removeItem(RESUME_STORAGE_KEY",
         "resume proposal cleanup",
     ),
 ]
@@ -83,22 +83,23 @@ test_name = "authentication resume uses the same top-level request and storage c
 if test_name in stability:
     raise SystemExit("The top-level resume-context regression already exists")
 
-stability += dedent(r'''\
-
+stability += "\n" + dedent(r'''
 test("authentication resume uses the same top-level request and storage context", () => {
   const request = functionBody("isResumeRequest");
   assert.match(request, /resumeRequestUrl\(\)/);
 
   const requestUrl = functionBody("resumeRequestUrl");
+  assert.match(requestUrl, /typeof window === "undefined"/);
   assert.match(requestUrl, /window\.top/);
   assert.match(requestUrl, /window\.location\.href/);
 
-  const storage = functionBody("createResumeStorage");
+  const storage = functionBody("resumeStorage");
+  assert.match(storage, /typeof window === "undefined"/);
   assert.match(storage, /window\.top\.sessionStorage/);
   assert.match(storage, /window\.sessionStorage/);
 
   const restore = functionBody("readStoredResumeProposal");
-  assert.match(restore, /RESUME_STORAGE\.getItem/);
+  assert.match(restore, /resumeStorage\(\)\?\.getItem/);
 });
 ''')
 stability_path.write_text(stability, encoding="utf-8")
