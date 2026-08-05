@@ -79,14 +79,13 @@ stability_path = Path(
     "src/lib/create-interface/group-contribution-client-stability.test.ts"
 )
 stability = stability_path.read_text(encoding="utf-8")
-old_assertions = dedent(r'''\
-  const restore = functionBody("readStoredResumeProposal");
-  assert.match(restore, /parseGroupContributionProposalPayload/);
-  assert.match(restore, /permitsGroupContributionMode/);
-  assert.match(restore, /result\.ok/);
-});
-''')
-new_assertions = dedent(r'''\
+test_name = "authentication resume uses the same top-level request and storage context"
+if test_name in stability:
+    raise SystemExit("The top-level resume-context regression already exists")
+
+stability += dedent(r'''\
+
+test("authentication resume uses the same top-level request and storage context", () => {
   const request = functionBody("isResumeRequest");
   assert.match(request, /resumeRequestUrl\(\)/);
 
@@ -100,16 +99,6 @@ new_assertions = dedent(r'''\
 
   const restore = functionBody("readStoredResumeProposal");
   assert.match(restore, /RESUME_STORAGE\.getItem/);
-  assert.match(restore, /parseGroupContributionProposalPayload/);
-  assert.match(restore, /permitsGroupContributionMode/);
-  assert.match(restore, /result\.ok/);
 });
 ''')
-if stability.count(old_assertions) != 1:
-    raise SystemExit(
-        f"Expected one generated authentication-resume assertion block; found {stability.count(old_assertions)}"
-    )
-stability_path.write_text(
-    stability.replace(old_assertions, new_assertions, 1),
-    encoding="utf-8",
-)
+stability_path.write_text(stability, encoding="utf-8")
