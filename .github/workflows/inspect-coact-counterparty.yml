@@ -1,0 +1,31 @@
+name: Inspect Co-Act counterparty render contract
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v3-20260803
+    paths:
+      - ".github/workflows/inspect-coact-counterparty.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v3-20260803
+          fetch-depth: 1
+      - name: Print bounded counterparty source context
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== client counterparty references ==='
+          grep -n -C 45 -E 'counterpartyParticipation|include the counterparty|updateCounterpartyMatchDefault' src/lib/create-interface/group-contribution-client.ts || true
+          echo '=== generated repair browser-test edits ==='
+          grep -n -C 25 -E 'counterparty|browser_path|resumedCoAct' .github/scripts/co-act-co-fund-resolve-blocker.py || true
+          echo '=== draft mapping ==='
+          grep -n -C 25 -E 'counterpartyParticipation|participantLimit' src/lib/create-interface/group-contribution-draft.ts | head -220
