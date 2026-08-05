@@ -18,15 +18,17 @@ jobs:
       - name: Check out exact pull-request head
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 1
 
       - name: Record exact source identity
         run: |
           set -euo pipefail
-          git rev-parse HEAD | tee source-head.txt
+          git rev-parse HEAD | tee "$RUNNER_TEMP/source-head.txt"
+          test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
           git status --short
 
-      - name: Package repository source
+      - name: Package repository source outside the worktree
         run: |
           set -euo pipefail
           tar \
@@ -36,16 +38,17 @@ jobs:
             --exclude=playwright-report \
             --exclude=test-results \
             --exclude=.github/workflows/export-account-bound-participant-picker-source-20260805.yml \
-            -czf account-bound-participant-picker-source.tgz .
-          sha256sum account-bound-participant-picker-source.tgz | tee account-bound-participant-picker-source.sha256
+            -czf "$RUNNER_TEMP/account-bound-participant-picker-source.tgz" .
+          sha256sum "$RUNNER_TEMP/account-bound-participant-picker-source.tgz" \
+            | tee "$RUNNER_TEMP/account-bound-participant-picker-source.sha256"
 
       - name: Upload exact source
         uses: actions/upload-artifact@v4
         with:
-          name: account-bound-participant-picker-source-${{ github.sha }}
+          name: account-bound-participant-picker-source-${{ github.event.pull_request.head.sha }}
           path: |
-            account-bound-participant-picker-source.tgz
-            account-bound-participant-picker-source.sha256
-            source-head.txt
+            ${{ runner.temp }}/account-bound-participant-picker-source.tgz
+            ${{ runner.temp }}/account-bound-participant-picker-source.sha256
+            ${{ runner.temp }}/source-head.txt
           if-no-files-found: error
           retention-days: 3
