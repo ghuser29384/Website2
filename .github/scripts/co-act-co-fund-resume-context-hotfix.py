@@ -136,6 +136,38 @@ primary = primary.replace(
 )
 client = client[:primary_start] + primary + client[primary_end:]
 
+old_write_header = dedent('''\
+function writeProposalPayload(persistCurrentDrafts = true): void {
+  if (persistCurrentDrafts) persistDrafts();
+  const payload = readProposalPayload();
+''')
+new_write_header = dedent('''\
+function writeProposalPayload(persistCurrentDrafts = true): void {
+  const preservingResumedDrafts = mounted.size === 0 && resumedProposal !== null;
+  if (persistCurrentDrafts && !preservingResumedDrafts) persistDrafts();
+  const payload = readProposalPayload();
+''')
+if client.count(old_write_header) != 1:
+    raise SystemExit(
+        f"Expected one conditional proposal writer; found {client.count(old_write_header)}"
+    )
+client = client.replace(old_write_header, new_write_header, 1)
+
+old_scan_tail = dedent('''\
+  removeDetachedOptions();
+  writeProposalPayload();
+}
+''')
+new_scan_tail = dedent('''\
+  removeDetachedOptions();
+  if (mounted.size > 0) resumedProposal = null;
+  writeProposalPayload();
+}
+''')
+if client.count(old_scan_tail) != 1:
+    raise SystemExit(f"Expected one option-scan tail; found {client.count(old_scan_tail)}")
+client = client.replace(old_scan_tail, new_scan_tail, 1)
+
 old_persist = dedent('''\
 function persistResumeProposal(proposal: GroupContributionProposalPayload): void {
   if (proposal.options.length === 0) return;
@@ -252,5 +284,43 @@ test("authentication resume restores the exact editable group draft snapshot", (
   assert.match(clear, /removeItem\(RESUME_STORAGE_KEY\)/);
   assert.match(clear, /removeItem\(RESUME_DRAFT_STORAGE_KEY\)/);
 });
+
+test("summary scans preserve restored group drafts until option cards remount", () => {
+  const writer = functionBody("writeProposalPayload");
+  assert.match(writer, /const preservingResumedDrafts = mounted\.size === 0 && resumedProposal !== null/);
+  assert.match(writer, /persistCurrentDrafts && !preservingResumedDrafts/);
+
+  const scan = functionBody("scanForOptions");
+  assert.match(scan, /if \(mounted\.size > 0\) resumedProposal = null/);
+  assert.ok(scan.indexOf("mounted.size > 0") < scan.indexOf("writeProposalPayload();"));
+});
 ''')
 stability_path.write_text(stability, encoding="utf-8")
+
+browser_path = Path("tests/create-group-contribution-proposal.spec.ts")
+browser = browser_path.read_text(encoding="utf-8")
+summary_anchor = '  await expect(resumed.getByText("CO-ACT · PROPOSAL ONLY")).toBeVisible();\n\n'
+summary_assertion = summary_anchor + dedent('''\
+  const resumedDraftSnapshot = await resumed.locator("body").evaluate(() =>
+    localStorage.getItem("mt:create:group-contribution-drafts:v1"),
+  );
+  expect(resumedDraftSnapshot).not.toBeNull();
+  const resumedDrafts = JSON.parse(resumedDraftSnapshot || "null") as {
+    drafts?: Record<string, {
+      mode?: string;
+      participantLimit?: number;
+      counterpartyParticipation?: string;
+    }>;
+  };
+  expect(resumedDrafts.drafts?.["behavior:1"]).toMatchObject({
+    mode: "co-act",
+    participantLimit: 17,
+    counterpartyParticipation: "explicitly-included",
+  });
+
+''')
+if browser.count(summary_anchor) != 1:
+    raise SystemExit(
+        f"Expected one resumed summary assertion anchor; found {browser.count(summary_anchor)}"
+    )
+browser_path.write_text(browser.replace(summary_anchor, summary_assertion, 1), encoding="utf-8")
