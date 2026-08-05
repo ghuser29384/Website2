@@ -1,0 +1,297 @@
+name: PR 346 protected Preview QA
+
+on:
+  push:
+    branches:
+      - ops/pr346-preview-qa-20260805
+    paths:
+      - .github/workflows/pr346-protected-preview-qa-20260805.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr346-protected-preview-qa-20260805
+  cancel-in-progress: false
+
+jobs:
+  preview-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      EXPECTED_CONTROL_PARENT: 8bdc10338121f173a300436a692c04808d56966b
+      EXPECTED_CANDIDATE: cda77f37bc1854494fef502a64f320394b37eabc
+      CONTROL_PATH: .github/workflows/pr346-protected-preview-qa-20260805.yml
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      PGSSLMODE: require
+      PLAYWRIGHT_HTML_OPEN: never
+
+    steps:
+      - name: Check out the exact one-use QA controller
+        uses: actions/checkout@v4
+        with:
+          ref: ops/pr346-preview-qa-20260805
+          fetch-depth: 0
+
+      - name: Verify the controller boundary and check out the immutable candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/ops/pr346-preview-qa-20260805'
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CONTROL_PARENT"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')" = "$CONTROL_PATH"
+          git fetch --no-tags origin "$EXPECTED_CANDIDATE"
+          git checkout --detach "$EXPECTED_CANDIDATE"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE"
+          git diff --check HEAD^
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and browser/database clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+          npx playwright install --with-deps chromium
+
+      - name: Verify the isolated-QA database target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          ssl_modes = parse_qs(parsed.query).get('sslmode', ['require'])
+          valid = (
+              parsed.scheme in {'postgres', 'postgresql'}
+              and 'hvmxfjjbdcgjjudmthdz' in (parsed.username or '')
+              and parsed.hostname == 'aws-0-us-west-1.pooler.supabase.com'
+              and parsed.port == 5432
+              and parsed.path == '/postgres'
+              and ssl_modes == ['require']
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit('Refusing a database URL outside the exact TLS-only MoralTrade QA target.')
+          PY
+
+      - name: Resolve the exact READY canonical-project Preview deployment
+        id: preview
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          mkdir -p preview-evidence
+          selected=''
+
+          for attempt in $(seq 1 160); do
+            curl -fsS -G \
+              -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+              --data-urlencode "projectId=${VERCEL_PROJECT_ID}" \
+              --data-urlencode "teamId=${VERCEL_TEAM_ID}" \
+              --data-urlencode 'target=preview' \
+              --data-urlencode 'limit=100' \
+              'https://api.vercel.com/v6/deployments' \
+              > preview-evidence/deployments.json
+
+            selected="$(jq -r --arg sha "$EXPECTED_CANDIDATE" '
+              [.deployments[]
+                | select((.meta.githubCommitSha // "") == $sha)
+                | select((.readyState // .state // "") == "READY")
+                | select((.target // "") == "preview")]
+              | sort_by(.createdAt)
+              | last
+              | (.uid // .id // empty)
+            ' preview-evidence/deployments.json)"
+            if [[ -n "$selected" ]]; then
+              break
+            fi
+            sleep 15
+          done
+          test -n "$selected"
+
+          curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            "https://api.vercel.com/v13/deployments/${selected}?teamId=${VERCEL_TEAM_ID}" \
+            > preview-evidence/deployment.json
+
+          jq -e \
+            --arg id "$selected" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$EXPECTED_CANDIDATE" '
+              ((.uid // .id) == $id)
+              and ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and (.target == "preview")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitSha == $sha)
+            ' preview-evidence/deployment.json >/dev/null
+
+          preview_url="https://$(jq -r '.url' preview-evidence/deployment.json)"
+          test "$preview_url" != 'https://'
+          printf '%s\n' "$preview_url" | tee preview-evidence/url.txt
+          echo "deployment_id=$selected" >> "$GITHUB_OUTPUT"
+          echo "preview_url=$preview_url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify direct Preview access and QA runtime binding
+        env:
+          PREVIEW_URL: ${{ steps.preview.outputs.preview_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl -sS -L -o preview-evidence/root.html -w '%{http_code}' \
+            -H 'Cookie: mt_walkthrough_seen=1' \
+            "$PREVIEW_URL/")"
+          if [[ "$status" == '401' || "$status" == '403' ]]; then
+            echo 'The exact Vercel Preview is protected and needs a temporary authenticated share/bypass URL.' >&2
+            exit 86
+          fi
+          [[ "$status" =~ ^(200|30[1278])$ ]]
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+          import urllib.parse
+          import urllib.request
+
+          origin = os.environ['PREVIEW_URL'].rstrip('/')
+          pages = ['/', '/login', '/trades/new']
+          seen = set()
+          payloads = []
+          opener = urllib.request.build_opener()
+          for path in pages:
+              request = urllib.request.Request(
+                  origin + path,
+                  headers={'Cookie': 'mt_walkthrough_seen=1', 'User-Agent': 'MoralTrade-Preview-QA/1'},
+              )
+              with opener.open(request, timeout=30) as response:
+                  html = response.read().decode('utf-8', errors='replace')
+              payloads.append(html)
+              for src in re.findall(r'<script[^>]+src=["\']([^"\']+)', html):
+                  url = urllib.parse.urljoin(origin + path, src)
+                  if url in seen:
+                      continue
+                  seen.add(url)
+                  try:
+                      with opener.open(url, timeout=30) as response:
+                          payloads.append(response.read().decode('utf-8', errors='replace'))
+                  except Exception:
+                      pass
+          combined = '\n'.join(payloads)
+          Path('preview-evidence/public-runtime.txt').write_text(combined, encoding='utf-8')
+          if 'hvmxfjjbdcgjjudmthdz' not in combined:
+              raise SystemExit('The Preview public runtime is not bound to the isolated MoralTrade QA project.')
+          if 'jnpoxvalyjtdghnperyu' in combined:
+              raise SystemExit('The Preview public runtime unexpectedly exposes the production Supabase project reference.')
+          PY
+
+      - name: Verify required QA migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          recorded="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where (version = '20260730150000' and name = 'feed_create_phase1') or (version = '20260801062000' and name = 'feed_create_phase1_authenticated_runtime');" \
+            | tr -d '[:space:]')"
+          test "$recorded" = '2'
+
+      - name: Create ephemeral authenticated Preview fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export FEED_CREATE_QA_PASSWORD="$qa_password"
+          printf 'FEED_CREATE_QA_PASSWORD=%s\n' "$qa_password" >> "$GITHUB_ENV"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/feed_create_phase1_browser_fixture.sql \
+            | tee preview-evidence/fixture.log
+
+      - name: Run authenticated desktop, 390-pixel mobile, negative, duplicate, and no-flash Preview QA
+        env:
+          FEED_CREATE_BASE_URL: ${{ steps.preview.outputs.preview_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > playwright.preview.config.ts <<'TS'
+          import { defineConfig } from '@playwright/test';
+
+          export default defineConfig({
+            testDir: './tests',
+            testMatch: /feed-create-phase1-authenticated\.spec\.ts/,
+            timeout: 30_000,
+            expect: { timeout: 5_000 },
+            workers: 1,
+            use: {
+              trace: 'retain-on-failure',
+              screenshot: 'only-on-failure',
+              video: 'retain-on-failure',
+            },
+          });
+          TS
+          npx playwright test \
+            tests/feed-create-phase1-authenticated.spec.ts \
+            --config=playwright.preview.config.ts \
+            --reporter=line \
+            | tee preview-evidence/playwright.log
+
+      - name: Remove all Preview fixtures and verify zero residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/feed_create_phase1_browser_cleanup.sql \
+            | tee preview-evidence/cleanup.log
+
+      - name: Inspect Preview runtime errors for the exact deployment
+        if: always()
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_ID: ${{ steps.preview.outputs.deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${DEPLOYMENT_ID:-}" ]]; then
+            exit 0
+          fi
+          curl -fsS -G \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            --data-urlencode "projectId=${VERCEL_PROJECT_ID}" \
+            --data-urlencode "teamId=${VERCEL_TEAM_ID}" \
+            --data-urlencode "deploymentId=${DEPLOYMENT_ID}" \
+            --data-urlencode 'level=error' \
+            --data-urlencode 'since=1h' \
+            'https://api.vercel.com/v1/projects/logs' \
+            > preview-evidence/runtime-errors.json || true
+
+      - name: Upload immutable Preview QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr346-protected-preview-qa-${{ env.EXPECTED_CANDIDATE }}
+          path: |
+            preview-evidence
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 30
