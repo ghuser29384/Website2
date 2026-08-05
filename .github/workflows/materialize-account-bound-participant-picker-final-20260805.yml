@@ -33,6 +33,7 @@ jobs:
 
           test "$(git branch --show-current)" = "feature/account-bound-participant-picker-20260805"
           git merge-base --is-ancestor 3c3d744a621d833726da5563d72c636e40795563 HEAD
+          test -e .github/workflows/account-bound-participant-picker-gates.yml
           test -z "$(git status --porcelain)"
 
           declare -A expected=(
@@ -55,7 +56,6 @@ jobs:
 
           cat .github/account-bound-participant-picker-final.patch.xz.b64.0* \
             | base64 --decode > /tmp/account-bound-participant-picker-final.patch.xz
-
           echo "663541c44fb7a8304da1f520e211df36cf2d68501b72af9ed806daa45f1b3170  /tmp/account-bound-participant-picker-final.patch.xz" \
             | sha256sum --check --strict
           xz --test /tmp/account-bound-participant-picker-final.patch.xz
@@ -67,7 +67,6 @@ jobs:
           awk '/^diff --git a\// {path=$3; sub(/^a\//, "", path); print path}' \
             /tmp/account-bound-participant-picker-final.patch \
             | sort -u > /tmp/account-bound-participant-picker-final.paths
-
           cat > /tmp/account-bound-participant-picker-final.expected-paths <<'PATHS'
           .github/workflows/account-bound-participant-picker-gates.yml
           public/moral-trade-create/participant-picker.js
@@ -87,16 +86,24 @@ jobs:
           sed -i 's/^          //' /tmp/account-bound-participant-picker-final.expected-paths
           sort -o /tmp/account-bound-participant-picker-final.expected-paths \
             /tmp/account-bound-participant-picker-final.expected-paths
-
           test "$(wc -l < /tmp/account-bound-participant-picker-final.paths)" -eq 14
           diff -u \
             /tmp/account-bound-participant-picker-final.expected-paths \
             /tmp/account-bound-participant-picker-final.paths
 
-          git apply --check /tmp/account-bound-participant-picker-final.patch
-          git apply --index /tmp/account-bound-participant-picker-final.patch
+          grep -Fxv '.github/workflows/account-bound-participant-picker-gates.yml' \
+            /tmp/account-bound-participant-picker-final.expected-paths \
+            > /tmp/account-bound-participant-picker-final.nonworkflow-paths
+          test "$(wc -l < /tmp/account-bound-participant-picker-final.nonworkflow-paths)" -eq 13
 
-      - name: Remove all temporary transport machinery
+          git apply \
+            --exclude=.github/workflows/account-bound-participant-picker-gates.yml \
+            --check /tmp/account-bound-participant-picker-final.patch
+          git apply \
+            --exclude=.github/workflows/account-bound-participant-picker-gates.yml \
+            --index /tmp/account-bound-participant-picker-final.patch
+
+      - name: Remove temporary payload files
         shell: bash
         run: |
           set -euo pipefail
@@ -107,29 +114,19 @@ jobs:
             .github/account-bound-participant-picker-final.patch.xz.b64.03 \
             .github/account-bound-participant-picker-final.patch.xz.b64.04 \
             .github/account-bound-participant-picker-final.patch.xz.b64.05 \
-            .github/account-bound-participant-picker-final.patch.xz.b64.06 \
-            .github/workflows/export-current-abpp-source-20260805.yml \
-            .github/workflows/materialize-account-bound-participant-picker-final-20260805.yml
+            .github/account-bound-participant-picker-final.patch.xz.b64.06
 
-      - name: Validate exact staged candidate
+      - name: Validate exact staged non-workflow candidate
         shell: bash
         run: |
           set -euo pipefail
           git diff --cached --check
           git diff --cached --name-only | sort -u > /tmp/staged-paths
-          test "$(wc -l < /tmp/staged-paths)" -eq 23
+          test "$(wc -l < /tmp/staged-paths)" -eq 20
 
-          for path in \
-            .github/account-bound-participant-picker-final.patch.xz.b64.00 \
-            .github/account-bound-participant-picker-final.patch.xz.b64.01 \
-            .github/account-bound-participant-picker-final.patch.xz.b64.02 \
-            .github/account-bound-participant-picker-final.patch.xz.b64.03 \
-            .github/account-bound-participant-picker-final.patch.xz.b64.04 \
-            .github/account-bound-participant-picker-final.patch.xz.b64.05 \
-            .github/account-bound-participant-picker-final.patch.xz.b64.06 \
-            .github/workflows/export-current-abpp-source-20260805.yml \
-            .github/workflows/materialize-account-bound-participant-picker-final-20260805.yml; do
-            grep -Fxq "$path" /tmp/staged-paths
+          for suffix in 00 01 02 03 04 05 06; do
+            grep -Fxq ".github/account-bound-participant-picker-final.patch.xz.b64.${suffix}" \
+              /tmp/staged-paths
           done
 
           comm -23 \
@@ -141,18 +138,19 @@ jobs:
               .github/account-bound-participant-picker-final.patch.xz.b64.03 \
               .github/account-bound-participant-picker-final.patch.xz.b64.04 \
               .github/account-bound-participant-picker-final.patch.xz.b64.05 \
-              .github/account-bound-participant-picker-final.patch.xz.b64.06 \
-              .github/workflows/export-current-abpp-source-20260805.yml \
-              .github/workflows/materialize-account-bound-participant-picker-final-20260805.yml | sort) \
+              .github/account-bound-participant-picker-final.patch.xz.b64.06 | sort) \
             > /tmp/durable-staged-paths
-          test "$(wc -l < /tmp/durable-staged-paths)" -eq 14
+          test "$(wc -l < /tmp/durable-staged-paths)" -eq 13
           diff -u \
-            /tmp/account-bound-participant-picker-final.expected-paths \
+            /tmp/account-bound-participant-picker-final.nonworkflow-paths \
             /tmp/durable-staged-paths
 
+          test -e .github/workflows/account-bound-participant-picker-gates.yml
+          test -e .github/workflows/export-current-abpp-source-20260805.yml
+          test -e .github/workflows/materialize-account-bound-participant-picker-final-20260805.yml
           git status --short
 
-      - name: Commit durable candidate and push
+      - name: Commit non-workflow candidate and push
         shell: bash
         run: |
           set -euo pipefail
