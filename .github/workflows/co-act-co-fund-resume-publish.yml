@@ -1,0 +1,274 @@
+name: Publish proven Co-Act and Co-Fund resume repair
+
+on:
+  push:
+    branches:
+      - feature/co-act-co-fund-create-v3-20260803
+    paths:
+      - ".github/workflows/co-act-co-fund-resume-publish.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: co-act-co-fund-resume-publish-${{ github.sha }}
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
+  CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-publish.yml
+  BASE_REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
+  RESUME_REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resume-context-hotfix.py
+
+jobs:
+  repair-prove-publish:
+    if: >-
+      github.repository == 'ghuser29384/Website2' &&
+      github.ref == 'refs/heads/feature/co-act-co-fund-create-v3-20260803'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out exact controller trigger
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v3-20260803
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact one-file trigger and branch lease
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
+          test "$(git diff --name-only HEAD^ HEAD)" = "$CONTROLLER_PATH"
+          test -f "$BASE_REPAIR_SCRIPT"
+          test -f "$RESUME_REPAIR_SCRIPT"
+
+      - name: Record publication-gate start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started the corrected exact-head publication gate in Actions run \`$GITHUB_RUN_ID\` at controller commit \`$GITHUB_SHA\`. The previous full gate passed all product and rendered checks; its final manifest rejected only build-generated \`next-env.d.ts\`. This run resets that generated file before diff verification and pushes only if every gate passes again. PR #477 remains draft; no merge or deployment is authorized."
+
+      - name: Apply bounded repair and remove temporary machinery
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 "$BASE_REPAIR_SCRIPT"
+          python3 "$RESUME_REPAIR_SCRIPT"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          from textwrap import dedent
+
+          html_path = Path("public/moral-trade-create/index.html")
+          html = html_path.read_text(encoding="utf-8")
+
+          old_snapshot = 'CREATE_DRAFT_STORAGE.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify({ ...state, published: false }));'
+          new_snapshot = '''CREATE_DRAFT_STORAGE.setItem(
+                  CREATE_DRAFT_STORAGE_KEY,
+                  JSON.stringify({ ...state, step: 4, offerPhase: "details", published: false }),
+                );'''
+          if html.count(old_snapshot) != 1:
+              raise SystemExit(
+                  f"Expected one authentication resume snapshot; found {html.count(old_snapshot)}"
+              )
+          html = html.replace(old_snapshot, new_snapshot, 1)
+
+          old_cleanup = (
+              '        Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });\n'
+              '        CREATE_DRAFT_STORAGE.removeItem(CREATE_DRAFT_STORAGE_KEY);\n'
+              '        return true;'
+          )
+          new_cleanup = (
+              '        Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });\n'
+              '        // Retain the snapshot until a durable receipt or explicit reset; the srcDoc iframe may remount during route hydration.\n'
+              '        return true;'
+          )
+          if html.count(old_cleanup) != 1:
+              raise SystemExit(
+                  f"Expected one eager authentication-resume cleanup; found {html.count(old_cleanup)}"
+              )
+          html = html.replace(old_cleanup, new_cleanup, 1)
+          html_path.write_text(html, encoding="utf-8")
+
+          contract_path = Path("src/lib/create-interface/source-contract.test.ts")
+          contract = contract_path.read_text(encoding="utf-8")
+          old_assertion = '  assert.match(html, /CREATE_DRAFT_STORAGE\\.setItem\\(CREATE_DRAFT_STORAGE_KEY/);\n'
+          new_assertions = (
+              '  assert.match(html, /CREATE_DRAFT_STORAGE\\.setItem\\(\\s*CREATE_DRAFT_STORAGE_KEY/);\n'
+              '  assert.match(html, /step: 4, offerPhase: "details", published: false/);\n'
+          )
+          if contract.count(old_assertion) != 1:
+              raise SystemExit(
+                  f"Expected one resume-storage assertion; found {contract.count(old_assertion)}"
+              )
+          contract = contract.replace(old_assertion, new_assertions, 1)
+
+          test_name = "authentication resume snapshot survives an iframe remount until durable receipt"
+          if test_name in contract:
+              raise SystemExit("The iframe-remount resume contract already exists")
+          contract += dedent('''\
+
+          test("authentication resume snapshot survives an iframe remount until durable receipt", () => {
+            const start = html.indexOf("function restoreDraftForResume()");
+            const end = html.indexOf("\\n    function renderSubmittedReceipt", start);
+            assert.ok(start >= 0 && end > start);
+            const restoreSource = html.slice(start, end);
+            assert.match(restoreSource, /Object\\.assign\\(state, saved/);
+            assert.doesNotMatch(
+              restoreSource,
+              /CREATE_DRAFT_STORAGE\\.removeItem\\(CREATE_DRAFT_STORAGE_KEY\\)/,
+            );
+          });
+          ''')
+          contract_path.write_text(contract, encoding="utf-8")
+          PY
+
+          git rm \
+            "$BASE_REPAIR_SCRIPT" \
+            "$RESUME_REPAIR_SCRIPT" \
+            .github/workflows/co-act-co-fund-resume-preservation-repair.yml \
+            .github/workflows/co-act-co-fund-resume-repair.yml \
+            .github/workflows/co-act-co-fund-resume-repair-v2.yml \
+            .github/workflows/co-act-co-fund-storage-diagnostic.yml \
+            .github/workflows/inspect-coact-counterparty.yml \
+            "$CONTROLLER_PATH"
+
+          cat > /tmp/expected-files <<'EOF'
+          .github/scripts/co-act-co-fund-resolve-blocker.py
+          .github/scripts/co-act-co-fund-resume-context-hotfix.py
+          .github/workflows/co-act-co-fund-resume-preservation-repair.yml
+          .github/workflows/co-act-co-fund-resume-publish.yml
+          .github/workflows/co-act-co-fund-resume-repair-v2.yml
+          .github/workflows/co-act-co-fund-resume-repair.yml
+          .github/workflows/co-act-co-fund-storage-diagnostic.yml
+          .github/workflows/inspect-coact-counterparty.yml
+          public/moral-trade-create/index.html
+          src/components/create/create-interface-frame.tsx
+          src/lib/create-interface/group-contribution-client-stability.test.ts
+          src/lib/create-interface/group-contribution-client.ts
+          src/lib/create-interface/source-contract.test.ts
+          tests/create-group-contribution-proposal.spec.ts
+          EOF
+          sort -o /tmp/expected-files /tmp/expected-files
+          git diff HEAD --name-only | sort > /tmp/actual-files
+          diff -u /tmp/expected-files /tmp/actual-files
+          git diff HEAD --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused Co-Act and Co-Fund contracts
+        run: >-
+          node --import tsx --test
+          src/lib/create-interface/group-contribution*.test.ts
+          src/lib/create-interface/persistence.test.ts
+          src/lib/create-interface/source-contract.test.ts
+          src/lib/create-interface/validation.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run absolute ESLint
+        run: npm run lint
+
+      - name: Run absolute TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run exact rendered proposal workflow
+        env:
+          CREATE_ROUTE_CAPTURE: "1"
+        run: npx playwright test tests/create-group-contribution-proposal.spec.ts
+
+      - name: Verify bounded final diff and branch lease
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf test-results playwright-report
+          git checkout -- next-env.d.ts
+          git diff HEAD --check
+          cat > /tmp/expected-files <<'EOF'
+          .github/scripts/co-act-co-fund-resolve-blocker.py
+          .github/scripts/co-act-co-fund-resume-context-hotfix.py
+          .github/workflows/co-act-co-fund-resume-preservation-repair.yml
+          .github/workflows/co-act-co-fund-resume-publish.yml
+          .github/workflows/co-act-co-fund-resume-repair-v2.yml
+          .github/workflows/co-act-co-fund-resume-repair.yml
+          .github/workflows/co-act-co-fund-storage-diagnostic.yml
+          .github/workflows/inspect-coact-counterparty.yml
+          public/moral-trade-create/index.html
+          src/components/create/create-interface-frame.tsx
+          src/lib/create-interface/group-contribution-client-stability.test.ts
+          src/lib/create-interface/group-contribution-client.ts
+          src/lib/create-interface/source-contract.test.ts
+          tests/create-group-contribution-proposal.spec.ts
+          EOF
+          sort -o /tmp/expected-files /tmp/expected-files
+          git diff HEAD --name-only | sort > /tmp/actual-files
+          diff -u /tmp/expected-files /tmp/actual-files
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
+
+      - name: Commit and push proven repair
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Fix Co-Act/Co-Fund resume draft preservation"
+          REPAIR_SHA="$(git rev-parse HEAD)"
+          echo "repair_sha=$REPAIR_SHA" >> "$GITHUB_OUTPUT"
+          git push --force-with-lease="refs/heads/$TARGET_BRANCH:$GITHUB_SHA" \
+            origin "HEAD:refs/heads/$TARGET_BRANCH"
+
+      - name: Record PASS on draft PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPAIR_SHA: ${{ steps.commit.outputs.repair_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Published the proven rendered-persistence repair on commit \`$REPAIR_SHA\`. Summary-screen observer scans no longer erase restored Co-Act/Co-Fund drafts; semantic action fields remain stable; Co-Fund numeric inputs remain stable; and the exact editable draft survives authentication and srcDoc iframe remount. Focused contracts, the complete repository suite, ESLint, TypeScript, production build, and all four rendered Playwright scenarios passed. Build-generated \`next-env.d.ts\` was reset before exact-diff verification, and all temporary repair/diagnostic machinery was removed. PR #477 remains draft and proposal-only; it was not merged or deployed."
+
+      - name: Record bounded failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "The corrected exact-head publication gate \`$GITHUB_RUN_ID\` failed before a durable source commit was pushed. PR #477 remains draft and unmerged; no deployment occurred. Failure evidence is attached where available."
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: co-act-co-fund-resume-publish-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
