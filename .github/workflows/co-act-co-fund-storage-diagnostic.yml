@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  EXPECTED_PARENT: 7d3f121826f001b3f7a1fcfb9b84d96a4156a17e
+  TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-storage-diagnostic.yml
 
 jobs:
@@ -39,9 +39,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
+          test "$(git diff --name-only HEAD^ HEAD)" = "$CONTROLLER_PATH"
 
       - name: Apply the current bounded repair in the diagnostic worktree
         shell: bash
@@ -214,4 +214,4 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-# Exact trigger parent: 7d3f121826f001b3f7a1fcfb9b84d96a4156a17e
+# Race-safe exact one-file trigger
