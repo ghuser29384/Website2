@@ -18,7 +18,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: 2718b2bbb36dc4dd4798ff579f9d1063e287f7bd
+  EXPECTED_PARENT: 050ab49dc72e02f2f39d17759f747ba37fde57ad
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
   REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
 
@@ -141,6 +141,7 @@ jobs:
           .github/scripts/co-act-co-fund-resolve-blocker.py
           .github/workflows/co-act-co-fund-resume-repair.yml
           public/moral-trade-create/index.html
+          src/components/create/create-interface-frame.tsx
           src/lib/create-interface/group-contribution-client-stability.test.ts
           src/lib/create-interface/group-contribution-client.ts
           src/lib/create-interface/source-contract.test.ts
@@ -202,6 +203,7 @@ jobs:
           .github/scripts/co-act-co-fund-resolve-blocker.py
           .github/workflows/co-act-co-fund-resume-repair.yml
           public/moral-trade-create/index.html
+          src/components/create/create-interface-frame.tsx
           src/lib/create-interface/group-contribution-client-stability.test.ts
           src/lib/create-interface/group-contribution-client.ts
           src/lib/create-interface/source-contract.test.ts
@@ -253,3 +255,5 @@ jobs:
             playwright-report
           if-no-files-found: warn
           retention-days: 14
+
+# Trigger exact head 050ab49dc72e02f2f39d17759f747ba37fde57ad
