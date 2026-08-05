@@ -111,6 +111,14 @@ begin
   if not has_function_privilege('service_role','public.search_create_participants_v2(uuid,text,integer)','execute') then
     raise exception 'service role cannot execute participant search';
   end if;
+  if not has_function_privilege('authenticated','public.normalize_profile_username_v1(text)','execute')
+     or not has_function_privilege('authenticated','public.profile_username_is_reserved_v1(text)','execute') then
+    raise exception 'authenticated profile owners cannot execute username constraint helpers';
+  end if;
+  if has_function_privilege('anon','public.normalize_profile_username_v1(text)','execute')
+     or has_function_privilege('anon','public.profile_username_is_reserved_v1(text)','execute') then
+    raise exception 'anonymous role can execute username constraint helpers';
+  end if;
   if to_regprocedure('public.search_create_participants_v1(uuid,text,text,uuid,integer)') is not null
      or to_regprocedure('public.resolve_create_participants_v1(uuid,uuid[])') is not null then
     raise exception 'retired v1 participant RPCs remain';

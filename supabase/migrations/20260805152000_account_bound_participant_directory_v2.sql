@@ -369,6 +369,12 @@ revoke all on function public.normalize_profile_username_v1(text) from public, a
 revoke all on function public.profile_username_is_reserved_v1(text) from public, anon, authenticated;
 revoke all on function public.safe_participant_display_name_v1(text, text) from public, anon, authenticated;
 
+-- The profile username check constraint calls these two pure validators while ordinary
+-- authenticated owners update their own profile. Grant only those non-sensitive helpers;
+-- participant search and the private claim ledger remain service-role-only.
+grant execute on function public.normalize_profile_username_v1(text) to authenticated;
+grant execute on function public.profile_username_is_reserved_v1(text) to authenticated;
+
 drop function if exists public.search_create_participants_v1(uuid, text, text, uuid, integer);
 drop function if exists public.resolve_create_participants_v1(uuid, uuid[]);
 
