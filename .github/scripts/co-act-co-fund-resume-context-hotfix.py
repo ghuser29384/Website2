@@ -4,6 +4,19 @@ from textwrap import dedent
 client_path = Path("src/lib/create-interface/group-contribution-client.ts")
 client = client_path.read_text(encoding="utf-8")
 
+old_keys = (
+    'const RESUME_STORAGE_KEY = "mt:create:group-contribution-resume:v1";\n'
+    'const PAYLOAD_FIELD = "groupContributionTerms";'
+)
+new_keys = (
+    'const RESUME_STORAGE_KEY = "mt:create:group-contribution-resume:v1";\n'
+    'const RESUME_DRAFT_STORAGE_KEY = "mt:create:group-contribution-resume-drafts:v1";\n'
+    'const PAYLOAD_FIELD = "groupContributionTerms";'
+)
+if client.count(old_keys) != 1:
+    raise SystemExit(f"Expected one resume-key block; found {client.count(old_keys)}")
+client = client.replace(old_keys, new_keys, 1)
+
 old_resume_context = dedent('''\
 function isResumeRequest(): boolean {
   try {
@@ -43,6 +56,20 @@ function isResumeRequest(): boolean {
     return false;
   }
 }
+
+function restoreResumeDrafts(): void {
+  if (!isResumeRequest()) return;
+  try {
+    const raw = resumeStorage()?.getItem(RESUME_DRAFT_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Partial<StoredDrafts>;
+    if (parsed.version !== 1 || !parsed.drafts || typeof parsed.drafts !== "object") return;
+    const snapshot: StoredDrafts = { version: 1, drafts: parsed.drafts };
+    createWindow().localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Invalid or unavailable local state cannot override the validated proposal snapshot.
+  }
+}
 ''')
 if client.count(old_resume_context) != 1:
     raise SystemExit(
@@ -50,28 +77,116 @@ if client.count(old_resume_context) != 1:
     )
 client = client.replace(old_resume_context, new_resume_context, 1)
 
-storage_replacements = [
-    (
-        "window.sessionStorage.setItem(RESUME_STORAGE_KEY",
-        "resumeStorage()?.setItem(RESUME_STORAGE_KEY",
-        "resume proposal write",
-    ),
-    (
-        "window.sessionStorage.getItem(RESUME_STORAGE_KEY",
-        "resumeStorage()?.getItem(RESUME_STORAGE_KEY",
-        "resume proposal read",
-    ),
-    (
-        "window.sessionStorage.removeItem(RESUME_STORAGE_KEY",
-        "resumeStorage()?.removeItem(RESUME_STORAGE_KEY",
-        "resume proposal cleanup",
-    ),
-]
-for old, new, label in storage_replacements:
-    count = client.count(old)
-    if count != 1:
-        raise SystemExit(f"Expected one {label}; found {count}")
-    client = client.replace(old, new, 1)
+old_activation = (
+    '  activeWindow = targetWindow;\n'
+    '  activeDocument = targetDocument;\n'
+    '  resumedProposal = readStoredResumeProposal();\n'
+    '  scanQueued = false;'
+)
+new_activation = (
+    '  activeWindow = targetWindow;\n'
+    '  activeDocument = targetDocument;\n'
+    '  restoreResumeDrafts();\n'
+    '  resumedProposal = readStoredResumeProposal();\n'
+    '  scanQueued = false;'
+)
+if client.count(old_activation) != 1:
+    raise SystemExit(f"Expected one resume activation block; found {client.count(old_activation)}")
+client = client.replace(old_activation, new_activation, 1)
+
+old_primary_loop = dedent('''\
+  for (const field of preferredFields) {
+    const control = card.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      `[data-offer-field='${field}']`,
+    );
+    const value = control?.value.trim() ?? "";
+    if (value) return value;
+  }
+
+  const controls = card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+''')
+new_primary_loop = dedent('''\
+  let hasPreferredControl = false;
+  for (const field of preferredFields) {
+    const control = card.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+      `[data-offer-field='${field}']`,
+    );
+    if (control) hasPreferredControl = true;
+    const value = control?.value.trim() ?? "";
+    if (value) return value;
+  }
+  if (hasPreferredControl) return "";
+
+  const controls = card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+''')
+if client.count(old_primary_loop) != 1:
+    raise SystemExit(
+        f"Expected one primary-field fallback loop; found {client.count(old_primary_loop)}"
+    )
+client = client.replace(old_primary_loop, new_primary_loop, 1)
+
+old_persist = dedent('''\
+function persistResumeProposal(proposal: GroupContributionProposalPayload): void {
+  if (proposal.options.length === 0) return;
+  try {
+    window.sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify(proposal));
+    resumedProposal = proposal;
+  } catch {
+    // Authentication resume is best effort; the server remains authoritative.
+  }
+}
+''')
+new_persist = dedent('''\
+function persistResumeProposal(proposal: GroupContributionProposalPayload): void {
+  if (proposal.options.length === 0) return;
+  resumedProposal = proposal;
+  const storage = resumeStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(RESUME_STORAGE_KEY, JSON.stringify(proposal));
+    const draftSnapshot = createWindow().localStorage.getItem(STORAGE_KEY);
+    if (draftSnapshot) storage.setItem(RESUME_DRAFT_STORAGE_KEY, draftSnapshot);
+  } catch {
+    // Authentication resume is best effort; the server remains authoritative.
+  }
+}
+''')
+if client.count(old_persist) != 1:
+    raise SystemExit(f"Expected one resume-persist function; found {client.count(old_persist)}")
+client = client.replace(old_persist, new_persist, 1)
+
+old_clear = dedent('''\
+function clearResumeProposal(): void {
+  resumedProposal = null;
+  try {
+    window.sessionStorage.removeItem(RESUME_STORAGE_KEY);
+  } catch {
+    // A successful server receipt is authoritative even if local cleanup fails.
+  }
+}
+''')
+new_clear = dedent('''\
+function clearResumeProposal(): void {
+  resumedProposal = null;
+  const storage = resumeStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(RESUME_STORAGE_KEY);
+    storage.removeItem(RESUME_DRAFT_STORAGE_KEY);
+  } catch {
+    // A successful server receipt is authoritative even if local cleanup fails.
+  }
+}
+''')
+if client.count(old_clear) != 1:
+    raise SystemExit(f"Expected one resume-cleanup function; found {client.count(old_clear)}")
+client = client.replace(old_clear, new_clear, 1)
+
+old_read = "    const raw = window.sessionStorage.getItem(RESUME_STORAGE_KEY);"
+new_read = "    const raw = resumeStorage()?.getItem(RESUME_STORAGE_KEY);"
+if client.count(old_read) != 1:
+    raise SystemExit(f"Expected one resume-proposal read; found {client.count(old_read)}")
+client = client.replace(old_read, new_read, 1)
 
 client_path.write_text(client, encoding="utf-8")
 
@@ -84,6 +199,13 @@ if test_name in stability:
     raise SystemExit("The top-level resume-context regression already exists")
 
 stability += "\n" + dedent(r'''
+test("semantic primary fields never fall through to duration or currency", () => {
+  const primary = functionBody("readPrimaryText");
+  assert.match(primary, /let hasPreferredControl = false/);
+  assert.match(primary, /if \(control\) hasPreferredControl = true/);
+  assert.match(primary, /if \(hasPreferredControl\) return ""/);
+});
+
 test("authentication resume uses the same top-level request and storage context", () => {
   const request = functionBody("isResumeRequest");
   assert.match(request, /resumeRequestUrl\(\)/);
@@ -98,8 +220,26 @@ test("authentication resume uses the same top-level request and storage context"
   assert.match(storage, /window\.top\.sessionStorage/);
   assert.match(storage, /window\.sessionStorage/);
 
-  const restore = functionBody("readStoredResumeProposal");
-  assert.match(restore, /resumeStorage\(\)\?\.getItem/);
+  const restoreProposal = functionBody("readStoredResumeProposal");
+  assert.match(restoreProposal, /resumeStorage\(\)\?\.getItem/);
+});
+
+test("authentication resume restores the exact editable group draft snapshot", () => {
+  const persist = functionBody("persistResumeProposal");
+  assert.match(persist, /createWindow\(\)\.localStorage\.getItem\(STORAGE_KEY\)/);
+  assert.match(persist, /RESUME_DRAFT_STORAGE_KEY/);
+
+  const restore = functionBody("restoreResumeDrafts");
+  assert.match(restore, /RESUME_DRAFT_STORAGE_KEY/);
+  assert.match(restore, /parsed\.version !== 1/);
+  assert.match(restore, /createWindow\(\)\.localStorage\.setItem\(STORAGE_KEY/);
+
+  const activate = functionBody("activateCreateDocument");
+  assert.ok(activate.indexOf("restoreResumeDrafts();") < activate.indexOf("readStoredResumeProposal();"));
+
+  const clear = functionBody("clearResumeProposal");
+  assert.match(clear, /removeItem\(RESUME_STORAGE_KEY\)/);
+  assert.match(clear, /removeItem\(RESUME_DRAFT_STORAGE_KEY\)/);
 });
 ''')
 stability_path.write_text(stability, encoding="utf-8")
