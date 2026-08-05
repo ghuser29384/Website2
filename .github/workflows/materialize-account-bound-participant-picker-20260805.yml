@@ -67,7 +67,7 @@ jobs:
           path_count="$(wc -l < /tmp/account-bound-participant-picker.paths)"
           echo "durable_patch_path_count=$path_count"
           cat /tmp/account-bound-participant-picker.paths
-          test "$path_count" -eq 52
+          test "$path_count" -eq 37
 
           while IFS= read -r path; do
             case "$path" in
@@ -113,7 +113,7 @@ jobs:
           staged_count="$(wc -l < /tmp/staged-paths)"
           echo "staged_path_count=$staged_count"
           cat /tmp/staged-paths
-          test "$staged_count" -eq 60
+          test "$staged_count" -eq 45
 
           durable_count="$(comm -23 \
             <(sort /tmp/staged-paths) \
@@ -128,7 +128,7 @@ jobs:
               .github/workflows/materialize-account-bound-participant-picker-20260805.yml | sort) \
             | wc -l)"
           echo "durable_staged_count=$durable_count"
-          test "$durable_count" -eq 52
+          test "$durable_count" -eq 37
 
           git status --short
 
