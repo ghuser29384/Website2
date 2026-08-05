@@ -14,6 +14,7 @@ function validCoAct() {
     "Avoid meat for one meal per week",
   );
   draft.mode = "co-act";
+  draft.creatorParticipation = "organizer-only";
   draft.counterpartyParticipation = "explicitly-excluded";
   const terms = buildGroupContributionTerms(draft);
   assert(terms && terms.mode === "co-act");
@@ -27,6 +28,7 @@ function validCoFund() {
     "Commission one fixed research brief",
   );
   draft.mode = "co-fund";
+  draft.creatorParticipation = "organizer-only";
   draft.targetMinor = 5_000;
   draft.maximumBudgetMinor = 500;
   draft.noPoolDefault = "Fund another approved research project";
@@ -55,6 +57,25 @@ test("rejects an unknown evidence field", () => {
   };
   const issues = validateGroupContributionNestedShape(candidate);
   assert(issues.some((issue) => issue.path === "evidence.verifierOverride"));
+});
+
+test("rejects an unknown participant identity field", () => {
+  const base = validCoAct();
+  const candidate = {
+    ...base,
+    participants: [{
+      rowId: "external-one",
+      kind: "external-claim",
+      displayNameSnapshot: "External invitee",
+      deliveryChannel: "claim-link",
+      publicMention: "unclaimed-invitee",
+      invitationState: "draft",
+      isCreator: false,
+      email: "must-not-be-stored@example.test",
+    }],
+  };
+  const issues = validateGroupContributionNestedShape(candidate);
+  assert(issues.some((issue) => issue.path === "participants[0].email"));
 });
 
 test("rejects an unknown role field", () => {

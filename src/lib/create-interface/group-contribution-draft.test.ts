@@ -7,6 +7,22 @@ import {
   defaultGroupContributionDraft,
   normalizeDraft,
 } from "./group-contribution-draft";
+import type { AccountParticipantTarget } from "./participant-target";
+
+function creatorTarget(): AccountParticipantTarget {
+  return {
+    rowId: "creator-row",
+    kind: "account",
+    profileId: "11111111-1111-4111-8111-111111111111",
+    usernameSnapshot: "creator-example",
+    displayNameSnapshot: "Creator Example",
+    accountType: "individual",
+    verification: "identity-verified",
+    publicMention: "username",
+    invitationState: "draft",
+    isCreator: true,
+  };
+}
 
 test("solo drafts produce no group proposal terms", () => {
   const draft = defaultGroupContributionDraft("behavior:option-1", "nonfinancial", "Avoid meat");
@@ -20,6 +36,7 @@ test("maps a complete same-action draft to valid proposal-only Co-Act terms", ()
     "Avoid meat for one meal per week",
   );
   draft.mode = "co-act";
+  draft.creatorParticipation = "organizer-only";
   draft.minimumParticipants = 10;
   draft.participantLimit = 10;
   draft.duration = "12 weeks";
@@ -43,6 +60,7 @@ test("maps complementary-role lines into named role obligations", () => {
     "Produce an animal-welfare research brief",
   );
   draft.mode = "co-act";
+  draft.creatorParticipation = "organizer-only";
   draft.coActStructure = "complementary-roles";
   draft.complementaryRoles = "Researcher: review the evidence\nEditor: edit the final brief";
   draft.counterpartyParticipation = "not-applicable";
@@ -66,6 +84,8 @@ test("maps Co-Fund input to an open exact-target allocation proposal", () => {
     "Commission an existential-risk research brief",
   );
   draft.mode = "co-fund";
+  draft.creatorParticipation = "participating";
+  draft.participants = [creatorTarget()];
   draft.projectDescription = "One fixed two-page research brief.";
   draft.targetMinor = 5_000;
   draft.maximumBudgetMinor = 1_000;
@@ -84,6 +104,7 @@ test("maps Co-Fund input to an open exact-target allocation proposal", () => {
 test("adds only structured allowlisted eligibility criteria", () => {
   const draft = defaultGroupContributionDraft("behavior:option-1", "nonfinancial", "Avoid meat");
   draft.mode = "co-act";
+  draft.creatorParticipation = "organizer-only";
   draft.minimumReliability = 70;
   draft.geography = "Ohio, United States";
   draft.skill = "Nutrition planning";

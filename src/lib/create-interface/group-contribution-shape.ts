@@ -9,6 +9,8 @@ const COMMON_SHAPE: Shape = {
   execution: "value",
   mode: "value",
   participantLimit: "value",
+  creatorParticipation: "value",
+  participants: "array-record",
   visibility: "value",
   eligibility: "array-record",
   groupReference: {
@@ -71,8 +73,8 @@ const CO_ACT_SHAPE: Shape = {
   },
   identity: {
     membersSeeAfterJoining: "value",
-    publicAfterSuccessfulCompletion: "value",
-    completionDisclosureConsentRequired: "value",
+    publicAfterTerminalState: "value",
+    terminalStateDisclosureConsentRequired: "value",
   },
   counterpartyParticipation: "value",
 };
@@ -121,6 +123,30 @@ const CO_FUND_SHAPE: Shape = {
   },
 };
 
+
+const ACCOUNT_PARTICIPANT_SHAPE: Shape = {
+  rowId: "value",
+  kind: "value",
+  profileId: "value",
+  usernameSnapshot: "value",
+  displayNameSnapshot: "value",
+  accountType: "value",
+  verification: "value",
+  publicMention: "value",
+  invitationState: "value",
+  isCreator: "value",
+};
+
+const EXTERNAL_PARTICIPANT_SHAPE: Shape = {
+  rowId: "value",
+  kind: "value",
+  displayNameSnapshot: "value",
+  deliveryChannel: "value",
+  publicMention: "value",
+  invitationState: "value",
+  isCreator: "value",
+};
+
 const ELIGIBILITY_SHAPE: Shape = {
   type: "value",
   minimum: "value",
@@ -153,6 +179,16 @@ export function validateGroupContributionNestedShape(input: unknown): Validation
 
   const issues: ValidationIssue[] = [];
   inspectRecord(input, shape, "", issues);
+
+  if (Array.isArray(input.participants)) {
+    input.participants.forEach((participant, index) => {
+      if (!isRecord(participant)) return;
+      const participantShape = participant.kind === "external-claim"
+        ? EXTERNAL_PARTICIPANT_SHAPE
+        : ACCOUNT_PARTICIPANT_SHAPE;
+      inspectRecord(participant, participantShape, `participants[${index}]`, issues);
+    });
+  }
 
   if (Array.isArray(input.eligibility)) {
     input.eligibility.forEach((criterion, index) => {

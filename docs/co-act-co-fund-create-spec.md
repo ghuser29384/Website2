@@ -54,6 +54,8 @@ Co-Act and Co-Fund share these primitives:
 - contribution-option identifier;
 - group mode and subtype;
 - participant ceiling of 100, shared with the standalone Co-Fund entry surface;
+- a required, initially unselected creator-participation decision;
+- account-bound participant and external-invitee targets;
 - visibility: public, unlisted, or invitation-only;
 - eligibility requirements;
 - existing-group reference or create-new-group intent;
@@ -74,6 +76,10 @@ Eligibility uses a structured allowlist rather than executable free text. Suppor
 Each criterion records the required evidence level: self-declared, profile-verified, document-verified, or independently verified.
 
 The creator may attach an existing compatible group or create a new one. Compatibility requires identical material terms, including action/project, allocation or obligation terms, deadline, evidence policy, visibility policy, and agreement version.
+
+Participant identity uses the immutable Moral Trade profile UUID as the authority and the selected username/display name as an audit snapshot. Typing text never silently resolves an account: the creator must explicitly select a suggestion. Duplicate account selection is rejected. Existing accounts without a username are not searchable until their holder chooses one; Moral Trade does not generate provisional usernames. A separate external-invitee target may retain only a display label and a future private claim-link intent in this release. Ordinary proposal payloads store no invitee email address or phone number.
+
+The creator must answer **Are you participating?** with neither answer preselected. A participating creator appears exactly once as an account-bound participant. An organizer-only creator does not count as a participant and cannot submit participant-owned terms. Selecting any participant while drafting sends no notification and enrolls nobody. Invitations are a later explicit publication action.
 
 ## 4. Create-page interaction
 
@@ -118,11 +124,11 @@ Supported activation modes:
 - **Act together without a minimum** — each accepted participant's obligation can begin independently;
 - **Act only if at least N eligible people join**.
 
-The creator chooses whether the creator counts toward a participant minimum.
+The creator first chooses whether they participate or organize only. If participating, the creator separately chooses whether their own accepted obligation counts toward a participant minimum. An organizer-only creator never counts.
 
 The creator chooses whether late joining is prohibited, uses the original end date, or gives each late participant the full duration.
 
-Public groups show participant identities publicly. Invitation-only members can see one another after joining. Public disclosure of invitation-only participant identities occurs only after successful completion and only when every affected participant accepted that disclosure before joining. Failed or cancelled invitation-only Co-Acts do not automatically publish identities.
+Public groups show identities according to the accepted pending-invitation and participation rules. A user who has disabled public invitation mentions remains privately discoverable but appears publicly as **Pending invitee** until acceptance rather than being named. Invitation-only creators and accepted participants can see the bound participants; outsiders cannot. Invitation-only participant identities become public after any terminal state—successful completion, failure, expiry, or cancellation—only when every affected participant accepted that disclosure term before joining.
 
 ### 5.2 Activation and performance start
 
@@ -235,19 +241,22 @@ Supported allocation subtypes:
 
 All subtypes must end in a frozen allocation whose shares exactly equal the settlement target before the final confirmation window. Substantive project changes create a new version and require fresh consent.
 
-Every participant records:
+Every participant enters and confirms their own terms:
 
-- maximum budget;
+- private maximum contribution;
 - no-pool default;
-- whether participation is preferable to that default.
+- whether participation is preferable to that default;
+- any compatible payment terms in a later executable release.
+
+The creator cannot enter these terms for another participant. A participating creator may enter only their own terms; an organizer-only creator submits no participant-owned funding terms.
 
 Custom-split allocation may additionally use numerical private values. Private numerical values must not be included in ordinary proposal payloads, logs, analytics, rendered HTML, or participant-visible records. A future allocation service may decrypt them transiently under an audited isolation boundary; ordinary application code must not expose them.
 
 ### 6.2 No-pool default
 
-The no-pool default is informational by default. Where a fallback is executable, the participant may separately pre-authorize execution.
+The no-pool default is informational in this proposal release. Any future executable fallback requires a separate participant authorization after the proposal stage.
 
-A pre-authorized fallback may trigger only after terminal failure, after permitted extensions, waitlist substitution, and reallocation attempts are exhausted. The proposal release may describe this intent but must not create or exercise the authorization.
+A future authorized fallback may trigger only after terminal failure, after permitted extensions, waitlist substitution, and reallocation attempts are exhausted. The proposal release must not create, imply, or exercise that authorization.
 
 ### 6.3 Confirmation, payment, and failure terms
 
@@ -310,15 +319,18 @@ Server validation must enforce at least:
 
 - supported group mode and subtype;
 - contribution-type compatibility;
-- participant count from 1 through 100;
+- participant ceiling from 1 through 100 and selected-target count at or below that ceiling;
+- explicit creator participation matching the selected participant list;
+- immutable account UUIDs, valid username snapshots, unique account selection, and unresolved legacy free text;
 - structured eligibility allowlist;
 - exact allocation arithmetic using minor currency units;
 - one authoritative settlement currency;
 - valid deadlines and confirmation windows;
 - accepted redistribution ceilings;
 - material-term versioning;
-- invitation-only disclosure policy;
-- absence of private numerical values and executable payment authority;
+- pending public-mention preferences and terminal-state invitation-only disclosure policy;
+- participant-owned terms entered only by the authenticated participant;
+- absence of invitee email/phone data, private numerical values, and executable payment authority;
 - absence of client-controlled activation, verification, reliability, subsidy, or bridge state;
 - idempotent proposal writes;
 - participant- and owner-scoped authorization;
@@ -351,7 +363,11 @@ Before leaving draft, the exact candidate must pass:
 - no-minimum and threshold activation terms;
 - matching-action `Do this together?` behavior;
 - baseline privacy and incremental-credit calculation;
-- identity timing for invitation-only groups;
+- account autocomplete requiring explicit selection;
+- creator participation with neither answer preselected;
+- duplicate, blocked, self, and username-less account handling;
+- external claim-link targets without email/phone persistence;
+- identity timing for invitation-only groups across every terminal state;
 - redistribution formula and participant ceilings;
 - exact Co-Fund allocation in integer minor units;
 - all four Co-Fund subtypes;

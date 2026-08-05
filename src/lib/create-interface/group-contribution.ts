@@ -1,3 +1,11 @@
+import {
+  validateParticipantOwnedFundingTerms,
+  validateParticipantTargets,
+  type CreatorParticipation,
+  type ParticipantOwnedFundingTerms,
+  type ParticipantTarget,
+} from "./participant-target";
+
 export const GROUP_CONTRIBUTION_SCHEMA_VERSION = 1 as const;
 export const MAX_GROUP_PARTICIPANTS = 100 as const;
 export const COFUND_CONFIRMATION_HOURS = 24 as const;
@@ -43,6 +51,8 @@ export interface GroupContributionCommon {
   execution: "proposal-only";
   mode: GroupContributionMode;
   participantLimit: number;
+  creatorParticipation: CreatorParticipation;
+  participants: ParticipantTarget[];
   visibility: GroupVisibility;
   eligibility: EligibilityCriterion[];
   groupReference: ExistingGroupReference;
@@ -127,8 +137,8 @@ export interface CoActTerms extends GroupContributionCommon {
   };
   identity: {
     membersSeeAfterJoining: boolean;
-    publicAfterSuccessfulCompletion: boolean;
-    completionDisclosureConsentRequired: true;
+    publicAfterTerminalState: boolean;
+    terminalStateDisclosureConsentRequired: true;
   };
   counterpartyParticipation: "not-applicable" | "explicitly-included" | "explicitly-excluded";
 }
@@ -164,12 +174,7 @@ export interface CoFundTerms extends GroupContributionCommon {
         status: "frozen";
         shares: CoFundShare[];
       };
-  participantTerms: {
-    maximumBudgetMinor: number;
-    noPoolDefault: string;
-    participationBeatsDefault: boolean;
-    preauthorizeExecutableFallback: boolean;
-  };
+  participantTerms: ParticipantOwnedFundingTerms | null;
   confirmationHours: typeof COFUND_CONFIRMATION_HOURS;
   paymentMethods: Array<"wallet" | "card-or-ach" | "escrow">;
   paymentFailure: {
@@ -255,6 +260,8 @@ const COMMON_KEYS = new Set([
   "execution",
   "mode",
   "participantLimit",
+  "creatorParticipation",
+  "participants",
   "visibility",
   "eligibility",
   "groupReference",
@@ -392,6 +399,43 @@ function validateCommon(
       `Participant limit must be an integer from 1 through ${MAX_GROUP_PARTICIPANTS}`,
     );
   }
+  if (!(
+    ["participating", "organizer-only"] as unknown[]
+  ).includes(value.creatorParticipation)) {
+    addIssue(
+      issues,
+      "creatorParticipation",
+      "missing-field",
+      "Choose whether the creator is participating or organizing only",
+    );
+  }
+
+  if (!Array.isArray(value.participants)) {
+    addIssue(issues, "participants", "invalid-type", "Participants must be an array");
+  } else if (
+    value.creatorParticipation === "participating" ||
+    value.creatorParticipation === "organizer-only"
+  ) {
+    try {
+      validateParticipantTargets(value.participants, {
+        minimum: 0,
+        maximum: isPositiveInteger(value.participantLimit)
+          ? Math.min(value.participantLimit, MAX_GROUP_PARTICIPANTS)
+          : MAX_GROUP_PARTICIPANTS,
+        creatorParticipation: value.creatorParticipation,
+      });
+    } catch (error) {
+      addIssue(
+        issues,
+        "participants",
+        /twice|unique/iu.test(error instanceof Error ? error.message : "")
+          ? "duplicate-participant"
+          : "invalid-value",
+        error instanceof Error ? error.message : "Participant identities are invalid",
+      );
+    }
+  }
+
   if (!(["public", "unlisted", "invitation-only"] as unknown[]).includes(value.visibility)) {
     addIssue(issues, "visibility", "invalid-value", "Unsupported visibility");
   }
@@ -510,6 +554,18 @@ function validateCoAct(value: Record<string, unknown>, issues: ValidationIssue[]
   }
 
   validateActivation(value.activation, value.participantLimit, issues);
+  if (
+    value.creatorParticipation === "organizer-only" &&
+    isRecord(value.activation) &&
+    value.activation.creatorCounts === true
+  ) {
+    addIssue(
+      issues,
+      "activation.creatorCounts",
+      "invalid-value",
+      "An organizer-only creator cannot count toward the participant minimum",
+    );
+  }
   validatePerformanceStart(value.performanceStart, issues);
   if (!( ["same-period", "same-time"] as unknown[]).includes(value.timing)) {
     addIssue(issues, "timing", "invalid-value", "Unsupported Co-Act timing rule");
@@ -782,20 +838,20 @@ function validateIdentity(
   if (typeof value.membersSeeAfterJoining !== "boolean") {
     addIssue(issues, "identity.membersSeeAfterJoining", "invalid-type", "Member visibility must be explicit");
   }
-  if (typeof value.publicAfterSuccessfulCompletion !== "boolean") {
+  if (typeof value.publicAfterTerminalState !== "boolean") {
     addIssue(
       issues,
-      "identity.publicAfterSuccessfulCompletion",
+      "identity.publicAfterTerminalState",
       "invalid-type",
-      "Completion visibility must be explicit",
+      "Terminal-state visibility must be explicit",
     );
   }
-  if (value.completionDisclosureConsentRequired !== true) {
+  if (value.terminalStateDisclosureConsentRequired !== true) {
     addIssue(
       issues,
-      "identity.completionDisclosureConsentRequired",
+      "identity.terminalStateDisclosureConsentRequired",
       "invalid-value",
-      "Completion disclosure always requires advance consent",
+      "Terminal-state disclosure always requires advance consent",
     );
   }
   if (visibility === "invitation-only" && value.membersSeeAfterJoining !== true) {
@@ -808,13 +864,13 @@ function validateIdentity(
   }
   if (
     visibility === "invitation-only" &&
-    value.publicAfterSuccessfulCompletion !== true
+    value.publicAfterTerminalState !== true
   ) {
     addIssue(
       issues,
-      "identity.publicAfterSuccessfulCompletion",
+      "identity.publicAfterTerminalState",
       "invalid-value",
-      "Invitation-only participant identities become public only after successful completion",
+      "Invitation-only participant identities become public after any terminal state",
     );
   }
 
@@ -850,7 +906,7 @@ function validateCoFund(value: Record<string, unknown>, issues: ValidationIssue[
   }
 
   validateAllocation(value.allocation, value.targetMinor, value.participantLimit, issues);
-  validateParticipantTerms(value.participantTerms, issues);
+  validateParticipantTerms(value.participantTerms, value.creatorParticipation, issues);
 
   if (value.confirmationHours !== COFUND_CONFIRMATION_HOURS) {
     addIssue(
@@ -969,41 +1025,41 @@ function validateAllocation(
   }
 }
 
-function validateParticipantTerms(value: unknown, issues: ValidationIssue[]): void {
-  if (!isRecord(value)) {
-    addIssue(issues, "participantTerms", "invalid-type", "Participant terms must be an object");
+function validateParticipantTerms(
+  value: unknown,
+  creatorParticipation: unknown,
+  issues: ValidationIssue[],
+): void {
+  if (creatorParticipation === "organizer-only") {
+    if (value !== null) {
+      addIssue(
+        issues,
+        "participantTerms",
+        "private-or-executable-field",
+        "An organizer-only creator cannot submit participant-owned funding terms",
+      );
+    }
     return;
   }
-  if (!isPositiveInteger(value.maximumBudgetMinor)) {
+
+  if (creatorParticipation !== "participating") {
     addIssue(
       issues,
-      "participantTerms.maximumBudgetMinor",
+      "participantTerms",
       "invalid-value",
-      "Maximum budget must be a positive minor-unit integer",
+      "Creator participation must be resolved before funding terms are validated",
     );
+    return;
   }
-  if (!isNonEmptyString(value.noPoolDefault)) {
+
+  try {
+    validateParticipantOwnedFundingTerms(value, "Creator Co-Fund terms");
+  } catch (error) {
     addIssue(
       issues,
-      "participantTerms.noPoolDefault",
-      "missing-field",
-      "No-pool default is required",
-    );
-  }
-  if (typeof value.participationBeatsDefault !== "boolean") {
-    addIssue(
-      issues,
-      "participantTerms.participationBeatsDefault",
-      "invalid-type",
-      "Default comparison must be explicit",
-    );
-  }
-  if (typeof value.preauthorizeExecutableFallback !== "boolean") {
-    addIssue(
-      issues,
-      "participantTerms.preauthorizeExecutableFallback",
-      "invalid-type",
-      "Fallback intent must be explicit",
+      "participantTerms",
+      "invalid-value",
+      error instanceof Error ? error.message : "Creator Co-Fund terms are invalid",
     );
   }
 }

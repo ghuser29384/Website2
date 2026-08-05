@@ -9,6 +9,22 @@ import {
   type CoActTerms,
   type CoFundTerms,
 } from "./group-contribution";
+import type { AccountParticipantTarget } from "./participant-target";
+
+function creatorTarget(): AccountParticipantTarget {
+  return {
+    rowId: "creator-row",
+    kind: "account",
+    profileId: "11111111-1111-4111-8111-111111111111",
+    usernameSnapshot: "creator-example",
+    displayNameSnapshot: "Creator Example",
+    accountType: "individual",
+    verification: "identity-verified",
+    publicMention: "username",
+    invitationState: "draft",
+    isCreator: true,
+  };
+}
 
 function validCoAct(): CoActTerms {
   return {
@@ -16,6 +32,8 @@ function validCoAct(): CoActTerms {
     execution: "proposal-only",
     mode: "co-act",
     participantLimit: 10,
+    creatorParticipation: "participating",
+    participants: [creatorTarget()],
     visibility: "public",
     eligibility: [
       {
@@ -84,8 +102,8 @@ function validCoAct(): CoActTerms {
     },
     identity: {
       membersSeeAfterJoining: true,
-      publicAfterSuccessfulCompletion: true,
-      completionDisclosureConsentRequired: true,
+      publicAfterTerminalState: true,
+      terminalStateDisclosureConsentRequired: true,
     },
     counterpartyParticipation: "explicitly-excluded",
   };
@@ -97,6 +115,8 @@ function validCoFund(): CoFundTerms {
     execution: "proposal-only",
     mode: "co-fund",
     participantLimit: 10,
+    creatorParticipation: "participating",
+    participants: [creatorTarget()],
     visibility: "unlisted",
     eligibility: [],
     groupReference: { mode: "create-new" },
@@ -271,6 +291,31 @@ test("rejects unknown top-level terms instead of silently accepting them", () =>
   }
 });
 
+test("requires the creator participation decision to match the participant list", () => {
+  const proposal = {
+    ...validCoAct(),
+    creatorParticipation: "organizer-only" as const,
+  };
+  const result = validateGroupContributionTerms(proposal, "nonfinancial");
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert(result.issues.some((issue) => issue.path === "participants"));
+  }
+});
+
+test("rejects duplicate account participants", () => {
+  const target = creatorTarget();
+  const proposal = {
+    ...validCoAct(),
+    participants: [target, { ...target, rowId: "duplicate-row", isCreator: false }],
+  };
+  const result = validateGroupContributionTerms(proposal, "nonfinancial");
+  assert.equal(result.ok, false);
+  if (!result.ok) {
+    assert(result.issues.some((issue) => issue.path === "participants"));
+  }
+});
+
 test("calculates impact credit only for verified performance above baseline", () => {
   assert.equal(calculateIncrementalQuantity(3, 2), 1);
   assert.equal(calculateIncrementalQuantity(1, 2), 0);
@@ -288,14 +333,14 @@ test("generates deterministic compact summaries", () => {
   );
 });
 
-test("requires invitation-only identities to become public only after successful completion", () => {
+test("requires invitation-only identities to become public after any terminal state", () => {
   const base = validCoAct();
   const proposal = {
     ...base,
     visibility: "invitation-only" as const,
     identity: {
       ...base.identity,
-      publicAfterSuccessfulCompletion: false,
+      publicAfterTerminalState: false,
     },
   };
   const result = validateGroupContributionTerms(proposal, "nonfinancial");
@@ -303,7 +348,7 @@ test("requires invitation-only identities to become public only after successful
   if (!result.ok) {
     assert(
       result.issues.some(
-        (issue) => issue.path === "identity.publicAfterSuccessfulCompletion",
+        (issue) => issue.path === "identity.publicAfterTerminalState",
       ),
     );
   }

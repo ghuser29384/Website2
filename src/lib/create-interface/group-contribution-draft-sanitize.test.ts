@@ -57,3 +57,31 @@ test("clamps valid numeric values through the normalizer", () => {
   assert.equal(draft.baselineQuantity, 0);
   assert.equal(draft.redistributionMaximumQuantity, 0);
 });
+
+
+test("keeps explicit account targets and drops legacy free-text participants", () => {
+  const draft = sanitizeGroupContributionDraft(
+    {
+      mode: "co-act",
+      creatorParticipation: "organizer-only",
+      participants: [
+        { name: "Typed but never selected" },
+        {
+          rowId: "invitee-one",
+          kind: "external-claim",
+          displayNameSnapshot: "External invitee",
+          deliveryChannel: "claim-link",
+          publicMention: "unclaimed-invitee",
+          invitationState: "draft",
+          isCreator: false,
+        },
+      ],
+    },
+    "behavior:option-1",
+    "nonfinancial",
+  );
+
+  assert.equal(draft.creatorParticipation, "organizer-only");
+  assert.equal(draft.participants.length, 1);
+  assert.equal(draft.participants[0]?.kind, "external-claim");
+});

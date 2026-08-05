@@ -41,6 +41,8 @@ test("100-Spark Mosaic ranks priorities and preserves the account completion flo
   await expect(details).toContainText("Factory farming");
 
   await page.getByLabel("Display name").fill("Alex Morgan");
+  await page.getByLabel("Username").fill("alex-morgan");
+  await expect(page.getByText("Existing accounts are not assigned a generated username.")).toBeVisible();
   await page.getByLabel("Role or short descriptor").fill("Policy researcher");
   await page
     .getByLabel("Company, organization, or university (optional)")

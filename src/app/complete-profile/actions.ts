@@ -89,6 +89,8 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
 
   const submission = normalizeCompleteProfileSubmission({
     displayName: read(formData, "display_name"),
+    username: read(formData, "username"),
+    publicInvitationMentionsEnabled: read(formData, "public_invitation_mentions_enabled"),
     role: read(formData, "role"),
     affiliation: read(formData, "affiliation"),
     bio: read(formData, "bio"),
@@ -106,7 +108,7 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     redirectWithMessage(
       returnTo,
       "error",
-      "Review your priorities, add a display name and role, then check the participation limits before saving.",
+      "Review your priorities, choose a valid username, add a display name and role, then check the participation limits before saving.",
     );
   }
 
@@ -151,6 +153,8 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
     .from("profiles")
     .update({
       display_name: submission.displayName,
+      username: submission.username,
+      public_invitation_mentions_enabled: submission.publicInvitationMentionsEnabled,
       affiliation: submission.affiliation,
       bio: submission.bio,
     })
@@ -158,7 +162,16 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
 
   if (profileError) {
     console.error("Failed to update complete profile identity", profileError);
-    redirectWithMessage(returnTo, "error", "Your identity details could not be saved. Try again.");
+    const usernameConflict =
+      profileError.code === "23505" ||
+      /username.*(?:claimed|reserved|unique|already)/iu.test(profileError.message ?? "");
+    redirectWithMessage(
+      returnTo,
+      "error",
+      usernameConflict
+        ? "That username is already claimed or reserved. Choose another username."
+        : "Your identity details could not be saved. Try again.",
+    );
   }
 
   const { error: onboardingError } = await (supabase as any)
