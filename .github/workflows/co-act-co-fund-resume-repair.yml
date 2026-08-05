@@ -13,14 +13,15 @@ permissions:
   issues: write
 
 concurrency:
-  group: co-act-co-fund-resolve-blocker-once
+  group: co-act-co-fund-resolve-blocker-${{ github.sha }}
   cancel-in-progress: false
 
 env:
   TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
-  EXPECTED_PARENT: 2718b2bbb36dc4dd4798ff579f9d1063e287f7bd
+  EXPECTED_PARENT: d6561445b9f3715af88c517eb77ddedbe0305104
   CONTROLLER_PATH: .github/workflows/co-act-co-fund-resume-repair.yml
   REPAIR_SCRIPT: .github/scripts/co-act-co-fund-resolve-blocker.py
+  RESUME_CONTEXT_SCRIPT: .github/scripts/co-act-co-fund-resume-context-hotfix.py
 
 jobs:
   repair-and-prove:
@@ -47,6 +48,7 @@ jobs:
           test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
           test "$(git diff --name-only "$EXPECTED_PARENT" "$GITHUB_SHA")" = "$CONTROLLER_PATH"
           test -f "$REPAIR_SCRIPT"
+          test -f "$RESUME_CONTEXT_SCRIPT"
 
       - name: Record bounded repair start
         env:
@@ -54,13 +56,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started bounded iframe-remount-safe authentication-resume repair in Actions run \`$GITHUB_RUN_ID\` at controller commit \`$GITHUB_SHA\`. The workflow will push source changes only if focused contracts, the full test suite, ESLint, TypeScript, the production build, and the exact rendered Playwright workflow all pass. The PR remains draft; no merge or deployment is authorized."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Started bounded server-safe top-level authentication-resume repair in Actions run \`$GITHUB_RUN_ID\` at controller commit \`$GITHUB_SHA\`. The workflow will push source changes only if focused contracts, the full test suite, ESLint, TypeScript, the production build, and the exact rendered Playwright workflow all pass. The PR remains draft; no merge or deployment is authorized."
 
       - name: Apply bounded source repair
         shell: bash
         run: |
           set -euo pipefail
           python3 "$REPAIR_SCRIPT"
+          python3 "$RESUME_CONTEXT_SCRIPT"
 
           python3 - <<'PY'
           from pathlib import Path
@@ -135,12 +138,14 @@ jobs:
           contract_path.write_text(contract, encoding="utf-8")
           PY
 
-          git rm "$CONTROLLER_PATH" "$REPAIR_SCRIPT"
+          git rm "$CONTROLLER_PATH" "$REPAIR_SCRIPT" "$RESUME_CONTEXT_SCRIPT"
 
           cat > /tmp/expected-files <<'EOF'
           .github/scripts/co-act-co-fund-resolve-blocker.py
+          .github/scripts/co-act-co-fund-resume-context-hotfix.py
           .github/workflows/co-act-co-fund-resume-repair.yml
           public/moral-trade-create/index.html
+          src/components/create/create-interface-frame.tsx
           src/lib/create-interface/group-contribution-client-stability.test.ts
           src/lib/create-interface/group-contribution-client.ts
           src/lib/create-interface/source-contract.test.ts
@@ -200,8 +205,10 @@ jobs:
           git diff HEAD --check
           cat > /tmp/expected-files <<'EOF'
           .github/scripts/co-act-co-fund-resolve-blocker.py
+          .github/scripts/co-act-co-fund-resume-context-hotfix.py
           .github/workflows/co-act-co-fund-resume-repair.yml
           public/moral-trade-create/index.html
+          src/components/create/create-interface-frame.tsx
           src/lib/create-interface/group-contribution-client-stability.test.ts
           src/lib/create-interface/group-contribution-client.ts
           src/lib/create-interface/source-contract.test.ts
@@ -241,7 +248,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Bounded iframe-remount-safe blocker repair run \`$GITHUB_RUN_ID\` failed before a source commit was pushed. The draft branch therefore remains at the controller commit. Failure evidence is attached to the run where available; no merge or deployment occurred."
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "Bounded server-safe top-level-context blocker repair run \`$GITHUB_RUN_ID\` failed before a source commit was pushed. The draft branch therefore remains at the controller commit. Failure evidence is attached to the run where available; no merge or deployment occurred."
 
       - name: Upload failure evidence
         if: failure()
@@ -253,3 +260,5 @@ jobs:
             playwright-report
           if-no-files-found: warn
           retention-days: 14
+
+# Retry lazy server-safe resume context d6561445b9f3715af88c517eb77ddedbe0305104
