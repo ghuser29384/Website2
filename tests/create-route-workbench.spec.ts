@@ -92,12 +92,9 @@ test.describe("Create route workbench", () => {
     await expect(
       create.getByText("Are you participating in this Co-Fund?", { exact: true }),
     ).toBeVisible();
-    await expect(
-      create.getByText(
-        "Typed text is not a participant until you explicitly select an account.",
-        { exact: true },
-      ),
-    ).toBeVisible();
+    await expect(create.locator("#commonGroundParticipantList")).toContainText(
+      "Type at least two characters, then explicitly select an account.",
+    );
     await expect(create.getByRole("button", { name: /Review Co-Fund/ })).toBeDisabled();
     expect(publishRequestCount).toBe(0);
 
