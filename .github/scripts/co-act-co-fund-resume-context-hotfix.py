@@ -94,36 +94,47 @@ if client.count(old_activation) != 1:
     raise SystemExit(f"Expected one resume activation block; found {client.count(old_activation)}")
 client = client.replace(old_activation, new_activation, 1)
 
-old_primary_loop = dedent('''\
-  for (const field of preferredFields) {
-    const control = card.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-      `[data-offer-field='${field}']`,
-    );
-    const value = control?.value.trim() ?? "";
-    if (value) return value;
-  }
+primary_start = client.index("function readPrimaryText(")
+primary_end = client.index("\nfunction renderMountedOption(", primary_start)
+primary = client[primary_start:primary_end]
 
-  const controls = card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-''')
-new_primary_loop = dedent('''\
-  let hasPreferredControl = false;
-  for (const field of preferredFields) {
-    const control = card.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-      `[data-offer-field='${field}']`,
-    );
-    if (control) hasPreferredControl = true;
-    const value = control?.value.trim() ?? "";
-    if (value) return value;
-  }
-  if (hasPreferredControl) return "";
-
-  const controls = card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-''')
-if client.count(old_primary_loop) != 1:
+loop_anchor = "  for (const field of preferredFields) {\n"
+if primary.count(loop_anchor) != 1:
     raise SystemExit(
-        f"Expected one primary-field fallback loop; found {client.count(old_primary_loop)}"
+        f"Expected one preferred-field loop in readPrimaryText; found {primary.count(loop_anchor)}"
     )
-client = client.replace(old_primary_loop, new_primary_loop, 1)
+primary = primary.replace(
+    loop_anchor,
+    "  let hasPreferredControl = false;\n  for (const field of preferredFields) {\n",
+    1,
+)
+
+value_anchor = '    const value = control?.value.trim() ?? "";\n'
+if primary.count(value_anchor) != 1:
+    raise SystemExit(
+        f"Expected one preferred-field value read in readPrimaryText; found {primary.count(value_anchor)}"
+    )
+primary = primary.replace(
+    value_anchor,
+    '    if (control) hasPreferredControl = true;\n    const value = control?.value.trim() ?? "";\n',
+    1,
+)
+
+fallback_anchor = (
+    "  }\n\n"
+    "  const controls = card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(\n"
+)
+if primary.count(fallback_anchor) != 1:
+    raise SystemExit(
+        f"Expected one generic-control fallback in readPrimaryText; found {primary.count(fallback_anchor)}"
+    )
+primary = primary.replace(
+    fallback_anchor,
+    "  }\n  if (hasPreferredControl) return \"\";\n\n"
+    "  const controls = card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(\n",
+    1,
+)
+client = client[:primary_start] + primary + client[primary_end:]
 
 old_persist = dedent('''\
 function persistResumeProposal(proposal: GroupContributionProposalPayload): void {
