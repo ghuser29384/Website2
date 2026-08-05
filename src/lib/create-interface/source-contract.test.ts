@@ -44,6 +44,8 @@ test("the accepted Create interface is mounted with Donation Upgrade and compact
   assert.match(frame, /integrateCommonGroundCreateSource/);
   assert.match(frame, /srcDoc=\{getCreateInterfaceSource\(resume\)\}/);
   assert.match(frame, /The Moral Trade Create resume contract could not be located/);
+  assert.match(frame, /resumeExpression\.test\(createInterfaceSource\)/);
+  assert.match(frame, /createInterfaceSource\.replace\([\s\S]*resumeExpression[\s\S]*const shouldResume = true/);
   assert.doesNotMatch(frame, /src=\{src\}/);
   assert.match(nextConfig, /X-Frame-Options/);
   assert.match(nextConfig, /DENY/);
@@ -91,7 +93,11 @@ test("the browser waits for a durable server receipt and contains no simulated p
   assert.match(html, /fetch\("\/api\/create\/publish"/);
   assert.match(html, /credentials: "same-origin"/);
   assert.match(html, /renderSubmittedReceipt/);
-  assert.match(html, /sessionStorage\.setItem\(CREATE_DRAFT_STORAGE_KEY/);
+  assert.match(html, /function createDraftResumeStorage/);
+  assert.match(html, /window\.top\.sessionStorage/);
+  assert.match(html, /CREATE_DRAFT_STORAGE\.setItem\(\s*CREATE_DRAFT_STORAGE_KEY/);
+  assert.match(html, /step: 4, offerPhase: "details", published: false/);
+  assert.match(html, /CREATE_DRAFT_STORAGE\.getItem\(CREATE_DRAFT_STORAGE_KEY/);
   assert.doesNotMatch(html, /POOL-REV/);
   assert.doesNotMatch(html, /Prototype: public/);
   assert.doesNotMatch(html, /state\.publishedId\s*=.*Date\.now/);
@@ -143,4 +149,16 @@ test("proposal-only group terms are integrated into the real iframe and authorit
   assert.match(createValidation, /visibility: "private-review"/);
   assert.match(createPersistence, /groupContributionReviewRecord/);
   assert.doesNotMatch(createPersistence, /paymentIntent|clientSecret|publishIdentities/);
+});
+
+test("authentication resume snapshot survives an iframe remount until durable receipt", () => {
+  const start = html.indexOf("function restoreDraftForResume()");
+  const end = html.indexOf("\n    function renderSubmittedReceipt", start);
+  assert.ok(start >= 0 && end > start);
+  const restoreSource = html.slice(start, end);
+  assert.match(restoreSource, /Object\.assign\(state, saved/);
+  assert.doesNotMatch(
+    restoreSource,
+    /CREATE_DRAFT_STORAGE\.removeItem\(CREATE_DRAFT_STORAGE_KEY\)/,
+  );
 });

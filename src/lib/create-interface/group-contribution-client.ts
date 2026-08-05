@@ -13,6 +13,7 @@ import {
   type GroupDraftMode,
 } from "./group-contribution-draft";
 import { sanitizeGroupContributionDraft } from "./group-contribution-draft-sanitize";
+import { parseGroupContributionProposalPayload } from "./group-contribution-payload";
 import {
   permitsCoActStructure,
   permitsCoFundAllocation,
@@ -21,6 +22,8 @@ import {
 } from "./group-contribution-flags";
 
 const STORAGE_KEY = "mt:create:group-contribution-drafts:v1";
+const RESUME_STORAGE_KEY = "mt:create:group-contribution-resume:v1";
+const RESUME_DRAFT_STORAGE_KEY = "mt:create:group-contribution-resume-drafts:v1";
 const PAYLOAD_FIELD = "groupContributionTerms";
 const HOST_ATTRIBUTE = "data-mt-group-contribution-host";
 const OPTION_ATTRIBUTE = "data-mt-group-contribution-option";
@@ -91,6 +94,7 @@ let activeDocument: Document | null = null;
 let activeFrame: HTMLIFrameElement | null = null;
 let scanQueued = false;
 let submitGuardInstalled = false;
+let resumedProposal: GroupContributionProposalPayload | null = null;
 
 export function startGroupContributionEnhancement(): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
@@ -141,6 +145,8 @@ function activateCreateDocument(targetWindow: Window, targetDocument: Document):
   mounted.clear();
   activeWindow = targetWindow;
   activeDocument = targetDocument;
+  restoreResumeDrafts();
+  resumedProposal = readStoredResumeProposal();
   scanQueued = false;
   submitGuardInstalled = false;
 
@@ -191,7 +197,10 @@ function queueScan(): void {
 function scanForOptions(): void {
   if (!activeWindow || !activeDocument) return;
   const root = locateOfferStepRoot();
-  if (!root) return;
+  if (!root) {
+    if (resumedProposal) writeProposalPayload(false);
+    return;
+  }
 
   const candidates = locateOptionCards(root);
   candidates.forEach((candidate, index) => {
@@ -200,6 +209,7 @@ function scanForOptions(): void {
   });
 
   removeDetachedOptions();
+  if (mounted.size > 0) resumedProposal = null;
   writeProposalPayload();
 }
 
@@ -404,13 +414,16 @@ function readPrimaryText(
   const preferredFields = underlying === "financial"
     ? ["organization", "matchTarget"]
     : ["action", "work", "person", "cause", "support", "unit"];
+  let hasPreferredControl = false;
   for (const field of preferredFields) {
     const control = card.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
       `[data-offer-field='${field}']`,
     );
+    if (control) hasPreferredControl = true;
     const value = control?.value.trim() ?? "";
     if (value) return value;
   }
+  if (hasPreferredControl) return "";
 
   const controls = card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
     "textarea, input:not([type='hidden']):not([type='checkbox']):not([type='radio']):not([type='number']), select",
@@ -847,7 +860,11 @@ function installShadowDelegatedListeners(entry: MountedOption): void {
 
     persistDrafts();
     writeProposalPayload();
-    scheduleMountedOptionRender(entry);
+    if (controlRequiresPanelRender(control)) {
+      scheduleMountedOptionRender(entry);
+    } else {
+      updateValidationStatus(entry);
+    }
   });
 }
 
@@ -864,6 +881,21 @@ function formControlTarget(
   const element = elementTarget(target);
   if (!element?.matches("input, textarea, select")) return null;
   return element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+}
+
+function controlRequiresPanelRender(
+  control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+): boolean {
+  const field = control.dataset.field;
+  return (
+    field === "coActStructure" ||
+    field === "activationMode" ||
+    field === "performanceStartMode" ||
+    field === "redistributionEnabled" ||
+    field === "allocationMode" ||
+    field === "recurringMode" ||
+    field === "coFundDeadlineOutcome"
+  );
 }
 
 function updateStateFromControl(
@@ -934,6 +966,8 @@ function updateValidationStatus(entry: MountedOption): void {
 }
 
 function readProposalPayload(): GroupContributionProposalPayload {
+  if (mounted.size === 0 && resumedProposal) return resumedProposal;
+
   const options: ProposalOptionPayload[] = [];
   for (const entry of mounted.values()) {
     const terms = buildGroupContributionTerms(entry.state);
@@ -955,8 +989,9 @@ function validateMountedDrafts(): Array<{ optionKey: string; issues: ValidationI
   return invalid;
 }
 
-function writeProposalPayload(): void {
-  persistDrafts();
+function writeProposalPayload(persistCurrentDrafts = true): void {
+  const preservingResumedDrafts = mounted.size === 0 && resumedProposal !== null;
+  if (persistCurrentDrafts && !preservingResumedDrafts) persistDrafts();
   const payload = readProposalPayload();
   const serialized = JSON.stringify(payload);
 
@@ -1084,10 +1119,13 @@ function installPublishBridge(): void {
       throw new Error("The Create submission body must be a JSON object.");
     }
 
-    return originalFetch(input, {
+    persistResumeProposal(proposal);
+    const response = await originalFetch(input, {
       ...init,
       body: JSON.stringify({ ...payload, groupContributionTerms: proposal }),
     });
+    if (response.ok) clearResumeProposal();
+    return response;
   }) as typeof targetWindow.fetch;
   targetWindow.__moralTradeGroupContributionFetchBridgeV1 = true;
 }
@@ -1144,6 +1182,112 @@ function installSubmitGuard(): void {
     },
     true,
   );
+}
+
+function resumeStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    if (window.top && window.top !== window) return window.top.sessionStorage;
+  } catch {
+    // Cross-origin embedding falls back to the iframe storage area.
+  }
+  return window.sessionStorage;
+}
+
+function resumeRequestUrl(): URL | null {
+  if (typeof window === "undefined") return null;
+  try {
+    if (window.top && window.top !== window) {
+      return new URL(window.top.location.href);
+    }
+  } catch {
+    // Cross-origin embedding falls back to the iframe URL.
+  }
+  return new URL(window.location.href);
+}
+
+function isResumeRequest(): boolean {
+  try {
+    return resumeRequestUrl()?.searchParams.get("resume") === "create";
+  } catch {
+    return false;
+  }
+}
+
+function restoreResumeDrafts(): void {
+  if (!isResumeRequest()) return;
+  try {
+    const raw = resumeStorage()?.getItem(RESUME_DRAFT_STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Partial<StoredDrafts>;
+    if (parsed.version !== 1 || !parsed.drafts || typeof parsed.drafts !== "object") return;
+    const snapshot: StoredDrafts = { version: 1, drafts: parsed.drafts };
+    createWindow().localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Invalid or unavailable local state cannot override the validated proposal snapshot.
+  }
+}
+
+function persistResumeProposal(proposal: GroupContributionProposalPayload): void {
+  if (proposal.options.length === 0) return;
+  resumedProposal = proposal;
+  const storage = resumeStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(RESUME_STORAGE_KEY, JSON.stringify(proposal));
+    const draftSnapshot = createWindow().localStorage.getItem(STORAGE_KEY);
+    if (draftSnapshot) storage.setItem(RESUME_DRAFT_STORAGE_KEY, draftSnapshot);
+  } catch {
+    // Authentication resume is best effort; the server remains authoritative.
+  }
+}
+
+function clearResumeProposal(): void {
+  resumedProposal = null;
+  const storage = resumeStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(RESUME_STORAGE_KEY);
+    storage.removeItem(RESUME_DRAFT_STORAGE_KEY);
+  } catch {
+    // A successful server receipt is authoritative even if local cleanup fails.
+  }
+}
+
+function readStoredResumeProposal(): GroupContributionProposalPayload | null {
+  if (!isResumeRequest()) return null;
+  try {
+    const raw = resumeStorage()?.getItem(RESUME_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isRecord(parsed) || !Array.isArray(parsed.options)) return null;
+
+    const contributionKinds = new Map<string, UnderlyingContributionKind>();
+    for (const candidate of parsed.options) {
+      if (
+        !isRecord(candidate) ||
+        typeof candidate.optionKey !== "string" ||
+        !isRecord(candidate.terms)
+      ) {
+        return null;
+      }
+      if (candidate.terms.mode === "co-act") {
+        if (!permitsGroupContributionMode(PROPOSAL_FLAGS, "co-act")) return null;
+        contributionKinds.set(candidate.optionKey, "nonfinancial");
+      } else if (candidate.terms.mode === "co-fund") {
+        if (!permitsGroupContributionMode(PROPOSAL_FLAGS, "co-fund")) return null;
+        contributionKinds.set(candidate.optionKey, "financial");
+      } else {
+        return null;
+      }
+    }
+
+    const result = parseGroupContributionProposalPayload(raw, contributionKinds);
+    return result.ok && result.value.options.length > 0 ? result.value : null;
+  } catch {
+    return null;
+  }
 }
 
 function persistDrafts(): void {

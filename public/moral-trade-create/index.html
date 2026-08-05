@@ -4627,7 +4627,16 @@
     }
 
     const CREATE_INTERFACE_VERSION = "moral_trade_create_v1";
-    const CREATE_DRAFT_STORAGE_KEY = "moral_trade_create_resume_v1";
+const CREATE_DRAFT_STORAGE_KEY = "moral_trade_create_resume_v1";
+
+function createDraftResumeStorage() {
+  try {
+    if (window.top && window.top !== window) return window.top.sessionStorage;
+  } catch {}
+  return window.sessionStorage;
+}
+
+const CREATE_DRAFT_STORAGE = createDraftResumeStorage();
 
     function createSubmissionKey() {
       if (globalThis.crypto?.randomUUID) return `create-${globalThis.crypto.randomUUID()}`;
@@ -7050,7 +7059,7 @@
 
     function resetFlow() {
       state.submissionKey = createSubmissionKey();
-      try { sessionStorage.removeItem(CREATE_DRAFT_STORAGE_KEY); } catch {}
+      try { CREATE_DRAFT_STORAGE.removeItem(CREATE_DRAFT_STORAGE_KEY); } catch {}
       state.step = 1;
       state.cause = null;
       state.causeTone = "blue";
@@ -7168,7 +7177,10 @@
 
     function saveDraftForResume() {
       try {
-        sessionStorage.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify({ ...state, published: false }));
+        CREATE_DRAFT_STORAGE.setItem(
+        CREATE_DRAFT_STORAGE_KEY,
+        JSON.stringify({ ...state, step: 4, offerPhase: "details", published: false }),
+      );
       } catch {}
     }
 
@@ -7176,10 +7188,10 @@
       const shouldResume = new URLSearchParams(window.location.search).get("resume") === "create";
       if (!shouldResume) return false;
       try {
-        const saved = JSON.parse(sessionStorage.getItem(CREATE_DRAFT_STORAGE_KEY) || "null");
+        const saved = JSON.parse(CREATE_DRAFT_STORAGE.getItem(CREATE_DRAFT_STORAGE_KEY) || "null");
         if (!saved || typeof saved !== "object") return false;
         Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });
-        sessionStorage.removeItem(CREATE_DRAFT_STORAGE_KEY);
+        // Retain the snapshot until a durable receipt or explicit reset; the srcDoc iframe may remount during route hydration.
         return true;
       } catch {
         return false;
@@ -7279,7 +7291,7 @@
         if (!response.ok || !result?.ok || !result.submission) {
           throw new Error(result?.message || `Submission failed with HTTP ${response.status}.`);
         }
-        try { sessionStorage.removeItem(CREATE_DRAFT_STORAGE_KEY); } catch {}
+        try { CREATE_DRAFT_STORAGE.removeItem(CREATE_DRAFT_STORAGE_KEY); } catch {}
         renderSubmittedReceipt(result.submission);
       } catch (error) {
         $("#publishError").textContent = error instanceof Error ? error.message : "The submission could not be saved.";
