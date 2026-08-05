@@ -141,11 +141,13 @@ test("accepts an organizer-only creator who is not counted as a participant", ()
 
 test("rejects free-text identity and creator-entered terms for another participant", () => {
   const freeText = commonGroundPayload();
-  Object.assign(freeText.pool!.commonGround!.participants[1], { name: "Typed but not selected" });
+  Object.assign(freeText.pool!.commonGround!.participants[1]!, {
+    name: "Typed but not selected",
+  });
   assert.throws(() => validateCreatePayload(freeText), /unsupported or private field/i);
 
   const impersonatedTerms = commonGroundPayload();
-  impersonatedTerms.pool!.commonGround!.participants[1].participantTerms = creatorTerms();
+  impersonatedTerms.pool!.commonGround!.participants[1]!.participantTerms = creatorTerms();
   assert.throws(
     () => validateCreatePayload(impersonatedTerms),
     /cannot enter another participant's private or financial terms/i,
@@ -154,15 +156,15 @@ test("rejects free-text identity and creator-entered terms for another participa
 
 test("rejects duplicate account identities and creator-state mismatches", () => {
   const duplicate = commonGroundPayload();
-  duplicate.pool!.commonGround!.participants[1].target = {
+  duplicate.pool!.commonGround!.participants[1]!.target = {
     ...accountTarget(1),
     rowId: "cg-account-duplicate",
   };
   assert.throws(() => validateCreatePayload(duplicate), /same account cannot be added twice/i);
 
   const missingCreator = commonGroundPayload();
-  missingCreator.pool!.commonGround!.participants[0].target = accountTarget(1);
-  missingCreator.pool!.commonGround!.participants[0].participantTerms = null;
+  missingCreator.pool!.commonGround!.participants[0]!.target = accountTarget(1);
+  missingCreator.pool!.commonGround!.participants[0]!.participantTerms = null;
   assert.throws(() => validateCreatePayload(missingCreator), /participating creator/i);
 });
 
