@@ -1,0 +1,102 @@
+name: Repair MPGF publication prerequisite columns 2026-08-06
+
+on:
+  push:
+    branches:
+      - fix/mpgf-pool-publication-materialization-20260806
+    paths:
+      - ".github/workflows/repair-mpgf-publication-prerequisite-columns-20260806.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-mpgf-publication-prerequisite-columns-20260806
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_PARENT: 1bfeed52e1142560b58764a33ca1ec38537ca692
+      TARGET_BRANCH: fix/mpgf-pool-publication-materialization-20260806
+      CONTROLLER_PATH: .github/workflows/repair-mpgf-publication-prerequisite-columns-20260806.yml
+
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          ref: ${{ github.sha }}
+
+      - name: Make publication migration restore skipped canonical campaign columns
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration_path = Path("supabase/migrations/20260806143000_mpgf_pool_publication_materialization.sql")
+          migration = migration_path.read_text()
+          anchor = """  );
+
+alter table public.mpgf_public_goods_campaigns
+  drop constraint if exists mpgf_public_goods_campaigns_published_version_valid,
+"""
+          addition = """  );
+
+-- Some isolated or partially migrated environments installed the visibility
+-- migration before the canonical public-goods campaign table existed. Restore
+-- the same proposal linkage and visibility columns here before publication.
+alter table public.mpgf_public_goods_campaigns
+  add column if not exists pool_proposal_id uuid
+    references public.mpgf_pool_proposals(id) on delete restrict,
+  add column if not exists threshold_visibility public.mpgf_threshold_visibility
+    not null default 'public_exact'::public.mpgf_threshold_visibility,
+  add column if not exists progress_visibility public.mpgf_progress_visibility
+    not null default 'exact_amount'::public.mpgf_progress_visibility,
+  add column if not exists first_accepted_pledge_at timestamptz;
+
+alter table public.mpgf_public_goods_campaigns
+  drop constraint if exists mpgf_public_goods_campaigns_published_version_valid,
+"""
+          if migration.count(anchor) != 1:
+              raise SystemExit(f"Expected one publication campaign anchor, found {migration.count(anchor)}")
+          migration_path.write_text(migration.replace(anchor, addition))
+
+          test_path = Path("src/lib/mpgf/pool-publication-materialization.test.ts")
+          test_source = test_path.read_text()
+          test_anchor = '    "create or replace function public.mpgf_publish_pool_proposal(",\n'
+          test_addition = (
+              '    "add column if not exists pool_proposal_id uuid",\n'
+              '    "add column if not exists threshold_visibility public.mpgf_threshold_visibility",\n'
+              '    "add column if not exists progress_visibility public.mpgf_progress_visibility",\n'
+              '    "add column if not exists first_accepted_pledge_at timestamptz",\n'
+          )
+          if test_source.count(test_anchor) != 1:
+              raise SystemExit(f"Expected one publication contract anchor, found {test_source.count(test_anchor)}")
+          test_path.write_text(test_source.replace(test_anchor, test_anchor + test_addition))
+          PY
+
+          git diff --check
+          git diff -- \
+            supabase/migrations/20260806143000_mpgf_pool_publication_materialization.sql \
+            src/lib/mpgf/pool-publication-materialization.test.ts
+
+      - name: Commit and push non-workflow repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            supabase/migrations/20260806143000_mpgf_pool_publication_materialization.sql \
+            src/lib/mpgf/pool-publication-materialization.test.ts
+          git diff --cached --check
+          git commit -m "Restore canonical campaign columns before publication"
+          git push origin "HEAD:$TARGET_BRANCH"
