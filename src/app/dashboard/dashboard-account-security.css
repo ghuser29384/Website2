@@ -1,0 +1,44 @@
+/*
+ * The marketplace shell hides legacy top-level dashboard sections. Account security
+ * still lives inside the legacy background-networking section, so expose only the
+ * account-security card until that dashboard surface is fully consolidated.
+ */
+.dashboard-page.marketplace-app-shell #main-content > #background-networking {
+  display: block;
+  width: min(100%, var(--content-width));
+  margin: 0 auto 1.5rem;
+  padding: 0 1rem;
+}
+
+.dashboard-page.marketplace-app-shell #main-content > #background-networking:not(:has(#account-security)) {
+  display: none;
+}
+
+.dashboard-page.marketplace-app-shell #main-content > #background-networking > :not(.data-grid) {
+  display: none !important;
+}
+
+.dashboard-page.marketplace-app-shell #main-content > #background-networking > .data-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+.dashboard-page.marketplace-app-shell
+  #main-content
+  > #background-networking
+  > .data-grid
+  > :not(#account-security) {
+  display: none !important;
+}
+
+.dashboard-page.marketplace-app-shell #background-networking #account-security {
+  display: grid;
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .dashboard-page.marketplace-app-shell #main-content > #background-networking {
+    padding: 0 0.75rem;
+  }
+}
