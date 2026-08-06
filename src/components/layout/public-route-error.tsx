@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
 
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -9,7 +8,6 @@ import { SiteFooter } from "./site-footer";
 import { SiteTopbar } from "./site-topbar";
 
 interface PublicRouteErrorProps {
-  error: Error & { digest?: string };
   reset: () => void;
   eyebrow: string;
   title: string;
@@ -17,16 +15,11 @@ interface PublicRouteErrorProps {
 }
 
 export function PublicRouteError({
-  error,
   reset,
   eyebrow,
   title,
   description,
 }: PublicRouteErrorProps) {
-  useEffect(() => {
-    console.error(`[public-route] ${eyebrow} could not finish rendering`, error);
-  }, [error, eyebrow]);
-
   return (
     <div className="page-shell">
       <header className="hero">
