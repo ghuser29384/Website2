@@ -1,0 +1,341 @@
+name: Public route shell exact gates c2c58e20
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/public-route-shell-gates-c2c58e20.yml"
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: public-route-shell-gates-c2c58e20
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: 87b093751a4c2de909555abdb7f181061bb36390
+  CANDIDATE_SHA: c2c58e20b7104bd6b21f53a5a19650f63380fece
+  PRODUCT_PR: "542"
+  STATUS_CONTEXT: QA / Public route shell exact gates
+  EVIDENCE_DIR: public-route-shell-evidence-c2c58e20
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  exact-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Mark immutable candidate pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Running exact source, focused route, and current-main differential gates" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Guard product PR identity and exact scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
+
+          actual_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          expected_files="$(printf '%s\n' \
+            'src/app/donation-offsets/error.tsx' \
+            'src/app/page.tsx' \
+            'src/app/priority-correction-fund/error.tsx' \
+            'src/components/create/create-interface-frame.tsx' \
+            'src/components/layout/public-route-error.tsx' \
+            'tests/public-routes.spec.ts' | sort)"
+          test "$actual_files" = "$expected_files"
+
+      - name: Check out immutable product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove immutable identity and exact differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git fetch --depth=1 origin "$BASE_SHA"
+          actual_files="$(git diff --name-only "$BASE_SHA" "$CANDIDATE_SHA" | sort)"
+          expected_files="$(printf '%s\n' \
+            'src/app/donation-offsets/error.tsx' \
+            'src/app/page.tsx' \
+            'src/app/priority-correction-fund/error.tsx' \
+            'src/components/create/create-interface-frame.tsx' \
+            'src/components/layout/public-route-error.tsx' \
+            'tests/public-routes.spec.ts' | sort)"
+          test "$actual_files" = "$expected_files"
+          git diff --check "$BASE_SHA" "$CANDIDATE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          git diff --stat "$BASE_SHA" "$CANDIDATE_SHA" > "$EVIDENCE_DIR/diff-stat.txt"
+          printf '%s\n' "$BASE_SHA" > "$EVIDENCE_DIR/base-sha.txt"
+          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+
+      - name: Run source, lint, type, and production-build gates
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$EVIDENCE_DIR/source-tests.log"
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+          npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/build.log"
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Repeat the focused public-route contract
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test tests/public-routes.spec.ts \
+            --workers=1 --repeat-each=2 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/focused-public-routes.log"
+
+      - name: Write Playwright report normalizer
+        shell: bash
+        run: |
+          cat > /tmp/normalize-playwright.mjs <<'NODE'
+          import fs from 'node:fs';
+          import path from 'node:path';
+
+          const [reportPath, outputPrefix, exitStatusPath] = process.argv.slice(2);
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          const failures = [];
+
+          function resultErrors(test) {
+            const errors = [];
+            for (const result of test?.results ?? []) {
+              if (result.status === 'passed' || result.status === 'skipped') continue;
+              for (const error of result.errors ?? []) {
+                const text = String(error?.message ?? error?.stack ?? error ?? '').trim();
+                if (text) errors.push(text.slice(0, 8000));
+              }
+            }
+            return errors;
+          }
+
+          function visitSuite(suite, ancestors = []) {
+            const nextAncestors = suite?.title ? [...ancestors, suite.title] : ancestors;
+            for (const spec of suite?.specs ?? []) {
+              const failedTests = (spec.tests ?? []).filter((test) =>
+                (test.results ?? []).some((result) => !['passed', 'skipped'].includes(result.status)),
+              );
+              if (spec.ok === false || failedTests.length > 0) {
+                failures.push({
+                  file: spec.file ?? '',
+                  line: spec.line ?? 0,
+                  column: spec.column ?? 0,
+                  title: [...nextAncestors, spec.title ?? ''].filter(Boolean).join(' › '),
+                  errors: failedTests.flatMap(resultErrors),
+                });
+              }
+            }
+            for (const child of suite?.suites ?? []) visitSuite(child, nextAncestors);
+          }
+
+          for (const suite of report.suites ?? []) visitSuite(suite, []);
+          const unique = [];
+          const seen = new Set();
+          for (const failure of failures) {
+            const key = `${failure.file}:${failure.line}:${failure.column} › ${failure.title}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            unique.push({ key, ...failure });
+          }
+          unique.sort((left, right) => left.key.localeCompare(right.key));
+
+          const hydrationPattern = /hydrated but some attributes of the server rendered HTML didn't match|Hydration failed because the server rendered HTML didn't match/;
+          const publicRouteFailures = unique.filter((failure) => failure.file.endsWith('public-routes.spec.ts'));
+          const hydrationFailures = unique.filter((failure) =>
+            failure.errors.some((error) => hydrationPattern.test(error)),
+          );
+          const summary = {
+            exitStatus: Number(fs.readFileSync(exitStatusPath, 'utf8').trim()),
+            stats: report.stats ?? null,
+            failureCount: unique.length,
+            publicRouteFailureCount: publicRouteFailures.length,
+            publicRouteFailures: publicRouteFailures.map((failure) => failure.key),
+            hydrationMismatchCount: hydrationFailures.length,
+            hydrationFailures: hydrationFailures.map((failure) => failure.key),
+          };
+
+          fs.writeFileSync(`${outputPrefix}-failures.json`, `${JSON.stringify(unique, null, 2)}\n`);
+          fs.writeFileSync(`${outputPrefix}-summary.json`, `${JSON.stringify(summary, null, 2)}\n`);
+          fs.writeFileSync(
+            `${outputPrefix}-failures.txt`,
+            `${unique.map((failure) => failure.key).join('\n')}${unique.length ? '\n' : ''}`,
+          );
+          console.log(JSON.stringify(summary, null, 2));
+          NODE
+          node --check /tmp/normalize-playwright.mjs
+
+      - name: Run complete candidate rendered suite truthfully
+        shell: bash
+        run: |
+          set -uo pipefail
+          rm -rf .next
+          set +e
+          npx playwright test --reporter=json \
+            > "$EVIDENCE_DIR/candidate-report.json" \
+            2> "$EVIDENCE_DIR/candidate-playwright.stderr.log"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$EVIDENCE_DIR/candidate-exit-status.txt"
+          node /tmp/normalize-playwright.mjs \
+            "$EVIDENCE_DIR/candidate-report.json" \
+            "$EVIDENCE_DIR/candidate" \
+            "$EVIDENCE_DIR/candidate-exit-status.txt"
+
+      - name: Run complete immutable base rendered suite under the same conditions
+        shell: bash
+        run: |
+          set -uo pipefail
+          git checkout --force "$BASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          rm -rf .next
+          set +e
+          npx playwright test --reporter=json \
+            > "$EVIDENCE_DIR/base-report.json" \
+            2> "$EVIDENCE_DIR/base-playwright.stderr.log"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$EVIDENCE_DIR/base-exit-status.txt"
+          node /tmp/normalize-playwright.mjs \
+            "$EVIDENCE_DIR/base-report.json" \
+            "$EVIDENCE_DIR/base" \
+            "$EVIDENCE_DIR/base-exit-status.txt"
+
+      - name: Enforce public-route repair and non-regression differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = process.env.EVIDENCE_DIR;
+          const baseSummary = JSON.parse(fs.readFileSync(path.join(dir, 'base-summary.json'), 'utf8'));
+          const candidateSummary = JSON.parse(fs.readFileSync(path.join(dir, 'candidate-summary.json'), 'utf8'));
+          const baseFailures = JSON.parse(fs.readFileSync(path.join(dir, 'base-failures.json'), 'utf8'));
+          const candidateFailures = JSON.parse(fs.readFileSync(path.join(dir, 'candidate-failures.json'), 'utf8'));
+
+          const baseNonPublic = new Set(
+            baseFailures
+              .filter((failure) => !failure.file.endsWith('public-routes.spec.ts'))
+              .map((failure) => failure.key),
+          );
+          const candidateOnlyNonPublic = candidateFailures
+            .filter((failure) => !failure.file.endsWith('public-routes.spec.ts'))
+            .filter((failure) => !baseNonPublic.has(failure.key))
+            .map((failure) => failure.key)
+            .sort();
+          const resolvedBasePublicRoutes = baseFailures
+            .filter((failure) => failure.file.endsWith('public-routes.spec.ts'))
+            .map((failure) => failure.key)
+            .sort();
+
+          const comparison = {
+            baseSha: process.env.BASE_SHA,
+            candidateSha: process.env.CANDIDATE_SHA,
+            base: baseSummary,
+            candidate: candidateSummary,
+            basePublicRouteFailureCount: resolvedBasePublicRoutes.length,
+            basePublicRouteFailures: resolvedBasePublicRoutes,
+            candidateOnlyNonPublicFailureCount: candidateOnlyNonPublic.length,
+            candidateOnlyNonPublicFailures: candidateOnlyNonPublic,
+            passed:
+              candidateSummary.publicRouteFailureCount === 0 &&
+              candidateSummary.hydrationMismatchCount === 0 &&
+              candidateOnlyNonPublic.length === 0 &&
+              candidateSummary.failureCount <= baseSummary.failureCount,
+          };
+
+          fs.writeFileSync(
+            path.join(dir, 'current-main-differential.json'),
+            `${JSON.stringify(comparison, null, 2)}\n`,
+          );
+          console.log(JSON.stringify(comparison, null, 2));
+          if (!comparison.passed) process.exit(1);
+          NODE
+
+          {
+            echo '## Public-route shell exact gates'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Base failures: \`$(jq -r '.base.failureCount' "$EVIDENCE_DIR/current-main-differential.json")\`"
+            echo "- Candidate failures: \`$(jq -r '.candidate.failureCount' "$EVIDENCE_DIR/current-main-differential.json")\`"
+            echo "- Base public-route failures: \`$(jq -r '.basePublicRouteFailureCount' "$EVIDENCE_DIR/current-main-differential.json")\`"
+            echo "- Candidate public-route failures: \`$(jq -r '.candidate.publicRouteFailureCount' "$EVIDENCE_DIR/current-main-differential.json")\`"
+            echo "- Candidate-only non-public failures: \`$(jq -r '.candidateOnlyNonPublicFailureCount' "$EVIDENCE_DIR/current-main-differential.json")\`"
+            echo "- Candidate hydration mismatches: \`$(jq -r '.candidate.hydrationMismatchCount' "$EVIDENCE_DIR/current-main-differential.json")\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload exact gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-route-shell-gates-c2c58e20
+          path: public-route-shell-evidence-c2c58e20
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish immutable candidate result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="Exact public-route gates passed with zero route failures and zero new non-public failures"
+          else
+            state=failure
+            description="Public-route shell exact gates failed; inspect immutable evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
