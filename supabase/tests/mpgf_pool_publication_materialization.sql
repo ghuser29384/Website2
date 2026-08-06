@@ -299,7 +299,9 @@ declare
   campaign_count integer;
   publication_event_count integer;
   create_status text;
-  forbidden_object_count integer;
+  forbidden_object_count integer := 0;
+  relation_name text;
+  relation_count integer;
 begin
   select * into campaign_row
   from public.mpgf_public_goods_campaigns
@@ -339,11 +341,23 @@ begin
     raise exception 'Create submission receipt did not transition to published.';
   end if;
 
-  select
-    (select count(*) from public.mpgf_public_goods_pledges where campaign_id = campaign_row.id)
-    + (select count(*) from public.mpgf_pledge_intents where campaign_id = campaign_row.id)
-    + (select count(*) from public.mpgf_conditional_pledges where campaign_id = campaign_row.id)
-  into forbidden_object_count;
+  for relation_name in
+    select unnest(array[
+      'public.mpgf_public_goods_pledges',
+      'public.mpgf_pledge_intents',
+      'public.mpgf_conditional_pledges'
+    ])
+  loop
+    if to_regclass(relation_name) is not null then
+      execute format(
+        'select count(*) from %s where campaign_id = $1',
+        relation_name
+      )
+      into relation_count
+      using campaign_row.id;
+      forbidden_object_count := forbidden_object_count + relation_count;
+    end if;
+  end loop;
   if forbidden_object_count <> 0 then
     raise exception 'Publication unexpectedly created a pledge or payment intent.';
   end if;

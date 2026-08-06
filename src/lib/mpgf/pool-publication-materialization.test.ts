@@ -82,6 +82,9 @@ test("transactional regression covers authorization, malformed state, visibility
     "Published campaign operative terms unexpectedly changed.",
     "Published campaign unexpectedly deleted.",
     "Publication unexpectedly created a pledge or payment intent.",
+    "to_regclass(relation_name) is not null",
+    "public.mpgf_pledge_intents",
+    "public.mpgf_conditional_pledges",
     "rollback;",
   ]);
 });
