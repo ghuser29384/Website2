@@ -1,0 +1,157 @@
+name: Integrate latest Co-Act and Co-Fund parent into account-bound participant candidate
+
+on:
+  push:
+    branches:
+      - feature/account-bound-participant-picker-20260805
+
+permissions:
+  contents: write
+
+concurrency:
+  group: integrate-account-bound-parent
+  cancel-in-progress: false
+
+env:
+  EXPECTED_PARENT_SHA: f01cdda542f2d12875b453e20ff90ab7c53e753e
+  PARENT_BRANCH: feature/co-act-co-fund-create-v3-20260803
+  CHILD_BRANCH: feature/account-bound-participant-picker-20260805
+  NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+  VERCEL: "1"
+  VERCEL_ENV: preview
+
+jobs:
+  integrate:
+    if: ${{ !contains(github.event.head_commit.message, '[integrated-parent]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact child branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/account-bound-participant-picker-20260805
+          fetch-depth: 0
+
+      - name: Merge exact parent and resolve the four adjudicated conflicts
+        shell: bash
+        run: |
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git fetch origin "$PARENT_BRANCH"
+          actual_parent="$(git rev-parse "origin/$PARENT_BRANCH")"
+          test "$actual_parent" = "$EXPECTED_PARENT_SHA"
+
+          set +e
+          git merge --no-commit --no-ff "origin/$PARENT_BRANCH"
+          merge_status=$?
+          set -e
+          test "$merge_status" -eq 1
+
+          expected_conflicts="$(printf '%s\n' \
+            public/moral-trade-create/index.html \
+            src/lib/create-interface/group-contribution-client.ts \
+            src/lib/create-interface/source-contract.test.ts \
+            tests/create-group-contribution-proposal.spec.ts)"
+          actual_conflicts="$(git diff --name-only --diff-filter=U | sort)"
+          test "$actual_conflicts" = "$expected_conflicts"
+
+          python .github/scripts/resolve-account-bound-parent-sync.py
+          test -z "$(git diff --name-only --diff-filter=U)"
+
+          rm -f \
+            .github/scripts/co-act-co-fund-resolve-blocker.py \
+            .github/scripts/co-act-co-fund-resume-context-hotfix.py \
+            .github/workflows/co-act-co-fund-resume-repair.yml \
+            .github/workflows/inspect-parent-sync-conflicts.yml \
+            .github/scripts/resolve-account-bound-parent-sync.py \
+            .github/workflows/integrate-account-bound-parent.yml
+
+          git add -A
+          git diff --cached --check
+          ! git grep -n '^<<<<<<<\|^=======\|^>>>>>>>' -- \
+            public/moral-trade-create \
+            src/lib/create-interface \
+            tests/create-group-contribution-proposal.spec.ts
+          test ! -e .github/workflows/inspect-parent-sync-conflicts.yml
+          test ! -e .github/scripts/resolve-account-bound-parent-sync.py
+          test ! -e .github/workflows/integrate-account-bound-parent.yml
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused Create, participant, persistence, and profile contracts
+        shell: bash
+        run: |
+          node --import tsx --test \
+            src/lib/create-interface/group-contribution*.test.ts \
+            src/lib/create-interface/participant-target*.test.ts \
+            src/lib/create-interface/persistence.test.ts \
+            src/lib/create-interface/source-contract.test.ts \
+            src/lib/create-interface/validation.test.ts \
+            src/lib/profile-username.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run absolute ESLint
+        run: npm run lint
+
+      - name: Run absolute TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run integrated desktop, mobile, resume, participant, and profile workflows
+        run: >-
+          npx playwright test
+          tests/create-group-contribution-proposal.spec.ts
+          tests/create-common-ground-pool.spec.ts
+          tests/create-route-workbench.spec.ts
+          tests/complete-profile-review.spec.ts
+          --reporter=line
+
+      - name: Verify exact merge tree and temporary-machinery absence
+        shell: bash
+        run: |
+          git checkout -- next-env.d.ts 2>/dev/null || true
+          git add -A
+          git diff --cached --check
+          test -z "$(git diff --name-only --diff-filter=U)"
+          ! git diff --cached --name-only | grep -E 'resolve-account-bound-parent-sync|integrate-account-bound-parent|inspect-parent-sync-conflicts|co-act-co-fund-(resolve-blocker|resume-context-hotfix|resume-repair)'
+          git diff --cached --name-only | sort > integrated-file-manifest.txt
+          git diff --cached --stat > integrated-diff-stat.txt
+          printf '%s\n' "$EXPECTED_PARENT_SHA" > integrated-parent-sha.txt
+          printf '%s\n' "$(git rev-parse HEAD)" > integrated-child-premerge-sha.txt
+
+      - name: Upload integrated rendered and diff evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-bound-parent-integration-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+            integrated-file-manifest.txt
+            integrated-diff-stat.txt
+            integrated-parent-sha.txt
+            integrated-child-premerge-sha.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Commit and push the verified merge
+        shell: bash
+        run: |
+          git add -A
+          git commit -m "Integrate verified Co-Act and Co-Fund parent [integrated-parent]"
+          git merge-base --is-ancestor "$EXPECTED_PARENT_SHA" HEAD
+          git push origin "HEAD:$CHILD_BRANCH"
