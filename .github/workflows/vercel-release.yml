@@ -104,8 +104,25 @@ jobs:
           PLAYWRIGHT_HTML_OPEN: never
         run: |
           set -euo pipefail
+          # The complete browser suite is a source-rendered gate. The preceding build
+          # deliberately proves production compilation separately; retaining its BUILD_ID
+          # makes Playwright start a credential-free production server and invalidates
+          # runtime-route tests. Remove only generated build output before browser QA.
+          rm -rf .next
+          test ! -e .next/BUILD_ID
           npx playwright install --with-deps chromium
           npm run test:e2e -- --reporter=line
+
+      - name: Upload rendered-browser diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-vercel-rendered-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Link only the canonical Vercel project
         shell: bash
