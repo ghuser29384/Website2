@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      EXPECTED_PARENT: c47b48d6044a014168c849a28747ec0b6a26966b
+      EXPECTED_PARENT: 34f402fe50821f0796114882810fa06f8c519748
       TARGET_BRANCH: fix/mpgf-pool-review-freeze-20260806
       CONTROLLER_PATH: .github/workflows/repair-mpgf-review-freeze-ambiguity-20260806.yml
 
@@ -43,16 +43,18 @@ jobs:
 
           migration_path = Path("supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql")
           migration = migration_path.read_text()
-          old = """  select terms_sha256 into recorded_hash
-  from public.mpgf_pool_proposal_versions
-  where proposal_id = p_proposal_id
-    and terms_version = proposal_row.terms_version;
-"""
-          new = """  select proposal_version.terms_sha256 into recorded_hash
-  from public.mpgf_pool_proposal_versions as proposal_version
-  where proposal_version.proposal_id = p_proposal_id
-    and proposal_version.terms_version = proposal_row.terms_version;
-"""
+          old = (
+              "  select terms_sha256 into recorded_hash\n"
+              "  from public.mpgf_pool_proposal_versions\n"
+              "  where proposal_id = p_proposal_id\n"
+              "    and terms_version = proposal_row.terms_version;\n"
+          )
+          new = (
+              "  select proposal_version.terms_sha256 into recorded_hash\n"
+              "  from public.mpgf_pool_proposal_versions as proposal_version\n"
+              "  where proposal_version.proposal_id = p_proposal_id\n"
+              "    and proposal_version.terms_version = proposal_row.terms_version;\n"
+          )
           if migration.count(old) != 1:
               raise SystemExit(f"Expected exactly one ambiguous approval query, found {migration.count(old)}")
           migration = migration.replace(old, new)
