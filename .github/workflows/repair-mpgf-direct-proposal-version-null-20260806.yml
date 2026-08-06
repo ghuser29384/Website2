@@ -19,9 +19,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      EXPECTED_PARENT: f489be5676e2214324557e8f1efdf2d547d097ab
+      EXPECTED_PARENT: f33d6a76351668e0a0bd4c4c2b5f02e2e03c92c1
       TARGET_BRANCH: fix/mpgf-pool-review-freeze-20260806
       CONTROLLER_PATH: .github/workflows/repair-mpgf-direct-proposal-version-null-20260806.yml
+      DIRECT_FIXTURE_B64: LS0gRGlyZWN0IE1QR0YgcHJvcG9zYWwgcGF0aDogbm8gbGlua2VkIE1vcmFsIFRyYWRlIENyZWF0ZSB0ZXJtcy4KaW5zZXJ0IGludG8gcHVibGljLm1wZ2ZfcG9vbF9wcm9wb3NhbHMgKAogIGlkLCBwcm9wb3Nlcl9pZCwgdGl0bGUsIHByb2JsZW0sIGludGVydmVudGlvbiwgbW9yYWxfcHVibGljX2dvb2RfcmF0aW9uYWxlLAogIHByb3Bvc2VkX3JlY2lwaWVudF9uYW1lLCBzdW1tYXJ5LCBjYXVzZV9hcmVhLCByZXF1ZXN0ZWRfbWF4aW11bV9mdW5kaW5nX2NlbnRzLAogIG1pbmltdW1fdmlhYmxlX2Z1bmRpbmdfY2VudHMsIG91dGNvbWVfdW5pdHNfc3VtbWFyeSwgZXhwZWN0ZWRfZWZmZWN0X3ZzX2Z1bmRpbmcsCiAgdGltZWxpbmUsIG1pbGVzdG9uZXNfanNvbiwgcmlza3NfanNvbiwgbWlzdXNlX3BhdGh3YXlzLCBpbXBsZW1lbnRpbmdfdGVhbV9qc29uLAogIHN0YXR1cywgc3VibWl0dGVkX2F0LCBwdWJsaWNfZ29vZHNfZGVzdGluYXRpb25fdHlwZSwgcHVibGljX2dvb2RzX2Rlc3RpbmF0aW9uX3JlZiwKICBwdWJsaWNfZ29vZHNfdGhyZXNob2xkX2Ftb3VudF9jZW50cywgcHVibGljX2dvb2RzX3RocmVzaG9sZF9zdXBwb3J0ZXJzLAogIHB1YmxpY19nb29kc19kZWFkbGluZV9hdCwgcHVibGljX2dvb2RzX3ZlcmlmaWNhdGlvbl9tZXRob2QsIHB1YmxpY19nb29kc19iYXNlbGluZV9ydWxlLAogIHB1YmxpY19nb29kc19leGl0X3J1bGUsIHB1YmxpY19nb29kc19iYXNlX21hdGNoX3JhdGlvLCBwdWJsaWNfZ29vZHNfcWZfZW5hYmxlZCwKICBwdWJsaWNfZ29vZHNfcWZfY2FwX211bHRpcGxlLCBwdWJsaWNfZ29vZHNfcGF5b3V0X21ldGhvZCwKICBwdWJsaWNfZ29vZHNfZmFpbHVyZV9ib251c19lbmFibGVkLCBwdWJsaWNfZ29vZHNfc3VjY2Vzc19wcmVtaXVtX2luY2x1ZGVkX2luX25ldF90aHJlc2hvbGQKKSB2YWx1ZXMgKAogICc3ZDY2NjY2Ni02NjY2LTQ2NjYtODY2Ni02NjY2NjY2NjY2NjYnLAogICc3YTExMTExMS0xMTExLTQxMTEtODExMS0xMTExMTExMTExMTEnLAogICdRQSBkaXJlY3QgcG9vbCByZXZpZXcgYW5kIGZyZWV6ZScsCiAgJ1N5bnRoZXRpYyBkaXJlY3QgUUEgcHJvYmxlbScsCiAgJ1N5bnRoZXRpYyBkaXJlY3QgUUEgaW50ZXJ2ZW50aW9uJywKICAnU3ludGhldGljIGRpcmVjdCBRQSBwdWJsaWMtZ29vZCByYXRpb25hbGUnLAogICdTeW50aGV0aWMgZGlyZWN0IFFBIHJlY2lwaWVudCcsCiAgJ1N5bnRoZXRpYyBkaXJlY3QgUUEgc3VtbWFyeScsCiAgJ1FBJywKICAxMDAwMDAsCiAgNTAwMDAsCiAgJ09uZSB2ZXJpZmllZCBkaXJlY3QgUUEgb3V0Y29tZScsCiAgJ1N5bnRoZXRpYyBkaXJlY3QgUUEgZWZmZWN0JywKICAnU3ludGhldGljIGRpcmVjdCBRQSB0aW1lbGluZScsCiAgJ1tdJzo6anNvbmIsCiAgJ1tdJzo6anNvbmIsCiAgJ05vbmU7IHRyYW5zYWN0aW9uIHJvbGxzIGJhY2snLAogICd7InN1bW1hcnkiOiJTeW50aGV0aWMgZGlyZWN0IFFBIHRlYW0ifSc6Ompzb25iLAogICdzdWJtaXR0ZWQnLAogIHRpbWV6b25lKCd1dGMnLCBub3coKSksCiAgJ2V4dGVybmFsX2NoYXJpdHknLAogICdxYS1kaXJlY3QtcmVjaXBpZW50LXJlZmVyZW5jZScsCiAgNTAwMDAsCiAgMiwKICB0aW1lem9uZSgndXRjJywgbm93KCkpICsgaW50ZXJ2YWwgJzMwIGRheXMnLAogICdTeW50aGV0aWMgZGlyZWN0IFFBIGV2aWRlbmNlJywKICAnTm8gY2hhcmdlIHdpdGhvdXQgc3VjY2VzcycsCiAgJ1BsZWRnZXMgZXhwaXJlIG9uIGxhcHNlJywKICAwLAogIGZhbHNlLAogIDEuNSwKICAnZXh0ZXJuYWxfaGFuZG9mZicsCiAgZmFsc2UsCiAgZmFsc2UKKTsKCg==
+      DIRECT_REVIEW_B64: LS0gQSBzdXBwb3J0ZWQgZGlyZWN0IE1QR0YgcHJvcG9zYWwgd2l0aG91dCBsaW5rZWQgQ3JlYXRlIHRlcm1zIGNhbiBzdGlsbCBiZSB2ZXJzaW9uZWQsCi0tIGluZGVwZW5kZW50bHkgcmV2aWV3ZWQsIGFuZCBmcm96ZW4uIEl0cyBvcHRpb25hbCBDcmVhdGUgc25hcHNob3QgbXVzdCBiZSBTUUwgbnVsbCwKLS0gbm90IEpTT04gbnVsbC4Kc2VsZWN0ICogZnJvbSBwdWJsaWMubXBnZl9iZWdpbl9wb29sX3Byb3Bvc2FsX3JldmlldygKICAnN2Q2NjY2NjYtNjY2Ni00NjY2LTg2NjYtNjY2NjY2NjY2NjY2JywKICAnN2IyMjIyMjItMjIyMi00MjIyLTgyMjItMjIyMjIyMjIyMjIyJywKICAnUUEgZGlyZWN0IHByb3Bvc2FsIHJldmlldyBzdGFydGVkJwopOwpzZWxlY3QgKiBmcm9tIHB1YmxpYy5tcGdmX2FwcHJvdmVfYW5kX2ZyZWV6ZV9wb29sX3Byb3Bvc2FsKAogICc3ZDY2NjY2Ni02NjY2LTQ2NjYtODY2Ni02NjY2NjY2NjY2NjYnLAogICc3YjIyMjIyMi0yMjIyLTQyMjItODIyMi0yMjIyMjIyMjIyMjInLAogICdRQSBkaXJlY3QgcHJvcG9zYWwgdGVybXMgYXBwcm92ZWQgYW5kIGZyb3plbicKKTsKCmRvICR0ZXN0JApkZWNsYXJlCiAgZGlyZWN0X3N0YXR1cyB0ZXh0OwogIGRpcmVjdF9jcmVhdGVfdGVybXMganNvbmI7CmJlZ2luCiAgc2VsZWN0IHByb3Bvc2FsLnN0YXR1cywgdmVyc2lvbi5jcmVhdGVfcG9vbF90ZXJtc19qc29uCiAgaW50byBkaXJlY3Rfc3RhdHVzLCBkaXJlY3RfY3JlYXRlX3Rlcm1zCiAgZnJvbSBwdWJsaWMubXBnZl9wb29sX3Byb3Bvc2FscyBhcyBwcm9wb3NhbAogIGpvaW4gcHVibGljLm1wZ2ZfcG9vbF9wcm9wb3NhbF92ZXJzaW9ucyBhcyB2ZXJzaW9uCiAgICBvbiB2ZXJzaW9uLnByb3Bvc2FsX2lkID0gcHJvcG9zYWwuaWQKICAgYW5kIHZlcnNpb24udGVybXNfdmVyc2lvbiA9IHByb3Bvc2FsLmFwcHJvdmVkX3Rlcm1zX3ZlcnNpb24KICB3aGVyZSBwcm9wb3NhbC5pZCA9ICc3ZDY2NjY2Ni02NjY2LTQ2NjYtODY2Ni02NjY2NjY2NjY2NjYnOwoKICBpZiBkaXJlY3Rfc3RhdHVzIDw+ICdhcHByb3ZlZF9hc19jYW5kaWRhdGUnIHRoZW4KICAgIHJhaXNlIGV4Y2VwdGlvbiAnRGlyZWN0IHByb3Bvc2FsIGRpZCBub3QgcmVhY2ggYXBwcm92ZWQgZnJvemVuIHN0YXR1cy4nOwogIGVuZCBpZjsKICBpZiBkaXJlY3RfY3JlYXRlX3Rlcm1zIGlzIG5vdCBudWxsIHRoZW4KICAgIHJhaXNlIGV4Y2VwdGlvbiAnRGlyZWN0IHByb3Bvc2FsIHZlcnNpb24gc3RvcmVkIEpTT04gbnVsbCBpbnN0ZWFkIG9mIFNRTCBudWxsLic7CiAgZW5kIGlmOwplbmQ7CiR0ZXN0JDsKCg==
 
     steps:
       - name: Check out exact controller commit
@@ -39,6 +41,8 @@ jobs:
           test "$changed" = "$CONTROLLER_PATH"
 
           python3 - <<'PY'
+          import base64
+          import os
           from pathlib import Path
 
           migration_path = Path("supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql")
@@ -46,136 +50,41 @@ jobs:
           old_assignment = "  create_terms_json := snapshot_json -> 'createPoolTerms';\n"
           new_assignment = "  create_terms_json := nullif(snapshot_json -> 'createPoolTerms', 'null'::jsonb);\n"
           if migration.count(old_assignment) != 1:
-              raise SystemExit(
-                  f"Expected one direct-proposal Create-term assignment, found {migration.count(old_assignment)}"
-              )
+              raise SystemExit(f"Expected one direct-proposal assignment, found {migration.count(old_assignment)}")
           migration_path.write_text(migration.replace(old_assignment, new_assignment))
 
           regression_path = Path("supabase/tests/mpgf_pool_review_freeze.sql")
           regression = regression_path.read_text()
-          proposal_anchor = """insert into public.moral_trade_create_submissions (
-"""
-          direct_fixture = """-- Direct MPGF proposal path: no linked Moral Trade Create terms.
-insert into public.mpgf_pool_proposals (
-  id, proposer_id, title, problem, intervention, moral_public_good_rationale,
-  proposed_recipient_name, summary, cause_area, requested_maximum_funding_cents,
-  minimum_viable_funding_cents, outcome_units_summary, expected_effect_vs_funding,
-  timeline, milestones_json, risks_json, misuse_pathways, implementing_team_json,
-  status, submitted_at, public_goods_destination_type, public_goods_destination_ref,
-  public_goods_threshold_amount_cents, public_goods_threshold_supporters,
-  public_goods_deadline_at, public_goods_verification_method, public_goods_baseline_rule,
-  public_goods_exit_rule, public_goods_base_match_ratio, public_goods_qf_enabled,
-  public_goods_qf_cap_multiple, public_goods_payout_method,
-  public_goods_failure_bonus_enabled, public_goods_success_premium_included_in_net_threshold
-) values (
-  '7d666666-6666-4666-8666-666666666666',
-  '7a111111-1111-4111-8111-111111111111',
-  'QA direct pool review and freeze',
-  'Synthetic direct QA problem',
-  'Synthetic direct QA intervention',
-  'Synthetic direct QA public-good rationale',
-  'Synthetic direct QA recipient',
-  'Synthetic direct QA summary',
-  'QA',
-  100000,
-  50000,
-  'One verified direct QA outcome',
-  'Synthetic direct QA effect',
-  'Synthetic direct QA timeline',
-  '[]'::jsonb,
-  '[]'::jsonb,
-  'None; transaction rolls back',
-  '{"summary":"Synthetic direct QA team"}'::jsonb,
-  'submitted',
-  timezone('utc', now()),
-  'external_charity',
-  'qa-direct-recipient-reference',
-  50000,
-  2,
-  timezone('utc', now()) + interval '30 days',
-  'Synthetic direct QA evidence',
-  'No charge without success',
-  'Pledges expire on lapse',
-  0,
-  false,
-  1.5,
-  'external_handoff',
-  false,
-  false
-);
-
-"""
+          fixture = base64.b64decode(os.environ["DIRECT_FIXTURE_B64"]).decode()
+          review = base64.b64decode(os.environ["DIRECT_REVIEW_B64"]).decode()
+          proposal_anchor = "insert into public.moral_trade_create_submissions (\n"
+          review_anchor = (
+              "select * from public.mpgf_begin_pool_proposal_review(\n"
+              "  '7d444444-4444-4444-8444-444444444444',\n"
+          )
           if regression.count(proposal_anchor) != 1:
               raise SystemExit(f"Expected one Create-submission anchor, found {regression.count(proposal_anchor)}")
-          regression = regression.replace(proposal_anchor, direct_fixture + proposal_anchor)
-
-          review_anchor = """select * from public.mpgf_begin_pool_proposal_review(
-  '7d444444-4444-4444-8444-444444444444',
-"""
-          direct_review = """-- A supported direct MPGF proposal without linked Create terms can still be versioned,
--- independently reviewed, and frozen. Its optional Create snapshot must be SQL null,
--- not JSON null.
-select * from public.mpgf_begin_pool_proposal_review(
-  '7d666666-6666-4666-8666-666666666666',
-  '7b222222-2222-4222-8222-222222222222',
-  'QA direct proposal review started'
-);
-select * from public.mpgf_approve_and_freeze_pool_proposal(
-  '7d666666-6666-4666-8666-666666666666',
-  '7b222222-2222-4222-8222-222222222222',
-  'QA direct proposal terms approved and frozen'
-);
-
-do $test$
-declare
-  direct_status text;
-  direct_create_terms jsonb;
-begin
-  select proposal.status, version.create_pool_terms_json
-  into direct_status, direct_create_terms
-  from public.mpgf_pool_proposals as proposal
-  join public.mpgf_pool_proposal_versions as version
-    on version.proposal_id = proposal.id
-   and version.terms_version = proposal.approved_terms_version
-  where proposal.id = '7d666666-6666-4666-8666-666666666666';
-
-  if direct_status <> 'approved_as_candidate' then
-    raise exception 'Direct proposal did not reach approved frozen status.';
-  end if;
-  if direct_create_terms is not null then
-    raise exception 'Direct proposal version stored JSON null instead of SQL null.';
-  end if;
-end;
-$test$;
-
-"""
           if regression.count(review_anchor) != 1:
               raise SystemExit(f"Expected one primary review anchor, found {regression.count(review_anchor)}")
-          regression_path.write_text(regression.replace(review_anchor, direct_review + review_anchor))
+          regression = regression.replace(proposal_anchor, fixture + proposal_anchor)
+          regression_path.write_text(regression.replace(review_anchor, review + review_anchor))
 
           contract_path = Path("src/lib/mpgf/pool-review-freeze-migration.test.ts")
           contract = contract_path.read_text()
           migration_anchor = '    "proposal_version.terms_sha256",\n'
           migration_assertion = '    "nullif(snapshot_json -> \'createPoolTerms\', \'null\'::jsonb)",\n'
-          if contract.count(migration_anchor) != 1:
-              raise SystemExit(f"Expected one version-hash contract anchor, found {contract.count(migration_anchor)}")
-          contract = contract.replace(migration_anchor, migration_anchor + migration_assertion)
-
           regression_anchor = '    "Drifted linked terms unexpectedly approved",\n'
           regression_assertions = (
               '    "QA direct proposal review started",\n'
               '    "Direct proposal version stored JSON null instead of SQL null",\n'
           )
-          if contract.count(regression_anchor) != 1:
-              raise SystemExit(f"Expected one regression contract anchor, found {contract.count(regression_anchor)}")
+          if contract.count(migration_anchor) != 1 or contract.count(regression_anchor) != 1:
+              raise SystemExit("Expected migration-contract insertion anchors were not unique")
+          contract = contract.replace(migration_anchor, migration_anchor + migration_assertion)
           contract_path.write_text(contract.replace(regression_anchor, regression_anchor + regression_assertions))
           PY
 
           git diff --check
-          git diff -- \
-            supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql \
-            supabase/tests/mpgf_pool_review_freeze.sql \
-            src/lib/mpgf/pool-review-freeze-migration.test.ts
 
       - name: Commit and push non-workflow repair
         shell: bash
