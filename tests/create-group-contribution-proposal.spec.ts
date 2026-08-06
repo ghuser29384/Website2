@@ -168,6 +168,7 @@ test("integrates proposal-only Co-Act and Co-Fund terms into the real Create ifr
   await expect(coFund.getByText("@ellen-example", { exact: true })).toBeVisible();
   await coFund.getByLabel("Project target").fill("50.00");
   await coFund.getByLabel("Your private maximum contribution").fill("5.00");
+  await expect(coFund.getByLabel("Your private maximum contribution")).toHaveValue("5.00");
   await coFund
     .getByLabel("What would you fund instead?")
     .fill("Donate the same budget to another approved existential-risk project");
@@ -276,6 +277,23 @@ test("restores proposal-only group terms after the Create authentication handoff
   const resumed = page.frameLocator('iframe[title="Moral Trade Create"]');
   await expect(resumed.getByRole("heading", { level: 1, name: "Ready for review." })).toBeVisible();
   await expect(resumed.getByText("CO-ACT · PROPOSAL ONLY")).toBeVisible();
+
+const resumedDraftSnapshot = await resumed.locator("body").evaluate(() =>
+  localStorage.getItem("mt:create:group-contribution-drafts:v1"),
+);
+expect(resumedDraftSnapshot).not.toBeNull();
+const resumedDrafts = JSON.parse(resumedDraftSnapshot || "null") as {
+  drafts?: Record<string, {
+    mode?: string;
+    participantLimit?: number;
+    counterpartyParticipation?: string;
+  }>;
+};
+expect(resumedDrafts.drafts?.["behavior:1"]).toMatchObject({
+  mode: "co-act",
+  participantLimit: 17,
+  counterpartyParticipation: "explicitly-included",
+});
 
   await resumed.getByRole("button", { name: "Change contributions" }).click();
   await expect(

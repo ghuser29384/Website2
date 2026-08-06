@@ -4631,8 +4631,8 @@
 
     function createDraftStorage() {
       try {
-        if (window.parent !== window) {
-          const storage = window.parent.sessionStorage;
+        if (window.top && window.top !== window) {
+          const storage = window.top.sessionStorage;
           storage.getItem(CREATE_DRAFT_STORAGE_KEY);
           return storage;
         }
@@ -7193,7 +7193,12 @@
       const storage = createDraftStorage();
       if (!storage) return false;
       try {
-        const serialized = JSON.stringify({ ...state, published: false });
+        const serialized = JSON.stringify({
+          ...state,
+          step: 4,
+          offerPhase: "details",
+          published: false,
+        });
         storage.setItem(CREATE_DRAFT_STORAGE_KEY, serialized);
         return storage.getItem(CREATE_DRAFT_STORAGE_KEY) === serialized;
       } catch {
@@ -7210,7 +7215,7 @@
         const saved = JSON.parse(storage.getItem(CREATE_DRAFT_STORAGE_KEY) || "null");
         if (!saved || typeof saved !== "object") return false;
         Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });
-        storage.removeItem(CREATE_DRAFT_STORAGE_KEY);
+        // Keep the snapshot through a possible srcDoc remount. A durable receipt or explicit reset clears it.
         return true;
       } catch {
         return false;

@@ -79,3 +79,87 @@ test("review summaries are idempotent so their observer cannot self-trigger fore
   assert.match(review, /=== fingerprint/);
   assert.match(review, /existing\?\.remove\(\)/);
 });
+
+test("ordinary value changes do not replace the active form control", () => {
+  const listeners = functionBody("installShadowDelegatedListeners");
+  assert.match(listeners, /const field = control\.dataset\.field \?\? ""/);
+  assert.match(listeners, /panelShapeChanged = PANEL_SHAPE_FIELDS\.has\(field\)/);
+  assert.match(listeners, /if \(panelShapeChanged\) scheduleMountedOptionRender\(entry\)/);
+  assert.match(listeners, /else updateValidationStatus\(entry\)/);
+
+  const shapeFieldsStart = client.indexOf("const PANEL_SHAPE_FIELDS");
+  const shapeFieldsEnd = client.indexOf("const PROPOSAL_FLAGS", shapeFieldsStart);
+  assert.ok(shapeFieldsStart >= 0 && shapeFieldsEnd > shapeFieldsStart);
+  const shapeFields = client.slice(shapeFieldsStart, shapeFieldsEnd);
+  assert.match(shapeFields, /coActStructure/);
+  assert.match(shapeFields, /allocationMode/);
+  assert.doesNotMatch(shapeFields, /maximumBudgetMinor|targetMinor|noPoolDefault/);
+});
+
+test("authentication resume validates and restores the proposal on the summary screen", () => {
+  const scan = functionBody("scanForOptions");
+  assert.match(scan, /if \(!root\)[\s\S]*resumedProposal[\s\S]*writeProposalPayload\(false\)/);
+
+  const payload = functionBody("readProposalPayload");
+  assert.match(payload, /mounted\.size === 0 && resumedProposal/);
+
+  const restore = functionBody("readStoredResumeProposal");
+  assert.match(restore, /parseGroupContributionProposalPayload/);
+  assert.match(restore, /permitsGroupContributionMode/);
+  assert.match(restore, /result\.ok/);
+});
+
+
+test("semantic primary fields never fall through to duration or currency", () => {
+  const primary = functionBody("readPrimaryText");
+  assert.match(primary, /let hasPreferredControl = false/);
+  assert.match(primary, /if \(control\) hasPreferredControl = true/);
+  assert.match(primary, /if \(hasPreferredControl\) return ""/);
+});
+
+test("authentication resume uses the same top-level request and storage context", () => {
+  const request = functionBody("isResumeRequest");
+  assert.match(request, /resumeRequestUrl\(\)/);
+
+  const requestUrl = functionBody("resumeRequestUrl");
+  assert.match(requestUrl, /typeof window === "undefined"/);
+  assert.match(requestUrl, /window\.top/);
+  assert.match(requestUrl, /window\.location\.href/);
+
+  const storage = functionBody("resumeStorage");
+  assert.match(storage, /typeof window === "undefined"/);
+  assert.match(storage, /window\.top\.sessionStorage/);
+  assert.match(storage, /window\.sessionStorage/);
+
+  const restoreProposal = functionBody("readStoredResumeProposal");
+  assert.match(restoreProposal, /resumeStorage\(\)\?\.getItem/);
+});
+
+test("authentication resume restores the exact editable group draft snapshot", () => {
+  const persist = functionBody("persistResumeProposal");
+  assert.match(persist, /groupDraftStorage\(\)\?\.getItem\(STORAGE_KEY\)/);
+  assert.match(persist, /RESUME_DRAFT_STORAGE_KEY/);
+
+  const restore = functionBody("restoreResumeDrafts");
+  assert.match(restore, /RESUME_DRAFT_STORAGE_KEY/);
+  assert.match(restore, /parsed\.version !== 1/);
+  assert.match(restore, /const localStorage = groupDraftStorage\(\)/);
+  assert.match(restore, /localStorage\.setItem\(STORAGE_KEY/);
+
+  const activate = functionBody("activateCreateDocument");
+  assert.ok(activate.indexOf("restoreResumeDrafts();") < activate.indexOf("readStoredResumeProposal();"));
+
+  const clear = functionBody("clearResumeProposal");
+  assert.match(clear, /removeItem\(RESUME_STORAGE_KEY\)/);
+  assert.match(clear, /removeItem\(RESUME_DRAFT_STORAGE_KEY\)/);
+});
+
+test("summary scans preserve restored group drafts until option cards remount", () => {
+  const writer = functionBody("writeProposalPayload");
+  assert.match(writer, /const preservingResumedDrafts = mounted\.size === 0 && resumedProposal !== null/);
+  assert.match(writer, /persistCurrentDrafts && !preservingResumedDrafts/);
+
+  const scan = functionBody("scanForOptions");
+  assert.match(scan, /if \(mounted\.size > 0\) resumedProposal = null/);
+  assert.ok(scan.indexOf("mounted.size > 0") < scan.indexOf("writeProposalPayload();"));
+});
