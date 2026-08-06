@@ -25,6 +25,8 @@ jobs:
       - name: Reproduce three-way merge and package conflict stages
         shell: bash
         run: |
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
           git fetch origin feature/co-act-co-fund-create-v3-20260803
           set +e
           git merge --no-commit --no-ff origin/feature/co-act-co-fund-create-v3-20260803
@@ -42,9 +44,14 @@ jobs:
             cp "$path" "conflict-artifact/${safe}.markers" 2>/dev/null || true
           done < conflict-artifact/conflicts.txt
           printf '%s\n' "$merge_status" > conflict-artifact/merge-status.txt
-          test -s conflict-artifact/conflicts.txt
+          printf '%s\n' "$(git rev-parse HEAD)" > conflict-artifact/child-head.txt
+          printf '%s\n' "$(git rev-parse origin/feature/co-act-co-fund-create-v3-20260803)" > conflict-artifact/parent-head.txt
+          if [ "$merge_status" -eq 0 ]; then
+            git diff --cached --name-only > conflict-artifact/clean-merge-files.txt
+          fi
 
       - name: Upload exact conflict evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: parent-sync-conflicts-${{ github.run_id }}
