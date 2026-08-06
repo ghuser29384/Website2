@@ -1,6 +1,14 @@
 name: MPGF DAC pledge intent and canonical-ledger gates
 
 on:
+  push:
+    branches:
+      - fix/mpgf-dac-pledge-intent-ledger-20260806
+    paths:
+      - ".github/workflows/mpgf-dac-pledge-intent-ledger-gates.yml"
+      - "src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts"
+      - "supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql"
+      - "supabase/tests/mpgf_dac_pledge_intent_ledger.sql"
   pull_request:
     branches:
       - fix/mpgf-pool-publication-materialization-20260806
@@ -29,7 +37,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 70
     env:
-      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || 'db6140716e2a9f5b8b2564f2ee03ace44023784f' }}
       EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
       SITE_URL: https://www.moraltrade.org
@@ -116,7 +124,7 @@ jobs:
 
   isolated-qa:
     name: Atomic two-pledger, RLS, idempotency, and no-payment proof
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     needs: source-gates
     runs-on: ubuntu-24.04
     timeout-minutes: 35
