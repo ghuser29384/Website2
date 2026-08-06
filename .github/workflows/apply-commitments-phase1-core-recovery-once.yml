@@ -1,0 +1,104 @@
+name: Recover Commitments Phase 1 core once
+
+on:
+  push:
+    branches:
+      - feature/commitments-phase1-export-once-20260806
+    paths:
+      - .github/workflows/apply-commitments-phase1-core-recovery-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: recover-commitments-phase1-core-once
+  cancel-in-progress: false
+
+env:
+  SOURCE_BRANCH: feature/commitments-phase1-export-once-20260806
+  TARGET_BRANCH: feature/commitments-phase1-impact-accounting-20260806
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out controller source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_BRANCH }}
+          path: controller-source
+          fetch-depth: 1
+
+      - name: Check out target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          path: target
+          fetch-depth: 0
+
+      - name: Recover the reviewed archive from the invalid one-time controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload_file="$GITHUB_WORKSPACE/controller-source/.github/workflows/apply-commitments-phase1-core-once.yml"
+          archive_b64="$RUNNER_TEMP/phase1-core.tar.gz.b64"
+          archive="$RUNNER_TEMP/phase1-core.tar.gz"
+
+          awk '/^H4sI/{print; exit}' "$payload_file" > "$archive_b64"
+          test -s "$archive_b64"
+          base64 --decode "$archive_b64" > "$archive"
+          tar -tzf "$archive" > "$RUNNER_TEMP/phase1-core-members.txt"
+          grep -Fxq 'src/lib/impact-accounting.ts' "$RUNNER_TEMP/phase1-core-members.txt"
+          grep -Fxq 'src/lib/impact-accounting.test.ts' "$RUNNER_TEMP/phase1-core-members.txt"
+          grep -Fxq 'src/lib/impact-model-governance.ts' "$RUNNER_TEMP/phase1-core-members.txt"
+          grep -Fxq 'src/lib/impact-model-governance-server.ts' "$RUNNER_TEMP/phase1-core-members.txt"
+          grep -Fxq 'src/lib/impact-model-governance.test.ts' "$RUNNER_TEMP/phase1-core-members.txt"
+          test "$(wc -l < "$RUNNER_TEMP/phase1-core-members.txt")" -eq 5
+
+          tar -xzf "$archive" -C "$GITHUB_WORKSPACE/target"
+          cd "$GITHUB_WORKSPACE/target"
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+
+      - name: Install exact dependencies
+        working-directory: target
+        run: npm ci
+
+      - name: Run focused Phase 1 tests
+        working-directory: target
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/impact-accounting.test.ts \
+            src/lib/impact-model-governance.test.ts
+          npx eslint \
+            src/lib/impact-accounting.ts \
+            src/lib/impact-accounting.test.ts \
+            src/lib/impact-model-governance.ts \
+            src/lib/impact-model-governance-server.ts \
+            src/lib/impact-model-governance.test.ts
+          npx tsc --noEmit
+
+      - name: Commit and push exact target branch
+        working-directory: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            src/lib/impact-accounting.ts \
+            src/lib/impact-accounting.test.ts \
+            src/lib/impact-model-governance.ts \
+            src/lib/impact-model-governance-server.ts \
+            src/lib/impact-model-governance.test.ts
+          git diff --cached --check
+          git commit -m 'Add Commitments Phase 1 impact accounting core'
+          git push origin "HEAD:${TARGET_BRANCH}"
