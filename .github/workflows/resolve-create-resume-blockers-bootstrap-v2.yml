@@ -1,0 +1,89 @@
+name: Bootstrap robust Create blocker repair
+
+on:
+  push:
+    branches:
+      - feature/account-bound-participant-picker-20260805
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bootstrap-resolve-create-blockers-v2
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[resolve-create-blockers]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/account-bound-participant-picker-20260805
+          fetch-depth: 0
+
+      - name: Execute the structural patch with robust auth replacement
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          controller = Path(".github/workflows/resolve-create-resume-blockers.yml")
+          lines = controller.read_text(encoding="utf-8").splitlines()
+          start_line = next(i for i, line in enumerate(lines) if "python - <<'PY'" in line)
+          end_line = next(i for i in range(start_line + 1, len(lines)) if lines[i].strip() == "PY")
+          body = lines[start_line + 1:end_line]
+          nonempty = [line for line in body if line.strip()]
+          indent = min(len(line) - len(line.lstrip(" ")) for line in nonempty)
+          script = "\n".join(line[indent:] if line.strip() else "" for line in body) + "\n"
+
+          auth_start = "replace_once(\n    index,\n    '''        if (response.status === 401 && result?.requiresAuth) {"
+          auth_end = "\n\nreplace_count(\n    index,"
+          start = script.find(auth_start)
+          if start < 0:
+              raise SystemExit("Embedded auth replacement start marker is missing")
+          end = script.find(auth_end, start)
+          if end < 0:
+              raise SystemExit("Embedded auth replacement end marker is missing")
+          if script.find(auth_start, start + len(auth_start)) >= 0:
+              raise SystemExit("Embedded auth replacement start marker is not unique")
+
+          robust_auth = '''replace_between(
+              index,
+              '        if (response.status === 401 && result?.requiresAuth) {',
+              '\n        if (!response.ok || !result?.ok || !result.submission) {',
+              '''        if (response.status === 401 && result?.requiresAuth) {
+            if (!saveDraftForResume()) {
+              throw new Error("Sign-in is required, but Create could not preserve this draft. Keep this page open and try again.");
+            }
+            window.top.location.assign(result.loginUrl || "/login?returnTo=%2Ftrades%2Fnew%3Fresume%3Dcreate");
+            return;
+          }''',
+              "Create auth handoff",
+          )'''
+          script = script[:start] + robust_auth + script[end:]
+
+          patch_path = Path("/tmp/resolve-create-blockers.py")
+          patch_path.write_text(script, encoding="utf-8")
+          subprocess.run(["python", str(patch_path)], check=True)
+          PY
+
+      - name: Remove temporary controllers and commit durable repair
+        shell: bash
+        run: |
+          rm .github/workflows/resolve-create-resume-blockers.yml
+          rm .github/workflows/resolve-create-resume-blockers-bootstrap-v2.yml
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git add \
+            public/moral-trade-create/index.html \
+            src/lib/create-interface/group-contribution-client.ts \
+            src/lib/create-interface/group-contribution-client-stability.test.ts \
+            src/lib/create-interface/source-contract.test.ts \
+            .github/workflows/resolve-create-resume-blockers.yml \
+            .github/workflows/resolve-create-resume-blockers-bootstrap-v2.yml
+          git diff --cached --check
+          git commit -m "Resolve Create resume and field stability blockers [resolve-create-blockers]"
+          git push origin HEAD:feature/account-bound-participant-picker-20260805
