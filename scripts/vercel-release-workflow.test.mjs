@@ -95,7 +95,7 @@ test("preview browser failures are adjudicated against the exact merge base whil
   assert.match(source, /merge_base="\$\(git merge-base origin\/main HEAD\)"/);
   assert.match(source, /test "\$RENDERED_BASE_SHA" = "\$merge_base"/);
   assert.match(source, /git worktree add --detach "\$base_dir" "\$RENDERED_BASE_SHA"/);
-  assert.match(source, /candidate-only-regressions/);
+  assert.match(source, /candidate_only_regressions/);
   assert.match(source, /--repeat-each=5/);
   assert.match(source, /if \[\[ "\$RELEASE_TARGET" == 'production' \]\]; then\n\s+npm run test:e2e -- --reporter=line/);
 });
