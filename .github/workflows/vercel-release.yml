@@ -19,6 +19,11 @@ on:
         description: Full 40-character commit SHA proved by the repository gates
         required: true
         type: string
+      rendered_base_sha:
+        description: Exact immutable merge-base SHA for preview differential browser QA; leave blank for production
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -59,9 +64,16 @@ jobs:
           case "${{ inputs.target }}" in
             production)
               test "${{ inputs.ref }}" = 'main'
+              test -z "$RENDERED_BASE_SHA"
               ;;
             preview)
               test "${{ inputs.ref }}" = "$RELEASE_PREVIEW_BRANCH"
+              test "${#RENDERED_BASE_SHA}" -eq 40
+              git cat-file -e "$RENDERED_BASE_SHA^{commit}"
+              test "$RENDERED_BASE_SHA" != "$EXPECTED_SHA"
+              git merge-base --is-ancestor "$RENDERED_BASE_SHA" HEAD
+              merge_base="$(git merge-base origin/main HEAD)"
+              test "$RENDERED_BASE_SHA" = "$merge_base"
               ;;
             *)
               echo 'Unsupported release target.' >&2
@@ -72,6 +84,7 @@ jobs:
           git diff --check HEAD^
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
+          RENDERED_BASE_SHA: ${{ inputs.rendered_base_sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -102,16 +115,316 @@ jobs:
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
           SITE_URL: http://127.0.0.1:3210
           PLAYWRIGHT_HTML_OPEN: never
+          RELEASE_TARGET: ${{ inputs.target }}
+          RENDERED_BASE_SHA: ${{ inputs.rendered_base_sha }}
         run: |
           set -euo pipefail
+
+          evidence_dir="$GITHUB_WORKSPACE/rendered-gate-evidence"
+          rm -rf .next test-results playwright-report "$evidence_dir"
+          mkdir -p "$evidence_dir"
+          {
+            printf 'target=%s\n' "$RELEASE_TARGET"
+            printf 'candidate=%s\n' "$(git rev-parse HEAD)"
+            printf 'base=%s\n' "$RENDERED_BASE_SHA"
+          } > "$evidence_dir/gate-metadata.txt"
+
           # The complete browser suite is a source-rendered gate. The preceding build
           # deliberately proves production compilation separately; retaining its BUILD_ID
           # makes Playwright start a credential-free production server and invalidates
           # runtime-route tests. Remove only generated build output before browser QA.
-          rm -rf .next
           test ! -e .next/BUILD_ID
           npx playwright install --with-deps chromium
-          npm run test:e2e -- --reporter=line
+
+          if [[ "$RELEASE_TARGET" == 'production' ]]; then
+            npm run test:e2e -- --reporter=line
+            cat > "$evidence_dir/rendered-gate-summary.md" <<EOF
+          ### Rendered browser gate
+
+          - Mode: absolute production gate
+          - Candidate: \`$(git rev-parse HEAD)\`
+          - Result: complete suite passed
+          EOF
+            cat "$evidence_dir/rendered-gate-summary.md" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if command -v fuser >/dev/null 2>&1; then
+            fuser -k 3210/tcp || true
+          fi
+
+          set +e
+          npm run test:e2e -- --reporter=line 2>&1 | tee "$evidence_dir/candidate-full.log"
+          candidate_status=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$candidate_status" > "$evidence_dir/candidate-full.status"
+          if command -v fuser >/dev/null 2>&1; then
+            fuser -k 3210/tcp || true
+          fi
+          if [[ -d test-results ]]; then
+            mv test-results "$evidence_dir/candidate-full-test-results"
+          fi
+          if [[ -d playwright-report ]]; then
+            mv playwright-report "$evidence_dir/candidate-full-playwright-report"
+          fi
+
+          if [[ "$candidate_status" -eq 0 ]]; then
+            cat > "$evidence_dir/rendered-gate-summary.md" <<EOF
+          ### Rendered browser gate
+
+          - Mode: preview differential gate
+          - Candidate: \`$(git rev-parse HEAD)\`
+          - Exact base: \`$RENDERED_BASE_SHA\`
+          - Result: complete candidate suite passed; no baseline adjudication was needed
+          EOF
+            cat "$evidence_dir/rendered-gate-summary.md" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          base_dir="$RUNNER_TEMP/vercel-rendered-base-$GITHUB_RUN_ID"
+          rm -rf "$base_dir"
+          git worktree add --detach "$base_dir" "$RENDERED_BASE_SHA"
+          cleanup_base() {
+            if command -v fuser >/dev/null 2>&1; then
+              fuser -k 3210/tcp || true
+            fi
+            git worktree remove --force "$base_dir" >/dev/null 2>&1 || true
+          }
+          trap cleanup_base EXIT
+
+          (
+            set -euo pipefail
+            cd "$base_dir"
+            test "$(git rev-parse HEAD)" = "$RENDERED_BASE_SHA"
+            npm ci
+            rm -rf .next test-results playwright-report
+            if command -v fuser >/dev/null 2>&1; then
+              fuser -k 3210/tcp || true
+            fi
+            set +e
+            npm run test:e2e -- --reporter=line 2>&1 | tee "$evidence_dir/base-full.log"
+            base_status=${PIPESTATUS[0]}
+            set -e
+            printf '%s\n' "$base_status" > "$evidence_dir/base-full.status"
+            if command -v fuser >/dev/null 2>&1; then
+              fuser -k 3210/tcp || true
+            fi
+            if [[ -d test-results ]]; then
+              mv test-results "$evidence_dir/base-full-test-results"
+            fi
+            if [[ -d playwright-report ]]; then
+              mv playwright-report "$evidence_dir/base-full-playwright-report"
+            fi
+          )
+          base_status="$(cat "$evidence_dir/base-full.status")"
+
+          comparator="$RUNNER_TEMP/rendered-gate-comparator.py"
+          cat > "$comparator" <<'PY'
+          import argparse
+          import json
+          import re
+          from pathlib import Path
+
+          ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+          FAILURE_SUMMARY = re.compile(r"(?m)^\s*(\d+) failed\s*$")
+          PASS_SUMMARY = re.compile(r"(?m)^\s*(\d+) passed(?:\s+\([^\n]+\))?\s*$")
+          TEST = re.compile(r"(tests/[^\n]*?\.spec\.ts):(\d+):\d+\s+›\s+(.+?)\s*$")
+          TRAILING_RULE = re.compile(r"\s+[─━-]+\s*$")
+
+          def parse_log(path: Path, status: int):
+              text = ANSI.sub("", path.read_text(errors="replace"))
+              summaries = list(FAILURE_SUMMARY.finditer(text))
+              if status == 0:
+                  if summaries:
+                      raise SystemExit(f"{path} exited zero but reports failures")
+                  if not PASS_SUMMARY.search(text):
+                      raise SystemExit(f"{path} exited zero without a Playwright pass summary")
+                  return 0, {}
+              if not summaries:
+                  raise SystemExit(f"{path} failed without a parseable Playwright failure summary")
+              declared = int(summaries[-1].group(1))
+              tail = text[summaries[-1].end():]
+              failures = {}
+              for raw in tail.splitlines():
+                  match = TEST.search(raw)
+                  if not match:
+                      continue
+                  file_path = match.group(1)
+                  title = TRAILING_RULE.sub("", match.group(3)).strip()
+                  identity = f"{file_path} › {title}"
+                  failures[identity] = {"file": file_path, "title": title}
+              if declared and not failures:
+                  raise SystemExit(f"{path} declared {declared} failures but none were parsed")
+              return declared, failures
+
+          parser = argparse.ArgumentParser()
+          parser.add_argument("phase", choices=("initial", "focused"))
+          parser.add_argument("--candidate", type=Path, required=True)
+          parser.add_argument("--candidate-status", type=int, required=True)
+          parser.add_argument("--base", type=Path, required=True)
+          parser.add_argument("--base-status", type=int, required=True)
+          parser.add_argument("--output", type=Path, required=True)
+          args = parser.parse_args()
+          args.output.mkdir(parents=True, exist_ok=True)
+
+          candidate_declared, candidate = parse_log(args.candidate, args.candidate_status)
+          base_declared, base = parse_log(args.base, args.base_status)
+          candidate_only = sorted(set(candidate) - set(base))
+          base_only = sorted(set(base) - set(candidate))
+          shared = sorted(set(candidate) & set(base))
+
+          if args.phase == "initial":
+              payload = {
+                  "candidate_declared_failures": candidate_declared,
+                  "candidate_unique_failures": len(candidate),
+                  "base_declared_failures": base_declared,
+                  "base_unique_failures": len(base),
+                  "shared_failures": shared,
+                  "candidate_only_failures": candidate_only,
+                  "base_only_failures": base_only,
+              }
+              (args.output / "rendered-gate-comparison.json").write_text(
+                  json.dumps(payload, indent=2, sort_keys=True) + "\n"
+              )
+              files = sorted({candidate[item]["file"] for item in candidate_only})
+              titles = [candidate[item]["title"] for item in candidate_only]
+              (args.output / "candidate-only-files.txt").write_text(
+                  "".join(f"{item}\n" for item in files)
+              )
+              grep = "^(?:" + "|".join(re.escape(title) for title in titles) + ")$" if titles else ""
+              (args.output / "candidate-only-grep.txt").write_text(grep + ("\n" if grep else ""))
+              (args.output / "candidate-only-identities.txt").write_text(
+                  "".join(f"{item}\n" for item in candidate_only)
+              )
+              (args.output / "rendered-gate-summary.md").write_text(
+                  "### Rendered browser gate\n\n"
+                  "- Mode: preview differential gate\n"
+                  f"- Candidate full-suite failures: {candidate_declared}\n"
+                  f"- Exact-base full-suite failures: {base_declared}\n"
+                  f"- Shared unique failure identities: {len(shared)}\n"
+                  f"- Candidate-only identities requiring focused adjudication: {len(candidate_only)}\n"
+              )
+          else:
+              regressions = candidate_only
+              payload = {
+                  "candidate_focused_declared_failures": candidate_declared,
+                  "candidate_focused_unique_failures": sorted(candidate),
+                  "base_focused_declared_failures": base_declared,
+                  "base_focused_unique_failures": sorted(base),
+                  "reproduced_on_base": shared,
+                  "candidate_only_regressions": regressions,
+              }
+              (args.output / "rendered-gate-adjudication.json").write_text(
+                  json.dumps(payload, indent=2, sort_keys=True) + "\n"
+              )
+              (args.output / "regressions.txt").write_text(
+                  "".join(f"{item}\n" for item in regressions)
+              )
+              (args.output / "focused-summary.md").write_text(
+                  "### Focused rendered-failure adjudication\n\n"
+                  f"- Candidate focused failures: {candidate_declared}\n"
+                  f"- Exact-base focused failures: {base_declared}\n"
+                  f"- Failure identities reproduced on the exact base: {len(shared)}\n"
+                  f"- Persistent candidate-only regressions: {len(regressions)}\n"
+              )
+          PY
+
+          python3 "$comparator" initial \
+            --candidate "$evidence_dir/candidate-full.log" \
+            --candidate-status "$candidate_status" \
+            --base "$evidence_dir/base-full.log" \
+            --base-status "$base_status" \
+            --output "$evidence_dir"
+          cat "$evidence_dir/rendered-gate-summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ ! -s "$evidence_dir/candidate-only-files.txt" ]]; then
+            echo 'The candidate introduced no browser-failure identity beyond the exact base.'
+            exit 0
+          fi
+
+          mapfile -t focused_files < "$evidence_dir/candidate-only-files.txt"
+          focused_grep="$(cat "$evidence_dir/candidate-only-grep.txt")"
+          test "${#focused_files[@]}" -gt 0
+          test -n "$focused_grep"
+
+          rm -rf test-results playwright-report
+          if command -v fuser >/dev/null 2>&1; then
+            fuser -k 3210/tcp || true
+          fi
+          set +e
+          npx playwright test "${focused_files[@]}" \
+            --grep "$focused_grep" \
+            --repeat-each=5 \
+            --reporter=line 2>&1 | tee "$evidence_dir/candidate-focused.log"
+          candidate_focused_status=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$candidate_focused_status" > "$evidence_dir/candidate-focused.status"
+          if command -v fuser >/dev/null 2>&1; then
+            fuser -k 3210/tcp || true
+          fi
+          if [[ -d test-results ]]; then
+            mv test-results "$evidence_dir/candidate-focused-test-results"
+          fi
+          if [[ -d playwright-report ]]; then
+            mv playwright-report "$evidence_dir/candidate-focused-playwright-report"
+          fi
+
+          (
+            set -euo pipefail
+            cd "$base_dir"
+            rm -rf .next test-results playwright-report
+            if command -v fuser >/dev/null 2>&1; then
+              fuser -k 3210/tcp || true
+            fi
+            set +e
+            npx playwright test "${focused_files[@]}" \
+              --grep "$focused_grep" \
+              --repeat-each=5 \
+              --reporter=line 2>&1 | tee "$evidence_dir/base-focused.log"
+            base_focused_status=${PIPESTATUS[0]}
+            set -e
+            printf '%s\n' "$base_focused_status" > "$evidence_dir/base-focused.status"
+            if command -v fuser >/dev/null 2>&1; then
+              fuser -k 3210/tcp || true
+            fi
+            if [[ -d test-results ]]; then
+              mv test-results "$evidence_dir/base-focused-test-results"
+            fi
+            if [[ -d playwright-report ]]; then
+              mv playwright-report "$evidence_dir/base-focused-playwright-report"
+            fi
+          )
+          base_focused_status="$(cat "$evidence_dir/base-focused.status")"
+
+          python3 "$comparator" focused \
+            --candidate "$evidence_dir/candidate-focused.log" \
+            --candidate-status "$candidate_focused_status" \
+            --base "$evidence_dir/base-focused.log" \
+            --base-status "$base_focused_status" \
+            --output "$evidence_dir"
+          cat "$evidence_dir/focused-summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ -s "$evidence_dir/regressions.txt" ]]; then
+            echo 'Persistent candidate-only rendered regressions:' >&2
+            cat "$evidence_dir/regressions.txt" >&2
+            exit 1
+          fi
+
+          echo 'Every candidate-only full-suite failure either cleared or reproduced on the exact base.'
+
+      - name: Upload rendered-browser comparison evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-vercel-rendered-comparison-${{ github.run_id }}
+          path: |
+            rendered-gate-evidence/*.log
+            rendered-gate-evidence/*.status
+            rendered-gate-evidence/*.txt
+            rendered-gate-evidence/*.json
+            rendered-gate-evidence/*.md
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload rendered-browser diagnostics
         if: failure()
@@ -121,6 +434,8 @@ jobs:
           path: |
             test-results
             playwright-report
+            rendered-gate-evidence/*-test-results
+            rendered-gate-evidence/*-playwright-report
           if-no-files-found: warn
           retention-days: 14
 
@@ -237,6 +552,11 @@ jobs:
             echo "- Target: \`${{ inputs.target }}\`"
             echo "- Ref: \`${{ inputs.ref }}\`"
             echo "- Commit: \`${{ inputs.expected_sha }}\`"
+            if [[ '${{ inputs.target }}' == 'preview' ]]; then
+              echo "- Rendered gate: differential against exact merge base \`${{ inputs.rendered_base_sha }}\`"
+            else
+              echo '- Rendered gate: absolute complete suite'
+            fi
             echo "- Team: \`$VERCEL_ORG_ID\` (\`$VERCEL_SCOPE\`)"
             echo "- Project: \`$VERCEL_PROJECT_ID\`"
             echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
