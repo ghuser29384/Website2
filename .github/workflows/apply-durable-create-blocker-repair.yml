@@ -1,0 +1,51 @@
+name: Apply durable Create blocker repair
+
+on:
+  push:
+    branches:
+      - feature/account-bound-participant-picker-20260805
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-durable-create-blocker-repair
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[resolve-create-blockers]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/account-bound-participant-picker-20260805
+          fetch-depth: 0
+
+      - name: Apply fail-closed source repair
+        shell: bash
+        run: |
+          cat .github/patches/resolve-create-blockers-*.b64 | base64 --decode > /tmp/patch-create-blockers.py
+          python -m py_compile /tmp/patch-create-blockers.py
+          python /tmp/patch-create-blockers.py
+
+      - name: Remove temporary machinery and commit durable changes
+        shell: bash
+        run: |
+          rm .github/workflows/resolve-create-resume-blockers.yml
+          rm .github/workflows/apply-durable-create-blocker-repair.yml
+          rm .github/patches/resolve-create-blockers-*.b64
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git add \
+            public/moral-trade-create/index.html \
+            src/lib/create-interface/group-contribution-client.ts \
+            src/lib/create-interface/group-contribution-client-stability.test.ts \
+            src/lib/create-interface/source-contract.test.ts \
+            .github/workflows/resolve-create-resume-blockers.yml \
+            .github/workflows/apply-durable-create-blocker-repair.yml \
+            .github/patches
+          git diff --cached --check
+          git commit -m "Resolve Create resume and field stability blockers [resolve-create-blockers]"
+          git push origin HEAD:feature/account-bound-participant-picker-20260805
