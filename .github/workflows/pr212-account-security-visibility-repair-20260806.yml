@@ -47,30 +47,38 @@ jobs:
           page_path = Path('src/app/dashboard/page.tsx')
           page = page_path.read_text(encoding='utf-8')
           panel = '          <BackgroundAccountSecurityPanel initialSummary={accountSecuritySummary} />\n'
-
-          hidden = '''            </article>
-
-            <BackgroundAccountSecurityPanel initialSummary={accountSecuritySummary} />
-          </div>
-'''
+          hidden = '\n'.join([
+              '            </article>',
+              '',
+              '            <BackgroundAccountSecurityPanel initialSummary={accountSecuritySummary} />',
+              '          </div>',
+              '',
+          ])
+          hidden_replacement = '\n'.join([
+              '            </article>',
+              '          </div>',
+              '',
+          ])
           if page.count(hidden) != 1:
               raise SystemExit(f'Expected one hidden account-security placement, found {page.count(hidden)}.')
-          page = page.replace(hidden, '''            </article>
-          </div>
-''', 1)
+          page = page.replace(hidden, hidden_replacement, 1)
 
-          visible_anchor = '''          </nav>
-        </section>
-
-        {!supabaseReady ? (
-'''
-          visible_replacement = '''          </nav>
-
-          <BackgroundAccountSecurityPanel initialSummary={accountSecuritySummary} />
-        </section>
-
-        {!supabaseReady ? (
-'''
+          visible_anchor = '\n'.join([
+              '          </nav>',
+              '        </section>',
+              '',
+              '        {!supabaseReady ? (',
+              '',
+          ])
+          visible_replacement = '\n'.join([
+              '          </nav>',
+              '',
+              '          <BackgroundAccountSecurityPanel initialSummary={accountSecuritySummary} />',
+              '        </section>',
+              '',
+              '        {!supabaseReady ? (',
+              '',
+          ])
           if page.count(visible_anchor) != 1:
               raise SystemExit(f'Expected one visible account-surface insertion point, found {page.count(visible_anchor)}.')
           page = page.replace(visible_anchor, visible_replacement, 1)
@@ -78,39 +86,44 @@ jobs:
               raise SystemExit(f'Expected one account-security panel after repair, found {page.count(panel)}.')
           page_path.write_text(page, encoding='utf-8')
 
-          test_path = Path('src/institutional-dashboard-mfa-visibility.test.ts')
-          test_path.write_text('''import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import test from "node:test";
-
-const dashboard = readFileSync("src/app/dashboard/page.tsx", "utf8");
-const globalCss = readFileSync("src/app/globals.css", "utf8");
-const panel = "<BackgroundAccountSecurityPanel initialSummary={accountSecuritySummary} />";
-
-test("the browser MFA panel is rendered in the visible Account surface exactly once", () => {
-  const occurrences = dashboard.split(panel).length - 1;
-  assert.equal(occurrences, 1);
-
-  const visibleSurfaceStart = dashboard.indexOf(
-    '<section className="v72-private-surface v72-account-surface"',
-  );
-  const visibleSurfaceEnd = dashboard.indexOf("</section>", visibleSurfaceStart);
-  const panelIndex = dashboard.indexOf(panel);
-  const legacyNetworkingIndex = dashboard.indexOf('id="background-networking"');
-
-  assert.ok(visibleSurfaceStart >= 0, "Visible Account surface is missing.");
-  assert.ok(visibleSurfaceEnd > visibleSurfaceStart, "Visible Account surface does not close.");
-  assert.ok(panelIndex > visibleSurfaceStart && panelIndex < visibleSurfaceEnd);
-  assert.ok(panelIndex < legacyNetworkingIndex);
-});
-
-test("the regression contract detects why the legacy placement was inaccessible", () => {
-  assert.match(
-    globalCss,
-    /\.marketplace-app-shell\s+#main-content\s*>\s*\.section\s*\{\s*display:\s*none;/,
-  );
-});
-''', encoding='utf-8')
+          test_lines = [
+              'import assert from "node:assert/strict";',
+              'import { readFileSync } from "node:fs";',
+              'import test from "node:test";',
+              '',
+              'const dashboard = readFileSync("src/app/dashboard/page.tsx", "utf8");',
+              'const globalCss = readFileSync("src/app/globals.css", "utf8");',
+              'const panel = "<BackgroundAccountSecurityPanel initialSummary={accountSecuritySummary} />";',
+              '',
+              'test("the browser MFA panel is rendered in the visible Account surface exactly once", () => {',
+              '  const occurrences = dashboard.split(panel).length - 1;',
+              '  assert.equal(occurrences, 1);',
+              '',
+              '  const visibleSurfaceStart = dashboard.indexOf(',
+              '    \'<section className="v72-private-surface v72-account-surface"\',',
+              '  );',
+              '  const visibleSurfaceEnd = dashboard.indexOf("</section>", visibleSurfaceStart);',
+              '  const panelIndex = dashboard.indexOf(panel);',
+              '  const legacyNetworkingIndex = dashboard.indexOf(\'id="background-networking"\');',
+              '',
+              '  assert.ok(visibleSurfaceStart >= 0, "Visible Account surface is missing.");',
+              '  assert.ok(visibleSurfaceEnd > visibleSurfaceStart, "Visible Account surface does not close.");',
+              '  assert.ok(panelIndex > visibleSurfaceStart && panelIndex < visibleSurfaceEnd);',
+              '  assert.ok(panelIndex < legacyNetworkingIndex);',
+              '});',
+              '',
+              'test("the regression contract detects why the legacy placement was inaccessible", () => {',
+              '  assert.match(',
+              '    globalCss,',
+              '    /\\.marketplace-app-shell\\s+#main-content\\s*>\\s*\\.section\\s*\\{\\s*display:\\s*none;/',
+              '  );',
+              '});',
+              '',
+          ]
+          Path('src/institutional-dashboard-mfa-visibility.test.ts').write_text(
+              '\n'.join(test_lines),
+              encoding='utf-8',
+          )
           PY
           git diff --check
           mapfile -t changed < <(git diff --name-only)
