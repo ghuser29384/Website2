@@ -56,6 +56,11 @@ jobs:
           test "$actual_conflicts" = "$expected_conflicts"
 
           python .github/scripts/resolve-account-bound-parent-sync.py
+          git add \
+            public/moral-trade-create/index.html \
+            src/lib/create-interface/group-contribution-client.ts \
+            src/lib/create-interface/source-contract.test.ts \
+            tests/create-group-contribution-proposal.spec.ts
           test -z "$(git diff --name-only --diff-filter=U)"
 
           rm -f \
