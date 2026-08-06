@@ -14,6 +14,18 @@ alter table public.mpgf_pool_lifecycle_events
     )
   );
 
+-- Some isolated or partially migrated environments installed the visibility
+-- migration before the canonical public-goods campaign table existed. Restore
+-- the same proposal linkage and visibility columns here before publication.
+alter table public.mpgf_public_goods_campaigns
+  add column if not exists pool_proposal_id uuid
+    references public.mpgf_pool_proposals(id) on delete restrict,
+  add column if not exists threshold_visibility public.mpgf_threshold_visibility
+    not null default 'public_exact'::public.mpgf_threshold_visibility,
+  add column if not exists progress_visibility public.mpgf_progress_visibility
+    not null default 'exact_amount'::public.mpgf_progress_visibility,
+  add column if not exists first_accepted_pledge_at timestamptz;
+
 alter table public.mpgf_public_goods_campaigns
   drop constraint if exists mpgf_public_goods_campaigns_published_version_valid,
   drop constraint if exists mpgf_public_goods_campaigns_published_hash_valid,

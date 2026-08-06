@@ -20,6 +20,10 @@ function assertIncludesAll(source: string, fragments: string[]) {
 test("publication materializes only an approved frozen proposal into the canonical campaign table", () => {
   assertIncludesAll(migration, [
     "create or replace function public.mpgf_publish_pool_proposal(",
+    "add column if not exists pool_proposal_id uuid",
+    "add column if not exists threshold_visibility public.mpgf_threshold_visibility",
+    "add column if not exists progress_visibility public.mpgf_progress_visibility",
+    "add column if not exists first_accepted_pledge_at timestamptz",
     "proposal_row.status <> 'approved_as_candidate'",
     "proposal_row.approved_terms_version <> proposal_row.terms_version",
     "current_hash <> proposal_row.operative_terms_sha256",
