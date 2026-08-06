@@ -275,7 +275,7 @@ begin
 
   snapshot_json := public.mpgf_pool_proposal_terms_snapshot(p_proposal_id);
   terms_hash := public.mpgf_pool_proposal_terms_sha256(p_proposal_id);
-  create_terms_json := snapshot_json -> 'createPoolTerms';
+  create_terms_json := nullif(snapshot_json -> 'createPoolTerms', 'null'::jsonb);
 
   select terms_sha256 into existing_hash
   from public.mpgf_pool_proposal_versions
