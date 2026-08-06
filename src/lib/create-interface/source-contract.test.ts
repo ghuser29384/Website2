@@ -96,7 +96,16 @@ test("the browser waits for a durable server receipt and contains no simulated p
   assert.match(html, /fetch\("\/api\/create\/publish"/);
   assert.match(html, /credentials: "same-origin"/);
   assert.match(html, /renderSubmittedReceipt/);
-  assert.match(html, /sessionStorage\.setItem\(CREATE_DRAFT_STORAGE_KEY/);
+  assert.match(html, /function createDraftStorage\(\)/);
+  assert.match(html, /window\.parent\.sessionStorage/);
+  assert.match(html, /storage\.setItem\(CREATE_DRAFT_STORAGE_KEY/);
+  assert.match(html, /return storage\.getItem\(CREATE_DRAFT_STORAGE_KEY\) === serialized/);
+  assert.match(html, /if \(!saveDraftForResume\(\)\)/);
+  assert.match(html, /function clearDraftForResume\(\)/);
+  assert.doesNotMatch(
+    html,
+    /sessionStorage\.(?:setItem|getItem|removeItem)\(CREATE_DRAFT_STORAGE_KEY/,
+  );
   assert.doesNotMatch(html, /POOL-REV/);
   assert.doesNotMatch(html, /Prototype: public/);
   assert.doesNotMatch(html, /state\.publishedId\s*=.*Date\.now/);

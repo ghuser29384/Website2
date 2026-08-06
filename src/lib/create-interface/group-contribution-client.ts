@@ -27,6 +27,17 @@ const HOST_ATTRIBUTE = "data-mt-group-contribution-host";
 const OPTION_ATTRIBUTE = "data-mt-group-contribution-option";
 const MAX_LOCAL_DRAFTS = 50;
 const CREATE_FRAME_SELECTOR = "iframe[data-create-interface-frame='true']";
+const PANEL_SHAPE_FIELDS = new Set<string>([
+  "participantLimit",
+  "creatorParticipation",
+  "coActStructure",
+  "activationMode",
+  "performanceStartMode",
+  "rewardMode",
+  "redistributionEnabled",
+  "coFundDeadlineOutcome",
+  "recurringMode",
+]);
 const PROPOSAL_FLAGS = readGroupContributionProposalFlags({
   NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS:
     process.env.NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS,
@@ -1034,6 +1045,7 @@ function installShadowDelegatedListeners(entry: MountedOption): void {
     const control = formControlTarget(event.target);
     if (!control) return;
 
+    let panelShapeChanged = false;
     if (control.matches("[data-payment-method]")) {
       entry.state.paymentMethods = [
         ...entry.shadow.querySelectorAll<HTMLInputElement>("[data-payment-method]:checked"),
@@ -1043,18 +1055,21 @@ function installShadowDelegatedListeners(entry: MountedOption): void {
           value === "wallet" || value === "card-or-ach" || value === "escrow",
         );
     } else if (control.matches("[data-field]")) {
+      const field = control.dataset.field ?? "";
       updateStateFromControl(entry.state, control);
-      if (control.dataset.field === "creatorParticipation") {
+      if (field === "creatorParticipation") {
         applyCreatorParticipationChoice(entry);
       }
       entry.state = normalizeDraft(entry.state);
+      panelShapeChanged = PANEL_SHAPE_FIELDS.has(field);
     } else {
       return;
     }
 
     persistDrafts();
     writeProposalPayload();
-    scheduleMountedOptionRender(entry);
+    if (panelShapeChanged) scheduleMountedOptionRender(entry);
+    else updateValidationStatus(entry);
   });
 }
 
@@ -1358,8 +1373,26 @@ function installSubmitGuard(): void {
   );
 }
 
+function groupDraftStorage(): Storage | null {
+  try {
+    const storage = window.localStorage;
+    storage.getItem(STORAGE_KEY);
+    return storage;
+  } catch {
+    try {
+      const storage = createWindow().localStorage;
+      storage.getItem(STORAGE_KEY);
+      return storage;
+    } catch {
+      return null;
+    }
+  }
+}
+
 function persistDrafts(): void {
   try {
+    const storage = groupDraftStorage();
+    if (!storage) return;
     const drafts = [...mounted.values()]
       .slice(0, MAX_LOCAL_DRAFTS)
       .reduce<Record<string, GroupContributionDraftState>>((record, entry) => {
@@ -1367,7 +1400,7 @@ function persistDrafts(): void {
         return record;
       }, {});
     const value: StoredDrafts = { version: 1, drafts };
-    createWindow().localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    storage.setItem(STORAGE_KEY, JSON.stringify(value));
   } catch {
     // Local draft persistence is best effort. Proposal submission remains explicit.
   }
@@ -1375,7 +1408,9 @@ function persistDrafts(): void {
 
 function readStoredDrafts(): StoredDrafts {
   try {
-    const raw = createWindow().localStorage.getItem(STORAGE_KEY);
+    const storage = groupDraftStorage();
+    if (!storage) return { version: 1, drafts: {} };
+    const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return { version: 1, drafts: {} };
     const parsed = JSON.parse(raw) as Partial<StoredDrafts>;
     if (parsed.version !== 1 || !parsed.drafts || typeof parsed.drafts !== "object") {
