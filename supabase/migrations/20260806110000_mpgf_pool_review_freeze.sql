@@ -604,10 +604,10 @@ begin
     raise exception using errcode = '23514', message = 'Failure-bonus schedule approval is required before proposal approval.';
   end if;
 
-  select terms_sha256 into recorded_hash
-  from public.mpgf_pool_proposal_versions
-  where proposal_id = p_proposal_id
-    and terms_version = proposal_row.terms_version;
+  select proposal_version.terms_sha256 into recorded_hash
+  from public.mpgf_pool_proposal_versions as proposal_version
+  where proposal_version.proposal_id = p_proposal_id
+    and proposal_version.terms_version = proposal_row.terms_version;
   current_hash := public.mpgf_pool_proposal_terms_sha256(p_proposal_id);
 
   if recorded_hash is null or recorded_hash <> current_hash then
@@ -617,7 +617,7 @@ begin
   perform set_config('app.mpgf_pool_review_transition', p_proposal_id::text, true);
   update public.mpgf_pool_proposals
   set status = 'approved_as_candidate',
-      approved_terms_version = terms_version,
+      approved_terms_version = proposal_row.terms_version,
       operative_terms_sha256 = current_hash,
       terms_locked_at = timezone('utc', now()),
       reviewed_by = p_reviewer_id,
