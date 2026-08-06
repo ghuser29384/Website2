@@ -1,0 +1,117 @@
+name: Repair MPGF publication optional-ledger regression 2026-08-06
+
+on:
+  push:
+    branches:
+      - fix/mpgf-pool-publication-materialization-20260806
+    paths:
+      - ".github/workflows/repair-mpgf-publication-optional-ledgers-20260806.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-mpgf-publication-optional-ledgers-20260806
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_PARENT: 0c2256299f6e76f246c47eab676efc517cec3d8c
+      TARGET_BRANCH: fix/mpgf-pool-publication-materialization-20260806
+      CONTROLLER_PATH: .github/workflows/repair-mpgf-publication-optional-ledgers-20260806.yml
+
+    steps:
+      - name: Check out exact controller commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          ref: ${{ github.sha }}
+
+      - name: Make zero-payment proof tolerate absent later-tranche ledgers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          regression_path = Path("supabase/tests/mpgf_pool_publication_materialization.sql")
+          regression = regression_path.read_text()
+          old_declaration = """  create_status text;
+  forbidden_object_count integer;
+begin
+"""
+          new_declaration = """  create_status text;
+  forbidden_object_count integer := 0;
+  relation_name text;
+  relation_count integer;
+begin
+"""
+          if regression.count(old_declaration) != 1:
+              raise SystemExit(f"Expected one publication-proof declaration block, found {regression.count(old_declaration)}")
+          regression = regression.replace(old_declaration, new_declaration)
+
+          old_query = """  select
+    (select count(*) from public.mpgf_public_goods_pledges where campaign_id = campaign_row.id)
+    + (select count(*) from public.mpgf_pledge_intents where campaign_id = campaign_row.id)
+    + (select count(*) from public.mpgf_conditional_pledges where campaign_id = campaign_row.id)
+  into forbidden_object_count;
+"""
+          new_query = """  for relation_name in
+    select unnest(array[
+      'public.mpgf_public_goods_pledges',
+      'public.mpgf_pledge_intents',
+      'public.mpgf_conditional_pledges'
+    ])
+  loop
+    if to_regclass(relation_name) is not null then
+      execute format(
+        'select count(*) from %s where campaign_id = $1',
+        relation_name
+      )
+      into relation_count
+      using campaign_row.id;
+      forbidden_object_count := forbidden_object_count + relation_count;
+    end if;
+  end loop;
+"""
+          if regression.count(old_query) != 1:
+              raise SystemExit(f"Expected one fixed-ledger publication proof, found {regression.count(old_query)}")
+          regression_path.write_text(regression.replace(old_query, new_query))
+
+          contract_path = Path("src/lib/mpgf/pool-publication-materialization.test.ts")
+          contract = contract_path.read_text()
+          anchor = '    "Publication unexpectedly created a pledge or payment intent.",\n'
+          assertions = (
+              '    "to_regclass(relation_name) is not null",\n'
+              '    "public.mpgf_pledge_intents",\n'
+              '    "public.mpgf_conditional_pledges",\n'
+          )
+          if contract.count(anchor) != 1:
+              raise SystemExit(f"Expected one no-payment contract anchor, found {contract.count(anchor)}")
+          contract_path.write_text(contract.replace(anchor, anchor + assertions))
+          PY
+
+          git diff --check
+          git diff -- \
+            supabase/tests/mpgf_pool_publication_materialization.sql \
+            src/lib/mpgf/pool-publication-materialization.test.ts
+
+      - name: Commit and push non-workflow repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            supabase/tests/mpgf_pool_publication_materialization.sql \
+            src/lib/mpgf/pool-publication-materialization.test.ts
+          git diff --cached --check
+          git commit -m "Handle optional pledge ledgers in publication QA"
+          git push origin "HEAD:$TARGET_BRANCH"
