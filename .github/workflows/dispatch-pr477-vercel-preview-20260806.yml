@@ -1,4 +1,4 @@
-name: Dispatch PR 477 exact-head Vercel preview
+name: Diagnose PR 477 gated preview failure
 
 on:
   push:
@@ -8,42 +8,40 @@ on:
       - .github/workflows/dispatch-pr477-vercel-preview-20260806.yml
 
 permissions:
-  actions: write
+  actions: read
   contents: read
 
 concurrency:
-  group: dispatch-pr477-vercel-preview-20260806
+  group: diagnose-pr477-vercel-preview-20260806
   cancel-in-progress: false
 
 jobs:
-  dispatch:
+  diagnose:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
+    env:
+      FAILED_RUN_ID: '31109928406'
     steps:
-      - name: Guard immutable release inputs
+      - name: Guard diagnostic inputs
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test '${{ github.ref_name }}' = 'ops/dispatch-pr477-vercel-preview-20260806'
           test '${{ github.actor }}' != 'github-actions[bot]'
+          test "$FAILED_RUN_ID" = '31109928406'
 
-      - name: Dispatch the gated exact-head preview release
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ github.token }}
-          script: |
-            const expectedSha = '25ab8a778e5c2d808ab66436059839680dfe67a8';
-            const releaseRef = 'release/vercel-preview';
-            await github.rest.actions.createWorkflowDispatch({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'vercel-release.yml',
-              ref: releaseRef,
-              inputs: {
-                target: 'preview',
-                ref: releaseRef,
-                expected_sha: expectedSha,
-              },
-            });
-            core.notice(`Dispatched gated preview for ${expectedSha}`);
+      - name: Print exact failed-run metadata and log excerpt
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          echo '--- run metadata ---'
+          gh run view "$FAILED_RUN_ID" --repo "$GITHUB_REPOSITORY" --json databaseId,name,displayTitle,headBranch,headSha,status,conclusion,event,createdAt,updatedAt,url,jobs
+          echo '--- failed log ---'
+          gh run view "$FAILED_RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > failed.log
+          echo '--- salient failure lines ---'
+          grep -nE '(^|[^[:alpha:]])(Error:|FAIL|failed|failure|Timeout|timed out|expect\(|Process completed|browser|playwright|vercel|Deployment|Missing|SUPABASE|AssertionError|Traceback)' failed.log | tail -n 400 || true
+          echo '--- final 500 lines ---'
+          tail -n 500 failed.log
