@@ -67,7 +67,8 @@ test("publication does not create a pledge or payment object", () => {
 
 test("transactional regression covers authorization, malformed state, visibility, idempotency, immutability, and no payments", () => {
   assertIncludesAll(regression, [
-    "has_function_privilege('authenticated'",
+    "has_function_privilege(",
+    "'authenticated',",
     "Unauthorized publisher unexpectedly succeeded.",
     "Draft proposal unexpectedly published.",
     "Incomplete proposal unexpectedly published.",
