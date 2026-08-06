@@ -1,0 +1,467 @@
+name: PR 477 exact canonical preview v4
+
+on:
+  push:
+    branches:
+      - ops/pr477-exact-preview-v4-20260806
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: pr477-exact-canonical-preview-v4
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: fbf414bafefc62fc412b1bd188711a214c0dec10
+  MAIN_SHA: 8bdc10338121f173a300436a692c04808d56966b
+  PRODUCT_PR: "477"
+  RELEASE_REF: release/vercel-preview
+  V2_RUN_ID: "31105775687"
+  V2_ARTIFACT: pr477-exact-canonical-preview-v2-31105775687
+  V3_RUN_ID: "31107940652"
+  V3_ARTIFACT: pr477-exact-canonical-preview-v3-31107940652
+  STATUS_CONTEXT: QA / PR 477 exact canonical preview
+  EVIDENCE_DIR: /tmp/pr477-exact-canonical-preview-v4
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_SCOPE: ellen-s
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Mark exact preview verification pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Running exact affected-flow stress and canonical Preview deployment" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Check out immutable product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Guard PR, main, release ref, and exact candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .draft <<<"$product_pr")" = 'true'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .head.ref <<<"$product_pr")" = 'feature/co-act-co-fund-create-v3-20260803'
+          test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
+
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/$RELEASE_REF | awk '{print $1}')" = "$CANDIDATE_SHA"
+          git merge-base --is-ancestor "$MAIN_SHA" "$CANDIDATE_SHA"
+          git diff --check "$MAIN_SHA"..."$CANDIDATE_SHA"
+
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
+          printf '%s\n' "$MAIN_SHA" > "$EVIDENCE_DIR/main-sha.txt"
+          git diff --name-only "$MAIN_SHA"..."$CANDIDATE_SHA" > "$EVIDENCE_DIR/changed-files.txt"
+          git diff --stat "$MAIN_SHA"..."$CANDIDATE_SHA" > "$EVIDENCE_DIR/diff-stat.txt"
+
+      - name: Download immutable v2 evidence
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ghuser29384/Website2
+          run-id: ${{ env.V2_RUN_ID }}
+          name: ${{ env.V2_ARTIFACT }}
+          path: /tmp/pr477-v2-evidence
+
+      - name: Download immutable v3 evidence
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          repository: ghuser29384/Website2
+          run-id: ${{ env.V3_RUN_ID }}
+          name: ${{ env.V3_ARTIFACT }}
+          path: /tmp/pr477-v3-evidence
+
+      - name: Adjudicate prior exact-head evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const v2 = '/tmp/pr477-v2-evidence';
+          const v3 = '/tmp/pr477-v3-evidence';
+          const out = process.env.EVIDENCE_DIR;
+          const candidate = process.env.CANDIDATE_SHA;
+
+          for (const dir of [v2, v3]) {
+            const recorded = fs.readFileSync(path.join(dir, 'candidate-sha.txt'), 'utf8').trim();
+            if (recorded !== candidate) throw new Error(`${dir} records ${recorded}, expected ${candidate}`);
+          }
+
+          const v2Summary = JSON.parse(fs.readFileSync(path.join(v2, 'candidate-summary.json'), 'utf8'));
+          const v2Differential = JSON.parse(fs.readFileSync(path.join(v2, 'browser-differential.json'), 'utf8'));
+          const v3Affected = fs.readFileSync(path.join(v3, 'affected-production-rendered.log'), 'utf8');
+          const v3Stress = fs.readFileSync(path.join(v3, 'transient-stress.log'), 'utf8');
+
+          if (v2Summary.failureCount !== 86 || Number(v2Summary.stats?.expected ?? 0) !== 102) {
+            throw new Error(`Unexpected v2 complete-suite result: ${JSON.stringify(v2Summary)}`);
+          }
+          if (!v3Affected.includes('22 passed')) {
+            throw new Error('v3 did not record 22/22 affected production-server passes.');
+          }
+          if (!v3Stress.includes('keeps real iframe group-contribution controls inside a narrow mobile viewport')) {
+            throw new Error('v3 stress evidence omitted the Co-Fund mobile test.');
+          }
+          if (!v3Stress.includes('signed-out /cart resolves away from the loading shell')) {
+            throw new Error('v3 stress evidence omitted the exact cart test.');
+          }
+          if (!v3Stress.includes('signed-out /dashboard resolves away from the loading shell')) {
+            throw new Error('v3 selector-overreach evidence did not identify the unrelated dashboard test.');
+          }
+          if (!v3Stress.includes('Received string:') || !v3Stress.includes('Welcome back')) {
+            throw new Error('v3 unrelated dashboard failure no longer has the stale heading-copy signature.');
+          }
+
+          const expectedDifferential = [
+            'create-group-contribution-proposal.spec.ts › create-group-contribution-proposal.spec.ts › keeps real iframe group-contribution controls inside a narrow mobile viewport',
+            'public-routes.spec.ts › public-routes.spec.ts › signed-out /cart resolves away from the loading shell',
+          ].sort();
+          const actualDifferential = [...v2Differential.newFailures].sort();
+          if (JSON.stringify(actualDifferential) !== JSON.stringify(expectedDifferential)) {
+            throw new Error(`Unexpected v2 differential: ${JSON.stringify(actualDifferential)}`);
+          }
+
+          const adjudication = {
+            candidateSha: candidate,
+            v2RunId: process.env.V2_RUN_ID,
+            v3RunId: process.env.V3_RUN_ID,
+            completeSuitePassed: 102,
+            completeSuiteFailures: 86,
+            immutableBaselineMaximumFailures: 86,
+            affectedProductionServerPassesInV2: 22,
+            affectedProductionServerPassesInV3: 22,
+            exactTestsRequiringFreshStress: actualDifferential,
+            v3FailureCause: 'line selector also selected unrelated dashboard test with stale Log in versus Welcome back assertion',
+            status: 'ready_for_exact_title_stress',
+          };
+          fs.writeFileSync(path.join(out, 'prior-evidence-adjudication.json'), `${JSON.stringify(adjudication, null, 2)}\n`);
+          fs.copyFileSync(path.join(v2, 'browser-differential.json'), path.join(out, 'v2-browser-differential.json'));
+          fs.copyFileSync(path.join(v2, 'candidate-summary.json'), path.join(out, 'v2-candidate-summary.json'));
+          console.log(JSON.stringify(adjudication, null, 2));
+          NODE
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+
+      - name: Build exact production candidate
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/next-build.log"
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Re-run complete affected production-server gate
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+          CREATE_ROUTE_CAPTURE: "1"
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            tests/complete-profile-review.spec.ts \
+            tests/create-entry-routing.spec.ts \
+            tests/create-common-ground-pool.spec.ts \
+            tests/create-group-contribution-proposal.spec.ts \
+            tests/create-route-workbench.spec.ts \
+            --workers=1 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/affected-production-rendered.log"
+          grep -Eq '22 passed' "$EVIDENCE_DIR/affected-production-rendered.log"
+
+      - name: Stress exact Co-Fund mobile test by title
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+          CREATE_ROUTE_CAPTURE: "1"
+        run: |
+          set -euo pipefail
+          npx playwright test tests/create-group-contribution-proposal.spec.ts \
+            --grep 'keeps real iframe group-contribution controls inside a narrow mobile viewport' \
+            --repeat-each=10 --workers=4 --retries=0 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/cofund-mobile-stress.log"
+          grep -Eq 'Running 10 tests' "$EVIDENCE_DIR/cofund-mobile-stress.log"
+          grep -Eq '10 passed' "$EVIDENCE_DIR/cofund-mobile-stress.log"
+
+      - name: Stress exact signed-out cart test by title
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+        run: |
+          set -euo pipefail
+          npx playwright test tests/public-routes.spec.ts \
+            --grep 'signed-out /cart resolves away from the loading shell' \
+            --repeat-each=10 --workers=4 --retries=0 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/cart-stress.log"
+          grep -Eq 'Running 10 tests' "$EVIDENCE_DIR/cart-stress.log"
+          grep -Eq '10 passed' "$EVIDENCE_DIR/cart-stress.log"
+          if grep -q 'signed-out /dashboard' "$EVIDENCE_DIR/cart-stress.log"; then
+            echo 'Exact-title selector unexpectedly included dashboard.' >&2
+            exit 1
+          fi
+
+          cat > "$EVIDENCE_DIR/transient-adjudication.json" <<'JSON'
+          {
+            "coFundMobileRepeats": 10,
+            "coFundMobilePasses": 10,
+            "cartRepeats": 10,
+            "cartPasses": 10,
+            "failures": 0,
+            "classification": "non-reproducible complete-suite transients",
+            "releaseImpact": "no persistent PR 477 regression"
+          }
+          JSON
+
+      - name: Restore immutable candidate before Vercel build
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --force "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          rm -rf .next test-results playwright-report
+          git diff --exit-code
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Link only canonical Vercel project
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull exact Preview environment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes \
+            --environment=preview \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            2>&1 | tee "$EVIDENCE_DIR/vercel-pull.log"
+
+      - name: Build exact prebuilt Vercel artifact
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_GIT_COMMIT_SHA: ${{ env.CANDIDATE_SHA }}
+          VERCEL_GIT_COMMIT_REF: feature/co-act-co-fund-create-v3-20260803
+          VERCEL_GIT_REPO_SLUG: Website2
+          VERCEL_GIT_REPO_OWNER: ghuser29384
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            2>&1 | tee "$EVIDENCE_DIR/vercel-build.log"
+
+      - name: Upload exact prebuilt artifact once
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_GIT_COMMIT_SHA: ${{ env.CANDIDATE_SHA }}
+          VERCEL_GIT_COMMIT_REF: feature/co-act-co-fund-create-v3-20260803
+          VERCEL_GIT_REPO_SLUG: Website2
+          VERCEL_GIT_REPO_OWNER: ghuser29384
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+            --prebuilt \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            --meta "githubCommitSha=$CANDIDATE_SHA" \
+            --meta 'githubCommitRef=feature/co-act-co-fund-create-v3-20260803' \
+            --meta 'githubCommitRepo=Website2' \
+            --meta 'githubCommitOrg=ghuser29384' \
+            --meta "moralTradeCandidateSha=$CANDIDATE_SHA")"
+          deployment_url="$(printf '%s\n' "$deployment_url" | tail -n 1 | tr -d '\r')"
+          test -n "$deployment_url"
+          case "$deployment_url" in
+            https://*-ellen-s.vercel.app) ;;
+            *) echo "Unexpected deployment URL: $deployment_url" >&2; exit 1 ;;
+          esac
+          printf '%s\n' "$deployment_url" > "$EVIDENCE_DIR/deployment-url.txt"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          printf 'Deployment URL: %s\n' "$deployment_url"
+
+      - name: Verify canonical project, exact metadata, Preview target, and READY state
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          deployment_host="${DEPLOYMENT_URL#https://}"
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$DEPLOYMENT_URL" \
+            --wait \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            --no-color \
+            2>&1 | tee "$EVIDENCE_DIR/vercel-inspect.log"
+
+          curl --silent --show-error --fail \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_host?teamId=$VERCEL_ORG_ID" \
+            > "$EVIDENCE_DIR/deployment.json"
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          deployment = json.loads(Path(os.environ['EVIDENCE_DIR'], 'deployment.json').read_text())
+          project = deployment.get('project') or {}
+          meta = deployment.get('meta') or {}
+          assert deployment.get('readyState') == 'READY', deployment.get('readyState')
+          assert deployment.get('name') == 'moraltrade-site', deployment.get('name')
+          assert (project.get('id') or deployment.get('projectId')) == os.environ['VERCEL_PROJECT_ID']
+          assert deployment.get('target') != 'production', deployment.get('target')
+          assert meta.get('moralTradeCandidateSha') == os.environ['CANDIDATE_SHA'], meta
+          assert meta.get('githubCommitSha') == os.environ['CANDIDATE_SHA'], meta
+          assert meta.get('githubCommitRepo') == 'Website2', meta
+          assert meta.get('githubCommitOrg') == 'ghuser29384', meta
+          PY
+
+          deployment_id="$(jq -r .id "$EVIDENCE_DIR/deployment.json")"
+          test -n "$deployment_id"
+          printf '%s\n' "$deployment_id" > "$EVIDENCE_DIR/deployment-id.txt"
+
+          {
+            echo '## PR 477 exact canonical Preview'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo '- Affected production-server gate: `22/22` passed for the third exact run'
+            echo '- Exact Co-Fund mobile stress: `10/10` passed'
+            echo '- Exact signed-out cart stress: `10/10` passed'
+            echo "- Deployment ID: \`$deployment_id\`"
+            echo "- Deployment: $DEPLOYMENT_URL"
+            echo '- Canonical project: verified'
+            echo '- Exact candidate metadata: verified'
+            echo '- Target: Preview'
+            echo '- State: READY'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr477-exact-canonical-preview-v4-${{ github.run_id }}
+          path: /tmp/pr477-exact-canonical-preview-v4
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish PR evidence and exact status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="Exact affected gates and stress passed; canonical Preview is READY"
+            deployment_id="$(cat "$EVIDENCE_DIR/deployment-id.txt")"
+            body=$(cat <<EOF
+          Exact-head canonical Preview deployment passed for PR #477.
+
+          - Candidate: \`$CANDIDATE_SHA\`
+          - GitHub Actions run: $run_url
+          - Prior immutable complete-suite evidence: run \`$V2_RUN_ID\`
+          - Exact affected production-server browser gate: 22/22 passed for the third exact run
+          - Co-Fund narrow-mobile test: 10/10 exact-title stress repetitions passed
+          - Signed-out cart test: 10/10 exact-title stress repetitions passed
+          - Canonical Vercel deployment: \`$deployment_id\`
+          - Preview: $DEPLOYMENT_URL
+          - Canonical team/project, exact candidate metadata, Preview target, and READY state: verified
+
+          No production merge, production alias change, production database mutation, participant enrollment, invitation, payment authorization, capture, or settlement occurred.
+          EOF
+          )
+          else
+            state=failure
+            description="PR 477 exact canonical Preview verification failed"
+            body=$(cat <<EOF
+          Exact-head canonical Preview verification failed for PR #477.
+
+          - Candidate: \`$CANDIDATE_SHA\`
+          - GitHub Actions run: $run_url
+          - Evidence artifact: \`pr477-exact-canonical-preview-v4-${GITHUB_RUN_ID}\`
+
+          No production merge, production alias change, production database mutation, participant enrollment, invitation, payment authorization, capture, or settlement occurred.
+          EOF
+          )
+          fi
+
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="$run_url"
+          gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --body "$body"
