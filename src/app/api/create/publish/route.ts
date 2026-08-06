@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getViewer } from "@/lib/app-data";
 import { persistCreateSubmission } from "@/lib/create-interface/persistence";
 import { validateCreatePayload } from "@/lib/create-interface/validation";
+import { assessHarmfulOffer } from "@/lib/moral-trade/harmful-offer-assessment";
+import { presentHarmfulOfferAssessment } from "@/lib/moral-trade/harmful-offer-presentation";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -46,16 +48,52 @@ export async function POST(request: NextRequest) {
 
   try {
     const validated = validateCreatePayload(raw);
+    const assessment = await assessHarmfulOffer(validated.source, {
+      trigger: "publication",
+      includeModel: true,
+    });
     const supabase = createServiceClient();
-    const submission = await persistCreateSubmission({
+    const persisted = await persistCreateSubmission({
       supabase,
       actorId: viewer.authUser.id,
       validated,
+      assessment,
       origin: request.nextUrl.origin,
     });
-    return response({ ok: true, submission }, 201);
+    const harmAssessment = presentHarmfulOfferAssessment(
+      assessment,
+      persisted.assessmentId,
+    );
+
+    if (persisted.outcome === "blocked") {
+      console.warn("[create-interface] submission blocked by hard policy", {
+        assessmentId: persisted.assessmentId,
+        categories: harmAssessment.categories,
+        userId: viewer.authUser.id,
+      });
+      return response(
+        {
+          ok: false,
+          blocked: true,
+          message: harmAssessment.message,
+          harmAssessment,
+        },
+        422,
+      );
+    }
+
+    return response(
+      {
+        ok: true,
+        submission: persisted.submission,
+        harmAssessment,
+      },
+      201,
+    );
   } catch (error) {
-    const message = error instanceof Error ? error.message : "The Create submission could not be saved.";
+    const message = error instanceof Error
+      ? error.message
+      : "The Create submission could not be saved.";
     const status = /required|invalid|must|unsupported|exceeds|cannot|between|future|formula|threshold/i.test(message)
       ? 400
       : 500;
