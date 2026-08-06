@@ -1,4 +1,4 @@
-name: Diagnose PR 477 gated preview failure
+name: Compare PR 477 rendered gate with exact base
 
 on:
   push:
@@ -8,40 +8,71 @@ on:
       - .github/workflows/dispatch-pr477-vercel-preview-20260806.yml
 
 permissions:
-  actions: read
   contents: read
 
 concurrency:
-  group: diagnose-pr477-vercel-preview-20260806
+  group: compare-pr477-rendered-base-20260806
   cancel-in-progress: false
 
 jobs:
-  diagnose:
+  base-rendered:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 45
     env:
-      FAILED_RUN_ID: '31109928406'
+      BASE_SHA: '8bdc10338121f173a300436a692c04808d56966b'
     steps:
-      - name: Guard diagnostic inputs
+      - name: Guard exact diagnostic source
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test '${{ github.ref_name }}' = 'ops/dispatch-pr477-vercel-preview-20260806'
           test '${{ github.actor }}' != 'github-actions[bot]'
-          test "$FAILED_RUN_ID" = '31109928406'
+          test "$BASE_SHA" = '8bdc10338121f173a300436a692c04808d56966b'
 
-      - name: Print exact failed-run metadata and log excerpt
+      - name: Check out exact PR base
+        uses: actions/checkout@v4
+        with:
+          ref: 8bdc10338121f173a300436a692c04808d56966b
+          fetch-depth: 0
+
+      - name: Prove immutable base
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          echo '--- run metadata ---'
-          gh run view "$FAILED_RUN_ID" --repo "$GITHUB_REPOSITORY" --json databaseId,name,displayTitle,headBranch,headSha,status,conclusion,event,createdAt,updatedAt,url,jobs
-          echo '--- failed log ---'
-          gh run view "$FAILED_RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > failed.log
-          echo '--- salient failure lines ---'
-          grep -nE '(^|[^[:alpha:]])(Error:|FAIL|failed|failure|Timeout|timed out|expect\(|Process completed|browser|playwright|vercel|Deployment|Missing|SUPABASE|AssertionError|Traceback)' failed.log | tail -n 400 || true
-          echo '--- final 500 lines ---'
-          tail -n 500 failed.log
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the exact release browser gate on the base
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -o pipefail
+          rm -rf .next test-results playwright-report
+          npm run test:e2e -- --reporter=line 2>&1 | tee base-e2e.log
+
+      - name: Upload exact base diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr477-exact-base-rendered-${{ github.run_id }}
+          path: |
+            base-e2e.log
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
