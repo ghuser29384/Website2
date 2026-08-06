@@ -74,6 +74,55 @@ insert into public.mpgf_pool_proposals (
   false
 );
 
+-- Direct MPGF proposal path: no linked Moral Trade Create terms.
+insert into public.mpgf_pool_proposals (
+  id, proposer_id, title, problem, intervention, moral_public_good_rationale,
+  proposed_recipient_name, summary, cause_area, requested_maximum_funding_cents,
+  minimum_viable_funding_cents, outcome_units_summary, expected_effect_vs_funding,
+  timeline, milestones_json, risks_json, misuse_pathways, implementing_team_json,
+  status, submitted_at, public_goods_destination_type, public_goods_destination_ref,
+  public_goods_threshold_amount_cents, public_goods_threshold_supporters,
+  public_goods_deadline_at, public_goods_verification_method, public_goods_baseline_rule,
+  public_goods_exit_rule, public_goods_base_match_ratio, public_goods_qf_enabled,
+  public_goods_qf_cap_multiple, public_goods_payout_method,
+  public_goods_failure_bonus_enabled, public_goods_success_premium_included_in_net_threshold
+) values (
+  '7d666666-6666-4666-8666-666666666666',
+  '7a111111-1111-4111-8111-111111111111',
+  'QA direct pool review and freeze',
+  'Synthetic direct QA problem',
+  'Synthetic direct QA intervention',
+  'Synthetic direct QA public-good rationale',
+  'Synthetic direct QA recipient',
+  'Synthetic direct QA summary',
+  'QA',
+  100000,
+  50000,
+  'One verified direct QA outcome',
+  'Synthetic direct QA effect',
+  'Synthetic direct QA timeline',
+  '[]'::jsonb,
+  '[]'::jsonb,
+  'None; transaction rolls back',
+  '{"summary":"Synthetic direct QA team"}'::jsonb,
+  'submitted',
+  timezone('utc', now()),
+  'external_charity',
+  'qa-direct-recipient-reference',
+  50000,
+  2,
+  timezone('utc', now()) + interval '30 days',
+  'Synthetic direct QA evidence',
+  'No charge without success',
+  'Pledges expire on lapse',
+  0,
+  false,
+  1.5,
+  'external_handoff',
+  false,
+  false
+);
+
 insert into public.moral_trade_create_submissions (
   id, owner_profile_id, submission_key, interface_version, submission_kind,
   cause_area, request_kind, requested_action, offered_terms_json, pool_terms_json,
@@ -201,6 +250,42 @@ begin
   exception
     when insufficient_privilege then null;
   end;
+end;
+$test$;
+
+-- A supported direct MPGF proposal without linked Create terms can still be versioned,
+-- independently reviewed, and frozen. Its optional Create snapshot must be SQL null,
+-- not JSON null.
+select * from public.mpgf_begin_pool_proposal_review(
+  '7d666666-6666-4666-8666-666666666666',
+  '7b222222-2222-4222-8222-222222222222',
+  'QA direct proposal review started'
+);
+select * from public.mpgf_approve_and_freeze_pool_proposal(
+  '7d666666-6666-4666-8666-666666666666',
+  '7b222222-2222-4222-8222-222222222222',
+  'QA direct proposal terms approved and frozen'
+);
+
+do $test$
+declare
+  direct_status text;
+  direct_create_terms jsonb;
+begin
+  select proposal.status, version.create_pool_terms_json
+  into direct_status, direct_create_terms
+  from public.mpgf_pool_proposals as proposal
+  join public.mpgf_pool_proposal_versions as version
+    on version.proposal_id = proposal.id
+   and version.terms_version = proposal.approved_terms_version
+  where proposal.id = '7d666666-6666-4666-8666-666666666666';
+
+  if direct_status <> 'approved_as_candidate' then
+    raise exception 'Direct proposal did not reach approved frozen status.';
+  end if;
+  if direct_create_terms is not null then
+    raise exception 'Direct proposal version stored JSON null instead of SQL null.';
+  end if;
 end;
 $test$;
 
