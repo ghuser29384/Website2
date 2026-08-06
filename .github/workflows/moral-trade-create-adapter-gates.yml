@@ -3,6 +3,7 @@ name: Moral Trade Create adapter gates
 on:
   pull_request:
     paths:
+      - ".env.example"
       - ".github/workflows/moral-trade-create-adapter-gates.yml"
       - "docs/moral-trade-create-interface-adapter.md"
       - "public/moral-trade-create/**"
@@ -11,10 +12,13 @@ on:
       - "src/app/trades/new/page.tsx"
       - "src/components/create/**"
       - "src/lib/create-interface/**"
+      - "src/lib/moral-trade/harmful-offer-*"
       - "src/lib/live-discover-navigation.test.ts"
       - "src/lib/public-route-smoke.test.ts"
       - "supabase/migrations/2026072704*.sql"
+      - "supabase/migrations/2026080616*.sql"
       - "supabase/tests/moral_trade_create_interface_adapter.sql"
+      - "supabase/tests/moral_trade_harmful_offer_assessment.sql"
   push:
     branches:
       - feature/moral-trade-create-interface-adapter-20260727
@@ -56,6 +60,11 @@ jobs:
           if (!match) throw new Error('Create interface script was not found.');
           new Function(match[1]);
           NODE
+
+      - name: Run focused harmful-offer assessment tests
+        run: >-
+          node --import tsx --test
+          src/lib/moral-trade/harmful-offer-assessment.test.ts
 
       - name: Run focused Create adapter and Discover loader tests
         run: >-
@@ -210,11 +219,33 @@ jobs:
             --file supabase/tests/moral_trade_create_interface_adapter.sql \
             | tee qa-create-adapter-sql.log
 
+      - name: Run transactional harmful-offer migrations and SQL regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf 'begin;\n'
+            sed \
+              -e '/^[[:space:]]*begin;[[:space:]]*$/d' \
+              -e '/^[[:space:]]*commit;[[:space:]]*$/d' \
+              supabase/migrations/20260806160000_moral_trade_harmful_offer_assessments.sql \
+              supabase/migrations/20260806160500_moral_trade_harmful_offer_assessment_invariants.sql
+            cat supabase/tests/moral_trade_harmful_offer_assessment.sql
+            printf 'rollback;\n'
+          } > /tmp/moral-trade-harmful-offer-qa.sql
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file /tmp/moral-trade-harmful-offer-qa.sql \
+            | tee qa-harmful-offer-sql.log
+
       - name: Upload QA database evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: moral-trade-create-adapter-qa-db-${{ github.run_id }}
-          path: qa-create-adapter-sql.log
+          path: |
+            qa-create-adapter-sql.log
+            qa-harmful-offer-sql.log
           if-no-files-found: warn
           retention-days: 30
