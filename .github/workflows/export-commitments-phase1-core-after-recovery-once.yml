@@ -1,0 +1,42 @@
+name: Export recovered Commitments Phase 1 core once
+
+on:
+  push:
+    branches:
+      - feature/commitments-phase1-export-once-20260806
+    paths:
+      - .github/workflows/export-commitments-phase1-core-after-recovery-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out target branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/commitments-phase1-impact-accounting-20260806
+
+      - name: Package recovered core
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovered-core/src/lib
+          cp \
+            src/lib/impact-accounting.ts \
+            src/lib/impact-accounting.test.ts \
+            src/lib/impact-model-governance.ts \
+            src/lib/impact-model-governance-server.ts \
+            src/lib/impact-model-governance.test.ts \
+            recovered-core/src/lib/
+
+      - name: Upload recovered core
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-phase1-recovered-core-${{ github.run_id }}
+          path: recovered-core
+          if-no-files-found: error
+          retention-days: 2
