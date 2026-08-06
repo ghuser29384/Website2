@@ -68,28 +68,41 @@ async function openConcreteOfferStep(page: Page): Promise<FrameLocator> {
   await create.getByRole("button", { name: "Money" }).click();
   await create.locator("#continueOffers").click();
 
+  // The enhancement mounts asynchronously after the concrete-offer editor appears.
+  // Wait for that one-time DOM decoration before entering values so the test never
+  // races the mount and mistakes a replaced pre-mount control for the durable field.
+  await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
+
   const behaviorAction = create.locator(
     '[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="action"]',
   );
   const behaviorDuration = create.locator(
     '[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]',
   );
+  const moneyAmount = create.locator(
+    '[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]',
+  );
+  const moneyOrganization = create.locator(
+    '[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]',
+  );
 
-  await behaviorDuration.fill("once per week for 12 weeks");
-  await create
-    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]')
-    .fill("5.00");
-  await create
-    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]')
-    .fill("Existential Risk Research Project");
-
-  // Enter the action last and cross a real focus boundary before mounting group controls.
-  // This prevents later offer-field updates from racing the delegated Create state handler.
   await behaviorAction.fill("Avoid meat for one meal per week");
   await behaviorAction.press("Tab");
   await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");
 
-  await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
+  await behaviorDuration.fill("once per week for 12 weeks");
+  await behaviorDuration.press("Tab");
+  await expect(behaviorDuration).toHaveValue("once per week for 12 weeks");
+
+  await moneyAmount.fill("5.00");
+  await moneyAmount.press("Tab");
+  await expect(moneyAmount).toHaveValue("5.00");
+
+  await moneyOrganization.fill("Existential Risk Research Project");
+  await moneyOrganization.press("Tab");
+  await expect(moneyOrganization).toHaveValue("Existential Risk Research Project");
+
+  await expect(create.locator("#reviewOffers")).toBeEnabled();
   return create;
 }
 
@@ -202,6 +215,10 @@ test("integrates proposal-only Co-Act and Co-Fund terms into the real Create ifr
     "money:1",
   ]);
 
+  await expect(
+    create.locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]'),
+  ).toHaveValue("once per week for 12 weeks");
+  await expect(create.locator("#reviewOffers")).toBeEnabled();
   await create.locator("#reviewOffers").click();
   await expect(create.getByText("Proposed group terms", { exact: true })).toBeVisible();
   await expect(create.getByText(/CO-ACT · PROPOSAL ONLY/)).toBeVisible();
