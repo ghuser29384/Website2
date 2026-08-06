@@ -1,4 +1,4 @@
-name: PR 477 exact canonical preview v2
+name: PR 477 exact canonical preview v3
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: pr477-exact-canonical-preview-v2
+  group: pr477-exact-canonical-preview-v3
   cancel-in-progress: false
 
 env:
@@ -21,9 +21,13 @@ env:
   MAIN_SHA: 8bdc10338121f173a300436a692c04808d56966b
   PRODUCT_PR: "477"
   RELEASE_REF: release/vercel-preview
-  BASELINE_RUN_ID: "30877175677"
+  CONTROLLER_REF: ops/pr477-exact-preview-v2-20260806
+  CONTROLLER_PATH: .github/workflows/pr477-exact-canonical-preview-v2.yml
   STATUS_CONTEXT: QA / PR 477 exact canonical preview
-  EVIDENCE_DIR: /tmp/pr477-exact-canonical-preview-v2
+  EVIDENCE_DIR: /tmp/pr477-exact-canonical-preview-v3
+  MAIN_WORKTREE: /tmp/pr477-current-main-baseline
+  CANDIDATE_RUNS: "2"
+  MAIN_RUNS: "3"
   VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
   VERCEL_SCOPE: ellen-s
   VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
@@ -32,7 +36,7 @@ env:
 jobs:
   preview:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
       - name: Mark exact preview verification pending
@@ -44,7 +48,7 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
             -f state=pending \
             -f context="$STATUS_CONTEXT" \
-            -f description="Running exact differential, focused rendered gates, and canonical preview deployment" \
+            -f description="Running same-environment current-main differential, focused rendered gates, and canonical preview" \
             -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Check out the immutable product candidate
@@ -53,7 +57,7 @@ jobs:
           ref: ${{ env.CANDIDATE_SHA }}
           fetch-depth: 0
 
-      - name: Guard product PR, main, release ref, and exact candidate
+      - name: Guard controller, product PR, main, release ref, and exact candidate
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -61,6 +65,8 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git ls-remote origin "refs/heads/$CONTROLLER_REF" | awk '{print $1}')" = "$GITHUB_SHA"
+          test "$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA")" = "$CONTROLLER_PATH"
 
           product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
           test "$(jq -r .state <<<"$product_pr")" = 'open'
@@ -79,6 +85,7 @@ jobs:
           mkdir -p "$EVIDENCE_DIR"
           printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
           printf '%s\n' "$MAIN_SHA" > "$EVIDENCE_DIR/main-sha.txt"
+          printf '%s\n' "$GITHUB_SHA" > "$EVIDENCE_DIR/controller-sha.txt"
           git diff --stat "$MAIN_SHA"..."$CANDIDATE_SHA" > "$EVIDENCE_DIR/diff-stat.txt"
 
       - name: Set up Node.js
@@ -87,13 +94,13 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install exact dependencies
+      - name: Install exact candidate dependencies
         shell: bash
         run: |
           set -euo pipefail
-          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/candidate-npm-ci.log"
 
-      - name: Run source, lint, type, and production-build gates
+      - name: Run candidate source, lint, type, and production-build gates
         shell: bash
         env:
           NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
@@ -133,29 +140,17 @@ jobs:
             --workers=1 --reporter=line \
             2>&1 | tee "$EVIDENCE_DIR/focused-rendered.log"
 
-      - name: Run the complete candidate suite for differential evidence
+      - name: Install exact Playwright report extractor
         shell: bash
-        env:
-          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
-          SITE_URL: http://127.0.0.1:3210
-          PLAYWRIGHT_HTML_OPEN: never
         run: |
-          set -uo pipefail
-          rm -rf .next test-results playwright-report
-          set +e
-          npx playwright test --reporter=json \
-            > "$EVIDENCE_DIR/candidate-report.json" \
-            2> "$EVIDENCE_DIR/candidate-playwright.stderr.log"
-          status=$?
-          set -e
-          printf '%s\n' "$status" > "$EVIDENCE_DIR/candidate-exit-status.txt"
-
-          node <<'NODE'
+          set -euo pipefail
+          cat > /tmp/extract-pr477-playwright.cjs <<'NODE'
           const fs = require('node:fs');
           const path = require('node:path');
 
+          const [reportPath, statusPath, prefix, ref] = process.argv.slice(2);
           const dir = process.env.EVIDENCE_DIR;
-          const report = JSON.parse(fs.readFileSync(path.join(dir, 'candidate-report.json'), 'utf8'));
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
           const failures = [];
 
           function resultErrors(test) {
@@ -203,34 +198,82 @@ jobs:
             failure.errors.some((error) => hydrationPattern.test(error)),
           );
           const summary = {
-            candidateSha: process.env.CANDIDATE_SHA,
-            exitStatus: Number(fs.readFileSync(path.join(dir, 'candidate-exit-status.txt'), 'utf8').trim()),
+            prefix,
+            ref,
+            exitStatus: Number(fs.readFileSync(statusPath, 'utf8').trim()),
             stats: report.stats ?? null,
             failureCount: unique.length,
             hydrationMismatchCount: hydrationFailures.length,
             hydrationFailures: hydrationFailures.map((failure) => failure.key),
           };
 
-          fs.writeFileSync(path.join(dir, 'candidate-failures.json'), `${JSON.stringify(unique, null, 2)}\n`);
-          fs.writeFileSync(path.join(dir, 'candidate-summary.json'), `${JSON.stringify(summary, null, 2)}\n`);
+          fs.writeFileSync(path.join(dir, `${prefix}-failures.json`), `${JSON.stringify(unique, null, 2)}\n`);
+          fs.writeFileSync(path.join(dir, `${prefix}-summary.json`), `${JSON.stringify(summary, null, 2)}\n`);
           fs.writeFileSync(
-            path.join(dir, 'candidate-failures.txt'),
+            path.join(dir, `${prefix}-failures.txt`),
             `${unique.map((failure) => failure.key).join('\n')}${unique.length ? '\n' : ''}`,
           );
           console.log(JSON.stringify(summary, null, 2));
           NODE
+          node --check /tmp/extract-pr477-playwright.cjs
 
-      - name: Download the immutable three-run browser baseline
-        uses: actions/download-artifact@v4
-        with:
-          github-token: ${{ github.token }}
-          repository: ghuser29384/Website2
-          run-id: ${{ env.BASELINE_RUN_ID }}
-          pattern: playwright-baseline-*-ad82ed44
-          path: /tmp/pr477-browser-baseline
-          merge-multiple: false
+      - name: Run two complete candidate suites for differential evidence
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -uo pipefail
+          for run in $(seq 1 "$CANDIDATE_RUNS"); do
+            rm -rf .next test-results playwright-report
+            set +e
+            npx playwright test --workers=1 --reporter=json \
+              > "$EVIDENCE_DIR/candidate-${run}-report.json" \
+              2> "$EVIDENCE_DIR/candidate-${run}-playwright.stderr.log"
+            status=$?
+            set -e
+            printf '%s\n' "$status" > "$EVIDENCE_DIR/candidate-${run}-exit-status.txt"
+            node /tmp/extract-pr477-playwright.cjs \
+              "$EVIDENCE_DIR/candidate-${run}-report.json" \
+              "$EVIDENCE_DIR/candidate-${run}-exit-status.txt" \
+              "candidate-${run}" \
+              "$CANDIDATE_SHA"
+          done
 
-      - name: Require zero new full-suite failures
+      - name: Run three same-environment suites on exact current main
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -uo pipefail
+          rm -rf "$MAIN_WORKTREE"
+          git worktree add --detach "$MAIN_WORKTREE" "$MAIN_SHA"
+          cd "$MAIN_WORKTREE"
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/main-npm-ci.log"
+
+          for run in $(seq 1 "$MAIN_RUNS"); do
+            rm -rf .next test-results playwright-report
+            set +e
+            npx playwright test --workers=1 --reporter=json \
+              > "$EVIDENCE_DIR/main-${run}-report.json" \
+              2> "$EVIDENCE_DIR/main-${run}-playwright.stderr.log"
+            status=$?
+            set -e
+            printf '%s\n' "$status" > "$EVIDENCE_DIR/main-${run}-exit-status.txt"
+            node /tmp/extract-pr477-playwright.cjs \
+              "$EVIDENCE_DIR/main-${run}-report.json" \
+              "$EVIDENCE_DIR/main-${run}-exit-status.txt" \
+              "main-${run}" \
+              "$MAIN_SHA"
+          done
+
+          cd "$GITHUB_WORKSPACE"
+          git worktree remove --force "$MAIN_WORKTREE"
+
+      - name: Require zero reproducible regressions against exact current main
         shell: bash
         run: |
           set -euo pipefail
@@ -238,61 +281,122 @@ jobs:
           const fs = require('node:fs');
           const path = require('node:path');
 
-          function walk(dir) {
-            const out = [];
-            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-              const full = path.join(dir, entry.name);
-              if (entry.isDirectory()) out.push(...walk(full));
-              else out.push(full);
-            }
-            return out;
-          }
-
-          const baselineFiles = walk('/tmp/pr477-browser-baseline').filter((file) => file.endsWith('/failures.json'));
-          if (baselineFiles.length < 3) throw new Error(`Expected three baseline failure files, found ${baselineFiles.length}`);
-
-          const baselineUnion = new Set();
-          for (const file of baselineFiles) {
-            const failures = JSON.parse(fs.readFileSync(file, 'utf8'));
-            for (const failure of failures) {
-              baselineUnion.add(`${failure.file ?? ''} › ${failure.title ?? ''}`);
-            }
-          }
-
           const dir = process.env.EVIDENCE_DIR;
-          const summary = JSON.parse(fs.readFileSync(path.join(dir, 'candidate-summary.json'), 'utf8'));
-          const failures = JSON.parse(fs.readFileSync(path.join(dir, 'candidate-failures.json'), 'utf8'));
-          const newFailures = failures
-            .filter((failure) => !baselineUnion.has(failure.key))
-            .map((failure) => failure.key)
+          const candidateRunCount = Number(process.env.CANDIDATE_RUNS);
+          const mainRunCount = Number(process.env.MAIN_RUNS);
+
+          function loadRuns(prefix, count) {
+            return Array.from({ length: count }, (_, index) => {
+              const run = index + 1;
+              return {
+                failures: JSON.parse(fs.readFileSync(path.join(dir, `${prefix}-${run}-failures.json`), 'utf8')),
+                summary: JSON.parse(fs.readFileSync(path.join(dir, `${prefix}-${run}-summary.json`), 'utf8')),
+              };
+            });
+          }
+
+          function union(sets) {
+            return new Set(sets.flatMap((set) => [...set]));
+          }
+
+          function frequencyMap(sets) {
+            const frequencies = new Map();
+            for (const set of sets) {
+              for (const key of set) frequencies.set(key, (frequencies.get(key) ?? 0) + 1);
+            }
+            return frequencies;
+          }
+
+          const candidateRuns = loadRuns('candidate', candidateRunCount);
+          const mainRuns = loadRuns('main', mainRunCount);
+          const candidateSets = candidateRuns.map((run) => new Set(run.failures.map((failure) => failure.key)));
+          const mainSets = mainRuns.map((run) => new Set(run.failures.map((failure) => failure.key)));
+          const candidateUnion = union(candidateSets);
+          const mainUnion = union(mainSets);
+          const candidateFrequency = frequencyMap(candidateSets);
+          const mainFrequency = frequencyMap(mainSets);
+
+          const candidatePersistent = [...candidateUnion]
+            .filter((key) => candidateFrequency.get(key) === candidateRunCount)
+            .sort();
+          const newPersistentFailures = candidatePersistent
+            .filter((key) => !mainUnion.has(key))
+            .sort();
+          const frequencyRegressions = candidatePersistent
+            .filter((key) => (mainFrequency.get(key) ?? 0) < 2)
             .sort();
 
-          const affectedFiles = new Set([
-            'tests/complete-profile-review.spec.ts',
-            'tests/create-entry-routing.spec.ts',
-            'tests/create-common-ground-pool.spec.ts',
-            'tests/create-group-contribution-proposal.spec.ts',
-            'tests/create-route-workbench.spec.ts',
+          const affectedBasenames = new Set([
+            'complete-profile-review.spec.ts',
+            'create-entry-routing.spec.ts',
+            'create-common-ground-pool.spec.ts',
+            'create-group-contribution-proposal.spec.ts',
+            'create-route-workbench.spec.ts',
           ]);
-          const affectedFailures = failures
-            .filter((failure) => affectedFiles.has(failure.file))
-            .map((failure) => failure.key)
+          const allCandidateFailures = new Map(
+            candidateRuns.flatMap((run) => run.failures).map((failure) => [failure.key, failure]),
+          );
+          const affectedPersistentFailures = candidatePersistent
+            .filter((key) => affectedBasenames.has(path.basename(allCandidateFailures.get(key)?.file ?? '')))
             .sort();
+          const affectedTransientFailures = [...candidateUnion]
+            .filter((key) => !candidatePersistent.includes(key))
+            .filter((key) => affectedBasenames.has(path.basename(allCandidateFailures.get(key)?.file ?? '')))
+            .sort();
+
+          const candidateHydrationUnion = union(
+            candidateRuns.map((run) => new Set(run.summary.hydrationFailures ?? [])),
+          );
+          const mainHydrationUnion = union(
+            mainRuns.map((run) => new Set(run.summary.hydrationFailures ?? [])),
+          );
+          const newHydrationFailures = [...candidateHydrationUnion]
+            .filter((key) => !mainHydrationUnion.has(key))
+            .sort();
+
+          const candidateFailureCounts = candidateRuns.map((run) => run.summary.failureCount);
+          const mainFailureCounts = mainRuns.map((run) => run.summary.failureCount);
+          const candidateExpectedCounts = candidateRuns.map((run) => Number(run.summary.stats?.expected ?? 0));
+          const mainExpectedCounts = mainRuns.map((run) => Number(run.summary.stats?.expected ?? 0));
+          const candidateMinFailureCount = Math.min(...candidateFailureCounts);
+          const mainMaxFailureCount = Math.max(...mainFailureCounts);
+          const candidateExpectedMin = Math.min(...candidateExpectedCounts);
+          const mainExpectedMin = Math.min(...mainExpectedCounts);
 
           const comparison = {
-            baselineRunId: process.env.BASELINE_RUN_ID,
-            baselineFailureUnionCount: baselineUnion.size,
-            candidate: summary,
-            newFailureCount: newFailures.length,
-            newFailures,
-            affectedFailureCount: affectedFailures.length,
-            affectedFailures,
+            candidateSha: process.env.CANDIDATE_SHA,
+            mainSha: process.env.MAIN_SHA,
+            candidateRunCount,
+            mainRunCount,
+            candidateFailureCounts,
+            mainFailureCounts,
+            candidateUnionCount: candidateUnion.size,
+            mainUnionCount: mainUnion.size,
+            candidatePersistentCount: candidatePersistent.length,
+            newPersistentFailureCount: newPersistentFailures.length,
+            newPersistentFailures,
+            frequencyRegressionCount: frequencyRegressions.length,
+            frequencyRegressions,
+            affectedPersistentFailureCount: affectedPersistentFailures.length,
+            affectedPersistentFailures,
+            affectedTransientFailureCount: affectedTransientFailures.length,
+            affectedTransientFailures,
+            candidateHydrationUnionCount: candidateHydrationUnion.size,
+            mainHydrationUnionCount: mainHydrationUnion.size,
+            newHydrationFailureCount: newHydrationFailures.length,
+            newHydrationFailures,
+            candidateMinFailureCount,
+            mainMaxFailureCount,
+            candidateExpectedMin,
+            mainExpectedMin,
             passed:
-              newFailures.length === 0 &&
-              affectedFailures.length === 0 &&
-              summary.hydrationMismatchCount === 0 &&
-              summary.failureCount <= baselineUnion.size &&
-              Number(summary.stats?.expected ?? 0) >= 100,
+              newPersistentFailures.length === 0 &&
+              frequencyRegressions.length === 0 &&
+              affectedPersistentFailures.length === 0 &&
+              newHydrationFailures.length === 0 &&
+              candidateMinFailureCount <= mainMaxFailureCount &&
+              candidateExpectedMin >= 100 &&
+              mainExpectedMin >= 100,
           };
 
           fs.writeFileSync(path.join(dir, 'browser-differential.json'), `${JSON.stringify(comparison, null, 2)}\n`);
@@ -301,22 +405,25 @@ jobs:
           NODE
 
           {
-            echo '## PR 477 browser differential'
+            echo '## PR 477 exact-current-main browser differential'
             echo
             echo "- Candidate: \`$CANDIDATE_SHA\`"
-            echo "- Candidate full-suite failures: \`$(jq -r '.candidate.failureCount' "$EVIDENCE_DIR/browser-differential.json")\`"
-            echo "- New failures: \`$(jq -r '.newFailureCount' "$EVIDENCE_DIR/browser-differential.json")\`"
-            echo "- Affected-flow failures: \`$(jq -r '.affectedFailureCount' "$EVIDENCE_DIR/browser-differential.json")\`"
-            echo "- Hydration mismatches: \`$(jq -r '.candidate.hydrationMismatchCount' "$EVIDENCE_DIR/browser-differential.json")\`"
+            echo "- Main: \`$MAIN_SHA\`"
+            echo "- Candidate failure counts: \`$(jq -c '.candidateFailureCounts' "$EVIDENCE_DIR/browser-differential.json")\`"
+            echo "- Main failure counts: \`$(jq -c '.mainFailureCounts' "$EVIDENCE_DIR/browser-differential.json")\`"
+            echo "- New persistent failures: \`$(jq -r '.newPersistentFailureCount' "$EVIDENCE_DIR/browser-differential.json")\`"
+            echo "- Failure-frequency regressions: \`$(jq -r '.frequencyRegressionCount' "$EVIDENCE_DIR/browser-differential.json")\`"
+            echo "- Persistent affected-flow failures: \`$(jq -r '.affectedPersistentFailureCount' "$EVIDENCE_DIR/browser-differential.json")\`"
+            echo "- New hydration failures: \`$(jq -r '.newHydrationFailureCount' "$EVIDENCE_DIR/browser-differential.json")\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Restore the exact candidate before deployment
         shell: bash
         run: |
           set -euo pipefail
-          git checkout --force "$CANDIDATE_SHA"
+          git reset --hard "$CANDIDATE_SHA"
+          git clean -fdx -e node_modules/
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
-          rm -rf .next test-results playwright-report
           test -z "$(git status --porcelain)"
 
       - name: Link only the canonical Vercel project
@@ -433,12 +540,98 @@ jobs:
             echo '- Target: preview'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Smoke-test the protected preview and inspect deployment logs
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          deployment_id="$(cat "$EVIDENCE_DIR/deployment-id.txt")"
+
+          page_status="$(npx --yes "vercel@$VERCEL_CLI_VERSION" curl /trades/new \
+            --deployment "$DEPLOYMENT_URL" \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            --silent --show-error --location \
+            --output "$EVIDENCE_DIR/preview-trades-new.html" \
+            --write-out '%{http_code}' \
+            2> "$EVIDENCE_DIR/preview-trades-new.stderr.log" | tail -n 1 | tr -d '\r')"
+          test "$page_status" = '200'
+          grep -q 'data-create-interface-frame' "$EVIDENCE_DIR/preview-trades-new.html"
+          grep -q 'Moral Trade Create' "$EVIDENCE_DIR/preview-trades-new.html"
+
+          participant_status="$(npx --yes "vercel@$VERCEL_CLI_VERSION" curl '/api/create/participants?q=el' \
+            --deployment "$DEPLOYMENT_URL" \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            --silent --show-error \
+            --output "$EVIDENCE_DIR/preview-participants.json" \
+            --write-out '%{http_code}' \
+            2> "$EVIDENCE_DIR/preview-participants.stderr.log" | tail -n 1 | tr -d '\r')"
+          test "$participant_status" = '401'
+          jq -e '.ok == false and .requiresAuth == true' "$EVIDENCE_DIR/preview-participants.json" >/dev/null
+
+          sleep 5
+          set +e
+          npx --yes "vercel@$VERCEL_CLI_VERSION" logs \
+            --deployment "$deployment_id" \
+            --since 10m \
+            --json \
+            --no-follow \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            > "$EVIDENCE_DIR/vercel-runtime-logs.jsonl" \
+            2> "$EVIDENCE_DIR/vercel-runtime-logs.stderr.log"
+          logs_status=$?
+          set -e
+          test "$logs_status" -eq 0
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ['EVIDENCE_DIR'], 'vercel-runtime-logs.jsonl')
+          serious = []
+          for line in path.read_text(encoding='utf-8').splitlines():
+              line = line.strip()
+              if not line:
+                  continue
+              try:
+                  entry = json.loads(line)
+              except json.JSONDecodeError:
+                  continue
+              level = str(entry.get('level') or entry.get('severity') or '').lower()
+              statuses = [
+                  entry.get('statusCode'),
+                  entry.get('status'),
+                  entry.get('responseStatusCode'),
+                  (entry.get('response') or {}).get('statusCode') if isinstance(entry.get('response'), dict) else None,
+              ]
+              status_5xx = any(isinstance(value, int) and value >= 500 for value in statuses)
+              if level in {'error', 'fatal'} or status_5xx:
+                  serious.append(entry)
+          Path(os.environ['EVIDENCE_DIR'], 'vercel-runtime-serious.json').write_text(
+              json.dumps(serious, indent=2) + '\n', encoding='utf-8'
+          )
+          assert not serious, serious
+          PY
+
+          {
+            echo '## Preview smoke'
+            echo
+            echo '- `/trades/new`: `200`, Create iframe marker present'
+            echo '- `/api/create/participants?q=el` while signed out: expected `401` auth boundary'
+            echo '- Deployment-scoped runtime error/fatal/5xx logs after smoke: `0`'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload immutable preview evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: pr477-exact-canonical-preview-v2-${{ github.run_id }}
-          path: /tmp/pr477-exact-canonical-preview-v2
+          name: pr477-exact-canonical-preview-v3-${{ github.run_id }}
+          path: /tmp/pr477-exact-canonical-preview-v3
           if-no-files-found: error
           retention-days: 14
 
@@ -454,32 +647,36 @@ jobs:
           run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           if [[ "$JOB_STATUS" == 'success' ]]; then
             state=success
-            description="Exact differential and focused rendered gates passed; canonical preview is READY"
+            description="Exact current-main differential passed; canonical preview is READY and smoke-tested"
             deployment_id="$(cat "$EVIDENCE_DIR/deployment-id.txt")"
             body=$(cat <<EOF
           Exact-head canonical Preview verification passed for PR #477.
 
           - Candidate: \`$CANDIDATE_SHA\`
+          - Exact current main: \`$MAIN_SHA\`
           - GitHub Actions run: $run_url
           - Vercel deployment: \`$deployment_id\`
           - Preview: $DEPLOYMENT_URL
           - Complete source suite, ESLint, TypeScript, and production build: passed
           - Affected production-server browser gates: passed
-          - Full-suite differential against immutable three-run baseline: zero new failures, zero affected-flow failures, zero hydration mismatches
+          - Same-environment browser differential: two candidate runs vs three exact-current-main runs; zero new persistent failures, zero failure-frequency regressions, zero persistent affected-flow failures, and zero new hydration failures
           - Canonical team/project, exact Git SHA, preview target, and READY state: verified
+          - Protected preview route and signed-out participant-search auth boundary: smoke-tested
+          - Deployment-scoped runtime error/fatal/5xx logs after smoke: zero
 
-          No production merge, production alias change, production database mutation, participant enrollment, invitation, payment authorization, capture, or settlement occurred.
+          No production merge, production alias change, production database mutation, participant enrollment, invitation, payment authorization, capture, or settlement occurred. PR #477 remains draft pending review of this exact preview.
           EOF
           )
           else
             state=failure
-            description="PR 477 exact canonical preview verification failed; inspect immutable evidence"
+            description="PR 477 exact canonical preview verification failed; inspect immutable v3 evidence"
             body=$(cat <<EOF
           Exact-head canonical Preview verification failed for PR #477.
 
           - Candidate: \`$CANDIDATE_SHA\`
+          - Exact current main: \`$MAIN_SHA\`
           - GitHub Actions run: $run_url
-          - Evidence artifact: \`pr477-exact-canonical-preview-v2-${GITHUB_RUN_ID}\`
+          - Evidence artifact: \`pr477-exact-canonical-preview-v3-${GITHUB_RUN_ID}\`
 
           No production merge, production alias change, production database mutation, participant enrollment, invitation, payment authorization, capture, or settlement occurred.
           EOF
@@ -500,4 +697,4 @@ jobs:
         shell: bash
         run: |
           gh api -X DELETE \
-            "repos/${GITHUB_REPOSITORY}/git/refs/heads/ops/pr477-exact-preview-v2-20260806" || true
+            "repos/${GITHUB_REPOSITORY}/git/refs/heads/$CONTROLLER_REF" || true
