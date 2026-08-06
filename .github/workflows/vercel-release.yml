@@ -29,6 +29,7 @@ concurrency:
 
 env:
   VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_SCOPE: ellen-s
   VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
   RELEASE_PREVIEW_BRANCH: release/vercel-preview
   VERCEL_CLI_VERSION: 50.38.1
@@ -126,6 +127,7 @@ jobs:
           npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
             --yes \
             --environment="${{ inputs.target }}" \
+            --scope="$VERCEL_SCOPE" \
             --token="$VERCEL_TOKEN"
 
       - name: Build the Vercel artifact on GitHub Actions compute
@@ -137,9 +139,11 @@ jobs:
           if [[ '${{ inputs.target }}' == 'production' ]]; then
             npx --yes "vercel@$VERCEL_CLI_VERSION" build \
               --prod \
+              --scope="$VERCEL_SCOPE" \
               --token="$VERCEL_TOKEN"
           else
             npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+              --scope="$VERCEL_SCOPE" \
               --token="$VERCEL_TOKEN"
           fi
 
@@ -154,15 +158,58 @@ jobs:
             deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
               --prebuilt \
               --prod \
+              --scope="$VERCEL_SCOPE" \
               --token="$VERCEL_TOKEN")"
           else
             deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
               --prebuilt \
+              --scope="$VERCEL_SCOPE" \
               --token="$VERCEL_TOKEN")"
           fi
           test -n "$deployment_url"
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
           printf 'Deployment URL: %s\n' "$deployment_url"
+
+      - name: Verify deployment belongs to the canonical team and project
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          deployment_host="${DEPLOYMENT_URL#https://}"
+          case "$deployment_host" in
+            *-ellen-s.vercel.app) ;;
+            *) echo "Deployment escaped the canonical ellen-s scope: $deployment_host" >&2; exit 1 ;;
+          esac
+
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$DEPLOYMENT_URL" \
+            --wait \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            --no-color
+
+          curl --silent --show-error --fail \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_host?teamId=$VERCEL_ORG_ID" \
+            > /tmp/deployment.json
+
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          deployment = json.loads(Path('/tmp/deployment.json').read_text())
+          project = deployment.get('project') or {}
+          assert deployment.get('readyState') == 'READY', deployment.get('readyState')
+          assert (project.get('id') or deployment.get('projectId')) == os.environ['VERCEL_PROJECT_ID']
+          if os.environ['RELEASE_TARGET'] == 'production':
+              assert deployment.get('target') == 'production', deployment.get('target')
+          else:
+              assert deployment.get('target') in (None, 'preview'), deployment.get('target')
+          PY
+        env:
+          RELEASE_TARGET: ${{ inputs.target }}
 
       - name: Record immutable release evidence
         shell: bash
@@ -174,6 +221,7 @@ jobs:
             echo "- Target: \`${{ inputs.target }}\`"
             echo "- Ref: \`${{ inputs.ref }}\`"
             echo "- Commit: \`${{ inputs.expected_sha }}\`"
+            echo "- Team: \`$VERCEL_ORG_ID\` (\`$VERCEL_SCOPE\`)"
             echo "- Project: \`$VERCEL_PROJECT_ID\`"
             echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
             echo '- Build location: GitHub Actions (`vercel build` + `vercel deploy --prebuilt`)'
