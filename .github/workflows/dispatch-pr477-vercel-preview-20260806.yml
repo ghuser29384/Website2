@@ -1,4 +1,4 @@
-name: Stress PR 477 candidate-only rendered failures
+name: Dispatch PR 477 exact-head Vercel preview
 
 on:
   push:
@@ -8,83 +8,44 @@ on:
       - .github/workflows/dispatch-pr477-vercel-preview-20260806.yml
 
 permissions:
+  actions: write
   contents: read
 
 concurrency:
-  group: stress-pr477-candidate-only-rendered-20260806
+  group: dispatch-pr477-vercel-preview-20260806
   cancel-in-progress: false
 
 jobs:
-  focused-rendered:
-    name: Focused rendered stress (${{ matrix.label }})
+  dispatch:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - label: exact-base
-            sha: 8bdc10338121f173a300436a692c04808d56966b
-          - label: exact-candidate
-            sha: 25ab8a778e5c2d808ab66436059839680dfe67a8
+    timeout-minutes: 10
+    env:
+      CANDIDATE_SHA: '1df4a247894023fcbd74e3c1fa3316773d2612f8'
+      BASE_SHA: '8bdc10338121f173a300436a692c04808d56966b'
+      RELEASE_REF: release/vercel-preview
     steps:
-      - name: Guard exact diagnostic source
+      - name: Guard exact dispatch inputs
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test '${{ github.ref_name }}' = 'ops/dispatch-pr477-vercel-preview-20260806'
           test '${{ github.actor }}' != 'github-actions[bot]'
-          test '${{ matrix.sha }}' = '8bdc10338121f173a300436a692c04808d56966b' \
-            || test '${{ matrix.sha }}' = '25ab8a778e5c2d808ab66436059839680dfe67a8'
+          test "${#CANDIDATE_SHA}" -eq 40
+          test "${#BASE_SHA}" -eq 40
 
-      - name: Check out exact revision
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ matrix.sha }}
-          fetch-depth: 0
-
-      - name: Prove immutable revision
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = '${{ matrix.sha }}'
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install exact dependencies
-        run: npm ci
-
-      - name: Install Chromium
-        run: npx playwright install --with-deps chromium
-
-      - name: Repeat all differential rendered tests five times
+      - name: Prove immutable release ref and dispatch gated preview
         shell: bash
         env:
-          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
-          SITE_URL: http://127.0.0.1:3210
-          PLAYWRIGHT_HTML_OPEN: never
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          rm -rf .next test-results playwright-report
-          npx playwright test \
-            tests/public-routes.spec.ts \
-            tests/retired-explainer-navigation.spec.ts \
-            --grep 'public route /(paid-action-offers|safety) renders meaningful content without landmark regressions|redirects the legacy Trust URL to Safety' \
-            --repeat-each=5 \
-            --reporter=line
-
-      - name: Upload focused diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr477-focused-rendered-${{ matrix.label }}-${{ github.run_id }}
-          path: |
-            test-results
-            playwright-report
-          if-no-files-found: warn
-          retention-days: 14
+          release_sha="$(gh api "/repos/$GITHUB_REPOSITORY/git/ref/heads/$RELEASE_REF" --jq '.object.sha')"
+          test "$release_sha" = "$CANDIDATE_SHA"
+          gh workflow run vercel-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$RELEASE_REF" \
+            -f target=preview \
+            -f ref="$RELEASE_REF" \
+            -f expected_sha="$CANDIDATE_SHA" \
+            -f rendered_base_sha="$BASE_SHA"
