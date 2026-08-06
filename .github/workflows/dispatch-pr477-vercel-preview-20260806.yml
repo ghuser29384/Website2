@@ -1,4 +1,4 @@
-name: Compare PR 477 candidate and base rendered failures
+name: Stress PR 477 candidate-only rendered failures
 
 on:
   push:
@@ -8,96 +8,83 @@ on:
       - .github/workflows/dispatch-pr477-vercel-preview-20260806.yml
 
 permissions:
-  actions: read
   contents: read
 
 concurrency:
-  group: compare-pr477-rendered-failures-20260806
+  group: stress-pr477-candidate-only-rendered-20260806
   cancel-in-progress: false
 
 jobs:
-  compare:
+  focused-rendered:
+    name: Focused rendered stress (${{ matrix.label }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    env:
-      CANDIDATE_RUN_ID: '31109928406'
-      BASE_RUN_ID: '31113499116'
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: exact-base
+            sha: 8bdc10338121f173a300436a692c04808d56966b
+          - label: exact-candidate
+            sha: 25ab8a778e5c2d808ab66436059839680dfe67a8
     steps:
-      - name: Guard exact diagnostic inputs
+      - name: Guard exact diagnostic source
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test '${{ github.ref_name }}' = 'ops/dispatch-pr477-vercel-preview-20260806'
           test '${{ github.actor }}' != 'github-actions[bot]'
-          test "$CANDIDATE_RUN_ID" = '31109928406'
-          test "$BASE_RUN_ID" = '31113499116'
+          test '${{ matrix.sha }}' = '8bdc10338121f173a300436a692c04808d56966b' \
+            || test '${{ matrix.sha }}' = '25ab8a778e5c2d808ab66436059839680dfe67a8'
 
-      - name: Compare normalized Playwright failure identities
+      - name: Check out exact revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+
+      - name: Prove immutable revision
         shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh run view "$CANDIDATE_RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > candidate-failed.log
-          gh run view "$BASE_RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > base-failed.log
+          test "$(git rev-parse HEAD)" = '${{ matrix.sha }}'
 
-          python3 - <<'PY'
-          import re
-          from pathlib import Path
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
 
-          ANSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
-          SUMMARY = re.compile(r"\b(\d+) failed\b")
-          TEST = re.compile(r"(tests/[^\n]*?\.spec\.ts):\d+:\d+\s+›\s+(.+)$")
-          TRAILING = re.compile(r"\s+[─━-]+\s*$")
+      - name: Install exact dependencies
+        run: npm ci
 
-          def parse(path: str):
-              text = ANSI.sub("", Path(path).read_text(errors="replace"))
-              matches = list(SUMMARY.finditer(text))
-              if not matches:
-                  raise SystemExit(f"No Playwright failure summary found in {path}")
-              declared = int(matches[-1].group(1))
-              tail = text[matches[-1].end():]
-              failures = []
-              for raw in tail.splitlines():
-                  match = TEST.search(raw)
-                  if not match:
-                      continue
-                  title = TRAILING.sub("", match.group(2)).strip()
-                  failures.append(f"{match.group(1)} › {title}")
-              unique = sorted(set(failures))
-              if declared and len(unique) != declared:
-                  print(f"WARNING: {path}: declared {declared} failures, extracted {len(unique)} unique identities")
-              return declared, unique
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
 
-          candidate_declared, candidate = parse("candidate-failed.log")
-          base_declared, base = parse("base-failed.log")
-          candidate_set = set(candidate)
-          base_set = set(base)
-          introduced = sorted(candidate_set - base_set)
-          resolved = sorted(base_set - candidate_set)
-          shared = sorted(candidate_set & base_set)
+      - name: Repeat all differential rendered tests five times
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          rm -rf .next test-results playwright-report
+          npx playwright test \
+            tests/public-routes.spec.ts \
+            tests/retired-explainer-navigation.spec.ts \
+            --grep 'public route /(paid-action-offers|safety) renders meaningful content without landmark regressions|redirects the legacy Trust URL to Safety' \
+            --repeat-each=5 \
+            --reporter=line
 
-          print(f"candidate_declared_failures={candidate_declared}")
-          print(f"candidate_extracted_failures={len(candidate)}")
-          print(f"base_declared_failures={base_declared}")
-          print(f"base_extracted_failures={len(base)}")
-          print(f"shared_failures={len(shared)}")
-          print(f"candidate_only_failures={len(introduced)}")
-          print(f"base_only_failures={len(resolved)}")
-
-          print("--- candidate-only normalized failures ---")
-          for item in introduced:
-              print(item)
-          print("--- base-only normalized failures ---")
-          for item in resolved:
-              print(item)
-          print("--- shared normalized failures ---")
-          for item in shared:
-              print(item)
-
-          if candidate_declared and not candidate:
-              raise SystemExit("Candidate failures were not parsed")
-          if base_declared and not base:
-              raise SystemExit("Base failures were not parsed")
-          PY
+      - name: Upload focused diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr477-focused-rendered-${{ matrix.label }}-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
