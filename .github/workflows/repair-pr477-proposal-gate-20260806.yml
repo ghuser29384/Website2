@@ -41,45 +41,40 @@ jobs:
           from pathlib import Path
 
           path = Path('tests/create-group-contribution-proposal.spec.ts')
-          text = path.read_text(encoding='utf-8')
-          old = '''  await behaviorDuration.fill("once per week for 12 weeks");
-  await create
-    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]')
-    .fill("5.00");
-  await create
-    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]')
-    .fill("Existential Risk Research Project");
+          lines = path.read_text(encoding='utf-8').splitlines()
 
-  // Enter the action last and cross a real focus boundary before mounting group controls.
-  // This prevents later offer-field updates from racing the delegated Create state handler.
-  await behaviorAction.fill("Avoid meat for one meal per week");
-  await behaviorAction.press("Tab");
-  await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");
+          duration_line = '  await behaviorDuration.fill("once per week for 12 weeks");'
+          if lines.count(duration_line) != 1:
+              raise SystemExit('Unexpected behavior-duration setup inventory.')
+          lines.remove(duration_line)
 
-  await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
-'''
-          new = '''  await create
-    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]')
-    .fill("5.00");
-  await create
-    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]')
-    .fill("Existential Risk Research Project");
+          old_comments = [
+              '  // Enter the action last and cross a real focus boundary before mounting group controls.',
+              '  // This prevents later offer-field updates from racing the delegated Create state handler.',
+          ]
+          if any(lines.count(line) != 1 for line in old_comments):
+              raise SystemExit('Could not locate the unique proposal-test stabilization comments.')
+          comment_index = lines.index(old_comments[0])
+          if lines[comment_index:comment_index + 2] != old_comments:
+              raise SystemExit('Proposal-test stabilization comments are not adjacent.')
+          lines[comment_index:comment_index + 2] = [
+              '  // Commit each behavior field across a real focus boundary. Entering the action mounts',
+              '  // the group controls, so fill and verify the duration against the mounted DOM afterward.',
+          ]
 
-  // Commit each behavior field across a real focus boundary. Entering the action mounts
-  // the group controls, so fill and verify the duration against the mounted DOM afterward.
-  await behaviorAction.fill("Avoid meat for one meal per week");
-  await behaviorAction.press("Tab");
-  await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");
-  await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
+          host_line = '  await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);'
+          if lines.count(host_line) != 1:
+              raise SystemExit('Could not locate the unique group-host assertion.')
+          host_index = lines.index(host_line)
+          lines[host_index + 1:host_index + 1] = [
+              '',
+              '  await behaviorDuration.fill("once per week for 12 weeks");',
+              '  await behaviorDuration.press("Tab");',
+              '  await expect(behaviorDuration).toHaveValue("once per week for 12 weeks");',
+              '  await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");',
+          ]
 
-  await behaviorDuration.fill("once per week for 12 weeks");
-  await behaviorDuration.press("Tab");
-  await expect(behaviorDuration).toHaveValue("once per week for 12 weeks");
-  await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");
-'''
-          if text.count(old) != 1:
-              raise SystemExit('Could not locate the unique proposal-test setup block.')
-          path.write_text(text.replace(old, new), encoding='utf-8')
+          path.write_text('\n'.join(lines) + '\n', encoding='utf-8')
           PY
 
           git rm \
