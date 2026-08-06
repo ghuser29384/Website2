@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      EXPECTED_PARENT: 65b4686a6a9fe89395394af244c499d26fa061ea
+      EXPECTED_PARENT: 7721d79b76cdb07c0d4c86ac55d8cd002643e109
       TARGET_BRANCH: fix/mpgf-pool-review-freeze-20260806
       CONTROLLER_PATH: .github/workflows/repair-mpgf-approval-metadata-guard-20260806.yml
 
@@ -43,17 +43,19 @@ jobs:
 
           migration_path = Path("supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql")
           migration = migration_path.read_text()
-          old = """      - 'reviewed_by'
-      - 'reviewed_at'
-      - 'review_reason';
-"""
-          new = """      - 'reviewed_by'
-      - 'reviewed_at'
-      - 'review_reason'
-      - 'approved_terms_version'
-      - 'operative_terms_sha256'
-      - 'terms_locked_at';
-"""
+          old = (
+              "      - 'reviewed_by'\n"
+              "      - 'reviewed_at'\n"
+              "      - 'review_reason';\n"
+          )
+          new = (
+              "      - 'reviewed_by'\n"
+              "      - 'reviewed_at'\n"
+              "      - 'review_reason'\n"
+              "      - 'approved_terms_version'\n"
+              "      - 'operative_terms_sha256'\n"
+              "      - 'terms_locked_at';\n"
+          )
           if migration.count(old) != 2:
               raise SystemExit(f"Expected two operative-material projections, found {migration.count(old)}")
           migration_path.write_text(migration.replace(old, new))
