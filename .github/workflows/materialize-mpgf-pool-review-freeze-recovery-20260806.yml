@@ -1,4 +1,4 @@
-name: Recover MPGF pool review freeze materialization 2026-08-06
+name: Recover MPGF pool review freeze non-workflow files 2026-08-06
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: recover-mpgf-pool-review-freeze-20260806
+  group: recover-mpgf-pool-review-freeze-non-workflow-20260806
   cancel-in-progress: false
 
 jobs:
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      EXPECTED_PARENT: 1c3b90b540fdc8f6ad4022a6933bac66785e1982
+      EXPECTED_PARENT: e9522e8b307b2f4b0f98a5fda97f459a7fe4742e
       BROKEN_CONTROLLER: .github/workflows/materialize-mpgf-pool-review-freeze-20260806.yml
       RECOVERY_CONTROLLER: .github/workflows/materialize-mpgf-pool-review-freeze-recovery-20260806.yml
       PAYLOAD_SHA256: 88eb1ee9ace6d02e9b3e7c74a9c60646bcb324c92c0d059206d3ced0f9156776
@@ -31,7 +31,7 @@ jobs:
           fetch-depth: 2
           ref: ${{ github.sha }}
 
-      - name: Recover and verify the embedded reviewed payload
+      - name: Recover and verify the reviewed payload
         shell: bash
         run: |
           set -euo pipefail
@@ -42,21 +42,24 @@ jobs:
           grep -m1 '^H4s' "$BROKEN_CONTROLLER" > /tmp/review-freeze-payload.b64
           base64 --decode /tmp/review-freeze-payload.b64 > /tmp/review-freeze-payload.tar.gz
           echo "$PAYLOAD_SHA256  /tmp/review-freeze-payload.tar.gz" | sha256sum --check
-          tar -xzf /tmp/review-freeze-payload.tar.gz -C "$GITHUB_WORKSPACE"
-          test -f supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql
-          test -f supabase/tests/mpgf_pool_review_freeze.sql
-          test -f src/lib/mpgf/pool-review-freeze-migration.test.ts
-          test -f .github/workflows/mpgf-pool-review-freeze-gates.yml
-          rm "$BROKEN_CONTROLLER" "$RECOVERY_CONTROLLER"
+          rm -rf /tmp/review-freeze-payload
+          mkdir -p /tmp/review-freeze-payload
+          tar -xzf /tmp/review-freeze-payload.tar.gz -C /tmp/review-freeze-payload
+          install -D -m 0644 /tmp/review-freeze-payload/supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql
+          install -D -m 0644 /tmp/review-freeze-payload/supabase/tests/mpgf_pool_review_freeze.sql supabase/tests/mpgf_pool_review_freeze.sql
+          install -D -m 0644 /tmp/review-freeze-payload/src/lib/mpgf/pool-review-freeze-migration.test.ts src/lib/mpgf/pool-review-freeze-migration.test.ts
           git diff --check
 
-      - name: Commit the exact repair and remove both controllers
+      - name: Commit only the non-workflow repair files
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add \
+            supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql \
+            supabase/tests/mpgf_pool_review_freeze.sql \
+            src/lib/mpgf/pool-review-freeze-migration.test.ts
           git diff --cached --check
-          git commit -m "Enforce MPGF pool review authorization and terms freeze"
+          git commit -m "Add MPGF pool review authorization and freeze foundation"
           git push origin "HEAD:fix/mpgf-pool-review-freeze-20260806"
