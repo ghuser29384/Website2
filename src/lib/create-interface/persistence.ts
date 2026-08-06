@@ -12,7 +12,11 @@ interface RpcRow {
   submission_id: string | null;
   target_type: "offer" | "mpgf_pool_proposal" | null;
   target_id: string | null;
-  submission_status: "pending_review" | "published" | "rejected";
+  submission_status:
+    | "pending_review"
+    | "published"
+    | "changes_requested"
+    | "rejected";
   canonical_path: string | null;
   harm_assessment_id: string;
   harm_route: "allow" | "human_review" | "block";

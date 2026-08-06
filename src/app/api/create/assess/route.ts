@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
-import { persistCreateSubmission } from "@/lib/create-interface/persistence";
 import { validateCreatePayload } from "@/lib/create-interface/validation";
 import { assessHarmfulOffer } from "@/lib/moral-trade/harmful-offer-assessment";
 import { presentHarmfulOfferAssessment } from "@/lib/moral-trade/harmful-offer-presentation";
@@ -24,7 +23,7 @@ function response(body: unknown, status = 200) {
 export async function POST(request: NextRequest) {
   const requestOrigin = request.headers.get("origin");
   if (requestOrigin && requestOrigin !== request.nextUrl.origin) {
-    return response({ ok: false, message: "Cross-origin Create submissions are not accepted." }, 403);
+    return response({ ok: false, message: "Cross-origin assessments are not accepted." }, 403);
   }
 
   const viewer = await getViewer();
@@ -33,7 +32,7 @@ export async function POST(request: NextRequest) {
       {
         ok: false,
         requiresAuth: true,
-        message: "Sign in to submit this Create record. Your entered terms remain in this browser.",
+        message: "Sign in to run the private automatic assessment.",
         loginUrl: "/login?returnTo=%2Ftrades%2Fnew%3Fresume%3Dcreate",
       },
       401,
@@ -44,66 +43,44 @@ export async function POST(request: NextRequest) {
   try {
     raw = await request.json();
   } catch {
-    return response({ ok: false, message: "The Create submission was not valid JSON." }, 400);
+    return response({ ok: false, message: "The assessment request was not valid JSON." }, 400);
   }
 
   try {
     const validated = validateCreatePayload(raw);
     const supabase = createServiceClient();
-    const modelCallAllowed = await claimHarmfulOfferAssessmentRateLimit({
+    const allowed = await claimHarmfulOfferAssessmentRateLimit({
       supabase,
       actorId: viewer.authUser.id,
-      scope: "publication",
+      scope: "live_draft",
     });
-    const assessment = await assessHarmfulOffer(validated.source, {
-      trigger: "publication",
-      includeModel: modelCallAllowed,
-    });
-    const persisted = await persistCreateSubmission({
-      supabase,
-      actorId: viewer.authUser.id,
-      validated,
-      assessment,
-      origin: request.nextUrl.origin,
-    });
-    const harmAssessment = presentHarmfulOfferAssessment(
-      assessment,
-      persisted.assessmentId,
-    );
-
-    if (persisted.outcome === "blocked") {
-      console.warn("[create-interface] submission blocked by categorical policy", {
-        assessmentId: persisted.assessmentId,
-        reasonCodes: harmAssessment.reasonCodes,
-        userId: viewer.authUser.id,
-      });
+    if (!allowed) {
       return response(
         {
           ok: false,
-          blocked: true,
-          message: harmAssessment.message,
-          harmAssessment,
+          rateLimited: true,
+          message: "Automatic assessment is temporarily limited. The final submission will remain private for review if an automatic result is unavailable.",
         },
-        422,
+        429,
       );
     }
 
-    return response(
-      {
-        ok: true,
-        submission: persisted.submission,
-        harmAssessment,
-      },
-      201,
-    );
+    const assessment = await assessHarmfulOffer(validated.source, {
+      trigger: "live_draft",
+      includeModel: true,
+    });
+    return response({
+      ok: true,
+      harmAssessment: presentHarmfulOfferAssessment(assessment),
+    });
   } catch (error) {
     const message = error instanceof Error
       ? error.message
-      : "The Create submission could not be saved.";
+      : "The automatic assessment could not be completed.";
     const status = /required|invalid|must|unsupported|exceeds|cannot|between|future|formula|threshold/i.test(message)
       ? 400
       : 500;
-    console.error("[create-interface] submission failed", {
+    console.error("[create-interface] live harm assessment failed", {
       message,
       userId: viewer.authUser.id,
     });
