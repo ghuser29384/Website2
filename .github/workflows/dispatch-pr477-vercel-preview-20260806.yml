@@ -33,7 +33,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           script: |
-            const expectedSha = 'd5be798466fbef0a805df74d427d472065f1b9ea';
+            const expectedSha = 'f1d893e89c94b60b97ac83e2c6429b873600064e';
             const releaseRef = 'release/vercel-preview';
             await github.rest.actions.createWorkflowDispatch({
               owner: context.repo.owner,
