@@ -1,0 +1,147 @@
+name: PR 212 MFA scroll repair controller 20260806
+
+on:
+  push:
+    branches:
+      - ops/pr212-mfa-scroll-repair-20260806
+    paths:
+      - .github/scripts/pr212_repair_mfa_scroll.py
+      - .github/workflows/pr212-mfa-scroll-repair-controller-20260806.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-mfa-scroll-repair-controller-20260806
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: feat/institutional-trade-system
+      EXPECTED_HEAD: dbbb0afbb42ef9a1636be073bb1d47343badd98b
+      PATCH_SCRIPT: .github/scripts/pr212_repair_mfa_scroll.py
+      E2E_FILE: .github/scripts/institutional-trade-qa-e2e.mjs
+      CONTRACT_FILE: src/institutional-product-completeness.test.ts
+      TRIGGER_FILE: .github/pr212-exact-head-qa-trigger-20260804.txt
+    steps:
+      - name: Check out the exact controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+
+      - name: Check out the exact PR 212 branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          path: target
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then
+              exit 0
+            fi
+            if (( attempt == 4 )); then
+              echo "npm ci failed after four attempts." >&2
+              exit 1
+            fi
+            delay=$((attempt * 20))
+            echo "npm ci attempt $attempt failed; retrying after ${delay}s." >&2
+            sleep "$delay"
+          done
+
+      - name: Apply and verify the narrow MFA scroll repair
+        id: patch
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          current="$(git rev-parse HEAD)"
+          [[ "$current" == "$EXPECTED_HEAD" ]] || {
+            echo "Feature head moved: expected $EXPECTED_HEAD, found $current" >&2
+            exit 1
+          }
+
+          python ../controller/$PATCH_SCRIPT
+          node --check "$E2E_FILE"
+          node --import tsx --test \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-pool-record-trigger.test.ts
+          git diff --check
+
+          mapfile -t changed < <(git diff --name-only | sort)
+          expected=(
+            "$TRIGGER_FILE"
+            "$E2E_FILE"
+            "$CONTRACT_FILE"
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          [[ "${#changed[@]}" -eq "${#expected_sorted[@]}" ]] || {
+            printf 'Unexpected changed-file count. Actual:\n%s\n' "${changed[*]:-none}" >&2
+            exit 1
+          }
+          for index in "${!expected_sorted[@]}"; do
+            [[ "${changed[$index]}" == "${expected_sorted[$index]}" ]] || {
+              printf 'Unexpected changed files. Actual:\n%s\nExpected:\n%s\n' \
+                "${changed[*]}" "${expected_sorted[*]}" >&2
+              exit 1
+            }
+          done
+
+          grep -Fq 'await panel.evaluate((element) => {' "$E2E_FILE"
+          grep -Fq 'element.scrollIntoView({ block: "center", inline: "nearest" });' "$E2E_FILE"
+          ! grep -Fq 'await panel.scrollIntoViewIfNeeded();' "$E2E_FILE"
+          grep -Fq 'assert.doesNotMatch(qaScript, /panel\\.scrollIntoViewIfNeeded' "$CONTRACT_FILE"
+          [[ ! -e "$TRIGGER_FILE" ]]
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A -- "$E2E_FILE" "$CONTRACT_FILE" "$TRIGGER_FILE"
+          git commit -m 'Repair offscreen MFA scrolling in institutional QA'
+          new_head="$(git rev-parse HEAD)"
+
+          remote="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          [[ "$remote" == "$EXPECTED_HEAD" ]] || {
+            echo "Feature branch advanced concurrently to $remote" >&2
+            exit 1
+          }
+          git push origin "HEAD:$TARGET_BRANCH"
+          echo "new_head=$new_head" >> "$GITHUB_OUTPUT"
+
+      - name: Record the repaired exact head on PR 212
+        if: success()
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-mfa-scroll-repair-20260806 -->
+          Published the narrow offscreen-MFA QA repair as exact head \`${{ steps.patch.outputs.new_head }}\`.
+
+          The authenticated driver now invokes DOM \`scrollIntoView\` after the account-security card is attached, avoiding Playwright's visibility precondition on the far-offscreen dashboard card. A source-contract assertion prevents reintroducing \`scrollIntoViewIfNeeded\`, and the one-use QA trigger file was removed. JavaScript syntax and focused institutional contracts passed before publication.
+
+          The complete Institutional trade QA workflow must still pass on this exact head. PR #212 remains draft and unmerged. No production database, deployment, payment, custody, payout, integration, or institutional feature-flag state was changed."
+
+      - name: Record controller failure on PR 212
+        if: failure()
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-mfa-scroll-repair-20260806-failure -->
+          The narrow MFA-scroll repair controller failed in $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. PR #212 remains draft and unmerged. No production database, deployment, payment, custody, payout, integration, or institutional feature-flag state was changed."
