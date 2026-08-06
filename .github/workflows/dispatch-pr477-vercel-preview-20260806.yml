@@ -20,8 +20,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      CANDIDATE_SHA: '1df4a247894023fcbd74e3c1fa3316773d2612f8'
-      BASE_SHA: '8bdc10338121f173a300436a692c04808d56966b'
+      CANDIDATE_SHA: '7bada6f910ecbc13c9964aaa07b5966040e99d1e'
+      BASE_SHA: '87b093751a4c2de909555abdb7f181061bb36390'
       RELEASE_REF: release/vercel-preview
     steps:
       - name: Guard exact dispatch inputs
