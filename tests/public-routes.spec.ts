@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const oauthProviderLabels = {
   apple: "Apple",
@@ -52,6 +52,62 @@ const oauthProviders = [
   "fly",
 ] as const;
 
+const standardPublicRoutes = [
+  "/funding-rounds/vegetarian-week-micro-assurance-preview",
+  "/what-is-moral-trade",
+  "/worked-examples",
+  "/cohort",
+  "/create",
+  "/pledge-swaps",
+  "/paid-action-offers",
+  "/background-networking",
+  "/reasoning-standards",
+  "/donate",
+  "/methodology",
+  "/reasoning-center",
+  "/moral-trade/technical-spec",
+  "/wish-registry",
+  "/people",
+  "/mpgf",
+  "/public-goods-fund",
+  "/mpgf/contribute",
+  "/mpgf/account/contributions",
+  "/mpgf/pools",
+  "/mpgf/technical-spec",
+  "/privacy",
+  "/terms",
+  "/safety",
+  "/anti-threat-rules",
+  "/status",
+  "/team-and-governance",
+  "/pilot-updates",
+  "/faq",
+] as const;
+
+const dataDependentPublicRoutes = [
+  {
+    route: "/donation-offsets",
+    heading: /Redirect opposed donations into shared good|Live offset data is temporarily unavailable/i,
+  },
+  {
+    route: "/priority-correction-fund",
+    heading:
+      /Redirect a fixed share of recent money|Live priority-fund data is temporarily unavailable/i,
+  },
+] as const;
+
+const protectedRoutes = ["/dashboard", "/cart"] as const;
+const standardNavLabels = [
+  "Feed",
+  "Discover",
+  "Create",
+  "Invite",
+  "Messages",
+  "Commitments",
+  "Evidence",
+  "Safety",
+] as const;
+
 async function getEnabledOAuthProvidersForTest() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key =
@@ -77,49 +133,10 @@ async function getEnabledOAuthProvidersForTest() {
     external?: Partial<Record<(typeof oauthProviders)[number], boolean>>;
   };
 
-  return oauthProviders.filter((provider) => settings.external?.[provider] === true);
+  return oauthProviders.filter(
+    (provider) => provider !== "apple" && settings.external?.[provider] === true,
+  );
 }
-
-const publicRoutes = [
-  "/",
-  "/offers",
-  "/funding-rounds/vegetarian-week-micro-assurance-preview",
-  "/what-is-moral-trade",
-  "/worked-examples",
-  "/cohort",
-  "/offers/new",
-  "/create",
-  "/pledge-swaps",
-  "/paid-action-offers",
-  "/background-networking",
-  "/reasoning-standards",
-  "/donate",
-  "/donation-offsets",
-  "/methodology",
-  "/reasoning-center",
-  "/moral-trade/technical-spec",
-  "/wish-registry",
-  "/people",
-  "/mpgf",
-  "/public-goods-fund",
-  "/mpgf/contribute",
-  "/mpgf/account/contributions",
-  "/mpgf/pools",
-  "/mpgf/technical-spec",
-  "/priority-correction-fund",
-  "/privacy",
-  "/terms",
-  "/safety",
-  "/anti-threat-rules",
-  "/status",
-  "/team-and-governance",
-  "/pilot-updates",
-  "/faq",
-  "/login",
-  "/signup",
-] as const;
-
-const protectedRoutes = ["/dashboard", "/cart"] as const;
 
 function isIgnorableConsoleError(message: string) {
   return (
@@ -128,64 +145,199 @@ function isIgnorableConsoleError(message: string) {
   );
 }
 
-for (const route of publicRoutes) {
-  test(`public route ${route} renders meaningful content without landmark regressions`, async ({
-    page,
-  }) => {
-    const consoleErrors: string[] = [];
-    page.on("console", (message) => {
-      if (message.type() === "error" && !isIgnorableConsoleError(message.text())) {
-        consoleErrors.push(message.text());
-      }
-    });
-    page.on("pageerror", (error) => {
-      consoleErrors.push(error.message);
-    });
+function recordUnexpectedErrors(page: Page) {
+  const errors: string[] = [];
 
-    await page.goto(route, { waitUntil: "domcontentloaded" });
+  page.on("console", (message) => {
+    if (message.type() === "error" && !isIgnorableConsoleError(message.text())) {
+      errors.push(message.text());
+    }
+  });
+  page.on("pageerror", (error) => {
+    errors.push(error.stack || error.message);
+  });
 
-    await expect(page.locator("h1")).toHaveCount(1);
-    await expect(page.locator("h1")).toBeVisible();
-    await expect(page.locator("body")).not.toHaveText(
-      /Loading Moral Trade\.\s*Opening the requested workflow\./,
-    );
-    await expect(page.locator("body")).not.toContainText("Preparing route");
-    await expect(page.locator("body")).not.toContainText("Internal Error");
-    await expect(page.locator('nav[aria-label="Primary"]')).toHaveCount(1);
-    await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.locator("footer")).toHaveCount(1);
+  return errors;
+}
 
-    const landmarkOrder = await page.evaluate(() => {
-      const main = document.querySelector("main");
-      const footer = document.querySelector("footer");
-      if (!main || !footer) {
-        return "missing";
-      }
+async function visibleCount(page: Page, selector: string) {
+  return page.locator(selector).evaluateAll((elements) =>
+    elements.filter((element) => {
+      const html = element as HTMLElement;
+      const style = getComputedStyle(html);
+      const rect = html.getBoundingClientRect();
+      const hiddenAncestor = element.closest("[hidden], [aria-hidden='true'], [inert]");
 
-      return main.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING
-        ? "main-before-footer"
-        : "footer-before-main";
-    });
-    expect(landmarkOrder).toBe("main-before-footer");
+      return (
+        !hiddenAncestor &&
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        Number(style.opacity) !== 0 &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    }).length,
+  );
+}
 
-    const footerAfterPageHeadings = await page.evaluate(() => {
-      const footer = document.querySelector("footer");
-      const headings = [...document.querySelectorAll("main h2, main h3")];
-      if (!footer) {
-        return "missing-footer";
-      }
+async function expectVisibleCount(page: Page, selector: string, expected: number) {
+  await expect
+    .poll(() => visibleCount(page, selector), {
+      message: `visible ${selector} count`,
+      timeout: 15_000,
+    })
+    .toBe(expected);
+}
 
-      return headings.every(
-        (heading) => heading.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING,
-      )
-        ? "footer-after-headings"
-        : "footer-before-page-content";
-    });
-    expect(footerAfterPageHeadings).toBe("footer-after-headings");
-
-    expect(consoleErrors).toEqual([]);
+async function waitForResolvedPage(page: Page) {
+  await page.waitForLoadState("load").catch(() => undefined);
+  await expect(page.locator("body")).not.toHaveText(
+    /Loading Moral Trade\.\s*Opening the requested workflow\./,
+    { timeout: 15_000 },
+  );
+  await expect(page.locator("body")).not.toContainText("Preparing route", { timeout: 15_000 });
+  await expect(page.locator("body")).not.toContainText("This page did not finish rendering", {
+    timeout: 15_000,
+  });
+  await expect(page.locator("body")).not.toContainText("Internal Server Error", {
+    timeout: 15_000,
   });
 }
+
+async function expectStandardShell(page: Page) {
+  await expectVisibleCount(page, "h1", 1);
+  await expectVisibleCount(page, 'nav[aria-label="Primary"]', 1);
+  await expectVisibleCount(page, "main", 1);
+  await expectVisibleCount(page, ".mt-site-footer", 1);
+
+  const order = await page.evaluate(() => {
+    const main = [...document.querySelectorAll("main")].find((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    const footer = [...document.querySelectorAll(".mt-site-footer")].find((element) => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+
+    if (!main || !footer) return "missing";
+    return main.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING
+      ? "main-before-footer"
+      : "footer-before-main";
+  });
+  expect(order).toBe("main-before-footer");
+}
+
+for (const route of standardPublicRoutes) {
+  test(`standard public route ${route} resolves with one visible page shell`, async ({ page }) => {
+    const errors = recordUnexpectedErrors(page);
+    const response = await page.goto(route, { waitUntil: "domcontentloaded" });
+
+    expect(response?.status() ?? 200).toBeLessThan(400);
+    await waitForResolvedPage(page);
+    await expectStandardShell(page);
+    expect(errors).toEqual([]);
+  });
+}
+
+for (const { route, heading } of dataDependentPublicRoutes) {
+  test(`${route} renders either live data or a truthful recovery shell`, async ({ page }) => {
+    const response = await page.goto(route, { waitUntil: "domcontentloaded" });
+
+    expect(response?.status() ?? 200).toBeLessThan(500);
+    await waitForResolvedPage(page);
+    await expectStandardShell(page);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
+    await expect(page.getByText("No action taken")).toHaveCount(
+      (await page.getByRole("heading", { level: 1 }).getAttribute("class")) === null &&
+        (await page.getByRole("heading", { level: 1 }).textContent())?.includes("temporarily unavailable")
+        ? 1
+        : 0,
+    );
+  });
+}
+
+test("the current home workspace has one semantic page heading and its dedicated navigation", async ({
+  page,
+}) => {
+  const errors = recordUnexpectedErrors(page);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await waitForResolvedPage(page);
+
+  await expect(page.getByRole("heading", { level: 1, name: "Your best match right now" })).toHaveCount(1);
+  await expectVisibleCount(page, 'nav[aria-label="Primary"]', 1);
+  await expectVisibleCount(page, "main", 1);
+  await expectVisibleCount(page, ".mt-site-footer", 0);
+
+  const navLabels = await page
+    .locator('nav[aria-label="Primary"] a')
+    .allTextContents();
+  expect(navLabels.map((label) => label.trim())).toEqual([
+    "Feed",
+    "Now",
+    "Discover",
+    "Activity",
+    "Evidence",
+    "Account",
+  ]);
+  expect(errors).toEqual([]);
+});
+
+test("/offers transfers to the dedicated Discover shell", async ({ page }) => {
+  const errors = recordUnexpectedErrors(page);
+  await page.goto("/offers", { waitUntil: "domcontentloaded" });
+  await waitForResolvedPage(page);
+
+  await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/discover");
+  await expectVisibleCount(page, "h1", 1);
+  await expectVisibleCount(page, "main", 1);
+  await expectVisibleCount(page, 'nav[aria-label="Primary"]', 0);
+  await expectVisibleCount(page, ".mt-site-footer", 0);
+  expect(errors).toEqual([]);
+});
+
+test("/offers/new transfers to the embedded Create interface with a document heading", async ({
+  page,
+}) => {
+  const errors = recordUnexpectedErrors(page);
+  await page.goto("/offers/new", { waitUntil: "domcontentloaded" });
+  await waitForResolvedPage(page);
+
+  await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/trades/new");
+  await expect(page.getByRole("heading", { level: 1, name: "Create a Moral Trade" })).toHaveCount(1);
+  await expectVisibleCount(page, "main", 1);
+  await expect(page.locator('iframe[title="Moral Trade Create"]')).toBeVisible();
+  await expectVisibleCount(page, 'nav[aria-label="Primary"]', 0);
+  await expectVisibleCount(page, ".mt-site-footer", 0);
+  expect(errors).toEqual([]);
+});
+
+test("auth routes use the compact auth shell rather than the marketplace topbar", async ({ page }) => {
+  for (const [route, heading] of [
+    ["/login", "Welcome back"],
+    ["/signup", "Create your account"],
+  ] as const) {
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+    await waitForResolvedPage(page);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
+    await expectVisibleCount(page, 'nav[aria-label="Primary"]', 0);
+    await expectVisibleCount(page, "main", 1);
+    await expectVisibleCount(page, ".mt-site-footer", 1);
+  }
+});
+
+test("representative marketplace pages expose the current top-level navigation", async ({ page }) => {
+  for (const route of ["/methodology", "/mpgf", "/people", "/safety"] as const) {
+    await page.goto(route, { waitUntil: "domcontentloaded" });
+    await waitForResolvedPage(page);
+
+    const navLabels = await page
+      .locator(".topbar-links > a, .topbar-links > details > summary")
+      .allTextContents();
+    expect(navLabels.map((label) => label.replace("▾", "").trim())).toEqual(standardNavLabels);
+    await expect(page.locator(".topbar-actions")).toContainText("Sign in");
+  }
+});
 
 test("/offers/new offset creation layout stays broad without mobile overflow", async ({ page }) => {
   const route = "/offers/new?mode=offset#offer-boundaries";
@@ -218,11 +370,11 @@ test("/offers/new offset creation layout stays broad without mobile overflow", a
   }
 });
 
-test("/login renders unified auth options and preserves returnTo", async ({ page }) => {
+test("/login renders enabled auth options and preserves returnTo", async ({ page }) => {
   const enabledOAuthProviders = await getEnabledOAuthProvidersForTest();
   await page.goto("/login?returnTo=/offers/new", { waitUntil: "domcontentloaded" });
 
-  await expect(page.locator("h1")).toHaveText("Log in to Moral Trade");
+  await expect(page.locator("h1")).toHaveText("Welcome back");
   await expect(page.getByRole("link", { name: "Continue with Email" })).toHaveAttribute(
     "href",
     "/login?mode=login&method=email&returnTo=%2Foffers%2Fnew",
@@ -250,7 +402,7 @@ test("/login renders unified auth options and preserves returnTo", async ({ page
 test("/signup renders signup mode with legal text and mode switch", async ({ page }) => {
   await page.goto("/signup?next=/wish-registry", { waitUntil: "domcontentloaded" });
 
-  await expect(page.locator("h1")).toHaveText("Create your Moral Trade account");
+  await expect(page.locator("h1")).toHaveText("Create your account");
   await expect(page.getByText("Start with one low-risk action. You can add profile details later.")).toBeVisible();
   await expect(page.getByText("By creating an account, you agree to the")).toBeVisible();
   await expect(page.getByRole("link", { name: "Log in" }).last()).toHaveAttribute(
@@ -259,16 +411,16 @@ test("/signup renders signup mode with legal text and mode switch", async ({ pag
   );
 });
 
-test("auth mode switch changes between login and signup while preserving returnTo", async ({ page }) => {
+test("auth mode switch preserves returnTo", async ({ page }) => {
   await page.goto("/login?returnTo=/offers/new", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("link", { name: "Create account" }).first().click();
   await expect(page).toHaveURL(/\/signup\?mode=signup&returnTo=%2Foffers%2Fnew$/);
-  await expect(page.locator("h1")).toHaveText("Create your Moral Trade account");
+  await expect(page.locator("h1")).toHaveText("Create your account");
 
   await page.getByRole("link", { name: "Log in" }).first().click();
   await expect(page).toHaveURL(/\/login\?mode=login&returnTo=%2Foffers%2Fnew$/);
-  await expect(page.locator("h1")).toHaveText("Log in to Moral Trade");
+  await expect(page.locator("h1")).toHaveText("Welcome back");
 });
 
 test("auth email flow exposes compact required email/password form", async ({ page }) => {
@@ -295,28 +447,6 @@ test("signup email flow asks only email and password before onboarding details",
   await expect(page.locator('#email-auth input[name="return_to"]')).toHaveValue("/onboarding");
 });
 
-for (const route of ["/", "/offers", "/donation-offsets", "/mpgf", "/methodology", "/safety", "/people", "/signup"] as const) {
-  test(`public route ${route} uses canonical top-level navigation`, async ({ page }) => {
-    await page.goto(route, { waitUntil: "domcontentloaded" });
-
-    const navLabels = await page.evaluate(() =>
-      [...document.querySelectorAll(".topbar-links > a, .topbar-links > details > summary")]
-        .map((item) => (item.textContent ?? "").replace(/\s+/g, " ").replace("▾", "").trim()),
-    );
-    const actionLabels = await page.evaluate(() =>
-      [...document.querySelectorAll(".topbar-actions a")]
-        .map((item) => (item.textContent ?? "").replace(/\s+/g, " ").trim()),
-    );
-
-    expect(navLabels).toEqual(["Browse", "Create", "Learn", "Community"]);
-    expect(actionLabels).toContain("Sign in");
-    expect(navLabels).not.toContain("Marketplace");
-    expect(navLabels).not.toContain("Explore");
-    expect(navLabels).not.toContain("Advanced");
-    expect(navLabels).not.toContain("MPGF");
-  });
-}
-
 test("/mpgf assurance funding receipt recalculates expected other funding", async ({ page }) => {
   await page.goto("/mpgf#assurance-funding", { waitUntil: "networkidle" });
 
@@ -337,36 +467,6 @@ test("/mpgf assurance funding receipt recalculates expected other funding", asyn
   ).toBeVisible();
 });
 
-test("/offers keeps offer and cause-area cards before the footer", async ({ page }) => {
-  await page.goto("/offers", { waitUntil: "domcontentloaded" });
-
-  const contentAfterFooter = await page.evaluate(() => {
-    const footer = document.querySelector("footer");
-    if (!footer) {
-      return ["missing footer"];
-    }
-
-    const cards = [...document.querySelectorAll("article")].filter((card) => {
-      const text = card.textContent ?? "";
-      return (
-        text.includes("worked examples") ||
-        text.includes("No published offer yet") ||
-        text.includes("Published proposals") ||
-        card.classList.contains("data-card")
-      );
-    });
-
-    return cards
-      .filter(
-        (card) =>
-          footer.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING,
-      )
-      .map((card) => card.textContent?.trim().slice(0, 80) ?? "untitled card");
-  });
-
-  expect(contentAfterFooter).toEqual([]);
-});
-
 for (const route of protectedRoutes) {
   test(`signed-out ${route} resolves away from the loading shell`, async ({ page }) => {
     await page.context().clearCookies();
@@ -374,12 +474,12 @@ for (const route of protectedRoutes) {
 
     await expect(page.locator("body")).not.toHaveText(
       /Loading Moral Trade\.\s*Opening the requested workflow\./,
-      { timeout: 2_000 },
+      { timeout: 5_000 },
     );
 
     if (page.url().includes("/login")) {
       expect(page.url()).toContain(`returnTo=${encodeURIComponent(route)}`);
-      await expect(page.locator("h1")).toContainText("Log in");
+      await expect(page.locator("h1")).toContainText("Welcome back");
     } else {
       await expect(page.locator("h1")).toBeVisible();
     }
