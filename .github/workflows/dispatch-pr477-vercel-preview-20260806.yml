@@ -49,3 +49,13 @@ jobs:
             -f ref="$RELEASE_REF" \
             -f expected_sha="$CANDIDATE_SHA" \
             -f rendered_base_sha="$BASE_SHA"
+
+      - name: Record dispatch evidence
+        run: |
+          {
+            echo '### PR 477 preview dispatch'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Exact merge base: \`$BASE_SHA\`"
+            echo "- Release ref: \`$RELEASE_REF\`"
+          } >> "$GITHUB_STEP_SUMMARY"
