@@ -24,12 +24,11 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - name: Publish pending status on the pull request head and merge candidate
+      - name: Publish pending status on the pull request head
         id: pending
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         shell: bash
         run: |
@@ -42,29 +41,6 @@ jobs:
             --arg context "$STATUS_CONTEXT" \
             '{state:$state,target_url:$target_url,description:$description,context:$context}' \
             | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" --input - >/dev/null
-
-          merge_sha=''
-          for attempt in $(seq 1 15); do
-            merge_sha="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.merge_commit_sha // empty')"
-            if [[ -n "$merge_sha" ]]; then
-              break
-            fi
-            sleep 2
-          done
-          [[ -n "$merge_sha" ]] || {
-            echo "GitHub did not expose the current pull-request merge candidate SHA." >&2
-            exit 1
-          }
-
-          if [[ "$merge_sha" != "$HEAD_SHA" ]]; then
-            jq -n \
-              --arg state pending \
-              --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-              --arg description "Validating release classification and evidence" \
-              --arg context "$STATUS_CONTEXT" \
-              '{state:$state,target_url:$target_url,description:$description,context:$context}' \
-              | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$merge_sha" --input - >/dev/null
-          fi
 
       - name: Check out the current trusted base branch
         id: checkout
@@ -91,11 +67,10 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: node scripts/validate-release-pr-body.mjs
 
-      - name: Publish the final required status
+      - name: Publish the final required status on the pull request head
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PENDING_OUTCOME: ${{ steps.pending.outcome }}
           CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
@@ -111,19 +86,6 @@ jobs:
             description="Release classification policy failed"
           fi
 
-          merge_sha=''
-          for attempt in $(seq 1 15); do
-            merge_sha="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq '.merge_commit_sha // empty')"
-            if [[ -n "$merge_sha" ]]; then
-              break
-            fi
-            sleep 2
-          done
-          if [[ -z "$merge_sha" ]]; then
-            state=failure
-            description="Release classification merge candidate unavailable"
-          fi
-
           jq -n \
             --arg state "$state" \
             --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
@@ -131,15 +93,5 @@ jobs:
             --arg context "$STATUS_CONTEXT" \
             '{state:$state,target_url:$target_url,description:$description,context:$context}' \
             | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" --input - >/dev/null
-
-          if [[ -n "$merge_sha" && "$merge_sha" != "$HEAD_SHA" ]]; then
-            jq -n \
-              --arg state "$state" \
-              --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
-              --arg description "$description" \
-              --arg context "$STATUS_CONTEXT" \
-              '{state:$state,target_url:$target_url,description:$description,context:$context}' \
-              | gh api --method POST "repos/$GITHUB_REPOSITORY/statuses/$merge_sha" --input - >/dev/null
-          fi
 
           [[ "$state" == success ]]
