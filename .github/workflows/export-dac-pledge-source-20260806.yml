@@ -1,0 +1,68 @@
+name: Export exact DAC pledge source once
+
+on:
+  push:
+    branches:
+      - audit/export-dac-pledge-source-20260806
+    paths:
+      - .github/workflows/export-dac-pledge-source-20260806.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: export-dac-pledge-source-20260806
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SOURCE: db6140716e2a9f5b8b2564f2ee03ace44023784f
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact publication candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SOURCE }}
+          fetch-depth: 0
+
+      - name: Guard and package the exact source subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
+          mkdir -p dac-pledge-source
+          cp --parents \
+            package.json \
+            package-lock.json \
+            tsconfig.json \
+            src/lib/supabase/database.types.ts \
+            src/app/api/mpgf/rounds/[roundId]/pledge-intents/route.ts \
+            src/app/api/mpgf/governance/pledges/route.ts \
+            src/lib/mpgf/public-goods-contribution-intents.ts \
+            src/lib/mpgf/public-goods-contribution-ledger.ts \
+            src/lib/mpgf/public-goods-contribution-persistence.ts \
+            src/lib/mpgf/public-goods-api.ts \
+            src/lib/mpgf/public-goods-finalization.ts \
+            src/lib/mpgf/public-goods-stripe-commitments.ts \
+            src/lib/mpgf/participant-types.ts \
+            src/lib/mpgf/persistence.ts \
+            src/lib/mpgf/types.ts \
+            supabase/migrations/*.sql \
+            supabase/tests/*.sql \
+            .github/workflows/mpgf-pool-publication-gates.yml \
+            dac-pledge-source/
+          printf 'source=%s\ntree=%s\n' "$(git rev-parse HEAD)" "$(git rev-parse HEAD^{tree})" > dac-pledge-source/SOURCE.txt
+          find dac-pledge-source -type f -print0 | sort -z | xargs -0 sha256sum > dac-pledge-source/SHA256SUMS
+          tar -czf dac-pledge-source.tar.gz dac-pledge-source
+          sha256sum dac-pledge-source.tar.gz
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: dac-pledge-source-${{ github.run_id }}
+          path: dac-pledge-source.tar.gz
+          if-no-files-found: error
+          retention-days: 7
