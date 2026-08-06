@@ -1,0 +1,145 @@
+name: Public route shell fast gates 360908c9
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/public-route-shell-fast-360908c9.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: public-route-shell-fast-360908c9
+  cancel-in-progress: true
+
+env:
+  BASE_SHA: 87b093751a4c2de909555abdb7f181061bb36390
+  CANDIDATE_SHA: 360908c9d927cde1f7c43a9f84780150a8467fd2
+  PRODUCT_PR: "542"
+  STATUS_CONTEXT: QA / Public route shell fast gates
+  EVIDENCE_DIR: public-route-shell-fast-evidence-360908c9
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  fast-gates:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 65
+
+    steps:
+      - name: Mark immutable candidate pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Running alternate-runner source, build, and focused route gates" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Guard exact product identity and scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = open
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.sha <<<"$product_pr")" = "$BASE_SHA"
+          actual_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          expected_files="$(printf '%s\n' \
+            'src/app/donation-offsets/error.tsx' \
+            'src/app/page.tsx' \
+            'src/app/priority-correction-fund/error.tsx' \
+            'src/components/create/create-interface-frame.tsx' \
+            'src/components/layout/public-route-error.tsx' \
+            'tests/public-routes.spec.ts' | sort)"
+          test "$actual_files" = "$expected_files"
+
+      - name: Check out immutable candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove exact candidate differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git fetch --depth=1 origin "$BASE_SHA"
+          test "$(git diff --name-only "$BASE_SHA" "$CANDIDATE_SHA" | sort)" = "$(printf '%s\n' \
+            'src/app/donation-offsets/error.tsx' \
+            'src/app/page.tsx' \
+            'src/app/priority-correction-fund/error.tsx' \
+            'src/components/create/create-interface-frame.tsx' \
+            'src/components/layout/public-route-error.tsx' \
+            'tests/public-routes.spec.ts' | sort)"
+          git diff --check "$BASE_SHA" "$CANDIDATE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          git diff --stat "$BASE_SHA" "$CANDIDATE_SHA" > "$EVIDENCE_DIR/diff-stat.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+
+      - name: Run source, lint, type, and build gates
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$EVIDENCE_DIR/source-tests.log"
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+          npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/build.log"
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium 2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Run focused public-route contract once
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test tests/public-routes.spec.ts --workers=1 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/focused-public-routes.log"
+
+      - name: Upload fast-gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-route-shell-fast-gates-360908c9
+          path: public-route-shell-fast-evidence-360908c9
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish immutable candidate result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          if [[ "$JOB_STATUS" == success ]]; then
+            state=success
+            description="Alternate-runner source, build, and focused public-route gates passed"
+          else
+            state=failure
+            description="Fast public-route gates failed; inspect exact evidence"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
