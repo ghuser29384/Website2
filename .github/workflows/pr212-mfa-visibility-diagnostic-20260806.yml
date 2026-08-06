@@ -20,7 +20,7 @@ concurrency:
 jobs:
   diagnose:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       EXPECTED_HEAD: dbbb0afbb42ef9a1636be073bb1d47343badd98b
       QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
@@ -39,32 +39,27 @@ jobs:
       CRON_SECRET: qa-institutional-cron-not-production
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Check out exact PR 212 head
-        uses: actions/checkout@v4
-        with:
-          ref: feat/institutional-trade-system
-          fetch-depth: 0
-
-      - name: Refuse branch drift or production configuration
+      - name: Clone the exact PR 212 head without marketplace actions
         shell: bash
         run: |
           set -euo pipefail
-          actual="$(git rev-parse HEAD)"
+          node --version
+          npm --version
+          git init target
+          git -C target remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -C target fetch --depth=1 origin "$EXPECTED_HEAD"
+          git -C target checkout --detach FETCH_HEAD
+          actual="$(git -C target rev-parse HEAD)"
           [[ "$actual" == "$EXPECTED_HEAD" ]] || {
-            echo "PR #212 moved: expected $EXPECTED_HEAD, found $actual" >&2
+            echo "PR #212 moved or checkout drifted: expected $EXPECTED_HEAD, found $actual" >&2
             exit 1
           }
           [[ "$NEXT_PUBLIC_SUPABASE_URL" == *"$QA_PROJECT_REF"* ]]
           [[ "$NEXT_PUBLIC_SUPABASE_URL" != *"jnpoxvalyjtdghnperyu"* ]]
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
       - name: Install dependencies with retry
         shell: bash
+        working-directory: target
         run: |
           set -euo pipefail
           for attempt in 1 2 3 4; do
@@ -74,10 +69,12 @@ jobs:
           done
 
       - name: Install Chromium
+        working-directory: target
         run: npx playwright install --with-deps chromium
 
       - name: Add fail-closed MFA visibility evidence locally
         shell: bash
+        working-directory: target
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -142,10 +139,12 @@ jobs:
           git diff --check
 
       - name: Build exact feature head
+        working-directory: target
         run: npm run build
 
       - name: Start application
         shell: bash
+        working-directory: target
         run: |
           set -euo pipefail
           npm run start > institutional-diagnostic-server.log 2>&1 &
@@ -160,6 +159,7 @@ jobs:
       - name: Run isolated authenticated diagnostic
         id: e2e
         shell: bash
+        working-directory: target
         run: |
           set +e
           node .github/scripts/institutional-trade-qa-e2e.mjs 2>&1 | tee institutional-e2e-diagnostic.log
@@ -167,29 +167,50 @@ jobs:
           echo "status=$status" >> "$GITHUB_OUTPUT"
           exit 0
 
-      - name: Upload diagnostic evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr212-mfa-visibility-diagnostic-${{ env.EXPECTED_HEAD }}-${{ github.run_id }}
-          path: |
-            institutional-e2e-diagnostic
-            institutional-e2e-diagnostic.log
-            institutional-diagnostic-server.log
-          if-no-files-found: warn
-          retention-days: 14
-
-      - name: Record diagnostic run on PR 212
+      - name: Publish computed visibility evidence on PR 212
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-mfa-visibility-diagnostic-20260806 -->
+          status="${{ steps.e2e.outputs.status || 'not-run' }}"
+          evidence_file="target/institutional-e2e-diagnostic/mfa-verifier-visibility.json"
+          if [[ -f "$evidence_file" ]]; then
+            evidence="$(jq -c '{role,url,title,panelCount,visibilityDiagnostic,bodyText:(.bodyText[0:1800])}' "$evidence_file")"
+          else
+            evidence='{"diagnostic":"visibility evidence file was not produced"}'
+          fi
+          server_tail="$(tail -n 80 target/institutional-diagnostic-server.log 2>/dev/null || true)"
+          e2e_tail="$(tail -n 120 target/institutional-e2e-diagnostic.log 2>/dev/null || true)"
+          body_file="$(mktemp)"
+          cat > "$body_file" <<EOF
+          <!-- pr212-mfa-visibility-diagnostic-20260806 -->
           ## PR #212 MFA visibility diagnostic
 
           - Exact feature head: \`$EXPECTED_HEAD\`
           - Diagnostic run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-          - Authenticated E2E exit status: \`${{ steps.e2e.outputs.status || 'not-run' }}\`
-          - Artifact: \`pr212-mfa-visibility-diagnostic-$EXPECTED_HEAD-$GITHUB_RUN_ID\`
+          - Authenticated E2E exit status: \`$status\`
 
-          The run patches only its ephemeral checkout to capture the current URL, body text, computed visibility and ancestor chain for \`article#account-security\`, plus a full-page screenshot before the failing scroll. The isolated QA database cleanup remains in the E2E script. PR #212 remains draft and unmerged; production database, deployment, payment, custody, payout, and feature flags are unchanged."
+          <details><summary>Computed visibility evidence</summary>
+
+          \`\`\`json
+          $evidence
+          \`\`\`
+          </details>
+
+          <details><summary>E2E log tail</summary>
+
+          \`\`\`
+          $e2e_tail
+          \`\`\`
+          </details>
+
+          <details><summary>Server log tail</summary>
+
+          \`\`\`
+          $server_tail
+          \`\`\`
+          </details>
+
+          This pure-shell diagnostic bypasses the transient GitHub marketplace-action download outage. It modifies only an ephemeral checkout and runs against isolated QA. PR #212 remains draft and unmerged; production database, deployment, payment, custody, payout, and feature flags are unchanged.
+          EOF
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body-file "$body_file"
