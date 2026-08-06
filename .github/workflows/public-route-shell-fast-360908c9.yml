@@ -1,4 +1,4 @@
-name: Public route shell fast gates 360908c9
+name: Public route shell fast gates 36f20ec4
 
 on:
   pull_request:
@@ -11,15 +11,15 @@ permissions:
   statuses: write
 
 concurrency:
-  group: public-route-shell-fast-360908c9
+  group: public-route-shell-fast-gates
   cancel-in-progress: true
 
 env:
   BASE_SHA: 87b093751a4c2de909555abdb7f181061bb36390
-  CANDIDATE_SHA: 360908c9d927cde1f7c43a9f84780150a8467fd2
+  CANDIDATE_SHA: 36f20ec464b6b4efab7cb8065faeef56f4d11a38
   PRODUCT_PR: "542"
   STATUS_CONTEXT: QA / Public route shell fast gates
-  EVIDENCE_DIR: public-route-shell-fast-evidence-360908c9
+  EVIDENCE_DIR: public-route-shell-fast-evidence-36f20ec4
   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
   SITE_URL: http://127.0.0.1:3210
   PLAYWRIGHT_HTML_OPEN: never
@@ -118,8 +118,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: public-route-shell-fast-gates-360908c9
-          path: public-route-shell-fast-evidence-360908c9
+          name: public-route-shell-fast-gates-36f20ec4
+          path: public-route-shell-fast-evidence-36f20ec4
           if-no-files-found: error
           retention-days: 14
 
