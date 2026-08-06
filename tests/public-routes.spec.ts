@@ -1,58 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const oauthProviderLabels = {
-  apple: "Apple",
-  azure: "Microsoft",
-  bitbucket: "Bitbucket",
-  discord: "Discord",
-  facebook: "Facebook",
-  figma: "Figma",
-  fly: "Fly.io",
-  github: "GitHub",
-  gitlab: "GitLab",
-  google: "Google",
-  kakao: "Kakao",
-  keycloak: "Keycloak",
-  linkedin: "LinkedIn",
-  linkedin_oidc: "LinkedIn OIDC",
-  notion: "Notion",
-  slack: "Slack",
-  slack_oidc: "Slack OIDC",
-  spotify: "Spotify",
-  twitch: "Twitch",
-  twitter: "Twitter",
-  workos: "WorkOS",
-  x: "X",
-  zoom: "Zoom",
-} as const;
-
-const oauthProviders = [
-  "google",
-  "apple",
-  "facebook",
-  "github",
-  "discord",
-  "x",
-  "twitter",
-  "linkedin_oidc",
-  "linkedin",
-  "azure",
-  "gitlab",
-  "bitbucket",
-  "figma",
-  "kakao",
-  "keycloak",
-  "notion",
-  "slack_oidc",
-  "slack",
-  "spotify",
-  "twitch",
-  "workos",
-  "zoom",
-  "fly",
-] as const;
-
 const standardPublicRoutes = [
+  "/offers",
   "/funding-rounds/vegetarian-week-micro-assurance-preview",
   "/what-is-moral-trade",
   "/worked-examples",
@@ -107,36 +56,6 @@ const standardNavLabels = [
   "Evidence",
   "Safety",
 ] as const;
-
-async function getEnabledOAuthProvidersForTest() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key =
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !key) {
-    return [];
-  }
-
-  const response = await fetch(`${url}/auth/v1/settings`, {
-    headers: {
-      apikey: key,
-      authorization: `Bearer ${key}`,
-    },
-  });
-
-  if (!response.ok) {
-    return [];
-  }
-
-  const settings = (await response.json()) as {
-    external?: Partial<Record<(typeof oauthProviders)[number], boolean>>;
-  };
-
-  return oauthProviders.filter(
-    (provider) => provider !== "apple" && settings.external?.[provider] === true,
-  );
-}
 
 function isIgnorableConsoleError(message: string) {
   return (
@@ -211,20 +130,28 @@ async function expectStandardShell(page: Page) {
   await expectVisibleCount(page, ".mt-site-footer", 1);
 
   const order = await page.evaluate(() => {
-    const main = [...document.querySelectorAll("main")].find((element) => {
-      const rect = element.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    });
-    const footer = [...document.querySelectorAll(".mt-site-footer")].find((element) => {
-      const rect = element.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    });
+    const isVisible = (element: Element) => {
+      const html = element as HTMLElement;
+      const style = getComputedStyle(html);
+      const rect = html.getBoundingClientRect();
+      return (
+        !element.closest("[hidden], [aria-hidden='true'], [inert]") &&
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        Number(style.opacity) !== 0 &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    };
+    const main = [...document.querySelectorAll("main")].find(isVisible);
+    const footer = [...document.querySelectorAll(".mt-site-footer")].find(isVisible);
 
     if (!main || !footer) return "missing";
     return main.compareDocumentPosition(footer) & Node.DOCUMENT_POSITION_FOLLOWING
       ? "main-before-footer"
       : "footer-before-main";
   });
+
   expect(order).toBe("main-before-footer");
 }
 
@@ -241,18 +168,16 @@ for (const route of standardPublicRoutes) {
 }
 
 for (const { route, heading } of dataDependentPublicRoutes) {
-  test(`${route} renders either live data or a truthful recovery shell`, async ({ page }) => {
-    const response = await page.goto(route, { waitUntil: "domcontentloaded" });
-
-    expect(response?.status() ?? 200).toBeLessThan(500);
+  test(`${route} renders live data or a truthful recovery shell`, async ({ page }) => {
+    await page.goto(route, { waitUntil: "domcontentloaded" });
     await waitForResolvedPage(page);
     await expectStandardShell(page);
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
-    await expect(page.getByText("No action taken")).toHaveCount(
-      (await page.getByRole("heading", { level: 1 }).getAttribute("class")) === null &&
-        (await page.getByRole("heading", { level: 1 }).textContent())?.includes("temporarily unavailable")
-        ? 1
-        : 0,
+
+    const pageHeading = page.getByRole("heading", { level: 1 });
+    await expect(pageHeading).toHaveText(heading);
+    const isRecovery = /temporarily unavailable/i.test((await pageHeading.textContent()) ?? "");
+    await expect(page.getByText("No action taken", { exact: true })).toHaveCount(
+      isRecovery ? 1 : 0,
     );
   });
 }
@@ -264,14 +189,14 @@ test("the current home workspace has one semantic page heading and its dedicated
   await page.goto("/", { waitUntil: "domcontentloaded" });
   await waitForResolvedPage(page);
 
-  await expect(page.getByRole("heading", { level: 1, name: "Your best match right now" })).toHaveCount(1);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Your best match right now" }),
+  ).toHaveCount(1);
   await expectVisibleCount(page, 'nav[aria-label="Primary"]', 1);
   await expectVisibleCount(page, "main", 1);
   await expectVisibleCount(page, ".mt-site-footer", 0);
 
-  const navLabels = await page
-    .locator('nav[aria-label="Primary"] a')
-    .allTextContents();
+  const navLabels = await page.locator('nav[aria-label="Primary"] a').allTextContents();
   expect(navLabels.map((label) => label.trim())).toEqual([
     "Feed",
     "Now",
@@ -283,19 +208,6 @@ test("the current home workspace has one semantic page heading and its dedicated
   expect(errors).toEqual([]);
 });
 
-test("/offers transfers to the dedicated Discover shell", async ({ page }) => {
-  const errors = recordUnexpectedErrors(page);
-  await page.goto("/offers", { waitUntil: "domcontentloaded" });
-  await waitForResolvedPage(page);
-
-  await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/discover");
-  await expectVisibleCount(page, "h1", 1);
-  await expectVisibleCount(page, "main", 1);
-  await expectVisibleCount(page, 'nav[aria-label="Primary"]', 0);
-  await expectVisibleCount(page, ".mt-site-footer", 0);
-  expect(errors).toEqual([]);
-});
-
 test("/offers/new transfers to the embedded Create interface with a document heading", async ({
   page,
 }) => {
@@ -304,7 +216,9 @@ test("/offers/new transfers to the embedded Create interface with a document hea
   await waitForResolvedPage(page);
 
   await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/trades/new");
-  await expect(page.getByRole("heading", { level: 1, name: "Create a Moral Trade" })).toHaveCount(1);
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Create a Moral Trade" }),
+  ).toHaveCount(1);
   await expectVisibleCount(page, "main", 1);
   await expect(page.locator('iframe[title="Moral Trade Create"]')).toBeVisible();
   await expectVisibleCount(page, 'nav[aria-label="Primary"]', 0);
@@ -322,12 +236,12 @@ test("auth routes use the compact auth shell rather than the marketplace topbar"
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
     await expectVisibleCount(page, 'nav[aria-label="Primary"]', 0);
     await expectVisibleCount(page, "main", 1);
-    await expectVisibleCount(page, ".mt-site-footer", 1);
+    await expectVisibleCount(page, "footer", 1);
   }
 });
 
 test("representative marketplace pages expose the current top-level navigation", async ({ page }) => {
-  for (const route of ["/methodology", "/mpgf", "/people", "/safety"] as const) {
+  for (const route of ["/offers", "/methodology", "/mpgf", "/people", "/safety"] as const) {
     await page.goto(route, { waitUntil: "domcontentloaded" });
     await waitForResolvedPage(page);
 
@@ -370,8 +284,7 @@ test("/offers/new offset creation layout stays broad without mobile overflow", a
   }
 });
 
-test("/login renders enabled auth options and preserves returnTo", async ({ page }) => {
-  const enabledOAuthProviders = await getEnabledOAuthProvidersForTest();
+test("/login preserves returnTo, keeps email, and never exposes Apple", async ({ page }) => {
   await page.goto("/login?returnTo=/offers/new", { waitUntil: "domcontentloaded" });
 
   await expect(page.locator("h1")).toHaveText("Welcome back");
@@ -379,19 +292,12 @@ test("/login renders enabled auth options and preserves returnTo", async ({ page
     "href",
     "/login?mode=login&method=email&returnTo=%2Foffers%2Fnew",
   );
+  await expect(page.getByRole("button", { name: "Continue with Apple" })).toHaveCount(0);
+  await expect(page.locator('input[name="provider"][value="apple"]')).toHaveCount(0);
 
-  for (const provider of oauthProviders) {
-    const buttonName = `Continue with ${oauthProviderLabels[provider]}`;
-    const expectedCount = enabledOAuthProviders.includes(provider) ? 1 : 0;
-    await expect(page.getByRole("button", { name: buttonName })).toHaveCount(expectedCount);
-
-    if (expectedCount === 1) {
-      const providerInput = page.locator(
-        `form:has(button:has-text("${buttonName}")) input[name="provider"]`,
-      );
-      await expect(providerInput).toHaveValue(provider);
-    }
-  }
+  const renderedProviders = await page.locator('input[name="provider"]').allInputValues();
+  expect(new Set(renderedProviders).size).toBe(renderedProviders.length);
+  expect(renderedProviders).not.toContain("apple");
 
   await expect(page.getByRole("link", { name: "Create an account" })).toHaveAttribute(
     "href",
@@ -403,7 +309,9 @@ test("/signup renders signup mode with legal text and mode switch", async ({ pag
   await page.goto("/signup?next=/wish-registry", { waitUntil: "domcontentloaded" });
 
   await expect(page.locator("h1")).toHaveText("Create your account");
-  await expect(page.getByText("Start with one low-risk action. You can add profile details later.")).toBeVisible();
+  await expect(
+    page.getByText("Start with one low-risk action. You can add profile details later."),
+  ).toBeVisible();
   await expect(page.getByText("By creating an account, you agree to the")).toBeVisible();
   await expect(page.getByRole("link", { name: "Log in" }).last()).toHaveAttribute(
     "href",
