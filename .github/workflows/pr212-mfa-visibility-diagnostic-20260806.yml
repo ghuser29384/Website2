@@ -1,0 +1,199 @@
+name: PR 212 MFA visibility diagnostic 20260806
+
+on:
+  push:
+    branches:
+      - ops/pr212-mfa-visibility-diagnostic-20260806
+    paths:
+      - .github/workflows/pr212-mfa-visibility-diagnostic-20260806.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-mfa-visibility-diagnostic-20260806
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_HEAD: dbbb0afbb42ef9a1636be073bb1d47343badd98b
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+      SITE_URL: http://127.0.0.1:3000
+      INSTITUTIONAL_TRADES_ENABLED: "true"
+      INSTITUTIONAL_POOLS_ENABLED: "true"
+      INSTITUTIONAL_ENTERPRISE_API_ENABLED: "true"
+      INSTITUTIONAL_WEBHOOKS_ENABLED: "true"
+      INSTITUTIONAL_E2E_BASE_URL: http://127.0.0.1:3000
+      INSTITUTIONAL_E2E_OUTPUT_DIR: institutional-e2e-diagnostic
+      CRON_SECRET: qa-institutional-cron-not-production
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out exact PR 212 head
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Refuse branch drift or production configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          [[ "$actual" == "$EXPECTED_HEAD" ]] || {
+            echo "PR #212 moved: expected $EXPECTED_HEAD, found $actual" >&2
+            exit 1
+          }
+          [[ "$NEXT_PUBLIC_SUPABASE_URL" == *"$QA_PROJECT_REF"* ]]
+          [[ "$NEXT_PUBLIC_SUPABASE_URL" != *"jnpoxvalyjtdghnperyu"* ]]
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Add fail-closed MFA visibility evidence locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          target = Path('.github/scripts/institutional-trade-qa-e2e.mjs')
+          text = target.read_text(encoding='utf-8')
+          old = '''  await panel.waitFor({ state: "attached", timeout: 30_000 });
+          await panel.scrollIntoViewIfNeeded();
+          await panel.waitFor({ state: "visible", timeout: 30_000 });
+          '''
+          new = '''  await panel.waitFor({ state: "attached", timeout: 30_000 });
+          const panelCount = await page.locator("article#account-security").count();
+          const visibilityDiagnostic = await page.locator("article#account-security").evaluateAll((elements) =>
+            elements.map((element) => {
+              const ancestry = [];
+              let node = element;
+              while (node) {
+                const style = window.getComputedStyle(node);
+                const rect = node.getBoundingClientRect();
+                ancestry.push({
+                  tag: node.tagName,
+                  id: node.id || null,
+                  className: typeof node.className === "string" ? node.className : null,
+                  hidden: Boolean(node.hidden),
+                  ariaHidden: node.getAttribute("aria-hidden"),
+                  open: node.tagName === "DETAILS" ? Boolean(node.open) : null,
+                  display: style.display,
+                  visibility: style.visibility,
+                  opacity: style.opacity,
+                  contentVisibility: style.contentVisibility,
+                  overflow: style.overflow,
+                  position: style.position,
+                  rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+                });
+                node = node.parentElement;
+              }
+              return ancestry;
+            }),
+          );
+          await writeFile(
+            path.join(outputDir, `mfa-${user.role}-visibility.json`),
+            JSON.stringify({
+              runId,
+              role: user.role,
+              url: page.url(),
+              title: await page.title(),
+              panelCount,
+              visibilityDiagnostic,
+              bodyText: (await page.locator("body").innerText()).slice(0, 6000),
+            }, null, 2),
+          );
+          await page.screenshot({
+            path: path.join(outputDir, `mfa-${user.role}-before-scroll.png`),
+            fullPage: true,
+          });
+          await panel.scrollIntoViewIfNeeded();
+          await panel.waitFor({ state: "visible", timeout: 30_000 });
+          '''
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected one ensureMfa visibility block, found {count}.')
+          target.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          git diff --check
+
+      - name: Build exact feature head
+        run: npm run build
+
+      - name: Start application
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start > institutional-diagnostic-server.log 2>&1 &
+          echo $! > institutional-diagnostic-server.pid
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:3000/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat institutional-diagnostic-server.log >&2
+          exit 1
+
+      - name: Run isolated authenticated diagnostic
+        id: e2e
+        shell: bash
+        run: |
+          set +e
+          node .github/scripts/institutional-trade-qa-e2e.mjs 2>&1 | tee institutional-e2e-diagnostic.log
+          status=${PIPESTATUS[0]}
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr212-mfa-visibility-diagnostic-${{ env.EXPECTED_HEAD }}-${{ github.run_id }}
+          path: |
+            institutional-e2e-diagnostic
+            institutional-e2e-diagnostic.log
+            institutional-diagnostic-server.log
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Record diagnostic run on PR 212
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-mfa-visibility-diagnostic-20260806 -->
+          ## PR #212 MFA visibility diagnostic
+
+          - Exact feature head: \`$EXPECTED_HEAD\`
+          - Diagnostic run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+          - Authenticated E2E exit status: \`${{ steps.e2e.outputs.status || 'not-run' }}\`
+          - Artifact: \`pr212-mfa-visibility-diagnostic-$EXPECTED_HEAD-$GITHUB_RUN_ID\`
+
+          The run patches only its ephemeral checkout to capture the current URL, body text, computed visibility and ancestor chain for \`article#account-security\`, plus a full-page screenshot before the failing scroll. The isolated QA database cleanup remains in the E2E script. PR #212 remains draft and unmerged; production database, deployment, payment, custody, payout, and feature flags are unchanged."
