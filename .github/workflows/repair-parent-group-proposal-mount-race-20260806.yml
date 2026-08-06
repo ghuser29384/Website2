@@ -1,0 +1,147 @@
+name: Repair parent group proposal mount race 2026-08-06
+
+on:
+  push:
+    branches:
+      - audit/self-service-pool-lifecycle-source-20260806
+    paths:
+      - ".github/workflows/repair-parent-group-proposal-mount-race-20260806.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-parent-group-proposal-mount-race-20260806
+  cancel-in-progress: false
+
+jobs:
+  repair-parent:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
+      EXPECTED_TARGET_HEAD: 4030e9242f9870a23f6ce3f1e7368b0e9a541842
+
+    steps:
+      - name: Check out the exact parent candidate
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v3-20260803
+          fetch-depth: 2
+
+      - name: Verify target head and repair the rendered regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_HEAD"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/create-group-contribution-proposal.spec.ts")
+          text = path.read_text()
+
+          old = '''  await create.locator("#continueOffers").click();
+
+  const behaviorAction = create.locator(
+    '[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="action"]',
+  );
+  const behaviorDuration = create.locator(
+    '[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]',
+  );
+
+  await behaviorDuration.fill("once per week for 12 weeks");
+  await create
+    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]')
+    .fill("5.00");
+  await create
+    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]')
+    .fill("Existential Risk Research Project");
+
+  // Enter the action last and cross a real focus boundary before mounting group controls.
+  // This prevents later offer-field updates from racing the delegated Create state handler.
+  await behaviorAction.fill("Avoid meat for one meal per week");
+  await behaviorAction.press("Tab");
+  await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");
+
+  await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
+  return create;
+'''
+
+          new = '''  await create.locator("#continueOffers").click();
+
+  // The enhancement mounts asynchronously after the concrete-offer editor appears.
+  // Wait for that one-time DOM decoration before entering values so the test never
+  // races the mount and mistakes a replaced pre-mount control for the durable field.
+  await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
+
+  const behaviorAction = create.locator(
+    '[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="action"]',
+  );
+  const behaviorDuration = create.locator(
+    '[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]',
+  );
+  const moneyAmount = create.locator(
+    '[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]',
+  );
+  const moneyOrganization = create.locator(
+    '[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]',
+  );
+
+  await behaviorAction.fill("Avoid meat for one meal per week");
+  await behaviorAction.press("Tab");
+  await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");
+
+  await behaviorDuration.fill("once per week for 12 weeks");
+  await behaviorDuration.press("Tab");
+  await expect(behaviorDuration).toHaveValue("once per week for 12 weeks");
+
+  await moneyAmount.fill("5.00");
+  await moneyAmount.press("Tab");
+  await expect(moneyAmount).toHaveValue("5.00");
+
+  await moneyOrganization.fill("Existential Risk Research Project");
+  await moneyOrganization.press("Tab");
+  await expect(moneyOrganization).toHaveValue("Existential Risk Research Project");
+
+  await expect(create.locator("#reviewOffers")).toBeEnabled();
+  return create;
+'''
+
+          if text.count(old) != 1:
+              raise SystemExit(f"Expected one helper block, found {text.count(old)}")
+          text = text.replace(old, new)
+
+          old_click = '''  await create.locator("#reviewOffers").click();
+  await expect(create.getByText("Proposed group terms", { exact: true })).toBeVisible();
+'''
+          new_click = '''  await expect(
+    create.locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]'),
+  ).toHaveValue("once per week for 12 weeks");
+  await expect(create.locator("#reviewOffers")).toBeEnabled();
+  await create.locator("#reviewOffers").click();
+  await expect(create.getByText("Proposed group terms", { exact: true })).toBeVisible();
+'''
+          if text.count(old_click) != 1:
+              raise SystemExit(f"Expected one review-click block, found {text.count(old_click)}")
+          path.write_text(text.replace(old_click, new_click))
+
+          temporary = Path(".github/workflows/repair-group-proposal-mount-race.yml")
+          if not temporary.exists():
+              raise SystemExit("Expected temporary feature-branch repair workflow")
+          temporary.unlink()
+          PY
+
+          git diff --check
+          git diff -- tests/create-group-contribution-proposal.spec.ts .github/workflows/repair-group-proposal-mount-race.yml
+
+      - name: Commit and push the exact repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/create-group-contribution-proposal.spec.ts .github/workflows/repair-group-proposal-mount-race.yml
+          git diff --cached --check
+          git commit -m "Stabilize group proposal editor after enhancement mount"
+          git push origin "HEAD:$TARGET_BRANCH"
