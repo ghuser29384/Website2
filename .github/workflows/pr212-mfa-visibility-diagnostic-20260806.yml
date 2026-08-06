@@ -85,62 +85,58 @@ jobs:
 
           target = Path('.github/scripts/institutional-trade-qa-e2e.mjs')
           text = target.read_text(encoding='utf-8')
-          old = '''  await panel.waitFor({ state: "attached", timeout: 30_000 });
-          await panel.scrollIntoViewIfNeeded();
-          await panel.waitFor({ state: "visible", timeout: 30_000 });
-          '''
-          new = '''  await panel.waitFor({ state: "attached", timeout: 30_000 });
-          const panelCount = await page.locator("article#account-security").count();
-          const visibilityDiagnostic = await page.locator("article#account-security").evaluateAll((elements) =>
-            elements.map((element) => {
-              const ancestry = [];
-              let node = element;
-              while (node) {
-                const style = window.getComputedStyle(node);
-                const rect = node.getBoundingClientRect();
-                ancestry.push({
-                  tag: node.tagName,
-                  id: node.id || null,
-                  className: typeof node.className === "string" ? node.className : null,
-                  hidden: Boolean(node.hidden),
-                  ariaHidden: node.getAttribute("aria-hidden"),
-                  open: node.tagName === "DETAILS" ? Boolean(node.open) : null,
-                  display: style.display,
-                  visibility: style.visibility,
-                  opacity: style.opacity,
-                  contentVisibility: style.contentVisibility,
-                  overflow: style.overflow,
-                  position: style.position,
-                  rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-                });
-                node = node.parentElement;
-              }
-              return ancestry;
-            }),
-          );
-          await writeFile(
-            path.join(outputDir, `mfa-${user.role}-visibility.json`),
-            JSON.stringify({
-              runId,
-              role: user.role,
-              url: page.url(),
-              title: await page.title(),
-              panelCount,
-              visibilityDiagnostic,
-              bodyText: (await page.locator("body").innerText()).slice(0, 6000),
-            }, null, 2),
-          );
-          await page.screenshot({
-            path: path.join(outputDir, `mfa-${user.role}-before-scroll.png`),
-            fullPage: true,
-          });
-          await panel.scrollIntoViewIfNeeded();
-          await panel.waitFor({ state: "visible", timeout: 30_000 });
-          '''
-          count = text.count(old)
-          if count != 1:
-              raise SystemExit(f'Expected one ensureMfa visibility block, found {count}.')
-          target.write_text(text.replace(old, new, 1), encoding='utf-8')
+          needle = '  await panel.scrollIntoViewIfNeeded();\n'
+          if text.count(needle) != 1:
+              raise SystemExit(f'Expected one ensureMfa scroll line, found {text.count(needle)}.')
+
+          diagnostic_lines = [
+              '  const panelCount = await page.locator("article#account-security").count();',
+              '  const visibilityDiagnostic = await page.locator("article#account-security").evaluateAll((elements) =>',
+              '    elements.map((element) => {',
+              '      const ancestry = [];',
+              '      let node = element;',
+              '      while (node) {',
+              '        const style = window.getComputedStyle(node);',
+              '        const rect = node.getBoundingClientRect();',
+              '        ancestry.push({',
+              '          tag: node.tagName,',
+              '          id: node.id || null,',
+              '          className: typeof node.className === "string" ? node.className : null,',
+              '          hidden: Boolean(node.hidden),',
+              '          ariaHidden: node.getAttribute("aria-hidden"),',
+              '          open: node.tagName === "DETAILS" ? Boolean(node.open) : null,',
+              '          display: style.display,',
+              '          visibility: style.visibility,',
+              '          opacity: style.opacity,',
+              '          contentVisibility: style.contentVisibility,',
+              '          overflow: style.overflow,',
+              '          position: style.position,',
+              '          rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },',
+              '        });',
+              '        node = node.parentElement;',
+              '      }',
+              '      return ancestry;',
+              '    }),',
+              '  );',
+              '  await writeFile(',
+              '    path.join(outputDir, `mfa-${user.role}-visibility.json`),',
+              '    JSON.stringify({',
+              '      runId,',
+              '      role: user.role,',
+              '      url: page.url(),',
+              '      title: await page.title(),',
+              '      panelCount,',
+              '      visibilityDiagnostic,',
+              '      bodyText: (await page.locator("body").innerText()).slice(0, 6000),',
+              '    }, null, 2),',
+              '  );',
+              '  await page.screenshot({',
+              '    path: path.join(outputDir, `mfa-${user.role}-before-scroll.png`),',
+              '    fullPage: true,',
+              '  });',
+          ]
+          diagnostic = '\n'.join(diagnostic_lines) + '\n'
+          target.write_text(text.replace(needle, diagnostic + needle, 1), encoding='utf-8')
           PY
           node --check .github/scripts/institutional-trade-qa-e2e.mjs
           git diff --check
