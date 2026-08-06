@@ -42,14 +42,14 @@ jobs:
             .github/workflows/pr212-push-qa-snapshot-20260804.yml \
             .github/workflows/one-person-browser-redirect-repair-controller-v2.yml
 
-          actual="$(git diff --name-only | sort)"
+          actual="$(git diff --cached --name-only | sort)"
           expected="$(printf '%s\n' \
             '.github/workflows/one-person-browser-redirect-repair-controller-v2.yml' \
             '.github/workflows/pr212-current-main-qa-controller.yml' \
             '.github/workflows/pr212-push-qa-snapshot-20260804.yml' \
             | sort)"
           test "$actual" = "$expected"
-          git diff --check
+          git diff --cached --check
 
       - name: Commit and push the cleanup
         shell: bash
