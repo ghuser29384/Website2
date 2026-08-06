@@ -1,4 +1,4 @@
-name: Diagnose PR 477 gated preview failure
+name: Validate PR 477 rendered gate in development mode
 
 on:
   push:
@@ -8,36 +8,50 @@ on:
       - .github/workflows/dispatch-pr477-vercel-preview-20260806.yml
 
 permissions:
-  actions: read
   contents: read
 
 concurrency:
-  group: diagnose-pr477-gated-preview-20260806
+  group: validate-pr477-dev-rendered-gate-20260806
   cancel-in-progress: false
 
 jobs:
-  diagnose:
+  rendered:
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 40
     env:
-      FAILED_RUN_ID: '31094698620'
+      EXPECTED_HEAD: f1d893e89c94b60b97ac83e2c6429b873600064e
     steps:
-      - name: Guard diagnostic inputs
+      - name: Check out the exact PR candidate
+        uses: actions/checkout@v4
+        with:
+          ref: f1d893e89c94b60b97ac83e2c6429b873600064e
+          fetch-depth: 0
+
+      - name: Guard exact diagnostic source
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
-          test '${{ github.ref_name }}' = 'ops/dispatch-pr477-vercel-preview-20260806'
-          test '${{ github.actor }}' != 'github-actions[bot]'
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
 
-      - name: Print the failed rendered-gate log excerpt
-        shell: bash
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the complete rendered suite without production build artifacts
         env:
-          GH_TOKEN: ${{ github.token }}
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
         run: |
           set -euo pipefail
-          gh run view "$FAILED_RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > failed.log
-          echo '--- salient failure lines ---'
-          grep -nE '(^|[^[:alpha:]])(Error:|FAIL|failed|failure|Timeout|timed out|expect\(|Process completed|browser|playwright)' failed.log | tail -n 240 || true
-          echo '--- final 320 lines ---'
-          tail -n 320 failed.log
+          test ! -e .next/BUILD_ID
+          npm run test:e2e -- --reporter=line
