@@ -1,0 +1,103 @@
+name: Rename DAC pledge intent table once
+
+on:
+  push:
+    branches:
+      - fix/mpgf-dac-pledge-intent-ledger-20260806
+    paths:
+      - .github/workflows/rename-dac-pledge-intent-table-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rename-dac-pledge-intent-table-once
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: fix/mpgf-dac-pledge-intent-ledger-20260806
+  EXPECTED_PARENT: c4fec8487a97c5db4afa78a4d19d2dc764174616
+  CONTROLLER_PATH: .github/workflows/rename-dac-pledge-intent-table-once.yml
+
+jobs:
+  rename:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact target
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 2
+
+      - name: Guard and rename the dedicated immutable-consent table
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = "$CONTROLLER_PATH"
+
+          files=(
+            supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql
+            supabase/tests/mpgf_dac_pledge_intent_ledger.sql
+            src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts
+            .github/workflows/mpgf-dac-pledge-intent-ledger-gates.yml
+          )
+
+          for file in "${files[@]}"; do
+            python3 - "$file" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          old = "mpgf_pledge_intents"
+          new = "mpgf_dac_pledge_intents"
+          if old not in text:
+              raise SystemExit(f"Expected {old} in {path}")
+          path.write_text(text.replace(old, new))
+          PY
+          done
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration = Path("supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql")
+          text = migration.read_text()
+          text = text.replace(
+              "Immutable consent evidence for self-service dominant assurance contract pledges. It is not an active pledge ledger.",
+              "Immutable DAC-specific consent evidence for self-service dominant assurance contract pledges. It is not an active pledge ledger and intentionally does not reuse the incompatible speculative round-intent schema."
+          )
+          migration.write_text(text)
+
+          test_path = Path("src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts")
+          text = test_path.read_text()
+          marker = "assert.doesNotMatch(\n    migration,\n    /create table(?: if not exists)? public\\.mpgf_conditional_pledges/i,\n  );"
+          addition = "assert.doesNotMatch(\n    migration,\n    /create table(?: if not exists)? public\\.mpgf_pledge_intents/i,\n  );\n  " + marker
+          if marker not in text:
+              raise SystemExit("Could not find conditional-ledger source-contract marker")
+          test_path.write_text(text.replace(marker, addition, 1))
+          PY
+
+          rm "$CONTROLLER_PATH"
+          git diff --check
+          ! git grep -n "public\.mpgf_pledge_intents" -- \
+            supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql \
+            supabase/tests/mpgf_dac_pledge_intent_ledger.sql \
+            src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts \
+            .github/workflows/mpgf-dac-pledge-intent-ledger-gates.yml
+          git grep -n "mpgf_dac_pledge_intents" -- \
+            supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql \
+            supabase/tests/mpgf_dac_pledge_intent_ledger.sql \
+            src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts \
+            .github/workflows/mpgf-dac-pledge-intent-ledger-gates.yml
+
+      - name: Commit the collision-free schema name and remove this controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Use a dedicated immutable DAC pledge-intent table"
+          git push origin "HEAD:$TARGET_BRANCH"
