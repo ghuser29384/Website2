@@ -1,0 +1,342 @@
+name: PR 477 hosted preview smoke
+
+on:
+  push:
+    branches:
+      - ops/pr477-hosted-preview-smoke-20260806
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: pr477-hosted-preview-smoke
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: fbf414bafefc62fc412b1bd188711a214c0dec10
+  MAIN_SHA: 8bdc10338121f173a300436a692c04808d56966b
+  PRODUCT_PR: "477"
+  DEPLOYMENT_ID: dpl_4kXNPDNaLD6QzZUg9E8xLHz3LFGu
+  DEPLOYMENT_URL: https://moraltrade-site-q7el3ssqn-ellen-s.vercel.app
+  EXPECTED_PRODUCTION_ID: dpl_2L22DhWktStkXA7e3Eiqu4cYMRxF
+  EXPECTED_PRODUCTION_SHA: 7b52271d54e11f4335741c679336da4ae7b50292
+  STATUS_CONTEXT: QA / PR 477 hosted preview smoke
+  EVIDENCE_DIR: /tmp/pr477-hosted-preview-smoke
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_SCOPE: ellen-s
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Mark hosted Preview smoke pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Smoke-testing exact hosted Create route and signed-out participant boundary" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Check out immutable product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Guard exact PR and repository state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .draft <<<"$product_pr")" = 'true'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.sha <<<"$product_pr")" = "$MAIN_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
+
+      - name: Verify exact Preview and unchanged production deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          curl --silent --show-error --fail \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            > "$EVIDENCE_DIR/preview-deployment.json"
+          curl --silent --show-error --fail \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&target=production&limit=1&teamId=$VERCEL_ORG_ID" \
+            > "$EVIDENCE_DIR/production-deployments.json"
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          evidence = Path(os.environ['EVIDENCE_DIR'])
+          preview = json.loads((evidence / 'preview-deployment.json').read_text())
+          production = json.loads((evidence / 'production-deployments.json').read_text())['deployments'][0]
+          meta = preview.get('meta') or {}
+          project = preview.get('project') or {}
+
+          assert preview.get('id') == os.environ['DEPLOYMENT_ID']
+          assert preview.get('readyState') == 'READY', preview.get('readyState')
+          assert preview.get('target') != 'production', preview.get('target')
+          assert preview.get('name') == 'moraltrade-site', preview.get('name')
+          assert (project.get('id') or preview.get('projectId')) == os.environ['VERCEL_PROJECT_ID']
+          assert meta.get('githubCommitSha') == os.environ['CANDIDATE_SHA'], meta
+          assert meta.get('moralTradeCandidateSha') == os.environ['CANDIDATE_SHA'], meta
+
+          assert production.get('uid') == os.environ['EXPECTED_PRODUCTION_ID'], production
+          production_meta = production.get('meta') or {}
+          assert production_meta.get('githubCommitSha') == os.environ['EXPECTED_PRODUCTION_SHA'], production_meta
+          PY
+
+      - name: Link canonical Vercel project for authenticated curl
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" whoami \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            --no-color > "$EVIDENCE_DIR/vercel-whoami.txt"
+
+      - name: Smoke hosted Create interface through Vercel authentication
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" curl '/trades/new' \
+            --deployment "$DEPLOYMENT_URL" \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            --no-color \
+            > "$EVIDENCE_DIR/trades-new.html" \
+            2> "$EVIDENCE_DIR/trades-new.stderr.log"
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          body = Path(os.environ['EVIDENCE_DIR'], 'trades-new.html').read_text(errors='replace')
+          required = [
+              'data-create-interface-frame=',
+              'Moral Trade Create',
+              'Future flourishing',
+              'Who should fund one project together?',
+              'Participant 1',
+              'No invitation or money moves',
+          ]
+          for token in required:
+              assert token in body, f'Missing hosted Create token: {token}'
+          forbidden = ['Internal Server Error', 'Application error', 'DEPLOYMENT_NOT_FOUND']
+          for token in forbidden:
+              assert token not in body, f'Hosted Create returned forbidden token: {token}'
+          assert len(body) > 100_000, len(body)
+          PY
+
+      - name: Smoke signed-out participant-search boundary
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          npx --yes "vercel@$VERCEL_CLI_VERSION" curl '/api/create/participants?q=alice' \
+            --deployment "$DEPLOYMENT_URL" \
+            --scope="$VERCEL_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            --no-color \
+            > "$EVIDENCE_DIR/participant-search.json" \
+            2> "$EVIDENCE_DIR/participant-search.stderr.log"
+          command_status=$?
+          set -e
+          printf '%s\n' "$command_status" > "$EVIDENCE_DIR/participant-search-command-status.txt"
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          body = Path(os.environ['EVIDENCE_DIR'], 'participant-search.json').read_text(errors='replace').strip()
+          payload = json.loads(body)
+          assert payload == {
+              'ok': False,
+              'requiresAuth': True,
+              'message': 'Sign in before searching Moral Trade participants.',
+          }, payload
+          PY
+
+      - name: Run protected hosted browser smoke when automation bypass is configured
+        env:
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${VERCEL_AUTOMATION_BYPASS_SECRET:-}" ]]; then
+            cat > "$EVIDENCE_DIR/hosted-browser-smoke.json" <<'JSON'
+          {
+            "status": "not-run",
+            "reason": "VERCEL_AUTOMATION_BYPASS_SECRET is not configured in GitHub Actions",
+            "coveredElsewhere": "exact production-server Playwright plus authenticated hosted HTTP smoke"
+          }
+          JSON
+            exit 0
+          fi
+
+          npm ci
+          npx playwright install --with-deps chromium
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { chromium } = require('@playwright/test');
+
+          (async () => {
+            const browser = await chromium.launch();
+            const context = await browser.newContext({
+              viewport: { width: 390, height: 844 },
+              extraHTTPHeaders: {
+                'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
+                'x-vercel-set-bypass-cookie': 'samesitenone',
+              },
+            });
+            const page = await context.newPage();
+            const response = await page.goto(`${process.env.DEPLOYMENT_URL}/trades/new`, {
+              waitUntil: 'domcontentloaded',
+            });
+            if (!response || response.status() !== 200) {
+              throw new Error(`Hosted Create returned ${response?.status() ?? 'no response'}`);
+            }
+            const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await create.getByRole('button', { name: 'Future flourishing' }).click();
+            await create.locator('[data-request-kind="fund"]').click();
+            await create.locator('[data-fund-mode="commonGround"]').click();
+            await create.getByRole('heading', { name: 'Who should fund one project together?' }).waitFor();
+            const overflow = await create.locator('html').evaluate(
+              (element) => element.scrollWidth > element.clientWidth + 1,
+            );
+            if (overflow) throw new Error('Hosted Co-Fund has horizontal overflow at 390×844.');
+            const report = {
+              status: 'pass',
+              route: '/trades/new',
+              responseStatus: response.status(),
+              coFundVisible: true,
+              horizontalOverflow: false,
+              viewport: '390x844',
+            };
+            fs.writeFileSync(
+              `${process.env.EVIDENCE_DIR}/hosted-browser-smoke.json`,
+              `${JSON.stringify(report, null, 2)}\n`,
+            );
+            await browser.close();
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Record hosted smoke summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > "$EVIDENCE_DIR/smoke-summary.json" <<JSON
+          {
+            "candidateSha": "$CANDIDATE_SHA",
+            "deploymentId": "$DEPLOYMENT_ID",
+            "deploymentUrl": "$DEPLOYMENT_URL",
+            "previewReady": true,
+            "previewTarget": "preview",
+            "productionDeploymentUnchanged": true,
+            "hostedCreateHttpSmoke": "pass",
+            "signedOutParticipantBoundary": "pass",
+            "browserSmoke": $(cat "$EVIDENCE_DIR/hosted-browser-smoke.json")
+          }
+          JSON
+          {
+            echo '## PR 477 hosted Preview smoke'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Deployment: \`$DEPLOYMENT_ID\`"
+            echo '- Hosted `/trades/new`: passed through `vercel curl`'
+            echo '- Create iframe, Co-Fund source, participant input, and proposal-only boundary: present'
+            echo '- Signed-out participant API: exact fail-closed response verified'
+            echo '- Production deployment: unchanged'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable hosted-smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr477-hosted-preview-smoke-${{ github.run_id }}
+          path: /tmp/pr477-hosted-preview-smoke
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish hosted-smoke result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="Exact hosted Create and participant auth-boundary smoke passed"
+            body=$(cat <<EOF
+          Hosted Preview smoke passed for PR #477.
+
+          - Candidate: \`$CANDIDATE_SHA\`
+          - Deployment: \`$DEPLOYMENT_ID\`
+          - Preview: $DEPLOYMENT_URL
+          - Run: $run_url
+          - Hosted \`/trades/new\`: exact Create iframe and Co-Fund source loaded
+          - Proposal-only boundary copy and participant input were present
+          - Signed-out participant search returned the exact private, fail-closed authentication response
+          - The current Moral Trade production deployment remained unchanged
+
+          No account was created, no invitation was sent, no participant was enrolled, and no payment was reserved, authorized, captured, disbursed, or settled.
+          EOF
+          )
+          else
+            state=failure
+            description="PR 477 hosted Preview smoke failed"
+            body=$(cat <<EOF
+          Hosted Preview smoke failed for PR #477.
+
+          - Candidate: \`$CANDIDATE_SHA\`
+          - Deployment: \`$DEPLOYMENT_ID\`
+          - Run: $run_url
+          - Evidence artifact: \`pr477-hosted-preview-smoke-${GITHUB_RUN_ID}\`
+
+          No production or participant/payment mutation occurred.
+          EOF
+          )
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="$run_url"
+          gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --body "$body"
