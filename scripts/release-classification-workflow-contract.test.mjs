@@ -28,16 +28,23 @@ test("the required policy workflow executes only current trusted base code", () 
   assert.match(source, /node scripts\/validate-release-pr-body\.mjs/);
 });
 
-test("the policy workflow publishes one stable required context on the PR head", () => {
+test("the policy workflow publishes one stable required context only on the PR head", () => {
   const source = read(policyWorkflowPath);
 
   assert.match(source, /^\s{2}STATUS_CONTEXT: release-classification$/m);
-  assert.match(source, /HEAD_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/);
+  assert.equal(
+    (source.match(/HEAD_SHA: \$\{\{ github\.event\.pull_request\.head\.sha \}\}/g) ?? [])
+      .length,
+    2,
+  );
   assert.match(source, /state pending/);
   assert.match(source, /state=success/);
   assert.match(source, /state=failure/);
-  assert.match(source, /repos\/\$GITHUB_REPOSITORY\/statuses\/\$HEAD_SHA/);
   assert.match(source, /if: always\(\)/);
+
+  const statusTargets = [...source.matchAll(/statuses\/\$(\w+)/g)].map((match) => match[1]);
+  assert.deepEqual(statusTargets, ["HEAD_SHA", "HEAD_SHA"]);
+  assert.doesNotMatch(source, /merge_commit_sha|merge_sha|PR_NUMBER|merge candidate/i);
 });
 
 test("the self-test workflow covers every policy implementation file", () => {
