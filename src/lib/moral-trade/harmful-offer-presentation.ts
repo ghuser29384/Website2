@@ -59,15 +59,23 @@ export function presentHarmfulOfferAssessment(
   const categories = unique(
     materialFindings.map((finding) => LABELS[finding.dimension]),
   ).slice(0, 8);
-  const reasonCodes = unique(
+  const findingReasonCodes = unique(
     materialFindings.map((finding) => finding.reasonCode),
   ) as HarmfulOfferReasonCode[];
+  const reasonCodes = assessment.route === "human_review" && findingReasonCodes.length === 0
+    ? ["REVIEW_MODEL_UNRESOLVED" as const]
+    : findingReasonCodes;
   const affectedFields = unique(
     materialFindings.flatMap((finding) => finding.affectedFields),
   ).slice(0, 12);
-  const policyBasis = unique(
+  const findingPolicyBasis = unique(
     materialFindings.map((finding) => finding.policyBasis),
-  ).slice(0, 8);
+  );
+  const policyBasis = assessment.route === "human_review" && findingPolicyBasis.length === 0
+    ? [
+        "Automatic permission requires a completed high-confidence assessment establishing every low-risk criterion; otherwise the proposal remains private for human review.",
+      ]
+    : findingPolicyBasis.slice(0, 8);
   const appealEligible = assessment.route !== "allow" && Boolean(assessmentId);
   const common = {
     categories,
