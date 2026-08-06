@@ -295,7 +295,9 @@ test("/login preserves returnTo, keeps email, and never exposes Apple", async ({
   await expect(page.getByRole("button", { name: "Continue with Apple" })).toHaveCount(0);
   await expect(page.locator('input[name="provider"][value="apple"]')).toHaveCount(0);
 
-  const renderedProviders = await page.locator('input[name="provider"]').allInputValues();
+  const renderedProviders = await page.locator('input[name="provider"]').evaluateAll((inputs) =>
+    inputs.map((input) => (input as HTMLInputElement).value),
+  );
   expect(new Set(renderedProviders).size).toBe(renderedProviders.length);
   expect(renderedProviders).not.toContain("apple");
 
