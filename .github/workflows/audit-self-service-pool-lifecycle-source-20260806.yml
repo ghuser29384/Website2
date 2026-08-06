@@ -1,0 +1,128 @@
+name: Audit self-service pool lifecycle source 2026-08-06
+
+on:
+  push:
+    branches:
+      - audit/self-service-pool-lifecycle-source-20260806
+    paths:
+      - ".github/workflows/audit-self-service-pool-lifecycle-source-20260806.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: audit-self-service-pool-lifecycle-source-20260806
+  cancel-in-progress: false
+
+jobs:
+  source-inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_SHA: 8bdc10338121f173a300436a692c04808d56966b
+      OUTPUT_DIR: self-service-pool-lifecycle-source-audit
+
+    steps:
+      - name: Check out the isolated audit branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify audit isolation and prepare exact target worktree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$TARGET_SHA"
+          changed="$(git diff --name-only "$TARGET_SHA"...HEAD)"
+          test "$changed" = ".github/workflows/audit-self-service-pool-lifecycle-source-20260806.yml"
+          git cat-file -e "${TARGET_SHA}^{commit}"
+          rm -rf audit-target "$OUTPUT_DIR"
+          git worktree add --detach audit-target "$TARGET_SHA"
+          mkdir -p "$OUTPUT_DIR"
+
+      - name: Inventory exact current-main lifecycle source
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$GITHUB_WORKSPACE/audit-target"
+          out="$GITHUB_WORKSPACE/$OUTPUT_DIR"
+          cd "$root"
+
+          {
+            echo "target_sha=$(git rev-parse HEAD)"
+            echo "target_tree=$(git rev-parse HEAD^{tree})"
+            echo "audit_run_id=$GITHUB_RUN_ID"
+            echo "audit_run_attempt=$GITHUB_RUN_ATTEMPT"
+            echo "generated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "$out/metadata.txt"
+
+          git status --short > "$out/git-status.txt"
+          git ls-files | sort > "$out/tracked-files.txt"
+
+          node - <<'NODE' > "$out/package-scripts.json"
+          const fs = require("node:fs");
+          const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+          process.stdout.write(`${JSON.stringify(pkg.scripts ?? {}, null, 2)}\n`);
+          NODE
+
+          {
+            git grep -nI -E 'proposal|review|clarification|approved_as_candidate|candidate approval|terms freeze|terms_frozen|publish|materializ|pledge|join|participant|success|succeed|lapse|lapsed|expire|audit' -- . \
+              ':!package-lock.json' ':!pnpm-lock.yaml' ':!yarn.lock' ':!*.min.js' || true
+          } | sed -n '1,12000p' > "$out/lifecycle-matches.txt"
+
+          {
+            git grep -nI -E 'mpgf|pool_proposal|pool_participant|pool_pledge|pool_audit|failure_bonus|common_ground|assurance contract|dominant assurance' -- \
+              src api components pages public supabase scripts .github docs README.md 2>/dev/null || true
+          } | sed -n '1,12000p' > "$out/pool-domain-matches.txt"
+
+          {
+            git ls-files 'supabase/migrations/*.sql' 'supabase/tests/*.sql' 'supabase/functions/**' | sort
+          } > "$out/database-files.txt"
+
+          {
+            git grep -nI -E 'create table|alter table|create policy|create or replace function|security definer|row level security|audit|proposal|pool|pledge|participant|publish|lapse' -- \
+              'supabase/migrations/*.sql' 'supabase/tests/*.sql' 'supabase/functions/**' 2>/dev/null || true
+          } | sed -n '1,12000p' > "$out/database-matches.txt"
+
+          {
+            git ls-files '*test*' '*spec*' '.github/workflows/*' 'scripts/*' | \
+              grep -Ei 'pool|proposal|pledge|lifecycle|audit|participant|publish|review|common-ground|common_ground|mpgf' || true
+          } | sort -u > "$out/test-workflow-candidates.txt"
+
+          {
+            git ls-files 'src/**' 'api/**' 'components/**' 'pages/**' 'public/**' 'supabase/**' 'scripts/**' '.github/workflows/**' 'docs/**' 'README.md' | \
+              grep -Ei 'pool|proposal|pledge|lifecycle|audit|participant|publish|review|common-ground|common_ground|mpgf' || true
+          } | sort -u > "$out/source-file-candidates.txt"
+
+          lifecycle_count="$(wc -l < "$out/lifecycle-matches.txt" | tr -d ' ')"
+          pool_count="$(wc -l < "$out/pool-domain-matches.txt" | tr -d ' ')"
+          database_count="$(wc -l < "$out/database-matches.txt" | tr -d ' ')"
+          candidate_count="$(wc -l < "$out/source-file-candidates.txt" | tr -d ' ')"
+          test_count="$(wc -l < "$out/test-workflow-candidates.txt" | tr -d ' ')"
+
+          cat > "$out/summary.md" <<EOF
+          # Self-service pool lifecycle source audit
+
+          - Exact target commit: \`$TARGET_SHA\`
+          - Exact target tree: \`$(git rev-parse HEAD^{tree})\`
+          - Working tree status: \`$(test -s "$out/git-status.txt" && cat "$out/git-status.txt" || echo clean)\`
+          - Broad lifecycle matches: $lifecycle_count
+          - Pool-domain matches: $pool_count
+          - Database/RLS/RPC matches: $database_count
+          - Candidate source files: $candidate_count
+          - Candidate tests/workflows: $test_count
+
+          This is a source inventory only. It does not claim that the complete multi-actor lifecycle exists or passes. The permanent isolated-QA regression must be designed from the exact files and database objects in this artifact.
+          EOF
+
+          sha256sum "$out"/* > "$out/SHA256SUMS"
+          cat "$out/summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload source-of-truth audit artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: self-service-pool-lifecycle-source-audit-${{ github.run_id }}
+          path: self-service-pool-lifecycle-source-audit
+          if-no-files-found: error
+          retention-days: 14
