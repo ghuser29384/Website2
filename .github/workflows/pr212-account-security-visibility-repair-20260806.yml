@@ -126,7 +126,8 @@ jobs:
           )
           PY
           git diff --check
-          mapfile -t changed < <(git diff --name-only)
+          mapfile -t changed < <({ git diff --name-only; git ls-files --others --exclude-standard; } | sort -u)
+          printf 'Changed files:\n%s\n' "${changed[*]}"
           [[ "${#changed[@]}" -eq 2 ]]
           [[ "${changed[0]}" == "src/app/dashboard/page.tsx" ]]
           [[ "${changed[1]}" == "src/institutional-dashboard-mfa-visibility.test.ts" ]]
