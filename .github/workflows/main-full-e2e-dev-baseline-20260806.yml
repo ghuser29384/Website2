@@ -1,0 +1,60 @@
+name: Main full E2E dev-server baseline
+
+on:
+  push:
+    branches:
+      - ops/main-full-e2e-dev-baseline-20260806
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-full-e2e-dev-baseline-20260806
+  cancel-in-progress: false
+
+jobs:
+  full-e2e-dev:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out exact main baseline
+        uses: actions/checkout@v4
+        with:
+          ref: 8bdc10338121f173a300436a692c04808d56966b
+          fetch-depth: 0
+
+      - name: Prove exact baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "8bdc10338121f173a300436a692c04808d56966b"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run complete rendered browser suite on main's dev-server path
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npm run test:e2e -- --reporter=line
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: main-full-e2e-dev-baseline-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
