@@ -6,6 +6,7 @@ on:
       - ops/pr477-hosted-preview-smoke-20260806
 
 permissions:
+  actions: read
   contents: read
   pull-requests: write
   statuses: write
@@ -15,11 +16,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CANDIDATE_SHA: fbf414bafefc62fc412b1bd188711a214c0dec10
+  CANDIDATE_SHA: 25ab8a778e5c2d808ab66436059839680dfe67a8
   MAIN_SHA: 8bdc10338121f173a300436a692c04808d56966b
   PRODUCT_PR: "477"
-  DEPLOYMENT_ID: dpl_4kXNPDNaLD6QzZUg9E8xLHz3LFGu
-  DEPLOYMENT_URL: https://moraltrade-site-q7el3ssqn-ellen-s.vercel.app
+  RELEASE_REF: release/vercel-preview
+  RELEASE_RUN_ID: "31109928406"
   EXPECTED_PRODUCTION_ID: dpl_2L22DhWktStkXA7e3Eiqu4cYMRxF
   EXPECTED_PRODUCTION_SHA: 7b52271d54e11f4335741c679336da4ae7b50292
   STATUS_CONTEXT: QA / PR 477 hosted preview smoke
@@ -32,8 +33,18 @@ env:
 jobs:
   smoke:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 120
+
     steps:
+      - name: Initialize immutable evidence directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
+          printf '%s\n' "$MAIN_SHA" > "$EVIDENCE_DIR/base-sha.txt"
+          printf '%s\n' "$RELEASE_RUN_ID" > "$EVIDENCE_DIR/release-run-id.txt"
+
       - name: Mark hosted Preview smoke pending
         env:
           GH_TOKEN: ${{ github.token }}
@@ -43,7 +54,7 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
             -f state=pending \
             -f context="$STATUS_CONTEXT" \
-            -f description="Smoke-testing exact hosted Create route and signed-out participant boundary" \
+            -f description="Waiting for the exact gated Preview, then smoke-testing hosted Create" \
             -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Check out immutable product candidate
@@ -52,22 +63,61 @@ jobs:
           ref: ${{ env.CANDIDATE_SHA }}
           fetch-depth: 0
 
-      - name: Guard exact PR and repository state
+      - name: Guard exact PR, base, release ref, and release run
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+
           product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
           test "$(jq -r .state <<<"$product_pr")" = 'open'
           test "$(jq -r .draft <<<"$product_pr")" = 'true'
           test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .head.ref <<<"$product_pr")" = 'feature/co-act-co-fund-create-v3-20260803'
+          test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
           test "$(jq -r .base.sha <<<"$product_pr")" = "$MAIN_SHA"
-          mkdir -p "$EVIDENCE_DIR"
-          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
 
-      - name: Verify exact Preview and unchanged production deployment
+          release_sha="$(git ls-remote origin "refs/heads/$RELEASE_REF" | awk '{print $1}')"
+          test "$release_sha" = "$CANDIDATE_SHA"
+
+          release_run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RELEASE_RUN_ID}")"
+          test "$(jq -r .name <<<"$release_run")" = 'Gated Vercel release'
+          test "$(jq -r .event <<<"$release_run")" = 'workflow_dispatch'
+          test "$(jq -r .head_branch <<<"$release_run")" = "$RELEASE_REF"
+          test "$(jq -r .head_sha <<<"$release_run")" = "$CANDIDATE_SHA"
+
+          git merge-base --is-ancestor "$MAIN_SHA" "$CANDIDATE_SHA"
+          git diff --check "$MAIN_SHA"..."$CANDIDATE_SHA"
+          printf '%s\n' "$release_sha" > "$EVIDENCE_DIR/release-ref-sha.txt"
+          printf '%s\n' "$product_pr" > "$EVIDENCE_DIR/product-pr.json"
+          printf '%s\n' "$release_run" > "$EVIDENCE_DIR/release-run-initial.json"
+
+      - name: Wait for exact gated Preview release to succeed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 6600))
+          while (( SECONDS < deadline )); do
+            release_run="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RELEASE_RUN_ID}")"
+            status="$(jq -r .status <<<"$release_run")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$release_run")"
+            printf 'release run %s: status=%s conclusion=%s\n' \
+              "$RELEASE_RUN_ID" "$status" "${conclusion:-pending}"
+            if [[ "$status" == 'completed' ]]; then
+              printf '%s\n' "$release_run" > "$EVIDENCE_DIR/release-run-final.json"
+              test "$conclusion" = 'success'
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Timed out waiting for gated Preview run $RELEASE_RUN_ID." >&2
+          exit 1
+
+      - name: Discover and verify the exact READY Preview deployment
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
@@ -76,8 +126,8 @@ jobs:
           test -n "$VERCEL_TOKEN"
           curl --silent --show-error --fail \
             --header "Authorization: Bearer $VERCEL_TOKEN" \
-            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
-            > "$EVIDENCE_DIR/preview-deployment.json"
+            "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&limit=100&teamId=$VERCEL_ORG_ID" \
+            > "$EVIDENCE_DIR/all-deployments.json"
           curl --silent --show-error --fail \
             --header "Authorization: Bearer $VERCEL_TOKEN" \
             "https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&target=production&limit=1&teamId=$VERCEL_ORG_ID" \
@@ -89,22 +139,66 @@ jobs:
           from pathlib import Path
 
           evidence = Path(os.environ['EVIDENCE_DIR'])
-          preview = json.loads((evidence / 'preview-deployment.json').read_text())
-          production = json.loads((evidence / 'production-deployments.json').read_text())['deployments'][0]
+          deployments = json.loads((evidence / 'all-deployments.json').read_text()).get('deployments', [])
+          matches = []
+          for deployment in deployments:
+              meta = deployment.get('meta') or {}
+              if meta.get('githubCommitSha') != os.environ['CANDIDATE_SHA']:
+                  continue
+              if deployment.get('readyState') != 'READY':
+                  continue
+              if deployment.get('target') == 'production':
+                  continue
+              if deployment.get('name') != 'moraltrade-site':
+                  continue
+              matches.append(deployment)
+
+          if not matches:
+              raise SystemExit('No READY canonical Preview deployment matched the exact candidate SHA.')
+          matches.sort(key=lambda row: row.get('createdAt', 0), reverse=True)
+          preview = matches[0]
+          deployment_id = preview.get('uid') or preview.get('id')
+          deployment_url = preview.get('url')
+          if not deployment_id or not deployment_url:
+              raise SystemExit(f'Incomplete deployment identity: {preview}')
+          if not deployment_url.startswith('http'):
+              deployment_url = f'https://{deployment_url}'
+
+          production = json.loads((evidence / 'production-deployments.json').read_text()).get('deployments', [])[0]
+          production_meta = production.get('meta') or {}
+          assert (production.get('uid') or production.get('id')) == os.environ['EXPECTED_PRODUCTION_ID'], production
+          assert production_meta.get('githubCommitSha') == os.environ['EXPECTED_PRODUCTION_SHA'], production_meta
+          assert production_meta.get('githubCommitSha') != os.environ['CANDIDATE_SHA'], production_meta
+
+          (evidence / 'preview-deployment-list-record.json').write_text(json.dumps(preview, indent=2) + '\n')
+          (evidence / 'deployment-id.txt').write_text(deployment_id + '\n')
+          (evidence / 'deployment-url.txt').write_text(deployment_url + '\n')
+          with open(os.environ['GITHUB_ENV'], 'a') as handle:
+              handle.write(f'DEPLOYMENT_ID={deployment_id}\n')
+              handle.write(f'DEPLOYMENT_URL={deployment_url}\n')
+          PY
+
+          curl --silent --show-error --fail \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            > "$EVIDENCE_DIR/preview-deployment.json"
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          preview = json.loads(Path(os.environ['EVIDENCE_DIR'], 'preview-deployment.json').read_text())
           meta = preview.get('meta') or {}
           project = preview.get('project') or {}
-
           assert preview.get('id') == os.environ['DEPLOYMENT_ID']
           assert preview.get('readyState') == 'READY', preview.get('readyState')
           assert preview.get('target') != 'production', preview.get('target')
           assert preview.get('name') == 'moraltrade-site', preview.get('name')
           assert (project.get('id') or preview.get('projectId')) == os.environ['VERCEL_PROJECT_ID']
           assert meta.get('githubCommitSha') == os.environ['CANDIDATE_SHA'], meta
-          assert meta.get('moralTradeCandidateSha') == os.environ['CANDIDATE_SHA'], meta
-
-          assert production.get('uid') == os.environ['EXPECTED_PRODUCTION_ID'], production
-          production_meta = production.get('meta') or {}
-          assert production_meta.get('githubCommitSha') == os.environ['EXPECTED_PRODUCTION_SHA'], production_meta
+          assert meta.get('githubCommitRepo') == 'Website2', meta
+          assert meta.get('githubCommitOrg') == 'ghuser29384', meta
           PY
 
       - name: Link canonical Vercel project for authenticated curl
@@ -150,8 +244,7 @@ jobs:
           ]
           for token in required:
               assert token in body, f'Missing hosted Create token: {token}'
-          forbidden = ['Internal Server Error', 'Application error', 'DEPLOYMENT_NOT_FOUND']
-          for token in forbidden:
+          for token in ['Internal Server Error', 'Application error', 'DEPLOYMENT_NOT_FOUND']:
               assert token not in body, f'Hosted Create returned forbidden token: {token}'
           assert len(body) > 100_000, len(body)
           PY
@@ -199,7 +292,7 @@ jobs:
           {
             "status": "not-run",
             "reason": "VERCEL_AUTOMATION_BYPASS_SECRET is not configured in GitHub Actions",
-            "coveredElsewhere": "exact production-server Playwright plus authenticated hosted HTTP smoke"
+            "coveredElsewhere": "three exact production-server affected-flow runs, targeted stress, complete source-rendered release gate, and authenticated hosted HTTP smoke"
           }
           JSON
             exit 0
@@ -236,17 +329,16 @@ jobs:
               (element) => element.scrollWidth > element.clientWidth + 1,
             );
             if (overflow) throw new Error('Hosted Co-Fund has horizontal overflow at 390×844.');
-            const report = {
-              status: 'pass',
-              route: '/trades/new',
-              responseStatus: response.status(),
-              coFundVisible: true,
-              horizontalOverflow: false,
-              viewport: '390x844',
-            };
             fs.writeFileSync(
               `${process.env.EVIDENCE_DIR}/hosted-browser-smoke.json`,
-              `${JSON.stringify(report, null, 2)}\n`,
+              `${JSON.stringify({
+                status: 'pass',
+                route: '/trades/new',
+                responseStatus: response.status(),
+                coFundVisible: true,
+                horizontalOverflow: false,
+                viewport: '390x844',
+              }, null, 2)}\n`,
             );
             await browser.close();
           })().catch((error) => {
@@ -259,23 +351,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > "$EVIDENCE_DIR/smoke-summary.json" <<JSON
-          {
-            "candidateSha": "$CANDIDATE_SHA",
-            "deploymentId": "$DEPLOYMENT_ID",
-            "deploymentUrl": "$DEPLOYMENT_URL",
-            "previewReady": true,
-            "previewTarget": "preview",
-            "productionDeploymentUnchanged": true,
-            "hostedCreateHttpSmoke": "pass",
-            "signedOutParticipantBoundary": "pass",
-            "browserSmoke": $(cat "$EVIDENCE_DIR/hosted-browser-smoke.json")
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          evidence = Path(os.environ['EVIDENCE_DIR'])
+          browser = json.loads((evidence / 'hosted-browser-smoke.json').read_text())
+          summary = {
+              'candidateSha': os.environ['CANDIDATE_SHA'],
+              'releaseRunId': os.environ['RELEASE_RUN_ID'],
+              'deploymentId': os.environ['DEPLOYMENT_ID'],
+              'deploymentUrl': os.environ['DEPLOYMENT_URL'],
+              'previewReady': True,
+              'previewTarget': 'preview',
+              'productionDeploymentUnchanged': True,
+              'hostedCreateHttpSmoke': 'pass',
+              'signedOutParticipantBoundary': 'pass',
+              'browserSmoke': browser,
           }
-          JSON
+          (evidence / 'smoke-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
+          PY
+
           {
             echo '## PR 477 hosted Preview smoke'
             echo
             echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Gated release run: \`$RELEASE_RUN_ID\`"
             echo "- Deployment: \`$DEPLOYMENT_ID\`"
             echo '- Hosted `/trades/new`: passed through `vercel curl`'
             echo '- Create iframe, Co-Fund source, participant input, and proposal-only boundary: present'
@@ -308,9 +410,10 @@ jobs:
           Hosted Preview smoke passed for PR #477.
 
           - Candidate: \`$CANDIDATE_SHA\`
+          - Gated release run: \`$RELEASE_RUN_ID\`
           - Deployment: \`$DEPLOYMENT_ID\`
           - Preview: $DEPLOYMENT_URL
-          - Run: $run_url
+          - Smoke run: $run_url
           - Hosted \`/trades/new\`: exact Create iframe and Co-Fund source loaded
           - Proposal-only boundary copy and participant input were present
           - Signed-out participant search returned the exact private, fail-closed authentication response
@@ -326,8 +429,8 @@ jobs:
           Hosted Preview smoke failed for PR #477.
 
           - Candidate: \`$CANDIDATE_SHA\`
-          - Deployment: \`$DEPLOYMENT_ID\`
-          - Run: $run_url
+          - Gated release run: \`$RELEASE_RUN_ID\`
+          - Smoke run: $run_url
           - Evidence artifact: \`pr477-hosted-preview-smoke-${GITHUB_RUN_ID}\`
 
           No production or participant/payment mutation occurred.
