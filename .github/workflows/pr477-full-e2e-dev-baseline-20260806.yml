@@ -1,0 +1,61 @@
+name: PR 477 full E2E dev-server baseline
+
+on:
+  push:
+    branches:
+      - ops/pr477-full-e2e-dev-baseline-20260806
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr477-full-e2e-dev-baseline-20260806
+  cancel-in-progress: false
+
+jobs:
+  full-e2e-dev:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out exact PR 477 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: fbf414bafefc62fc412b1bd188711a214c0dec10
+          fetch-depth: 0
+
+      - name: Prove exact candidate and dev-server mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "fbf414bafefc62fc412b1bd188711a214c0dec10"
+          test ! -e .next/BUILD_ID
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run complete rendered browser suite on the historical dev-server path
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: npm run test:e2e -- --reporter=line
+
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr477-full-e2e-dev-baseline-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
