@@ -368,7 +368,10 @@ begin
       - 'progress_visibility'
       - 'reviewed_by'
       - 'reviewed_at'
-      - 'review_reason';
+      - 'review_reason'
+      - 'approved_terms_version'
+      - 'operative_terms_sha256'
+      - 'terms_locked_at';
     new_material := to_jsonb(new)
       - 'status'
       - 'candidate_alternative_id'
@@ -376,7 +379,10 @@ begin
       - 'progress_visibility'
       - 'reviewed_by'
       - 'reviewed_at'
-      - 'review_reason';
+      - 'review_reason'
+      - 'approved_terms_version'
+      - 'operative_terms_sha256'
+      - 'terms_locked_at';
 
     if new_material is distinct from old_material then
       raise exception using errcode = '23514', message = 'Pool proposal terms are immutable after review begins; submit a new version instead.';
