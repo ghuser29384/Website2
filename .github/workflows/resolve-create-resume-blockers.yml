@@ -1,0 +1,392 @@
+name: Resolve Create resume and field-stability blockers
+
+on:
+  push:
+    branches:
+      - feature/account-bound-participant-picker-20260805
+
+permissions:
+  contents: write
+
+concurrency:
+  group: resolve-create-resume-blockers
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[resolve-create-blockers]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/account-bound-participant-picker-20260805
+          fetch-depth: 0
+
+      - name: Apply fail-closed exact patches
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str, expected: int = 1) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != expected:
+                  raise SystemExit(
+                      f"{path}: expected {expected} exact occurrence(s), found {count}"
+                  )
+              target.write_text(text.replace(old, new), encoding="utf-8")
+
+          client = "src/lib/create-interface/group-contribution-client.ts"
+          replace_exact(
+              client,
+              '''const CREATE_FRAME_SELECTOR = "iframe[data-create-interface-frame='true']";
+          const PROPOSAL_FLAGS = readGroupContributionProposalFlags({''',
+              '''const CREATE_FRAME_SELECTOR = "iframe[data-create-interface-frame='true']";
+          const PANEL_SHAPE_FIELDS = new Set<string>([
+            "participantLimit",
+            "creatorParticipation",
+            "coActStructure",
+            "activationMode",
+            "performanceStartMode",
+            "rewardMode",
+            "redistributionEnabled",
+            "coFundDeadlineOutcome",
+            "recurringMode",
+          ]);
+          const PROPOSAL_FLAGS = readGroupContributionProposalFlags({''',
+          )
+
+          replace_exact(
+              client,
+              '''  entry.shadow.addEventListener("change", (event) => {
+              const control = formControlTarget(event.target);
+              if (!control) return;
+
+              if (control.matches("[data-payment-method]")) {
+                entry.state.paymentMethods = [
+                  ...entry.shadow.querySelectorAll<HTMLInputElement>("[data-payment-method]:checked"),
+                ]
+                  .map((input) => input.dataset.paymentMethod)
+                  .filter((value): value is "wallet" | "card-or-ach" | "escrow" =>
+                    value === "wallet" || value === "card-or-ach" || value === "escrow",
+                  );
+              } else if (control.matches("[data-field]")) {
+                updateStateFromControl(entry.state, control);
+                if (control.dataset.field === "creatorParticipation") {
+                  applyCreatorParticipationChoice(entry);
+                }
+                entry.state = normalizeDraft(entry.state);
+              } else {
+                return;
+              }
+
+              persistDrafts();
+              writeProposalPayload();
+              scheduleMountedOptionRender(entry);
+            });''',
+              '''  entry.shadow.addEventListener("change", (event) => {
+              const control = formControlTarget(event.target);
+              if (!control) return;
+
+              let panelShapeChanged = false;
+              if (control.matches("[data-payment-method]")) {
+                entry.state.paymentMethods = [
+                  ...entry.shadow.querySelectorAll<HTMLInputElement>("[data-payment-method]:checked"),
+                ]
+                  .map((input) => input.dataset.paymentMethod)
+                  .filter((value): value is "wallet" | "card-or-ach" | "escrow" =>
+                    value === "wallet" || value === "card-or-ach" || value === "escrow",
+                  );
+              } else if (control.matches("[data-field]")) {
+                const field = control.dataset.field ?? "";
+                updateStateFromControl(entry.state, control);
+                if (field === "creatorParticipation") {
+                  applyCreatorParticipationChoice(entry);
+                }
+                entry.state = normalizeDraft(entry.state);
+                panelShapeChanged = PANEL_SHAPE_FIELDS.has(field);
+              } else {
+                return;
+              }
+
+              persistDrafts();
+              writeProposalPayload();
+              if (panelShapeChanged) scheduleMountedOptionRender(entry);
+              else updateValidationStatus(entry);
+            });''',
+          )
+
+          replace_exact(
+              client,
+              '''function persistDrafts(): void {
+            try {
+              const drafts = [...mounted.values()]
+                .slice(0, MAX_LOCAL_DRAFTS)
+                .reduce<Record<string, GroupContributionDraftState>>((record, entry) => {
+                  record[entry.key] = normalizeDraft(entry.state);
+                  return record;
+                }, {});
+              const value: StoredDrafts = { version: 1, drafts };
+              createWindow().localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+            } catch {
+              // Local draft persistence is best effort. Proposal submission remains explicit.
+            }
+          }
+
+          function readStoredDrafts(): StoredDrafts {
+            try {
+              const raw = createWindow().localStorage.getItem(STORAGE_KEY);
+              if (!raw) return { version: 1, drafts: {} };
+              const parsed = JSON.parse(raw) as Partial<StoredDrafts>;
+              if (parsed.version !== 1 || !parsed.drafts || typeof parsed.drafts !== "object") {
+                return { version: 1, drafts: {} };
+              }
+              return { version: 1, drafts: parsed.drafts };
+            } catch {
+              return { version: 1, drafts: {} };
+            }
+          }''',
+              '''function groupDraftStorage(): Storage | null {
+            try {
+              const storage = window.localStorage;
+              storage.getItem(STORAGE_KEY);
+              return storage;
+            } catch {
+              try {
+                const storage = createWindow().localStorage;
+                storage.getItem(STORAGE_KEY);
+                return storage;
+              } catch {
+                return null;
+              }
+            }
+          }
+
+          function persistDrafts(): void {
+            try {
+              const storage = groupDraftStorage();
+              if (!storage) return;
+              const drafts = [...mounted.values()]
+                .slice(0, MAX_LOCAL_DRAFTS)
+                .reduce<Record<string, GroupContributionDraftState>>((record, entry) => {
+                  record[entry.key] = normalizeDraft(entry.state);
+                  return record;
+                }, {});
+              const value: StoredDrafts = { version: 1, drafts };
+              storage.setItem(STORAGE_KEY, JSON.stringify(value));
+            } catch {
+              // Local draft persistence is best effort. Proposal submission remains explicit.
+            }
+          }
+
+          function readStoredDrafts(): StoredDrafts {
+            try {
+              const storage = groupDraftStorage();
+              if (!storage) return { version: 1, drafts: {} };
+              const raw = storage.getItem(STORAGE_KEY);
+              if (!raw) return { version: 1, drafts: {} };
+              const parsed = JSON.parse(raw) as Partial<StoredDrafts>;
+              if (parsed.version !== 1 || !parsed.drafts || typeof parsed.drafts !== "object") {
+                return { version: 1, drafts: {} };
+              }
+              return { version: 1, drafts: parsed.drafts };
+            } catch {
+              return { version: 1, drafts: {} };
+            }
+          }''',
+          )
+
+          stability = "src/lib/create-interface/group-contribution-client-stability.test.ts"
+          replace_exact(
+              stability,
+              '''test("state-replacing controls defer their panel rerender until the browser event is complete", () => {
+            const listeners = functionBody("installShadowDelegatedListeners");
+            assert.match(listeners, /entry\\.state\\.mode = mode/);
+            assert.match(listeners, /scheduleMountedOptionRender\\(entry\\)/);
+            assert.doesNotMatch(listeners, /renderMountedOption\\(entry\\)/);
+
+            const scheduled = functionBody("scheduleMountedOptionRender");
+            assert.match(scheduled, /setTimeout/);
+            assert.match(scheduled, /renderMountedOption\\(entry\\)/);
+          });''',
+              '''test("only panel-shape controls defer a rerender until the browser event is complete", () => {
+            const shapeFieldsStart = client.indexOf("const PANEL_SHAPE_FIELDS");
+            const shapeFieldsEnd = client.indexOf("const PROPOSAL_FLAGS", shapeFieldsStart);
+            assert.ok(shapeFieldsStart >= 0 && shapeFieldsEnd > shapeFieldsStart);
+            const shapeFields = client.slice(shapeFieldsStart, shapeFieldsEnd);
+            assert.match(shapeFields, /creatorParticipation/);
+            assert.match(shapeFields, /activationMode/);
+            assert.match(shapeFields, /recurringMode/);
+            assert.doesNotMatch(shapeFields, /targetMinor|maximumBudgetMinor|noPoolDefault/);
+
+            const listeners = functionBody("installShadowDelegatedListeners");
+            assert.match(listeners, /entry\\.state\\.mode = mode/);
+            assert.match(listeners, /const field = control\\.dataset\\.field \\?\\? ""/);
+            assert.match(listeners, /panelShapeChanged = PANEL_SHAPE_FIELDS\\.has\\(field\\)/);
+            assert.match(listeners, /if \\(panelShapeChanged\\) scheduleMountedOptionRender\\(entry\\)/);
+            assert.match(listeners, /else updateValidationStatus\\(entry\\)/);
+            assert.doesNotMatch(listeners, /renderMountedOption\\(entry\\)/);
+
+            const scheduled = functionBody("scheduleMountedOptionRender");
+            assert.match(scheduled, /setTimeout/);
+            assert.match(scheduled, /renderMountedOption\\(entry\\)/);
+          });
+
+          test("group drafts persist in the stable application storage across srcDoc remounts", () => {
+            const storage = functionBody("groupDraftStorage");
+            assert.match(storage, /window\\.localStorage/);
+            assert.match(storage, /createWindow\\(\\)\\.localStorage/);
+
+            const persist = functionBody("persistDrafts");
+            const read = functionBody("readStoredDrafts");
+            assert.match(persist, /groupDraftStorage\\(\\)/);
+            assert.match(read, /groupDraftStorage\\(\\)/);
+            assert.doesNotMatch(persist, /createWindow\\(\\)\\.localStorage\\.setItem/);
+            assert.doesNotMatch(read, /createWindow\\(\\)\\.localStorage\\.getItem/);
+          });''',
+          )
+
+          index = "public/moral-trade-create/index.html"
+          replace_exact(
+              index,
+              '''    const CREATE_INTERFACE_VERSION = "moral_trade_create_v1";
+              const CREATE_DRAFT_STORAGE_KEY = "moral_trade_create_resume_v1";
+
+              function createSubmissionKey() {''',
+              '''    const CREATE_INTERFACE_VERSION = "moral_trade_create_v1";
+              const CREATE_DRAFT_STORAGE_KEY = "moral_trade_create_resume_v1";
+
+              function createDraftStorage() {
+                try {
+                  if (window.parent !== window) {
+                    const storage = window.parent.sessionStorage;
+                    storage.getItem(CREATE_DRAFT_STORAGE_KEY);
+                    return storage;
+                  }
+                } catch {}
+                try {
+                  const storage = window.sessionStorage;
+                  storage.getItem(CREATE_DRAFT_STORAGE_KEY);
+                  return storage;
+                } catch {
+                  return null;
+                }
+              }
+
+              function clearDraftForResume() {
+                const storage = createDraftStorage();
+                if (!storage) return;
+                try { storage.removeItem(CREATE_DRAFT_STORAGE_KEY); } catch {}
+              }
+
+              function createSubmissionKey() {''',
+          )
+
+          replace_exact(
+              index,
+              '''    function saveDraftForResume() {
+                try {
+                  sessionStorage.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify({ ...state, published: false }));
+                } catch {}
+              }
+
+              function restoreDraftForResume() {
+                const shouldResume = new URLSearchParams(window.location.search).get("resume") === "create";
+                if (!shouldResume) return false;
+                try {
+                  const saved = JSON.parse(sessionStorage.getItem(CREATE_DRAFT_STORAGE_KEY) || "null");
+                  if (!saved || typeof saved !== "object") return false;
+                  Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });
+                  sessionStorage.removeItem(CREATE_DRAFT_STORAGE_KEY);
+                  return true;
+                } catch {
+                  return false;
+                }
+              }''',
+              '''    function saveDraftForResume() {
+                const storage = createDraftStorage();
+                if (!storage) return false;
+                try {
+                  const serialized = JSON.stringify({ ...state, published: false });
+                  storage.setItem(CREATE_DRAFT_STORAGE_KEY, serialized);
+                  return storage.getItem(CREATE_DRAFT_STORAGE_KEY) === serialized;
+                } catch {
+                  return false;
+                }
+              }
+
+              function restoreDraftForResume() {
+                const shouldResume = new URLSearchParams(window.location.search).get("resume") === "create";
+                if (!shouldResume) return false;
+                const storage = createDraftStorage();
+                if (!storage) return false;
+                try {
+                  const saved = JSON.parse(storage.getItem(CREATE_DRAFT_STORAGE_KEY) || "null");
+                  if (!saved || typeof saved !== "object") return false;
+                  Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });
+                  storage.removeItem(CREATE_DRAFT_STORAGE_KEY);
+                  return true;
+                } catch {
+                  return false;
+                }
+              }''',
+          )
+
+          replace_exact(
+              index,
+              '''        if (response.status === 401 && result?.requiresAuth) {
+                  saveDraftForResume();
+                  window.top.location.assign(result.loginUrl || "/login?returnTo=%2Ftrades%2Fnew%3Fresume%3Dcreate");
+                  return;
+                }''',
+              '''        if (response.status === 401 && result?.requiresAuth) {
+                  if (!saveDraftForResume()) {
+                    throw new Error("Sign-in is required, but Create could not preserve this draft. Keep this page open and try again.");
+                  }
+                  window.top.location.assign(result.loginUrl || "/login?returnTo=%2Ftrades%2Fnew%3Fresume%3Dcreate");
+                  return;
+                }''',
+          )
+
+          replace_exact(
+              index,
+              '''try { sessionStorage.removeItem(CREATE_DRAFT_STORAGE_KEY); } catch {}''',
+              '''clearDraftForResume();''',
+              expected=2,
+          )
+
+          source_contract = "src/lib/create-interface/source-contract.test.ts"
+          replace_exact(
+              source_contract,
+              '''  assert.match(html, /sessionStorage\\.setItem\\(CREATE_DRAFT_STORAGE_KEY/);''',
+              '''  assert.match(html, /function createDraftStorage\\(\\)/);
+              assert.match(html, /window\\.parent\\.sessionStorage/);
+              assert.match(html, /storage\\.setItem\\(CREATE_DRAFT_STORAGE_KEY/);
+              assert.match(html, /return storage\\.getItem\\(CREATE_DRAFT_STORAGE_KEY\\) === serialized/);
+              assert.match(html, /if \\(!saveDraftForResume\\(\\)\\)/);
+              assert.match(html, /function clearDraftForResume\\(\\)/);
+              assert.doesNotMatch(
+                html,
+                /sessionStorage\\.(?:setItem|getItem|removeItem)\\(CREATE_DRAFT_STORAGE_KEY/,
+              );''',
+          )
+          PY
+
+      - name: Remove temporary workflow and commit durable repair
+        shell: bash
+        run: |
+          rm .github/workflows/resolve-create-resume-blockers.yml
+          git config user.name "ghuser29384"
+          git config user.email "262476329+ghuser29384@users.noreply.github.com"
+          git add \
+            public/moral-trade-create/index.html \
+            src/lib/create-interface/group-contribution-client.ts \
+            src/lib/create-interface/group-contribution-client-stability.test.ts \
+            src/lib/create-interface/source-contract.test.ts \
+            .github/workflows/resolve-create-resume-blockers.yml
+          git diff --cached --check
+          git commit -m "Resolve Create resume and field stability blockers [resolve-create-blockers]"
+          git push origin HEAD:feature/account-bound-participant-picker-20260805
