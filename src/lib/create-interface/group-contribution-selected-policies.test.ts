@@ -14,6 +14,7 @@ test("persists the creator's same-period or same-time Co-Act choice", () => {
     "Avoid meat for one meal per week",
   );
   draft.mode = "co-act";
+  draft.creatorParticipation = "organizer-only";
   draft.counterpartyParticipation = "explicitly-excluded";
   draft.coActTiming = "same-time";
   draft.coordination = "discussion-thread";
@@ -32,6 +33,7 @@ test("persists a creator-selected Co-Fund deadline outcome and fallback", () => 
     "Commission one fixed existential-risk research brief",
   );
   draft.mode = "co-fund";
+  draft.creatorParticipation = "organizer-only";
   draft.targetMinor = 5_000;
   draft.maximumBudgetMinor = 500;
   draft.noPoolDefault = "Fund another approved project";

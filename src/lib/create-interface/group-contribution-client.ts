@@ -14,6 +14,7 @@ import {
 } from "./group-contribution-draft";
 import { sanitizeGroupContributionDraft } from "./group-contribution-draft-sanitize";
 import { parseGroupContributionProposalPayload } from "./group-contribution-payload";
+import type { ParticipantTarget } from "./participant-target";
 import {
   permitsCoActStructure,
   permitsCoFundAllocation,
@@ -29,6 +30,18 @@ const HOST_ATTRIBUTE = "data-mt-group-contribution-host";
 const OPTION_ATTRIBUTE = "data-mt-group-contribution-option";
 const MAX_LOCAL_DRAFTS = 50;
 const CREATE_FRAME_SELECTOR = "iframe[data-create-interface-frame='true']";
+const PANEL_SHAPE_FIELDS = new Set<string>([
+  "participantLimit",
+  "creatorParticipation",
+  "coActStructure",
+  "activationMode",
+  "performanceStartMode",
+  "rewardMode",
+  "redistributionEnabled",
+  "coFundDeadlineOutcome",
+  "allocationMode",
+  "recurringMode",
+]);
 const PROPOSAL_FLAGS = readGroupContributionProposalFlags({
   NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS:
     process.env.NEXT_PUBLIC_MORAL_TRADE_CO_ACT_PROPOSALS,
@@ -59,6 +72,10 @@ interface MountedOption {
   inputListener: () => void;
   renderTimer: number | null;
   shadowListenersInstalled: boolean;
+  participantPickerCleanups: Array<() => void>;
+  creatorLoadInFlight: boolean;
+  creatorLoadSequence: number;
+  creatorIdentityMessage: string;
 }
 
 interface ProposalOptionPayload {
@@ -72,6 +89,34 @@ export interface GroupContributionProposalPayload {
   options: ProposalOptionPayload[];
 }
 
+interface ParticipantPickerViewer {
+  profileId: string;
+  username: string;
+  displayName: string;
+  accountType: "individual" | "organization";
+  verification: "none" | "identity-verified" | "organization-verified";
+  publicMention: "username" | "pending-invitee";
+  usernameRequired: boolean;
+}
+
+type PickerTarget = Omit<ParticipantTarget, "rowId">;
+
+interface ParticipantPickerApi {
+  loadViewer: (options?: { refresh?: boolean }) => Promise<ParticipantPickerViewer>;
+  mount: (
+    root: HTMLElement,
+    config?: {
+      label?: string;
+      selected?: ParticipantTarget | null;
+      locked?: boolean;
+      excludedProfileIds?: string[];
+      allowExternalClaim?: boolean;
+      onSelect?: (target: PickerTarget) => void;
+      onClear?: () => void;
+    },
+  ) => () => void;
+}
+
 interface PublicGroupContributionApi {
   readProposalPayload: () => GroupContributionProposalPayload;
   readDrafts: () => GroupContributionDraftState[];
@@ -82,6 +127,7 @@ interface PublicGroupContributionApi {
 declare global {
   interface Window {
     MoralTradeGroupContributions?: PublicGroupContributionApi;
+    MoralTradeParticipantPicker?: ParticipantPickerApi;
     __moralTradeGroupContributionFetchBridgeV1?: boolean;
   }
 }
@@ -141,6 +187,7 @@ function activateCreateDocument(targetWindow: Window, targetDocument: Document):
     entry.card.removeEventListener("input", entry.inputListener);
     entry.card.removeEventListener("change", entry.inputListener);
     if (entry.renderTimer !== null) targetWindow.clearTimeout(entry.renderTimer);
+    cleanupParticipantPickers(entry);
   }
   mounted.clear();
   activeWindow = targetWindow;
@@ -329,6 +376,10 @@ function mountOption(card: HTMLElement, label: HTMLElement, index: number): void
     inputListener,
     renderTimer: null,
     shadowListenersInstalled: false,
+    participantPickerCleanups: [],
+    creatorLoadInFlight: false,
+    creatorLoadSequence: 0,
+    creatorIdentityMessage: "",
   };
   mounted.set(key, entry);
   updateCounterpartyMatchDefault(entry.state);
@@ -341,6 +392,7 @@ function removeDetachedOptions(): void {
     entry.card.removeEventListener("input", entry.inputListener);
     entry.card.removeEventListener("change", entry.inputListener);
     if (entry.renderTimer !== null) createWindow().clearTimeout(entry.renderTimer);
+    cleanupParticipantPickers(entry);
     mounted.delete(key);
   }
 }
@@ -455,8 +507,10 @@ function renderMountedOption(entry: MountedOption): void {
 
   const slot = shadow.querySelector<HTMLElement>("[data-mt-group-panel-slot]");
   if (!slot) throw new Error("The group-contribution panel slot is unavailable");
+  cleanupParticipantPickers(entry);
   slot.innerHTML = state.mode === "solo" ? soloCopy(availableGroupMode) : groupPanel(state);
   hydrateValues(slot, state);
+  if (state.mode !== "solo") mountParticipantControls(entry);
   updateValidationStatus(entry);
 }
 
@@ -503,6 +557,7 @@ function groupPanel(state: GroupContributionDraftState): string {
         ["unlisted", "Unlisted"],
         ["invitation-only", "Invitation-only"],
       ])}
+      ${participantFields(state)}
       ${state.mode === "co-act" ? coActPrimaryFields(state) : coFundPrimaryFields(state)}
     </div>
     ${counterpartyPrompt(state)}
@@ -515,6 +570,156 @@ function groupPanel(state: GroupContributionDraftState): string {
     </details>
     <div class="validation" data-validation aria-live="polite"></div>
   </div>`;
+}
+
+function participantFields(state: GroupContributionDraftState): string {
+  const optionName = `creator-participation-${slug(state.optionKey)}`;
+  return `<section class="participant-section" data-mt-group-participants>
+    <fieldset class="participant-choice field-wide">
+      <legend>Are you participating in this ${state.mode === "co-act" ? "Co-Act" : "Co-Fund"}?</legend>
+      <div class="participant-choice-row">
+        <label><input type="radio" name="${escapeHtml(optionName)}" data-field="creatorParticipation" value="participating"><span>Yes, I am a participant</span></label>
+        <label><input type="radio" name="${escapeHtml(optionName)}" data-field="creatorParticipation" value="organizer-only"><span>No, I am organizing only</span></label>
+      </div>
+    </fieldset>
+    <div class="participant-head"><strong>Initial participants and invitees</strong><span>${state.participants.length} selected · maximum ${state.participantLimit}</span></div>
+    <div class="participant-list" data-mt-group-participant-list>
+      ${state.participants.map((_, index) => `<div data-mt-group-participant-index="${index}"></div>`).join("")}
+    </div>
+    ${state.participants.length < state.participantLimit ? `<div data-mt-group-participant-add></div>` : ""}
+    <div class="creator-identity-message" data-mt-creator-identity-message></div>
+    <p class="privacy-note">Typing does not identify an account. Select a suggestion explicitly. This proposal save sends no invitation, enrolls nobody, and stores no email or phone number.</p>
+  </section>`;
+}
+
+function cleanupParticipantPickers(entry: MountedOption): void {
+  entry.participantPickerCleanups.forEach((cleanup) => cleanup());
+  entry.participantPickerCleanups = [];
+}
+
+function participantRowId(entry: MountedOption): string {
+  const random = Math.random().toString(36).slice(2, 8);
+  return `group-${slug(entry.key)}-${Date.now().toString(36)}-${random}`.slice(0, 80);
+}
+
+function mountParticipantControls(entry: MountedOption): void {
+  const picker = createWindow().MoralTradeParticipantPicker;
+  const message = entry.shadow.querySelector<HTMLElement>("[data-mt-creator-identity-message]");
+  if (message) {
+    message.innerHTML = entry.creatorIdentityMessage
+      ? `${escapeHtml(entry.creatorIdentityMessage)}${entry.creatorIdentityMessage.includes("username") ? ` <a href="/complete-profile?username_required=1&next=%2Ftrades%2Fnew%3Fresume%3Dcreate" target="_top">Choose username</a>` : ""}`
+      : "";
+  }
+  if (!picker) {
+    if (message) message.textContent = "Participant search is unavailable. Reload Create and try again.";
+    return;
+  }
+
+  entry.state.participants.forEach((target, index) => {
+    const root = entry.shadow.querySelector<HTMLElement>(`[data-mt-group-participant-index="${index}"]`);
+    if (!root) return;
+    entry.participantPickerCleanups.push(
+      picker.mount(root, {
+        selected: target,
+        locked: target.isCreator,
+        onClear: () => {
+          if (target.isCreator) return;
+          entry.state.participants = entry.state.participants.filter((_, candidateIndex) => candidateIndex !== index);
+          entry.state = normalizeDraft(entry.state);
+          persistDrafts();
+          renderMountedOption(entry);
+          writeProposalPayload();
+        },
+      }),
+    );
+  });
+
+  const addRoot = entry.shadow.querySelector<HTMLElement>("[data-mt-group-participant-add]");
+  if (addRoot) {
+    const excludedProfileIds = entry.state.participants
+      .filter((target): target is Extract<ParticipantTarget, { kind: "account" }> => target.kind === "account")
+      .map((target) => target.profileId);
+    entry.participantPickerCleanups.push(
+      picker.mount(addRoot, {
+        label: "Add participant or invitee",
+        excludedProfileIds,
+        allowExternalClaim: true,
+        onSelect: (target) => {
+          if (entry.state.participants.length >= entry.state.participantLimit) return;
+          entry.state.participants = [
+            ...entry.state.participants,
+            { ...target, rowId: participantRowId(entry), isCreator: false } as ParticipantTarget,
+          ];
+          entry.state = normalizeDraft(entry.state);
+          persistDrafts();
+          renderMountedOption(entry);
+          writeProposalPayload();
+        },
+      }),
+    );
+  }
+
+  ensureCreatorParticipant(entry, picker);
+}
+
+function applyCreatorParticipationChoice(entry: MountedOption): void {
+  entry.creatorLoadSequence += 1;
+  entry.creatorLoadInFlight = false;
+  entry.creatorIdentityMessage = "";
+  if (entry.state.creatorParticipation === "organizer-only") {
+    entry.state.participants = entry.state.participants.filter((target) => !target.isCreator);
+    entry.state.creatorCounts = false;
+  } else if (entry.state.creatorParticipation === "participating") {
+    entry.state.creatorCounts = true;
+  }
+}
+
+function ensureCreatorParticipant(entry: MountedOption, picker: ParticipantPickerApi): void {
+  if (entry.state.creatorParticipation !== "participating") return;
+  if (entry.state.participants.some((target) => target.isCreator)) return;
+  if (entry.creatorLoadInFlight || entry.creatorIdentityMessage) return;
+
+  entry.creatorLoadInFlight = true;
+  entry.creatorIdentityMessage = "Loading your participant identity…";
+  const sequence = ++entry.creatorLoadSequence;
+  picker.loadViewer().then((viewer) => {
+    if (sequence !== entry.creatorLoadSequence || entry.state.creatorParticipation !== "participating") return;
+    entry.creatorLoadInFlight = false;
+    if (!viewer || viewer.usernameRequired || !viewer.username) {
+      entry.creatorIdentityMessage = "Choose a Moral Trade username before participating.";
+      renderMountedOption(entry);
+      writeProposalPayload();
+      return;
+    }
+    entry.creatorIdentityMessage = "";
+    entry.state.participants = [
+      {
+        rowId: `group-${slug(entry.key)}-creator`.slice(0, 80),
+        kind: "account",
+        profileId: viewer.profileId,
+        usernameSnapshot: viewer.username,
+        displayNameSnapshot: viewer.displayName,
+        accountType: viewer.accountType,
+        verification: viewer.verification,
+        publicMention: viewer.publicMention,
+        invitationState: "draft",
+        isCreator: true,
+      },
+      ...entry.state.participants.filter((target) => !target.isCreator),
+    ];
+    entry.state = normalizeDraft(entry.state);
+    persistDrafts();
+    renderMountedOption(entry);
+    writeProposalPayload();
+  }).catch((error: unknown) => {
+    if (sequence !== entry.creatorLoadSequence) return;
+    entry.creatorLoadInFlight = false;
+    entry.creatorIdentityMessage = error instanceof Error
+      ? error.message
+      : "Your participant identity could not be loaded.";
+    renderMountedOption(entry);
+    writeProposalPayload();
+  });
 }
 
 function coActStructureOptions(): Array<[string, string]> {
@@ -540,6 +745,10 @@ function coFundAllocationOptions(): Array<[string, string]> {
 }
 
 function coActPrimaryFields(state: GroupContributionDraftState): string {
+  const creatorBaseline = state.creatorParticipation === "participating"
+    ? `${numberField("baselineQuantity", "Your pre-commitment baseline", state.baselineQuantity, 0, 1_000_000, "number")}
+       ${textField("baselineUnit", "Your baseline unit", "e.g. meat-free meals per week")}`
+    : `<p class="participant-owned-note field-wide">Accepted participants enter and confirm their own baseline and private participation terms. The creator cannot enter them on their behalf.</p>`;
   return `
     ${selectField("coActStructure", "Structure", coActStructureOptions())}
     ${selectField("activationMode", "Activation", [
@@ -553,19 +762,21 @@ function coActPrimaryFields(state: GroupContributionDraftState): string {
     }
     ${textField("duration", "Duration", "e.g. 12 weeks")}
     ${textField("frequency", "Frequency", "e.g. one meal per week")}
-    ${numberField("baselineQuantity", "Pre-commitment baseline", state.baselineQuantity, 0, 1_000_000, "number")}
-    ${textField("baselineUnit", "Baseline unit", "e.g. meat-free meals per week")}
+    ${creatorBaseline}
   `;
 }
 
-function coFundPrimaryFields(_state: GroupContributionDraftState): string {
+function coFundPrimaryFields(state: GroupContributionDraftState): string {
+  const creatorTerms = state.creatorParticipation === "participating"
+    ? `${moneyField("maximumBudgetMinor", "Your private maximum contribution", "0.00")}
+       ${textareaField("noPoolDefault", "What would you fund instead?", "If this Co-Fund does not happen, where would you otherwise use this money?")}
+       ${checkboxField("participationBeatsDefault", "This Co-Fund is better by my lights than my stated default")}`
+    : `<p class="participant-owned-note field-wide">Accepted participants enter and confirm their own fallback, private maximum contribution, and payment terms. The organizer cannot enter those terms for them.</p>`;
   return `
     ${selectField("allocationMode", "Allocation", coFundAllocationOptions())}
     ${moneyField("targetMinor", "Project target", "0.00")}
     ${textField("settlementCurrency", "Settlement currency", "USD", 3)}
-    ${moneyField("maximumBudgetMinor", "Your maximum budget", "0.00")}
-    ${textareaField("noPoolDefault", "What would you fund instead?", "If this Co-Fund does not happen, where would you otherwise use this money?")}
-    ${checkboxField("participationBeatsDefault", "This Co-Fund is better by my lights than my stated default")}
+    ${creatorTerms}
   `;
 }
 
@@ -607,7 +818,7 @@ function coActAdvancedFields(state: GroupContributionDraftState): string {
             )
           : ""
       }
-      ${checkboxField("creatorCounts", "Creator counts toward the participant minimum")}
+      ${state.creatorParticipation === "participating" ? checkboxField("creatorCounts", "Creator counts toward the participant minimum") : ""}
       ${numberField(
         "activationConfirmationHours",
         "Activation confirmation period (hours)",
@@ -683,7 +894,7 @@ function coActAdvancedFields(state: GroupContributionDraftState): string {
         ["new-version", "Create a revised version for fresh consent"],
       ])}
     </div>
-    <p class="privacy-note">Detailed baselines stay private. Other users see only the incremental commitment, method, and confidence. Invitation-only identities become public only after successful completion and advance consent.</p>
+    <p class="privacy-note">Detailed baselines stay private. Other users see only the incremental commitment, method, and confidence. Invitation-only identities remain hidden from outsiders until the Co-Act reaches a terminal state; disclosure still requires the accepted terms.</p>
   </section>`;
 }
 
@@ -707,7 +918,7 @@ function coFundAdvancedFields(state: GroupContributionDraftState): string {
         ["alternative-offer", "Use a specified alternative offer"],
         ["renegotiate", "Permit renegotiation"],
       ])}
-      ${checkboxField("preauthorizeExecutableFallback", "Request a separate fallback authorization after proposal review")}
+      <p class="privacy-note field-wide">A no-pool fallback is informational in this proposal. Any future executable fallback requires a separate participant authorization and is not created here.</p>
       ${selectField("recurringMode", "Recurring terms", [
         ["none", "One time"],
         ["standing-authorization", "Standing authorization"],
@@ -794,7 +1005,9 @@ function hydrateValues(root: ParentNode, state: GroupContributionDraftState): vo
       const field = control.dataset.field as keyof GroupContributionDraftState;
       if (!(field in state)) return;
       const value = state[field];
-      if (isInputElement(control) && control.type === "checkbox") {
+      if (isInputElement(control) && control.type === "radio") {
+        control.checked = control.value === String(value);
+      } else if (isInputElement(control) && control.type === "checkbox") {
         if (field === "counterpartyParticipation") {
           control.checked = state.counterpartyParticipation === "explicitly-included";
         } else {
@@ -833,6 +1046,9 @@ function installShadowDelegatedListeners(entry: MountedOption): void {
     const control = formControlTarget(event.target);
     if (!control?.matches("[data-field]")) return;
     updateStateFromControl(entry.state, control);
+    if (control.dataset.field === "creatorParticipation") {
+      applyCreatorParticipationChoice(entry);
+    }
     entry.state = normalizeDraft(entry.state);
     persistDrafts();
     writeProposalPayload();
@@ -843,6 +1059,7 @@ function installShadowDelegatedListeners(entry: MountedOption): void {
     const control = formControlTarget(event.target);
     if (!control) return;
 
+    let panelShapeChanged = false;
     if (control.matches("[data-payment-method]")) {
       entry.state.paymentMethods = [
         ...entry.shadow.querySelectorAll<HTMLInputElement>("[data-payment-method]:checked"),
@@ -852,19 +1069,21 @@ function installShadowDelegatedListeners(entry: MountedOption): void {
           value === "wallet" || value === "card-or-ach" || value === "escrow",
         );
     } else if (control.matches("[data-field]")) {
+      const field = control.dataset.field ?? "";
       updateStateFromControl(entry.state, control);
+      if (field === "creatorParticipation") {
+        applyCreatorParticipationChoice(entry);
+      }
       entry.state = normalizeDraft(entry.state);
+      panelShapeChanged = PANEL_SHAPE_FIELDS.has(field);
     } else {
       return;
     }
 
     persistDrafts();
     writeProposalPayload();
-    if (controlRequiresPanelRender(control)) {
-      scheduleMountedOptionRender(entry);
-    } else {
-      updateValidationStatus(entry);
-    }
+    if (panelShapeChanged) scheduleMountedOptionRender(entry);
+    else updateValidationStatus(entry);
   });
 }
 
@@ -883,27 +1102,17 @@ function formControlTarget(
   return element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 }
 
-function controlRequiresPanelRender(
-  control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
-): boolean {
-  const field = control.dataset.field;
-  return (
-    field === "coActStructure" ||
-    field === "activationMode" ||
-    field === "performanceStartMode" ||
-    field === "redistributionEnabled" ||
-    field === "allocationMode" ||
-    field === "recurringMode" ||
-    field === "coFundDeadlineOutcome"
-  );
-}
-
 function updateStateFromControl(
   state: GroupContributionDraftState,
   control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
 ): void {
   const field = control.dataset.field as keyof GroupContributionDraftState;
   if (!(field in state)) return;
+
+  if (field === "creatorParticipation" && isInputElement(control) && control.type === "radio") {
+    state.creatorParticipation = control.value === "participating" ? "participating" : "organizer-only";
+    return;
+  }
 
   if (field === "counterpartyParticipation" && isInputElement(control)) {
     state.counterpartyParticipation = control.checked ? "explicitly-included" : "explicitly-excluded";
@@ -1184,14 +1393,34 @@ function installSubmitGuard(): void {
   );
 }
 
+function groupDraftStorage(): Storage | null {
+  try {
+    const storage = window.localStorage;
+    storage.getItem(STORAGE_KEY);
+    return storage;
+  } catch {
+    try {
+      const storage = createWindow().localStorage;
+      storage.getItem(STORAGE_KEY);
+      return storage;
+    } catch {
+      return null;
+    }
+  }
+}
+
 function resumeStorage(): Storage | null {
   if (typeof window === "undefined") return null;
   try {
     if (window.top && window.top !== window) return window.top.sessionStorage;
   } catch {
-    // Cross-origin embedding falls back to the iframe storage area.
+    // Cross-origin embedding falls back to the current application storage area.
   }
-  return window.sessionStorage;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 }
 
 function resumeRequestUrl(): URL | null {
@@ -1201,28 +1430,29 @@ function resumeRequestUrl(): URL | null {
       return new URL(window.top.location.href);
     }
   } catch {
-    // Cross-origin embedding falls back to the iframe URL.
+    // Cross-origin embedding falls back to the current window URL.
   }
-  return new URL(window.location.href);
+  try {
+    return new URL(window.location.href);
+  } catch {
+    return null;
+  }
 }
 
 function isResumeRequest(): boolean {
-  try {
-    return resumeRequestUrl()?.searchParams.get("resume") === "create";
-  } catch {
-    return false;
-  }
+  return resumeRequestUrl()?.searchParams.get("resume") === "create";
 }
 
 function restoreResumeDrafts(): void {
   if (!isResumeRequest()) return;
   try {
     const raw = resumeStorage()?.getItem(RESUME_DRAFT_STORAGE_KEY);
-    if (!raw) return;
+    const localStorage = groupDraftStorage();
+    if (!raw || !localStorage) return;
     const parsed = JSON.parse(raw) as Partial<StoredDrafts>;
     if (parsed.version !== 1 || !parsed.drafts || typeof parsed.drafts !== "object") return;
     const snapshot: StoredDrafts = { version: 1, drafts: parsed.drafts };
-    createWindow().localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   } catch {
     // Invalid or unavailable local state cannot override the validated proposal snapshot.
   }
@@ -1235,7 +1465,7 @@ function persistResumeProposal(proposal: GroupContributionProposalPayload): void
   if (!storage) return;
   try {
     storage.setItem(RESUME_STORAGE_KEY, JSON.stringify(proposal));
-    const draftSnapshot = createWindow().localStorage.getItem(STORAGE_KEY);
+    const draftSnapshot = groupDraftStorage()?.getItem(STORAGE_KEY);
     if (draftSnapshot) storage.setItem(RESUME_DRAFT_STORAGE_KEY, draftSnapshot);
   } catch {
     // Authentication resume is best effort; the server remains authoritative.
@@ -1292,6 +1522,8 @@ function readStoredResumeProposal(): GroupContributionProposalPayload | null {
 
 function persistDrafts(): void {
   try {
+    const storage = groupDraftStorage();
+    if (!storage) return;
     const drafts = [...mounted.values()]
       .slice(0, MAX_LOCAL_DRAFTS)
       .reduce<Record<string, GroupContributionDraftState>>((record, entry) => {
@@ -1299,7 +1531,7 @@ function persistDrafts(): void {
         return record;
       }, {});
     const value: StoredDrafts = { version: 1, drafts };
-    createWindow().localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    storage.setItem(STORAGE_KEY, JSON.stringify(value));
   } catch {
     // Local draft persistence is best effort. Proposal submission remains explicit.
   }
@@ -1307,7 +1539,9 @@ function persistDrafts(): void {
 
 function readStoredDrafts(): StoredDrafts {
   try {
-    const raw = createWindow().localStorage.getItem(STORAGE_KEY);
+    const storage = groupDraftStorage();
+    if (!storage) return { version: 1, drafts: {} };
+    const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return { version: 1, drafts: {} };
     const parsed = JSON.parse(raw) as Partial<StoredDrafts>;
     if (parsed.version !== 1 || !parsed.drafts || typeof parsed.drafts !== "object") {
@@ -1471,6 +1705,36 @@ function styles(): string {
     legend { margin-bottom: 8px; }
     .checks { display: flex; gap: 14px; flex-wrap: wrap; }
     .privacy-note, .fixed-policy { margin: 0; padding: 11px 12px; background: #f5f2eb; color: #5d5952; font-size: 12px; line-height: 1.45; }
+    .participant-section { grid-column: 1 / -1; display: grid; gap: 10px; border-top: 1px solid #d0cabf; padding-top: 12px; }
+    .participant-choice { display: grid; gap: 8px; border: 0; padding: 0; margin: 0; }
+    .participant-choice legend { margin: 0; }
+    .participant-choice-row { display: flex; gap: 10px; flex-wrap: wrap; }
+    .participant-choice-row label { display: flex; align-items: center; gap: 7px; min-height: 38px; border: 1px solid #b8b1a5; padding: 8px 10px; background: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+    .participant-choice-row input { width: 16px; height: 16px; accent-color: #075ee8; }
+    .participant-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+    .participant-head strong { font: 700 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; }
+    .participant-head span { color: #66625b; font-size: 11px; }
+    .participant-list { display: grid; gap: 8px; }
+    .participant-owned-note { margin: 0; padding: 11px 12px; border-left: 3px solid #b8b1a5; background: #f5f2eb; color: #5d5952; font-size: 12px; line-height: 1.45; }
+    .creator-identity-message { min-height: 0; color: #8a281f; font-size: 11px; line-height: 1.4; }
+    .creator-identity-message a { color: #075ee8; font-weight: 700; }
+    .mt-participant-picker { position: relative; display: grid; gap: 6px; }
+    .mt-participant-picker > label { font: 700 9px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .08em; text-transform: uppercase; }
+    .mt-participant-picker input { width: 100%; min-height: 42px; border: 1px solid #b8b1a5; padding: 9px 11px; background: #fff; font-size: 13px; }
+    .mt-participant-results { position: absolute; z-index: 20; top: calc(100% - 18px); left: 0; right: 0; max-height: 270px; overflow: auto; border: 1px solid #b8b1a5; background: #fff; box-shadow: 0 12px 28px rgba(20,18,14,.15); }
+    .mt-participant-results[hidden] { display: none; }
+    .mt-participant-results button { display: grid; width: 100%; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 9px; border: 0; border-bottom: 1px solid #d0cabf; padding: 10px 11px; background: #fff; text-align: left; cursor: pointer; }
+    .mt-participant-option-copy { display: grid; gap: 4px; min-width: 0; }
+    .mt-participant-avatar { display: grid; width: 32px; height: 32px; place-items: center; overflow: hidden; border: 1px solid #b8b1a5; border-radius: 50%; background: #f2efe8; color: #403c35; font: 700 12px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .mt-participant-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .mt-participant-results button:hover, .mt-participant-results button.active { background: #eef4ff; }
+    .mt-participant-results button strong, .mt-participant-selected strong { color: #075ee8; font-size: 13px; }
+    .mt-participant-results button span, .mt-participant-empty, .mt-participant-status, .mt-participant-selected span { color: #66625b; font-size: 11px; line-height: 1.35; }
+    .mt-participant-empty { padding: 12px; }
+    .mt-participant-status { min-height: 16px; }
+    .mt-participant-selected { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; border: 1px solid #b8b1a5; padding: 10px 11px; background: #fff; }
+    .mt-participant-selected > div { display: grid; gap: 4px; min-width: 0; }
+    .mt-participant-selected button { min-height: 30px; border: 1px solid #b8b1a5; padding: 0 9px; background: #fff; cursor: pointer; }
     .fixed-policy { display: grid; gap: 4px; }
     .fixed-policy strong { color: #222; font: 700 10px/1.2 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: .08em; }
     .validation { border-top: 1px solid #d0cabf; padding: 10px 14px; color: #66625b; font-size: 12px; line-height: 1.4; }
@@ -1484,6 +1748,8 @@ function styles(): string {
       .counterparty-prompt { align-items: flex-start; flex-direction: column; }
       .proposal-boundary { align-items: flex-start; flex-direction: column; gap: 5px; }
       .mechanism { margin-left: 0; }
+      .mt-participant-results { position: static; max-height: 230px; box-shadow: none; }
+      .mt-participant-selected { align-items: flex-start; flex-direction: column; }
     }
     @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
   </style>`;

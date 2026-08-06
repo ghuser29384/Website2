@@ -17,6 +17,7 @@ function coActTerms() {
     "Avoid meat for one meal per week",
   );
   draft.mode = "co-act";
+  draft.creatorParticipation = "organizer-only";
   draft.counterpartyParticipation = "explicitly-excluded";
   const terms = buildGroupContributionTerms(draft);
   assert(terms);

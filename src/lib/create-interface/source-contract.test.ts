@@ -23,6 +23,14 @@ const groupClient = readFileSync(
   "src/lib/create-interface/group-contribution-client.ts",
   "utf8",
 );
+const participantPicker = readFileSync(
+  "public/moral-trade-create/participant-picker.js",
+  "utf8",
+);
+const participantTargetServer = readFileSync(
+  "src/lib/create-interface/participant-target-server.ts",
+  "utf8",
+);
 const instrumentationClient = readFileSync("src/instrumentation-client.ts", "utf8");
 const page = readFileSync("src/app/trades/new/page.tsx", "utf8");
 const frame = readFileSync("src/components/create/create-interface-frame.tsx", "utf8");
@@ -66,26 +74,23 @@ test("the accepted Create interface is mounted with Donation Upgrade and compact
   assert.match(html, /Threshold pool/);
   assert.match(html, /data-common-ground-create-integration-v1/);
   assert.match(html, /moral-trade-create\/common-ground\.css/);
+  assert.match(html, /moral-trade-create\/participant-picker\.js/);
   assert.match(html, /moral-trade-create\/common-ground\.js/);
   assert.match(html, /Custom mathematical formula/);
   assert.match(html, /Public exact thresholds/);
   assert.match(html, /Progress range/);
   assert.doesNotMatch(html, /href="\/mpgf\/common-ground-pool/);
-  assert.match(
-    html,
-    /If this Co-Fund does not happen, where would you otherwise use this money\?/,
-  );
-  assert.match(
-    html,
-    /These are the projects we would honestly fund if this Co-Fund did not happen\./,
-  );
+  assert.match(html, /Are you participating in this Co-Fund\?/);
+  assert.match(html, /Typed text is not a participant until you explicitly select an account\./);
+  assert.match(html, /private claim link/);
   assert.match(commonGroundScript, /What would you fund instead\?/);
-  assert.doesNotMatch(commonGroundScript, /Without pool|no-pool/);
-  assert.match(commonGroundScript, /Private value estimates stay in this tab/);
+  assert.match(commonGroundScript, /Your private maximum contribution/);
+  assert.match(commonGroundScript, /participant-owned terms/i);
   assert.match(commonGroundScript, /privateValueEstimatesStored:\s*false/);
-  assert.match(commonGroundScript, /participantGainChecked:\s*true/);
-  assert.match(commonGroundScript, /participants\.length > 100/);
+  assert.match(commonGroundScript, /allocationStatus:\s*"open"/);
+  assert.match(commonGroundScript, /creatorParticipation:\s*state\.commonGroundCreatorParticipation/);
   assert.match(commonGroundScript, /commonGroundParticipants\.length >= 100/);
+  assert.doesNotMatch(commonGroundScript, /contributionCents|participantGainChecked/);
   assert.doesNotThrow(() => new Function(commonGroundScript));
 });
 
@@ -93,11 +98,16 @@ test("the browser waits for a durable server receipt and contains no simulated p
   assert.match(html, /fetch\("\/api\/create\/publish"/);
   assert.match(html, /credentials: "same-origin"/);
   assert.match(html, /renderSubmittedReceipt/);
-  assert.match(html, /function createDraftResumeStorage/);
+  assert.match(html, /function createDraftStorage\(\)/);
   assert.match(html, /window\.top\.sessionStorage/);
-  assert.match(html, /CREATE_DRAFT_STORAGE\.setItem\(\s*CREATE_DRAFT_STORAGE_KEY/);
-  assert.match(html, /step: 4, offerPhase: "details", published: false/);
-  assert.match(html, /CREATE_DRAFT_STORAGE\.getItem\(CREATE_DRAFT_STORAGE_KEY/);
+  assert.match(html, /storage\.setItem\(CREATE_DRAFT_STORAGE_KEY/);
+  assert.match(html, /step: 4/);
+  assert.match(html, /offerPhase: "details"/);
+  assert.match(html, /return storage\.getItem\(CREATE_DRAFT_STORAGE_KEY\) === serialized/);
+  assert.match(html, /if \(!saveDraftForResume\(\)\)/);
+  assert.match(html, /function clearDraftForResume\(\)/);
+  assert.match(html, /Keep the snapshot through a possible srcDoc remount/);
+  assert.doesNotMatch(html, /CREATE_DRAFT_STORAGE\.(?:setItem|getItem|removeItem)/);
   assert.doesNotMatch(html, /POOL-REV/);
   assert.doesNotMatch(html, /Prototype: public/);
   assert.doesNotMatch(html, /state\.publishedId\s*=.*Date\.now/);
@@ -147,6 +157,15 @@ test("proposal-only group terms are integrated into the real iframe and authorit
   assert.match(createValidation, /authoritativeGroupContributionOptions/);
   assert.match(createValidation, /optionKey: `\$\{offer\.id\}:\$\{index \+ 1\}`/);
   assert.match(createValidation, /visibility: "private-review"/);
+  assert.match(groupClient, /MoralTradeParticipantPicker/);
+  assert.match(groupClient, /Are you participating in this/);
+  assert.match(groupClient, /participant-owned(?: terms|-note)|enter and confirm their own/i);
+  assert.match(participantPicker, /role="combobox"/);
+  assert.match(participantPicker, /Select one explicitly/);
+  assert.match(participantPicker, /private claim link/);
+  assert.match(route, /validateAccountParticipantTargets/);
+  assert.match(participantTargetServer, /resolve_create_participants_v2/);
+  assert.match(participantTargetServer, /no longer eligible/);
   assert.match(createPersistence, /groupContributionReviewRecord/);
   assert.doesNotMatch(createPersistence, /paymentIntent|clientSecret|publishIdentities/);
 });

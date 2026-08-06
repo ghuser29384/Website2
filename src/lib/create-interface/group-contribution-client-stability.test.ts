@@ -25,15 +25,40 @@ test("the client mounts one stable Shadow DOM shell and replaces only the panel 
   assert.match(render, /slot\.innerHTML\s*=/);
 });
 
-test("state-replacing controls defer their panel rerender until the browser event is complete", () => {
+test("only panel-shape controls defer a rerender until the browser event is complete", () => {
+  const shapeFieldsStart = client.indexOf("const PANEL_SHAPE_FIELDS");
+  const shapeFieldsEnd = client.indexOf("const PROPOSAL_FLAGS", shapeFieldsStart);
+  assert.ok(shapeFieldsStart >= 0 && shapeFieldsEnd > shapeFieldsStart);
+  const shapeFields = client.slice(shapeFieldsStart, shapeFieldsEnd);
+  assert.match(shapeFields, /creatorParticipation/);
+  assert.match(shapeFields, /activationMode/);
+  assert.match(shapeFields, /recurringMode/);
+  assert.doesNotMatch(shapeFields, /targetMinor|maximumBudgetMinor|noPoolDefault/);
+
   const listeners = functionBody("installShadowDelegatedListeners");
   assert.match(listeners, /entry\.state\.mode = mode/);
-  assert.match(listeners, /scheduleMountedOptionRender\(entry\)/);
+  assert.match(listeners, /const field = control\.dataset\.field \?\? ""/);
+  assert.match(listeners, /panelShapeChanged = PANEL_SHAPE_FIELDS\.has\(field\)/);
+  assert.match(listeners, /if \(panelShapeChanged\) scheduleMountedOptionRender\(entry\)/);
+  assert.match(listeners, /else updateValidationStatus\(entry\)/);
   assert.doesNotMatch(listeners, /renderMountedOption\(entry\)/);
 
   const scheduled = functionBody("scheduleMountedOptionRender");
   assert.match(scheduled, /setTimeout/);
   assert.match(scheduled, /renderMountedOption\(entry\)/);
+});
+
+test("group drafts persist in stable application storage across srcDoc remounts", () => {
+  const storage = functionBody("groupDraftStorage");
+  assert.match(storage, /window\.localStorage/);
+  assert.match(storage, /createWindow\(\)\.localStorage/);
+
+  const persist = functionBody("persistDrafts");
+  const readStored = functionBody("readStoredDrafts");
+  assert.match(persist, /groupDraftStorage\(\)/);
+  assert.match(readStored, /groupDraftStorage\(\)/);
+  assert.doesNotMatch(persist, /createWindow\(\)\.localStorage\.setItem/);
+  assert.doesNotMatch(readStored, /createWindow\(\)\.localStorage\.getItem/);
 });
 
 test("the iframe event target guards are cross-realm safe", () => {
@@ -57,13 +82,18 @@ test("review summaries are idempotent so their observer cannot self-trigger fore
 
 test("ordinary value changes do not replace the active form control", () => {
   const listeners = functionBody("installShadowDelegatedListeners");
-  assert.match(listeners, /controlRequiresPanelRender\(control\)/);
-  assert.match(listeners, /updateValidationStatus\(entry\)/);
+  assert.match(listeners, /const field = control\.dataset\.field \?\? ""/);
+  assert.match(listeners, /panelShapeChanged = PANEL_SHAPE_FIELDS\.has\(field\)/);
+  assert.match(listeners, /if \(panelShapeChanged\) scheduleMountedOptionRender\(entry\)/);
+  assert.match(listeners, /else updateValidationStatus\(entry\)/);
 
-  const structural = functionBody("controlRequiresPanelRender");
-  assert.match(structural, /coActStructure/);
-  assert.match(structural, /allocationMode/);
-  assert.doesNotMatch(structural, /maximumBudgetMinor|targetMinor|noPoolDefault/);
+  const shapeFieldsStart = client.indexOf("const PANEL_SHAPE_FIELDS");
+  const shapeFieldsEnd = client.indexOf("const PROPOSAL_FLAGS", shapeFieldsStart);
+  assert.ok(shapeFieldsStart >= 0 && shapeFieldsEnd > shapeFieldsStart);
+  const shapeFields = client.slice(shapeFieldsStart, shapeFieldsEnd);
+  assert.match(shapeFields, /coActStructure/);
+  assert.match(shapeFields, /allocationMode/);
+  assert.doesNotMatch(shapeFields, /maximumBudgetMinor|targetMinor|noPoolDefault/);
 });
 
 test("authentication resume validates and restores the proposal on the summary screen", () => {
@@ -107,13 +137,14 @@ test("authentication resume uses the same top-level request and storage context"
 
 test("authentication resume restores the exact editable group draft snapshot", () => {
   const persist = functionBody("persistResumeProposal");
-  assert.match(persist, /createWindow\(\)\.localStorage\.getItem\(STORAGE_KEY\)/);
+  assert.match(persist, /groupDraftStorage\(\)\?\.getItem\(STORAGE_KEY\)/);
   assert.match(persist, /RESUME_DRAFT_STORAGE_KEY/);
 
   const restore = functionBody("restoreResumeDrafts");
   assert.match(restore, /RESUME_DRAFT_STORAGE_KEY/);
   assert.match(restore, /parsed\.version !== 1/);
-  assert.match(restore, /createWindow\(\)\.localStorage\.setItem\(STORAGE_KEY/);
+  assert.match(restore, /const localStorage = groupDraftStorage\(\)/);
+  assert.match(restore, /localStorage\.setItem\(STORAGE_KEY/);
 
   const activate = functionBody("activateCreateDocument");
   assert.ok(activate.indexOf("restoreResumeDrafts();") < activate.indexOf("readStoredResumeProposal();"));

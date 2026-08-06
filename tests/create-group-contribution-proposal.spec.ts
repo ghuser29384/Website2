@@ -7,6 +7,45 @@ import {
   type Route,
 } from "@playwright/test";
 
+const PARTICIPANT_VIEWER = {
+  profileId: "11111111-1111-4111-8111-111111111111",
+  username: "creator-example",
+  displayName: "Creator Example",
+  affiliation: "Moral Trade",
+  accountType: "individual",
+  verification: "identity-verified",
+  publicMention: "username",
+  usernameRequired: false,
+};
+
+const PARTICIPANT_RESULT = {
+  profileId: "22222222-2222-4222-8222-222222222222",
+  username: "ellen-example",
+  displayName: "Ellen Example",
+  affiliation: "Forethought",
+  accountType: "individual",
+  verification: "identity-verified",
+  publicMention: "pending-invitee",
+};
+
+async function mockParticipantDirectory(page: Page): Promise<void> {
+  await page.route("**/api/create/participants**", async (route: Route) => {
+    const requestUrl = new URL(route.request().url());
+    const query = requestUrl.searchParams.get("q")?.trim() ?? "";
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "Cache-Control": "private, no-store, max-age=0" },
+      body: JSON.stringify({
+        ok: true,
+        query,
+        viewer: PARTICIPANT_VIEWER,
+        results: query.length >= 2 ? [PARTICIPANT_RESULT] : [],
+      }),
+    });
+  });
+}
+
 async function openConcreteOfferStep(page: Page): Promise<FrameLocator> {
   await page.goto("/trades/new");
   await page.waitForLoadState("domcontentloaded");
@@ -81,6 +120,7 @@ test("integrates proposal-only Co-Act and Co-Fund terms into the real Create ifr
       paymentRequests.push(request.url());
     }
   });
+  await mockParticipantDirectory(page);
   await page.route("**/api/create/publish", async (route: Route) => {
     submissionCapture.payload = JSON.parse(
       route.request().postData() || "null",
@@ -108,6 +148,10 @@ test("integrates proposal-only Co-Act and Co-Fund terms into the real Create ifr
   const coAct = behaviorHost(create);
   await coAct.getByRole("button", { name: "Act together" }).click();
   await expect(coAct.getByText("PROPOSAL ONLY")).toBeVisible();
+  await coAct.getByLabel("No, I am organizing only").check();
+  await coAct.getByLabel("Add participant or invitee").fill("External collaborator");
+  await coAct.getByRole("option", { name: /Invite “External collaborator” by private claim link/ }).click();
+  await expect(coAct.getByText("External collaborator", { exact: true })).toBeVisible();
   await expect(coAct.getByText("Do this together?")).toBeVisible();
   await coAct.getByLabel("Yes, include the counterparty").check();
   await coAct.getByLabel("Maximum participants").fill("10");
@@ -117,9 +161,14 @@ test("integrates proposal-only Co-Act and Co-Fund terms into the real Create ifr
 
   const coFund = fundingHost(create);
   await coFund.getByRole("button", { name: "Fund together" }).click();
+  await coFund.getByLabel("Yes, I am a participant").check();
+  await expect(coFund.getByText("@creator-example", { exact: true })).toBeVisible();
+  await coFund.getByLabel("Add participant or invitee").fill("ellen");
+  await coFund.getByRole("option", { name: /@ellen-example/ }).click();
+  await expect(coFund.getByText("@ellen-example", { exact: true })).toBeVisible();
   await coFund.getByLabel("Project target").fill("50.00");
-  await coFund.getByLabel("Your maximum budget").fill("5.00");
-  await expect(coFund.getByLabel("Your maximum budget")).toHaveValue("5.00");
+  await coFund.getByLabel("Your private maximum contribution").fill("5.00");
+  await expect(coFund.getByLabel("Your private maximum contribution")).toHaveValue("5.00");
   await coFund
     .getByLabel("What would you fund instead?")
     .fill("Donate the same budget to another approved existential-risk project");
@@ -166,8 +215,25 @@ test("integrates proposal-only Co-Act and Co-Fund terms into the real Create ifr
     "co-act",
     "co-fund",
   ]);
+  const submittedOptions = groupTerms.options as Array<{
+    optionKey: string;
+    terms: { mode: string; creatorParticipation: string; participants: Array<Record<string, unknown>> };
+  }>;
+  const submittedCoAct = submittedOptions.find((option) => option.terms.mode === "co-act");
+  const submittedCoFund = submittedOptions.find((option) => option.terms.mode === "co-fund");
+  expect(submittedCoAct?.terms.creatorParticipation).toBe("organizer-only");
+  expect(submittedCoAct?.terms.participants).toEqual([
+    expect.objectContaining({ kind: "external-claim", displayNameSnapshot: "External collaborator" }),
+  ]);
+  expect(submittedCoFund?.terms.creatorParticipation).toBe("participating");
+  expect(submittedCoFund?.terms.participants).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ profileId: PARTICIPANT_VIEWER.profileId, isCreator: true }),
+      expect.objectContaining({ profileId: PARTICIPANT_RESULT.profileId, isCreator: false }),
+    ]),
+  );
   expect(JSON.stringify(submittedPayload)).not.toMatch(
-    /paymentIntent|clientSecret|activate|publishIdentities|privateValue/i,
+    /paymentIntent|clientSecret|activate|publishIdentities|privateValue|email|phone/i,
   );
   expect(paymentRequests).toEqual([]);
   expect(consoleErrors).toEqual([]);
@@ -198,6 +264,7 @@ test("restores proposal-only group terms after the Create authentication handoff
   const create = await openConcreteOfferStep(page);
   const coAct = behaviorHost(create);
   await coAct.getByRole("button", { name: "Act together" }).click();
+  await coAct.getByLabel("No, I am organizing only").check();
   await coAct.getByLabel("Yes, include the counterparty").check();
   await coAct.getByLabel("Maximum participants").fill("17");
   await expect(coAct.getByText("Group terms are complete for proposal review.")).toBeVisible();
@@ -241,6 +308,7 @@ expect(resumedDrafts.drafts?.["behavior:1"]).toMatchObject({
   );
   await expect(resumedCoAct.getByLabel("Maximum participants")).toHaveValue("17");
   await expect(resumedCoAct.getByLabel("Yes, include the counterparty")).toBeChecked();
+  await expect(resumedCoAct.getByLabel("No, I am organizing only")).toBeChecked();
 
   const submittedPayload = submissionCapture.payload;
   if (!submittedPayload) throw new Error("Expected the authentication handoff payload");
@@ -277,7 +345,9 @@ test("keeps real iframe group-contribution controls inside a narrow mobile viewp
   await page.setViewportSize({ width: 390, height: 844 });
   const create = await openConcreteOfferStep(page);
   await behaviorHost(create).getByRole("button", { name: "Act together" }).click();
+  await behaviorHost(create).getByLabel("No, I am organizing only").check();
   await fundingHost(create).getByRole("button", { name: "Fund together" }).click();
+  await fundingHost(create).getByLabel("No, I am organizing only").check();
   await expect(fundingHost(create).getByText("PROPOSAL ONLY")).toBeVisible();
   await page.screenshot({
     path: testInfo.outputPath("mobile-co-act-co-fund-proposal.png"),

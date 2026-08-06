@@ -9,6 +9,11 @@ import {
   type GroupVisibility,
   type UnderlyingContributionKind,
 } from "./group-contribution";
+import {
+  validateParticipantTarget,
+  type CreatorParticipation,
+  type ParticipantTarget,
+} from "./participant-target";
 
 export type GroupDraftMode = "solo" | "co-act" | "co-fund";
 
@@ -17,6 +22,8 @@ export interface GroupContributionDraftState {
   underlyingContribution: UnderlyingContributionKind;
   mode: GroupDraftMode;
   participantLimit: number;
+  creatorParticipation: "" | CreatorParticipation;
+  participants: ParticipantTarget[];
   visibility: GroupVisibility;
   combination: "alternative" | "cumulative";
   recruitmentDeadline: string;
@@ -102,6 +109,8 @@ export function defaultGroupContributionDraft(
     underlyingContribution,
     mode,
     participantLimit: 10,
+    creatorParticipation: "",
+    participants: [],
     visibility: "public",
     combination: "alternative",
     recruitmentDeadline: "",
@@ -167,11 +176,13 @@ export function defaultGroupContributionDraft(
 export function normalizeDraft(state: GroupContributionDraftState): GroupContributionDraftState {
   const participantLimit = clampInteger(state.participantLimit, 1, MAX_GROUP_PARTICIPANTS);
   const minimumParticipants = clampInteger(state.minimumParticipants, 1, participantLimit);
+  const participants = normalizeDraftParticipants(state.participants).slice(0, participantLimit);
 
   return {
     ...state,
     optionKey: state.optionKey.trim(),
     participantLimit,
+    participants,
     minimumParticipants,
     activationConfirmationHours: clampInteger(state.activationConfirmationHours, 1, 720),
     allowedMisses: clampInteger(state.allowedMisses, 0, 10_000),
@@ -244,6 +255,8 @@ function commonTerms(state: GroupContributionDraftState) {
     schemaVersion: GROUP_CONTRIBUTION_SCHEMA_VERSION,
     execution: "proposal-only" as const,
     participantLimit: state.participantLimit,
+    creatorParticipation: state.creatorParticipation as CreatorParticipation,
+    participants: state.participants,
     visibility: state.visibility,
     eligibility,
     groupReference: state.existingGroupId
@@ -271,12 +284,14 @@ function buildCoActTerms(state: GroupContributionDraftState): CoActTerms {
       state.activationMode === "independent"
         ? {
             mode: "independent",
-            creatorCounts: state.creatorCounts,
+            creatorCounts:
+              state.creatorParticipation === "participating" && state.creatorCounts,
           }
         : {
             mode: "minimum-participants",
             minimumParticipants: state.minimumParticipants,
-            creatorCounts: state.creatorCounts,
+            creatorCounts:
+              state.creatorParticipation === "participating" && state.creatorCounts,
             confirmationHours: state.activationConfirmationHours,
           },
     performanceStart:
@@ -330,8 +345,8 @@ function buildCoActTerms(state: GroupContributionDraftState): CoActTerms {
         },
     identity: {
       membersSeeAfterJoining: true,
-      publicAfterSuccessfulCompletion: state.visibility === "invitation-only",
-      completionDisclosureConsentRequired: true,
+      publicAfterTerminalState: state.visibility === "invitation-only",
+      terminalStateDisclosureConsentRequired: true,
     },
     counterpartyParticipation: state.counterpartyParticipation,
   };
@@ -386,12 +401,15 @@ function buildCoFundTerms(state: GroupContributionDraftState): CoFundTerms {
       status: "open",
       shares: [],
     },
-    participantTerms: {
-      maximumBudgetMinor: state.maximumBudgetMinor,
-      noPoolDefault: state.noPoolDefault,
-      participationBeatsDefault: state.participationBeatsDefault,
-      preauthorizeExecutableFallback: state.preauthorizeExecutableFallback,
-    },
+    participantTerms:
+      state.creatorParticipation === "participating"
+        ? {
+            maximumBudgetMinor: state.maximumBudgetMinor,
+            noPoolDefault: state.noPoolDefault,
+            participationBeatsDefault: true,
+            preauthorizeExecutableFallback: false,
+          }
+        : null,
     confirmationHours: COFUND_CONFIRMATION_HOURS,
     paymentMethods: state.paymentMethods,
     paymentFailure: {
@@ -419,6 +437,26 @@ function buildCoFundTerms(state: GroupContributionDraftState): CoFundTerms {
       underThresholdFallback: state.coFundFailureFallback,
     },
   };
+}
+
+function normalizeDraftParticipants(value: unknown): ParticipantTarget[] {
+  if (!Array.isArray(value)) return [];
+  const targets: ParticipantTarget[] = [];
+  const rowIds = new Set<string>();
+  const profileIds = new Set<string>();
+  for (const candidate of value) {
+    try {
+      const target = validateParticipantTarget(candidate);
+      if (rowIds.has(target.rowId)) continue;
+      if (target.kind === "account" && profileIds.has(target.profileId)) continue;
+      rowIds.add(target.rowId);
+      if (target.kind === "account") profileIds.add(target.profileId);
+      targets.push(target);
+    } catch {
+      // Old free-text or malformed local drafts remain unresolved rather than being auto-matched.
+    }
+  }
+  return targets;
 }
 
 function clampInteger(value: number, minimum: number, maximum: number): number {

@@ -1,4 +1,5 @@
 import type { UnderlyingContributionKind } from "./group-contribution";
+import { validateParticipantTarget, type ParticipantTarget } from "./participant-target";
 import {
   defaultGroupContributionDraft,
   normalizeDraft,
@@ -6,6 +7,7 @@ import {
 } from "./group-contribution-draft";
 
 const MODES = new Set(["solo", "co-act", "co-fund"]);
+const CREATOR_PARTICIPATION = new Set(["participating", "organizer-only"]);
 const VISIBILITIES = new Set(["public", "unlisted", "invitation-only"]);
 const COMBINATIONS = new Set(["alternative", "cumulative"]);
 const CO_ACT_STRUCTURES = new Set(["same-action", "complementary-roles"]);
@@ -69,6 +71,8 @@ export function sanitizeGroupContributionDraft(
 
   assignEnum(candidate, "mode", input.mode, MODES);
   assignNumber(candidate, "participantLimit", input.participantLimit);
+  assignEnum(candidate, "creatorParticipation", input.creatorParticipation, CREATOR_PARTICIPATION);
+  candidate.participants = sanitizeParticipantTargets(input.participants);
   assignEnum(candidate, "visibility", input.visibility, VISIBILITIES);
   assignEnum(candidate, "combination", input.combination, COMBINATIONS);
   assignString(candidate, "recruitmentDeadline", input.recruitmentDeadline);
@@ -149,6 +153,26 @@ export function sanitizeGroupContributionDraft(
   if (underlyingContribution === "nonfinancial" && candidate.mode === "co-fund") candidate.mode = "solo";
 
   return normalizeDraft(candidate);
+}
+
+function sanitizeParticipantTargets(value: unknown): ParticipantTarget[] {
+  if (!Array.isArray(value)) return [];
+  const targets: ParticipantTarget[] = [];
+  const rowIds = new Set<string>();
+  const profileIds = new Set<string>();
+  for (const candidate of value) {
+    try {
+      const target = validateParticipantTarget(candidate);
+      if (rowIds.has(target.rowId)) continue;
+      if (target.kind === "account" && profileIds.has(target.profileId)) continue;
+      rowIds.add(target.rowId);
+      if (target.kind === "account") profileIds.add(target.profileId);
+      targets.push(target);
+    } catch {
+      // Do not infer account identity from an old free-text draft.
+    }
+  }
+  return targets;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
