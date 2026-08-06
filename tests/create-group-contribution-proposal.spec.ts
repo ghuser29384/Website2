@@ -68,18 +68,26 @@ async function openConcreteOfferStep(page: Page): Promise<FrameLocator> {
   await create.getByRole("button", { name: "Money" }).click();
   await create.locator("#continueOffers").click();
 
-  await create
-    .locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="action"]')
-    .fill("Avoid meat for one meal per week");
-  await create
-    .locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]')
-    .fill("once per week for 12 weeks");
+  const behaviorAction = create.locator(
+    '[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="action"]',
+  );
+  const behaviorDuration = create.locator(
+    '[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]',
+  );
+
+  await behaviorDuration.fill("once per week for 12 weeks");
   await create
     .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]')
     .fill("5.00");
   await create
     .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]')
     .fill("Existential Risk Research Project");
+
+  // Enter the action last and cross a real focus boundary before mounting group controls.
+  // This prevents later offer-field updates from racing the delegated Create state handler.
+  await behaviorAction.fill("Avoid meat for one meal per week");
+  await behaviorAction.press("Tab");
+  await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");
 
   await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
   return create;
