@@ -1,0 +1,108 @@
+name: Repair PR 477 proposal gate and remove expired controllers
+
+on:
+  push:
+    branches:
+      - ops/dispatch-pr477-vercel-preview-20260806
+    paths:
+      - .github/workflows/repair-pr477-proposal-gate-20260806.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-pr477-proposal-gate-20260806
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
+      EXPECTED_HEAD: d5be798466fbef0a805df74d427d472065f1b9ea
+    steps:
+      - name: Check out the exact PR 477 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: feature/co-act-co-fund-create-v3-20260803
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Apply the narrow test stabilization and remove expired one-shot controllers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/create-group-contribution-proposal.spec.ts')
+          text = path.read_text(encoding='utf-8')
+          old = '''  await behaviorDuration.fill("once per week for 12 weeks");
+  await create
+    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]')
+    .fill("5.00");
+  await create
+    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]')
+    .fill("Existential Risk Research Project");
+
+  // Enter the action last and cross a real focus boundary before mounting group controls.
+  // This prevents later offer-field updates from racing the delegated Create state handler.
+  await behaviorAction.fill("Avoid meat for one meal per week");
+  await behaviorAction.press("Tab");
+  await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");
+
+  await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
+'''
+          new = '''  await create
+    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]')
+    .fill("5.00");
+  await create
+    .locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]')
+    .fill("Existential Risk Research Project");
+
+  // Commit each behavior field across a real focus boundary. Entering the action mounts
+  // the group controls, so fill and verify the duration against the mounted DOM afterward.
+  await behaviorAction.fill("Avoid meat for one meal per week");
+  await behaviorAction.press("Tab");
+  await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");
+  await expect(create.locator("[data-mt-group-contribution-host]")).toHaveCount(2);
+
+  await behaviorDuration.fill("once per week for 12 weeks");
+  await behaviorDuration.press("Tab");
+  await expect(behaviorDuration).toHaveValue("once per week for 12 weeks");
+  await expect(behaviorAction).toHaveValue("Avoid meat for one meal per week");
+'''
+          if text.count(old) != 1:
+              raise SystemExit('Could not locate the unique proposal-test setup block.')
+          path.write_text(text.replace(old, new), encoding='utf-8')
+          PY
+
+          git rm \
+            .github/workflows/pr212-current-main-qa-controller.yml \
+            .github/workflows/pr212-push-qa-snapshot-20260804.yml \
+            .github/workflows/one-person-browser-redirect-repair-controller-v2.yml
+
+          actual="$(git diff --name-only | sort)"
+          expected="$(printf '%s\n' \
+            '.github/workflows/one-person-browser-redirect-repair-controller-v2.yml' \
+            '.github/workflows/pr212-current-main-qa-controller.yml' \
+            '.github/workflows/pr212-push-qa-snapshot-20260804.yml' \
+            'tests/create-group-contribution-proposal.spec.ts' \
+            | sort)"
+          test "$actual" = "$expected"
+          git diff --check
+
+      - name: Commit and push the exact repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add tests/create-group-contribution-proposal.spec.ts
+          git commit -m 'Stabilize proposal gate and remove expired controllers'
+          git push origin "HEAD:$TARGET_BRANCH"
