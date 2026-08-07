@@ -1012,7 +1012,9 @@ revoke all on table public.mpgf_dac_campaign_outcomes
   from public, anon, authenticated;
 grant select on table public.mpgf_dac_campaign_outcomes
   to anon, authenticated;
-grant all on table public.mpgf_dac_campaign_outcomes
+revoke all on table public.mpgf_dac_campaign_outcomes
+  from service_role;
+grant select on table public.mpgf_dac_campaign_outcomes
   to service_role;
 
 comment on table public.mpgf_dac_campaign_outcomes is

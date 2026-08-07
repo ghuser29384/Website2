@@ -337,6 +337,32 @@ begin
   ) then
     raise exception 'Service role cannot execute the DAC terminal function.';
   end if;
+  if has_table_privilege(
+    'service_role',
+    'public.mpgf_dac_campaign_outcomes',
+    'INSERT'
+  ) or has_table_privilege(
+    'service_role',
+    'public.mpgf_dac_campaign_outcomes',
+    'UPDATE'
+  ) or has_table_privilege(
+    'service_role',
+    'public.mpgf_dac_campaign_outcomes',
+    'DELETE'
+  ) or has_table_privilege(
+    'service_role',
+    'public.mpgf_dac_campaign_outcomes',
+    'TRUNCATE'
+  ) then
+    raise exception 'Service role unexpectedly has direct DAC outcome mutation privileges.';
+  end if;
+  if not has_table_privilege(
+    'service_role',
+    'public.mpgf_dac_campaign_outcomes',
+    'SELECT'
+  ) then
+    raise exception 'Service role cannot read DAC terminal outcomes.';
+  end if;
   if to_regclass('public.mpgf_conditional_pledges') is not null then
     raise exception 'A second mutable conditional-pledge ledger exists.';
   end if;

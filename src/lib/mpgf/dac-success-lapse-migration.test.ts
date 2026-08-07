@@ -94,6 +94,18 @@ test("review and finalization are reviewer-authorized, exact-version, idempotent
     migration,
     /grant execute on function public\.mpgf_finalize_dac_campaign[\s\S]*to service_role/,
   );
+  assert.match(
+    migration,
+    /revoke all on table public\.mpgf_dac_campaign_outcomes[\s\S]*from service_role/,
+  );
+  assert.match(
+    migration,
+    /grant select on table public\.mpgf_dac_campaign_outcomes[\s\Mto service_role/,
+  );
+  assert.doesNotMatch(
+    migration,
+   /grant all on table public\.mpgf_dac_campaign_outcomes[\s\S]*to service_role/,
+  );
 });
 
 test("lapse expires signed intents while success and both outcomes create no payment behavior", async () => {
