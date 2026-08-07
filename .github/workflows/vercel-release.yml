@@ -291,7 +291,7 @@ jobs:
               (args.output / "candidate-only-files.txt").write_text(
                   "".join(f"{item}\n" for item in files)
               )
-              grep = "^(?:" + "|".join(re.escape(title) for title in titles) + ")$" if titles else ""
+              grep = "(?:" + "|".join(re.escape(title) for title in titles) + ")" if titles else ""
               (args.output / "candidate-only-grep.txt").write_text(grep + ("\n" if grep else ""))
               (args.output / "candidate-only-identities.txt").write_text(
                   "".join(f"{item}\n" for item in candidate_only)
@@ -369,31 +369,61 @@ jobs:
             mv playwright-report "$evidence_dir/candidate-focused-playwright-report"
           fi
 
-          (
-            set -euo pipefail
-            cd "$base_dir"
-            rm -rf .next test-results playwright-report
-            if command -v fuser >/dev/null 2>&1; then
-              fuser -k 3210/tcp || true
+          if [[ "$candidate_focused_status" -eq 0 ]]; then
+            cat > "$evidence_dir/focused-summary.md" <<EOF
+          ### Focused rendered-failure adjudication
+
+          - Candidate focused failures: 0
+          - Exact-base focused rerun: not needed
+          - Persistent candidate-only regressions: 0
+          - Result: every candidate-only full-suite failure cleared across five focused repetitions
+          EOF
+            : > "$evidence_dir/regressions.txt"
+            cat "$evidence_dir/focused-summary.md" >> "$GITHUB_STEP_SUMMARY"
+            echo 'Every candidate-only full-suite failure cleared under repeated focused rerun.'
+            exit 0
+          fi
+
+          base_focused_files=()
+          : > "$evidence_dir/base-unavailable-files.txt"
+          for focused_file in "${focused_files[@]}"; do
+            if [[ -f "$base_dir/$focused_file" ]]; then
+              base_focused_files+=("$focused_file")
+            else
+              printf '%s\n' "$focused_file" >> "$evidence_dir/base-unavailable-files.txt"
             fi
-            set +e
-            npx playwright test "${focused_files[@]}" \
-              --grep "$focused_grep" \
-              --repeat-each=5 \
-              --reporter=line 2>&1 | tee "$evidence_dir/base-focused.log"
-            base_focused_status=${PIPESTATUS[0]}
-            set -e
-            printf '%s\n' "$base_focused_status" > "$evidence_dir/base-focused.status"
-            if command -v fuser >/dev/null 2>&1; then
-              fuser -k 3210/tcp || true
-            fi
-            if [[ -d test-results ]]; then
-              mv test-results "$evidence_dir/base-focused-test-results"
-            fi
-            if [[ -d playwright-report ]]; then
-              mv playwright-report "$evidence_dir/base-focused-playwright-report"
-            fi
-          )
+          done
+
+          if [[ "${#base_focused_files[@]}" -eq 0 ]]; then
+            printf '  0 passed\n' > "$evidence_dir/base-focused.log"
+            printf '0\n' > "$evidence_dir/base-focused.status"
+          else
+            (
+              set -euo pipefail
+              cd "$base_dir"
+              rm -rf .next test-results playwright-report
+              if command -v fuser >/dev/null 2>&1; then
+                fuser -k 3210/tcp || true
+              fi
+              set +e
+              npx playwright test "${base_focused_files[@]}" \
+                --grep "$focused_grep" \
+                --repeat-each=5 \
+                --reporter=line 2>&1 | tee "$evidence_dir/base-focused.log"
+              base_focused_status=${PIPESTATUS[0]}
+              set -e
+              printf '%s\n' "$base_focused_status" > "$evidence_dir/base-focused.status"
+              if command -v fuser >/dev/null 2>&1; then
+                fuser -k 3210/tcp || true
+              fi
+              if [[ -d test-results ]]; then
+                mv test-results "$evidence_dir/base-focused-test-results"
+              fi
+              if [[ -d playwright-report ]]; then
+                mv playwright-report "$evidence_dir/base-focused-playwright-report"
+              fi
+            )
+          fi
           base_focused_status="$(cat "$evidence_dir/base-focused.status")"
 
           python3 "$comparator" focused \
@@ -402,6 +432,11 @@ jobs:
             --base "$evidence_dir/base-focused.log" \
             --base-status "$base_focused_status" \
             --output "$evidence_dir"
+          if [[ -s "$evidence_dir/base-unavailable-files.txt" ]]; then
+            unavailable_count="$(grep -c . "$evidence_dir/base-unavailable-files.txt")"
+            printf '%s\n' "- Candidate-only files absent from exact base: $unavailable_count" \
+              >> "$evidence_dir/focused-summary.md"
+          fi
           cat "$evidence_dir/focused-summary.md" >> "$GITHUB_STEP_SUMMARY"
 
           if [[ -s "$evidence_dir/regressions.txt" ]]; then
