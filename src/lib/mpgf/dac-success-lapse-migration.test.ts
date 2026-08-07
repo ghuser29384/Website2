@@ -55,7 +55,7 @@ test("DAC terminal architecture records one immutable aggregate outcome from the
   );
 });
 
-test("review and finalization are reviewer-authorized, exact-version, idempotent, and terminal", async () => {
+test("review and finalization are reviewer-authorized, exact-version, idempotent, terminal, and write-contained", async () => {
   const migration = await read(migrationPath);
 
   assert.match(
@@ -100,11 +100,11 @@ test("review and finalization are reviewer-authorized, exact-version, idempotent
   );
   assert.match(
     migration,
-    /grant select on table public\.mpgf_dac_campaign_outcomes[\s\Mto service_role/,
+    /grant select on table public\.mpgf_dac_campaign_outcomes[\s\S]*to service_role/,
   );
   assert.doesNotMatch(
     migration,
-   /grant all on table public\.mpgf_dac_campaign_outcomes[\s\S]*to service_role/,
+    /grant all on table public\.mpgf_dac_campaign_outcomes[\s\S]*to service_role/,
   );
 });
 
@@ -141,6 +141,10 @@ test("lapse expires signed intents while success and both outcomes create no pay
   assert.match(regression, /success_blocked_count <> 1/);
   assert.match(regression, /lapse_expired_count <> 1/);
   assert.match(regression, /payment_object_count <> 0/);
+  assert.match(
+    regression,
+    /Service role unexpectedly has direct DAC outcome mutation privileges/,
+  );
   assert.match(regression, /visible_outcomes <> 2/);
   assert.match(regression, /visible_private_events <> 0/);
 });
