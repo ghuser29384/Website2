@@ -1,9 +1,9 @@
 # Counsel and Provider Review Packet: Moral Trade Payments and Charitable Funds Flows
 
-**Prepared for:** Payments/fintech counsel, nonprofit and charitable-solicitation counsel, tax counsel, and payment-provider compliance  
-**Project:** Moral Trade  
-**Prepared:** August 7, 2026  
-**Requested output:** Written classification of each funds flow, required licenses and registrations, required contracts and disclosures, and a staged approval plan  
+**Prepared for:** Payments/fintech counsel, nonprofit and charitable-solicitation counsel, tax counsel, and payment-provider compliance
+**Project:** Moral Trade
+**Prepared:** August 7, 2026
+**Requested output:** Written classification of each funds flow, required licenses and registrations, required contracts and disclosures, and a staged approval plan
 **Status:** Architecture and issue-spotting packet; not a legal opinion
 
 ## 1. Decisions requested

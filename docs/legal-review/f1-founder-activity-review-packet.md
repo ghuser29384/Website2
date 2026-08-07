@@ -1,10 +1,10 @@
 # Counsel Review Packet: F-1 Founder-Activity Boundary for Moral Trade
 
-**Prepared for:** U.S. immigration counsel experienced in F-1 student employment and founder activity  
-**Project:** Moral Trade  
-**Founder:** Caijun Sun (also known as Ellen Sun)  
-**Prepared:** August 7, 2026  
-**Requested output:** A short written, fact-specific legal opinion and activity matrix  
+**Prepared for:** U.S. immigration counsel experienced in F-1 student employment and founder activity
+**Project:** Moral Trade
+**Founder:** Caijun Sun (also known as Ellen Sun)
+**Prepared:** August 7, 2026
+**Requested output:** A short written, fact-specific legal opinion and activity matrix
 **Status:** Attorney briefing packet; not a legal opinion
 
 ## 1. Question presented
