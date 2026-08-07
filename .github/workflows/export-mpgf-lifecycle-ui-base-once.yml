@@ -24,26 +24,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rev-parse HEAD | tee mpgf-lifecycle-ui-base-head.txt
-          git status --short | tee mpgf-lifecycle-ui-base-status.txt
-          test ! -s mpgf-lifecycle-ui-base-status.txt
+          test -z "$(git status --porcelain)"
+          export_dir="$RUNNER_TEMP/mpgf-lifecycle-ui-base"
+          mkdir -p "$export_dir"
+          git rev-parse HEAD > "$export_dir/head.txt"
+          git status --short > "$export_dir/status.txt"
           tar \
             --exclude=.git \
             --exclude=node_modules \
             --exclude=.next \
             --exclude=test-results \
             --exclude=playwright-report \
-            -czf mpgf-lifecycle-ui-base.tar.gz .
-          sha256sum mpgf-lifecycle-ui-base.tar.gz | tee mpgf-lifecycle-ui-base.sha256
+            -czf "$export_dir/source.tar.gz" .
+          sha256sum "$export_dir/source.tar.gz" > "$export_dir/source.sha256"
 
       - name: Upload exact source archive
         uses: actions/upload-artifact@v4
         with:
           name: mpgf-lifecycle-ui-base-${{ github.run_id }}
-          path: |
-            mpgf-lifecycle-ui-base.tar.gz
-            mpgf-lifecycle-ui-base-head.txt
-            mpgf-lifecycle-ui-base-status.txt
-            mpgf-lifecycle-ui-base.sha256
+          path: ${{ runner.temp }}/mpgf-lifecycle-ui-base
           if-no-files-found: error
           retention-days: 7
