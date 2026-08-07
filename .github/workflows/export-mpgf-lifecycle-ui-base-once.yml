@@ -1,0 +1,49 @@
+name: Export MPGF lifecycle UI base once
+
+on:
+  push:
+    branches:
+      - feature/mpgf-self-service-lifecycle-ui-20260807
+    paths:
+      - .github/workflows/export-mpgf-lifecycle-ui-base-once.yml
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record and archive exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee mpgf-lifecycle-ui-base-head.txt
+          git status --short | tee mpgf-lifecycle-ui-base-status.txt
+          test ! -s mpgf-lifecycle-ui-base-status.txt
+          tar \
+            --exclude=.git \
+            --exclude=node_modules \
+            --exclude=.next \
+            --exclude=test-results \
+            --exclude=playwright-report \
+            -czf mpgf-lifecycle-ui-base.tar.gz .
+          sha256sum mpgf-lifecycle-ui-base.tar.gz | tee mpgf-lifecycle-ui-base.sha256
+
+      - name: Upload exact source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-lifecycle-ui-base-${{ github.run_id }}
+          path: |
+            mpgf-lifecycle-ui-base.tar.gz
+            mpgf-lifecycle-ui-base-head.txt
+            mpgf-lifecycle-ui-base-status.txt
+            mpgf-lifecycle-ui-base.sha256
+          if-no-files-found: error
+          retention-days: 7
