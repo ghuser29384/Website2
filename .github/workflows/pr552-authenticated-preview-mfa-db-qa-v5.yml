@@ -21,7 +21,7 @@ env:
   HARNESS_BLOB: 394366c478fc01d93d6c7f245aba496986f56762
   DEPLOYMENT_ID: dpl_E4kcbFVK7QpYvdygM8m9sc841DpC
   PREVIEW_ORIGIN: https://moraltrade-site-n539b73lz-ellen-s.vercel.app
-  PREVIEW_SHARE_URL: https://moraltrade-site-n539b73lz-ellen-s.vercel.app/?_vercel_share=9RdJnehAsAAqP4SamU2n1XsWfG9ZVWV0
+  PREVIEW_SHARE_URL: https://moraltrade-site-n539b73lz-ellen-s.vercel.app/?_vercel_share=ukr19sJP6JOrggJOhtivRsTmb3VztBfA
   EXPECTED_SUPABASE_REF: jnpoxvalyjtdghnperyu
   NEXT_PUBLIC_SUPABASE_URL: https://jnpoxvalyjtdghnperyu.supabase.co
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT
