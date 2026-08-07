@@ -1,4 +1,4 @@
-name: Rename DAC pledge intent table once
+name: Rename DAC pledge intent schema files once
 
 on:
   push:
@@ -16,7 +16,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: fix/mpgf-dac-pledge-intent-ledger-20260806
-  EXPECTED_PARENT: c4fec8487a97c5db4afa78a4d19d2dc764174616
+  EXPECTED_PARENT: 73d671019c5b8c8728566530db96992da7119dab
   CONTROLLER_PATH: .github/workflows/rename-dac-pledge-intent-table-once.yml
 
 jobs:
@@ -41,13 +41,13 @@ jobs:
             supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql
             supabase/tests/mpgf_dac_pledge_intent_ledger.sql
             src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts
-            .github/workflows/mpgf-dac-pledge-intent-ledger-gates.yml
           )
 
           for file in "${files[@]}"; do
             python3 - "$file" <<'PY'
           from pathlib import Path
           import sys
+
           path = Path(sys.argv[1])
           text = path.read_text()
           old = "mpgf_pledge_intents"
@@ -78,26 +78,27 @@ jobs:
           test_path.write_text(text.replace(marker, addition, 1))
           PY
 
-          rm "$CONTROLLER_PATH"
           git diff --check
           ! git grep -n "public\.mpgf_pledge_intents" -- \
             supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql \
             supabase/tests/mpgf_dac_pledge_intent_ledger.sql \
-            src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts \
-            .github/workflows/mpgf-dac-pledge-intent-ledger-gates.yml
+            src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts
           git grep -n "mpgf_dac_pledge_intents" -- \
             supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql \
             supabase/tests/mpgf_dac_pledge_intent_ledger.sql \
-            src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts \
-            .github/workflows/mpgf-dac-pledge-intent-ledger-gates.yml
+            src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts
 
-      - name: Commit the collision-free schema name and remove this controller
+      - name: Commit collision-free schema references
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add \
+            supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql \
+            supabase/tests/mpgf_dac_pledge_intent_ledger.sql \
+            src/lib/mpgf/dac-pledge-intent-ledger-migration.test.ts
           git diff --cached --check
+          test "$(git diff --cached --name-only | wc -l | tr -d ' ')" = "3"
           git commit -m "Use a dedicated immutable DAC pledge-intent table"
           git push origin "HEAD:$TARGET_BRANCH"
