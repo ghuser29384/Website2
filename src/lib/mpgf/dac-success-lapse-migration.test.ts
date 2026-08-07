@@ -151,3 +151,5 @@ test("permanent exact-head gate proves source, isolated QA, both terminal paths,
   assert.doesNotMatch(workflow, /PRODUCTION_SUPABASE_DB_URL/);
   assert.doesNotMatch(workflow, /vercel deploy/);
 });
+
+// Exact-head retrigger after temporary repair-controller removal.
