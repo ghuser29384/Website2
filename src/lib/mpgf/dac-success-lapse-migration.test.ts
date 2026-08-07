@@ -168,4 +168,4 @@ test("permanent exact-head gate proves source, isolated QA, both terminal paths,
   assert.doesNotMatch(workflow, /vercel deploy/);
 });
 
-// Exact-head retrigger after temporary repair-controller removal.
+// Exact-head user-triggered run after selector disambiguation and controller removal.
