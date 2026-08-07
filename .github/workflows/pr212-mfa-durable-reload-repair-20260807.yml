@@ -1,0 +1,144 @@
+name: PR 212 MFA durable-reload repair
+
+on:
+  push:
+    branches:
+      - ops/pr212-mfa-stable-state-20260807
+    paths:
+      - .github/workflows/pr212-mfa-durable-reload-repair-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: pr212-mfa-durable-reload-repair-20260807
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      FEATURE_BRANCH: feat/institutional-trade-system
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out current feature head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Apply durable MFA browser assertion
+        id: patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          start_head="$(git rev-parse HEAD)"
+          echo "start_head=$start_head" >> "$GITHUB_OUTPUT"
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          script_path = Path('.github/scripts/institutional-trade-qa-e2e.mjs')
+          script = script_path.read_text()
+          pattern = re.compile(
+              r'(?P<indent>\s*)await panel\.getByRole\("button", \{ name: "Verify session" \}\)\.click\(\);\n'
+              r'(?P=indent)await panel\.getByText\("AAL: aal2", \{ exact: true \}\)\.waitFor\(\{ state: "visible", timeout: 30_000 \}\);'
+          )
+          match = pattern.search(script)
+          if not match:
+              raise SystemExit('Could not locate the exact MFA click-and-wait sequence.')
+          indent = match.group('indent')
+          replacement = f'''{indent}const verificationResponsePromise = page.waitForResponse(
+{indent}  (response) =>
+{indent}    response.request().method() === "POST" &&
+{indent}    new URL(response.url()).pathname === "/dashboard",
+{indent}  {{ timeout: 30_000 }},
+{indent});
+{indent}await panel.getByRole("button", {{ name: "Verify session" }}).click();
+{indent}const verificationResponse = await verificationResponsePromise;
+{indent}if (verificationResponse.status() >= 400) {{
+{indent}  throw new Error(`MFA verification server action returned ${{verificationResponse.status()}}.`);
+{indent}}}
+{indent}for (let attempt = 1; attempt <= 5; attempt += 1) {{
+{indent}  await page.reload({{ waitUntil: "domcontentloaded" }});
+{indent}  const refreshedPanel = page.locator("article#account-security");
+{indent}  const aal2Visible = await refreshedPanel
+{indent}    .getByText("AAL: aal2", {{ exact: true }})
+{indent}    .isVisible()
+{indent}    .catch(() => false);
+{indent}  if (aal2Visible) {{
+{indent}    return;
+{indent}  }}
+{indent}  await page.waitForTimeout(1_000);
+{indent}}}
+{indent}const finalSecurityText = await page
+{indent}  .locator("article#account-security")
+{indent}  .innerText()
+{indent}  .catch(() => "<account-security panel unavailable>");
+{indent}throw new Error(`MFA verification completed but the durable AAL2 state was not rendered after reloads. Panel: ${{finalSecurityText}}`);'''
+          script, count = pattern.subn(replacement, script, count=1)
+          if count != 1:
+              raise SystemExit(f'Expected one MFA sequence replacement, got {count}.')
+          script_path.write_text(script)
+
+          test_path = Path('src/institutional-trade-wiring.test.ts')
+          tests = test_path.read_text()
+          test_name = 'authenticated QA waits for the MFA action response and reloads before asserting durable AAL2'
+          if test_name not in tests:
+              tests = tests.rstrip() + f'''\n\n
+test("{test_name}", () => {{
+  assert.match(qaScript, /page\\.waitForResponse/);
+  assert.match(qaScript, /new URL\\(response\\.url\\(\\)\\)\\.pathname === "\\/dashboard"/);
+  assert.match(qaScript, /page\\.reload\\(\\{{ waitUntil: "domcontentloaded" \\}}\\)/);
+  assert.match(qaScript, /durable AAL2 state was not rendered after reloads/);
+}});\n'''
+              test_path.write_text(tests)
+          PY
+
+          git diff --check
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run focused contract and lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/institutional-trade-wiring.test.ts
+          npx eslint src/institutional-trade-wiring.test.ts
+
+      - name: Publish only if the feature branch is unchanged
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "${FEATURE_BRANCH}"
+          remote_head="$(git rev-parse "origin/${FEATURE_BRANCH}")"
+          if [[ "$remote_head" != "${{ steps.patch.outputs.start_head }}" ]]; then
+            echo "Feature branch moved during validation: started at ${{ steps.patch.outputs.start_head }}, now $remote_head" >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/scripts/institutional-trade-qa-e2e.mjs src/institutional-trade-wiring.test.ts
+          git commit -m "Make institutional MFA QA verify durable AAL2 after reload"
+          new_head="$(git rev-parse HEAD)"
+          git push origin "HEAD:${FEATURE_BRANCH}"
+          echo "new_head=$new_head" >> "$GITHUB_OUTPUT"
+
+      - name: Record repair on PR 212
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "Published the guarded MFA durability repair at \`${{ steps.publish.outputs.new_head }}\`. The browser flow now waits for the dashboard server-action POST, performs explicit page reload polling, and requires the durable rendered \`AAL: aal2\` state. Focused source-contract validation passed. PR #212 remains draft and unmerged; the complete isolated-QA workflow must still pass on this exact head."
