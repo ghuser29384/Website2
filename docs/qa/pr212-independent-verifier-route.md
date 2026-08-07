@@ -6,4 +6,6 @@ Independent verifiers do not become organization members when they accept an ass
 /institutions/individual/deals/:dealId
 ```
 
-Before assignment acceptance, that route denies access. After acceptance, `loadIndividualInstitutionalDeal` permits the exact named verifier. The organization-scoped route remains membership-gated and is not the verifier access surface.
+Before assignment acceptance, that route denies access. After acceptance, `loadIndividualInstitutionalDeal` permits the exact named verifier and renders the deal title. The organization-scoped route remains membership-gated and is not the verifier access surface.
+
+The authenticated browser matrix exercises the same independent route both before and after acceptance, so the negative and positive checks test the actual verifier authorization boundary rather than incidental organization-membership denial.
