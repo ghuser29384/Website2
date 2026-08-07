@@ -40,10 +40,5 @@ export default async function Page() {
   const viewer =
     hasSupabaseEnv() && hasSupabaseAuthCookie(cookieStore) ? await getViewer() : null;
 
-  return (
-    <>
-      <h1 className="sr-only">Your best match right now</h1>
-      <HomePage displayName={viewer?.displayName ?? null} />
-    </>
-  );
+  return <HomePage displayName={viewer?.displayName ?? null} />;
 }
