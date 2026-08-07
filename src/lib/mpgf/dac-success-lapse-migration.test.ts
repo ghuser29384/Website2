@@ -33,10 +33,22 @@ test("DAC terminal architecture records one immutable aggregate outcome from the
     /from public\.mpgf_public_goods_pledges as pledge[\s\S]*eligibility_state = 'eligible'[\s\S]*status = 'pledged'/,
   );
   assert.match(migration, /count\(distinct pledge\.profile_id\)/);
+  assert.match(
+    migration,
+    /Every DAC pledge must have a final audited eligibility decision bound to its immutable consent intent before finalization/,
+  );
+  assert.match(
+    migration,
+    /The canonical DAC pledge differs from its immutable consent intent/,
+  );
   assert.match(migration, /outcome_status in \('succeeded', 'lapsed'\)/);
   assert.match(migration, /mpgf_dac_campaign_outcomes_immutable/);
   assert.match(migration, /pool_succeeded/);
   assert.match(migration, /pool_lapsed/);
+  assert.match(
+    migration,
+    /status in \('approved_as_candidate', 'succeeded', 'lapsed'\)/,
+  );
   assert.doesNotMatch(
     migration,
     /create table(?: if not exists)? public\.mpgf_conditional_pledges/i,
@@ -105,10 +117,16 @@ test("lapse expires signed intents while success and both outcomes create no pay
   assert.match(regression, /rollback;\s*$/);
   assert.match(regression, /Premature lapse must fail/);
   assert.match(regression, /Replay the exact successful terminal transition/);
+  assert.match(
+    regression,
+    /A threshold-met DAC with a pending eligibility decision must not finalize/,
+  );
   assert.match(regression, /Replay the exact lapsed terminal transition/);
   assert.match(regression, /success_outcome\.eligible_amount_cents <> 11000/);
   assert.match(regression, /lapse_outcome\.eligible_amount_cents <> 1000/);
-  assert.match(regression, /success_pledged_count <> 2/);
+  assert.match(regression, /success_pledged_count <> 3/);
+  assert.match(regression, /success_eligible_count <> 2/);
+  assert.match(regression, /success_blocked_count <> 1/);
   assert.match(regression, /lapse_expired_count <> 1/);
   assert.match(regression, /payment_object_count <> 0/);
   assert.match(regression, /visible_outcomes <> 2/);

@@ -361,6 +361,13 @@ select * from public.mpgf_create_dac_pledge(
   null,
   'qa-dac-terminal-lapse-pledger-one'
 );
+select * from public.mpgf_create_dac_pledge(
+  'campaign-af666666666646668666666666666666',
+  100,
+  'private_amount',
+  null,
+  'qa-dac-terminal-success-pending-extra'
+);
 
 reset role;
 
@@ -429,6 +436,35 @@ select * from public.mpgf_review_dac_pledge_eligibility(
   9000,
   'Verify the second success pledger as a unique eligible person'
 );
+do $test$
+begin
+  begin
+    perform public.mpgf_finalize_dac_campaign(
+      'campaign-af666666666646668666666666666666',
+      'ab222222-2222-4222-8222-222222222222',
+      'A threshold-met DAC with a pending eligibility decision must not finalize'
+    );
+    raise exception 'A DAC campaign finalized while one pledge still awaited eligibility review.';
+  exception
+    when check_violation then null;
+  end;
+end;
+$test$;
+
+select * from public.mpgf_review_dac_pledge_eligibility(
+  (
+    select id from public.mpgf_public_goods_pledges
+    where campaign_id = 'campaign-af666666666646668666666666666666'
+      and profile_id = 'ac333333-3333-4333-8333-333333333333'
+      and amount_cents = 100
+      and pledge_intent_id is not null
+  ),
+  'ab222222-2222-4222-8222-222222222222',
+  'blocked',
+  0,
+  'Resolve the extra success pledge as ineligible before terminal evaluation'
+);
+
 select * from public.mpgf_review_dac_pledge_eligibility(
   (
     select id from public.mpgf_public_goods_pledges
@@ -570,6 +606,8 @@ declare
   success_lifecycle_count integer;
   lapse_lifecycle_count integer;
   success_pledged_count integer;
+  success_eligible_count integer;
+  success_blocked_count integer;
   lapse_expired_count integer;
   creation_event_count integer;
   eligibility_event_count integer;
@@ -608,6 +646,20 @@ begin
   where campaign_id = 'campaign-af666666666646668666666666666666'
     and pledge_intent_id is not null
     and status = 'pledged';
+
+  select count(*) into success_eligible_count
+  from public.mpgf_public_goods_pledges
+  where campaign_id = 'campaign-af666666666646668666666666666666'
+    and pledge_intent_id is not null
+    and status = 'pledged'
+    and eligibility_state = 'eligible';
+
+  select count(*) into success_blocked_count
+  from public.mpgf_public_goods_pledges
+  where campaign_id = 'campaign-af666666666646668666666666666666'
+    and pledge_intent_id is not null
+    and status = 'pledged'
+    and eligibility_state = 'blocked';
 
   select count(*) into lapse_expired_count
   from public.mpgf_public_goods_pledges
@@ -683,16 +735,18 @@ begin
      or lapse_outcome.evaluated_at < lapse_outcome.deadline_at
      or success_lifecycle_count <> 1
      or lapse_lifecycle_count <> 1
-     or success_pledged_count <> 2
+     or success_pledged_count <> 3
+     or success_eligible_count <> 2
+     or success_blocked_count <> 1
      or lapse_expired_count <> 1
-     or creation_event_count <> 3
-     or eligibility_event_count <> 3
+     or creation_event_count <> 4
+     or eligibility_event_count <> 4
      or expiry_event_count <> 1
      or payment_object_count <> 0
      or outcome_hash_mismatch <> 0
      or event_hash_mismatch <> 0 then
     raise exception
-      'DAC terminal invariant failed: outcomes %, success %/%/%/%/%, lapse %/%/%/%, lifecycle %/%, pledge disposition %/%, events %/%/%, payments %, outcome hashes %, event hashes %',
+      'DAC terminal invariant failed: outcomes %, success %/%/%/%/%, lapse %/%/%/%, lifecycle %/%, pledge disposition %/%/%/%, events %/%/%, payments %, outcome hashes %, event hashes %',
       outcome_count,
       success_outcome.outcome_status,
       success_outcome.eligible_amount_cents,
@@ -706,6 +760,8 @@ begin
       success_lifecycle_count,
       lapse_lifecycle_count,
       success_pledged_count,
+      success_eligible_count,
+      success_blocked_count,
       lapse_expired_count,
       creation_event_count,
       eligibility_event_count,

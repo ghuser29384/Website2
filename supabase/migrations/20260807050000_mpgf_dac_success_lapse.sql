@@ -20,6 +20,22 @@ alter table public.mpgf_pool_proposals
     )
   );
 
+alter table public.mpgf_pool_proposals
+  drop constraint if exists mpgf_pool_proposals_lock_complete;
+alter table public.mpgf_pool_proposals
+  add constraint mpgf_pool_proposals_lock_complete
+  check (
+    (
+      status in ('approved_as_candidate', 'succeeded', 'lapsed')
+    ) = (
+      approved_terms_version is not null
+      and operative_terms_sha256 is not null
+      and terms_locked_at is not null
+      and reviewed_by is not null
+      and reviewed_at is not null
+    )
+  ) not valid;
+
 alter table public.mpgf_pool_lifecycle_events
   drop constraint if exists mpgf_pool_lifecycle_events_event_type_check;
 alter table public.mpgf_pool_lifecycle_events
@@ -231,6 +247,7 @@ set search_path = pg_catalog, public
 as $function$
 declare
   pledge_row public.mpgf_public_goods_pledges%rowtype;
+  intent_row public.mpgf_dac_pledge_intents%rowtype;
   campaign_row public.mpgf_public_goods_campaigns%rowtype;
   existing_event public.mpgf_dac_pledge_events%rowtype;
   event_id_value uuid := gen_random_uuid();
@@ -287,6 +304,26 @@ begin
     raise exception using
       errcode = 'P0002',
       message = 'A proposal-bound DAC pledge was not found.';
+  end if;
+
+  select * into intent_row
+  from public.mpgf_dac_pledge_intents as intent
+  where intent.id = pledge_row.pledge_intent_id;
+
+  if intent_row.id is null
+     or intent_row.campaign_id is distinct from pledge_row.campaign_id
+     or intent_row.pool_proposal_id is distinct from pledge_row.pool_proposal_id
+     or intent_row.terms_version is distinct from pledge_row.terms_version
+     or intent_row.terms_sha256 is distinct from pledge_row.terms_sha256
+     or intent_row.profile_id is distinct from pledge_row.profile_id
+     or intent_row.amount_cents is distinct from pledge_row.amount_cents
+     or intent_row.currency is distinct from pledge_row.currency
+     or intent_row.visibility_mode is distinct from pledge_row.visibility_mode
+     or intent_row.supporter_reason is distinct from pledge_row.supporter_reason
+     or intent_row.accepted_at is distinct from pledge_row.accepted_at then
+    raise exception using
+      errcode = '23514',
+      message = 'The canonical DAC pledge differs from its immutable consent intent.';
   end if;
 
   perform public.mpgf_assert_authorized_pool_reviewer(
@@ -643,6 +680,53 @@ begin
     raise exception using
       errcode = '23514',
       message = 'This no-payment finalization tranche cannot process a charged or captured DAC pledge.';
+  end if;
+
+  if exists (
+    select 1
+    from public.mpgf_public_goods_pledges as pledge
+    left join public.mpgf_dac_pledge_intents as intent
+      on intent.id = pledge.pledge_intent_id
+    where pledge.campaign_id = campaign_row.id
+      and pledge.pledge_intent_id is not null
+      and (
+        intent.id is null
+        or intent.campaign_id is distinct from pledge.campaign_id
+        or intent.pool_proposal_id is distinct from pledge.pool_proposal_id
+        or intent.terms_version is distinct from pledge.terms_version
+        or intent.terms_sha256 is distinct from pledge.terms_sha256
+        or intent.profile_id is distinct from pledge.profile_id
+        or intent.amount_cents is distinct from pledge.amount_cents
+        or intent.currency is distinct from pledge.currency
+        or intent.visibility_mode is distinct from pledge.visibility_mode
+        or intent.supporter_reason is distinct from pledge.supporter_reason
+        or intent.accepted_at is distinct from pledge.accepted_at
+        or pledge.eligibility_state = 'pending_review'
+        or not exists (
+          select 1
+          from public.mpgf_dac_pledge_events as eligibility_event
+          where eligibility_event.pledge_id = pledge.id
+            and eligibility_event.pledge_intent_id = pledge.pledge_intent_id
+            and eligibility_event.campaign_id = pledge.campaign_id
+            and eligibility_event.pool_proposal_id = pledge.pool_proposal_id
+            and eligibility_event.profile_id = pledge.profile_id
+            and eligibility_event.event_type = 'eligibility_reviewed'
+            and eligibility_event.terms_version = pledge.terms_version
+            and eligibility_event.terms_sha256 = pledge.terms_sha256
+            and eligibility_event.amount_cents = pledge.amount_cents
+            and eligibility_event.currency = pledge.currency
+            and eligibility_event.event_sha256 =
+              public.mpgf_dac_json_sha256(eligibility_event.event_json)
+            and eligibility_event.event_json ->> 'toEligibilityState' =
+              pledge.eligibility_state
+            and (eligibility_event.event_json ->> 'humanScoreBps')::integer =
+              pledge.human_score_bps
+        )
+      )
+  ) then
+    raise exception using
+      errcode = '23514',
+      message = 'Every DAC pledge must have a final audited eligibility decision bound to its immutable consent intent before finalization.';
   end if;
 
   select
