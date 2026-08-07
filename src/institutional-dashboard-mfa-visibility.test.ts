@@ -6,6 +6,10 @@ const dashboard = readFileSync("src/app/dashboard/page.tsx", "utf8");
 const layout = readFileSync("src/app/dashboard/layout.tsx", "utf8");
 const routeCss = readFileSync("src/app/dashboard/dashboard-account-security.css", "utf8");
 const globalCss = readFileSync("src/app/globals.css", "utf8");
+const accountSecurityPanel = readFileSync(
+  "src/components/dashboard/background-account-security-panel.tsx",
+  "utf8",
+);
 
 test("dashboard loads the route-scoped account-security visibility repair", () => {
   assert.match(layout, /import\s+["']\.\/dashboard-account-security\.css["']/);
@@ -29,5 +33,25 @@ test("only account security is exposed from the otherwise hidden legacy workspac
   assert.match(
     routeCss,
     /#background-networking\s+#account-security\s*\{[\s\S]*display:\s*grid;/,
+  );
+});
+
+test("MFA code fields emit a valid separator-tolerant HTML pattern", () => {
+  const declaration = accountSecurityPanel.match(
+    /const TOTP_CODE_PATTERN = "([^"]+)";/,
+  );
+  assert.ok(declaration?.[1], "The shared TOTP code pattern must be declared.");
+
+  const emittedPattern = JSON.parse(`"${declaration[1]}"`) as string;
+  assert.doesNotThrow(() => new RegExp(`^(?:${emittedPattern})$`, "v"));
+
+  const pattern = new RegExp(`^(?:${emittedPattern})$`, "v");
+  assert.equal(pattern.test("123456"), true);
+  assert.equal(pattern.test("123-456"), true);
+  assert.equal(pattern.test("12 34 56"), true);
+  assert.equal(pattern.test("12345"), false);
+  assert.equal(
+    accountSecurityPanel.match(/pattern=\{TOTP_CODE_PATTERN\}/g)?.length,
+    2,
   );
 });

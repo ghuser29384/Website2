@@ -23,6 +23,8 @@ const INITIAL_MFA_ACTION_STATE: BackgroundMfaActionState = {
   status: "idle",
 };
 
+const TOTP_CODE_PATTERN = "[0-9\\s\\-]{6,8}";
+
 function ActionMessage({ state }: { state: BackgroundMfaActionState }) {
   if (state.status === "idle") {
     return null;
@@ -150,7 +152,7 @@ export function BackgroundAccountSecurityPanel({
                 inputMode="numeric"
                 maxLength={8}
                 name="code"
-                pattern="[0-9\\s-]{6,8}"
+                pattern={TOTP_CODE_PATTERN}
                 placeholder="123456"
               />
             </label>
@@ -197,7 +199,7 @@ export function BackgroundAccountSecurityPanel({
               inputMode="numeric"
               maxLength={8}
               name="code"
-              pattern="[0-9\\s-]{6,8}"
+              pattern={TOTP_CODE_PATTERN}
               placeholder="123456"
             />
           </label>
