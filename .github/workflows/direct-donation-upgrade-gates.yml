@@ -1,0 +1,186 @@
+name: Direct verified Donation Upgrade gates
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".env.example"
+      - ".github/workflows/direct-donation-upgrade-gates.yml"
+      - ".github/workflows/direct-donation-upgrade-qa.yml"
+      - "docs/direct-verified-donation-upgrade.md"
+      - "scripts/vercel-project-config.mjs"
+      - "scripts/vercel-project-config.test.mjs"
+      - "src/app/admin/donation-upgrades/**"
+      - "src/app/admin/page.tsx"
+      - "src/app/api/connectors/every-org/**"
+      - "src/app/api/donation-upgrades/**"
+      - "src/app/api/jobs/donation-upgrades/**"
+      - "src/app/connectors/page.tsx"
+      - "src/app/direct-donation-upgrade-actions.ts"
+      - "src/app/donation-upgrades/**"
+      - "src/app/sitemap.ts"
+      - "src/app/trades/new/conditional-donation.tsx"
+      - "src/components/donation-upgrades/**"
+      - "src/lib/direct-donation-upgrade*.ts"
+      - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
+      - "supabase/tests/direct_verified_donation_upgrade.sql"
+  push:
+    branches:
+      - integration/direct-donation-upgrade-current-main-20260807
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-donation-upgrade-gates-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Full engineering and release gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Focused direct Donation Upgrade tests
+        run: >-
+          node --import tsx --test
+          src/lib/direct-donation-upgrade.test.ts
+          src/lib/direct-donation-upgrade-source-contract.test.ts
+          scripts/vercel-project-config.test.mjs
+
+      - name: Complete repository tests
+        id: tests
+        continue-on-error: true
+        run: npm test > direct-upgrade-repository-tests.log 2>&1
+
+      - name: Absolute TypeScript gate
+        id: typecheck
+        continue-on-error: true
+        run: npx tsc --noEmit > direct-upgrade-typecheck.log 2>&1
+
+      - name: Absolute ESLint gate
+        id: lint
+        continue-on-error: true
+        run: npm run lint > direct-upgrade-lint.log 2>&1
+
+      - name: Production build with both money rails disabled
+        id: build
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > direct-upgrade-production-build.log 2>&1
+
+      - name: Migration, non-custody, and exact diff integrity
+        id: integrity
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration=supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
+          qa=supabase/tests/direct_verified_donation_upgrade.sql
+
+          test "$(grep -cF 'create or replace function public.' "$migration")" = "18"
+          test "$(grep -c '^\$\$;' "$migration")" = "18"
+          test "$(grep -cF 'grant execute on function public.' "$migration")" = "7"
+          grep -Fq "status in ('primary', 'promoted', 'fulfilled')" "$migration"
+          grep -Fq 'direct_donation_upgrade_offer_terms_immutable' "$migration"
+          grep -Fq 'direct_donation_upgrade_candidate_identity_immutable' "$migration"
+          grep -Fq 'direct_donation_upgrade_obligation_terms_immutable' "$migration"
+          grep -Fq 'The creator’s original amount is not' src/app/trades/new/conditional-donation.tsx
+          ! grep -Fq 'where offer_id = offer_id' "$qa"
+          ! grep -R -E '@\/lib\/stripe|stripe\.checkout|payment_intent|setup_intent' \
+            src/lib/direct-donation-upgrade.ts \
+            src/lib/direct-donation-upgrade-data.ts \
+            src/app/direct-donation-upgrade-actions.ts \
+            src/app/trades/new/conditional-donation.tsx
+          ! grep -Fq 'Authorize and publish' src/app/trades/new/conditional-donation.tsx
+
+          git fetch origin main
+          base="$(git merge-base origin/main HEAD)"
+          git diff --check "$base"...HEAD
+          git diff --name-only "$base"...HEAD | sort | tee direct-upgrade-changed-files.txt
+          git rev-parse HEAD | tee direct-upgrade-exact-head.txt
+          git rev-parse HEAD^{tree} | tee direct-upgrade-exact-tree.txt
+          sha256sum "$migration" "$qa" | tee direct-upgrade-sql-sha256.txt
+          git hash-object "$migration" "$qa" | tee direct-upgrade-sql-git-blobs.txt
+
+      - name: Package exact candidate source
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git archive --format=zip --output="direct-donation-upgrade-candidate-${GITHUB_SHA}.zip" HEAD
+          sha256sum "direct-donation-upgrade-candidate-${GITHUB_SHA}.zip" \
+            | tee direct-upgrade-candidate-sha256.txt
+
+      - name: Upload release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-donation-upgrade-gates-${{ github.run_id }}
+          path: |
+            direct-upgrade-repository-tests.log
+            direct-upgrade-typecheck.log
+            direct-upgrade-lint.log
+            direct-upgrade-production-build.log
+            direct-upgrade-changed-files.txt
+            direct-upgrade-exact-head.txt
+            direct-upgrade-exact-tree.txt
+            direct-upgrade-sql-sha256.txt
+            direct-upgrade-sql-git-blobs.txt
+            direct-upgrade-candidate-sha256.txt
+            direct-donation-upgrade-candidate-*.zip
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Require every engineering gate
+        if: always()
+        shell: bash
+        env:
+          TESTS: ${{ steps.tests.outcome }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          INTEGRITY: ${{ steps.integrity.outcome }}
+        run: |
+          set -euo pipefail
+          failed=0
+          report() {
+            local label="$1" outcome="$2" log="$3"
+            if [[ "$outcome" != "success" ]]; then
+              failed=1
+              echo "::error title=${label} failed::Last 200 lines follow"
+              test -f "$log" && tail -n 200 "$log" || true
+            fi
+          }
+          report "Complete repository tests" "$TESTS" direct-upgrade-repository-tests.log
+          report "Absolute TypeScript" "$TYPECHECK" direct-upgrade-typecheck.log
+          report "Absolute ESLint" "$LINT" direct-upgrade-lint.log
+          report "Production build" "$BUILD" direct-upgrade-production-build.log
+          report "Migration and diff integrity" "$INTEGRITY" direct-upgrade-changed-files.txt
+          exit "$failed"
