@@ -1,0 +1,144 @@
+name: Diagnose PR 552 exact full E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/diagnose-pr552-exact-full-e2e-20260807
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnose-pr552-exact-full-e2e-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  full-e2e:
+    name: Full E2E — ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: exact-base
+            sha: 3e2dc52dc128fd6f05935e2d74ace21db6f9b238
+          - label: exact-head
+            sha: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+
+    steps:
+      - name: Check out immutable target
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+
+      - name: Verify immutable target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ matrix.sha }}"
+          git diff --check
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run complete rendered browser suite
+        id: e2e
+        shell: bash
+        run: |
+          set +e
+          npm run test:e2e -- --reporter=line 2>&1 | tee e2e.log
+          exit_code=${PIPESTATUS[0]}
+          printf '%s\n' "$exit_code" > e2e-exit-code.txt
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Build machine-readable diagnostic summary
+        if: always()
+        shell: bash
+        env:
+          MATRIX_LABEL: ${{ matrix.label }}
+          TARGET_SHA: ${{ matrix.sha }}
+          E2E_EXIT_CODE: ${{ steps.e2e.outputs.exit_code }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { execFileSync } = require('node:child_process');
+
+          const raw = fs.existsSync('e2e.log') ? fs.readFileSync('e2e.log', 'utf8') : '';
+          const clean = raw
+            .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+            .replace(/\r/g, '');
+          const lines = clean.split('\n');
+          const countLines = lines
+            .filter((line) => /^\s*\d+\s+(failed|passed|skipped)\b/.test(line))
+            .slice(-12)
+            .map((line) => line.trim());
+          const failedTests = lines
+            .filter((line) => /^\s{4}\S.*›/.test(line) && !line.includes('[WebServer]'))
+            .map((line) => line.trim())
+            .filter((line, index, all) => all.indexOf(line) === index);
+          const checkedOutSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+          const exitCode = Number.parseInt(process.env.E2E_EXIT_CODE || '255', 10);
+          const summary = {
+            schemaVersion: 1,
+            label: process.env.MATRIX_LABEL,
+            targetSha: process.env.TARGET_SHA,
+            checkedOutSha,
+            exitCode,
+            countLines,
+            failedTestCount: failedTests.length,
+            failedTests,
+            webServer: 'next dev --webpack at http://127.0.0.1:3210',
+            workers: 2,
+            testDirectory: './tests',
+          };
+          fs.writeFileSync('e2e-summary.json', `${JSON.stringify(summary, null, 2)}\n`);
+          fs.writeFileSync(
+            'e2e-summary.txt',
+            [
+              `label=${summary.label}`,
+              `targetSha=${summary.targetSha}`,
+              `checkedOutSha=${summary.checkedOutSha}`,
+              `exitCode=${summary.exitCode}`,
+              `failedTestCount=${summary.failedTestCount}`,
+              ...summary.countLines,
+              ...summary.failedTests.map((test) => `FAIL ${test}`),
+            ].join('\n') + '\n',
+          );
+          NODE
+
+      - name: Upload exact-run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-exact-full-e2e-${{ matrix.label }}-${{ github.run_id }}
+          path: |
+            e2e.log
+            e2e-exit-code.txt
+            e2e-summary.json
+            e2e-summary.txt
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Preserve the suite conclusion
+        if: steps.e2e.outputs.exit_code != '0'
+        shell: bash
+        run: exit 1
