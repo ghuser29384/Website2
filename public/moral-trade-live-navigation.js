@@ -19,6 +19,27 @@
       .toLowerCase();
   }
 
+  function ensureDocumentHeading() {
+    if (document.getElementById("mt-live-document-heading")) return;
+
+    const heading = document.createElement("h1");
+    heading.id = "mt-live-document-heading";
+    heading.dataset.mtDocumentHeading = "true";
+    heading.textContent = "Your best match right now";
+    Object.assign(heading.style, {
+      border: "0",
+      clip: "rect(0 0 0 0)",
+      height: "1px",
+      margin: "-1px",
+      overflow: "hidden",
+      padding: "0",
+      position: "absolute",
+      whiteSpace: "nowrap",
+      width: "1px",
+    });
+    document.body.prepend(heading);
+  }
+
   function findFeedControl(nav) {
     return Array.from(nav.querySelectorAll("a, button")).find((candidate) => {
       const label = normalizeLabel(candidate);
@@ -192,8 +213,7 @@
           prepareControlsControl(controlsControl);
         }
       } else {
-        const template =
-          findFeedControl(nav) || updatedControls[0];
+        const template = findFeedControl(nav) || updatedControls[0];
         if (template) createControlsControl(nav, template, discoverControl);
       }
 
@@ -220,6 +240,8 @@
 
     return patched;
   }
+
+  ensureDocumentHeading();
 
   if (!patchNavigation()) {
     const observer = new MutationObserver(() => {
