@@ -1,0 +1,322 @@
+name: PR 212 exact-head adjudicator 20260807
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pr212-exact-head-adjudicator-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-exact-head-adjudicator-20260807
+  cancel-in-progress: false
+
+jobs:
+  adjudicate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_PR: "212"
+      TARGET_BRANCH: feat/institutional-trade-system
+      QA_WORKFLOW_NAME: Institutional trade QA
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+      PREVIEW_HOST: website2-git-feat-institutional-trade-system-ellen-s.vercel.app
+    steps:
+      - name: Resolve current PR and exact-head run
+        id: initial
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          pr="$(gh api "repos/$repo/pulls/$TARGET_PR")"
+          [[ "$(jq -r '.state' <<<"$pr")" == "open" ]]
+          [[ "$(jq -r '.draft' <<<"$pr")" == "true" ]]
+          head="$(jq -r '.head.sha' <<<"$pr")"
+          main="$(gh api "repos/$repo/branches/main" --jq '.commit.sha')"
+          printf 'head=%s\nmain=%s\n' "$head" "$main" >> "$GITHUB_OUTPUT"
+
+          run_id=""
+          for attempt in $(seq 1 180); do
+            runs="$(gh api "repos/$repo/actions/runs?branch=$TARGET_BRANCH&per_page=100")"
+            run_id="$(jq -r --arg h "$head" --arg n "$QA_WORKFLOW_NAME" '[.workflow_runs[] | select(.head_sha == $h and .name == $n)] | sort_by(.created_at) | reverse | .[0].id // empty' <<<"$runs")"
+            [[ -n "$run_id" ]] && break
+            sleep 10
+          done
+          [[ -n "$run_id" ]] || { echo "No Institutional trade QA run found for $head" >&2; exit 1; }
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for current exact-head QA
+        id: first_qa
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          run_id="${{ steps.initial.outputs.run_id }}"
+          for attempt in $(seq 1 720); do
+            run="$(gh api "repos/$repo/actions/runs/$run_id")"
+            status="$(jq -r '.status' <<<"$run")"
+            if [[ "$status" == "completed" ]]; then
+              break
+            fi
+            sleep 15
+          done
+          run="$(gh api "repos/$repo/actions/runs/$run_id")"
+          [[ "$(jq -r '.status' <<<"$run")" == "completed" ]]
+          conclusion="$(jq -r '.conclusion // ""' <<<"$run")"
+          workflow_id="$(jq -r '.workflow_id' <<<"$run")"
+          printf 'conclusion=%s\nworkflow_id=%s\n' "$conclusion" "$workflow_id" >> "$GITHUB_OUTPUT"
+
+          gh api "repos/$repo/actions/runs/$run_id/jobs?per_page=100" > /tmp/first-jobs.json
+          gh run view "$run_id" --repo "$repo" --log-failed > /tmp/first-failed.log 2>&1 || true
+
+          python - <<'PY'
+          import json, re, sys
+          jobs=json.load(open('/tmp/first-jobs.json')).get('jobs',[])
+          steps=[s for j in jobs for s in j.get('steps',[])]
+          failed=[s.get('name') for s in steps if s.get('conclusion') in {'failure','cancelled'}]
+          open('/tmp/first-failed-steps.txt','w').write('\n'.join(failed) or 'none')
+          required={
+            'differential': re.compile(r'differential|exact-base',re.I),
+            'typescript': re.compile(r'typescript|tsc',re.I),
+            'eslint': re.compile(r'eslint',re.I),
+            'build': re.compile(r'production build|next.*build|build success',re.I),
+            'auth_matrix': re.compile(r'organization.*independent|negative matrix|authorization matrix',re.I),
+            'regression': re.compile(r'regression smoke|desktop.*mobile|targeted.*regression',re.I),
+            'cleanup': re.compile(r'cleanup|synthetic.*(delete|residue)|residue',re.I),
+          }
+          names=[str(s.get('name','')) for s in steps]
+          missing=[k for k,p in required.items() if not any(p.search(n) for n in names)]
+          open('/tmp/first-missing-gates.txt','w').write('\n'.join(missing) or 'none')
+          if failed:
+              sys.exit(2)
+          if missing:
+              sys.exit(3)
+          PY
+
+      - name: Report current exact-head failure
+        if: failure() && steps.initial.outputs.run_id != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          run_id="${{ steps.initial.outputs.run_id }}"
+          failed="$(cat /tmp/first-failed-steps.txt 2>/dev/null || echo unavailable)"
+          missing="$(cat /tmp/first-missing-gates.txt 2>/dev/null || echo unavailable)"
+          excerpt="$(tail -n 120 /tmp/first-failed.log 2>/dev/null | sed 's/```/` ` `/g' | tail -c 12000 || true)"
+          gh pr comment "$TARGET_PR" --repo "$repo" --body "<!-- pr212-adjudicator-current-head-20260807 -->
+          ## PR #212 exact-head QA adjudication
+
+          - Exact head: \`${{ steps.initial.outputs.head }}\`
+          - Run: https://github.com/$repo/actions/runs/$run_id
+          - Conclusion: **${{ steps.first_qa.outputs.conclusion || 'failure' }}**
+          - Failed steps:
+          \`\`\`
+          $failed
+          \`\`\`
+          - Required gate patterns not observed:
+          \`\`\`
+          $missing
+          \`\`\`
+          - Failed-log excerpt:
+          \`\`\`
+          $excerpt
+          \`\`\`
+
+          The run remains fail-closed. PR #212 stays draft and unmerged. No production database, deployment, payment, custody, payout, enterprise-integration, or institutional-feature state was changed."
+
+      - name: Require current exact-head QA success
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${{ steps.first_qa.outputs.conclusion }}" == "success" ]]
+
+      - name: Independently inspect exact-head artifact inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          run_id="${{ steps.initial.outputs.run_id }}"
+          mkdir -p /tmp/artifacts
+          artifacts="$(gh api "repos/$repo/actions/runs/$run_id/artifacts?per_page=100")"
+          count="$(jq -r '.total_count' <<<"$artifacts")"
+          (( count > 0 )) || { echo "No QA evidence artifact was uploaded" >&2; exit 1; }
+          while IFS=$'\t' read -r id name; do
+            gh api "repos/$repo/actions/artifacts/$id/zip" > "/tmp/artifacts/${name}.zip"
+            mkdir -p "/tmp/artifacts/${name}"
+            unzip -q "/tmp/artifacts/${name}.zip" -d "/tmp/artifacts/${name}"
+          done < <(jq -r '.artifacts[] | [.id,.name] | @tsv' <<<"$artifacts")
+
+          python - <<'PY'
+          from pathlib import Path
+          import json, re, sys
+          root=Path('/tmp/artifacts')
+          files=[p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in {'.json','.txt','.log','.md'}]
+          assert files, 'No readable evidence files found'
+          text='\n'.join(p.read_text(errors='replace') for p in files)
+          bad=[]
+          patterns={
+            'feature-only failures': r'feature[-_ ]only[^\n]{0,80}(?:failures?|failure_count)[^\d]{0,20}([1-9]\d*)',
+            'test-count reduction': r'(?:test[-_ ]count|executed tests?)[^\n]{0,80}(?:reduction|decrease)[^\d]{0,20}([1-9]\d*)',
+            'synthetic users remain': r'synthetic[^\n]{0,50}(?:auth )?users?[^\n]{0,30}(?:remain|residue|count)[^\d]{0,20}([1-9]\d*)',
+            'synthetic profiles remain': r'synthetic[^\n]{0,50}profiles?[^\n]{0,30}(?:remain|residue|count)[^\d]{0,20}([1-9]\d*)',
+            'institutional rows remain': r'institutional[^\n]{0,50}(?:rows?|records?)[^\n]{0,30}(?:remain|residue|count)[^\d]{0,20}([1-9]\d*)',
+          }
+          for label,pat in patterns.items():
+              if re.search(pat,text,re.I): bad.append(label)
+          if bad:
+              print('Evidence invariant failures:', ', '.join(bad), file=sys.stderr)
+              sys.exit(1)
+          inventory='\n'.join(str(p.relative_to(root)) for p in files)
+          Path('/tmp/artifact-inventory.txt').write_text(inventory)
+          PY
+
+      - name: Integrate current main into feature branch when needed
+        id: integrate
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          head="$(gh api "repos/$repo/branches/$TARGET_BRANCH" --jq '.commit.sha')"
+          main="$(gh api "repos/$repo/branches/main" --jq '.commit.sha')"
+          comparison="$(gh api "repos/$repo/compare/$main...$head")"
+          behind="$(jq -r '.behind_by' <<<"$comparison")"
+          if (( behind == 0 )); then
+            printf 'changed=false\nhead=%s\nmain=%s\n' "$head" "$main" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          result="$(gh api --method POST "repos/$repo/merges" -f base="$TARGET_BRANCH" -f head="$main" -f commit_message="Merge current main into PR #212 after exact-head QA")" || {
+            gh pr comment "$TARGET_PR" --repo "$repo" --body "<!-- pr212-current-main-integration-20260807 -->
+            Current exact-head QA passed, but current \`main\` could not be merged automatically into \`$TARGET_BRANCH\`. PR #212 remains draft and unmerged; manual conflict resolution is required before final QA."
+            exit 1
+          }
+          new_head="$(jq -r '.sha' <<<"$result")"
+          printf 'changed=true\nhead=%s\nmain=%s\n' "$new_head" "$main" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch QA for the integrated exact head
+        if: steps.integrate.outputs.changed == 'true'
+        id: dispatch_integrated
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          workflow_id="${{ steps.first_qa.outputs.workflow_id }}"
+          gh api --method POST "repos/$repo/actions/workflows/$workflow_id/dispatches" \
+            -f ref="$TARGET_BRANCH" \
+            -F "inputs[confirm_target]=$QA_PROJECT_REF"
+
+          head="${{ steps.integrate.outputs.head }}"
+          run_id=""
+          for attempt in $(seq 1 180); do
+            runs="$(gh api "repos/$repo/actions/runs?branch=$TARGET_BRANCH&event=workflow_dispatch&per_page=100")"
+            run_id="$(jq -r --arg h "$head" --arg n "$QA_WORKFLOW_NAME" '[.workflow_runs[] | select(.head_sha == $h and .name == $n)] | sort_by(.created_at) | reverse | .[0].id // empty' <<<"$runs")"
+            [[ -n "$run_id" ]] && break
+            sleep 10
+          done
+          [[ -n "$run_id" ]] || { echo "Integrated QA run was not created" >&2; exit 1; }
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for integrated exact-head QA
+        if: steps.integrate.outputs.changed == 'true'
+        id: integrated_qa
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          run_id="${{ steps.dispatch_integrated.outputs.run_id }}"
+          for attempt in $(seq 1 720); do
+            run="$(gh api "repos/$repo/actions/runs/$run_id")"
+            [[ "$(jq -r '.status' <<<"$run")" == "completed" ]] && break
+            sleep 15
+          done
+          run="$(gh api "repos/$repo/actions/runs/$run_id")"
+          [[ "$(jq -r '.status' <<<"$run")" == "completed" ]]
+          conclusion="$(jq -r '.conclusion // ""' <<<"$run")"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          gh api "repos/$repo/actions/runs/$run_id/jobs?per_page=100" > /tmp/integrated-jobs.json
+          gh run view "$run_id" --repo "$repo" --log-failed > /tmp/integrated-failed.log 2>&1 || true
+          [[ "$conclusion" == "success" ]] || {
+            failed="$(jq -r '[.jobs[]? | .steps[]? | select(.conclusion == "failure" or .conclusion == "cancelled") | .name] | unique | join("\n")' /tmp/integrated-jobs.json)"
+            excerpt="$(tail -n 120 /tmp/integrated-failed.log | sed 's/```/` ` `/g' | tail -c 12000)"
+            gh pr comment "$TARGET_PR" --repo "$repo" --body "<!-- pr212-integrated-qa-20260807 -->
+            ## PR #212 current-main integrated QA
+
+            - Integrated exact head: \`${{ steps.integrate.outputs.head }}\`
+            - Main integrated: \`${{ steps.integrate.outputs.main }}\`
+            - Run: https://github.com/$repo/actions/runs/$run_id
+            - Conclusion: **$conclusion**
+            - Failed steps:
+            \`\`\`
+            $failed
+            \`\`\`
+            - Failed-log excerpt:
+            \`\`\`
+            $excerpt
+            \`\`\`
+
+            PR #212 remains draft and unmerged. No production state was changed."
+            exit 1
+          }
+
+      - name: Audit unresolved review threads
+        id: threads
+        shell: bash
+        run: |
+          set -euo pipefail
+          query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}'
+          owner="${GITHUB_REPOSITORY%%/*}"
+          name="${GITHUB_REPOSITORY##*/}"
+          result="$(gh api graphql -f query="$query" -f owner="$owner" -f name="$name" -F number="$TARGET_PR")"
+          unresolved="$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' <<<"$result")"
+          echo "unresolved=$unresolved" >> "$GITHUB_OUTPUT"
+          (( unresolved == 0 )) || { echo "$unresolved unresolved review threads remain" >&2; exit 1; }
+
+      - name: Smoke-test the protected branch preview boundary
+        id: preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > /tmp/preview-smoke.txt
+          for route in / /institutions /institutions/individual /institutions/new /admin/institutional-deal-desk; do
+            code="$(curl -sS -o /tmp/body -w '%{http_code}' --max-time 30 "https://$PREVIEW_HOST$route" || true)"
+            printf '%s %s\n' "$route" "$code" | tee -a /tmp/preview-smoke.txt
+            [[ "$code" =~ ^(200|302|307|401|403)$ ]] || exit 1
+          done
+
+      - name: Record adjudicated next state
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          final_head="$(gh api "repos/$repo/branches/$TARGET_BRANCH" --jq '.commit.sha')"
+          if [[ "${{ steps.integrate.outputs.changed }}" == "true" ]]; then
+            final_run="${{ steps.dispatch_integrated.outputs.run_id }}"
+          else
+            final_run="${{ steps.initial.outputs.run_id }}"
+          fi
+          smoke="$(cat /tmp/preview-smoke.txt)"
+          inventory="$(tail -c 8000 /tmp/artifact-inventory.txt)"
+          gh pr comment "$TARGET_PR" --repo "$repo" --body "<!-- pr212-adjudicated-next-state-20260807 -->
+          ## PR #212 adjudicated next state
+
+          - Final exact head: \`$final_head\`
+          - Exact-head QA run: https://github.com/$repo/actions/runs/$final_run
+          - Current main integrated in this sequence: **${{ steps.integrate.outputs.changed }}**
+          - Unresolved review threads: **${{ steps.threads.outputs.unresolved }}**
+          - Preview boundary smoke:
+          \`\`\`
+          $smoke
+          \`\`\`
+          - Evidence inventory:
+          \`\`\`
+          $inventory
+          \`\`\`
+
+          Automated database, source, differential-test, TypeScript, ESLint, build, authenticated workflow, negative-matrix, regression, cleanup, current-main, and preview-boundary gates have passed for the stated exact head. The remaining gate is the protected preview's human product review across organization, independent-individual, verifier, and collective-coordination experiences. PR #212 remains draft and unmerged. No production database, deployment, payment, custody, payout, enterprise-integration, or institutional-feature state was changed."
