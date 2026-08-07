@@ -1,0 +1,596 @@
+name: PR 552 authenticated exact Preview MFA automation-bypass QA
+
+on:
+  push:
+    branches:
+      - ops/pr552-authenticated-preview-mfa-automation-bypass-20260807
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr552-authenticated-preview-mfa-automation-bypass
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+  HARNESS_COMMIT: 331fe68c57cb4d2bceb17412cb8e806d8494544e
+  HARNESS_BLOB: 7c6dac1dd5b5e457e151e04324de18e715d1da4d
+  DEPLOYMENT_ID: dpl_E4kcbFVK7QpYvdygM8m9sc841DpC
+  PREVIEW_ORIGIN: https://moraltrade-site-n539b73lz-ellen-s.vercel.app
+  EXPECTED_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  NEXT_PUBLIC_SUPABASE_URL: https://jnpoxvalyjtdghnperyu.supabase.co
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  OUTPUT_DIR: pr552-authenticated-preview-mfa-automation-bypass
+  HARNESS_PATH: /tmp/pr552-authenticated-preview-mfa-automation-bypass.mjs
+
+jobs:
+  authenticated-preview-mfa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      PR552_QA_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out one-use QA controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard immutable candidate and controller-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          git cat-file -e "${HARNESS_COMMIT}^{commit}"
+          git merge-base --is-ancestor "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --check "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --name-only "$CANDIDATE_SHA" "$GITHUB_SHA" | sort > controller-files.txt
+          cat > allowed-files.txt <<'EOF'
+          .github/scripts/pr552-authenticated-preview-mfa-cleanup.sql
+          .github/scripts/pr552-authenticated-preview-mfa-fixture.sql
+          .github/workflows/pr552-authenticated-preview-mfa-automation-bypass.yml
+          EOF
+          diff -u allowed-files.txt controller-files.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies, Chromium, PostgreSQL, curl, and jq
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client curl jq > /dev/null
+
+      - name: Materialize immutable browser harness with official automation bypass
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show "${HARNESS_COMMIT}:.github/scripts/pr552-authenticated-preview-mfa-db.mjs" > "$HARNESS_PATH"
+          test "$(git hash-object "$HARNESS_PATH")" = "$HARNESS_BLOB"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path(os.environ['HARNESS_PATH'])
+          source = path.read_text(encoding='utf-8')
+
+          replacements = {
+              'const PREVIEW_SHARE_URL = process.env.PR552_PREVIEW_SHARE_URL;':
+                  'const AUTOMATION_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;',
+              'required("PR552_PREVIEW_SHARE_URL", PREVIEW_SHARE_URL);':
+                  'required("VERCEL_AUTOMATION_BYPASS_SECRET", AUTOMATION_BYPASS_SECRET);',
+          }
+          for old, new in replacements.items():
+              if source.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one occurrence of: {old}')
+              source = source.replace(old, new, 1)
+
+          start_marker = 'async function acquirePreviewAccess(context) {'
+          end_marker = 'async function authenticatedContext(browser, session, viewport) {'
+          if source.count(start_marker) != 1 or source.count(end_marker) != 1:
+              raise SystemExit('Preview-share function boundaries were not unique.')
+          start = source.index(start_marker)
+          end = source.index(end_marker, start)
+          source = source[:start] + source[end:]
+
+          old_context = '''  const context = await browser.newContext({
+            baseURL: PREVIEW_ORIGIN,
+            viewport,
+          });'''
+          new_context = '''  const context = await browser.newContext({
+            baseURL: PREVIEW_ORIGIN,
+            viewport,
+            extraHTTPHeaders: {
+              "x-vercel-protection-bypass": AUTOMATION_BYPASS_SECRET,
+              "x-vercel-set-bypass-cookie": "true",
+            },
+          });'''
+          if source.count(old_context) != 1:
+              raise SystemExit('Expected browser-context source was not found exactly once.')
+          source = source.replace(old_context, new_context, 1)
+
+          old_access_call = '  await acquirePreviewAccess(context);\n'
+          if source.count(old_access_call) != 1:
+              raise SystemExit('Expected preview-share access call was not found exactly once.')
+          source = source.replace(old_access_call, '', 1)
+
+          forbidden = ['PREVIEW_SHARE_URL', 'acquirePreviewAccess']
+          for token in forbidden:
+              if token in source:
+                  raise SystemExit(f'Legacy share-link token remains: {token}')
+
+          path.write_text(source, encoding='utf-8')
+          PY
+
+          node --check "$HARNESS_PATH"
+          sha256sum "$HARNESS_PATH" > patched-harness.sha256
+
+      - name: Guard exact production database and exact READY Preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${PR552_QA_PASSWORD:-}"
+          test -n "${VERCEL_TOKEN:-}"
+          test "${#PR552_QA_PASSWORD}" -ge 14
+
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ['PROD_SUPABASE_DB_URL'])
+          expected = os.environ['EXPECTED_SUPABASE_REF']
+          query = parse_qs(parsed.query)
+          if not (
+              parsed.scheme in {'postgres', 'postgresql'}
+              and bool(parsed.password)
+              and parsed.path == '/postgres'
+              and (
+                  expected in (parsed.username or '')
+                  or expected in (parsed.hostname or '')
+                  or query.get('project', [''])[0] == expected
+              )
+          ):
+              raise SystemExit('Refusing a database URL outside exact Moral Trade production.')
+          PY
+
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -Atv ON_ERROR_STOP=1 \
+              -c "select to_regclass('auth.users') is not null and to_regclass('auth.mfa_factors') is not null;" \
+            | grep -Fxq 't'
+
+          curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
+            > exact-deployment.json
+          jq -e \
+            --arg deployment_id "$DEPLOYMENT_ID" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg candidate_sha "$CANDIDATE_SHA" \
+            --arg expected_url "${PREVIEW_ORIGIN#https://}" '
+              ((.uid // .id) == $deployment_id)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // null) == null)
+              and ((.aliasError // null) == null)
+              and (.url == $expected_url)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $candidate_sha)
+              and (.meta.moralTradeCandidateSha == $candidate_sha)
+              and (.meta.releaseReason == "pr552-dashboard-account-security-preview")
+            ' exact-deployment.json >/dev/null
+
+      - name: Generate one-use Vercel automation bypass and prove access
+        id: bypass_generate
+        shell: bash
+        run: |
+          set -euo pipefail
+          secret="$(openssl rand -hex 16)"
+          test "${#secret}" -eq 32
+          echo "::add-mask::$secret"
+          secret_file="$RUNNER_TEMP/pr552-vercel-automation-bypass-secret"
+          umask 077
+          printf '%s' "$secret" > "$secret_file"
+
+          request_body="$(jq -nc \
+            --arg secret "$secret" \
+            --arg note "PR552 exact Preview QA ${GITHUB_RUN_ID}.${GITHUB_RUN_ATTEMPT}" \
+            '{generate:{secret:$secret,note:$note}}')"
+          status="$(curl -sS \
+            -X PATCH \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            -o "$RUNNER_TEMP/pr552-bypass-generate-response.json" \
+            -w '%{http_code}' \
+            --data "$request_body" \
+            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/protection-bypass?teamId=${VERCEL_ORG_ID}")"
+          test "$status" = '200'
+
+          access_status="$(curl -sS \
+            -H "x-vercel-protection-bypass: ${secret}" \
+            -H 'x-vercel-set-bypass-cookie: true' \
+            -o "$RUNNER_TEMP/pr552-bypass-access.html" \
+            -w '%{http_code}' \
+            "${PREVIEW_ORIGIN}/dashboard")"
+          test "$access_status" = '200'
+          grep -Fq 'Moral Trade' "$RUNNER_TEMP/pr552-bypass-access.html"
+
+          printf 'VERCEL_AUTOMATION_BYPASS_SECRET=%s\n' "$secret" >> "$GITHUB_ENV"
+          jq -n \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            --arg candidateSha "$CANDIDATE_SHA" \
+            --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{generated:true,operationalAccess:true,deploymentId:$deploymentId,candidateSha:$candidateSha,generatedAt:$generatedAt}' \
+            > bypass-generation-proof.json
+          echo 'exit_code=0' >> "$GITHUB_OUTPUT"
+
+      - name: Generate unique synthetic identity and factor scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          readarray -t generated < <(python3 - <<'PY'
+          import os
+          import uuid
+
+          run = f"{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}"
+          print(uuid.uuid4())
+          print(f"pr552-mfa-{run}@qa.moraltrade.invalid")
+          print(f"PR552 exact Preview {run}")
+          print(run)
+          PY
+          )
+          echo "PR552_QA_USER_ID=${generated[0]}" >> "$GITHUB_ENV"
+          echo "PR552_QA_EMAIL=${generated[1]}" >> "$GITHUB_ENV"
+          echo "PR552_QA_FACTOR_NAME=${generated[2]}" >> "$GITHUB_ENV"
+          echo "PR552_QA_RUN_ID=${generated[3]}" >> "$GITHUB_ENV"
+          echo "PR552_OUTPUT_DIR=$OUTPUT_DIR" >> "$GITHUB_ENV"
+          echo "PR552_STATE_PATH=$OUTPUT_DIR/state.json" >> "$GITHUB_ENV"
+
+      - name: Create isolated synthetic production Auth fixture
+        id: fixture
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$OUTPUT_DIR"
+          set +e
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc -v ON_ERROR_STOP=1 \
+              -f .github/scripts/pr552-authenticated-preview-mfa-fixture.sql \
+              2>&1 | tee "$OUTPUT_DIR/fixture.log"
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "$code" > "$OUTPUT_DIR/fixture-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Run authenticated desktop and mobile MFA lifecycle
+        id: lifecycle
+        if: steps.fixture.outputs.exit_code == '0'
+        shell: bash
+        run: |
+          set -uo pipefail
+          export PR552_PREVIEW_ORIGIN="$PREVIEW_ORIGIN"
+          export PR552_EXPECTED_SHA="$CANDIDATE_SHA"
+          export PR552_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID"
+          export PR552_EXPECTED_SUPABASE_REF="$EXPECTED_SUPABASE_REF"
+
+          set +e
+          node "$HARNESS_PATH" \
+            > >(tee "$OUTPUT_DIR/test.log") \
+            2> >(tee "$OUTPUT_DIR/test.stderr.log" >&2)
+          code=$?
+          set -e
+          echo "$code" > "$OUTPUT_DIR/test-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Clean exactly the run-created factor and synthetic user
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          export PR552_QA_FACTOR_ID=''
+          if [[ -s "$OUTPUT_DIR/state.json" ]]; then
+            export PR552_QA_FACTOR_ID="$(jq -r '.factorId // ""' "$OUTPUT_DIR/state.json")"
+          fi
+
+          set +e
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc -qAt -v ON_ERROR_STOP=1 \
+              -f .github/scripts/pr552-authenticated-preview-mfa-cleanup.sql \
+              > >(tee "$OUTPUT_DIR/cleanup.json") \
+              2> >(tee "$OUTPUT_DIR/cleanup.stderr.log" >&2)
+          code=$?
+          set -e
+          echo "$code" > "$OUTPUT_DIR/cleanup-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Independently prove zero synthetic residue
+        id: residue
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+            psql "$PROD_SUPABASE_DB_URL" --no-psqlrc -qAt -v ON_ERROR_STOP=1 \
+              -c "select jsonb_build_object(
+                'authUsers',(select count(*) from auth.users where id='${PR552_QA_USER_ID}'::uuid or lower(email)=lower('${PR552_QA_EMAIL}')),
+                'identities',(select count(*) from auth.identities where user_id='${PR552_QA_USER_ID}'::uuid),
+                'factors',(select count(*) from auth.mfa_factors where user_id='${PR552_QA_USER_ID}'::uuid),
+                'sessions',(select count(*) from auth.sessions where user_id='${PR552_QA_USER_ID}'::uuid),
+                'refreshTokens',(select count(*) from auth.refresh_tokens where user_id='${PR552_QA_USER_ID}'),
+                'profiles',(select count(*) from public.profiles where id='${PR552_QA_USER_ID}'::uuid));" \
+            > "$OUTPUT_DIR/residue.json"
+          query_code=$?
+          code=$query_code
+          if [[ "$query_code" -eq 0 ]] && jq -e 'all(.[]; . == 0)' "$OUTPUT_DIR/residue.json" >/dev/null; then
+            code=0
+          elif [[ "$query_code" -eq 0 ]]; then
+            code=92
+          fi
+          echo "$code" > "$OUTPUT_DIR/residue-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Revoke exact one-use automation bypass
+        id: bypass_revoke
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          secret_file="$RUNNER_TEMP/pr552-vercel-automation-bypass-secret"
+          code=0
+          generated=false
+          exact_absent=false
+          operationally_revoked=false
+
+          if [[ -s "$secret_file" ]]; then
+            generated=true
+            secret="$(cat "$secret_file")"
+            echo "::add-mask::$secret"
+            request_body="$(jq -nc \
+              --arg secret "$secret" \
+              '{revoke:{secret:$secret,regenerate:false}}')"
+            set +e
+            status="$(curl -sS \
+              -X PATCH \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              -o "$RUNNER_TEMP/pr552-bypass-revoke-response.json" \
+              -w '%{http_code}' \
+              --data "$request_body" \
+              "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/protection-bypass?teamId=${VERCEL_ORG_ID}")"
+            curl_code=$?
+            set -e
+
+            if [[ "$curl_code" -ne 0 || "$status" != '200' ]]; then
+              code=93
+            elif jq -e --arg secret "$secret" '((.protectionBypass // {}) | has($secret) | not)' \
+              "$RUNNER_TEMP/pr552-bypass-revoke-response.json" >/dev/null; then
+              exact_absent=true
+            else
+              code=94
+            fi
+
+            if [[ "$code" -eq 0 ]]; then
+              set +e
+              revoked_status="$(curl -sS \
+                -H "x-vercel-protection-bypass: ${secret}" \
+                -o "$RUNNER_TEMP/pr552-revoked-access.html" \
+                -w '%{http_code}' \
+                "${PREVIEW_ORIGIN}/dashboard")"
+              revoked_curl_code=$?
+              set -e
+              if [[ "$revoked_curl_code" -eq 0 ]] \
+                && { [[ "$revoked_status" != '200' ]] \
+                  || ! grep -Fq 'Moral Trade' "$RUNNER_TEMP/pr552-revoked-access.html"; }; then
+                operationally_revoked=true
+              else
+                code=95
+              fi
+            fi
+
+            rm -f "$secret_file" \
+              "$RUNNER_TEMP/pr552-bypass-generate-response.json" \
+              "$RUNNER_TEMP/pr552-bypass-access.html" \
+              "$RUNNER_TEMP/pr552-bypass-revoke-response.json" \
+              "$RUNNER_TEMP/pr552-revoked-access.html"
+          else
+            code=96
+          fi
+
+          jq -n \
+            --argjson generated "$generated" \
+            --argjson exactAbsent "$exact_absent" \
+            --argjson operationallyRevoked "$operationally_revoked" \
+            --arg revokedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{generated:$generated,revoked:($exactAbsent and $operationallyRevoked),exactSecretAbsent:$exactAbsent,operationallyRevoked:$operationallyRevoked,revokedAt:$revokedAt}' \
+            > bypass-revocation-proof.json
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Verify fail-closed lifecycle, cleanup, revocation, and safe evidence
+        id: evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const outputDir = process.env.OUTPUT_DIR;
+          const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
+          const readOutputJson = (name) => readJson(path.join(outputDir, name));
+          const readExit = (name) => Number.parseInt(
+            fs.readFileSync(path.join(outputDir, name), 'utf8').trim(),
+            10,
+          );
+          const assert = (condition, message) => {
+            if (!condition) throw new Error(message);
+          };
+          const emptyDiagnostics = (diagnostics) =>
+            diagnostics &&
+            diagnostics.consoleErrors.length === 0 &&
+            diagnostics.pageErrors.length === 0 &&
+            diagnostics.requestFailures.length === 0 &&
+            diagnostics.httpErrors.length === 0;
+
+          assert(readExit('fixture-exit-code.txt') === 0, 'Synthetic fixture creation failed.');
+          assert(readExit('test-exit-code.txt') === 0, 'Authenticated browser lifecycle failed.');
+          assert(readExit('cleanup-exit-code.txt') === 0, 'Exact cleanup failed.');
+          assert(readExit('residue-exit-code.txt') === 0, 'Zero-residue proof failed.');
+
+          const state = readOutputJson('state.json');
+          const result = readOutputJson('result.json');
+          const cleanup = readOutputJson('cleanup.json');
+          const residue = readOutputJson('residue.json');
+          const generation = readJson('bypass-generation-proof.json');
+          const revocation = readJson('bypass-revocation-proof.json');
+
+          assert(generation.generated === true && generation.operationalAccess === true, 'Automation bypass generation/access proof failed.');
+          assert(revocation.revoked === true && revocation.exactSecretAbsent === true && revocation.operationallyRevoked === true, 'Automation bypass revocation proof failed.');
+          assert(state.candidateSha === process.env.CANDIDATE_SHA, 'Candidate SHA mismatch.');
+          assert(state.deploymentId === process.env.DEPLOYMENT_ID, 'Deployment ID mismatch.');
+          assert(state.supabaseRef === process.env.EXPECTED_SUPABASE_REF, 'Supabase ref mismatch.');
+          assert(state.userId === process.env.PR552_QA_USER_ID, 'Synthetic user ID mismatch.');
+          assert(Array.isArray(state.beforeFactorIds) && state.beforeFactorIds.length === 0, 'Synthetic user did not start with zero factors.');
+          assert(typeof state.factorId === 'string' && state.factorId.length > 20, 'Created factor ID missing.');
+          assert(state.factorRemovedByUi === true, 'The exact factor was not removed through Account security.');
+
+          assert(result.testPassed === true, 'Authenticated lifecycle did not pass.');
+          assert(result.desktop?.verifiedFactors === 1, 'Desktop did not show one verified factor.');
+          assert(result.desktop?.sessionLevel === 'aal2', 'Desktop did not reach AAL2.');
+          assert(result.desktop?.horizontalOverflow <= 1, 'Desktop horizontal overflow exceeded one pixel.');
+          assert(emptyDiagnostics(result.desktop?.diagnostics), 'Desktop diagnostics were not empty.');
+          assert(result.mobile?.verifiedFactorsBeforeCleanup === 1, 'Mobile did not show the verified factor.');
+          assert(result.mobile?.sessionLevelBeforeCleanup === 'aal2', 'Mobile did not reach AAL2.');
+          assert(result.mobile?.verifiedFactorsAfterCleanup === 0, 'Mobile did not show zero factors after exact cleanup.');
+          assert(result.mobile?.horizontalOverflow <= 1, 'Mobile horizontal overflow exceeded one pixel.');
+          assert(emptyDiagnostics(result.mobile?.diagnostics), 'Mobile diagnostics were not empty.');
+
+          const lifecycle = result.factorLifecycle;
+          assert(lifecycle?.exactSingleNewFactor === true, 'Exactly-one-new-factor proof failed.');
+          assert(lifecycle.createdFactorId === state.factorId, 'Created factor ID mismatch.');
+          assert(lifecycle.beforeFactorIds.length === 0, 'Factor baseline was not empty.');
+          assert(lifecycle.afterEnrollmentIds.length === 1 && lifecycle.afterEnrollmentIds[0] === state.factorId, 'Enrollment factor set mismatch.');
+          assert(lifecycle.afterVerificationIds.length === 1 && lifecycle.afterVerificationIds[0] === state.factorId, 'Verification factor set mismatch.');
+          assert(lifecycle.verifiedStatus === 'verified', 'The new factor was not verified.');
+          assert(lifecycle.exactFactorRemovedByUi === true, 'The exact new factor was not removed by the UI.');
+          assert(lifecycle.baselineRestoredByUi === true && lifecycle.afterUiCleanupIds.length === 0, 'UI cleanup did not restore factor baseline.');
+
+          assert(cleanup.cleanupPassed === true, 'Database cleanup proof was not true.');
+          for (const [key, value] of Object.entries(cleanup)) {
+            if (key.endsWith('RowsRemaining')) assert(value === 0, `${key} was not zero.`);
+          }
+          assert(Object.values(residue).every((value) => value === 0), 'Independent residue proof was nonzero.');
+
+          const summary = {
+            schemaVersion: 1,
+            candidateSha: result.candidateSha,
+            deploymentId: result.deploymentId,
+            supabaseRef: result.supabaseRef,
+            desktop: {
+              viewport: result.desktop.viewport,
+              sessionLevel: result.desktop.sessionLevel,
+              verifiedFactors: result.desktop.verifiedFactors,
+              horizontalOverflow: result.desktop.horizontalOverflow,
+              diagnosticsEmpty: true,
+            },
+            mobile: {
+              viewport: result.mobile.viewport,
+              sessionLevel: result.mobile.sessionLevelBeforeCleanup,
+              verifiedFactorsBeforeCleanup: result.mobile.verifiedFactorsBeforeCleanup,
+              verifiedFactorsAfterCleanup: result.mobile.verifiedFactorsAfterCleanup,
+              horizontalOverflow: result.mobile.horizontalOverflow,
+              diagnosticsEmpty: true,
+            },
+            factorLifecycle: {
+              baselineFactorCount: lifecycle.beforeFactorIds.length,
+              createdFactorCount: lifecycle.afterEnrollmentIds.length,
+              verifiedStatus: lifecycle.verifiedStatus,
+              exactSingleNewFactor: lifecycle.exactSingleNewFactor,
+              exactFactorRemovedByUi: lifecycle.exactFactorRemovedByUi,
+              baselineRestoredByUi: lifecycle.baselineRestoredByUi,
+            },
+            cleanup: {
+              exactFactorOnly: true,
+              databaseCleanupPassed: cleanup.cleanupPassed,
+              zeroResidue: true,
+            },
+            automationBypass: {
+              generated: generation.generated,
+              operationalAccess: generation.operationalAccess,
+              revoked: revocation.revoked,
+              exactSecretAbsent: revocation.exactSecretAbsent,
+              operationallyRevoked: revocation.operationallyRevoked,
+            },
+            completedAt: result.completedAt,
+          };
+          fs.writeFileSync(path.join(outputDir, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`);
+          NODE
+          evidence_code=$?
+
+          sensitive_matches="$(grep -RIlE \
+            --include='*.json' \
+            --include='*.log' \
+            --include='*.txt' \
+            'otpauth://|"secret"[[:space:]]*:|"access_token"[[:space:]]*:|"refresh_token"[[:space:]]*:|sb_secret_|VERCEL_AUTOMATION_BYPASS_SECRET|x-vercel-protection-bypass' \
+            "$OUTPUT_DIR" bypass-generation-proof.json bypass-revocation-proof.json 2>/dev/null || true)"
+          if [[ -n "$sensitive_matches" ]]; then
+            printf 'Credential-like material detected in evidence files: %s\n' "$sensitive_matches" >&2
+            evidence_code=91
+          fi
+
+          printf '%s\n' "$evidence_code" > "$OUTPUT_DIR/evidence-exit-code.txt"
+          echo "exit_code=$evidence_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload authenticated exact-Preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-authenticated-preview-mfa-automation-bypass-${{ github.run_id }}
+          path: |
+            exact-deployment.json
+            controller-files.txt
+            allowed-files.txt
+            patched-harness.sha256
+            bypass-generation-proof.json
+            bypass-revocation-proof.json
+            pr552-authenticated-preview-mfa-automation-bypass/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Preserve fail-closed conclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.bypass_generate.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.fixture.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.lifecycle.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.cleanup.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.residue.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.bypass_revoke.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.evidence.outputs.exit_code || '255' }}" = '0'
