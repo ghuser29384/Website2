@@ -1,0 +1,213 @@
+name: Public Evidence current diagnostic c2d90782
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/public-evidence-current-diagnostic-c2d90782.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: public-evidence-current-diagnostic-c2d90782
+  cancel-in-progress: true
+
+env:
+  PRODUCT_SHA: c2d907827c4c7086fb66973bbe3d9619f1856f99
+  CONTROLLER_PATH: .github/workflows/public-evidence-current-diagnostic-c2d90782.yml
+  EVIDENCE_DIR: public-evidence-current-diagnostic-c2d90782
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Guard immutable product and one-file controller scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.head.ref }}' = 'qa/public-evidence-current-diagnostic-c2d90782'
+          test '${{ github.event.pull_request.base.ref }}' = 'main'
+          test '${{ github.event.pull_request.base.sha }}' = "$PRODUCT_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$PRODUCT_SHA"
+          actual_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename')"
+          test "$actual_files" = "$CONTROLLER_PATH"
+
+      - name: Check out immutable current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 1
+
+      - name: Prove checkout and source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test -f 'src/app/evidence/[[...recordId]]/page.tsx'
+          test -f 'src/lib/public-evidence-policy.test.ts'
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$PRODUCT_SHA" > "$EVIDENCE_DIR/product-sha.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Write bounded rendered diagnostic
+        shell: bash
+        run: |
+          cat > tests/public-evidence-current-diagnostic-c2d90782.spec.ts <<'TS'
+          import { mkdir, writeFile } from "node:fs/promises";
+          import path from "node:path";
+
+          import { expect, test, type Page } from "@playwright/test";
+
+          const evidenceDir = process.env.EVIDENCE_DIR ?? "public-evidence-current-diagnostic-c2d90782";
+
+          function observe(page: Page) {
+            const events = {
+              consoleErrors: [] as string[],
+              pageErrors: [] as string[],
+              failedRequests: [] as string[],
+              httpErrors: [] as string[],
+            };
+            page.on("console", (message) => {
+              if (message.type() === "error") events.consoleErrors.push(message.text());
+            });
+            page.on("pageerror", (error) => events.pageErrors.push(error.stack || error.message));
+            page.on("requestfailed", (request) => {
+              events.failedRequests.push(
+                `${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? "unknown"}`,
+              );
+            });
+            page.on("response", (response) => {
+              if (response.status() >= 400) {
+                events.httpErrors.push(
+                  `${response.status()} ${response.request().method()} ${response.url()}`,
+                );
+              }
+            });
+            return events;
+          }
+
+          async function record(page: Page, label: string, events: ReturnType<typeof observe>) {
+            await mkdir(evidenceDir, { recursive: true });
+            const snapshot = await page.evaluate(() => {
+              const summarize = (element: Element) => {
+                const html = element as HTMLElement;
+                const style = getComputedStyle(html);
+                const rect = html.getBoundingClientRect();
+                return {
+                  tag: element.tagName.toLowerCase(),
+                  id: html.id,
+                  className: html.className,
+                  text: (html.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 3000),
+                  visible:
+                    style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    Number(style.opacity) !== 0 &&
+                    rect.width > 0 &&
+                    rect.height > 0,
+                  attributes: Object.fromEntries(
+                    [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
+                  ),
+                };
+              };
+              return {
+                url: location.href,
+                title: document.title,
+                readyState: document.readyState,
+                bodyText: (document.body.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 10000),
+                headings: [...document.querySelectorAll("h1, h2, h3")].map(summarize),
+                banners: [...document.querySelectorAll("[role='alert'], .status-banner, .empty-state")].map(summarize),
+                topbar: [...document.querySelectorAll(".mt-site-topbar, nav[aria-label='Primary']")].map(summarize),
+                fieldPills: [...document.querySelectorAll(".source-pill")].map(summarize),
+                links: [...document.querySelectorAll("a")].slice(0, 100).map(summarize),
+                evidenceShellCount: document.querySelectorAll(".evidence-outcomes-shell").length,
+                retiredMessageCount: [...document.querySelectorAll("*")].filter((element) =>
+                  /Individual public dossier links have been retired/i.test(element.textContent ?? ""),
+                ).length,
+                privateArtifactLeakCount: [...document.querySelectorAll("a")].filter((anchor) =>
+                  /receipt|meal-before|meal-after|green-table/i.test(
+                    `${anchor.getAttribute("href") ?? ""} ${anchor.textContent ?? ""}`,
+                  ),
+                ).length,
+                dimensions: {
+                  innerWidth: window.innerWidth,
+                  clientWidth: document.documentElement.clientWidth,
+                  scrollWidth: document.documentElement.scrollWidth,
+                  innerHeight: window.innerHeight,
+                  scrollHeight: document.documentElement.scrollHeight,
+                },
+              };
+            });
+            await writeFile(
+              path.join(evidenceDir, `${label}.json`),
+              `${JSON.stringify({ label, snapshot, events }, null, 2)}\n`,
+              "utf8",
+            );
+            await page.screenshot({ path: path.join(evidenceDir, `${label}.png`), fullPage: true });
+          }
+
+          for (const route of ["/evidence", "/evidence/example"] as const) {
+            test(`records current ${route} contract`, async ({ page }) => {
+              const events = observe(page);
+              const response = await page.goto(route, { waitUntil: "domcontentloaded" });
+              await page.waitForLoadState("load").catch(() => undefined);
+              await expect(page.locator("body")).not.toBeEmpty({ timeout: 30_000 });
+              await page.waitForTimeout(500);
+              await record(page, route === "/evidence" ? "ledger-desktop" : "retired-record-desktop", events);
+              expect(response?.status() ?? 200).toBeLessThan(600);
+            });
+          }
+
+          test("records mobile ledger layout", async ({ page }) => {
+            await page.setViewportSize({ width: 390, height: 844 });
+            const events = observe(page);
+            await page.goto("/evidence", { waitUntil: "domcontentloaded" });
+            await page.waitForLoadState("load").catch(() => undefined);
+            await expect(page.locator("body")).not.toBeEmpty({ timeout: 30_000 });
+            await page.waitForTimeout(500);
+            await record(page, "ledger-mobile", events);
+          });
+          TS
+
+      - name: Run current Evidence diagnostic
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test tests/public-evidence-current-diagnostic-c2d90782.spec.ts \
+            --workers=1 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/playwright.log"
+
+      - name: Upload immutable diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-evidence-current-diagnostic-c2d90782
+          path: |
+            public-evidence-current-diagnostic-c2d90782
+            test-results
+          if-no-files-found: error
+          retention-days: 14
