@@ -37,8 +37,17 @@ test("the independent loader grants access only after verifier acceptance", () =
 });
 
 test("the organization deal loader remains membership-gated", () => {
-  assert.match(
-    institutionalData,
-    /institutional_memberships[\s\S]*?\.eq\("organization_id", organizationId\)[\s\S]*?\.eq\("profile_id", viewerProfileId\)[\s\S]*?\.eq\("status", "active"\)\.maybeSingle\(\)/,
+  const membershipGate = `const membershipResult = await client
+    .from("institutional_memberships")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("profile_id", viewerProfileId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (membershipResult.error || !membershipResult.data) return null;`;
+
+  assert.ok(
+    institutionalData.includes(membershipGate),
+    "The organization deal loader must require the exact active organization membership before loading the deal.",
   );
 });
