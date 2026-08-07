@@ -23,13 +23,13 @@ def replace_span(
     replacement: str,
 ) -> str:
     start_count = source.count(start_marker)
-    end_count = source.count(end_marker)
     if start_count != 1:
         fail(f"{label}: expected exactly one start marker, found {start_count}.")
-    if end_count != 1:
-        fail(f"{label}: expected exactly one end marker, found {end_count}.")
     start = source.index(start_marker)
-    end = source.index(end_marker, start)
+    try:
+        end = source.index(end_marker, start)
+    except ValueError:
+        fail(f"{label}: end marker was not found after the start marker.")
     if end <= start:
         fail(f"{label}: invalid marker order.")
     return source[:start] + replacement + source[end:]
@@ -144,16 +144,20 @@ function runPsql(sql, variables = {}) {
         if token in source:
             fail(f"Forbidden stale harness token remains: {token}")
 
-    required = [
-        "VERCEL_AUTOMATION_BYPASS_SECRET",
-        "x-vercel-protection-bypass",
-        "x-vercel-set-bypass-cookie",
-        "function expandPsqlVariables",
-        "input: expandedSql",
-    ]
-    for token in required:
-        if source.count(token) != 1:
-            fail(f"Required patched token must occur exactly once: {token}")
+    required_counts = {
+        "VERCEL_AUTOMATION_BYPASS_SECRET": 2,
+        "x-vercel-protection-bypass": 1,
+        "x-vercel-set-bypass-cookie": 1,
+        "function expandPsqlVariables": 1,
+        "input: expandedSql": 1,
+    }
+    for token, expected_count in required_counts.items():
+        actual_count = source.count(token)
+        if actual_count != expected_count:
+            fail(
+                f"Required patched token {token!r} must occur {expected_count} time(s); "
+                f"found {actual_count}."
+            )
 
     path.write_text(source, encoding="utf-8")
 
