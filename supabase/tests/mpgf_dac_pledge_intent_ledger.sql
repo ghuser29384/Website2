@@ -362,7 +362,7 @@ declare
   visible_intents integer;
   visible_events integer;
 begin
-  select count(*) into visible_intents from public.mpgf_pledge_intents;
+  select count(*) into visible_intents from public.mpgf_dac_pledge_intents;
   select count(*) into visible_events from public.mpgf_dac_pledge_events;
   if visible_intents <> 0 or visible_events <> 0 then
     raise exception 'An outsider could read another user''s private DAC consent or event.';
@@ -381,7 +381,7 @@ declare
   visible_intents integer;
   visible_events integer;
 begin
-  select count(*) into visible_intents from public.mpgf_pledge_intents;
+  select count(*) into visible_intents from public.mpgf_dac_pledge_intents;
   select count(*) into visible_events from public.mpgf_dac_pledge_events;
   if visible_intents <> 1 or visible_events <> 1 then
     raise exception 'A pledger could not read exactly their own DAC consent and creation event.';
@@ -414,7 +414,7 @@ declare
   event_hash_mismatch integer;
 begin
   select count(*) into intent_count
-  from public.mpgf_pledge_intents
+  from public.mpgf_dac_pledge_intents
   where campaign_id = 'campaign-9f666666666646668666666666666666';
 
   select count(*), coalesce(sum(amount_cents), 0), count(distinct profile_id)
@@ -441,7 +441,7 @@ begin
 
   select count(*) into invalid_binding_count
   from public.mpgf_public_goods_pledges as pledge
-  join public.mpgf_pledge_intents as intent on intent.id = pledge.pledge_intent_id
+  join public.mpgf_dac_pledge_intents as intent on intent.id = pledge.pledge_intent_id
   join public.mpgf_public_goods_campaigns as campaign on campaign.id = pledge.campaign_id
   where pledge.campaign_id = 'campaign-9f666666666646668666666666666666'
     and (
@@ -466,7 +466,7 @@ begin
     );
 
   select count(*) into consent_hash_mismatch
-  from public.mpgf_pledge_intents
+  from public.mpgf_dac_pledge_intents
   where campaign_id = 'campaign-9f666666666646668666666666666666'
     and (
       consent_sha256 <> public.mpgf_dac_json_sha256(consent_json)
@@ -509,7 +509,7 @@ declare
   event_id_value uuid;
 begin
   select id into intent_id_value
-  from public.mpgf_pledge_intents
+  from public.mpgf_dac_pledge_intents
   where profile_id = '9c333333-3333-4333-8333-333333333333';
 
   select id into pledge_id_value
@@ -522,7 +522,7 @@ begin
   where pledge_id = pledge_id_value;
 
   begin
-    update public.mpgf_pledge_intents
+    update public.mpgf_dac_pledge_intents
     set amount_cents = amount_cents + 1
     where id = intent_id_value;
     raise exception 'Immutable DAC pledge intent unexpectedly changed.';

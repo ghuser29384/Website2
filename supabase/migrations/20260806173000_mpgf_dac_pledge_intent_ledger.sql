@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgcrypto with schema extensions;
 
-create table if not exists public.mpgf_pledge_intents (
+create table if not exists public.mpgf_dac_pledge_intents (
   id uuid primary key default gen_random_uuid(),
   campaign_id text not null
     references public.mpgf_public_goods_campaigns (id) on delete restrict,
@@ -21,38 +21,38 @@ create table if not exists public.mpgf_pledge_intents (
   consent_sha256 text not null,
   accepted_at timestamptz not null,
   created_at timestamptz not null default timezone('utc', now()),
-  constraint mpgf_pledge_intents_terms_version_positive
+  constraint mpgf_dac_pledge_intents_terms_version_positive
     check (terms_version > 0),
-  constraint mpgf_pledge_intents_terms_hash_format
+  constraint mpgf_dac_pledge_intents_terms_hash_format
     check (terms_sha256 ~ '^sha256:[a-f0-9]{64}$'),
-  constraint mpgf_pledge_intents_idempotency_hash_format
+  constraint mpgf_dac_pledge_intents_idempotency_hash_format
     check (idempotency_key_hash ~ '^sha256:[a-f0-9]{64}$'),
-  constraint mpgf_pledge_intents_amount_positive
+  constraint mpgf_dac_pledge_intents_amount_positive
     check (amount_cents > 0),
-  constraint mpgf_pledge_intents_currency_usd
+  constraint mpgf_dac_pledge_intents_currency_usd
     check (currency = 'usd'),
-  constraint mpgf_pledge_intents_visibility_valid
+  constraint mpgf_dac_pledge_intents_visibility_valid
     check (visibility_mode in ('private_amount', 'public_supporter', 'public_reason')),
-  constraint mpgf_pledge_intents_supporter_reason_length
+  constraint mpgf_dac_pledge_intents_supporter_reason_length
     check (supporter_reason is null or char_length(supporter_reason) <= 500),
-  constraint mpgf_pledge_intents_consent_object
+  constraint mpgf_dac_pledge_intents_consent_object
     check (jsonb_typeof(consent_json) = 'object'),
-  constraint mpgf_pledge_intents_consent_hash_format
+  constraint mpgf_dac_pledge_intents_consent_hash_format
     check (consent_sha256 ~ '^sha256:[a-f0-9]{64}$'),
-  constraint mpgf_pledge_intents_proposal_version_fkey
+  constraint mpgf_dac_pledge_intents_proposal_version_fkey
     foreign key (pool_proposal_id, terms_version)
     references public.mpgf_pool_proposal_versions (proposal_id, terms_version)
     on delete restrict,
-  constraint mpgf_pledge_intents_profile_idempotency_key
+  constraint mpgf_dac_pledge_intents_profile_idempotency_key
     unique (profile_id, idempotency_key_hash)
 );
 
-create index if not exists mpgf_pledge_intents_campaign_created_idx
-  on public.mpgf_pledge_intents (campaign_id, created_at);
-create index if not exists mpgf_pledge_intents_proposal_version_idx
-  on public.mpgf_pledge_intents (pool_proposal_id, terms_version);
-create index if not exists mpgf_pledge_intents_profile_created_idx
-  on public.mpgf_pledge_intents (profile_id, created_at desc);
+create index if not exists mpgf_dac_pledge_intents_campaign_created_idx
+  on public.mpgf_dac_pledge_intents (campaign_id, created_at);
+create index if not exists mpgf_dac_pledge_intents_proposal_version_idx
+  on public.mpgf_dac_pledge_intents (pool_proposal_id, terms_version);
+create index if not exists mpgf_dac_pledge_intents_profile_created_idx
+  on public.mpgf_dac_pledge_intents (profile_id, created_at desc);
 
 alter table public.mpgf_public_goods_pledges
   add column if not exists pledge_intent_id uuid,
@@ -72,7 +72,7 @@ begin
     alter table public.mpgf_public_goods_pledges
       add constraint mpgf_public_goods_pledges_intent_fkey
       foreign key (pledge_intent_id)
-      references public.mpgf_pledge_intents (id)
+      references public.mpgf_dac_pledge_intents (id)
       on delete restrict;
   end if;
 
@@ -155,7 +155,7 @@ create index if not exists mpgf_public_goods_pledges_dac_proposal_version_idx
 create table if not exists public.mpgf_dac_pledge_events (
   id uuid primary key default gen_random_uuid(),
   pledge_intent_id uuid not null
-    references public.mpgf_pledge_intents (id) on delete restrict,
+    references public.mpgf_dac_pledge_intents (id) on delete restrict,
   pledge_id uuid not null
     references public.mpgf_public_goods_pledges (id) on delete restrict,
   campaign_id text not null
@@ -228,10 +228,10 @@ $function$;
 revoke all on function public.mpgf_dac_immutable_row()
   from public, anon, authenticated;
 
-drop trigger if exists mpgf_pledge_intents_immutable
-  on public.mpgf_pledge_intents;
-create trigger mpgf_pledge_intents_immutable
-before update or delete on public.mpgf_pledge_intents
+drop trigger if exists mpgf_dac_pledge_intents_immutable
+  on public.mpgf_dac_pledge_intents;
+create trigger mpgf_dac_pledge_intents_immutable
+before update or delete on public.mpgf_dac_pledge_intents
 for each row execute function public.mpgf_dac_immutable_row();
 
 drop trigger if exists mpgf_dac_pledge_events_immutable
@@ -365,7 +365,7 @@ declare
   campaign_id_value text := btrim(coalesce(p_campaign_id, ''));
   campaign_row public.mpgf_public_goods_campaigns%rowtype;
   proposal_row public.mpgf_pool_proposals%rowtype;
-  existing_intent public.mpgf_pledge_intents%rowtype;
+  existing_intent public.mpgf_dac_pledge_intents%rowtype;
   existing_pledge public.mpgf_public_goods_pledges%rowtype;
   intent_id_value uuid := gen_random_uuid();
   pledge_id_value uuid := gen_random_uuid();
@@ -424,7 +424,7 @@ begin
   );
 
   select * into existing_intent
-  from public.mpgf_pledge_intents as intent
+  from public.mpgf_dac_pledge_intents as intent
   where intent.profile_id = actor_id
     and intent.idempotency_key_hash = idempotency_hash_value;
 
@@ -558,7 +558,7 @@ begin
   );
   consent_hash_value := public.mpgf_dac_json_sha256(consent_value);
 
-  insert into public.mpgf_pledge_intents (
+  insert into public.mpgf_dac_pledge_intents (
     id,
     campaign_id,
     pool_proposal_id,
@@ -709,13 +709,13 @@ grant execute on function public.mpgf_create_dac_pledge(
   text, bigint, text, text, text
 ) to authenticated;
 
-alter table public.mpgf_pledge_intents enable row level security;
+alter table public.mpgf_dac_pledge_intents enable row level security;
 alter table public.mpgf_dac_pledge_events enable row level security;
 
-drop policy if exists mpgf_pledge_intents_select_own
-  on public.mpgf_pledge_intents;
-create policy mpgf_pledge_intents_select_own
-on public.mpgf_pledge_intents
+drop policy if exists mpgf_dac_pledge_intents_select_own
+  on public.mpgf_dac_pledge_intents;
+create policy mpgf_dac_pledge_intents_select_own
+on public.mpgf_dac_pledge_intents
 for select to authenticated
 using (profile_id = auth.uid());
 
@@ -726,17 +726,17 @@ on public.mpgf_dac_pledge_events
 for select to authenticated
 using (profile_id = auth.uid());
 
-revoke all on table public.mpgf_pledge_intents
+revoke all on table public.mpgf_dac_pledge_intents
   from public, anon, authenticated;
 revoke all on table public.mpgf_dac_pledge_events
   from public, anon, authenticated;
-grant select on table public.mpgf_pledge_intents to authenticated;
+grant select on table public.mpgf_dac_pledge_intents to authenticated;
 grant select on table public.mpgf_dac_pledge_events to authenticated;
-grant all on table public.mpgf_pledge_intents to service_role;
+grant all on table public.mpgf_dac_pledge_intents to service_role;
 grant all on table public.mpgf_dac_pledge_events to service_role;
 
-comment on table public.mpgf_pledge_intents is
-  'Immutable consent evidence for self-service dominant assurance contract pledges. It is not an active pledge ledger.';
+comment on table public.mpgf_dac_pledge_intents is
+  'Immutable DAC-specific consent evidence for self-service dominant assurance contract pledges. It is not an active pledge ledger and intentionally does not reuse the incompatible speculative round-intent schema.';
 comment on table public.mpgf_dac_pledge_events is
   'Append-only private lifecycle evidence for DAC pledges.';
 comment on function public.mpgf_create_dac_pledge(text, bigint, text, text, text) is

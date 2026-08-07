@@ -16,7 +16,7 @@ async function read(path: string) {
 test("DAC pledge architecture keeps immutable consent separate from one canonical active ledger", async () => {
   const migration = await read(migrationPath);
 
-  assert.match(migration, /create table if not exists public\.mpgf_pledge_intents/);
+  assert.match(migration, /create table if not exists public\.mpgf_dac_pledge_intents/);
   assert.match(migration, /create table if not exists public\.mpgf_dac_pledge_events/);
   assert.match(migration, /alter table public\.mpgf_public_goods_pledges/);
   assert.match(migration, /add column if not exists pledge_intent_id uuid/);
@@ -29,6 +29,10 @@ test("DAC pledge architecture keeps immutable consent separate from one canonica
   assert.match(migration, /payment_intent_ref,[\s\S]*null,/);
   assert.match(migration, /DAC pledge consent and audit records are immutable/);
   assert.match(migration, /Published DAC campaigns accept pledges only through an immutable pledge intent/);
+  assert.doesNotMatch(
+    migration,
+    /create table(?: if not exists)? public\.mpgf_pledge_intents/i,
+  );
   assert.doesNotMatch(
     migration,
     /create table(?: if not exists)? public\.mpgf_conditional_pledges/i,
@@ -52,8 +56,8 @@ test("DAC pledge creation is version-bound, idempotent, private, and non-authori
   assert.match(migration, /pg_advisory_xact_lock/);
   assert.match(migration, /The idempotency key was already used for different DAC pledge terms/);
   assert.match(migration, /profile_id = auth\.uid\(\)/);
-  assert.match(migration, /revoke all on table public\.mpgf_pledge_intents/);
-  assert.match(migration, /grant select on table public\.mpgf_pledge_intents to authenticated/);
+  assert.match(migration, /revoke all on table public\.mpgf_dac_pledge_intents/);
+  assert.match(migration, /grant select on table public\.mpgf_dac_pledge_intents to authenticated/);
   assert.match(
     migration,
     /It creates no payment authorization, mandate, charge, capture, success, or lapse outcome/,
