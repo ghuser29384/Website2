@@ -1,0 +1,182 @@
+name: Monitor PR 212 durable MFA repair
+
+on:
+  push:
+    branches:
+      - ops/pr212-mfa-stable-state-20260807
+    paths:
+      - .github/workflows/monitor-pr212-mfa-durable-repair-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+
+concurrency:
+  group: monitor-pr212-mfa-durable-repair-20260807
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_BRANCH: feat/institutional-trade-system
+      REPAIR_COMMIT_SUBJECT: Make institutional MFA QA verify durable AAL2 after reload
+      QA_WORKFLOW: Institutional trade QA
+      REPORT_DIR: ops/pr212-mfa-durable-repair-report
+    steps:
+      - name: Check out monitor branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/pr212-mfa-stable-state-20260807
+          fetch-depth: 0
+
+      - name: Wait for the guarded repair commit
+        id: head
+        shell: bash
+        run: |
+          set -euo pipefail
+          repaired_head=""
+          for attempt in $(seq 1 180); do
+            git fetch --quiet origin "${FEATURE_BRANCH}"
+            candidate="$(git rev-parse "origin/${FEATURE_BRANCH}")"
+            subject="$(git show -s --format=%s "$candidate")"
+            if [[ "$subject" == "$REPAIR_COMMIT_SUBJECT" ]]; then
+              repaired_head="$candidate"
+              break
+            fi
+            sleep 10
+          done
+          if [[ -z "$repaired_head" ]]; then
+            echo "The guarded repair did not publish within 30 minutes." >&2
+            exit 1
+          fi
+          echo "repaired_head=$repaired_head" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for exact-head institutional QA
+        id: qa
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ steps.head.outputs.repaired_head }}"
+          run_id=""
+          status=""
+          conclusion=""
+          mkdir -p "$REPORT_DIR"
+          for attempt in $(seq 1 720); do
+            gh run list \
+              --repo "$GITHUB_REPOSITORY" \
+              --workflow "$QA_WORKFLOW" \
+              --branch "$FEATURE_BRANCH" \
+              --limit 100 \
+              --json databaseId,headSha,status,conclusion,createdAt,url,name \
+              > /tmp/pr212-qa-runs.json
+            run_id="$(jq -r --arg head "$target" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/pr212-qa-runs.json)"
+            status="$(jq -r --arg head "$target" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/pr212-qa-runs.json)"
+            conclusion="$(jq -r --arg head "$target" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/pr212-qa-runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then
+              break
+            fi
+            sleep 15
+          done
+          if [[ -z "$run_id" || "$status" != "completed" ]]; then
+            echo "No terminal exact-head QA run was found within three hours." >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$REPORT_DIR/run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$REPORT_DIR/jobs.json"
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$REPORT_DIR/failed.log" 2>&1 || true
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --dir /tmp/pr212-qa-artifacts || true
+
+      - name: Validate exact-head evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ steps.head.outputs.repaired_head }}"
+          run_id="${{ steps.qa.outputs.run_id }}"
+          conclusion="${{ steps.qa.outputs.conclusion }}"
+          mkdir -p "$REPORT_DIR"
+          artifact_root="$(find /tmp/pr212-qa-artifacts -type f -name full-tests-differential.json -printf '%h\n' 2>/dev/null | head -1)"
+          evidence_status="incomplete"
+          if [[ -n "$artifact_root" ]]; then
+            cp -R "$artifact_root" "$REPORT_DIR/artifact" || true
+            differential="$artifact_root/full-tests-differential.json"
+            jq -e '.feature_only_failure_count == 0' "$differential" >/dev/null
+            jq -e '.feature_summary.tests >= .base_summary.tests' "$differential" >/dev/null
+            jq -e '.feature_summary.cancelled == 0 and .base_summary.cancelled == 0' "$differential" >/dev/null
+            residue_file="$(find /tmp/pr212-qa-artifacts -type f -name post-suite-residue.txt | head -1)"
+            if [[ -z "$residue_file" ]]; then
+              echo "Missing post-suite residue evidence." >&2
+              exit 1
+            fi
+            if ! grep -Eq 'auth\.users[[:space:]]*\|[[:space:]]*0' "$residue_file"; then
+              echo "Synthetic auth-user residue is not zero." >&2
+              exit 1
+            fi
+            if ! grep -Eq 'public\.profiles[[:space:]]*\|[[:space:]]*0' "$residue_file"; then
+              echo "Synthetic profile residue is not zero." >&2
+              exit 1
+            fi
+            evidence_status="validated"
+          fi
+          jq -n \
+            --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg feature_head "$target" \
+            --arg run_id "$run_id" \
+            --arg conclusion "$conclusion" \
+            --arg evidence_status "$evidence_status" \
+            '{generated_at:$generated_at,feature_head:$feature_head,run_id:$run_id,conclusion:$conclusion,evidence_status:$evidence_status}' \
+            > "$REPORT_DIR/summary.json"
+          if [[ "$conclusion" != "success" ]]; then
+            echo "Exact-head institutional QA failed." >&2
+            exit 1
+          fi
+          if [[ "$evidence_status" != "validated" ]]; then
+            echo "The QA badge was green but the expected evidence could not be validated." >&2
+            exit 1
+          fi
+          echo "status=pass" >> "$GITHUB_OUTPUT"
+
+      - name: Publish report and PR status
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$REPORT_DIR"
+          target="${{ steps.head.outputs.repaired_head }}"
+          run_id="${{ steps.qa.outputs.run_id }}"
+          conclusion="${{ steps.qa.outputs.conclusion }}"
+          evidence_status="$(jq -r '.evidence_status // "unavailable"' "$REPORT_DIR/summary.json" 2>/dev/null || echo unavailable)"
+          cat > "$REPORT_DIR/report.md" <<EOF
+          # PR #212 durable MFA repair report
+
+          - Exact feature head: \`${target:-unavailable}\`
+          - Institutional QA run: \`${run_id:-unavailable}\`
+          - Workflow conclusion: \`${conclusion:-unavailable}\`
+          - Evidence validation: \`${evidence_status}\`
+          - Production changed: \`no\`
+          - PR #212 merged or marked ready: \`no\`
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$REPORT_DIR"
+          git commit -m "Record PR 212 durable MFA QA result" || true
+          git push origin HEAD:ops/pr212-mfa-stable-state-20260807 || true
+          if [[ "$conclusion" == "success" && "$evidence_status" == "validated" ]]; then
+            gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "PASS: exact-head institutional QA completed for \`${target}\` in run \`${run_id}\`; differential test evidence, non-reduced test count, zero cancelled tests, and zero synthetic identity residue were independently validated. PR remains draft and unmerged. The next gate is current-main integration followed by a complete rerun."
+          else
+            failed_step="$(jq -r '[.jobs[]?.steps[]? | select(.conclusion == "failure") | .name][0] // "unknown"' "$REPORT_DIR/jobs.json" 2>/dev/null || echo unknown)"
+            gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "BLOCKED: exact-head institutional QA for \`${target}\` did not pass. Run: \`${run_id}\`. First failed step: \`${failed_step}\`. No integration, production deployment, production migration, payment, custody, or feature activation was performed."
+          fi
+
+      - name: Fail closed unless all evidence passed
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.evidence.outputs.status }}" = "pass"
