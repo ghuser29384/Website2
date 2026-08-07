@@ -1364,7 +1364,7 @@ async function browserFlow(value) {
     observePage(verifierPage, "verifier");
     await login(verifierPage, value.verifier, `/institutions/verifier-assignments/${value.verifierAssignment.id}`);
     await ensureMfa(verifierPage, value.verifier);
-    await verifierPage.goto(`${baseUrl}/institutions/${value.orgA.id}/deals/${value.deal.id}`);
+    await verifierPage.goto(`${baseUrl}/institutions/individual/deals/${value.deal.id}`);
     assert.doesNotMatch(await verifierPage.locator("body").innerText(), new RegExp(value.deal.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     record("Invited verifier has no confidential access before acceptance", "passed");
     await verifierPage.goto(`${baseUrl}/institutions/verifier-assignments/${value.verifierAssignment.id}`);
@@ -1373,7 +1373,7 @@ async function browserFlow(value) {
     await verifierForm.getByRole("button", { name: "Record my decision" }).click();
     await verifierPage.waitForLoadState("networkidle");
     assert.match(await verifierPage.locator("body").innerText(), /Verifier assignment updated|Assignment is accepted/i);
-    await verifierPage.goto(`${baseUrl}/institutions/${value.orgA.id}/deals/${value.deal.id}`);
+    await verifierPage.goto(`${baseUrl}/institutions/individual/deals/${value.deal.id}`);
     await verifierPage.getByRole("heading", { name: value.deal.title }).waitFor({ state: "visible", timeout: 30_000 });
     await screenshot(verifierPage, "verifier-access-after-acceptance");
     record("Named verifier acceptance atomically grants confidential access", "passed");
