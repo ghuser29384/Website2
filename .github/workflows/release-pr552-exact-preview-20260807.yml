@@ -1,0 +1,427 @@
+name: Release PR 552 exact Preview after differential
+
+on:
+  push:
+    branches:
+      - ops/release-pr552-preview-after-differential-20260807
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-pr552-exact-preview
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: 3e2dc52dc128fd6f05935e2d74ace21db6f9b238
+  CANDIDATE_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+  CANDIDATE_BRANCH: hotfix/dashboard-account-security-visible-20260807
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+
+jobs:
+  exact-full-e2e:
+    name: Exact full E2E — ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: exact-base
+            sha: 3e2dc52dc128fd6f05935e2d74ace21db6f9b238
+          - label: exact-head
+            sha: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+
+    steps:
+      - name: Check out immutable target
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+
+      - name: Verify immutable target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "${{ matrix.sha }}"
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run complete rendered browser suite
+        id: e2e
+        shell: bash
+        run: |
+          set +e
+          npm run test:e2e -- --reporter=line 2>&1 | tee e2e.log
+          exit_code=${PIPESTATUS[0]}
+          printf '%s\n' "$exit_code" > e2e-exit-code.txt
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Build machine-readable summary
+        if: always()
+        shell: bash
+        env:
+          MATRIX_LABEL: ${{ matrix.label }}
+          TARGET_SHA: ${{ matrix.sha }}
+          E2E_EXIT_CODE: ${{ steps.e2e.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          test -s e2e.log
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { execFileSync } = require('node:child_process');
+
+          const raw = fs.readFileSync('e2e.log', 'utf8');
+          const clean = raw
+            .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+            .replace(/\r/g, '');
+          const lines = clean.split('\n');
+          const counts = { failed: 0, passed: 0, skipped: 0 };
+          for (const line of [...lines].reverse()) {
+            const match = line.match(/^\s*(\d+)\s+(failed|passed|skipped)\b/);
+            if (match && counts[match[2]] === 0) counts[match[2]] = Number(match[1]);
+          }
+          const failedTests = lines
+            .filter((line) => /^\s{4}\S.*›/.test(line) && !line.includes('[WebServer]'))
+            .map((line) => line.trim())
+            .filter((line, index, all) => all.indexOf(line) === index);
+          const checkedOutSha = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
+          const exitCode = Number.parseInt(process.env.E2E_EXIT_CODE || '255', 10);
+          const summary = {
+            schemaVersion: 2,
+            label: process.env.MATRIX_LABEL,
+            targetSha: process.env.TARGET_SHA,
+            checkedOutSha,
+            exitCode,
+            counts,
+            totalTests: counts.failed + counts.passed + counts.skipped,
+            failedTestCount: failedTests.length,
+            failedTests,
+            webServer: 'next dev --webpack at http://127.0.0.1:3210',
+            workers: 2,
+            testDirectory: './tests',
+          };
+          fs.writeFileSync('e2e-summary.json', `${JSON.stringify(summary, null, 2)}\n`);
+          fs.writeFileSync(
+            'e2e-summary.txt',
+            [
+              `label=${summary.label}`,
+              `targetSha=${summary.targetSha}`,
+              `checkedOutSha=${summary.checkedOutSha}`,
+              `exitCode=${summary.exitCode}`,
+              `failed=${summary.counts.failed}`,
+              `passed=${summary.counts.passed}`,
+              `skipped=${summary.counts.skipped}`,
+              `totalTests=${summary.totalTests}`,
+              `failedTestCount=${summary.failedTestCount}`,
+              ...summary.failedTests.map((test) => `FAIL ${test}`),
+            ].join('\n') + '\n',
+          );
+          NODE
+
+      - name: Upload exact-run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-preview-gate-${{ matrix.label }}
+          path: |
+            e2e.log
+            e2e-exit-code.txt
+            e2e-summary.json
+            e2e-summary.txt
+            test-results/
+            playwright-report/
+          if-no-files-found: error
+          retention-days: 30
+
+  verify-and-release-preview:
+    name: Verify differential and release exact Preview
+    needs: exact-full-e2e
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      VERCEL: '1'
+      VERCEL_ENV: preview
+      PLAYWRIGHT_HTML_OPEN: never
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Guard repository, branch, candidate, and five-file diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          remote_sha="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$CANDIDATE_SHA"
+          git merge-base --is-ancestor "$BASE_SHA" "$CANDIDATE_SHA"
+          mkdir -p differential-evidence
+          git diff --check "$BASE_SHA" "$CANDIDATE_SHA" | tee differential-evidence/diff-check.log
+          git diff --name-only "$BASE_SHA" "$CANDIDATE_SHA" | sort > differential-evidence/actual-files.txt
+          cat > differential-evidence/expected-files.txt <<'EOF'
+          .github/workflows/dashboard-account-security-hotfix-gates.yml
+          src/app/dashboard/dashboard-account-security.css
+          src/app/dashboard/layout.tsx
+          src/dashboard-account-security-visibility.test.ts
+          tests/dashboard-account-security-visibility.spec.ts
+          EOF
+          sort -o differential-evidence/expected-files.txt differential-evidence/expected-files.txt
+          diff -u differential-evidence/expected-files.txt differential-evidence/actual-files.txt
+
+      - name: Download exact-base evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: pr552-preview-gate-exact-base
+          path: differential-evidence/base
+
+      - name: Download exact-head evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: pr552-preview-gate-exact-head
+          path: differential-evidence/head
+
+      - name: Prove zero head-only full-suite failures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+
+          const base = JSON.parse(fs.readFileSync('differential-evidence/base/e2e-summary.json', 'utf8'));
+          const head = JSON.parse(fs.readFileSync('differential-evidence/head/e2e-summary.json', 'utf8'));
+          const expectedBase = process.env.BASE_SHA;
+          const expectedHead = process.env.CANDIDATE_SHA;
+
+          function validate(summary, label, sha) {
+            if (summary.schemaVersion !== 2) throw new Error(`${label}: unexpected schema`);
+            if (summary.label !== label) throw new Error(`${label}: label mismatch`);
+            if (summary.targetSha !== sha || summary.checkedOutSha !== sha) {
+              throw new Error(`${label}: immutable SHA mismatch`);
+            }
+            if (summary.totalTests < 180) throw new Error(`${label}: incomplete suite (${summary.totalTests} tests)`);
+            if (summary.failedTestCount !== summary.counts.failed) {
+              throw new Error(
+                `${label}: parsed failure list ${summary.failedTestCount} does not match summary ${summary.counts.failed}`,
+              );
+            }
+            if (summary.exitCode === 0 && summary.counts.failed !== 0) {
+              throw new Error(`${label}: inconsistent zero exit code`);
+            }
+            if (summary.exitCode !== 0 && summary.counts.failed === 0) {
+              throw new Error(`${label}: non-test infrastructure failure`);
+            }
+          }
+
+          validate(base, 'exact-base', expectedBase);
+          validate(head, 'exact-head', expectedHead);
+
+          const baseFailures = new Set(base.failedTests);
+          const headFailures = new Set(head.failedTests);
+          const headOnly = head.failedTests.filter((test) => !baseFailures.has(test));
+          const baseOnly = base.failedTests.filter((test) => !headFailures.has(test));
+          const shared = head.failedTests.filter((test) => baseFailures.has(test));
+
+          const differential = {
+            schemaVersion: 1,
+            baseSha: expectedBase,
+            headSha: expectedHead,
+            baseCounts: base.counts,
+            headCounts: head.counts,
+            sharedFailureCount: shared.length,
+            headOnlyFailureCount: headOnly.length,
+            baseOnlyFailureCount: baseOnly.length,
+            headOnlyFailures: headOnly,
+            baseOnlyFailures: baseOnly,
+          };
+          fs.writeFileSync(
+            'differential-evidence/differential.json',
+            `${JSON.stringify(differential, null, 2)}\n`,
+          );
+          fs.writeFileSync(
+            'differential-evidence/differential.md',
+            [
+              '### PR 552 exact-base browser differential',
+              '',
+              `- Base: \`${expectedBase}\` — ${base.counts.failed} failed, ${base.counts.passed} passed, ${base.counts.skipped} skipped`,
+              `- Head: \`${expectedHead}\` — ${head.counts.failed} failed, ${head.counts.passed} passed, ${head.counts.skipped} skipped`,
+              `- Shared failures: ${shared.length}`,
+              `- Head-only failures: **${headOnly.length}**`,
+              `- Base-only failures: ${baseOnly.length}`,
+              '',
+              ...(headOnly.length ? ['#### Head-only failures', ...headOnly.map((test) => `- ${test}`)] : []),
+              ...(baseOnly.length ? ['', '#### Base-only failures', ...baseOnly.map((test) => `- ${test}`)] : []),
+            ].join('\n') + '\n',
+          );
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, fs.readFileSync('differential-evidence/differential.md'));
+          if (headOnly.length !== 0) {
+            throw new Error(`candidate introduced ${headOnly.length} full-suite failure(s)`);
+          }
+          NODE
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused visibility contract
+        shell: bash
+        run: |
+          set -o pipefail
+          node --import tsx --test src/dashboard-account-security-visibility.test.ts \
+            2>&1 | tee differential-evidence/focused-dashboard-account-security.log
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee differential-evidence/repository-tests.log
+
+      - name: Run complete ESLint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint -- --quiet 2>&1 | tee differential-evidence/repository-lint.log
+
+      - name: Run TypeScript
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee differential-evidence/typescript.log
+
+      - name: Run optimized production build
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee differential-evidence/production-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run focused desktop and mobile browser gate
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -o pipefail
+          npm run test:e2e -- tests/dashboard-account-security-visibility.spec.ts --reporter=line \
+            2>&1 | tee differential-evidence/rendered-dashboard-account-security.log
+
+      - name: Link only the canonical Vercel project
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull exact Preview environment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes \
+            --environment=preview \
+            --token="$VERCEL_TOKEN"
+
+      - name: Build the Vercel artifact on GitHub Actions compute
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+            --token="$VERCEL_TOKEN"
+
+      - name: Upload exact candidate as Preview only
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+            --prebuilt \
+            --meta moralTradeCandidateSha="$CANDIDATE_SHA" \
+            --meta releaseReason=pr552-dashboard-account-security-preview \
+            --token="$VERCEL_TOKEN")"
+          test -n "$deployment_url"
+          case "$deployment_url" in
+            https://*) ;;
+            *) echo "Unexpected deployment URL: $deployment_url" >&2; exit 1 ;;
+          esac
+          printf '%s\n' "$deployment_url" | tee differential-evidence/deployment-url.txt
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify deployed Preview is ready and reachable
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_url="${{ steps.deploy.outputs.deployment_url }}"
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$deployment_url" \
+            --token="$VERCEL_TOKEN" | tee differential-evidence/vercel-inspect.log
+          status="$(curl --silent --show-error --output /dev/null \
+            --write-out '%{http_code}' --max-time 45 "$deployment_url/status" || true)"
+          printf 'status=%s\n' "$status" | tee differential-evidence/preview-smoke.log
+          test "$status" -ge 200
+          test "$status" -lt 400
+          {
+            echo
+            echo '### Exact Preview release'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Canonical Vercel project: \`$VERCEL_PROJECT_ID\`"
+            echo "- Deployment: $deployment_url"
+            echo "- Unauthenticated /status response: \`$status\` (Preview protection may redirect)"
+            echo '- Target: Preview only; no production alias or production deployment'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-exact-preview-release-${{ github.run_id }}
+          path: |
+            differential-evidence/
+            test-results/
+            playwright-report/
+          if-no-files-found: error
+          retention-days: 30
