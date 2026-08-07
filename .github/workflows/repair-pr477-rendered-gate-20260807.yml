@@ -20,6 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
+      CONTROLLER_REVISION: '2'
       TARGET_BRANCH: feature/co-act-co-fund-create-v3-20260803
       EXPECTED_OLD_SHA: 7bada6f910ecbc13c9964aaa07b5966040e99d1e
       BASE_SHA: 87b093751a4c2de909555abdb7f181061bb36390
