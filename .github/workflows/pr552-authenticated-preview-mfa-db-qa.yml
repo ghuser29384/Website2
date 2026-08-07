@@ -1,0 +1,430 @@
+name: PR 552 authenticated exact Preview MFA database QA
+
+on:
+  push:
+    branches:
+      - ops/pr552-authenticated-preview-mfa-db-qa-20260807
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr552-authenticated-preview-mfa-db-qa
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+  DEPLOYMENT_ID: dpl_E4kcbFVK7QpYvdygM8m9sc841DpC
+  PREVIEW_ORIGIN: https://moraltrade-site-n539b73lz-ellen-s.vercel.app
+  PREVIEW_SHARE_URL: https://moraltrade-site-n539b73lz-ellen-s.vercel.app/?_vercel_share=9RdJnehAsAAqP4SamU2n1XsWfG9ZVWV0
+  EXPECTED_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  NEXT_PUBLIC_SUPABASE_URL: https://jnpoxvalyjtdghnperyu.supabase.co
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  OUTPUT_DIR: pr552-authenticated-preview-mfa-db
+
+jobs:
+  authenticated-preview-mfa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      PR552_QA_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out the one-use QA controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove immutable candidate and controller-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          git merge-base --is-ancestor "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --check "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --name-only "$CANDIDATE_SHA" "$GITHUB_SHA" | sort > controller-files.txt
+          cat > expected-controller-files.txt <<'EOF'
+          .github/scripts/pr552-authenticated-preview-mfa-cleanup.sql
+          .github/scripts/pr552-authenticated-preview-mfa-db.mjs
+          .github/scripts/pr552-authenticated-preview-mfa-fixture.sql
+          .github/workflows/pr552-authenticated-preview-mfa-db-qa.yml
+          EOF
+          diff -u expected-controller-files.txt controller-files.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies, Chromium, and PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Validate exact production database target and test password
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${PR552_QA_PASSWORD:-}"
+          test "${#PR552_QA_PASSWORD}" -ge 14
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ['PROD_SUPABASE_DB_URL'])
+          expected_ref = os.environ['EXPECTED_SUPABASE_REF']
+          query = parse_qs(parsed.query)
+          valid = (
+              parsed.scheme in {'postgres', 'postgresql'}
+              and bool(parsed.password)
+              and parsed.path == '/postgres'
+              and (
+                  expected_ref in (parsed.username or '')
+                  or expected_ref in (parsed.hostname or '')
+                  or query.get('project', [''])[0] == expected_ref
+              )
+          )
+          if not valid:
+              raise SystemExit('Refusing a database URL outside the exact Moral Trade production project.')
+          PY
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --tuples-only \
+              --no-align \
+              --set ON_ERROR_STOP=1 \
+              --command "select to_regclass('auth.users') is not null and to_regclass('auth.mfa_factors') is not null;" \
+              | grep -Fxq 't'
+
+      - name: Verify the exact READY Preview deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
+            > exact-deployment.json
+          jq -e \
+            --arg deployment_id "$DEPLOYMENT_ID" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg candidate_sha "$CANDIDATE_SHA" \
+            --arg expected_url "${PREVIEW_ORIGIN#https://}" '
+              ((.uid // .id) == $deployment_id)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // null) == null)
+              and ((.aliasError // null) == null)
+              and (.url == $expected_url)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $candidate_sha)
+              and (.meta.moralTradeCandidateSha == $candidate_sha)
+              and (.meta.releaseReason == "pr552-dashboard-account-security-preview")
+            ' exact-deployment.json >/dev/null
+
+      - name: Generate unique synthetic identity and factor scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          readarray -t generated < <(python3 - <<'PY'
+          import os
+          import uuid
+
+          run_id = os.environ['GITHUB_RUN_ID']
+          attempt = os.environ['GITHUB_RUN_ATTEMPT']
+          user_id = str(uuid.uuid4())
+          print(user_id)
+          print(f'pr552-mfa-{run_id}-{attempt}@qa.moraltrade.invalid')
+          print(f'PR552 exact Preview {run_id}.{attempt}')
+          print(f'{run_id}.{attempt}')
+          PY
+          )
+          printf 'PR552_QA_USER_ID=%s\n' "${generated[0]}" >> "$GITHUB_ENV"
+          printf 'PR552_QA_EMAIL=%s\n' "${generated[1]}" >> "$GITHUB_ENV"
+          printf 'PR552_QA_FACTOR_NAME=%s\n' "${generated[2]}" >> "$GITHUB_ENV"
+          printf 'PR552_QA_RUN_ID=%s\n' "${generated[3]}" >> "$GITHUB_ENV"
+          printf 'PR552_OUTPUT_DIR=%s\n' "$OUTPUT_DIR" >> "$GITHUB_ENV"
+          printf 'PR552_STATE_PATH=%s/state.json\n' "$OUTPUT_DIR" >> "$GITHUB_ENV"
+
+      - name: Create the isolated synthetic production Auth fixture
+        id: fixture
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$OUTPUT_DIR"
+          set +e
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file .github/scripts/pr552-authenticated-preview-mfa-fixture.sql \
+              2>&1 | tee "$OUTPUT_DIR/fixture.log"
+          exit_code=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$exit_code" > "$OUTPUT_DIR/fixture-exit-code.txt"
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Run authenticated desktop and mobile MFA lifecycle
+        id: lifecycle
+        if: steps.fixture.outputs.exit_code == '0'
+        shell: bash
+        run: |
+          set -uo pipefail
+          export PR552_PREVIEW_ORIGIN="$PREVIEW_ORIGIN"
+          export PR552_PREVIEW_SHARE_URL="$PREVIEW_SHARE_URL"
+          export PR552_EXPECTED_SHA="$CANDIDATE_SHA"
+          export PR552_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID"
+          export PR552_EXPECTED_SUPABASE_REF="$EXPECTED_SUPABASE_REF"
+
+          set +e
+          node .github/scripts/pr552-authenticated-preview-mfa-db.mjs \
+            > >(tee "$OUTPUT_DIR/test.log") \
+            2> >(tee "$OUTPUT_DIR/test.stderr.log" >&2)
+          exit_code=$?
+          set -e
+          printf '%s\n' "$exit_code" > "$OUTPUT_DIR/test-exit-code.txt"
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Clean exactly the run-created factor and synthetic user
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          factor_id=''
+          if [[ -s "$OUTPUT_DIR/state.json" ]]; then
+            factor_id="$(jq -r '.factorId // ""' "$OUTPUT_DIR/state.json")"
+          fi
+          export PR552_QA_FACTOR_ID="$factor_id"
+
+          set +e
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --quiet \
+              --tuples-only \
+              --no-align \
+              --set ON_ERROR_STOP=1 \
+              --file .github/scripts/pr552-authenticated-preview-mfa-cleanup.sql \
+              > >(tee "$OUTPUT_DIR/cleanup.json") \
+              2> >(tee "$OUTPUT_DIR/cleanup.stderr.log" >&2)
+          exit_code=$?
+          set -e
+          printf '%s\n' "$exit_code" > "$OUTPUT_DIR/cleanup-exit-code.txt"
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Independently prove zero synthetic residue
+        id: residue
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require \
+            psql "$PROD_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --quiet \
+              --tuples-only \
+              --no-align \
+              --set ON_ERROR_STOP=1 \
+              --command "
+                select jsonb_build_object(
+                  'authUsers', (select count(*) from auth.users where id = '${PR552_QA_USER_ID}'::uuid or lower(email) = lower('${PR552_QA_EMAIL}')),
+                  'identities', (select count(*) from auth.identities where user_id = '${PR552_QA_USER_ID}'::uuid),
+                  'factors', (select count(*) from auth.mfa_factors where user_id = '${PR552_QA_USER_ID}'::uuid),
+                  'sessions', (select count(*) from auth.sessions where user_id = '${PR552_QA_USER_ID}'::uuid),
+                  'refreshTokens', (select count(*) from auth.refresh_tokens where user_id = '${PR552_QA_USER_ID}'),
+                  'profiles', (select count(*) from public.profiles where id = '${PR552_QA_USER_ID}'::uuid)
+                );
+              " \
+              > "$OUTPUT_DIR/residue.json"
+          query_code=$?
+          residue_code=0
+          if [[ "$query_code" -ne 0 ]]; then
+            residue_code=$query_code
+          elif ! jq -e '
+            .authUsers == 0
+            and .identities == 0
+            and .factors == 0
+            and .sessions == 0
+            and .refreshTokens == 0
+            and .profiles == 0
+          ' "$OUTPUT_DIR/residue.json" >/dev/null; then
+            residue_code=92
+          fi
+          printf '%s\n' "$residue_code" > "$OUTPUT_DIR/residue-exit-code.txt"
+          echo "exit_code=$residue_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Verify fail-closed lifecycle, exact cleanup, and safe evidence
+        id: evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const outputDir = process.env.OUTPUT_DIR;
+          const readJson = (name) => {
+            const file = path.join(outputDir, name);
+            if (!fs.existsSync(file)) throw new Error(`Missing ${name}.`);
+            return JSON.parse(fs.readFileSync(file, 'utf8'));
+          };
+          const readExit = (name) => {
+            const file = path.join(outputDir, name);
+            if (!fs.existsSync(file)) return 255;
+            return Number.parseInt(fs.readFileSync(file, 'utf8').trim(), 10);
+          };
+          const assert = (condition, message) => {
+            if (!condition) throw new Error(message);
+          };
+          const emptyDiagnostics = (diagnostics) =>
+            diagnostics &&
+            diagnostics.consoleErrors.length === 0 &&
+            diagnostics.pageErrors.length === 0 &&
+            diagnostics.requestFailures.length === 0 &&
+            diagnostics.httpErrors.length === 0;
+
+          assert(readExit('fixture-exit-code.txt') === 0, 'Synthetic fixture creation failed.');
+          assert(readExit('test-exit-code.txt') === 0, 'Authenticated browser lifecycle failed.');
+          assert(readExit('cleanup-exit-code.txt') === 0, 'Exact cleanup failed.');
+          assert(readExit('residue-exit-code.txt') === 0, 'Zero-residue proof failed.');
+
+          const state = readJson('state.json');
+          const result = readJson('result.json');
+          const cleanup = readJson('cleanup.json');
+          const residue = readJson('residue.json');
+
+          assert(state.candidateSha === process.env.CANDIDATE_SHA, 'Candidate SHA mismatch.');
+          assert(state.deploymentId === process.env.DEPLOYMENT_ID, 'Deployment ID mismatch.');
+          assert(state.supabaseRef === process.env.EXPECTED_SUPABASE_REF, 'Supabase ref mismatch.');
+          assert(state.userId === process.env.PR552_QA_USER_ID, 'Synthetic user ID mismatch.');
+          assert(Array.isArray(state.beforeFactorIds) && state.beforeFactorIds.length === 0, 'Synthetic user did not start with zero factors.');
+          assert(typeof state.factorId === 'string' && state.factorId.length > 20, 'Created factor ID missing.');
+          assert(state.factorRemovedByUi === true, 'The exact factor was not removed through the Account security UI.');
+
+          assert(result.testPassed === true, 'Authenticated lifecycle did not pass.');
+          assert(result.desktop?.verifiedFactors === 1, 'Desktop did not show one verified factor.');
+          assert(result.desktop?.sessionLevel === 'aal2', 'Desktop did not reach AAL2.');
+          assert(result.desktop?.horizontalOverflow <= 1, 'Desktop horizontal overflow exceeded one pixel.');
+          assert(emptyDiagnostics(result.desktop?.diagnostics), 'Desktop diagnostics were not empty.');
+          assert(result.mobile?.verifiedFactorsBeforeCleanup === 1, 'Mobile did not show the verified factor.');
+          assert(result.mobile?.sessionLevelBeforeCleanup === 'aal2', 'Mobile did not reach AAL2.');
+          assert(result.mobile?.verifiedFactorsAfterCleanup === 0, 'Mobile did not show zero factors after exact cleanup.');
+          assert(result.mobile?.horizontalOverflow <= 1, 'Mobile horizontal overflow exceeded one pixel.');
+          assert(emptyDiagnostics(result.mobile?.diagnostics), 'Mobile diagnostics were not empty.');
+
+          const lifecycle = result.factorLifecycle;
+          assert(lifecycle?.exactSingleNewFactor === true, 'Exactly-one-new-factor proof failed.');
+          assert(lifecycle.createdFactorId === state.factorId, 'Created factor ID mismatch.');
+          assert(lifecycle.beforeFactorIds.length === 0, 'Factor baseline was not empty.');
+          assert(lifecycle.afterEnrollmentIds.length === 1 && lifecycle.afterEnrollmentIds[0] === state.factorId, 'Enrollment factor set mismatch.');
+          assert(lifecycle.afterVerificationIds.length === 1 && lifecycle.afterVerificationIds[0] === state.factorId, 'Verification factor set mismatch.');
+          assert(lifecycle.verifiedStatus === 'verified', 'The new factor was not verified.');
+          assert(lifecycle.exactFactorRemovedByUi === true, 'The exact new factor was not removed by the UI.');
+          assert(lifecycle.baselineRestoredByUi === true && lifecycle.afterUiCleanupIds.length === 0, 'UI cleanup did not restore the factor baseline.');
+
+          assert(cleanup.cleanupPassed === true, 'Database cleanup proof was not true.');
+          assert(cleanup.factorRowsRemaining === 0, 'Factor rows remained after cleanup.');
+          assert(cleanup.authRowsRemaining === 0, 'Auth user remained after cleanup.');
+          assert(cleanup.identityRowsRemaining === 0, 'Auth identity remained after cleanup.');
+          assert(cleanup.profileRowsRemaining === 0, 'Public profile remained after cleanup.');
+          assert(cleanup.sessionRowsRemaining === 0, 'Auth session remained after cleanup.');
+          assert(cleanup.refreshTokenRowsRemaining === 0, 'Refresh token remained after cleanup.');
+          assert(Object.values(residue).every((value) => value === 0), 'Independent residue proof was nonzero.');
+
+          const summary = {
+            schemaVersion: 1,
+            candidateSha: result.candidateSha,
+            deploymentId: result.deploymentId,
+            supabaseRef: result.supabaseRef,
+            desktop: {
+              viewport: result.desktop.viewport,
+              sessionLevel: result.desktop.sessionLevel,
+              verifiedFactors: result.desktop.verifiedFactors,
+              horizontalOverflow: result.desktop.horizontalOverflow,
+              diagnosticsEmpty: true,
+            },
+            mobile: {
+              viewport: result.mobile.viewport,
+              sessionLevel: result.mobile.sessionLevelBeforeCleanup,
+              verifiedFactorsBeforeCleanup: result.mobile.verifiedFactorsBeforeCleanup,
+              verifiedFactorsAfterCleanup: result.mobile.verifiedFactorsAfterCleanup,
+              horizontalOverflow: result.mobile.horizontalOverflow,
+              diagnosticsEmpty: true,
+            },
+            factorLifecycle: {
+              baselineFactorCount: lifecycle.beforeFactorIds.length,
+              createdFactorCount: lifecycle.afterEnrollmentIds.length,
+              verifiedStatus: lifecycle.verifiedStatus,
+              exactSingleNewFactor: lifecycle.exactSingleNewFactor,
+              exactFactorRemovedByUi: lifecycle.exactFactorRemovedByUi,
+              baselineRestoredByUi: lifecycle.baselineRestoredByUi,
+            },
+            cleanup: {
+              exactFactorOnly: true,
+              databaseCleanupPassed: cleanup.cleanupPassed,
+              zeroResidue: true,
+            },
+            completedAt: result.completedAt,
+          };
+          fs.writeFileSync(path.join(outputDir, 'summary.json'), `${JSON.stringify(summary, null, 2)}\n`);
+          NODE
+          evidence_code=$?
+
+          sensitive_matches="$(grep -RIlE \
+            --include='*.json' \
+            --include='*.log' \
+            --include='*.txt' \
+            'otpauth://|"secret"[[:space:]]*:|"access_token"[[:space:]]*:|"refresh_token"[[:space:]]*:|sb_secret_|PR552_QA_PASSWORD' \
+            "$OUTPUT_DIR" 2>/dev/null || true)"
+          if [[ -n "$sensitive_matches" ]]; then
+            printf 'Credential-like material detected in evidence files: %s\n' "$sensitive_matches" >&2
+            evidence_code=91
+          fi
+
+          printf '%s\n' "$evidence_code" > "$OUTPUT_DIR/evidence-exit-code.txt"
+          echo "exit_code=$evidence_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload authenticated exact-Preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-authenticated-preview-mfa-db-${{ github.run_id }}
+          path: |
+            exact-deployment.json
+            controller-files.txt
+            expected-controller-files.txt
+            pr552-authenticated-preview-mfa-db/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Preserve the fail-closed conclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.fixture.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.lifecycle.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.cleanup.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.residue.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.evidence.outputs.exit_code || '255' }}" = '0'
