@@ -23,14 +23,14 @@ jobs:
       FEATURE_BASE: eed67390dc79e5c389e160856ff602837710d0ea
       FEATURE_HEAD: c7cd82bd78608435155a4d047eda883e693e55cd
       TARGET_BRANCH: integration/direct-donation-upgrade-current-main-20260807
-      EXPECTED_PARENT: 959f40ef8d9c77dcf24c36d8abe70a80255bfd8d
+      EXPECTED_PARENT: c7656f149dc7bb4268c47269d7ea07a7b578f90f
     steps:
       - name: Check out exact controller head
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Apply the exact 31-file feature delta to current main
+      - name: Apply the exact non-workflow feature delta
         shell: bash
         run: |
           set -euo pipefail
@@ -41,9 +41,6 @@ jobs:
 
           cat > "$RUNNER_TEMP/paths.txt" <<'PATHS'
           .env.example
-          .github/workflows/direct-donation-upgrade-gates.yml
-          .github/workflows/direct-donation-upgrade-qa.yml
-          .github/workflows/direct-donation-upgrade-rendered-qa.yml
           docs/direct-verified-donation-upgrade.md
           scripts/vercel-project-config.mjs
           scripts/vercel-project-config.test.mjs
@@ -78,31 +75,14 @@ jobs:
           git diff --binary "$FEATURE_BASE" "$FEATURE_HEAD" -- "${paths[@]}" > "$RUNNER_TEMP/direct-upgrade.patch"
           test -s "$RUNNER_TEMP/direct-upgrade.patch"
           git apply --3way --index "$RUNNER_TEMP/direct-upgrade.patch"
-
-          python - <<'PY'
-          from pathlib import Path
-          old = "      - feature/direct-verified-donation-upgrade-20260731\n"
-          new = "      - integration/direct-donation-upgrade-current-main-20260807\n"
-          path = Path('.github/workflows/direct-donation-upgrade-gates.yml')
-          text = path.read_text(encoding='utf-8')
-          if text.count(old) != 1:
-              raise SystemExit(f'expected one old branch trigger, found {text.count(old)}')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-          PY
-
-          rm -f \
-            .github/workflows/direct-donation-upgrade-current-main-source-export-20260807.yml \
-            .github/workflows/direct-donation-upgrade-current-main-materialize-20260807.yml
-          git add -A
           git diff --cached --check
 
-          git diff --cached --name-only "$APP_BASE" | sort > "$RUNNER_TEMP/actual.txt"
+          git diff --cached --name-only | sort > "$RUNNER_TEMP/actual.txt"
           sort "$RUNNER_TEMP/paths.txt" > "$RUNNER_TEMP/expected.txt"
           diff -u "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/actual.txt"
 
           test "$(grep -c '^DIRECT_DONATION_UPGRADES_ENABLED=false$' .env.example)" = 1
           grep -Fq 'Moral Trade never receives, holds, combines, redirects, or re-donates participant funds.' docs/direct-verified-donation-upgrade.md
-          grep -Fq 'integration/direct-donation-upgrade-current-main-20260807' .github/workflows/direct-donation-upgrade-gates.yml
           ! grep -R -E '@/lib/stripe|stripe\.checkout|payment_intent|setup_intent' \
             src/lib/direct-donation-upgrade.ts \
             src/lib/direct-donation-upgrade-data.ts \
