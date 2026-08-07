@@ -15,6 +15,7 @@ const sharedCrons = Object.freeze([
   { path: "/api/jobs/trade-reminders", schedule: "0 11 * * *" },
   { path: "/api/jobs/background-networking", schedule: "0 * * * *" },
   { path: "/api/jobs/conditional-redirects", schedule: "15 * * * *" },
+  { path: "/api/jobs/donation-upgrades", schedule: "*/15 * * * *" },
 ]);
 
 const recommendationTrainingCron = Object.freeze({

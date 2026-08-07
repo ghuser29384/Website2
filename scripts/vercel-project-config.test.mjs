@@ -42,3 +42,15 @@ test("the duplicate website2 project receives no A1 training cron", () => {
 test("an explicitly unidentified local configuration retains the canonical schedule", () => {
   assert.equal(trainingCrons(null).length, 1);
 });
+
+
+test("every project runs exactly one direct Donation Upgrade lifecycle cron", () => {
+  for (const projectId of [CANONICAL_MORAL_TRADE_PROJECT_ID, DUPLICATE_WEBSITE2_PROJECT_ID, null]) {
+    assert.deepEqual(
+      buildVercelProjectConfig({ projectId }).crons.filter(
+        (cron) => cron.path === "/api/jobs/donation-upgrades",
+      ),
+      [{ path: "/api/jobs/donation-upgrades", schedule: "*/15 * * * *" }],
+    );
+  }
+});

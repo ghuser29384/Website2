@@ -41,6 +41,12 @@ test("the accepted Create interface is mounted with Donation Upgrade and compact
   assert.match(html, /Donation Upgrade/);
   assert.doesNotMatch(html, />Conditional donation</);
   assert.match(html, /data-fund-mode="conditional"/);
+  assert.match(html, /Commit inside Create/);
+  assert.match(html, /each participant donates directly after the outcome is fixed\./);
+  assert.doesNotMatch(
+    html,
+    /Authorize a fallback donation|Authorize inside Create|future-charge terms|before any payment method is saved/,
+  );
   assert.match(
     html,
     /window\.top\.location\.assign\("\/trades\/new\?structure=conditional-donation"\)/,
