@@ -1,4 +1,4 @@
-name: Public route resolved Home main diagnostic 285af803
+name: Public route Home main CSS diagnostic 285af803
 
 on:
   pull_request:
@@ -17,13 +17,13 @@ env:
   BASE_SHA: 87b093751a4c2de909555abdb7f181061bb36390
   CANDIDATE_SHA: 285af8035c4f8ea2b606c7733c70abd2427ecae0
   PRODUCT_PR: "542"
-  EVIDENCE_DIR: public-route-resolved-home-main-diagnostic-285af803
+  EVIDENCE_DIR: public-route-home-main-css-diagnostic-285af803
   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
   SITE_URL: http://127.0.0.1:3210
   PLAYWRIGHT_HTML_OPEN: never
 
 jobs:
-  diagnose-resolved-home-main:
+  diagnose-home-main-css:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
@@ -68,15 +68,15 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Write resolved Home landmark diagnostic
+      - name: Write Home main CSS diagnostic
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE_DIR"
-          cat > tests/home-main-diagnostic.spec.ts <<'TS'
+          cat > tests/home-main-css-diagnostic.spec.ts <<'TS'
           import { expect, test } from "@playwright/test";
 
-          test("records every main after the live Home document resolves", async ({ page }, testInfo) => {
+          test("records CSS selectors affecting the outer and nested Home mains", async ({ page }) => {
             await page.goto("/", { waitUntil: "domcontentloaded" });
             await expect(page.locator("#mt-live-document-heading")).toHaveCount(1, {
               timeout: 30_000,
@@ -86,86 +86,115 @@ jobs:
             });
             await page.waitForTimeout(1_000);
 
-            const diagnostics = await page.locator("main").evaluateAll((elements) =>
-              elements.map((element, index) => {
+            const diagnostics = await page.evaluate(() => {
+              const elements = [...document.querySelectorAll("main")];
+
+              function collectRulesFor(element: Element) {
+                const matches: Array<{
+                  selector: string;
+                  declarations: string;
+                  context: string[];
+                  source: string;
+                }> = [];
+
+                function visitRules(
+                  rules: CSSRuleList,
+                  context: string[],
+                  source: string,
+                ) {
+                  for (const rule of [...rules]) {
+                    if (rule instanceof CSSStyleRule) {
+                      try {
+                        if (element.matches(rule.selectorText)) {
+                          matches.push({
+                            selector: rule.selectorText,
+                            declarations: rule.style.cssText,
+                            context,
+                            source,
+                          });
+                        }
+                      } catch {
+                        // Ignore selectors unsupported by Element.matches().
+                      }
+                      continue;
+                    }
+
+                    if (
+                      rule instanceof CSSMediaRule ||
+                      rule instanceof CSSSupportsRule ||
+                      rule instanceof CSSLayerBlockRule
+                    ) {
+                      const nextContext = [...context, rule.cssText.slice(0, rule.cssText.indexOf("{"))];
+                      visitRules(rule.cssRules, nextContext, source);
+                    }
+                  }
+                }
+
+                for (const sheet of [...document.styleSheets]) {
+                  try {
+                    visitRules(sheet.cssRules, [], sheet.href ?? "inline");
+                  } catch {
+                    matches.push({
+                      selector: "<inaccessible stylesheet>",
+                      declarations: "",
+                      context: [],
+                      source: sheet.href ?? "inline",
+                    });
+                  }
+                }
+
+                return matches;
+              }
+
+              return elements.map((element, index) => {
                 const html = element as HTMLElement;
                 const style = getComputedStyle(html);
-                const rect = html.getBoundingClientRect();
-                const heading = element.querySelector("h1, h2, h3");
-                const hiddenAncestor = element.closest("[hidden], [aria-hidden='true'], [inert]");
                 return {
                   index,
                   id: html.id,
                   className: html.className,
-                  role: html.getAttribute("role"),
-                  ariaLabel: html.getAttribute("aria-label"),
-                  parentTag: html.parentElement?.tagName ?? null,
-                  parentId: html.parentElement?.id ?? null,
                   parentClassName: html.parentElement?.className ?? null,
-                  heading: heading?.textContent?.replace(/\s+/g, " ").trim().slice(0, 240) ?? null,
-                  text: html.textContent?.replace(/\s+/g, " ").trim().slice(0, 700) ?? "",
-                  display: style.display,
-                  visibility: style.visibility,
-                  opacity: style.opacity,
-                  position: style.position,
-                  contentVisibility: style.contentVisibility,
-                  width: rect.width,
-                  height: rect.height,
-                  top: rect.top,
-                  left: rect.left,
-                  hiddenAncestor: hiddenAncestor
-                    ? `${hiddenAncestor.tagName.toLowerCase()}#${(hiddenAncestor as HTMLElement).id}.${
-                        (hiddenAncestor as HTMLElement).className
-                      }`
-                    : null,
-                  dataAttributes: Object.fromEntries(
-                    [...html.attributes]
-                      .filter((attribute) => attribute.name.startsWith("data-"))
-                      .map((attribute) => [attribute.name, attribute.value]),
-                  ),
+                  computed: {
+                    display: style.display,
+                    position: style.position,
+                    boxSizing: style.boxSizing,
+                    width: style.width,
+                    minWidth: style.minWidth,
+                    maxWidth: style.maxWidth,
+                    height: style.height,
+                    minHeight: style.minHeight,
+                    padding: style.padding,
+                    margin: style.margin,
+                    gridArea: style.gridArea,
+                    gridColumn: style.gridColumn,
+                    gridRow: style.gridRow,
+                    alignSelf: style.alignSelf,
+                    justifySelf: style.justifySelf,
+                    overflow: style.overflow,
+                  },
+                  matchingRules: collectRulesFor(element),
                 };
-              }),
-            );
-            const controls = await page
-              .locator('[data-mt-feed-link], [data-mt-discover-link], [data-mt-evidence-link]')
-              .evaluateAll((elements) =>
-                elements.map((element, index) => ({
-                  index,
-                  tag: element.tagName,
-                  text: element.textContent?.replace(/\s+/g, " ").trim() ?? "",
-                  href: element.getAttribute("href"),
-                  ariaLabel: element.getAttribute("aria-label"),
-                  display: getComputedStyle(element).display,
-                  width: (element as HTMLElement).getBoundingClientRect().width,
-                  height: (element as HTMLElement).getBoundingClientRect().height,
-                  attributes: Object.fromEntries(
-                    [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
-                  ),
-                })),
-              );
+              });
+            });
 
-            console.log(`HOME_MAIN_DIAGNOSTICS=${JSON.stringify(diagnostics, null, 2)}`);
-            console.log(`HOME_NAVIGATION_DIAGNOSTICS=${JSON.stringify(controls, null, 2)}`);
-            await page.screenshot({ path: testInfo.outputPath("resolved-home-full.png"), fullPage: true });
-            expect(diagnostics.length).toBeGreaterThan(0);
+            console.log(`HOME_MAIN_CSS_DIAGNOSTICS=${JSON.stringify(diagnostics, null, 2)}`);
+            expect(diagnostics).toHaveLength(2);
           });
           TS
 
-      - name: Run resolved Home landmark diagnostic
+      - name: Run Home main CSS diagnostic
         shell: bash
         run: |
           set -o pipefail
           rm -rf .next
-          npx playwright test tests/home-main-diagnostic.spec.ts --workers=1 --reporter=line \
-            2>&1 | tee "$EVIDENCE_DIR/resolved-home-main-diagnostic.log"
+          npx playwright test tests/home-main-css-diagnostic.spec.ts --workers=1 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/home-main-css-diagnostic.log"
 
       - name: Upload diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: public-route-resolved-home-main-diagnostic-285af803
-          path: |
-            public-route-resolved-home-main-diagnostic-285af803
-            test-results
+          name: public-route-home-main-css-diagnostic-285af803
+          path: public-route-home-main-css-diagnostic-285af803
           if-no-files-found: error
           retention-days: 14
