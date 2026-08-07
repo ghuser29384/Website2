@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
-      EXPECTED_HEAD: 478063538ff18ae7d56e0bdf3c451b58fae30ba0
+      EXPECTED_HEAD: 3284fffd54edceaa4943e68e82aa860b9f272a8c
       FEATURE_BRANCH: feat/institutional-trade-system
       GH_TOKEN: ${{ github.token }}
     steps:
