@@ -222,3 +222,8 @@ test("five-participant QA names all required negative cases and verifies zero sy
     "zero synthetic",
   ]) assert.match(qaScript, new RegExp(phrase, "i"), phrase);
 });
+
+test("authenticated QA waits for the stable AAL2 session state after MFA verification", () => {
+  assert.match(qaScript, /panel\.getByText\("AAL: aal2", \{ exact: true \}\)/);
+  assert.doesNotMatch(qaScript, /getByText\("MFA verified for this session\."\)\.waitFor/);
+});

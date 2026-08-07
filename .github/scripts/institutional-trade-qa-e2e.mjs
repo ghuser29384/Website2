@@ -1242,7 +1242,7 @@ async function ensureMfa(page, user) {
   await verifyForm.locator('select[name="factor_id"]').selectOption(user.mfa.factorId);
   await verifyForm.locator('input[name="code"]').fill(await freshTotp(user.mfa.secret));
   await verifyForm.getByRole("button", { name: "Verify session" }).click();
-  await panel.getByText("MFA verified for this session.").waitFor({ state: "visible", timeout: 30_000 });
+  await panel.getByText("AAL: aal2", { exact: true }).waitFor({ state: "visible", timeout: 30_000 });
 }
 
 async function screenshot(page, name) {
