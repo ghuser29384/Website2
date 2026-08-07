@@ -1,0 +1,391 @@
+name: PR 552 authenticated exact Preview MFA QA
+
+on:
+  push:
+    branches:
+      - ops/pr552-authenticated-preview-mfa-qa-20260807
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr552-authenticated-preview-mfa-qa
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+  DEPLOYMENT_ID: dpl_E4kcbFVK7QpYvdygM8m9sc841DpC
+  PREVIEW_ORIGIN: https://moraltrade-site-n539b73lz-ellen-s.vercel.app
+  PREVIEW_SHARE_URL: https://moraltrade-site-n539b73lz-ellen-s.vercel.app/?_vercel_share=9RdJnehAsAAqP4SamU2n1XsWfG9ZVWV0
+  EXPECTED_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  OUTPUT_DIR: pr552-authenticated-preview-mfa
+
+jobs:
+  authenticated-preview-mfa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out the one-use QA controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove the controller is scoped to the immutable candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          git merge-base --is-ancestor "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --check "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --name-only "$CANDIDATE_SHA" "$GITHUB_SHA" | sort > controller-files.txt
+          cat > expected-controller-files.txt <<'EOF'
+          .github/scripts/pr552-authenticated-preview-mfa.mjs
+          .github/workflows/pr552-authenticated-preview-mfa-qa.yml
+          EOF
+          diff -u expected-controller-files.txt controller-files.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Normalize the one-use QA harness selectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/scripts/pr552-authenticated-preview-mfa.mjs')
+          source = path.read_text(encoding='utf-8')
+
+          old_isolation = '''  await expect(page.locator("#background-networking > *").filter({ hasNot: panel })).toHaveCount(0);'''
+          new_isolation = '''  const legacyWorkspace = page.locator("#background-networking");
+            const unrelatedVisibleChildren = await legacyWorkspace
+              .locator(":scope > :not(.data-grid), :scope > .data-grid > :not(#account-security)")
+              .evaluateAll((elements) =>
+                elements.filter((element) => getComputedStyle(element).display !== "none").length,
+              );
+            if (unrelatedVisibleChildren !== 0) {
+              throw new Error(`${label} exposed ${unrelatedVisibleChildren} unrelated legacy element(s).`);
+            }'''
+
+          old_summary = '''function summaryValue(panel, label) {
+            return panel.locator("dl.values-summary > div").filter({
+              has: panel.locator("dt", { hasText: label }),
+            }).locator("dd");
+          }'''
+          new_summary = '''function summaryValue(panel, label) {
+            return panel
+              .locator("dl.values-summary > div")
+              .filter({ hasText: label })
+              .locator("dd");
+          }'''
+
+          if old_isolation not in source:
+              raise SystemExit('Expected isolation assertion was not found.')
+          if old_summary not in source:
+              raise SystemExit('Expected summary locator was not found.')
+
+          source = source.replace(old_isolation, new_isolation, 1)
+          source = source.replace(old_summary, new_summary, 1)
+          path.write_text(source, encoding='utf-8')
+          PY
+          node --check .github/scripts/pr552-authenticated-preview-mfa.mjs
+
+      - name: Verify the exact READY Preview and pull its environment without printing secrets
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
+            > exact-deployment.json
+          jq -e \
+            --arg deployment_id "$DEPLOYMENT_ID" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg candidate_sha "$CANDIDATE_SHA" \
+            --arg expected_url "${PREVIEW_ORIGIN#https://}" '
+              ((.uid // .id) == $deployment_id)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // null) == null)
+              and ((.aliasError // null) == null)
+              and (.url == $expected_url)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $candidate_sha)
+              and (.meta.moralTradeCandidateSha == $candidate_sha)
+              and (.meta.releaseReason == "pr552-dashboard-account-security-preview")
+            ' exact-deployment.json >/dev/null
+
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" pull \
+            --yes \
+            --environment=preview \
+            --token="$VERCEL_TOKEN" \
+            > vercel-pull.log
+          test -s .vercel/.env.preview.local
+
+          set -a
+          # shellcheck disable=SC1091
+          source .vercel/.env.preview.local
+          set +a
+          test -n "${NEXT_PUBLIC_SUPABASE_URL:-}"
+          test -n "${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          actual_ref="$(node -e 'console.log(new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname.split(".")[0])')"
+          test "$actual_ref" = "$EXPECTED_SUPABASE_REF"
+
+      - name: Run authenticated desktop and mobile MFA lifecycle test
+        id: lifecycle
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          set -a
+          # shellcheck disable=SC1091
+          source .vercel/.env.preview.local
+          set +a
+          export PR552_PREVIEW_ORIGIN="$PREVIEW_ORIGIN"
+          export PR552_PREVIEW_SHARE_URL="$PREVIEW_SHARE_URL"
+          export PR552_EXPECTED_SHA="$CANDIDATE_SHA"
+          export PR552_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID"
+          export PR552_EXPECTED_SUPABASE_REF="$EXPECTED_SUPABASE_REF"
+          export PR552_OUTPUT_DIR="$OUTPUT_DIR"
+          export PR552_STATE_PATH="$OUTPUT_DIR/state.json"
+
+          set +e
+          node .github/scripts/pr552-authenticated-preview-mfa.mjs \
+            > >(tee "$OUTPUT_DIR/test.log") \
+            2> >(tee "$OUTPUT_DIR/test.stderr.log" >&2)
+          exit_code=$?
+          set -e
+          printf '%s\n' "$exit_code" > "$OUTPUT_DIR/test-exit-code.txt"
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Run independent exact-factor cleanup retry
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          if [[ ! -s .vercel/.env.preview.local ]]; then
+            printf 'Preview environment file is unavailable.\n' \
+              | tee "$OUTPUT_DIR/cleanup-retry.stderr.log" >&2
+            printf '90\n' > "$OUTPUT_DIR/cleanup-retry-exit-code.txt"
+            echo 'exit_code=90' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          set -a
+          # shellcheck disable=SC1091
+          source .vercel/.env.preview.local
+          set +a
+          export PR552_PREVIEW_ORIGIN="$PREVIEW_ORIGIN"
+          export PR552_EXPECTED_SHA="$CANDIDATE_SHA"
+          export PR552_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID"
+          export PR552_EXPECTED_SUPABASE_REF="$EXPECTED_SUPABASE_REF"
+          export PR552_OUTPUT_DIR="$OUTPUT_DIR"
+          export PR552_STATE_PATH="$OUTPUT_DIR/state.json"
+
+          set +e
+          node .github/scripts/pr552-authenticated-preview-mfa.mjs --cleanup-only \
+            > >(tee "$OUTPUT_DIR/cleanup-retry.log") \
+            2> >(tee "$OUTPUT_DIR/cleanup-retry.stderr.log" >&2)
+          exit_code=$?
+          set -e
+          printf '%s\n' "$exit_code" > "$OUTPUT_DIR/cleanup-retry-exit-code.txt"
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Verify fail-closed evidence and absence of credential material
+        id: evidence
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const outputDir = process.env.OUTPUT_DIR;
+          const readJson = (name) => {
+            const file = path.join(outputDir, name);
+            if (!fs.existsSync(file)) throw new Error(`Missing ${name}.`);
+            return JSON.parse(fs.readFileSync(file, 'utf8'));
+          };
+          const readExit = (name) => {
+            const file = path.join(outputDir, name);
+            if (!fs.existsSync(file)) return 255;
+            return Number.parseInt(fs.readFileSync(file, 'utf8').trim(), 10);
+          };
+          const assert = (condition, message) => {
+            if (!condition) throw new Error(message);
+          };
+          const emptyDiagnostics = (diagnostics) =>
+            diagnostics &&
+            diagnostics.consoleErrors.length === 0 &&
+            diagnostics.pageErrors.length === 0 &&
+            diagnostics.requestFailures.length === 0 &&
+            diagnostics.httpErrors.length === 0;
+
+          const testExitCode = readExit('test-exit-code.txt');
+          const cleanupRetryExitCode = readExit('cleanup-retry-exit-code.txt');
+          assert(testExitCode === 0, `Lifecycle test exit code was ${testExitCode}.`);
+          assert(cleanupRetryExitCode === 0, `Cleanup retry exit code was ${cleanupRetryExitCode}.`);
+
+          const state = readJson('state.json');
+          const result = readJson('result.json');
+          const cleanup = readJson('cleanup.json');
+          const cleanupRetry = readJson('cleanup-only-result.json');
+
+          assert(state.candidateSha === process.env.CANDIDATE_SHA, 'State candidate SHA mismatch.');
+          assert(state.deploymentId === process.env.DEPLOYMENT_ID, 'State deployment mismatch.');
+          assert(state.supabaseRef === process.env.EXPECTED_SUPABASE_REF, 'State Supabase ref mismatch.');
+          assert(typeof state.userId === 'string' && state.userId.length > 20, 'Temporary user ID missing.');
+          assert(Array.isArray(state.beforeFactorIds) && state.beforeFactorIds.length === 0, 'Fresh user had pre-existing factors.');
+          assert(typeof state.factorId === 'string' && state.factorId.length > 20, 'Created factor ID missing.');
+
+          assert(result.testPassed === true, 'The authenticated lifecycle did not pass.');
+          assert(result.cleanupPassed === true, 'The in-process cleanup did not pass.');
+          assert(result.candidateSha === process.env.CANDIDATE_SHA, 'Result candidate SHA mismatch.');
+          assert(result.deploymentId === process.env.DEPLOYMENT_ID, 'Result deployment mismatch.');
+          assert(result.desktop?.verifiedFactors === 1, 'Desktop did not show one verified factor.');
+          assert(result.desktop?.sessionLevel === 'aal2', 'Desktop did not reach AAL2.');
+          assert(result.desktop?.horizontalOverflow === 0, 'Desktop horizontal overflow was nonzero.');
+          assert(emptyDiagnostics(result.desktop?.diagnostics), 'Desktop browser diagnostics were not empty.');
+          assert(result.mobile?.verifiedFactors === 1, 'Mobile did not show one verified factor.');
+          assert(result.mobile?.sessionLevel === 'aal2', 'Mobile did not reach AAL2.');
+          assert(result.mobile?.horizontalOverflow <= 1, 'Mobile horizontal overflow exceeded one pixel.');
+          assert(emptyDiagnostics(result.mobile?.diagnostics), 'Mobile browser diagnostics were not empty.');
+
+          const lifecycle = result.factorLifecycle;
+          assert(lifecycle?.exactSingleNewFactor === true, 'Exactly-one-new-factor proof failed.');
+          assert(lifecycle?.createdFactorId === state.factorId, 'Lifecycle factor ID mismatch.');
+          assert(lifecycle?.beforeFactorIds.length === 0, 'Lifecycle baseline factor set was not empty.');
+          assert(lifecycle?.afterEnrollmentIds.length === 1, 'Enrollment did not yield exactly one factor.');
+          assert(lifecycle?.afterEnrollmentIds[0] === state.factorId, 'Enrollment factor ID mismatch.');
+          assert(lifecycle?.afterVerificationIds.length === 1, 'Verification changed the factor set.');
+          assert(lifecycle?.afterVerificationIds[0] === state.factorId, 'Verified factor ID mismatch.');
+          assert(lifecycle?.verifiedStatus === 'verified', 'Created factor was not verified.');
+
+          assert(cleanup.exactFactorOnly === true, 'Cleanup was not exact-factor-only.');
+          assert(cleanup.deletedFactorId === state.factorId, 'Cleanup deleted a different factor.');
+          assert(cleanup.beforeFactorIds.length === 0, 'Cleanup baseline factor set was not empty.');
+          assert(cleanup.factorsBeforeCleanup.length === 1, 'Cleanup did not observe exactly one created factor.');
+          assert(cleanup.factorsBeforeCleanup[0] === state.factorId, 'Cleanup observed an unexpected factor ID.');
+          assert(cleanup.factorsAfterCleanup.length === 0, 'Factor set did not return to baseline.');
+          assert(cleanup.userAbsent === true, 'Temporary user was not removed.');
+          assert(cleanupRetry.userAbsent === true, 'Independent cleanup retry did not prove user absence.');
+
+          const summary = {
+            schemaVersion: 1,
+            candidateSha: result.candidateSha,
+            deploymentId: result.deploymentId,
+            supabaseRef: result.supabaseRef,
+            desktop: {
+              viewport: result.desktop.viewport,
+              sessionLevel: result.desktop.sessionLevel,
+              verifiedFactors: result.desktop.verifiedFactors,
+              horizontalOverflow: result.desktop.horizontalOverflow,
+              diagnosticsEmpty: true,
+            },
+            mobile: {
+              viewport: result.mobile.viewport,
+              sessionLevel: result.mobile.sessionLevel,
+              verifiedFactors: result.mobile.verifiedFactors,
+              horizontalOverflow: result.mobile.horizontalOverflow,
+              diagnosticsEmpty: true,
+            },
+            factorLifecycle: {
+              baselineFactorCount: lifecycle.beforeFactorIds.length,
+              createdFactorCount: lifecycle.afterEnrollmentIds.length,
+              verifiedStatus: lifecycle.verifiedStatus,
+              exactSingleNewFactor: lifecycle.exactSingleNewFactor,
+            },
+            cleanup: {
+              exactFactorOnly: cleanup.exactFactorOnly,
+              factorSetReturnedToBaseline: cleanup.factorsAfterCleanup.length === cleanup.beforeFactorIds.length,
+              temporaryUserAbsent: cleanup.userAbsent && cleanupRetry.userAbsent,
+            },
+            completedAt: result.completedAt,
+          };
+          fs.writeFileSync(
+            path.join(outputDir, 'summary.json'),
+            `${JSON.stringify(summary, null, 2)}\n`,
+          );
+          NODE
+          evidence_code=$?
+
+          sensitive_matches="$({
+            grep -RIlE \
+              --include='*.json' \
+              --include='*.log' \
+              --include='*.txt' \
+              'otpauth://|"secret"[[:space:]]*:|"access_token"[[:space:]]*:|"refresh_token"[[:space:]]*:|sb_secret_|SUPABASE_SERVICE_ROLE_KEY' \
+              "$OUTPUT_DIR" || true
+          ; } | tr '\n' ' ')"
+          if [[ -n "$sensitive_matches" ]]; then
+            printf 'Credential-like material detected in evidence files: %s\n' "$sensitive_matches" >&2
+            evidence_code=91
+          fi
+
+          printf '%s\n' "$evidence_code" > "$OUTPUT_DIR/evidence-exit-code.txt"
+          echo "exit_code=$evidence_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload authenticated Preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-authenticated-preview-mfa-${{ github.run_id }}
+          path: |
+            exact-deployment.json
+            controller-files.txt
+            expected-controller-files.txt
+            pr552-authenticated-preview-mfa/state.json
+            pr552-authenticated-preview-mfa/result.json
+            pr552-authenticated-preview-mfa/summary.json
+            pr552-authenticated-preview-mfa/cleanup.json
+            pr552-authenticated-preview-mfa/cleanup-only-result.json
+            pr552-authenticated-preview-mfa/test-exit-code.txt
+            pr552-authenticated-preview-mfa/cleanup-retry-exit-code.txt
+            pr552-authenticated-preview-mfa/evidence-exit-code.txt
+            pr552-authenticated-preview-mfa/test.log
+            pr552-authenticated-preview-mfa/test.stderr.log
+            pr552-authenticated-preview-mfa/cleanup-retry.log
+            pr552-authenticated-preview-mfa/cleanup-retry.stderr.log
+            pr552-authenticated-preview-mfa/desktop-account-security.png
+            pr552-authenticated-preview-mfa/mobile-account-security.png
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Preserve the fail-closed conclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.lifecycle.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.cleanup.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.evidence.outputs.exit_code || '255' }}" = '0'
