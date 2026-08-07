@@ -1,0 +1,55 @@
+name: Fix DAC terminal pledger selectors once
+
+on:
+  push:
+    branches:
+      - fix/mpgf-dac-success-lapse-20260807
+    paths:
+      - .github/workflows/fix-dac-terminal-pledger-selectors-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fix-dac-terminal-pledger-selectors-once
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: fix/mpgf-dac-success-lapse-20260807
+  EXPECTED_PARENT: 86ea39d050e6c83db23d5b5f4ba8f356715af6ab
+  CONTROLLER_PATH: .github/workflows/fix-dac-terminal-pledger-selectors-once.yml
+  REGRESSION_PATH: supabase/tests/mpgf_dac_success_lapse.sql
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact target
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 2
+
+      - name: Guard and disambiguate exact first-pledger selectors
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = "$CONTROLLER_PATH"
+          printf '%s' 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgpwYXRoID0gUGF0aCgic3VwYWJhc2UvdGVzdHMvbXBnZl9kYWNfc3VjY2Vzc19sYXBzZS5zcWwiKQp0ZXh0ID0gcGF0aC5yZWFkX3RleHQoKQpvbGQgPSAiIiIgIHdoZXJlIGNhbXBhaWduX2lkID0gJ2NhbXBhaWduLWFmNjY2NjY2NjY2NjQ2NjY4NjY2NjY2NjY2NjY2NjY2JwogICAgYW5kIHByb2ZpbGVfaWQgPSAnYWMzMzMzMzMtMzMzMy00MzMzLTgzMzMtMzMzMzMzMzMzMzMzJwogICAgYW5kIHBsZWRnZV9pbnRlbnRfaWQgaXMgbm90IG51bGwiIiIKbmV3ID0gIiIiICB3aGVyZSBjYW1wYWlnbl9pZCA9ICdjYW1wYWlnbi1hZjY2NjY2NjY2NjY0NjY2ODY2NjY2NjY2NjY2NjY2NicKICAgIGFuZCBwcm9maWxlX2lkID0gJ2FjMzMzMzMzLTMzMzMtNDMzMy04MzMzLTMzMzMzMzMzMzMzMycKICAgIGFuZCBhbW91bnRfY2VudHMgPSA2MDAwCiAgICBhbmQgcGxlZGdlX2ludGVudF9pZCBpcyBub3QgbnVsbCIiIgpjb3VudCA9IHRleHQuY291bnQob2xkKQppZiBjb3VudCAhPSA0OgogICAgcmFpc2UgU3lzdGVtRXhpdChmIkV4cGVjdGVkIGV4YWN0bHkgZm91ciBhbWJpZ3VvdXMgZmlyc3QtcGxlZGdlciBzZWxlY3RvcnMsIGZvdW5kIHtjb3VudH0iKQpwYXRoLndyaXRlX3RleHQodGV4dC5yZXBsYWNlKG9sZCwgbmV3KSkK' | base64 --decode | python3
+          git diff --check
+          test "$(grep -Fc 'and amount_cents = 6000' "$REGRESSION_PATH")" = "4"
+
+      - name: Commit the repair and remove this controller in the same exact-head commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm "$CONTROLLER_PATH"
+          git add "$REGRESSION_PATH"
+          test "$(git diff --cached --name-only | sort | tr '\n' ' ')" = "$CONTROLLER_PATH $REGRESSION_PATH "
+          git diff --cached --check
+          git commit -m "Disambiguate DAC terminal pledge fixture selectors"
+          git push origin "HEAD:$TARGET_BRANCH"
