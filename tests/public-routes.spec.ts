@@ -43,7 +43,7 @@ const dataDependentPublicRoutes = [
   },
 ] as const;
 
-const protectedRoutes = ["/dashboard", "/cart"] as const;
+const protectedRoutes = ["/dashboard"] as const;
 const standardNavLabels = [
   "Feed",
   "Discover",
@@ -435,3 +435,23 @@ for (const route of protectedRoutes) {
     }
   });
 }
+
+test("/cart redirects to the signed-out saved-offers planner without a commitment", async ({
+  page,
+}) => {
+  await page.context().clearCookies();
+  const response = await page.goto("/cart", { waitUntil: "domcontentloaded" });
+
+  expect(response?.status() ?? 200).toBeLessThan(400);
+  await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/saved-offers");
+  await waitForResolvedPage(page);
+  await expect(page.getByRole("heading", { level: 1, name: "Planner" })).toBeVisible();
+  await expect(page.getByText("Sign in to view your planner.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Plan — private selected items. No commitment created.", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: "Sign in to continue" })).toHaveAttribute(
+    "href",
+    "/login?returnTo=/saved-offers",
+  );
+});
