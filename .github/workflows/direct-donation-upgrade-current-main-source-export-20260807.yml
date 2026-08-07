@@ -18,37 +18,43 @@ concurrency:
 jobs:
   export:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      APP_BASE: 87b093751a4c2de909555abdb7f181061bb36390
+      FEATURE_HEAD: c7cd82bd78608435155a4d047eda883e693e55cd
     steps:
       - name: Check out exact branch head
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Record exact source identity
+      - name: Verify identities and package source snapshots
         shell: bash
         run: |
           set -euo pipefail
-          git rev-parse HEAD | tee exact-head.txt
-          git rev-parse HEAD^{tree} | tee exact-tree.txt
-          git status --short | tee worktree-status.txt
-          test ! -s worktree-status.txt
+          test -z "$(git status --short)"
+          git cat-file -e "$APP_BASE^{commit}"
+          git cat-file -e "$FEATURE_HEAD^{commit}"
+          merge_base="$(git merge-base "$APP_BASE" "$FEATURE_HEAD")"
 
-      - name: Package exact repository source
-        shell: bash
-        run: |
-          set -euo pipefail
-          archive="direct-donation-upgrade-current-main-${GITHUB_SHA}.zip"
-          git archive --format=zip --output="$archive" HEAD
-          sha256sum "$archive" | tee source-sha256.txt
+          out="$RUNNER_TEMP/direct-upgrade-source"
+          mkdir -p "$out"
+          printf '%s\n' "$GITHUB_SHA" > "$out/exporter-head.txt"
+          printf '%s\n' "$APP_BASE" > "$out/app-base.txt"
+          printf '%s\n' "$FEATURE_HEAD" > "$out/feature-head.txt"
+          printf '%s\n' "$merge_base" > "$out/merge-base.txt"
+          git rev-parse "$APP_BASE^{tree}" > "$out/app-base-tree.txt"
+          git rev-parse "$FEATURE_HEAD^{tree}" > "$out/feature-tree.txt"
+          git rev-parse "$merge_base^{tree}" > "$out/merge-base-tree.txt"
 
-      - name: Upload exact source
+          git archive --format=zip --output="$out/current-main-$APP_BASE.zip" "$APP_BASE"
+          git archive --format=zip --output="$out/direct-upgrade-feature-$FEATURE_HEAD.zip" "$FEATURE_HEAD"
+          git archive --format=zip --output="$out/direct-upgrade-merge-base-$merge_base.zip" "$merge_base"
+          sha256sum "$out"/*.zip > "$out/source-sha256.txt"
+
+      - name: Upload exact source snapshots
         uses: actions/upload-artifact@v4
         with:
           name: direct-donation-upgrade-current-main-source-${{ github.run_id }}
-          path: |
-            direct-donation-upgrade-current-main-${{ github.sha }}.zip
-            exact-head.txt
-            exact-tree.txt
-            source-sha256.txt
+          path: ${{ runner.temp }}/direct-upgrade-source
           retention-days: 7
