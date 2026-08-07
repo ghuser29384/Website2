@@ -29,7 +29,7 @@ jobs:
           ref: ${{ env.RELEASE_REF }}
           fetch-depth: 0
 
-      - name: Guard the immutable candidate
+      - name: Guard the immutable candidate and test paths
         shell: bash
         run: |
           set -euo pipefail
@@ -38,6 +38,8 @@ jobs:
           remote_sha="$(git ls-remote origin "refs/heads/${RELEASE_REF}" | awk '{print $1}')"
           test "$remote_sha" = "$EXPECTED_SHA"
           git diff --check HEAD^
+          test -f tests/not-found-navigation.spec.ts
+          test -f tests/dashboard-account-security-visibility.spec.ts
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -59,7 +61,6 @@ jobs:
         run: >-
           npx playwright test
           tests/not-found-navigation.spec.ts
-          --project=chromium
           --workers=1
           --retries=0
           --repeat-each=5
@@ -73,7 +74,6 @@ jobs:
         run: >-
           npx playwright test
           tests/dashboard-account-security-visibility.spec.ts
-          --project=chromium
           --workers=1
           --retries=0
           --reporter=line
