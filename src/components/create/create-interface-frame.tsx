@@ -31,6 +31,7 @@ function getCreateInterfaceSource(resume: boolean) {
 export function CreateInterfaceFrame({ resume = false }: CreateInterfaceFrameProps) {
   return (
     <main id="main-content" style={{ minHeight: "100vh" }} tabIndex={-1}>
+      <h1 className="sr-only">Create a Moral Trade</h1>
       <iframe
         allow="clipboard-write"
         aria-label="Moral Trade Create"
