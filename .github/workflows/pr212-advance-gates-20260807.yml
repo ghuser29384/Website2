@@ -1,0 +1,176 @@
+name: PR 212 advance exact-head and current-main gates 20260807
+
+on:
+  push:
+    branches:
+      - ops/pr212-advance-gates-20260807
+    paths:
+      - .github/workflows/pr212-advance-gates-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-advance-gates-20260807
+  cancel-in-progress: false
+
+jobs:
+  advance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: "212"
+      TARGET_BRANCH: feat/institutional-trade-system
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+    steps:
+      - name: Observe exact head and test current-main integration separately
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          repo="$GITHUB_REPOSITORY"
+          report=/tmp/pr212-advance-report.md
+          : > "$report"
+
+          comment_report() {
+            gh pr comment "$PR_NUMBER" --repo "$repo" --body-file "$report"
+          }
+
+          fail_report() {
+            local message="$1"
+            printf '\n**Controller result:** BLOCKED — %s\n' "$message" >> "$report"
+            printf '\nPR #212 remains draft and unmerged. No production database, deployment, payment, custody, payout, enterprise-integration, or institutional feature-flag state was changed.\n' >> "$report"
+            comment_report || true
+            echo "$message" >&2
+            exit 1
+          }
+
+          latest_run_for_head() {
+            local workflow_id="$1"
+            local branch="$2"
+            local head_sha="$3"
+            gh api "repos/${repo}/actions/workflows/${workflow_id}/runs?branch=${branch}&per_page=100" \
+              --jq ".workflow_runs | map(select(.head_sha == \"${head_sha}\")) | sort_by(.created_at) | reverse | .[0].id // empty"
+          }
+
+          wait_for_run() {
+            local run_id="$1"
+            local label="$2"
+            local status conclusion
+            for attempt in $(seq 1 960); do
+              status="$(gh api "repos/${repo}/actions/runs/${run_id}" --jq '.status')"
+              conclusion="$(gh api "repos/${repo}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+              if [[ "$status" == "completed" ]]; then
+                printf -- '- %s run: https://github.com/%s/actions/runs/%s\n' "$label" "$repo" "$run_id" >> "$report"
+                printf -- '- %s conclusion: **%s**\n' "$label" "${conclusion:-unknown}" >> "$report"
+                gh api "repos/${repo}/actions/runs/${run_id}/jobs?per_page=100" > "/tmp/${label// /-}-jobs.json"
+                local failed
+                failed="$(jq -r '[.jobs[]? | .steps[]? | select(.conclusion == "failure") | .name] | unique | join(", ")' "/tmp/${label// /-}-jobs.json")"
+                printf -- '- %s failed steps: %s\n' "$label" "${failed:-none}" >> "$report"
+                [[ "$conclusion" == "success" ]]
+                return
+              fi
+              sleep 15
+            done
+            printf -- '- %s did not reach a terminal state within the controller timeout.\n' "$label" >> "$report"
+            return 1
+          }
+
+          pr_json="$(gh api "repos/${repo}/pulls/${PR_NUMBER}")"
+          state="$(jq -r '.state' <<<"$pr_json")"
+          draft="$(jq -r '.draft' <<<"$pr_json")"
+          merged="$(jq -r '.merged' <<<"$pr_json")"
+          head_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+          head_ref="$(jq -r '.head.ref' <<<"$pr_json")"
+          base_sha="$(jq -r '.base.sha' <<<"$pr_json")"
+
+          cat >> "$report" <<EOF
+          <!-- pr212-advance-gates-20260807 -->
+          ## PR #212 exact-head and current-main gate controller
+
+          - Starting feature head: \`$head_sha\`
+          - Starting base head: \`$base_sha\`
+          - PR state: \`$state\`; draft: \`$draft\`; merged: \`$merged\`
+          EOF
+
+          [[ "$state" == "open" && "$draft" == "true" && "$merged" == "false" ]] || \
+            fail_report "PR #212 was not open, draft, and unmerged at controller start."
+          [[ "$head_ref" == "$TARGET_BRANCH" ]] || \
+            fail_report "Unexpected PR head branch: $head_ref"
+
+          workflow_id="$(gh api "repos/${repo}/actions/workflows?per_page=100" --paginate \
+            --jq '.workflows[] | select(.name == "Institutional trade QA") | .id' | head -n1)"
+          [[ -n "$workflow_id" ]] || fail_report "Could not resolve the Institutional trade QA workflow ID."
+
+          pre_run_id="$(latest_run_for_head "$workflow_id" "$TARGET_BRANCH" "$head_sha")"
+          if [[ -z "$pre_run_id" ]]; then
+            fail_report "No Institutional trade QA run exists for the current exact feature head."
+          fi
+
+          if ! wait_for_run "$pre_run_id" "pre-integration QA"; then
+            fail_report "The exact feature-head institutional QA run failed."
+          fi
+
+          current_head="$(gh api "repos/${repo}/branches/${TARGET_BRANCH}" --jq '.commit.sha')"
+          [[ "$current_head" == "$head_sha" ]] || \
+            fail_report "The feature branch moved during pre-integration validation."
+
+          rm -rf /tmp/pr212-repo
+          gh repo clone "$repo" /tmp/pr212-repo -- --filter=blob:none
+          cd /tmp/pr212-repo
+          git fetch origin main "$TARGET_BRANCH"
+          git checkout --detach "$head_sha"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          integration_branch="ops/pr212-current-main-integrated-${head_sha:0:8}-${GITHUB_RUN_ID}"
+          git switch -c "$integration_branch"
+
+          if git merge-base --is-ancestor origin/main HEAD; then
+            printf -- '- Current main was already an ancestor of the feature head.\n' >> "$report"
+          else
+            if ! git merge --no-ff --no-edit origin/main; then
+              conflicts="$(git diff --name-only --diff-filter=U | paste -sd ', ' -)"
+              git merge --abort || true
+              fail_report "Current-main integration conflicts: ${conflicts:-unknown}."
+            fi
+          fi
+
+          integrated_head="$(git rev-parse HEAD)"
+          printf -- '- Isolated current-main integration branch: \`%s\`\n' "$integration_branch" >> "$report"
+          printf -- '- Integrated candidate head: \`%s\`\n' "$integrated_head" >> "$report"
+          git push origin "HEAD:refs/heads/${integration_branch}"
+
+          dispatch_status=0
+          gh api --method POST "repos/${repo}/actions/workflows/${workflow_id}/dispatches" \
+            -f ref="$integration_branch" \
+            -f "inputs[confirm_target]=$QA_PROJECT_REF" || dispatch_status=$?
+          if [[ "$dispatch_status" -ne 0 ]]; then
+            fail_report "Could not dispatch Institutional trade QA on the isolated current-main integration branch."
+          fi
+
+          integrated_run_id=""
+          for attempt in $(seq 1 120); do
+            integrated_run_id="$(latest_run_for_head "$workflow_id" "$integration_branch" "$integrated_head")"
+            [[ -n "$integrated_run_id" ]] && break
+            sleep 10
+          done
+          [[ -n "$integrated_run_id" ]] || \
+            fail_report "Could not locate the integrated-candidate QA run."
+
+          if ! wait_for_run "$integrated_run_id" "integrated QA"; then
+            fail_report "The isolated current-main integrated candidate failed institutional QA."
+          fi
+
+          cat >> "$report" <<EOF
+
+          **Controller result:** PASS — the current exact feature head and the isolated latest-main integration candidate both passed Institutional trade QA.
+
+          The feature branch was deliberately not moved by this controller. PR #212 remains draft and unmerged pending independent evidence review, protected-preview review, unresolved-thread audit, and a deliberate fast-forward decision. No production database, deployment, payment, custody, payout, enterprise-integration, or institutional feature-flag state was changed.
+          EOF
+          comment_report
