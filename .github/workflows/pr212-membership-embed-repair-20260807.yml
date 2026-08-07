@@ -1,0 +1,84 @@
+name: PR 212 institutional membership embed repair
+
+on:
+  push:
+    branches:
+      - ops/pr212-membership-embed-repair-20260807
+    paths:
+      - .github/workflows/pr212-membership-embed-repair-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr212-membership-embed-repair-20260807
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_HEAD: d8b7f24f15ba9bf3d66c9ab8f1289b63bcc1e1e9
+      FEATURE_BRANCH: feat/institutional-trade-system
+    steps:
+      - name: Check out exact feature head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify exact head and disambiguate the member profile relationship
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          if [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then
+            echo "Feature branch moved: expected $EXPECTED_HEAD, got $actual_head" >&2
+            exit 1
+          fi
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/lib/institutional-data.ts')
+          text = path.read_text()
+          old = '.select("*,profiles(id,display_name,email)")'
+          new = '.select("*,profiles:profiles!institutional_memberships_profile_id_fkey(id,display_name,email)")'
+          count = text.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one ambiguous membership profile embed, found {count}.')
+          path.write_text(text.replace(old, new))
+          PY
+
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run focused membership and institutional wiring contracts
+        run: node --import tsx --test src/institutional-membership-profile-embed.test.ts src/institutional-trade-wiring.test.ts
+
+      - name: Commit and push the verified repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/institutional-data.ts
+          git commit -m "Disambiguate institutional membership profile loading"
+          git push origin "HEAD:${FEATURE_BRANCH}"
