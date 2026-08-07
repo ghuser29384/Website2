@@ -1,0 +1,90 @@
+name: Account security release targeted rerun
+
+on:
+  push:
+    branches:
+      - ops/qa-account-security-release-rerun-20260807
+    paths:
+      - .github/workflows/qa-account-security-release-rerun-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: account-security-release-rerun-20260807
+  cancel-in-progress: true
+
+jobs:
+  targeted-rerun:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+      RELEASE_REF: release/vercel-preview
+    steps:
+      - name: Check out the exact preview candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_REF }}
+          fetch-depth: 0
+
+      - name: Guard the immutable candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          remote_sha="$(git ls-remote origin "refs/heads/${RELEASE_REF}" | awk '{print $1}')"
+          test "$remote_sha" = "$EXPECTED_SHA"
+          git diff --check HEAD^
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Repeat the two failed navigation regressions
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: >-
+          npx playwright test
+          tests/not-found-navigation.spec.ts
+          --project=chromium
+          --workers=1
+          --retries=0
+          --repeat-each=5
+          --reporter=line,html
+
+      - name: Reconfirm Account security visibility regressions
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: >-
+          npx playwright test
+          tests/dashboard-account-security-visibility.spec.ts
+          --project=chromium
+          --workers=1
+          --retries=0
+          --reporter=line
+
+      - name: Archive targeted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-security-release-targeted-rerun-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 14
