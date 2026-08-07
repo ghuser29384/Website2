@@ -16,7 +16,7 @@ concurrency:
 
 env:
   TARGET_BRANCH: fix/mpgf-dac-success-lapse-20260807
-  EXPECTED_PARENT: 5e0025013da1ca54101853142211151a2d663ef2
+  EXPECTED_PARENT: 4863280ca26dd24c2ef27678ec2634d83d62ad2e
   CONTROLLER_PATH: .github/workflows/serialize-dac-terminal-qa-once.yml
   WORKFLOW_PATH: .github/workflows/mpgf-dac-success-lapse-gates.yml
   SOURCE_TEST_PATH: src/lib/mpgf/dac-success-lapse-migration.test.ts
@@ -38,66 +38,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
           test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = "$CONTROLLER_PATH"
-
-          python3 - <<'PY'
-          from pathlib import Path
-
-          workflow_path = Path(".github/workflows/mpgf-dac-success-lapse-gates.yml")
-          source_test_path = Path("src/lib/mpgf/dac-success-lapse-migration.test.ts")
-
-          workflow = workflow_path.read_text()
-          old_job_header = """  isolated-qa:
-    name: Exactly-once success, lapse, expiry, RLS, and no-payment proof
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
-    needs: source-gates
-    runs-on: ubuntu-24.04
-"""
-          new_job_header = """  isolated-qa:
-    name: Exactly-once success, lapse, expiry, RLS, and no-payment proof
-    # In-repository pull requests duplicate the same push SHA. Run database proof only
-    # on push/dispatch and serialize it so concurrent DDL cannot deadlock the QA project.
-    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
-    needs: source-gates
-    concurrency:
-      group: mpgf-dac-terminal-isolated-qa-hvmxfjjbdcgjjudmthdz
-      cancel-in-progress: false
-    runs-on: ubuntu-24.04
-"""
-          if workflow.count(old_job_header) != 1:
-              raise SystemExit(
-                  f"Expected one isolated-QA job header, found {workflow.count(old_job_header)}"
-              )
-          workflow_path.write_text(workflow.replace(old_job_header, new_job_header, 1))
-
-          source = source_test_path.read_text()
-          old_assertion_tail = """  assert.doesNotMatch(workflow, /PRODUCTION_SUPABASE_DB_URL/);
-  assert.doesNotMatch(workflow, /vercel deploy/);
-});
-"""
-          new_assertion_tail = """  assert.doesNotMatch(workflow, /PRODUCTION_SUPABASE_DB_URL/);
-  assert.doesNotMatch(workflow, /vercel deploy/);
-  assert.match(
-    workflow,
-    /if: github\\.event_name == 'workflow_dispatch' \\|\\| github\\.event_name == 'push'/,
-  );
-  assert.match(
-    workflow,
-    /group: mpgf-dac-terminal-isolated-qa-hvmxfjjbdcgjjudmthdz/,
-  );
-  assert.match(workflow, /cancel-in-progress: false/);
-  assert.doesNotMatch(
-    workflow,
-    /isolated-qa:[\\s\\S]*github\\.event\\.pull_request\\.head\\.repo\\.full_name/,
-  );
-});
-"""
-          if source.count(old_assertion_tail) != 1:
-              raise SystemExit(
-                  f"Expected one source-test assertion tail, found {source.count(old_assertion_tail)}"
-              )
-          source_test_path.write_text(source.replace(old_assertion_tail, new_assertion_tail, 1))
-          PY
-
+          printf '%s' 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCgp3b3JrZmxvd19wYXRoID0gUGF0aCgiLmdpdGh1Yi93b3JrZmxvd3MvbXBnZi1kYWMtc3VjY2Vzcy1sYXBzZS1nYXRlcy55bWwiKQpzb3VyY2VfdGVzdF9wYXRoID0gUGF0aCgic3JjL2xpYi9tcGdmL2RhYy1zdWNjZXNzLWxhcHNlLW1pZ3JhdGlvbi50ZXN0LnRzIikKCndvcmtmbG93ID0gd29ya2Zsb3dfcGF0aC5yZWFkX3RleHQoKQpvbGRfam9iX2hlYWRlciA9ICIiIiAgaXNvbGF0ZWQtcWE6CiAgICBuYW1lOiBFeGFjdGx5LW9uY2Ugc3VjY2VzcywgbGFwc2UsIGV4cGlyeSwgUkxTLCBhbmQgbm8tcGF5bWVudCBwcm9vZgogICAgaWY6IGdpdGh1Yi5ldmVudF9uYW1lID09ICd3b3JrZmxvd19kaXNwYXRjaCcgfHwgZ2l0aHViLmV2ZW50X25hbWUgPT0gJ3B1c2gnIHx8IGdpdGh1Yi5ldmVudC5wdWxsX3JlcXVlc3QuaGVhZC5yZXBvLmZ1bGxfbmFtZSA9PSBnaXRodWIucmVwb3NpdG9yeQogICAgbmVlZHM6IHNvdXJjZS1nYXRlcwogICAgcnVucy1vbjogdWJ1bnR1LTI0LjA0CiIiIgpuZXdfam9iX2hlYWRlciA9ICIiIiAgaXNvbGF0ZWQtcWE6CiAgICBuYW1lOiBFeGFjdGx5LW9uY2Ugc3VjY2VzcywgbGFwc2UsIGV4cGlyeSwgUkxTLCBhbmQgbm8tcGF5bWVudCBwcm9vZgogICAgIyBJbi1yZXBvc2l0b3J5IHB1bGwgcmVxdWVzdHMgZHVwbGljYXRlIHRoZSBzYW1lIHB1c2ggU0hBLiBSdW4gZGF0YWJhc2UgcHJvb2Ygb25seQogICAgIyBvbiBwdXNoL2Rpc3BhdGNoIGFuZCBzZXJpYWxpemUgaXQgc28gY29uY3VycmVudCBEREwgY2Fubm90IGRlYWRsb2NrIHRoZSBRQSBwcm9qZWN0LgogICAgaWY6IGdpdGh1Yi5ldmVudF9uYW1lID09ICd3b3JrZmxvd19kaXNwYXRjaCcgfHwgZ2l0aHViLmV2ZW50X25hbWUgPT0gJ3B1c2gnCiAgICBuZWVkczogc291cmNlLWdhdGVzCiAgICBjb25jdXJyZW5jeToKICAgICAgZ3JvdXA6IG1wZ2YtZGFjLXRlcm1pbmFsLWlzb2xhdGVkLXFhLWh2bXhmampiZGNnanVkZG10aGR6CiAgICAgIGNhbmNlbC1pbi1wcm9ncmVzczogZmFsc2UKICAgIHJ1bnMtb246IHVidW50dS0yNC4wNAoiIiIKaWYgd29ya2Zsb3cuY291bnQob2xkX2pvYl9oZWFkZXIpICE9IDE6CiAgICByYWlzZSBTeXN0ZW1FeGl0KAogICAgICAgIGYiRXhwZWN0ZWQgb25lIGlzb2xhdGVkLVFBIHpvYiBoZWFkZXIsIGZvdW5kIHt3b3JrZmxvdy5jb3VudChvbGRfam9iX2hlYWRlcil9IgogICAgKQp3b3JrZmxvd19wYXRoLndyaXRlX3RleHQod29ya2Zsb3cucmVwbGFjZShvbGRfam9iX2hlYWRlciwgbmV3X2pvYl9oZWFkZXIsIDEpKQoKc291cmNlID0gc291cmNlX3Rlc3RfcGF0aC5yZWFkX3RleHQoKQpvbGRfYXNzZXJ0aW9uX3RhaWwgPSAiIiIgIGFzc2VydC5kb2VzTm90TWF0Y2god29ya2Zsb3csIC9QUk9EVUNUSU9OX1NVUEFCQVNFX0RCX1VSTC8pOwogIGFzc2VydC5kb2VzTm90TWF0Y2god29ya2Zsb3csIC92ZXJjZWwgZGVwbG95Lyk7Cn0pOwoiIiIKbmV3X2Fzc2VydGlvbl90YWlsID0gIiIiICBhc3NlcnQuZG9lc05vdE1hdGNoKHdvcmtmbG93LCAvUFJPRFVDVElPTl9TVVBBQkFTRV9EQl9VUkwvKTsKICBhc3NlcnQuZG9lc05vdE1hdGNoKHdvcmtmbG93LCAvdmVyY2VsIGRlcGxveS8pOwogIGFzc2VydC5tYXRjaCgKICAgIHdvcmtmbG93LAogICAgL2lmOiBnaXRodWJcXC5ldmVudF9uYW1lID09ICd3b3JrZmxvd19kaXNwYXRjaCcgXFxffFxcIGdpdGh1YlxcLmV2ZW50X25hbWUgPT0gJ3B1c2gnLywKICApOwogIGFzc2VydC5tYXRjaCgKICAgIHdvcmtmbG93LAogICAgL2dyb3VwOiBtcGdmLWRhYy10ZXJtaW5hbC1pc29sYXRlZC1xYS1odm14ZmpqYmRjZ2pqdWRtdGhkci8sCiAgKTsKICBhc3NlcnQubWF0Y2god29ya2Zsb3csIC9jYW5jZWwtaW4tcHJvZ3Jlc3M6IGZhbHNlLyk7CiAgYXNzZXJ0LmRvZXNOb3RNYXRjaCgKICAgIHdvcmtmbG93LAogICAgL2lzb2xhdGVkLXFhOltcXHNcXFNdKmdpdGh1YlxcLmV2ZW50XFwucHVsbF9yZXF1ZXN0XFwuaGVhZFxcLnJlcG9cXC5mdWxsX25hbWUvLAogICApOwp9KTsKIiIiCmlmIHNvdXJjZS5jb3VudChvbGRfYXNzZXJ0aW9uX3RhaWwpICE9IDE6CiAgICByYWlzZSBTeXN0ZW1FeGl0KAogICAgICAgIGYiRXhwZWN0ZWQgb25lIHNvdXJjZS10ZXN0IGFzc2VydGlvbiB0YWlsLCBmb3VuZCB7c291cmNlLmNvdW50KG9sZF9hc3NlcnRpb25fdGFpbCl9IgogICAgKQpzb3VyY2VfdGVzdF9wYXRoLndyaXRlX3RleHQoc291cmNlLnJlcGxhY2Uob2xkX2Fzc2VydGlvbl90YWlsLCBuZXdfYXNzZXJ0aW9uX3RhaWwsIDEpKQo=' | base64 --decode | python3
           git diff --check
           grep -Fxq "    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'" "$WORKFLOW_PATH"
           grep -Fxq "      group: mpgf-dac-terminal-isolated-qa-hvmxfjjbdcgjjudmthdz" "$WORKFLOW_PATH"
