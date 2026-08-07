@@ -100,6 +100,36 @@ test("preview browser failures are adjudicated against the exact merge base whil
   assert.match(source, /if \[\[ "\$RELEASE_TARGET" == 'production' \]\]; then\n\s+npm run test:e2e -- --reporter=line/);
 });
 
+test("focused preview adjudication reruns full Playwright titles and never asks the base to run absent files", async () => {
+  const source = await workflow();
+  const candidatePassIndex = source.indexOf(
+    'if [[ "$candidate_focused_status" -eq 0 ]]; then',
+  );
+  const basePartitionIndex = source.indexOf("base_focused_files=()");
+  const baseRunIndex = source.indexOf(
+    'npx playwright test "${base_focused_files[@]}"',
+  );
+
+  assert.ok(
+    source.includes(
+      'grep = "(?:" + "|".join(re.escape(title) for title in titles) + ")" if titles else ""',
+    ),
+  );
+  assert.ok(!source.includes('grep = "^(?:"'));
+  assert.notEqual(candidatePassIndex, -1);
+  assert.notEqual(basePartitionIndex, -1);
+  assert.notEqual(baseRunIndex, -1);
+  assert.ok(candidatePassIndex < basePartitionIndex);
+  assert.ok(basePartitionIndex < baseRunIndex);
+  assert.ok(source.includes('if [[ -f "$base_dir/$focused_file" ]]; then'));
+  assert.ok(source.includes('base_focused_files+=("$focused_file")'));
+  assert.ok(
+    source.includes('if [[ "${#base_focused_files[@]}" -eq 0 ]]; then'),
+  );
+  assert.ok(source.includes("printf '  0 passed"));
+  assert.ok(source.includes("base-unavailable-files.txt"));
+});
+
 test("the release requires a repository secret rather than embedding credentials", async () => {
   const source = await workflow();
   assert.match(source, /secrets\.VERCEL_TOKEN/);
