@@ -1,0 +1,251 @@
+name: PR 552 authenticated exact Preview MFA database QA v3
+
+on:
+  push:
+    branches:
+      - ops/pr552-authenticated-preview-mfa-db-qa-v2-20260807
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr552-authenticated-preview-mfa-db-qa-v3
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+  DEPLOYMENT_ID: dpl_E4kcbFVK7QpYvdygM8m9sc841DpC
+  PREVIEW_ORIGIN: https://moraltrade-site-n539b73lz-ellen-s.vercel.app
+  PREVIEW_SHARE_URL: https://moraltrade-site-n539b73lz-ellen-s.vercel.app/?_vercel_share=CCXqehyXnnKpN3lENwywLL3ObnEbZuF6
+  EXPECTED_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  NEXT_PUBLIC_SUPABASE_URL: https://jnpoxvalyjtdghnperyu.supabase.co
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  OUTPUT_DIR: pr552-authenticated-preview-mfa-db-v3
+
+jobs:
+  authenticated-preview-mfa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      PR552_QA_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard immutable candidate and controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          git merge-base --is-ancestor "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --check "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --name-only "$CANDIDATE_SHA" "$GITHUB_SHA" | sort > controller-files.txt
+          cat > allowed-files.txt <<'EOF'
+          .github/scripts/pr552-authenticated-preview-mfa-cleanup.sql
+          .github/scripts/pr552-authenticated-preview-mfa-db.mjs
+          .github/scripts/pr552-authenticated-preview-mfa-fixture.sql
+          .github/workflows/pr552-authenticated-preview-mfa-db-qa-v2.yml
+          .github/workflows/pr552-authenticated-preview-mfa-db-qa-v3.yml
+          .github/workflows/pr552-authenticated-preview-mfa-db-qa.yml
+          EOF
+          diff -u allowed-files.txt controller-files.txt
+
+      - name: Install tooling
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies, Chromium, and psql
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Guard exact production database and Preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          test -n "${PR552_QA_PASSWORD:-}"
+          test "${#PR552_QA_PASSWORD}" -ge 14
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+          parsed = urlparse(os.environ['PROD_SUPABASE_DB_URL'])
+          expected = os.environ['EXPECTED_SUPABASE_REF']
+          query = parse_qs(parsed.query)
+          if not (
+              parsed.scheme in {'postgres', 'postgresql'}
+              and parsed.password
+              and parsed.path == '/postgres'
+              and (
+                  expected in (parsed.username or '')
+                  or expected in (parsed.hostname or '')
+                  or query.get('project', [''])[0] == expected
+              )
+          ):
+              raise SystemExit('Refusing unexpected database target.')
+          PY
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc -Atv ON_ERROR_STOP=1 \
+            -c "select to_regclass('auth.users') is not null and to_regclass('auth.mfa_factors') is not null;" \
+            | grep -Fxq 't'
+
+          curl -fsS -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
+            > exact-deployment.json
+          jq -e --arg did "$DEPLOYMENT_ID" --arg pid "$VERCEL_PROJECT_ID" --arg sha "$CANDIDATE_SHA" --arg url "${PREVIEW_ORIGIN#https://}" '
+            ((.uid // .id) == $did)
+            and ((.projectId // .project.id // "") == $pid)
+            and ((.readyState // .state // "") == "READY")
+            and ((.target // null) == null)
+            and (.url == $url)
+            and (.meta.githubCommitSha == $sha)
+            and (.meta.moralTradeCandidateSha == $sha)
+            and (.meta.releaseReason == "pr552-dashboard-account-security-preview")
+          ' exact-deployment.json >/dev/null
+          test "$(curl -sS -L --max-time 60 -o /dev/null -w '%{http_code}' "$PREVIEW_SHARE_URL")" = '200'
+
+      - name: Generate unique synthetic scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          readarray -t generated < <(python3 - <<'PY'
+          import os, uuid
+          run = f"{os.environ['GITHUB_RUN_ID']}.{os.environ['GITHUB_RUN_ATTEMPT']}"
+          print(uuid.uuid4())
+          print(f"pr552-mfa-{run}@qa.moraltrade.invalid")
+          print(f"PR552 exact Preview {run}")
+          print(run)
+          PY
+          )
+          echo "PR552_QA_USER_ID=${generated[0]}" >> "$GITHUB_ENV"
+          echo "PR552_QA_EMAIL=${generated[1]}" >> "$GITHUB_ENV"
+          echo "PR552_QA_FACTOR_NAME=${generated[2]}" >> "$GITHUB_ENV"
+          echo "PR552_QA_RUN_ID=${generated[3]}" >> "$GITHUB_ENV"
+          echo "PR552_OUTPUT_DIR=$OUTPUT_DIR" >> "$GITHUB_ENV"
+          echo "PR552_STATE_PATH=$OUTPUT_DIR/state.json" >> "$GITHUB_ENV"
+
+      - name: Create isolated synthetic Auth fixture
+        id: fixture
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p "$OUTPUT_DIR"
+          set +e
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc -v ON_ERROR_STOP=1 \
+            -f .github/scripts/pr552-authenticated-preview-mfa-fixture.sql \
+            2>&1 | tee "$OUTPUT_DIR/fixture.log"
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "$code" > "$OUTPUT_DIR/fixture-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Run authenticated desktop/mobile MFA lifecycle
+        id: lifecycle
+        if: steps.fixture.outputs.exit_code == '0'
+        shell: bash
+        run: |
+          set -uo pipefail
+          export PR552_PREVIEW_ORIGIN="$PREVIEW_ORIGIN"
+          export PR552_PREVIEW_SHARE_URL="$PREVIEW_SHARE_URL"
+          export PR552_EXPECTED_SHA="$CANDIDATE_SHA"
+          export PR552_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID"
+          export PR552_EXPECTED_SUPABASE_REF="$EXPECTED_SUPABASE_REF"
+          set +e
+          node .github/scripts/pr552-authenticated-preview-mfa-db.mjs \
+            > >(tee "$OUTPUT_DIR/test.log") \
+            2> >(tee "$OUTPUT_DIR/test.stderr.log" >&2)
+          code=$?
+          set -e
+          echo "$code" > "$OUTPUT_DIR/test-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Clean exact factor and synthetic user
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          export PR552_QA_FACTOR_ID=''
+          if [[ -s "$OUTPUT_DIR/state.json" ]]; then
+            export PR552_QA_FACTOR_ID="$(jq -r '.factorId // ""' "$OUTPUT_DIR/state.json")"
+          fi
+          set +e
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc -qAt -v ON_ERROR_STOP=1 \
+            -f .github/scripts/pr552-authenticated-preview-mfa-cleanup.sql \
+            > >(tee "$OUTPUT_DIR/cleanup.json") \
+            2> >(tee "$OUTPUT_DIR/cleanup.stderr.log" >&2)
+          code=$?
+          set -e
+          echo "$code" > "$OUTPUT_DIR/cleanup-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Prove zero residue independently
+        id: residue
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          PGCONNECT_TIMEOUT=15 PGSSLMODE=require psql "$PROD_SUPABASE_DB_URL" \
+            --no-psqlrc -qAt -v ON_ERROR_STOP=1 \
+            -c "select jsonb_build_object(
+              'authUsers',(select count(*) from auth.users where id='${PR552_QA_USER_ID}'::uuid or lower(email)=lower('${PR552_QA_EMAIL}')),
+              'identities',(select count(*) from auth.identities where user_id='${PR552_QA_USER_ID}'::uuid),
+              'factors',(select count(*) from auth.mfa_factors where user_id='${PR552_QA_USER_ID}'::uuid),
+              'sessions',(select count(*) from auth.sessions where user_id='${PR552_QA_USER_ID}'::uuid),
+              'refreshTokens',(select count(*) from auth.refresh_tokens where user_id='${PR552_QA_USER_ID}'),
+              'profiles',(select count(*) from public.profiles where id='${PR552_QA_USER_ID}'::uuid));" \
+            > "$OUTPUT_DIR/residue.json"
+          query_code=$?
+          code=$query_code
+          if [[ "$query_code" -eq 0 ]] && jq -e 'all(.[]; . == 0)' "$OUTPUT_DIR/residue.json" >/dev/null; then
+            code=0
+          elif [[ "$query_code" -eq 0 ]]; then
+            code=92
+          fi
+          echo "$code" > "$OUTPUT_DIR/residue-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Upload complete fail-closed evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-authenticated-preview-mfa-db-v3-${{ github.run_id }}
+          path: |
+            exact-deployment.json
+            controller-files.txt
+            allowed-files.txt
+            pr552-authenticated-preview-mfa-db-v3/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Preserve fail-closed conclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ steps.fixture.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.lifecycle.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.cleanup.outputs.exit_code || '255' }}" = '0'
+          test "${{ steps.residue.outputs.exit_code || '255' }}" = '0'
