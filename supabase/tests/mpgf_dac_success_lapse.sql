@@ -421,6 +421,7 @@ begin
   from public.mpgf_public_goods_pledges
   where campaign_id = 'campaign-af666666666646668666666666666666'
     and profile_id = 'ac333333-3333-4333-8333-333333333333'
+    and amount_cents = 6000
     and pledge_intent_id is not null;
 
   begin
@@ -443,6 +444,7 @@ select * from public.mpgf_review_dac_pledge_eligibility(
     select id from public.mpgf_public_goods_pledges
     where campaign_id = 'campaign-af666666666646668666666666666666'
       and profile_id = 'ac333333-3333-4333-8333-333333333333'
+      and amount_cents = 6000
       and pledge_intent_id is not null
   ),
   'ab222222-2222-4222-8222-222222222222',
@@ -510,6 +512,7 @@ select * from public.mpgf_review_dac_pledge_eligibility(
     select id from public.mpgf_public_goods_pledges
     where campaign_id = 'campaign-af666666666646668666666666666666'
       and profile_id = 'ac333333-3333-4333-8333-333333333333'
+      and amount_cents = 6000
       and pledge_intent_id is not null
   ),
   'ab222222-2222-4222-8222-222222222222',
@@ -526,6 +529,7 @@ begin
   from public.mpgf_public_goods_pledges
   where campaign_id = 'campaign-af666666666646668666666666666666'
     and profile_id = 'ac333333-3333-4333-8333-333333333333'
+    and amount_cents = 6000
     and pledge_intent_id is not null;
 
   begin
