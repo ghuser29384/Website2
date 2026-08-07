@@ -105,17 +105,16 @@ def main() -> None:
 }
 
 function expandPsqlVariables(sql, variables) {
-  const expanded = sql.replace(
-    /:'([A-Za-z_][A-Za-z0-9_]*)'/g,
-    (token, name) => {
-      if (!Object.prototype.hasOwnProperty.call(variables, name)) {
-        throw new Error(`Missing guarded PostgreSQL variable: ${name}`);
-      }
-      return sqlLiteral(variables[name]);
-    },
-  );
-  if (/:'[A-Za-z_][A-Za-z0-9_]*'/.test(expanded)) {
-    throw new Error("An unresolved guarded PostgreSQL variable remained.");
+  let expanded = sql;
+  for (const [name, value] of Object.entries(variables)) {
+    const token = `:'${name}'`;
+    expanded = expanded.split(token).join(sqlLiteral(value));
+  }
+  const unresolved = expanded.match(/:'[A-Za-z_][A-Za-z0-9_]*'/g) ?? [];
+  if (unresolved.length > 0) {
+    throw new Error(
+      `Unresolved guarded PostgreSQL variable token count: ${unresolved.length}`,
+    );
   }
   return expanded;
 }
@@ -132,13 +131,20 @@ function runPsql(sql, variables = {}) {
     "ON_ERROR_STOP=1",
   ];
   const result = spawnSync("psql", args, {
-    input: expandedSql,''',
+''',
+    )
+    source = replace_literal(
+        source,
+        "expanded SQL stdin",
+        '    input: sql,',
+        '    input: expandedSql,',
     )
 
     forbidden = [
         "PR552_PREVIEW_SHARE_URL",
         "PREVIEW_SHARE_URL",
         'args.push("--set"',
+        "    input: sql,",
     ]
     for token in forbidden:
         if token in source:
@@ -149,6 +155,8 @@ function runPsql(sql, variables = {}) {
         "x-vercel-protection-bypass": 1,
         "x-vercel-set-bypass-cookie": 1,
         "function expandPsqlVariables": 1,
+        "const expandedSql = expandPsqlVariables(sql, variables);": 1,
+        "expanded.split(token).join(sqlLiteral(value))": 1,
         "input: expandedSql": 1,
     }
     for token, expected_count in required_counts.items():
