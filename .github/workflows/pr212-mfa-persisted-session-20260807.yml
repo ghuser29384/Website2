@@ -67,7 +67,7 @@ jobs:
             sleep $((attempt * 20))
           done
 
-      - name: Run focused source contracts
+      - name: Run focused source contracts after multiline-safe assertion fix
         working-directory: feature
         run: node --import tsx --test src/institutional-trade-wiring.test.ts src/institutional-mfa-stable-state.test.ts
 
