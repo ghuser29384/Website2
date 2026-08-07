@@ -1,0 +1,251 @@
+name: PR 212 converge current main after green QA
+
+on:
+  push:
+    branches:
+      - ops/pr212-post-green-audit-20260807
+    paths:
+      - .github/workflows/pr212-converge-current-main-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: pr212-converge-current-main-20260807
+  cancel-in-progress: false
+
+jobs:
+  converge:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_BRANCH: feat/institutional-trade-system
+      EVIDENCE_BRANCH: ops/pr212-post-green-audit-20260807
+      QA_WORKFLOW: Institutional trade QA
+      REPORT_DIR: ops/pr212-main-convergence-report
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Wait for the first integrated green report
+        id: initial
+        shell: bash
+        run: |
+          set -euo pipefail
+          initial_head=""
+          for attempt in $(seq 1 1080); do
+            git fetch --quiet origin "$EVIDENCE_BRANCH"
+            if git show "origin/${EVIDENCE_BRANCH}:ops/pr212-integrated-qa-report/summary.json" > /tmp/integrated-summary.json 2>/dev/null; then
+              conclusion="$(jq -r '.conclusion // empty' /tmp/integrated-summary.json)"
+              evidence="$(jq -r '.evidence_status // empty' /tmp/integrated-summary.json)"
+              initial_head="$(jq -r '.feature_head // empty' /tmp/integrated-summary.json)"
+              if [[ "$conclusion" == "success" && "$evidence" == "validated" && -n "$initial_head" ]]; then break; fi
+              if [[ -n "$conclusion" && "$conclusion" != "success" ]]; then
+                echo "The first integrated QA is terminal but not green." >&2
+                exit 1
+              fi
+            fi
+            sleep 10
+          done
+          if [[ -z "$initial_head" ]]; then
+            echo "No validated integrated report appeared within three hours." >&2
+            exit 1
+          fi
+          git fetch --quiet origin "$FEATURE_BRANCH" main
+          current_feature="$(git rev-parse "origin/${FEATURE_BRANCH}")"
+          if [[ "$current_feature" != "$initial_head" ]]; then
+            echo "Feature branch moved after the integrated report: report $initial_head, current $current_feature" >&2
+            exit 1
+          fi
+          echo "initial_head=$initial_head" >> "$GITHUB_OUTPUT"
+
+      - name: Converge at most three current-main deltas
+        id: converge
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$REPORT_DIR"
+          current_feature="${{ steps.initial.outputs.initial_head }}"
+          final_run_id="$(jq -r '.run_id' /tmp/integrated-summary.json)"
+          final_main="$(jq -r '.main_head' /tmp/integrated-summary.json)"
+          cycles=0
+          for cycle in 1 2 3; do
+            git fetch --quiet origin "$FEATURE_BRANCH" main
+            remote_feature="$(git rev-parse "origin/${FEATURE_BRANCH}")"
+            latest_main="$(git rev-parse origin/main)"
+            if [[ "$remote_feature" != "$current_feature" ]]; then
+              echo "Feature branch drifted before convergence cycle $cycle." >&2
+              exit 1
+            fi
+            if git merge-base --is-ancestor "$latest_main" "$current_feature"; then
+              final_main="$latest_main"
+              break
+            fi
+            cycles=$cycle
+            git checkout -B "$FEATURE_BRANCH" "$current_feature"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            set +e
+            git merge --no-ff --no-commit "$latest_main"
+            merge_status=$?
+            set -e
+            if (( merge_status != 0 )); then
+              git diff --name-only --diff-filter=U | sort > "$REPORT_DIR/conflicts-cycle-${cycle}.txt"
+              git merge --abort || true
+              echo "Current-main delta produced conflicts in cycle $cycle." >&2
+              exit 1
+            fi
+            git commit -m "Merge current main delta into institutional trade system"
+            candidate="$(git rev-parse HEAD)"
+            git diff --check "$current_feature..$candidate"
+
+            for attempt in 1 2 3 4; do
+              if npm ci; then break; fi
+              if (( attempt == 4 )); then exit 1; fi
+              sleep $((attempt * 20))
+            done
+            node --import tsx --test \
+              src/institutional-authorization-snapshot.test.ts \
+              src/institutional-individual-capacity.test.ts \
+              src/institutional-product-completeness.test.ts \
+              src/institutional-pool-record-trigger.test.ts \
+              src/institutional-trade-migration.test.ts \
+              src/institutional-trade-wiring.test.ts \
+              src/institutional-mfa-stable-state.test.ts \
+              src/lib/institutional-trade.test.ts \
+              src/lib/institutional-webhooks.test.ts
+            node --check .github/scripts/institutional-trade-qa-e2e.mjs
+            npx tsc --noEmit --pretty false
+            npm run lint
+            npm run build
+
+            git fetch --quiet origin "$FEATURE_BRANCH" main
+            if [[ "$(git rev-parse "origin/${FEATURE_BRANCH}")" != "$current_feature" ]]; then
+              echo "Feature branch moved during convergence cycle $cycle." >&2
+              exit 1
+            fi
+            if [[ "$(git rev-parse origin/main)" != "$latest_main" ]]; then
+              echo "Main moved during pre-push validation in cycle $cycle; retry through a fresh controlled cycle." >&2
+              exit 1
+            fi
+            git push origin "HEAD:${FEATURE_BRANCH}"
+            current_feature="$candidate"
+            final_main="$latest_main"
+
+            run_id=""
+            conclusion=""
+            for attempt in $(seq 1 720); do
+              gh run list --repo "$GITHUB_REPOSITORY" --workflow "$QA_WORKFLOW" --branch "$FEATURE_BRANCH" --limit 100 --json databaseId,headSha,status,conclusion,createdAt,url > /tmp/convergence-runs.json
+              run_id="$(jq -r --arg head "$current_feature" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/convergence-runs.json)"
+              status="$(jq -r --arg head "$current_feature" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/convergence-runs.json)"
+              conclusion="$(jq -r --arg head "$current_feature" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/convergence-runs.json)"
+              if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+              sleep 15
+            done
+            if [[ -z "$run_id" ]]; then
+              echo "No QA run found for convergence cycle $cycle." >&2
+              exit 1
+            fi
+            cycle_dir="/tmp/pr212-convergence-cycle-${cycle}"
+            mkdir -p "$cycle_dir"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$REPORT_DIR/run-cycle-${cycle}.json"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$REPORT_DIR/jobs-cycle-${cycle}.json"
+            gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$REPORT_DIR/failed-cycle-${cycle}.log" 2>&1 || true
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --dir "$cycle_dir" || true
+            artifact_root="$(find "$cycle_dir" -type f -name full-tests-differential.json -printf '%h\n' | head -1)"
+            test -n "$artifact_root"
+            jq -e '.feature_only_failure_count == 0' "$artifact_root/full-tests-differential.json" >/dev/null
+            jq -e '.feature_summary.tests >= .base_summary.tests' "$artifact_root/full-tests-differential.json" >/dev/null
+            jq -e '.feature_summary.cancelled == 0 and .base_summary.cancelled == 0' "$artifact_root/full-tests-differential.json" >/dev/null
+            residue_file="$(find "$cycle_dir" -type f -name post-suite-residue.txt | head -1)"
+            test -n "$residue_file"
+            grep -Eq 'auth\.users[[:space:]]*\|[[:space:]]*0' "$residue_file"
+            grep -Eq 'public\.profiles[[:space:]]*\|[[:space:]]*0' "$residue_file"
+            if [[ "$conclusion" != "success" ]]; then
+              echo "Convergence QA failed in cycle $cycle." >&2
+              exit 1
+            fi
+            final_run_id="$run_id"
+          done
+
+          git fetch --quiet origin "$FEATURE_BRANCH" main
+          latest_feature="$(git rev-parse "origin/${FEATURE_BRANCH}")"
+          latest_main="$(git rev-parse origin/main)"
+          if [[ "$latest_feature" != "$current_feature" ]]; then
+            echo "Feature branch drifted after convergence." >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$latest_main" "$current_feature"; then
+            echo "Main still moved after three convergence cycles." >&2
+            exit 1
+          fi
+          final_main="$latest_main"
+          echo "feature_head=$current_feature" >> "$GITHUB_OUTPUT"
+          echo "main_head=$final_main" >> "$GITHUB_OUTPUT"
+          echo "run_id=$final_run_id" >> "$GITHUB_OUTPUT"
+          echo "cycles=$cycles" >> "$GITHUB_OUTPUT"
+
+      - name: Audit draft state, mergeability, and review threads
+        id: review
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr_json="$(gh pr view 212 --repo "$GITHUB_REPOSITORY" --json isDraft,state,mergeable,headRefOid,url)"
+          printf '%s\n' "$pr_json" > "$REPORT_DIR/pr-state.json"
+          jq -e '.isDraft == true and .state == "OPEN" and .headRefOid == "${{ steps.converge.outputs.feature_head }}"' "$REPORT_DIR/pr-state.json" >/dev/null
+          gh api graphql -f query='query { repository(owner:"ghuser29384", name:"Website2") { pullRequest(number:212) { reviewThreads(first:100) { nodes { isResolved } pageInfo { hasNextPage } } } } }' > "$REPORT_DIR/review-threads.json"
+          unresolved="$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' "$REPORT_DIR/review-threads.json")"
+          has_next="$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' "$REPORT_DIR/review-threads.json")"
+          if [[ "$has_next" != "false" ]]; then
+            echo "Review-thread audit exceeded one page; refusing to undercount." >&2
+            exit 1
+          fi
+          echo "unresolved=$unresolved" >> "$GITHUB_OUTPUT"
+          if [[ "$unresolved" != "0" ]]; then
+            echo "$unresolved unresolved review threads remain." >&2
+            exit 1
+          fi
+
+      - name: Record converged draft status
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$REPORT_DIR"
+          feature_head="${{ steps.converge.outputs.feature_head }}"
+          main_head="${{ steps.converge.outputs.main_head }}"
+          run_id="${{ steps.converge.outputs.run_id }}"
+          cycles="${{ steps.converge.outputs.cycles }}"
+          unresolved="${{ steps.review.outputs.unresolved }}"
+          jq -n --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg feature_head "$feature_head" --arg main_head "$main_head" --arg run_id "$run_id" --arg cycles "$cycles" --arg unresolved "$unresolved" '{generated_at:$generated_at,feature_head:$feature_head,main_head:$main_head,run_id:$run_id,cycles:($cycles|tonumber? // 0),unresolved_review_threads:($unresolved|tonumber? // -1),state:"current_main_converged_qa_green_draft"}' > "$REPORT_DIR/summary.json"
+          cat > "$REPORT_DIR/report.md" <<EOF
+          # PR #212 current-main convergence
+
+          - Feature head: \`$feature_head\`
+          - Current main included: \`$main_head\`
+          - Final QA run: \`$run_id\`
+          - Additional convergence cycles: \`${cycles:-0}\`
+          - Unresolved review threads: \`${unresolved:-unknown}\`
+          - PR state: draft and unmerged
+          - Production changed: no
+          EOF
+          git checkout ops/pr212-post-green-audit-20260807
+          git pull --ff-only origin ops/pr212-post-green-audit-20260807 || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$REPORT_DIR"
+          git commit -m "Record PR 212 current-main convergence" || true
+          git push origin HEAD:ops/pr212-post-green-audit-20260807 || true
+          if [[ -n "$feature_head" && -n "$run_id" && "${unresolved:-1}" == "0" ]]; then
+            gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "PASS: PR #212 is converged with current main at \`$main_head\`; exact head \`$feature_head\` passed isolated-QA run \`$run_id\`, and zero unresolved review threads remain. PR stays draft and unmerged. The next authorized step is a protected, invite-only preview and organization/individual/collective rendered review—without production payments or custody."
+          else
+            gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "BLOCKED: the current-main convergence or review-thread audit did not complete cleanly. No production or merge action was taken; see the controller report for exact evidence."
+          fi
