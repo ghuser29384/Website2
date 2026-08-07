@@ -1,0 +1,182 @@
+name: PR 477 exact hosted preview smoke c7d59ade
+
+on:
+  push:
+    branches:
+      - ops/pr477-hosted-preview-smoke-c7d59ade
+    paths:
+      - .github/workflows/pr477-hosted-preview-smoke-c7d59ade.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr477-hosted-preview-smoke-c7d59ade
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: c7d59ade20e40793d6cdff6669cc7dab0a022fc1
+  EXPECTED_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  EXPECTED_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_SCOPE: ellen-s
+  VERCEL_CLI_VERSION: 50.38.1
+  DEPLOYMENT_ID: dpl_2bnAUjhtYmSFh74RDGZsrmrrg7X4
+  DEPLOYMENT_URL: https://moraltrade-site-630px91fb-ellen-s.vercel.app
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+
+    steps:
+      - name: Guard immutable verifier inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.ref_name }}' = 'ops/pr477-hosted-preview-smoke-c7d59ade'
+          test '${{ github.actor }}' != 'github-actions[bot]'
+          test "${#EXPECTED_SHA}" -eq 40
+          test "$DEPLOYMENT_ID" = 'dpl_2bnAUjhtYmSFh74RDGZsrmrrg7X4'
+          case "$DEPLOYMENT_URL" in
+            https://moraltrade-site-*-ellen-s.vercel.app) ;;
+            *) echo 'Unexpected preview URL.' >&2; exit 1 ;;
+          esac
+
+      - name: Wait for exact canonical preview to become READY
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+
+          for attempt in $(seq 1 300); do
+            curl --silent --show-error --fail \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$EXPECTED_TEAM_ID" \
+              > /tmp/deployment.json
+
+            state="$(jq -r '.readyState // .state // "UNKNOWN"' /tmp/deployment.json)"
+            project_id="$(jq -r '.project.id // .projectId // empty' /tmp/deployment.json)"
+            deployed_sha="$(jq -r '.meta.githubCommitSha // empty' /tmp/deployment.json)"
+            target="$(jq -r '.target // "preview"' /tmp/deployment.json)"
+
+            test "$project_id" = "$EXPECTED_PROJECT_ID"
+            test "$deployed_sha" = "$EXPECTED_SHA"
+            test "$target" = 'preview'
+
+            case "$state" in
+              READY)
+                jq '{id, url, readyState, target, project: .project.id, gitSha: .meta.githubCommitSha, aliasError}' \
+                  /tmp/deployment.json > /tmp/deployment-proof.json
+                exit 0
+                ;;
+              ERROR|CANCELED)
+                cat /tmp/deployment.json >&2
+                exit 1
+                ;;
+              QUEUED|BUILDING|INITIALIZING)
+                sleep 20
+                ;;
+              *)
+                echo "Unexpected deployment state: $state" >&2
+                cat /tmp/deployment.json >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          echo 'Timed out waiting for the exact hosted preview.' >&2
+          exit 1
+
+      - name: Link the canonical project for authenticated preview requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$EXPECTED_TEAM_ID" "$EXPECTED_PROJECT_ID" > .vercel/project.json
+
+      - name: Smoke-test Create, resume, and participant-search boundaries
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p hosted-preview-smoke
+
+          vcurl() {
+            local route="$1"
+            local output="$2"
+            npx --yes "vercel@$VERCEL_CLI_VERSION" curl "$route" \
+              --deployment "$DEPLOYMENT_URL" \
+              --scope "$VERCEL_SCOPE" \
+              --token "$VERCEL_TOKEN" \
+              --no-color > "$output"
+          }
+
+          vcurl '/trades/new' hosted-preview-smoke/create.html
+          grep -Fq 'data-create-interface-frame' hosted-preview-smoke/create.html
+          grep -Fq 'Moral Trade Create' hosted-preview-smoke/create.html
+          grep -Fq 'What do you want to improve?' hosted-preview-smoke/create.html
+          grep -Fq 'Act together' hosted-preview-smoke/create.html
+          grep -Fq 'Fund together' hosted-preview-smoke/create.html
+          grep -Fq 'PROPOSAL ONLY' hosted-preview-smoke/create.html
+
+          vcurl '/trades/new?resume=create' hosted-preview-smoke/resume.html
+          grep -Fq 'data-create-interface-frame' hosted-preview-smoke/resume.html
+          grep -Fq 'const shouldResume = true;' hosted-preview-smoke/resume.html
+
+          set +e
+          vcurl '/api/create/participants?q=ellen' hosted-preview-smoke/participants.json
+          participant_status=$?
+          set -e
+          test "$participant_status" -eq 0 || test "$participant_status" -eq 1
+          grep -Fq '"requiresAuth":true' hosted-preview-smoke/participants.json
+          grep -Fq 'Sign in before searching Moral Trade participants.' hosted-preview-smoke/participants.json
+
+          if grep -Eiq 'Vercel Authentication|deployment protection|x-vercel-challenge-token' \
+            hosted-preview-smoke/create.html hosted-preview-smoke/resume.html hosted-preview-smoke/participants.json; then
+            echo 'A deployment-protection interstitial was returned instead of the application.' >&2
+            exit 1
+          fi
+
+          {
+            echo 'exact_sha='"$EXPECTED_SHA"
+            echo 'deployment_id='"$DEPLOYMENT_ID"
+            echo 'deployment_url='"$DEPLOYMENT_URL"
+            echo 'create_route=passed'
+            echo 'co_act_shell=passed'
+            echo 'co_fund_shell=passed'
+            echo 'auth_resume_transform=passed'
+            echo 'signed_out_participant_boundary=passed'
+          } > hosted-preview-smoke/result.txt
+
+      - name: Upload hosted-preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr477-hosted-preview-smoke-c7d59ade
+          path: |
+            /tmp/deployment-proof.json
+            hosted-preview-smoke/result.txt
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Record hosted-preview result
+        shell: bash
+        run: |
+          {
+            echo '### PR 477 exact hosted-preview smoke'
+            echo
+            echo "- Candidate: \`$EXPECTED_SHA\`"
+            echo "- Deployment: \`$DEPLOYMENT_ID\`"
+            echo "- Project: \`$EXPECTED_PROJECT_ID\`"
+            echo '- Create shell: passed'
+            echo '- Co-Act and Co-Fund proposal controls: present'
+            echo '- Authentication-resume transform: passed'
+            echo '- Signed-out participant search: correctly failed closed'
+            echo '- Deployment-protection bypass: authenticated through Vercel CLI'
+          } >> "$GITHUB_STEP_SUMMARY"
