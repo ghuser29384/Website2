@@ -1,0 +1,363 @@
+name: Direct verified Donation Upgrade rendered QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/direct-donation-upgrade-rendered-qa.yml"
+      - "tests/direct-donation-upgrade-authenticated.spec.ts"
+      - "src/app/direct-donation-upgrade-actions.ts"
+      - "src/app/trades/new/conditional-donation.tsx"
+      - "src/app/api/donation-upgrades/**"
+      - "src/components/donation-upgrades/**"
+      - "src/lib/direct-donation-upgrade*.ts"
+      - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-donation-upgrade-rendered-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rendered-smoke:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      DIRECT_UPGRADE_RENDERED_BASE_URL: http://127.0.0.1:3211
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"
+      DIRECT_DONATION_UPGRADES_ENABLED: "true"
+      DIRECT_DONATION_UPGRADE_MODE: staging
+      DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
+      EVERY_ORG_WEBHOOK_TOKEN: direct-upgrade-rendered-qa-token
+      EVERY_ORG_WEBHOOK_PATH_SECRET: direct-upgrade-rendered-path-secret-20260801
+      EVERY_ORG_PARTNER_METADATA_SECRET: direct-upgrade-rendered-metadata-secret-20260801
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      VERCEL: "1"
+      VERCEL_ENV: preview
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Validate isolated-QA database target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
+          PY
+
+      - name: Install dependencies and PostgreSQL client
+        run: |
+          npm ci
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Create one ephemeral authenticated QA user
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          printf 'DIRECT_UPGRADE_RENDERED_QA_PASSWORD=%s\n' "$qa_password" >> "$GITHUB_ENV"
+          export DIRECT_UPGRADE_RENDERED_QA_PASSWORD="$qa_password"
+
+          cat > /tmp/direct-upgrade-rendered-fixture.sql <<'SQL'
+          \set ON_ERROR_STOP on
+          \getenv qa_password DIRECT_UPGRADE_RENDERED_QA_PASSWORD
+          begin;
+
+          create temporary table stale_direct_upgrade_offers on commit drop as
+          select id
+          from public.direct_donation_upgrade_offers
+          where creator_profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid;
+
+          update public.direct_donation_upgrade_offers
+          set winning_candidate_id = null
+          where id in (select id from stale_direct_upgrade_offers);
+
+          delete from public.direct_donation_upgrade_audit_events
+          where actor_profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid
+             or offer_id in (select id from stale_direct_upgrade_offers);
+          delete from public.direct_donation_upgrade_impact_credits
+          where profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid
+             or offer_id in (select id from stale_direct_upgrade_offers);
+          delete from public.direct_donation_upgrade_obligations
+          where participant_profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid
+             or offer_id in (select id from stale_direct_upgrade_offers);
+          delete from public.direct_donation_upgrade_candidates
+          where profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid
+             or offer_id in (select id from stale_direct_upgrade_offers);
+          delete from public.direct_donation_upgrade_offers
+          where id in (select id from stale_direct_upgrade_offers);
+
+          delete from public.trade_notifications
+          where user_id = 'd1000000-0000-4000-8000-000000000001'::uuid
+            and notification_type like 'direct_donation_upgrade_%';
+          delete from public.credibility_restrictions
+          where profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid
+            and reason_code = 'direct_donation_upgrade_default';
+
+          delete from moral_trade_private.person_account_aliases
+          where alias_profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid
+             or canonical_profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid;
+          delete from moral_trade_private.person_accounts
+          where profile_id = 'd1000000-0000-4000-8000-000000000001'::uuid;
+
+          delete from auth.users
+          where id = 'd1000000-0000-4000-8000-000000000001'::uuid;
+
+          insert into auth.users (
+            id, instance_id, aud, role, email, encrypted_password,
+            email_confirmed_at, raw_app_meta_data, raw_user_meta_data,
+            confirmation_token, recovery_token, email_change,
+            email_change_token_new, email_change_token_current,
+            reauthentication_token, is_sso_user, is_anonymous,
+            created_at, updated_at
+          ) values (
+            'd1000000-0000-4000-8000-000000000001'::uuid,
+            '00000000-0000-0000-0000-000000000000'::uuid,
+            'authenticated', 'authenticated',
+            'direct-upgrade-rendered-creator@qa.invalid',
+            extensions.crypt(:'qa_password', extensions.gen_salt('bf')),
+            now(),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            '{"display_name":"QA Direct Upgrade Creator","qa_fixture":"direct_upgrade_rendered"}'::jsonb,
+            '', '', '', '', '', '', false, false, now(), now()
+          );
+
+          insert into auth.identities (
+            provider_id, user_id, identity_data, provider,
+            last_sign_in_at, created_at, updated_at
+          ) values (
+            'd1000000-0000-4000-8000-000000000001',
+            'd1000000-0000-4000-8000-000000000001'::uuid,
+            jsonb_build_object(
+              'sub', 'd1000000-0000-4000-8000-000000000001',
+              'email', 'direct-upgrade-rendered-creator@qa.invalid',
+              'email_verified', true
+            ),
+            'email', now(), now(), now()
+          );
+
+          insert into public.profiles (id, email, display_name, bio, affiliation)
+          values (
+            'd1000000-0000-4000-8000-000000000001'::uuid,
+            'direct-upgrade-rendered-creator@qa.invalid',
+            'QA Direct Upgrade Creator',
+            '',
+            'Isolated QA'
+          )
+          on conflict (id) do update
+          set email = excluded.email,
+              display_name = excluded.display_name,
+              bio = excluded.bio,
+              affiliation = excluded.affiliation;
+
+          commit;
+          SQL
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file /tmp/direct-upgrade-rendered-fixture.sql \
+            | tee direct-upgrade-rendered-fixture.log
+
+      - name: Verify the synthetic Auth contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' | tee direct-upgrade-rendered-auth.log
+          import { createClient } from "@supabase/supabase-js";
+
+          const client = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL,
+            process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+            { auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false } },
+          );
+          const { data, error } = await client.auth.signInWithPassword({
+            email: "direct-upgrade-rendered-creator@qa.invalid",
+            password: process.env.DIRECT_UPGRADE_RENDERED_QA_PASSWORD,
+          });
+          if (error || !data.session) {
+            throw new Error(`Synthetic Auth sign-in failed: ${error?.message ?? "no session"}`);
+          }
+          await client.auth.signOut({ scope: "local" });
+          console.log("Verified the isolated-QA Direct Donation Upgrade identity.");
+          NODE
+
+      - name: Build the exact candidate
+        run: npm run build | tee direct-upgrade-rendered-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the exact production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3211 > direct-upgrade-rendered-server.log 2>&1 &
+          echo "$!" > direct-upgrade-rendered-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3211/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 200 direct-upgrade-rendered-server.log
+          exit 1
+
+      - name: Run authenticated desktop and mobile no-charge smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test tests/direct-donation-upgrade-authenticated.spec.ts --reporter=line \
+            | tee direct-upgrade-rendered-browser.log
+
+      - name: Prove the browser created zero Donation Upgrade or payment records
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee direct-upgrade-rendered-no-write.json
+          select jsonb_build_object(
+            'offers', (select count(*) from public.direct_donation_upgrade_offers where creator_profile_id='d1000000-0000-4000-8000-000000000001'),
+            'candidates', (select count(*) from public.direct_donation_upgrade_candidates where profile_id='d1000000-0000-4000-8000-000000000001'),
+            'obligations', (select count(*) from public.direct_donation_upgrade_obligations where participant_profile_id='d1000000-0000-4000-8000-000000000001'),
+            'credits', (select count(*) from public.direct_donation_upgrade_impact_credits where profile_id='d1000000-0000-4000-8000-000000000001'),
+            'auditEvents', (select count(*) from public.direct_donation_upgrade_audit_events where actor_profile_id='d1000000-0000-4000-8000-000000000001'),
+            'mandates', (select count(*) from public.conditional_payment_mandates where profile_id='d1000000-0000-4000-8000-000000000001'),
+            'paymentCustomers', (select count(*) from public.conditional_payment_customers where profile_id='d1000000-0000-4000-8000-000000000001'),
+            'poolObligations', (select count(*) from public.trade_donation_pool_obligations where payer_user_id='d1000000-0000-4000-8000-000000000001')
+          );
+          SQL
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          rows = [line.strip() for line in Path('direct-upgrade-rendered-no-write.json').read_text().splitlines() if line.strip()]
+          state = json.loads(rows[-1])
+          unexpected = {key: value for key, value in state.items() if value != 0}
+          if unexpected:
+              raise SystemExit(f"The no-charge browser smoke created sensitive records: {unexpected}")
+          print(json.dumps(state, sort_keys=True))
+          PY
+
+      - name: Remove the ephemeral identity and prove cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/direct-upgrade-rendered-cleanup.sql <<'SQL'
+          \set ON_ERROR_STOP on
+          begin;
+          create temporary table stale_direct_upgrade_offers on commit drop as
+          select id from public.direct_donation_upgrade_offers
+          where creator_profile_id='d1000000-0000-4000-8000-000000000001'::uuid;
+          update public.direct_donation_upgrade_offers set winning_candidate_id=null
+          where id in (select id from stale_direct_upgrade_offers);
+          delete from public.direct_donation_upgrade_audit_events
+          where actor_profile_id='d1000000-0000-4000-8000-000000000001'::uuid
+             or offer_id in (select id from stale_direct_upgrade_offers);
+          delete from public.direct_donation_upgrade_impact_credits
+          where profile_id='d1000000-0000-4000-8000-000000000001'::uuid
+             or offer_id in (select id from stale_direct_upgrade_offers);
+          delete from public.direct_donation_upgrade_obligations
+          where participant_profile_id='d1000000-0000-4000-8000-000000000001'::uuid
+             or offer_id in (select id from stale_direct_upgrade_offers);
+          delete from public.direct_donation_upgrade_candidates
+          where profile_id='d1000000-0000-4000-8000-000000000001'::uuid
+             or offer_id in (select id from stale_direct_upgrade_offers);
+          delete from public.direct_donation_upgrade_offers
+          where id in (select id from stale_direct_upgrade_offers);
+          delete from public.trade_notifications
+          where user_id='d1000000-0000-4000-8000-000000000001'::uuid
+            and notification_type like 'direct_donation_upgrade_%';
+          delete from public.credibility_restrictions
+          where profile_id='d1000000-0000-4000-8000-000000000001'::uuid
+            and reason_code='direct_donation_upgrade_default';
+          delete from moral_trade_private.person_account_aliases
+          where alias_profile_id='d1000000-0000-4000-8000-000000000001'::uuid
+             or canonical_profile_id='d1000000-0000-4000-8000-000000000001'::uuid;
+          delete from moral_trade_private.person_accounts
+          where profile_id='d1000000-0000-4000-8000-000000000001'::uuid;
+          delete from auth.users where id='d1000000-0000-4000-8000-000000000001'::uuid;
+          commit;
+          SQL
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file /tmp/direct-upgrade-rendered-cleanup.sql \
+            | tee direct-upgrade-rendered-cleanup.log
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee direct-upgrade-rendered-cleanup.json
+          select jsonb_build_object(
+            'authUsers', (select count(*) from auth.users where id='d1000000-0000-4000-8000-000000000001'),
+            'profiles', (select count(*) from public.profiles where id='d1000000-0000-4000-8000-000000000001'),
+            'personAccounts', (select count(*) from moral_trade_private.person_accounts where profile_id='d1000000-0000-4000-8000-000000000001'),
+            'personAccountAliases', (select count(*) from moral_trade_private.person_account_aliases where alias_profile_id='d1000000-0000-4000-8000-000000000001' or canonical_profile_id='d1000000-0000-4000-8000-000000000001'),
+            'offers', (select count(*) from public.direct_donation_upgrade_offers where creator_profile_id='d1000000-0000-4000-8000-000000000001'),
+            'candidates', (select count(*) from public.direct_donation_upgrade_candidates where profile_id='d1000000-0000-4000-8000-000000000001'),
+            'obligations', (select count(*) from public.direct_donation_upgrade_obligations where participant_profile_id='d1000000-0000-4000-8000-000000000001'),
+            'credits', (select count(*) from public.direct_donation_upgrade_impact_credits where profile_id='d1000000-0000-4000-8000-000000000001')
+          );
+          SQL
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          rows = [line.strip() for line in Path('direct-upgrade-rendered-cleanup.json').read_text().splitlines() if line.strip()]
+          state = json.loads(rows[-1])
+          unexpected = {key: value for key, value in state.items() if value != 0}
+          if unexpected:
+              raise SystemExit(f"Direct Donation Upgrade rendered-QA cleanup residue: {unexpected}")
+          print(json.dumps(state, sort_keys=True))
+          PY
+
+      - name: Upload rendered-QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-donation-upgrade-rendered-qa-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            direct-upgrade-rendered-*.log
+            direct-upgrade-rendered-*.json
+            direct-upgrade-rendered-desktop.png
+            direct-upgrade-rendered-mobile.png
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 30
