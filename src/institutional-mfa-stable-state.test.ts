@@ -17,6 +17,10 @@ test("institutional MFA QA waits for the stable rendered AAL2 session state", ()
     qaScript,
     /getByText\("MFA verified for this session\."\)\.waitFor/,
   );
+  assert.match(
+    accountSecurityPanel,
+    /useActionState\(verifyBackgroundNetworkingMfaAction/,
+  );
   assert.match(accountSecurityPanel, /AAL:\s*\{initialSummary\.currentLevel\}/);
   assert.match(accountSecurityPanel, /router\.refresh\(\)/);
 });
