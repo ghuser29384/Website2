@@ -8,11 +8,13 @@ const accountSecurityPanel = readFileSync(
   "utf8",
 );
 
-test("institutional MFA QA verifies the persisted AAL2 session after a completed action", () => {
+test("institutional MFA QA bounds response settling before verifying persisted AAL2", () => {
   assert.match(qaScript, /page\.waitForResponse/);
-  assert.match(qaScript, /actionResponse\.finished\(\)/);
+  assert.match(qaScript, /authCookieSignature/);
+  assert.match(qaScript, /authCookieChanged/);
   assert.match(qaScript, /page\.reload\(\{ waitUntil: "domcontentloaded" \}\)/);
   assert.match(qaScript, /mfa-\$\{user\.role\}-verification\.json/);
+  assert.doesNotMatch(qaScript, /actionResponse\.finished\(\)/);
   assert.doesNotMatch(
     qaScript,
     /getByText\("MFA verified for this session\."\)\.waitFor/,

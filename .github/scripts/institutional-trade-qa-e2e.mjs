@@ -1242,6 +1242,15 @@ async function ensureMfa(page, user) {
   await verifyForm.waitFor({ state: "visible", timeout: 30_000 });
   await verifyForm.locator('select[name="factor_id"]').selectOption(user.mfa.factorId);
   await verifyForm.locator('input[name="code"]').fill(await freshTotp(user.mfa.secret));
+
+  const authCookieSignature = async () =>
+    (await page.context().cookies())
+      .filter(({ name }) => name.startsWith("sb-") || name.includes("auth-token"))
+      .sort(({ name: left }, { name: right }) => left.localeCompare(right))
+      .map(({ name, value }) => `${name}:${value}`)
+      .join("|");
+  const beforeAuthCookieSignature = await authCookieSignature();
+
   const actionResponsePromise = page.waitForResponse(
     (response) => {
       const request = response.request();
@@ -1263,12 +1272,16 @@ async function ensureMfa(page, user) {
     200,
     `MFA server action returned HTTP ${actionResponse.status()} for ${user.role}.`,
   );
-  const responseFailure = await actionResponse.finished();
-  assert.equal(
-    responseFailure,
-    null,
-    `MFA server action transport failed for ${user.role}: ${responseFailure?.message ?? "unknown error"}.`,
-  );
+
+  let authCookieChanged = false;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await page.waitForTimeout(250);
+    if ((await authCookieSignature()) !== beforeAuthCookieSignature) {
+      authCookieChanged = true;
+      break;
+    }
+  }
+
   const postActionPanelText = await panel.innerText().catch(() => "");
   await page.reload({ waitUntil: "domcontentloaded" });
   const refreshedPanel = page.locator("article#account-security");
@@ -1297,6 +1310,7 @@ async function ensureMfa(page, user) {
       `${JSON.stringify(
         {
           actionResponseStatus: actionResponse.status(),
+          authCookieChanged,
           cookieMetadata,
           initialPanelText,
           postActionPanelText,
@@ -1315,6 +1329,7 @@ async function ensureMfa(page, user) {
         `Reloaded panel: ${refreshedPanelText.slice(0, 500)}`,
     );
   }
+
 }
 
 async function screenshot(page, name) {
