@@ -1,4 +1,4 @@
-name: Public route Home main diagnostic 285af803
+name: Public route resolved Home main diagnostic 285af803
 
 on:
   pull_request:
@@ -17,13 +17,13 @@ env:
   BASE_SHA: 87b093751a4c2de909555abdb7f181061bb36390
   CANDIDATE_SHA: 285af8035c4f8ea2b606c7733c70abd2427ecae0
   PRODUCT_PR: "542"
-  EVIDENCE_DIR: public-route-home-main-diagnostic-285af803
+  EVIDENCE_DIR: public-route-resolved-home-main-diagnostic-285af803
   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
   SITE_URL: http://127.0.0.1:3210
   PLAYWRIGHT_HTML_OPEN: never
 
 jobs:
-  diagnose-home-main:
+  diagnose-resolved-home-main:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
 
@@ -68,7 +68,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Write rendered Home landmark diagnostic
+      - name: Write resolved Home landmark diagnostic
         shell: bash
         run: |
           set -euo pipefail
@@ -76,13 +76,14 @@ jobs:
           cat > tests/home-main-diagnostic.spec.ts <<'TS'
           import { expect, test } from "@playwright/test";
 
-          test("records every rendered Home main element", async ({ page }, testInfo) => {
+          test("records every main after the live Home document resolves", async ({ page }, testInfo) => {
             await page.goto("/", { waitUntil: "domcontentloaded" });
-            await page.waitForLoadState("load").catch(() => undefined);
-            await expect(page.locator("body")).not.toHaveText(
-              /Loading Moral Trade\.\s*Opening the requested workflow\./,
-              { timeout: 15_000 },
-            );
+            await expect(page.locator("#mt-live-document-heading")).toHaveCount(1, {
+              timeout: 30_000,
+            });
+            await expect(page.locator('[data-mt-feed-link="true"]')).not.toHaveCount(0, {
+              timeout: 15_000,
+            });
             await page.waitForTimeout(1_000);
 
             const diagnostics = await page.locator("main").evaluateAll((elements) =>
@@ -102,10 +103,12 @@ jobs:
                   parentId: html.parentElement?.id ?? null,
                   parentClassName: html.parentElement?.className ?? null,
                   heading: heading?.textContent?.replace(/\s+/g, " ").trim().slice(0, 240) ?? null,
-                  text: html.textContent?.replace(/\s+/g, " ").trim().slice(0, 500) ?? "",
+                  text: html.textContent?.replace(/\s+/g, " ").trim().slice(0, 700) ?? "",
                   display: style.display,
                   visibility: style.visibility,
                   opacity: style.opacity,
+                  position: style.position,
+                  contentVisibility: style.contentVisibility,
                   width: rect.width,
                   height: rect.height,
                   top: rect.top,
@@ -123,28 +126,46 @@ jobs:
                 };
               }),
             );
+            const controls = await page
+              .locator('[data-mt-feed-link], [data-mt-discover-link], [data-mt-evidence-link]')
+              .evaluateAll((elements) =>
+                elements.map((element, index) => ({
+                  index,
+                  tag: element.tagName,
+                  text: element.textContent?.replace(/\s+/g, " ").trim() ?? "",
+                  href: element.getAttribute("href"),
+                  ariaLabel: element.getAttribute("aria-label"),
+                  display: getComputedStyle(element).display,
+                  width: (element as HTMLElement).getBoundingClientRect().width,
+                  height: (element as HTMLElement).getBoundingClientRect().height,
+                  attributes: Object.fromEntries(
+                    [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
+                  ),
+                })),
+              );
 
             console.log(`HOME_MAIN_DIAGNOSTICS=${JSON.stringify(diagnostics, null, 2)}`);
-            await page.screenshot({ path: testInfo.outputPath("home-full.png"), fullPage: true });
+            console.log(`HOME_NAVIGATION_DIAGNOSTICS=${JSON.stringify(controls, null, 2)}`);
+            await page.screenshot({ path: testInfo.outputPath("resolved-home-full.png"), fullPage: true });
             expect(diagnostics.length).toBeGreaterThan(0);
           });
           TS
 
-      - name: Run rendered Home landmark diagnostic
+      - name: Run resolved Home landmark diagnostic
         shell: bash
         run: |
           set -o pipefail
           rm -rf .next
           npx playwright test tests/home-main-diagnostic.spec.ts --workers=1 --reporter=line \
-            2>&1 | tee "$EVIDENCE_DIR/home-main-diagnostic.log"
+            2>&1 | tee "$EVIDENCE_DIR/resolved-home-main-diagnostic.log"
 
       - name: Upload diagnostic evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: public-route-home-main-diagnostic-285af803
+          name: public-route-resolved-home-main-diagnostic-285af803
           path: |
-            public-route-home-main-diagnostic-285af803
+            public-route-resolved-home-main-diagnostic-285af803
             test-results
           if-no-files-found: error
           retention-days: 14
