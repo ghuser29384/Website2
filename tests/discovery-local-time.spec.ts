@@ -114,11 +114,11 @@ test.describe("Discovery deadline parsing", () => {
     await openOfferList(page);
     await expectCurrentCommandSurface(page);
 
-    await expect(parseDeadlinePhrase(page, "Find offers before August 1", now)).resolves.toEqual({
+    expect(await parseDeadlinePhrase(page, "Find offers before August 1", now)).toEqual({
       parsed: "2026-08-01",
       label: "Aug 1",
     });
-    await expect(parseDeadlinePhrase(page, "Find offers before January 5", now)).resolves.toEqual({
+    expect(await parseDeadlinePhrase(page, "Find offers before January 5", now)).toEqual({
       parsed: "2027-01-05",
       label: "Jan 5",
     });
@@ -130,11 +130,11 @@ test.describe("Discovery deadline parsing", () => {
     await openOfferList(page);
     await expectCurrentCommandSurface(page);
 
-    await expect(parseDeadlinePhrase(page, "Find offers before 2028-03-04", now)).resolves.toEqual({
+    expect(await parseDeadlinePhrase(page, "Find offers before 2028-03-04", now)).toEqual({
       parsed: "2028-03-04",
       label: "Mar 4",
     });
-    await expect(parseDeadlinePhrase(page, "Find offers before 2027-02-29", now)).resolves.toEqual({
+    expect(await parseDeadlinePhrase(page, "Find offers before 2027-02-29", now)).toEqual({
       parsed: "",
       label: "",
     });
