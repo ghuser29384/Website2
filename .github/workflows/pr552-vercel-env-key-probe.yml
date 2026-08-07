@@ -1,0 +1,220 @@
+name: PR 552 Vercel Supabase credential probe
+
+on:
+  push:
+    branches:
+      - ops/pr552-vercel-env-key-probe-20260807
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr552-vercel-env-key-probe
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+  PROD_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact one-use controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard immutable candidate and one-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          git merge-base --is-ancestor "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --check "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --name-only "$CANDIDATE_SHA" "$GITHUB_SHA" | sort > controller-files.txt
+          cat > expected-controller-files.txt <<'EOF'
+          .github/workflows/pr552-vercel-env-key-probe.yml
+          EOF
+          diff -u expected-controller-files.txt controller-files.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Link exact Vercel project and pull Preview and Production environments
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" pull \
+            --yes \
+            --environment=preview \
+            --token="$VERCEL_TOKEN" \
+            > vercel-preview-pull.log
+          test -s .vercel/.env.preview.local
+
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" pull \
+            --yes \
+            --environment=production \
+            --token="$VERCEL_TOKEN" \
+            > vercel-production-pull.log
+          test -s .vercel/.env.production.local
+
+      - name: Probe Supabase-like Vercel variables without exposing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p probe
+
+          for environment in preview production; do
+            env_file=".vercel/.env.${environment}.local"
+            output_file="probe/${environment}.json"
+            (
+              set -a
+              # shellcheck disable=SC1090
+              source "$env_file"
+              set +a
+              PROBE_ENVIRONMENT="$environment" PROBE_OUTPUT="$output_file" python3 <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+          from pathlib import Path
+
+          environment = os.environ["PROBE_ENVIRONMENT"]
+          output = Path(os.environ["PROBE_OUTPUT"])
+          project_ref = os.environ["PROD_SUPABASE_REF"]
+
+          def probe(value: str) -> int:
+              request = urllib.request.Request(
+                  f"https://{project_ref}.supabase.co/auth/v1/admin/users?page=1&per_page=1",
+                  headers={
+                      "apikey": value,
+                      "Authorization": f"Bearer {value}",
+                      "User-Agent": "MoralTrade-PR552-Vercel-env-probe/1",
+                  },
+                  method="GET",
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      response.read(1)
+                      return int(response.status)
+              except urllib.error.HTTPError as error:
+                  error.read(1)
+                  return int(error.code)
+              except (urllib.error.URLError, TimeoutError):
+                  return 0
+
+          candidates = []
+          for name, value in sorted(os.environ.items()):
+              upper = name.upper()
+              if "SUPABASE" not in upper or not value:
+                  continue
+              if upper in {
+                  "NEXT_PUBLIC_SUPABASE_URL",
+                  "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+                  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+                  "SUPABASE_URL",
+              }:
+                  status = None
+              else:
+                  status = probe(value)
+              candidates.append(
+                  {
+                      "name": name,
+                      "adminEndpointStatus": status,
+                      "worksAsProductionAdminCredential": status == 200,
+                  }
+              )
+
+          result = {
+              "schemaVersion": 1,
+              "environment": environment,
+              "candidateNames": [candidate["name"] for candidate in candidates],
+              "candidates": candidates,
+              "workingAdminCredentialNames": [
+                  candidate["name"]
+                  for candidate in candidates
+                  if candidate["worksAsProductionAdminCredential"]
+              ],
+          }
+          output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
+          print(
+              json.dumps(
+                  {
+                      "environment": environment,
+                      "candidateNames": result["candidateNames"],
+                      "workingAdminCredentialNames": result["workingAdminCredentialNames"],
+                  },
+                  sort_keys=True,
+              )
+          )
+          PY
+            )
+          done
+
+          python3 <<'PY'
+          import json
+          from pathlib import Path
+
+          environments = [
+              json.loads(Path(f"probe/{name}.json").read_text(encoding="utf-8"))
+              for name in ("preview", "production")
+          ]
+          result = {
+              "schemaVersion": 1,
+              "environments": environments,
+              "workingCredentials": [
+                  {"environment": environment["environment"], "name": name}
+                  for environment in environments
+                  for name in environment["workingAdminCredentialNames"]
+              ],
+          }
+          Path("probe/summary.json").write_text(
+              json.dumps(result, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(result["workingCredentials"], sort_keys=True))
+          PY
+
+      - name: Prove no secret values entered the evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s probe/summary.json
+          ! grep -RIE \
+            'sb_secret_|eyJ[A-Za-z0-9_-]{20,}|postgres(ql)?://|"value"[[:space:]]*:' \
+            probe controller-files.txt expected-controller-files.txt
+          rm -rf .vercel
+          rm -f vercel-preview-pull.log vercel-production-pull.log
+
+      - name: Upload presence-only evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-vercel-env-key-probe-${{ github.run_id }}
+          path: |
+            controller-files.txt
+            expected-controller-files.txt
+            probe/
+          if-no-files-found: error
+          retention-days: 7
