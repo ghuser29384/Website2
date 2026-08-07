@@ -6,6 +6,7 @@ on:
       - ops/dispatch-dashboard-account-security-preview-20260807
     paths:
       - .github/workflows/dispatch-dashboard-account-security-preview-20260807.yml
+  workflow_dispatch:
 
 permissions:
   actions: write
