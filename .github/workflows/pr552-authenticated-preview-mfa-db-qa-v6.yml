@@ -1,0 +1,597 @@
+name: PR 552 authenticated exact Preview MFA QA v6
+
+on:
+  push:
+    branches:
+      - ops/pr552-authenticated-preview-mfa-db-qa-v6-20260807
+    paths:
+      - .github/workflows/pr552-authenticated-preview-mfa-db-qa-v6.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr552-authenticated-preview-mfa-db-qa-v6
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+  HARNESS_COMMIT: 928a81e30c6eae8f35e56513ac6f0f1a428fd825
+  HARNESS_BLOB: 394366c478fc01d93d6c7f245aba496986f56762
+  DEPLOYMENT_ID: dpl_E4kcbFVK7QpYvdygM8m9sc841DpC
+  PREVIEW_ORIGIN: https://moraltrade-site-n539b73lz-ellen-s.vercel.app
+  EXPECTED_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  NEXT_PUBLIC_SUPABASE_URL: https://jnpoxvalyjtdghnperyu.supabase.co
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  OUTPUT_DIR: pr552-authenticated-preview-mfa-db-v6
+  PRIVATE_STATE_PATH: .qa-private/pr552-authenticated-preview-mfa-db-v6.json
+  HARNESS_PATH: .qa-runtime/pr552-authenticated-preview-mfa-db.mjs
+
+jobs:
+  authenticated-preview-mfa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out the one-use QA controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Prove immutable candidate and one-file controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/pr552-authenticated-preview-mfa-db-qa-v6-20260807'
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          git cat-file -e "${HARNESS_COMMIT}^{commit}"
+          git merge-base --is-ancestor "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --check "$CANDIDATE_SHA" "$GITHUB_SHA"
+          git diff --name-only "$CANDIDATE_SHA" "$GITHUB_SHA" | sort > controller-files.txt
+          cat > expected-controller-files.txt <<'FILES'
+          .github/workflows/pr552-authenticated-preview-mfa-db-qa-v6.yml
+          FILES
+          diff -u expected-controller-files.txt controller-files.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies, Chromium, and PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+
+      - name: Materialize and patch the immutable MFA harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$HARNESS_PATH")"
+          git show "${HARNESS_COMMIT}:.github/scripts/pr552-authenticated-preview-mfa-db.mjs" > "$HARNESS_PATH"
+          test "$(git hash-object "$HARNESS_PATH")" = "$HARNESS_BLOB"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          path = Path(os.environ['HARNESS_PATH'])
+          source = path.read_text(encoding='utf-8')
+
+          replacements = []
+
+          replacements.append((
+          '''const PREVIEW_SHARE_URL = process.env.PR552_PREVIEW_SHARE_URL;''',
+          '''const VERCEL_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;'''))
+
+          replacements.append((
+          '''if (MODE === "test") required("PR552_PREVIEW_SHARE_URL", PREVIEW_SHARE_URL);''',
+          '''if (MODE === "test") {
+            required("VERCEL_AUTOMATION_BYPASS_SECRET", VERCEL_BYPASS_SECRET);
+          }'''))
+
+          replacements.append((
+          '''async function acquirePreviewAccess(context) {
+            const page = await context.newPage();
+            const response = await page.goto(PREVIEW_SHARE_URL, {
+              waitUntil: "domcontentloaded",
+              timeout: 60_000,
+            });
+            if (!response) throw new Error("Preview-share navigation returned no response.");
+            await page.waitForURL((url) => url.origin === previewUrl.origin, { timeout: 60_000 });
+            if (page.url().startsWith("https://vercel.com/")) {
+              throw new Error("Preview-share flow did not establish deployment access.");
+            }
+            await page.close();
+          }''',
+          '''async function acquirePreviewAccess(context) {
+            const page = await context.newPage();
+            const response = await page.goto(PREVIEW_ORIGIN, {
+              waitUntil: "domcontentloaded",
+              timeout: 60_000,
+            });
+            if (!response) throw new Error("Protected Preview navigation returned no response.");
+            if (response.status() !== 200) {
+              throw new Error(`Protected Preview returned HTTP ${response.status()}.`);
+            }
+            const currentUrl = new URL(page.url());
+            if (currentUrl.origin !== previewUrl.origin || currentUrl.hostname === "vercel.com") {
+              throw new Error("Automation bypass did not establish exact Preview access.");
+            }
+            const title = await page.title();
+            if (/vercel/i.test(title) && /log in|authentication|required/i.test(title)) {
+              throw new Error("Automation bypass reached a Vercel authentication page.");
+            }
+            await page.close();
+          }'''))
+
+          replacements.append((
+          '''  const context = await browser.newContext({
+            baseURL: PREVIEW_ORIGIN,
+            viewport,
+            ignoreHTTPSErrors: false,
+          });''',
+          '''  const context = await browser.newContext({
+            baseURL: PREVIEW_ORIGIN,
+            viewport,
+            ignoreHTTPSErrors: false,
+            extraHTTPHeaders: {
+              "x-vercel-protection-bypass": VERCEL_BYPASS_SECRET,
+              "x-vercel-set-bypass-cookie": "true",
+            },
+          });'''))
+
+          replacements.append((
+          '''function runPsql(sql, variables = {}) {
+            const args = [
+              PROD_DB_URL,
+              "--no-psqlrc",
+              "--quiet",
+              "--tuples-only",
+              "--no-align",
+              "--set",
+              "ON_ERROR_STOP=1",
+            ];
+            for (const [name, value] of Object.entries(variables)) {
+              args.push("--set", `${name}=${String(value ?? "")}`);
+            }
+            const result = spawnSync("psql", args, {
+              input: sql,
+          ''',
+          '''function sqlLiteral(value) {
+            return `'${String(value ?? "").replaceAll("'", "''")}'`;
+          }
+
+          function expandPsqlVariables(sql, variables) {
+            const expanded = sql.replace(
+              /:'([A-Za-z_][A-Za-z0-9_]*)'/g,
+              (token, name) => {
+                if (!Object.prototype.hasOwnProperty.call(variables, name)) {
+                  throw new Error(`Missing guarded PostgreSQL variable: ${name}`);
+                }
+                return sqlLiteral(variables[name]);
+              },
+            );
+            if (/:'[A-Za-z_][A-Za-z0-9_]*'/.test(expanded)) {
+              throw new Error("An unresolved guarded PostgreSQL variable remained.");
+            }
+            return expanded;
+          }
+
+          function runPsql(sql, variables = {}) {
+            const expandedSql = expandPsqlVariables(sql, variables);
+            const args = [
+              PROD_DB_URL,
+              "--no-psqlrc",
+              "--quiet",
+              "--tuples-only",
+              "--no-align",
+              "--set",
+              "ON_ERROR_STOP=1",
+            ];
+            const result = spawnSync("psql", args, {
+              input: expandedSql,
+          '''))
+
+          for old, new in replacements:
+              if source.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one harness block to patch; found {source.count(old)}.')
+              source = source.replace(old, new, 1)
+
+          path.write_text(source, encoding='utf-8')
+          PY
+
+          node --check "$HARNESS_PATH"
+          grep -F 'VERCEL_AUTOMATION_BYPASS_SECRET' "$HARNESS_PATH" >/dev/null
+          grep -F 'x-vercel-protection-bypass' "$HARNESS_PATH" >/dev/null
+          grep -F 'x-vercel-set-bypass-cookie' "$HARNESS_PATH" >/dev/null
+          grep -F 'function expandPsqlVariables' "$HARNESS_PATH" >/dev/null
+          if grep -F 'PR552_PREVIEW_SHARE_URL' "$HARNESS_PATH" >/dev/null; then
+            echo 'The runtime harness still depends on a share URL.' >&2
+            exit 1
+          fi
+          if grep -F 'args.push("--set"' "$HARNESS_PATH" >/dev/null; then
+            echo 'The runtime harness still delegates quoted variables to psql.' >&2
+            exit 1
+          fi
+          sha256sum "$HARNESS_PATH" > patched-harness.sha256
+
+      - name: Verify the exact READY Preview
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
+            > exact-deployment.json
+
+          jq -e \
+            --arg deployment_id "$DEPLOYMENT_ID" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg candidate_sha "$CANDIDATE_SHA" \
+            --arg expected_url "${PREVIEW_ORIGIN#https://}" '
+              ((.uid // .id) == $deployment_id)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // null) == null)
+              and ((.aliasError // null) == null)
+              and (.url == $expected_url)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $candidate_sha)
+              and (.meta.moralTradeCandidateSha == $candidate_sha)
+              and (.meta.releaseReason == "pr552-dashboard-account-security-preview")
+            ' exact-deployment.json >/dev/null
+
+      - name: Validate narrowly scoped production database access without printing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${PROD_SUPABASE_DB_URL:-}"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          DB_URL="$PROD_SUPABASE_DB_URL" node <<'NODE'
+          const url = new URL(process.env.DB_URL);
+          const expectedUser = `postgres.${process.env.EXPECTED_SUPABASE_REF}`;
+          if (url.username !== expectedUser) throw new Error('Wrong production database user.');
+          if (!url.hostname.endsWith('.pooler.supabase.com')) throw new Error('Wrong database host.');
+          if (url.pathname !== '/postgres') throw new Error('Wrong database name.');
+          if (!url.password) throw new Error('Production database password is missing.');
+          NODE
+          test "$(PGCONNECT_TIMEOUT=10 psql "$PROD_SUPABASE_DB_URL" -Atqc 'select current_database()')" = 'postgres'
+
+      - name: Generate one-use Vercel automation bypass
+        id: bypass
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          mkdir -p "$OUTPUT_DIR"
+
+          secret="$(openssl rand -hex 16)"
+          [[ "$secret" =~ ^[a-zA-Z0-9]{32}$ ]]
+          echo "::add-mask::$secret"
+          secret_file="$RUNNER_TEMP/pr552-vercel-bypass-secret"
+          printf '%s' "$secret" > "$secret_file"
+          chmod 600 "$secret_file"
+          test "$(stat -c '%a' "$secret_file")" = '600'
+
+          request_file="$RUNNER_TEMP/pr552-vercel-bypass-generate-request.json"
+          response_file="$RUNNER_TEMP/pr552-vercel-bypass-generate-response.json"
+          jq -n \
+            --arg secret "$secret" \
+            --arg note "PR552 exact Preview MFA QA run ${GITHUB_RUN_ID}" \
+            '{generate:{secret:$secret,note:$note}}' > "$request_file"
+
+          response_code="$(curl -sS \
+            -o "$response_file" \
+            -w '%{http_code}' \
+            -X PATCH \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/protection-bypass?teamId=${VERCEL_ORG_ID}" \
+            --data-binary @"$request_file")"
+          test "$response_code" = '200'
+          jq -e --arg secret "$secret" '(.protectionBypass // {}) | has($secret)' \
+            "$response_file" >/dev/null
+
+          post_count="$(jq '(.protectionBypass // {}) | length' "$response_file")"
+          pre_count="$((post_count - 1))"
+          test "$pre_count" -ge 0
+          jq -n \
+            --arg projectId "$VERCEL_PROJECT_ID" \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            --argjson preexistingBypassCount "$pre_count" \
+            --argjson postGenerationBypassCount "$post_count" \
+            --arg generatedAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            '{schemaVersion:1,projectId:$projectId,deploymentId:$deploymentId,generated:true,preexistingBypassCount:$preexistingBypassCount,postGenerationBypassCount:$postGenerationBypassCount,generatedAt:$generatedAt}' \
+            > "$OUTPUT_DIR/vercel-bypass-generation-proof.json"
+
+          rm -f "$request_file" "$response_file"
+
+      - name: Run authenticated desktop and mobile MFA lifecycle
+        id: lifecycle
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$OUTPUT_DIR" "$(dirname "$PRIVATE_STATE_PATH")"
+          secret_file="$RUNNER_TEMP/pr552-vercel-bypass-secret"
+          if [[ ! -s "$secret_file" ]]; then
+            echo 'The one-use Vercel bypass secret is unavailable.' >&2
+            printf '%s\n' 125 > "$OUTPUT_DIR/test-exit-code.txt"
+            echo 'exit_code=125' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          export VERCEL_AUTOMATION_BYPASS_SECRET="$(cat "$secret_file")"
+          echo "::add-mask::$VERCEL_AUTOMATION_BYPASS_SECRET"
+          export PR552_PREVIEW_ORIGIN="$PREVIEW_ORIGIN"
+          export PR552_EXPECTED_SHA="$CANDIDATE_SHA"
+          export PR552_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID"
+          export PR552_EXPECTED_SUPABASE_REF="$EXPECTED_SUPABASE_REF"
+          export PR552_OUTPUT_DIR="$OUTPUT_DIR"
+          export PR552_PRIVATE_STATE_PATH="$PRIVATE_STATE_PATH"
+
+          set +e
+          node "$HARNESS_PATH" \
+            > >(tee "$OUTPUT_DIR/test.log") \
+            2> >(tee "$OUTPUT_DIR/test.stderr.log" >&2)
+          exit_code=$?
+          set -e
+
+          printf '%s\n' "$exit_code" > "$OUTPUT_DIR/test-exit-code.txt"
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Run independent exact Supabase cleanup retry
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          export PR552_PREVIEW_ORIGIN="$PREVIEW_ORIGIN"
+          export PR552_EXPECTED_SHA="$CANDIDATE_SHA"
+          export PR552_EXPECTED_DEPLOYMENT_ID="$DEPLOYMENT_ID"
+          export PR552_EXPECTED_SUPABASE_REF="$EXPECTED_SUPABASE_REF"
+          export PR552_OUTPUT_DIR="$OUTPUT_DIR"
+          export PR552_PRIVATE_STATE_PATH="$PRIVATE_STATE_PATH"
+
+          set +e
+          node "$HARNESS_PATH" --cleanup-only \
+            > >(tee "$OUTPUT_DIR/cleanup-retry.log") \
+            2> >(tee "$OUTPUT_DIR/cleanup-retry.stderr.log" >&2)
+          exit_code=$?
+          set -e
+
+          printf '%s\n' "$exit_code" > "$OUTPUT_DIR/cleanup-retry-exit-code.txt"
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Revoke exactly the one-use Vercel automation bypass
+        id: revoke-bypass
+        if: always()
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          secret_file="$RUNNER_TEMP/pr552-vercel-bypass-secret"
+          generation_proof="$OUTPUT_DIR/vercel-bypass-generation-proof.json"
+
+          if [[ ! -s "$secret_file" ]]; then
+            jq -n \
+              --arg projectId "$VERCEL_PROJECT_ID" \
+              --arg deploymentId "$DEPLOYMENT_ID" \
+              '{schemaVersion:1,projectId:$projectId,deploymentId:$deploymentId,generated:false,revoked:false,reason:"No one-use secret file existed."}' \
+              > "$OUTPUT_DIR/vercel-bypass-revocation-proof.json"
+            exit 0
+          fi
+
+          test -n "${VERCEL_TOKEN:-}"
+          secret="$(cat "$secret_file")"
+          echo "::add-mask::$secret"
+          request_file="$RUNNER_TEMP/pr552-vercel-bypass-revoke-request.json"
+          response_file="$RUNNER_TEMP/pr552-vercel-bypass-revoke-response.json"
+          jq -n --arg secret "$secret" '{revoke:{secret:$secret,regenerate:false}}' > "$request_file"
+
+          response_code="$(curl -sS \
+            -o "$response_file" \
+            -w '%{http_code}' \
+            -X PATCH \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            "https://api.vercel.com/v1/projects/${VERCEL_PROJECT_ID}/protection-bypass?teamId=${VERCEL_ORG_ID}" \
+            --data-binary @"$request_file")"
+          test "$response_code" = '200'
+          jq -e --arg secret "$secret" '((.protectionBypass // {}) | has($secret)) | not' \
+            "$response_file" >/dev/null
+
+          post_count="$(jq '(.protectionBypass // {}) | length' "$response_file")"
+          pre_count="$(jq -r '.preexistingBypassCount' "$generation_proof")"
+          test "$post_count" -eq "$pre_count"
+
+          jq -n \
+            --arg projectId "$VERCEL_PROJECT_ID" \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            --argjson preexistingBypassCount "$pre_count" \
+            --argjson postRevocationBypassCount "$post_count" \
+            --arg revokedAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            '{schemaVersion:1,projectId:$projectId,deploymentId:$deploymentId,generated:true,revoked:true,exactGeneratedSecretAbsent:true,preexistingBypassCount:$preexistingBypassCount,postRevocationBypassCount:$postRevocationBypassCount,revokedAt:$revokedAt}' \
+            > "$OUTPUT_DIR/vercel-bypass-revocation-proof.json"
+
+          rm -f "$request_file" "$response_file" "$secret_file"
+          test ! -e "$secret_file"
+
+      - name: Verify fail-closed lifecycle and cleanup evidence
+        if: always()
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const outputDir = process.env.OUTPUT_DIR;
+          const readJson = (name) => {
+            const file = path.join(outputDir, name);
+            if (!fs.existsSync(file)) throw new Error(`Missing ${name}.`);
+            return JSON.parse(fs.readFileSync(file, 'utf8'));
+          };
+          const readExit = (name) => {
+            const file = path.join(outputDir, name);
+            if (!fs.existsSync(file)) return 255;
+            return Number.parseInt(fs.readFileSync(file, 'utf8').trim(), 10);
+          };
+          const assert = (condition, message) => {
+            if (!condition) throw new Error(message);
+          };
+          const emptyDiagnostics = (diagnostics) =>
+            diagnostics &&
+            diagnostics.consoleErrors.length === 0 &&
+            diagnostics.pageErrors.length === 0 &&
+            diagnostics.requestFailures.length === 0 &&
+            diagnostics.httpErrors.length === 0;
+
+          const generation = readJson('vercel-bypass-generation-proof.json');
+          const revocation = readJson('vercel-bypass-revocation-proof.json');
+          assert(generation.generated === true, 'The one-use Vercel bypass was not generated.');
+          assert(revocation.generated === true, 'The revocation proof does not bind a generated bypass.');
+          assert(revocation.revoked === true, 'The one-use Vercel bypass was not revoked.');
+          assert(revocation.exactGeneratedSecretAbsent === true, 'Exact bypass absence was not proved.');
+          assert(
+            revocation.postRevocationBypassCount === generation.preexistingBypassCount,
+            'The project bypass count was not restored.',
+          );
+
+          assert(readExit('test-exit-code.txt') === 0, 'Authenticated lifecycle failed.');
+          assert(readExit('cleanup-retry-exit-code.txt') === 0, 'Independent cleanup retry failed.');
+
+          const state = readJson('state.json');
+          const result = readJson('result.json');
+          const cleanup = readJson('cleanup.json');
+          const retry = readJson('cleanup-only-result.json');
+
+          assert(state.candidateSha === process.env.CANDIDATE_SHA, 'Candidate SHA mismatch.');
+          assert(state.deploymentId === process.env.DEPLOYMENT_ID, 'Deployment ID mismatch.');
+          assert(state.supabaseRef === process.env.EXPECTED_SUPABASE_REF, 'Supabase ref mismatch.');
+          assert(state.userCreated === true, 'Temporary user creation was not proved.');
+          assert(typeof state.userId === 'string' && state.userId.length > 20, 'Temporary user ID missing.');
+          assert(Array.isArray(state.beforeFactorIds) && state.beforeFactorIds.length === 0, 'Fresh temporary user had an MFA factor.');
+          assert(typeof state.factorId === 'string' && state.factorId.length > 20, 'Created factor ID missing.');
+
+          assert(result.testPassed === true, 'Authenticated lifecycle did not pass.');
+          assert(result.cleanupPassed === true, 'In-process cleanup did not pass.');
+          assert(result.desktop?.verifiedFactors === 1, 'Desktop did not show one verified factor.');
+          assert(result.desktop?.sessionLevel === 'aal2', 'Desktop session did not reach AAL2.');
+          assert(result.desktop?.horizontalOverflow <= 1, 'Desktop horizontal overflow exceeded one pixel.');
+          assert(emptyDiagnostics(result.desktop?.diagnostics), 'Desktop diagnostics were not empty.');
+          assert(result.mobile?.verifiedFactors === 1, 'Mobile did not show one verified factor.');
+          assert(result.mobile?.sessionLevel === 'aal2', 'Mobile session did not reach AAL2.');
+          assert(result.mobile?.horizontalOverflow <= 1, 'Mobile horizontal overflow exceeded one pixel.');
+          assert(emptyDiagnostics(result.mobile?.diagnostics), 'Mobile diagnostics were not empty.');
+
+          const lifecycle = result.factorLifecycle;
+          assert(lifecycle?.exactSingleNewFactor === true, 'Exactly-one-new-factor proof failed.');
+          assert(lifecycle.createdFactorId === state.factorId, 'Created factor ID mismatch.');
+          assert(lifecycle.beforeFactorIds.length === 0, 'Factor baseline was not empty.');
+          assert(lifecycle.afterEnrollmentIds.length === 1, 'Enrollment did not produce exactly one factor.');
+          assert(lifecycle.afterEnrollmentIds[0] === state.factorId, 'Enrollment factor ID mismatch.');
+          assert(lifecycle.afterVerificationIds.length === 1, 'Verification changed the factor set.');
+          assert(lifecycle.afterVerificationIds[0] === state.factorId, 'Verified factor ID mismatch.');
+          assert(lifecycle.verifiedStatus === 'verified', 'Created factor was not verified.');
+
+          assert(cleanup.exactFactorOnly === true, 'Cleanup was not exact-factor-only.');
+          assert(cleanup.apiFactorCleanupError === null, 'User-level exact-factor cleanup failed.');
+          assert(cleanup.apiFactorCleanup?.exactFactorOnly === true, 'User-level cleanup was not exact.');
+          assert(cleanup.apiFactorCleanup?.deletedFactorId === state.factorId, 'User-level cleanup deleted a different factor.');
+          assert(cleanup.apiFactorCleanup?.factorsBeforeCleanup.length === 1, 'Cleanup did not observe exactly one factor.');
+          assert(cleanup.apiFactorCleanup?.factorsBeforeCleanup[0] === state.factorId, 'Cleanup observed an unexpected factor.');
+          assert(cleanup.apiFactorCleanup?.factorsAfterCleanup.length === 0, 'Factor set did not return to baseline.');
+          assert(cleanup.databaseCleanup?.userAbsent === true, 'Temporary user was not removed.');
+          assert(cleanup.userAbsent === true, 'In-process cleanup did not prove user absence.');
+          assert(retry.exactFactorOnly === true, 'Independent cleanup retry was not exact-factor-only.');
+          assert(retry.userAbsent === true, 'Independent cleanup retry did not prove user absence.');
+
+          const summary = {
+            schemaVersion: 1,
+            candidateSha: result.candidateSha,
+            deploymentId: result.deploymentId,
+            desktop: {
+              sessionLevel: result.desktop.sessionLevel,
+              verifiedFactors: result.desktop.verifiedFactors,
+              horizontalOverflow: result.desktop.horizontalOverflow,
+            },
+            mobile: {
+              sessionLevel: result.mobile.sessionLevel,
+              verifiedFactors: result.mobile.verifiedFactors,
+              horizontalOverflow: result.mobile.horizontalOverflow,
+            },
+            exactSingleNewFactor: lifecycle.exactSingleNewFactor,
+            exactFactorDeleted: cleanup.apiFactorCleanup.deletedFactorId,
+            factorSetRestored: cleanup.apiFactorCleanup.factorsAfterCleanup,
+            userAbsent: cleanup.userAbsent,
+            independentCleanupProvedAbsence: retry.userAbsent,
+            vercelBypassRevoked: revocation.revoked,
+            vercelBypassCountRestored: revocation.postRevocationBypassCount,
+          };
+          fs.writeFileSync(
+            path.join(outputDir, 'verified-summary.json'),
+            `${JSON.stringify(summary, null, 2)}\n`,
+          );
+          NODE
+
+          {
+            echo '### PR 552 authenticated exact Preview MFA QA'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Deployment: \`$DEPLOYMENT_ID\`"
+            echo '- Desktop: one verified factor; session promoted from AAL1 to AAL2'
+            echo '- Mobile: fresh AAL1 session promoted to AAL2 with the same factor'
+            echo '- Supabase cleanup: exactly the run-created factor removed, factor set restored, temporary user absent'
+            echo '- Vercel cleanup: one-use automation bypass revoked and pre-test bypass count restored'
+            echo '- Diagnostics: no browser console, page, request, HTTP, or horizontal-overflow failures'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove private runtime credentials and temporary harness
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .qa-private .qa-runtime
+          rm -f "$RUNNER_TEMP/pr552-vercel-bypass-secret" \
+            "$RUNNER_TEMP/pr552-vercel-bypass-generate-request.json" \
+            "$RUNNER_TEMP/pr552-vercel-bypass-generate-response.json" \
+            "$RUNNER_TEMP/pr552-vercel-bypass-revoke-request.json" \
+            "$RUNNER_TEMP/pr552-vercel-bypass-revoke-response.json"
+          test ! -e "$PRIVATE_STATE_PATH"
+          test ! -e "$HARNESS_PATH"
+          test ! -e "$RUNNER_TEMP/pr552-vercel-bypass-secret"
+
+      - name: Archive authenticated Preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-authenticated-preview-mfa-db-v6-${{ github.run_id }}
+          path: |
+            exact-deployment.json
+            controller-files.txt
+            expected-controller-files.txt
+            patched-harness.sha256
+            pr552-authenticated-preview-mfa-db-v6
+          if-no-files-found: warn
+          retention-days: 30
