@@ -1,4 +1,4 @@
-name: Public route shell exact gates 36f20ec4
+name: Public route shell exact gates 78752a0c
 
 on:
   pull_request:
@@ -15,11 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BASE_SHA: 87b093751a4c2de909555abdb7f181061bb36390
-  CANDIDATE_SHA: 36f20ec464b6b4efab7cb8065faeef56f4d11a38
+  BASE_SHA: 3e2dc52dc128fd6f05935e2d74ace21db6f9b238
+  CANDIDATE_SHA: 78752a0c4a38920ae04c806c56753ae8ed84a3f3
   PRODUCT_PR: "542"
   STATUS_CONTEXT: QA / Public route shell exact gates
-  EVIDENCE_DIR: public-route-shell-evidence-36f20ec4
+  EVIDENCE_DIR: public-route-shell-evidence-78752a0c
   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
   SITE_URL: http://127.0.0.1:3210
   PLAYWRIGHT_HTML_OPEN: never
@@ -39,7 +39,7 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
             -f state=pending \
             -f context="$STATUS_CONTEXT" \
-            -f description="Running source, focused route, and current-main differential gates" \
+            -f description="Running exact source, focused-route, and current-main differential gates" \
             -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Guard product PR identity and exact scope
@@ -59,8 +59,8 @@ jobs:
             "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
             --jq '.[].filename' | sort)"
           expected_files="$(printf '%s\n' \
+            'public/moral-trade-live-navigation.js' \
             'src/app/donation-offsets/error.tsx' \
-            'src/app/page.tsx' \
             'src/app/priority-correction-fund/error.tsx' \
             'src/components/create/create-interface-frame.tsx' \
             'src/components/layout/public-route-error.tsx' \
@@ -81,8 +81,8 @@ jobs:
           git fetch --depth=1 origin "$BASE_SHA"
           actual_files="$(git diff --name-only "$BASE_SHA" "$CANDIDATE_SHA" | sort)"
           expected_files="$(printf '%s\n' \
+            'public/moral-trade-live-navigation.js' \
             'src/app/donation-offsets/error.tsx' \
-            'src/app/page.tsx' \
             'src/app/priority-correction-fund/error.tsx' \
             'src/components/create/create-interface-frame.tsx' \
             'src/components/layout/public-route-error.tsx' \
@@ -110,6 +110,8 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          node --check public/moral-trade-live-navigation.js \
+            2>&1 | tee "$EVIDENCE_DIR/live-navigation-syntax.log"
           npm test 2>&1 | tee "$EVIDENCE_DIR/source-tests.log"
           npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
           npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
@@ -184,7 +186,9 @@ jobs:
           unique.sort((left, right) => left.key.localeCompare(right.key));
 
           const hydrationPattern = /hydrated but some attributes of the server rendered HTML didn't match|Hydration failed because the server rendered HTML didn't match/;
-          const publicRouteFailures = unique.filter((failure) => failure.file.endsWith('public-routes.spec.ts'));
+          const publicRouteFailures = unique.filter((failure) =>
+            failure.file.endsWith('public-routes.spec.ts'),
+          );
           const hydrationFailures = unique.filter((failure) =>
             failure.errors.some((error) => hydrationPattern.test(error)),
           );
@@ -299,6 +303,7 @@ jobs:
           {
             echo '## Public-route shell exact gates'
             echo
+            echo "- Base: \`$BASE_SHA\`"
             echo "- Candidate: \`$CANDIDATE_SHA\`"
             echo "- Base failures: \`$(jq -r '.base.failureCount' "$EVIDENCE_DIR/current-main-differential.json")\`"
             echo "- Candidate failures: \`$(jq -r '.candidate.failureCount' "$EVIDENCE_DIR/current-main-differential.json")\`"
@@ -312,8 +317,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: public-route-shell-gates-36f20ec4
-          path: public-route-shell-evidence-36f20ec4
+          name: public-route-shell-gates-78752a0c
+          path: public-route-shell-evidence-78752a0c
           if-no-files-found: error
           retention-days: 14
 
