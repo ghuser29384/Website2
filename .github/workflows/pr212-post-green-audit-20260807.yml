@@ -1,0 +1,188 @@
+name: PR 212 post-green evidence and preview audit 20260807
+
+on:
+  push:
+    branches:
+      - ops/pr212-post-green-audit-20260807
+    paths:
+      - .github/workflows/pr212-post-green-audit-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  deployments: read
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: pr212-post-green-audit-20260807
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: "212"
+      TARGET_BRANCH: feat/institutional-trade-system
+      SOURCE_MARKER: pr212-clean-trigger-reverify-20260807
+      PREVIEW_HOST: website2-git-feat-institutional-trade-system-ellen-s.vercel.app
+      VERCEL_BYPASS_A: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      VERCEL_BYPASS_B: ${{ secrets.VERCEL_PROTECTION_BYPASS_SECRET }}
+    steps:
+      - name: Audit evidence, review state, and exact branch preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          report=/tmp/pr212-post-green-report.md
+          : > "$report"
+
+          comment_report() {
+            gh pr comment "$PR_NUMBER" --repo "$repo" --body-file "$report"
+          }
+
+          fail_report() {
+            local message="$1"
+            printf '\n**Post-green audit result:** BLOCKED — %s\n' "$message" >> "$report"
+            printf '\nPR #212 remains draft and unmerged. No production database, deployment promotion, payment, custody, payout, enterprise-integration, or institutional feature-flag state was changed.\n' >> "$report"
+            comment_report || true
+            echo "$message" >&2
+            exit 1
+          }
+
+          source_comment=""
+          for attempt in $(seq 1 1200); do
+            source_comment="$(gh api "repos/${repo}/issues/${PR_NUMBER}/comments?per_page=100" --paginate \
+              --jq '.[] | select(.body | contains("'"$SOURCE_MARKER"'") and contains("Cleanup-controller result:** PASS")) | .body' | tail -n1)"
+            [[ -n "$source_comment" ]] && break
+            sleep 15
+          done
+          [[ -n "$source_comment" ]] || fail_report "No PASS record from the cleaned exact-head controller was found."
+
+          cleaned_head="$(sed -n 's/^- Cleaned feature head: `\([^`]*\)`.*/\1/p' <<<"$source_comment" | head -n1)"
+          cleanup_run_id="$(sed -n 's#^- Cleanup exact-head QA run: https://github.com/[^/]*/[^/]*/actions/runs/\([0-9]*\).*#\1#p' <<<"$source_comment" | head -n1)"
+          [[ -n "$cleaned_head" && -n "$cleanup_run_id" ]] || \
+            fail_report "The cleanup PASS record did not contain the exact head and QA run."
+
+          pr_json="$(gh api "repos/${repo}/pulls/${PR_NUMBER}")"
+          state="$(jq -r '.state' <<<"$pr_json")"
+          draft="$(jq -r '.draft' <<<"$pr_json")"
+          merged="$(jq -r '.merged' <<<"$pr_json")"
+          current_head="$(jq -r '.head.sha' <<<"$pr_json")"
+          mergeable="$(jq -r '.mergeable' <<<"$pr_json")"
+          [[ "$state" == "open" && "$draft" == "true" && "$merged" == "false" ]] || \
+            fail_report "PR #212 was not open, draft, and unmerged."
+          [[ "$current_head" == "$cleaned_head" ]] || \
+            fail_report "Feature head drifted after cleanup QA: $current_head"
+
+          qa_json="$(gh api "repos/${repo}/actions/runs/${cleanup_run_id}")"
+          qa_head="$(jq -r '.head_sha' <<<"$qa_json")"
+          qa_status="$(jq -r '.status' <<<"$qa_json")"
+          qa_conclusion="$(jq -r '.conclusion // ""' <<<"$qa_json")"
+          [[ "$qa_head" == "$cleaned_head" && "$qa_status" == "completed" && "$qa_conclusion" == "success" ]] || \
+            fail_report "The recorded cleanup QA is not a successful terminal run for the exact feature head."
+
+          cat >> "$report" <<EOF
+          <!-- pr212-post-green-audit-20260807 -->
+          ## PR #212 post-green evidence and preview audit
+
+          - Exact cleaned feature head: \`$cleaned_head\`
+          - Exact successful QA run: https://github.com/$repo/actions/runs/$cleanup_run_id
+          - PR mergeable response: \`$mergeable\`
+          EOF
+
+          artifacts_json="$(gh api "repos/${repo}/actions/runs/${cleanup_run_id}/artifacts?per_page=100")"
+          artifact_count="$(jq -r '.total_count' <<<"$artifacts_json")"
+          artifact_names="$(jq -r '[.artifacts[] | select(.expired == false) | .name] | join(", ")' <<<"$artifacts_json")"
+          [[ "$artifact_count" -gt 0 && -n "$artifact_names" ]] || \
+            fail_report "The successful QA run has no unexpired evidence artifact."
+          printf -- '- QA evidence artifacts: %s\n' "$artifact_names" >> "$report"
+
+          rm -rf /tmp/pr212-artifacts
+          mkdir -p /tmp/pr212-artifacts
+          gh run download "$cleanup_run_id" --repo "$repo" --dir /tmp/pr212-artifacts
+          file_count="$(find /tmp/pr212-artifacts -type f | wc -l | tr -d ' ')"
+          [[ "$file_count" -gt 0 ]] || fail_report "Evidence artifacts downloaded but contained no files."
+          printf -- '- Downloaded evidence files: %s\n' "$file_count" >> "$report"
+
+          python - <<'PY'
+          from pathlib import Path
+          import json, re, sys
+          root = Path('/tmp/pr212-artifacts')
+          bad = []
+          parsed_json = 0
+          patterns = [
+              (re.compile(r'"(?:feature_only_failures|new_failures|synthetic_auth_users|synthetic_profiles|cancelled_tests)"\s*:\s*([1-9][0-9]*)', re.I), 'nonzero failure/residue field'),
+              (re.compile(r'"(?:test_count_reduced|coverage_reduced)"\s*:\s*true', re.I), 'reduction flag'),
+              (re.compile(r'(?:feature-only failures|new failures|synthetic auth users|synthetic profiles|cancelled tests)\s*[:=]\s*([1-9][0-9]*)', re.I), 'nonzero text summary'),
+          ]
+          for path in root.rglob('*'):
+              if not path.is_file() or path.stat().st_size > 20_000_000:
+                  continue
+              try:
+                  text = path.read_text(errors='replace')
+              except Exception:
+                  continue
+              if path.suffix.lower() == '.json':
+                  try:
+                      json.loads(text)
+                      parsed_json += 1
+                  except Exception as exc:
+                      bad.append(f'{path}: invalid JSON ({exc})')
+              for pattern, label in patterns:
+                  if pattern.search(text):
+                      bad.append(f'{path}: {label}')
+          Path('/tmp/artifact-audit.json').write_text(json.dumps({'parsed_json': parsed_json, 'bad': bad}, indent=2))
+          if bad:
+              print('\n'.join(bad), file=sys.stderr)
+              raise SystemExit(1)
+          PY
+          artifact_json_count="$(jq -r '.parsed_json' /tmp/artifact-audit.json)"
+          printf -- '- Independently parsed evidence JSON files: %s\n' "$artifact_json_count" >> "$report"
+
+          unresolved="$(gh api graphql \
+            -f owner="${repo%%/*}" \
+            -f name="${repo##*/}" \
+            -F number="$PR_NUMBER" \
+            -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{isResolved}}}}}' \
+            --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length')"
+          printf -- '- Unresolved review threads: %s\n' "$unresolved" >> "$report"
+          [[ "$unresolved" == "0" ]] || fail_report "Unresolved review threads remain: $unresolved"
+
+          files_json="$(gh api "repos/${repo}/pulls/${PR_NUMBER}/files?per_page=100" --paginate)"
+          temp_paths="$(jq -r '.[].filename' <<<"$files_json" | grep -E '^\.github/(pr212-.*trigger|workflows/pr212-(advance|promote|clean-trigger|post-green).*)' || true)"
+          [[ -z "$temp_paths" ]] || fail_report "Temporary PR #212 controller or trigger paths remain in the product diff: $temp_paths"
+          printf -- '- Temporary controller/trigger paths in product diff: none\n' >> "$report"
+
+          preview="https://${PREVIEW_HOST}"
+          bypass="${VERCEL_BYPASS_A:-${VERCEL_BYPASS_B:-}}"
+          failures=0
+          for route in / /institutions /institutions/individual /institutions/new /admin/institutional-deal-desk; do
+            out="/tmp/preview$(echo "$route" | tr '/' '_' | tr -cd '[:alnum:]_').html"
+            headers="/tmp/headers$(echo "$route" | tr '/' '_' | tr -cd '[:alnum:]_').txt"
+            args=(-sS -L --max-time 60 -D "$headers" -o "$out" -w '%{http_code}')
+            if [[ -n "$bypass" ]]; then
+              args+=(-H "x-vercel-protection-bypass: $bypass")
+            fi
+            code="$(curl "${args[@]}" "$preview$route" || printf '000')"
+            printf -- '- Preview `%s`: HTTP `%s`\n' "$route" "$code" >> "$report"
+            if [[ "$code" == "000" || "$code" =~ ^5 ]]; then
+              failures=$((failures + 1))
+            fi
+            if grep -Eqi 'DEPLOYMENT_NOT_FOUND|Application error|Internal Server Error' "$out" 2>/dev/null; then
+              failures=$((failures + 1))
+            fi
+          done
+          [[ "$failures" -eq 0 ]] || fail_report "Protected-preview route smoke reported $failures failure(s)."
+
+          cat >> "$report" <<EOF
+
+          **Post-green audit result:** PASS — exact-head QA evidence, residue-sensitive artifact scan, temporary-file inventory, review-thread state, and protected-preview route smoke all passed.
+
+          PR #212 remains draft and unmerged. This audit does not authorize production migration, deployment promotion, payment, custody, payout, enterprise integration, or institutional feature activation. The remaining step is a deliberate final product/release decision based on the exact evidence above.
+          EOF
+          comment_report
