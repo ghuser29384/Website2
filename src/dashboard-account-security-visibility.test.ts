@@ -44,9 +44,9 @@ test("only Account security is exposed from the otherwise hidden legacy workspac
 
 test("the exposed card contains the complete authenticator enrollment flow", () => {
   assert.match(accountSecurityPanel, /id="account-security"/);
-  assert.match(accountSecurityPanel, />Account security</);
-  assert.match(accountSecurityPanel, />Create MFA setup</);
+  assert.match(accountSecurityPanel, />\s*Account security\s*</);
+  assert.match(accountSecurityPanel, />\s*Create MFA setup\s*</);
   assert.match(accountSecurityPanel, /alt="Authenticator app setup QR code"/);
-  assert.match(accountSecurityPanel, />Verify MFA setup</);
+  assert.match(accountSecurityPanel, />\s*Verify MFA setup\s*</);
   assert.match(accountSecurityPanel, /autoComplete="one-time-code"/);
 });
