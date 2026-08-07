@@ -1,0 +1,166 @@
+name: PR 212 remove one-use trigger and reverify 20260807
+
+on:
+  push:
+    branches:
+      - ops/pr212-clean-trigger-reverify-20260807
+    paths:
+      - .github/workflows/pr212-clean-trigger-reverify-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-clean-trigger-reverify-20260807
+  cancel-in-progress: false
+
+jobs:
+  cleanup-and-reverify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: "212"
+      TARGET_BRANCH: feat/institutional-trade-system
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+      SOURCE_MARKER: pr212-promote-integrated-candidate-20260807
+      TRIGGER_PATH: .github/pr212-exact-head-qa-trigger-20260804.txt
+    steps:
+      - name: Remove only proven one-use trigger and rerun exact-head QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          report=/tmp/pr212-cleanup-report.md
+          : > "$report"
+
+          comment_report() {
+            gh pr comment "$PR_NUMBER" --repo "$repo" --body-file "$report"
+          }
+
+          fail_report() {
+            local message="$1"
+            printf '\n**Cleanup-controller result:** BLOCKED — %s\n' "$message" >> "$report"
+            printf '\nPR #212 remains draft and unmerged. No production database, deployment, payment, custody, payout, enterprise-integration, or institutional feature-flag state was changed.\n' >> "$report"
+            comment_report || true
+            echo "$message" >&2
+            exit 1
+          }
+
+          latest_run_for_head() {
+            local workflow_id="$1"
+            local branch="$2"
+            local head_sha="$3"
+            local event_filter="${4:-}"
+            local payload
+            payload="$(gh api "repos/${repo}/actions/workflows/${workflow_id}/runs?branch=${branch}&per_page=100")"
+            if [[ -n "$event_filter" ]]; then
+              jq -r --arg head "$head_sha" --arg event "$event_filter" '.workflow_runs | map(select(.head_sha == $head and .event == $event)) | sort_by(.created_at) | reverse | .[0].id // empty' <<<"$payload"
+            else
+              jq -r --arg head "$head_sha" '.workflow_runs | map(select(.head_sha == $head)) | sort_by(.created_at) | reverse | .[0].id // empty' <<<"$payload"
+            fi
+          }
+
+          wait_for_run() {
+            local run_id="$1"
+            local status conclusion
+            for attempt in $(seq 1 1200); do
+              status="$(gh api "repos/${repo}/actions/runs/${run_id}" --jq '.status')"
+              conclusion="$(gh api "repos/${repo}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+              if [[ "$status" == "completed" ]]; then
+                printf -- '- Cleanup exact-head QA run: https://github.com/%s/actions/runs/%s\n' "$repo" "$run_id" >> "$report"
+                printf -- '- Cleanup exact-head QA conclusion: **%s**\n' "${conclusion:-unknown}" >> "$report"
+                gh api "repos/${repo}/actions/runs/${run_id}/jobs?per_page=100" > /tmp/cleanup-jobs.json
+                local failed
+                failed="$(jq -r '[.jobs[]? | .steps[]? | select(.conclusion == "failure") | .name] | unique | join(", ")' /tmp/cleanup-jobs.json)"
+                printf -- '- Cleanup exact-head QA failed steps: %s\n' "${failed:-none}" >> "$report"
+                [[ "$conclusion" == "success" ]]
+                return
+              fi
+              sleep 15
+            done
+            return 1
+          }
+
+          source_comment=""
+          for attempt in $(seq 1 1200); do
+            source_comment="$(gh api "repos/${repo}/issues/${PR_NUMBER}/comments?per_page=100" --paginate \
+              --jq '.[] | select(.body | contains("'"$SOURCE_MARKER"'") and contains("Promotion-controller result:** PASS")) | .body' | tail -n1)"
+            [[ -n "$source_comment" ]] && break
+            sleep 15
+          done
+          [[ -n "$source_comment" ]] || fail_report "No PASS record from the integrated-candidate promotion controller was found."
+
+          validated_head="$(sed -n 's/^- Validated integrated head: `\([^`]*\)`.*/\1/p' <<<"$source_comment" | head -n1)"
+          [[ -n "$validated_head" ]] || fail_report "The promotion PASS record did not contain the validated integrated head."
+
+          pr_json="$(gh api "repos/${repo}/pulls/${PR_NUMBER}")"
+          state="$(jq -r '.state' <<<"$pr_json")"
+          draft="$(jq -r '.draft' <<<"$pr_json")"
+          merged="$(jq -r '.merged' <<<"$pr_json")"
+          current_head="$(jq -r '.head.sha' <<<"$pr_json")"
+          [[ "$state" == "open" && "$draft" == "true" && "$merged" == "false" ]] || \
+            fail_report "PR #212 was not open, draft, and unmerged."
+          [[ "$current_head" == "$validated_head" ]] || \
+            fail_report "Feature head drifted after final QA: $current_head"
+
+          cat >> "$report" <<EOF
+          <!-- pr212-clean-trigger-reverify-20260807 -->
+          ## PR #212 one-use-trigger cleanup and exact-head revalidation
+
+          - Validated pre-cleanup head: \`$validated_head\`
+          - Removed path, if present: \`$TRIGGER_PATH\`
+          EOF
+
+          rm -rf /tmp/pr212-repo
+          gh repo clone "$repo" /tmp/pr212-repo -- --filter=blob:none
+          cd /tmp/pr212-repo
+          git fetch origin "$TARGET_BRANCH"
+          git checkout -B "$TARGET_BRANCH" "origin/$TARGET_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if [[ -e "$TRIGGER_PATH" ]]; then
+            git rm "$TRIGGER_PATH"
+            git commit -m "Remove one-use PR 212 QA trigger"
+            git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          else
+            printf -- '- The one-use trigger was already absent; no cleanup commit was required.\n' >> "$report"
+          fi
+
+          cleaned_head="$(gh api "repos/${repo}/branches/${TARGET_BRANCH}" --jq '.commit.sha')"
+          printf -- '- Cleaned feature head: \`%s\`\n' "$cleaned_head" >> "$report"
+
+          workflow_id="$(gh api "repos/${repo}/actions/workflows?per_page=100" --paginate \
+            --jq '.workflows[] | select(.name == "Institutional trade QA") | .id' | head -n1)"
+          [[ -n "$workflow_id" ]] || fail_report "Could not resolve the Institutional trade QA workflow ID."
+
+          dispatch_status=0
+          gh api --method POST "repos/${repo}/actions/workflows/${workflow_id}/dispatches" \
+            -f ref="$TARGET_BRANCH" \
+            -f "inputs[confirm_target]=$QA_PROJECT_REF" || dispatch_status=$?
+          [[ "$dispatch_status" -eq 0 ]] || fail_report "Could not dispatch cleanup exact-head Institutional trade QA."
+
+          cleanup_run_id=""
+          for attempt in $(seq 1 160); do
+            cleanup_run_id="$(latest_run_for_head "$workflow_id" "$TARGET_BRANCH" "$cleaned_head" "workflow_dispatch")"
+            [[ -n "$cleanup_run_id" ]] && break
+            sleep 10
+          done
+          [[ -n "$cleanup_run_id" ]] || fail_report "Could not locate cleanup exact-head QA."
+
+          if ! wait_for_run "$cleanup_run_id"; then
+            fail_report "The cleaned exact feature head failed Institutional trade QA."
+          fi
+
+          cat >> "$report" <<EOF
+
+          **Cleanup-controller result:** PASS — temporary trigger material was removed and the cleaned exact feature head passed Institutional trade QA.
+
+          PR #212 remains draft and unmerged pending independent artifact review, protected-preview review, and unresolved-thread audit. No production database, deployment, payment, custody, payout, enterprise-integration, or institutional feature-flag state was changed.
+          EOF
+          comment_report
