@@ -7,7 +7,7 @@ Donation Upgrade lets a creator publish an existing donation plan and ask anothe
 1. Moral Trade records the creator's immutable no-match baseline, the original Every.org recipient, the upgraded Every.org recipient, amounts, deadline, and privacy mode.
 2. The first eligible matcher becomes primary; later eligible matchers become backups.
 3. A match freezes the matched branch and creates two separate direct-donation obligations to the upgraded recipient.
-4. If the matching deadline passes without a matcher, the fallback branch creates one creator obligation to the original recipient.
+4. If the matching deadline passes without a matcher, the fallback branch creates one creator obligation after an unmatched deadline.
 5. Each participant completes their own Every.org checkout. Moral Trade never receives, holds, combines, redirects, or re-donates participant funds.
 6. Only an exact Every.org partner webhook can verify fulfillment and create impact credit.
 
@@ -30,6 +30,8 @@ Permitted modes:
 - `disabled`: nonprofit search, publication, matching, and checkout are fail-closed.
 - `staging`: available only outside canonical production. The public API may be replaced by deterministic Homeward Pet and GiveWell fixtures when `DIRECT_DONATION_UPGRADE_QA_FIXTURES=true`.
 - `live`: available only on the canonical production deployment with all Every.org values configured.
+
+Internal, database, or rendered QA does not substitute for provider staging approval or a real hosted-checkout and authoritative-webhook exercise.
 
 The webhook path and metadata secrets must each contain at least 32 characters.
 
