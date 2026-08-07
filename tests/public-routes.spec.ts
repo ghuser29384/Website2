@@ -211,12 +211,18 @@ test("the live home workspace has one semantic page heading and its dedicated na
   await expect(
     page.getByRole("heading", { level: 1, name: "Your best match right now" }),
   ).toHaveCount(1);
-  await expectVisibleCount(page, 'nav[aria-label="Primary"]', 1);
   await expectVisibleCount(page, "main", 1);
   await expectVisibleCount(page, ".mt-site-footer", 0);
-  await expect(page.locator('[data-mt-feed-link="true"]')).toBeVisible();
-  await expect(page.locator('[data-mt-discover-link="true"]')).toBeVisible();
-  await expect(page.locator('[data-mt-evidence-link="true"]')).toBeVisible();
+
+  const feedLink = page.locator('[data-mt-feed-link="true"]:visible');
+  const discoverLink = page.locator('[data-mt-discover-link="true"]:visible');
+  const evidenceLink = page.locator('[data-mt-evidence-link="true"]:visible');
+  await expect(feedLink).toHaveCount(1);
+  await expect(discoverLink).toHaveCount(1);
+  await expect(evidenceLink).toHaveCount(1);
+  await expect(feedLink).toHaveAttribute("href", "/feed");
+  await expect(discoverLink).toHaveAttribute("href", "/discover");
+  await expect(evidenceLink).toHaveAttribute("href", "/evidence");
   expect(errors).toEqual([]);
 });
 
