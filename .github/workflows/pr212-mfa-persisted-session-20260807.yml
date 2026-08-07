@@ -34,13 +34,13 @@ jobs:
           path: feature
           fetch-depth: 0
 
-      - name: Apply persisted-session MFA QA repair
+      - name: Apply bounded-response MFA QA repair
         working-directory: feature
         shell: bash
         run: |
           set -euo pipefail
           actual_head="$(git rev-parse HEAD)"
-          expected_head="a36e06f494975d0a8a772ce65c3d639653afc0d4"
+          expected_head="988077aa8e5a15a96a0dbae40c7dc840f918cc4b"
           if [[ "$actual_head" != "$expected_head" ]]; then
             echo "Feature branch moved: expected $expected_head, got $actual_head" >&2
             exit 1
@@ -67,7 +67,7 @@ jobs:
             sleep $((attempt * 20))
           done
 
-      - name: Run focused source contracts after multiline-safe assertion fix
+      - name: Run focused bounded-response source contracts
         working-directory: feature
         run: node --import tsx --test src/institutional-trade-wiring.test.ts src/institutional-mfa-stable-state.test.ts
 
@@ -79,5 +79,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/scripts/institutional-trade-qa-e2e.mjs src/institutional-trade-wiring.test.ts src/institutional-mfa-stable-state.test.ts
-          git commit -m "Verify persisted AAL2 state after MFA action"
+          git commit -m "Bound MFA response settling before AAL2 reload"
           git push origin HEAD:feat/institutional-trade-system
