@@ -1,0 +1,178 @@
+name: PR 212 promote validated integrated candidate 20260807
+
+on:
+  push:
+    branches:
+      - ops/pr212-promote-integrated-candidate-20260807
+    paths:
+      - .github/workflows/pr212-promote-integrated-candidate-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-promote-integrated-candidate-20260807
+  cancel-in-progress: false
+
+jobs:
+  promote-and-reverify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: "212"
+      TARGET_BRANCH: feat/institutional-trade-system
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+      SOURCE_MARKER: pr212-advance-gates-20260807
+    steps:
+      - name: Promote only a proven current-main candidate and rerun exact-head QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          report=/tmp/pr212-promote-report.md
+          : > "$report"
+
+          comment_report() {
+            gh pr comment "$PR_NUMBER" --repo "$repo" --body-file "$report"
+          }
+
+          fail_report() {
+            local message="$1"
+            printf '\n**Promotion-controller result:** BLOCKED — %s\n' "$message" >> "$report"
+            printf '\nPR #212 remains draft and unmerged. No production database, deployment, payment, custody, payout, enterprise-integration, or institutional feature-flag state was changed.\n' >> "$report"
+            comment_report || true
+            echo "$message" >&2
+            exit 1
+          }
+
+          latest_run_for_head() {
+            local workflow_id="$1"
+            local branch="$2"
+            local head_sha="$3"
+            local event_filter="${4:-}"
+            local payload
+            payload="$(gh api "repos/${repo}/actions/workflows/${workflow_id}/runs?branch=${branch}&per_page=100")"
+            if [[ -n "$event_filter" ]]; then
+              jq -r --arg head "$head_sha" --arg event "$event_filter" '.workflow_runs | map(select(.head_sha == $head and .event == $event)) | sort_by(.created_at) | reverse | .[0].id // empty' <<<"$payload"
+            else
+              jq -r --arg head "$head_sha" '.workflow_runs | map(select(.head_sha == $head)) | sort_by(.created_at) | reverse | .[0].id // empty' <<<"$payload"
+            fi
+          }
+
+          wait_for_run() {
+            local run_id="$1"
+            local label="$2"
+            local status conclusion
+            for attempt in $(seq 1 1200); do
+              status="$(gh api "repos/${repo}/actions/runs/${run_id}" --jq '.status')"
+              conclusion="$(gh api "repos/${repo}/actions/runs/${run_id}" --jq '.conclusion // ""')"
+              if [[ "$status" == "completed" ]]; then
+                printf -- '- %s run: https://github.com/%s/actions/runs/%s\n' "$label" "$repo" "$run_id" >> "$report"
+                printf -- '- %s conclusion: **%s**\n' "$label" "${conclusion:-unknown}" >> "$report"
+                gh api "repos/${repo}/actions/runs/${run_id}/jobs?per_page=100" > "/tmp/${label// /-}-jobs.json"
+                local failed
+                failed="$(jq -r '[.jobs[]? | .steps[]? | select(.conclusion == "failure") | .name] | unique | join(", ")' "/tmp/${label// /-}-jobs.json")"
+                printf -- '- %s failed steps: %s\n' "$label" "${failed:-none}" >> "$report"
+                [[ "$conclusion" == "success" ]]
+                return
+              fi
+              sleep 15
+            done
+            return 1
+          }
+
+          source_comment=""
+          for attempt in $(seq 1 960); do
+            source_comment="$(gh api "repos/${repo}/issues/${PR_NUMBER}/comments?per_page=100" --paginate \
+              --jq '.[] | select(.body | contains("'"$SOURCE_MARKER"'") and contains("Controller result:** PASS")) | .body' | tail -n1)"
+            [[ -n "$source_comment" ]] && break
+            sleep 15
+          done
+          [[ -n "$source_comment" ]] || fail_report "No PASS record from the exact-head/current-main gate controller was found."
+
+          starting_head="$(sed -n 's/^- Starting feature head: `\([^`]*\)`.*/\1/p' <<<"$source_comment" | head -n1)"
+          integration_branch="$(sed -n 's/^- Isolated current-main integration branch: `\([^`]*\)`.*/\1/p' <<<"$source_comment" | head -n1)"
+          integrated_head="$(sed -n 's/^- Integrated candidate head: `\([^`]*\)`.*/\1/p' <<<"$source_comment" | head -n1)"
+          [[ -n "$starting_head" && -n "$integration_branch" && -n "$integrated_head" ]] || \
+            fail_report "The PASS record did not contain all pinned integration identifiers."
+
+          cat >> "$report" <<EOF
+          <!-- pr212-promote-integrated-candidate-20260807 -->
+          ## PR #212 validated-current-main promotion controller
+
+          - Previously validated feature head: \`$starting_head\`
+          - Validated integration branch: \`$integration_branch\`
+          - Validated integrated head: \`$integrated_head\`
+          EOF
+
+          pr_json="$(gh api "repos/${repo}/pulls/${PR_NUMBER}")"
+          state="$(jq -r '.state' <<<"$pr_json")"
+          draft="$(jq -r '.draft' <<<"$pr_json")"
+          merged="$(jq -r '.merged' <<<"$pr_json")"
+          current_head="$(jq -r '.head.sha' <<<"$pr_json")"
+          [[ "$state" == "open" && "$draft" == "true" && "$merged" == "false" ]] || \
+            fail_report "PR #212 was not open, draft, and unmerged."
+          if [[ "$current_head" != "$starting_head" && "$current_head" != "$integrated_head" ]]; then
+            fail_report "The feature head drifted after validation: $current_head"
+          fi
+
+          branch_head="$(gh api "repos/${repo}/branches/${integration_branch}" --jq '.commit.sha')"
+          [[ "$branch_head" == "$integrated_head" ]] || \
+            fail_report "The validated integration branch no longer points at the recorded head."
+
+          workflow_id="$(gh api "repos/${repo}/actions/workflows?per_page=100" --paginate \
+            --jq '.workflows[] | select(.name == "Institutional trade QA") | .id' | head -n1)"
+          [[ -n "$workflow_id" ]] || fail_report "Could not resolve the Institutional trade QA workflow ID."
+          integrated_run_id="$(latest_run_for_head "$workflow_id" "$integration_branch" "$integrated_head")"
+          [[ -n "$integrated_run_id" ]] || fail_report "No QA run exists for the validated integration head."
+          integrated_conclusion="$(gh api "repos/${repo}/actions/runs/${integrated_run_id}" --jq '.conclusion // ""')"
+          [[ "$integrated_conclusion" == "success" ]] || \
+            fail_report "The recorded integration head does not currently have a successful QA run."
+
+          rm -rf /tmp/pr212-repo
+          gh repo clone "$repo" /tmp/pr212-repo -- --filter=blob:none
+          cd /tmp/pr212-repo
+          git fetch origin "$TARGET_BRANCH" "$integration_branch"
+          git merge-base --is-ancestor "$starting_head" "$integrated_head" || \
+            fail_report "The integrated candidate is not a descendant of the validated feature head."
+
+          if [[ "$current_head" == "$starting_head" ]]; then
+            git push origin "$integrated_head:refs/heads/$TARGET_BRANCH"
+            printf -- '- Feature branch fast-forwarded to the validated integrated head.\n' >> "$report"
+          else
+            printf -- '- Feature branch already pointed at the validated integrated head.\n' >> "$report"
+          fi
+
+          actual_head="$(gh api "repos/${repo}/branches/${TARGET_BRANCH}" --jq '.commit.sha')"
+          [[ "$actual_head" == "$integrated_head" ]] || fail_report "Feature fast-forward verification failed."
+
+          dispatch_status=0
+          gh api --method POST "repos/${repo}/actions/workflows/${workflow_id}/dispatches" \
+            -f ref="$TARGET_BRANCH" \
+            -f "inputs[confirm_target]=$QA_PROJECT_REF" || dispatch_status=$?
+          [[ "$dispatch_status" -eq 0 ]] || fail_report "Could not dispatch final exact-head Institutional trade QA."
+
+          final_run_id=""
+          for attempt in $(seq 1 160); do
+            final_run_id="$(latest_run_for_head "$workflow_id" "$TARGET_BRANCH" "$integrated_head" "workflow_dispatch")"
+            [[ -n "$final_run_id" ]] && break
+            sleep 10
+          done
+          [[ -n "$final_run_id" ]] || fail_report "Could not locate the final feature-head QA run."
+
+          if ! wait_for_run "$final_run_id" "final feature-head QA"; then
+            fail_report "The final feature-head institutional QA run failed."
+          fi
+
+          cat >> "$report" <<EOF
+
+          **Promotion-controller result:** PASS — PR #212 now points at the validated current-main integrated head and that exact feature head passed Institutional trade QA.
+
+          PR #212 remains draft and unmerged pending independent artifact review, protected-preview review, and unresolved-thread audit. No production database, deployment, payment, custody, payout, enterprise-integration, or institutional feature-flag state was changed.
+          EOF
+          comment_report
