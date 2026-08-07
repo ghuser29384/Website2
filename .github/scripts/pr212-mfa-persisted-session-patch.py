@@ -131,7 +131,7 @@ new_stable = r'''test("institutional MFA QA verifies the persisted AAL2 session 
   );
   assert.match(
     accountSecurityPanel,
-    /useActionState\(verifyBackgroundNetworkingMfaAction/,
+    /useActionState\(\s*verifyBackgroundNetworkingMfaAction/,
   );
   assert.match(accountSecurityPanel, /initialSummary\?\.session\.currentAal/);
   assert.match(accountSecurityPanel, /router\.refresh\(\)/);
