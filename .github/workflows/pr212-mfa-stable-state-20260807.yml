@@ -1,0 +1,94 @@
+name: PR 212 MFA stable-state repair
+
+on:
+  push:
+    branches:
+      - ops/pr212-mfa-stable-state-20260807
+    paths:
+      - .github/workflows/pr212-mfa-stable-state-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: pr212-mfa-stable-state-20260807
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_HEAD: 4cc49bd979aa4f8061369c15bd66f4cc280f73f4
+      FEATURE_BRANCH: feat/institutional-trade-system
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out exact feature head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify head and apply stable MFA assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          if [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then
+            echo "Feature branch moved: expected $EXPECTED_HEAD, got $actual_head" >&2
+            exit 1
+          fi
+
+          python - <<'PY'
+          from pathlib import Path
+
+          script_path = Path('.github/scripts/institutional-trade-qa-e2e.mjs')
+          script = script_path.read_text()
+          old = '  await panel.getByText("MFA verified for this session.").waitFor({ state: "visible", timeout: 30_000 });\n'
+          new = '  await panel.getByText("AAL: aal2", { exact: true }).waitFor({ state: "visible", timeout: 30_000 });\n'
+          if script.count(old) != 1:
+              raise SystemExit(f'Expected one transient MFA assertion, found {script.count(old)}.')
+          script_path.write_text(script.replace(old, new))
+
+          test_path = Path('src/institutional-trade-wiring.test.ts')
+          test_source = test_path.read_text()
+          block = '''\n\ntest("authenticated QA waits for the stable AAL2 session state after MFA verification", () => {\n  assert.match(qaScript, /panel\\.getByText\\("AAL: aal2", \\{ exact: true \\}\\)/);\n  assert.doesNotMatch(qaScript, /getByText\\("MFA verified for this session\\."\\)\\.waitFor/);\n});\n'''
+          if 'authenticated QA waits for the stable AAL2 session state after MFA verification' not in test_source:
+              test_path.write_text(test_source.rstrip() + block)
+          PY
+
+          git diff --check
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run focused source contract
+        run: node --import tsx --test src/institutional-trade-wiring.test.ts
+
+      - name: Commit and push the verified repair
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/scripts/institutional-trade-qa-e2e.mjs src/institutional-trade-wiring.test.ts
+          git commit -m "Make institutional MFA QA wait for stable AAL2 state"
+          new_head="$(git rev-parse HEAD)"
+          git push origin "HEAD:${FEATURE_BRANCH}"
+          echo "new_head=$new_head" >> "$GITHUB_OUTPUT"
+
+      - name: Record repair on PR 212
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "Published the narrow MFA QA repair at \`${{ steps.publish.outputs.new_head }}\`. The authenticated workflow now verifies the stable rendered \`AAL: aal2\` session state instead of waiting for the transient server-action success message. Focused source-contract validation passed. PR remains draft and unmerged; complete exact-head QA is still required."
