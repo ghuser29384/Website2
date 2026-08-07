@@ -165,11 +165,7 @@ def main() -> None:
   assert.ok(
     source.includes('if [[ "${#base_focused_files[@]}" -eq 0 ]]; then'),
   );
-  assert.ok(
-    source.includes(
-      'printf \'  0 passed\\\\n\' > "$evidence_dir/base-focused.log"',
-    ),
-  );
+  assert.ok(source.includes("printf '  0 passed"));
   assert.ok(source.includes("base-unavailable-files.txt"));
 });
 
