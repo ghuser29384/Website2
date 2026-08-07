@@ -8,19 +8,19 @@ const accountSecurityPanel = readFileSync(
   "utf8",
 );
 
-test("institutional MFA QA waits for the stable rendered AAL2 session state", () => {
-  assert.match(
-    qaScript,
-    /panel\.getByText\("AAL: aal2", \{ exact: true \}\)\.waitFor/,
-  );
+test("institutional MFA QA verifies the persisted AAL2 session after a completed action", () => {
+  assert.match(qaScript, /page\.waitForResponse/);
+  assert.match(qaScript, /actionResponse\.finished\(\)/);
+  assert.match(qaScript, /page\.reload\(\{ waitUntil: "domcontentloaded" \}\)/);
+  assert.match(qaScript, /mfa-\$\{user\.role\}-verification\.json/);
   assert.doesNotMatch(
     qaScript,
     /getByText\("MFA verified for this session\."\)\.waitFor/,
   );
   assert.match(
     accountSecurityPanel,
-    /useActionState\(verifyBackgroundNetworkingMfaAction/,
+    /useActionState\(\s*verifyBackgroundNetworkingMfaAction/,
   );
-  assert.match(accountSecurityPanel, /AAL:\s*\{initialSummary\.currentLevel\}/);
+  assert.match(accountSecurityPanel, /initialSummary\?\.session\.currentAal/);
   assert.match(accountSecurityPanel, /router\.refresh\(\)/);
 });

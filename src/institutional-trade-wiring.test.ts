@@ -223,7 +223,10 @@ test("five-participant QA names all required negative cases and verifies zero sy
   ]) assert.match(qaScript, new RegExp(phrase, "i"), phrase);
 });
 
-test("authenticated QA waits for the stable AAL2 session state after MFA verification", () => {
-  assert.match(qaScript, /panel\.getByText\("AAL: aal2", \{ exact: true \}\)/);
+test("authenticated QA verifies the persisted AAL2 session after the MFA action response", () => {
+  assert.match(qaScript, /page\.waitForResponse/);
+  assert.match(qaScript, /actionResponse\.finished\(\)/);
+  assert.match(qaScript, /page\.reload\(\{ waitUntil: "domcontentloaded" \}\)/);
+  assert.match(qaScript, /mfa-\$\{user\.role\}-verification\.json/);
   assert.doesNotMatch(qaScript, /getByText\("MFA verified for this session\."\)\.waitFor/);
 });

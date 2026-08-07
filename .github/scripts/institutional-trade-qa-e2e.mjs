@@ -1236,13 +1236,85 @@ async function ensureMfa(page, user) {
   await panel.waitFor({ state: "attached", timeout: 30_000 });
   await panel.scrollIntoViewIfNeeded();
   await panel.waitFor({ state: "visible", timeout: 30_000 });
-  if (/Session level\s*aal2/i.test(await panel.innerText())) return;
+  const initialPanelText = await panel.innerText();
+  if (/Session level\s*aal2/i.test(initialPanelText) || /AAL:\s*aal2/i.test(initialPanelText)) return;
   const verifyForm = panel.locator("form").filter({ has: page.getByRole("button", { name: "Verify session" }) });
   await verifyForm.waitFor({ state: "visible", timeout: 30_000 });
   await verifyForm.locator('select[name="factor_id"]').selectOption(user.mfa.factorId);
   await verifyForm.locator('input[name="code"]').fill(await freshTotp(user.mfa.secret));
-  await verifyForm.getByRole("button", { name: "Verify session" }).click();
-  await panel.getByText("AAL: aal2", { exact: true }).waitFor({ state: "visible", timeout: 30_000 });
+  const actionResponsePromise = page.waitForResponse(
+    (response) => {
+      const request = response.request();
+      if (request.method() !== "POST") return false;
+      try {
+        return new URL(response.url()).pathname === "/dashboard";
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 30_000 },
+  );
+  const [actionResponse] = await Promise.all([
+    actionResponsePromise,
+    verifyForm.getByRole("button", { name: "Verify session" }).click(),
+  ]);
+  assert.equal(
+    actionResponse.status(),
+    200,
+    `MFA server action returned HTTP ${actionResponse.status()} for ${user.role}.`,
+  );
+  const responseFailure = await actionResponse.finished();
+  assert.equal(
+    responseFailure,
+    null,
+    `MFA server action transport failed for ${user.role}: ${responseFailure?.message ?? "unknown error"}.`,
+  );
+  const postActionPanelText = await panel.innerText().catch(() => "");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const refreshedPanel = page.locator("article#account-security");
+  await refreshedPanel.waitFor({ state: "attached", timeout: 30_000 });
+  await refreshedPanel.scrollIntoViewIfNeeded();
+  await refreshedPanel.waitFor({ state: "visible", timeout: 30_000 });
+  const refreshedPanelText = await refreshedPanel.innerText();
+  if (
+    !/Session level\s*aal2/i.test(refreshedPanelText) &&
+    !/AAL:\s*aal2/i.test(refreshedPanelText)
+  ) {
+    const cookieMetadata = (await page.context().cookies())
+      .filter(({ name }) => name.startsWith("sb-") || name.includes("auth-token"))
+      .map(({ domain, expires, httpOnly, name, path: cookiePath, sameSite, secure, value }) => ({
+        domain,
+        expires,
+        httpOnly,
+        name,
+        path: cookiePath,
+        sameSite,
+        secure,
+        valueLength: value.length,
+      }));
+    await writeFile(
+      path.join(outputDir, `mfa-${user.role}-verification.json`),
+      `${JSON.stringify(
+        {
+          actionResponseStatus: actionResponse.status(),
+          cookieMetadata,
+          initialPanelText,
+          postActionPanelText,
+          refreshedPanelText,
+          role: user.role,
+          url: page.url(),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    await screenshot(page, `mfa-${user.role}-verification-failed`);
+    throw new Error(
+      `MFA verification did not persist AAL2 for ${user.role}. ` +
+        `Post-action panel: ${postActionPanelText.slice(0, 500)} ` +
+        `Reloaded panel: ${refreshedPanelText.slice(0, 500)}`,
+    );
+  }
 }
 
 async function screenshot(page, name) {
