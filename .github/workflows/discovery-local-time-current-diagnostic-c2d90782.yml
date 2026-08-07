@@ -1,0 +1,404 @@
+name: Discover local-time current diagnostic c2d90782
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/discovery-local-time-current-diagnostic-c2d90782.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: discovery-local-time-current-diagnostic-c2d90782
+  cancel-in-progress: true
+
+env:
+  PRODUCT_SHA: c2d907827c4c7086fb66973bbe3d9619f1856f99
+  CONTROLLER_BRANCH: qa/discovery-local-time-diagnostic-c2d90782
+  CONTROLLER_PATH: .github/workflows/discovery-local-time-current-diagnostic-c2d90782.yml
+  EVIDENCE_DIR: discovery-local-time-current-diagnostic-c2d90782
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Guard controller and exact current product tree
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.head.ref }}' = "$CONTROLLER_BRANCH"
+          test '${{ github.event.pull_request.base.ref }}' = 'main'
+          test '${{ github.event.pull_request.base.sha }}' = "$PRODUCT_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$PRODUCT_SHA"
+
+          actual_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename')"
+          test "$actual_files" = "$CONTROLLER_PATH"
+
+      - name: Check out immutable current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 1
+
+      - name: Prove immutable checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$PRODUCT_SHA" > "$EVIDENCE_DIR/product-sha.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Write bounded Discover diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > tests/discovery-local-time-current-diagnostic-c2d90782.spec.ts <<'TS'
+          import { mkdir, writeFile } from "node:fs/promises";
+          import path from "node:path";
+
+          import { expect, test, type Page } from "@playwright/test";
+
+          const evidenceDir = process.env.EVIDENCE_DIR ?? "discovery-local-time-current-diagnostic-c2d90782";
+          const boundaryInstant = new Date("2026-07-20T01:30:00.000Z");
+
+          interface EventEvidence {
+            consoleErrors: string[];
+            pageErrors: string[];
+            failedRequests: string[];
+            httpErrors: string[];
+          }
+
+          function observe(page: Page): EventEvidence {
+            const evidence: EventEvidence = {
+              consoleErrors: [],
+              pageErrors: [],
+              failedRequests: [],
+              httpErrors: [],
+            };
+
+            page.on("console", (message) => {
+              if (message.type() === "error") evidence.consoleErrors.push(message.text());
+            });
+            page.on("pageerror", (error) => {
+              evidence.pageErrors.push(error.stack || error.message);
+            });
+            page.on("requestfailed", (request) => {
+              evidence.failedRequests.push(
+                `${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? "unknown"}`,
+              );
+            });
+            page.on("response", (response) => {
+              if (response.status() >= 400 && new URL(response.url()).origin === new URL(page.url()).origin) {
+                evidence.httpErrors.push(`${response.status()} ${response.request().method()} ${response.url()}`);
+              }
+            });
+
+            return evidence;
+          }
+
+          async function openDiscover(page: Page) {
+            await page.goto("/moral-trade-discover.html?domain=offers&view=list", {
+              waitUntil: "domcontentloaded",
+            });
+            await expect(
+              page.locator(".today-block time[data-mt-discover-local-today]"),
+            ).toBeVisible({ timeout: 30_000 });
+            await expect(page.locator('[data-row-id="offer-donation-redirect"]')).toBeVisible({
+              timeout: 30_000,
+            });
+            await page.waitForLoadState("load").catch(() => undefined);
+            await page.waitForTimeout(500);
+          }
+
+          async function recordSnapshot(
+            page: Page,
+            events: EventEvidence,
+            label: string,
+            extra: Record<string, unknown> = {},
+          ) {
+            await mkdir(evidenceDir, { recursive: true });
+            const snapshot = await page.evaluate(() => {
+              const summarize = (element: Element | null) => {
+                if (!element) return null;
+                const html = element as HTMLElement;
+                const rect = html.getBoundingClientRect();
+                const style = getComputedStyle(html);
+                return {
+                  tag: element.tagName.toLowerCase(),
+                  id: html.id,
+                  className: html.className,
+                  text: (html.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 2000),
+                  outerHTML: html.outerHTML.slice(0, 20_000),
+                  visible:
+                    style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    Number(style.opacity) !== 0 &&
+                    rect.width > 0 &&
+                    rect.height > 0,
+                  rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+                  attributes: Object.fromEntries(
+                    [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
+                  ),
+                };
+              };
+
+              const row = document.querySelector('[data-row-id="offer-donation-redirect"]');
+              const rowElements = row
+                ? [...row.querySelectorAll("*")].slice(0, 120).map((element) => {
+                    const html = element as HTMLElement;
+                    return {
+                      tag: element.tagName.toLowerCase(),
+                      id: html.id,
+                      className: html.className,
+                      text: (html.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 500),
+                      attributes: Object.fromEntries(
+                        [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
+                      ),
+                    };
+                  })
+                : [];
+
+              const controls = [...document.querySelectorAll("input, textarea, select, button")]
+                .slice(0, 160)
+                .map((element) => {
+                  const html = element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLButtonElement;
+                  const rect = html.getBoundingClientRect();
+                  const style = getComputedStyle(html);
+                  return {
+                    tag: element.tagName.toLowerCase(),
+                    id: html.id,
+                    name: html.getAttribute("name"),
+                    type: html.getAttribute("type"),
+                    className: html.className,
+                    value: "value" in html ? html.value : null,
+                    text: (html.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 300),
+                    placeholder: html.getAttribute("placeholder"),
+                    ariaLabel: html.getAttribute("aria-label"),
+                    visible:
+                      style.display !== "none" &&
+                      style.visibility !== "hidden" &&
+                      Number(style.opacity) !== 0 &&
+                      rect.width > 0 &&
+                      rect.height > 0,
+                    attributes: Object.fromEntries(
+                      [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
+                    ),
+                  };
+                });
+
+              const forms = [...document.querySelectorAll("form")].slice(0, 40).map((form) => ({
+                id: form.id,
+                className: form.className,
+                action: form.action,
+                method: form.method,
+                text: (form.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 1000),
+                outerHTML: form.outerHTML.slice(0, 20_000),
+              }));
+
+              return {
+                url: window.location.href,
+                title: document.title,
+                readyState: document.readyState,
+                bodyText: (document.body.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 5000),
+                today: summarize(
+                  document.querySelector(".today-block time[data-mt-discover-local-today]"),
+                ),
+                redirectRow: summarize(row),
+                redirectRowElements: rowElements,
+                legacyDeadlineSelector: summarize(
+                  row?.querySelector(".deadline-cell .cell-secondary") ?? null,
+                ),
+                deadlineCandidates: row
+                  ? [...row.querySelectorAll("time, [class*='deadline'], [class*='date'], [data-deadline], [data-date]")]
+                      .slice(0, 80)
+                      .map(summarize)
+                  : [],
+                commandInput: summarize(document.querySelector("#command-input")),
+                commandForm: summarize(document.querySelector("#command-form")),
+                controls,
+                forms,
+                headings: [...document.querySelectorAll("h1, h2, h3")].slice(0, 80).map(summarize),
+                discoverPayloadVersion: (window as Window & { __MT_DISCOVER_PAYLOAD_VERSION__?: string })
+                  .__MT_DISCOVER_PAYLOAD_VERSION__ ?? null,
+                localTimeRuntimeKeys: Object.keys(
+                  (window as Window & { MoralTradeDiscoverLocalTime?: object })
+                    .MoralTradeDiscoverLocalTime ?? {},
+                ),
+                scriptSources: [...document.scripts]
+                  .map((script) => script.src)
+                  .filter(Boolean)
+                  .slice(0, 100),
+                dimensions: {
+                  innerWidth: window.innerWidth,
+                  innerHeight: window.innerHeight,
+                  scrollWidth: document.documentElement.scrollWidth,
+                  scrollHeight: document.documentElement.scrollHeight,
+                },
+              };
+            });
+
+            const payload = {
+              label,
+              recordedAt: new Date().toISOString(),
+              snapshot,
+              events: structuredClone(events),
+              extra,
+            };
+            await writeFile(
+              path.join(evidenceDir, `${label}.json`),
+              `${JSON.stringify(payload, null, 2)}\n`,
+              "utf8",
+            );
+            await page.screenshot({
+              path: path.join(evidenceDir, `${label}.png`),
+              fullPage: true,
+            });
+          }
+
+          async function tryCurrentCommand(page: Page, command: string) {
+            const input = page.locator("#command-input");
+            if ((await input.count()) === 0) {
+              return { attempted: false, reason: "#command-input absent" };
+            }
+
+            await input.fill(command);
+            const result = await page.evaluate(() => {
+              const inputElement = document.querySelector("#command-input");
+              const form = inputElement?.closest("form") ?? document.querySelector("#command-form");
+              if (!(form instanceof HTMLFormElement)) {
+                return { submitted: false, reason: "No form associated with #command-input" };
+              }
+
+              const candidates = [...form.querySelectorAll("button, input[type='submit']")];
+              const submitter = candidates.find((element) => {
+                const label = `${element.getAttribute("aria-label") ?? ""} ${element.textContent ?? ""} ${
+                  element.getAttribute("value") ?? ""
+                }`
+                  .replace(/\s+/g, " ")
+                  .trim()
+                  .toLowerCase();
+                return /run search|search|apply|submit/.test(label);
+              });
+
+              if (submitter instanceof HTMLElement) {
+                submitter.click();
+                return {
+                  submitted: true,
+                  method: "click",
+                  submitter: submitter.outerHTML.slice(0, 2000),
+                };
+              }
+
+              form.requestSubmit();
+              return { submitted: true, method: "requestSubmit", submitter: null };
+            });
+
+            if (result.submitted) {
+              await page.waitForTimeout(1500);
+            }
+            return { attempted: true, command, ...result, finalUrl: page.url() };
+          }
+
+          test.describe("America/Los_Angeles current contract", () => {
+            test.use({ timezoneId: "America/Los_Angeles" });
+
+            test("records the previous local calendar date and redirect-row markup", async ({ page }) => {
+              const events = observe(page);
+              await page.clock.setFixedTime(boundaryInstant);
+              await openDiscover(page);
+              await recordSnapshot(page, events, "los-angeles");
+            });
+          });
+
+          test.describe("Asia/Tokyo current contract", () => {
+            test.use({ timezoneId: "Asia/Tokyo" });
+
+            test("records the next local calendar date and redirect-row markup", async ({ page }) => {
+              const events = observe(page);
+              await page.clock.setFixedTime(boundaryInstant);
+              await openDiscover(page);
+              await recordSnapshot(page, events, "tokyo");
+            });
+          });
+
+          test.describe("UTC refresh and command controls", () => {
+            test.use({ timezoneId: "UTC" });
+
+            test("records the local-midnight refresh lifecycle", async ({ page }) => {
+              const events = observe(page);
+              await page.clock.setFixedTime(new Date("2026-07-20T23:59:00.000Z"));
+              await openDiscover(page);
+              await recordSnapshot(page, events, "utc-before-midnight");
+
+              await page.clock.setFixedTime(new Date("2026-07-21T00:01:00.000Z"));
+              await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+              await page.waitForTimeout(500);
+              await recordSnapshot(page, events, "utc-after-midnight");
+            });
+
+            test("records the current command form and deadline parsing behavior", async ({ page }) => {
+              const events = observe(page);
+              await page.clock.setFixedTime(new Date("2026-07-20T12:00:00.000Z"));
+              await openDiscover(page);
+              await recordSnapshot(page, events, "command-initial");
+
+              const named = await tryCurrentCommand(page, "Find offers before August 1");
+              await recordSnapshot(page, events, "command-named-deadline", { named });
+
+              await page.goto("/moral-trade-discover.html?domain=offers&view=list", {
+                waitUntil: "domcontentloaded",
+              });
+              await expect(
+                page.locator(".today-block time[data-mt-discover-local-today]"),
+              ).toBeVisible({ timeout: 30_000 });
+              await page.waitForTimeout(500);
+              const iso = await tryCurrentCommand(page, "Find offers before 2028-03-04");
+              await recordSnapshot(page, events, "command-iso-deadline", { iso });
+            });
+          });
+          TS
+
+      - name: Run exact current Discover diagnostic
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test tests/discovery-local-time-current-diagnostic-c2d90782.spec.ts \
+            --workers=1 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/playwright.log"
+
+      - name: Upload immutable diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discovery-local-time-current-diagnostic-c2d90782
+          path: |
+            discovery-local-time-current-diagnostic-c2d90782
+            test-results
+          if-no-files-found: error
+          retention-days: 14
