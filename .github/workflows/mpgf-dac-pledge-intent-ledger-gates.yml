@@ -244,7 +244,7 @@ jobs:
             + (select count(*) from public.mpgf_pool_lifecycle_events where proposal_id = '9f666666-6666-4666-8666-666666666666')
             + (select count(*) from public.mpgf_public_goods_campaigns where id = 'campaign-9f666666666646668666666666666666')
             + (select count(*) from public.mpgf_public_goods_pledges where campaign_id = 'campaign-9f666666666646668666666666666666')
-            + (select count(*) from public.mpgf_pledge_intents where campaign_id = 'campaign-9f666666666646668666666666666666')
+            + (select count(*) from public.mpgf_dac_pledge_intents where campaign_id = 'campaign-9f666666666646668666666666666666')
             + (select count(*) from public.mpgf_dac_pledge_events where campaign_id = 'campaign-9f666666666646668666666666666666')
             + (select count(*) from public.mpgf_failure_bonus_premium_quotes where pool_proposal_id = '9f666666-6666-4666-8666-666666666666')
             + (select count(*) from public.mpgf_public_goods_rounds where id = 'qa-dac-pledge-round-20260806')
@@ -252,7 +252,7 @@ jobs:
           );
           select 'conditional_ledger_absent=' ||
             (to_regclass('public.mpgf_conditional_pledges') is null);
-          select 'intent_rows=' || count(*) from public.mpgf_pledge_intents;
+          select 'intent_rows=' || count(*) from public.mpgf_dac_pledge_intents;
           select 'dac_event_rows=' || count(*) from public.mpgf_dac_pledge_events;
           SQL
           grep -Fxq 'fixture_residue=0' mpgf-dac-pledge-zero-residue.txt
@@ -266,7 +266,7 @@ jobs:
             --no-psqlrc \
             --set ON_ERROR_STOP=1 \
             --pset pager=off <<'SQL' | tee mpgf-dac-pledge-schema-proof.txt
-          select to_regclass('public.mpgf_pledge_intents') as pledge_intents;
+          select to_regclass('public.mpgf_dac_pledge_intents') as pledge_intents;
           select to_regclass('public.mpgf_dac_pledge_events') as pledge_events;
           select to_regprocedure('public.mpgf_create_dac_pledge(text,bigint,text,text,text)') as pledge_rpc;
           select column_name
@@ -281,7 +281,7 @@ jobs:
           select policyname, tablename, cmd
           from pg_policies
           where schemaname = 'public'
-            and tablename in ('mpgf_pledge_intents','mpgf_dac_pledge_events')
+            and tablename in ('mpgf_dac_pledge_intents','mpgf_dac_pledge_events')
           order by tablename, policyname;
           select count(*) as payment_refs
           from public.mpgf_public_goods_pledges
