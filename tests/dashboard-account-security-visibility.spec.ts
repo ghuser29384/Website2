@@ -1,4 +1,11 @@
+import { readFileSync } from "node:fs";
+
 import { expect, test } from "@playwright/test";
+
+const routeCss = readFileSync(
+  "src/app/dashboard/dashboard-account-security.css",
+  "utf8",
+);
 
 const viewports = [
   { name: "desktop", width: 1440, height: 1000 },
@@ -21,7 +28,56 @@ for (const viewport of viewports) {
     });
 
     await page.setViewportSize(viewport);
-    await page.goto("/dashboard#account-security", { waitUntil: "domcontentloaded" });
+    await page.setContent(`
+      <!doctype html>
+      <html>
+        <head><meta name="viewport" content="width=device-width, initial-scale=1" /></head>
+        <body>
+          <div class="page-shell dashboard-page marketplace-app-shell">
+            <main id="main-content">
+              <section class="v72-private-surface v72-account-surface">
+                <h1>Account</h1>
+              </section>
+              <section class="section section-white" id="background-networking">
+                <header data-unrelated="section-heading">Background networking</header>
+                <div class="data-grid">
+                  <article class="panel data-card" data-unrelated="legacy-card">
+                    Legacy networking controls
+                  </article>
+                  <article class="panel data-card" id="account-security">
+                    <p class="detail-kicker">Account security</p>
+                    <h3>Authenticator MFA for private wish data</h3>
+                    <form>
+                      <label>
+                        <span>Factor name</span>
+                        <input name="friendly_name" placeholder="Authenticator app" />
+                      </label>
+                      <button type="button">Create MFA setup</button>
+                    </form>
+                    <form>
+                      <label>
+                        <span>Code</span>
+                        <input autocomplete="one-time-code" inputmode="numeric" name="code" />
+                      </label>
+                      <button type="button">Verify MFA setup</button>
+                    </form>
+                  </article>
+                </div>
+              </section>
+            </main>
+          </div>
+        </body>
+      </html>
+    `);
+    await page.addStyleTag({
+      content: `
+        :root { --content-width: 1180px; }
+        * { box-sizing: border-box; }
+        body { margin: 0; }
+        .marketplace-app-shell #main-content > .section { display: none; }
+      `,
+    });
+    await page.addStyleTag({ content: routeCss });
 
     const accountSecurity = page.locator("#account-security");
     await expect(accountSecurity).toBeVisible();
@@ -32,6 +88,8 @@ for (const viewport of viewports) {
       }),
     ).toBeVisible();
     await expect(accountSecurity.getByRole("button", { name: "Create MFA setup" })).toBeVisible();
+    await expect(accountSecurity.getByRole("button", { name: "Verify MFA setup" })).toBeVisible();
+    await expect(accountSecurity.locator('input[autocomplete="one-time-code"]')).toBeVisible();
 
     const legacyWorkspace = page.locator("#background-networking");
     await expect(legacyWorkspace).toBeVisible();
