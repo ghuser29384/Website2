@@ -224,7 +224,7 @@ export async function loadInstitutionalDeal(organizationId: string, dealId: stri
   const [organizationResult, programsResult, membershipsResult, partiesResult, roomMembersResult, profilesResult, authorityGrantsResult, proposalsResult, baselinesResult, obligationsResult, dependenciesResult, approvalsResult, consentsResult, signaturesResult, milestonesResult, assignmentsResult, requirementsResult, submissionsResult, risksResult, reservationsResult, accountsResult, poolResult, contributionsResult, anchorsResult, underwritingsResult, votesResult, disputesResult, auditResult, messagesResult, amendmentsResult, attributionClaimsResult, reportSnapshotsResult, organizationsResult] = await Promise.all([
     client.from("institutional_organizations").select("*").eq("id", organizationId).maybeSingle(),
     client.from("institutional_programs").select("*").in("organization_id", [...new Set([deal.lead_organization_id, organizationId].filter(Boolean))]),
-    client.from("institutional_memberships").select("*,profiles(id,display_name,email)").eq("organization_id", organizationId).eq("status", "active").order("created_at"),
+    client.from("institutional_memberships").select("*,profiles:profiles!institutional_memberships_profile_id_fkey(id,display_name,email)").eq("organization_id", organizationId).eq("status", "active").order("created_at"),
     client.from("institutional_deal_parties").select("*").eq("deal_id", dealId).order("created_at"),
     client.from("institutional_deal_room_members").select("*").eq("deal_id", dealId),
     client.from("profiles").select("id,display_name,email").limit(500),
