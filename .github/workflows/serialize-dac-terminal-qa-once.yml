@@ -1,0 +1,117 @@
+name: Serialize DAC terminal isolated QA once
+
+on:
+  push:
+    branches:
+      - fix/mpgf-dac-success-lapse-20260807
+    paths:
+      - .github/workflows/serialize-dac-terminal-qa-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: serialize-dac-terminal-isolated-qa-once
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: fix/mpgf-dac-success-lapse-20260807
+  EXPECTED_PARENT: 5e0025013da1ca54101853142211151a2d663ef2
+  CONTROLLER_PATH: .github/workflows/serialize-dac-terminal-qa-once.yml
+  WORKFLOW_PATH: .github/workflows/mpgf-dac-success-lapse-gates.yml
+  SOURCE_TEST_PATH: src/lib/mpgf/dac-success-lapse-migration.test.ts
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact target
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 2
+
+      - name: Guard and serialize exact isolated-QA execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git diff-tree --no-commit-id --name-only -r HEAD)" = "$CONTROLLER_PATH"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow_path = Path(".github/workflows/mpgf-dac-success-lapse-gates.yml")
+          source_test_path = Path("src/lib/mpgf/dac-success-lapse-migration.test.ts")
+
+          workflow = workflow_path.read_text()
+          old_job_header = """  isolated-qa:
+    name: Exactly-once success, lapse, expiry, RLS, and no-payment proof
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: source-gates
+    runs-on: ubuntu-24.04
+"""
+          new_job_header = """  isolated-qa:
+    name: Exactly-once success, lapse, expiry, RLS, and no-payment proof
+    # In-repository pull requests duplicate the same push SHA. Run database proof only
+    # on push/dispatch and serialize it so concurrent DDL cannot deadlock the QA project.
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    needs: source-gates
+    concurrency:
+      group: mpgf-dac-terminal-isolated-qa-hvmxfjjbdcgjjudmthdz
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+"""
+          if workflow.count(old_job_header) != 1:
+              raise SystemExit(
+                  f"Expected one isolated-QA job header, found {workflow.count(old_job_header)}"
+              )
+          workflow_path.write_text(workflow.replace(old_job_header, new_job_header, 1))
+
+          source = source_test_path.read_text()
+          old_assertion_tail = """  assert.doesNotMatch(workflow, /PRODUCTION_SUPABASE_DB_URL/);
+  assert.doesNotMatch(workflow, /vercel deploy/);
+});
+"""
+          new_assertion_tail = """  assert.doesNotMatch(workflow, /PRODUCTION_SUPABASE_DB_URL/);
+  assert.doesNotMatch(workflow, /vercel deploy/);
+  assert.match(
+    workflow,
+    /if: github\\.event_name == 'workflow_dispatch' \\|\\| github\\.event_name == 'push'/,
+  );
+  assert.match(
+    workflow,
+    /group: mpgf-dac-terminal-isolated-qa-hvmxfjjbdcgjjudmthdz/,
+  );
+  assert.match(workflow, /cancel-in-progress: false/);
+  assert.doesNotMatch(
+    workflow,
+    /isolated-qa:[\\s\\S]*github\\.event\\.pull_request\\.head\\.repo\\.full_name/,
+  );
+});
+"""
+          if source.count(old_assertion_tail) != 1:
+              raise SystemExit(
+                  f"Expected one source-test assertion tail, found {source.count(old_assertion_tail)}"
+              )
+          source_test_path.write_text(source.replace(old_assertion_tail, new_assertion_tail, 1))
+          PY
+
+          git diff --check
+          grep -Fxq "    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'" "$WORKFLOW_PATH"
+          grep -Fxq "      group: mpgf-dac-terminal-isolated-qa-hvmxfjjbdcgjjudmthdz" "$WORKFLOW_PATH"
+          test "$(grep -Fc 'github.event.pull_request.head.repo.full_name' "$WORKFLOW_PATH")" = "0"
+
+      - name: Commit repair and remove controller atomically
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm "$CONTROLLER_PATH"
+          git add "$WORKFLOW_PATH" "$SOURCE_TEST_PATH"
+          test "$(git diff --cached --name-only | sort | tr '\n' ' ')" = ".github/workflows/mpgf-dac-success-lapse-gates.yml .github/workflows/serialize-dac-terminal-qa-once.yml src/lib/mpgf/dac-success-lapse-migration.test.ts "
+          git diff --cached --check
+          git commit -m "Serialize DAC terminal isolated QA execution"
+          git push origin "HEAD:$TARGET_BRANCH"
