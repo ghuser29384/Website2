@@ -1,0 +1,79 @@
+name: Repair PR 552 automation-bypass controller once v2
+
+on:
+  push:
+    branches:
+      - ops/pr552-authenticated-preview-mfa-automation-bypass-20260807
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-pr552-automation-bypass-controller-once-v2
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact controller branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/pr552-authenticated-preview-mfa-automation-bypass-20260807
+          fetch-depth: 0
+
+      - name: Replace indentation-sensitive patch and remove repair workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/pr552-authenticated-preview-mfa-automation-bypass.yml')
+          source = path.read_text(encoding='utf-8')
+          start_marker = "          old_context = '''"
+          end_marker = "\n          old_access_call ="
+          if source.count(start_marker) != 1:
+              raise SystemExit('Expected old-context block was not found exactly once.')
+          start = source.index(start_marker)
+          end = source.index(end_marker, start)
+          replacement = "\n".join([
+              "          old_context = (",
+              "              '  const context = await browser.newContext({\\n'",
+              "              '    baseURL: PREVIEW_ORIGIN,\\n'",
+              "              '    viewport,\\n'",
+              "              '  });'",
+              "          )",
+              "          new_context = (",
+              "              '  const context = await browser.newContext({\\n'",
+              "              '    baseURL: PREVIEW_ORIGIN,\\n'",
+              "              '    viewport,\\n'",
+              "              '    extraHTTPHeaders: {\\n'",
+              "              '      \\\"x-vercel-protection-bypass\\\": AUTOMATION_BYPASS_SECRET,\\n'",
+              "              '      \\\"x-vercel-set-bypass-cookie\\\": \\\"true\\\",\\n'",
+              "              '    },\\n'",
+              "              '  });'",
+              "          )",
+              "          if source.count(old_context) != 1:",
+              "              raise SystemExit('Expected browser-context source was not found exactly once.')",
+              "          source = source.replace(old_context, new_context, 1)",
+          ])
+          source = source[:start] + replacement + source[end:]
+          path.write_text(source, encoding='utf-8')
+          PY
+
+          rm -f \
+            .github/workflows/repair-pr552-automation-bypass-controller.yml \
+            .github/workflows/repair-pr552-automation-bypass-controller-v2.yml
+          git diff --check
+
+      - name: Commit one-use repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Fix PR 552 automation-bypass harness patch'
+          git push origin HEAD:ops/pr552-authenticated-preview-mfa-automation-bypass-20260807
