@@ -1,4 +1,4 @@
-name: Public route shell fast gates 192bacdd
+name: Public route shell fast gates 4f9afe8e
 
 on:
   pull_request:
@@ -16,10 +16,10 @@ concurrency:
 
 env:
   BASE_SHA: 87b093751a4c2de909555abdb7f181061bb36390
-  CANDIDATE_SHA: 192bacddc8cbd233f3d1ef92e7d84fc8bd45c564
+  CANDIDATE_SHA: 4f9afe8e8467f83b051d862b2bf538a1540dd4f1
   PRODUCT_PR: "542"
   STATUS_CONTEXT: QA / Public route shell fast gates
-  EVIDENCE_DIR: public-route-shell-fast-evidence-192bacdd
+  EVIDENCE_DIR: public-route-shell-fast-evidence-4f9afe8e
   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
   SITE_URL: http://127.0.0.1:3210
   PLAYWRIGHT_HTML_OPEN: never
@@ -120,8 +120,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: public-route-shell-fast-gates-192bacdd
-          path: public-route-shell-fast-evidence-192bacdd
+          name: public-route-shell-fast-gates-4f9afe8e
+          path: public-route-shell-fast-evidence-4f9afe8e
           if-no-files-found: error
           retention-days: 14
 
