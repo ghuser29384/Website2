@@ -1,0 +1,88 @@
+name: PR 212 chained-gate failure evidence 20260807
+
+on:
+  push:
+    branches:
+      - ops/pr212-failure-evidence-20260807
+    paths:
+      - .github/workflows/pr212-failure-evidence-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: "212"
+    steps:
+      - name: Capture first chained-gate blocker with bounded failed logs
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo="$GITHUB_REPOSITORY"
+          blocker=""
+          for attempt in $(seq 1 1440); do
+            blocker="$(gh api "repos/${repo}/issues/${PR_NUMBER}/comments?per_page=100" --paginate \
+              --jq '.[] | select(.body | (contains("pr212-advance-gates-20260807") or contains("pr212-promote-integrated-candidate-20260807") or contains("pr212-clean-trigger-reverify-20260807") or contains("pr212-post-green-audit-20260807")) and contains("result:** BLOCKED")) | .body' | tail -n1)"
+            [[ -n "$blocker" ]] && break
+            success_count="$(gh api "repos/${repo}/issues/${PR_NUMBER}/comments?per_page=100" --paginate \
+              --jq '[.[] | select(.body | contains("pr212-post-green-audit-20260807") and contains("Post-green audit result:** PASS"))] | length' | tail -n1)"
+            if [[ "$success_count" =~ ^[1-9] ]]; then
+              exit 0
+            fi
+            sleep 15
+          done
+          [[ -n "$blocker" ]] || exit 0
+
+          report=/tmp/pr212-failure-evidence.md
+          cat > "$report" <<'EOF'
+          <!-- pr212-chained-failure-evidence-20260807 -->
+          ## PR #212 chained-gate failure evidence
+
+          A chained gate reported a fail-closed blocker. The controller comment is reproduced below, followed by bounded failed-log excerpts where a GitHub Actions run URL was present.
+
+          EOF
+          printf '%s\n\n' "$blocker" >> "$report"
+
+          mapfile -t run_ids < <(grep -Eo 'actions/runs/[0-9]+' <<<"$blocker" | awk -F/ '{print $3}' | sort -u)
+          if [[ "${#run_ids[@]}" -eq 0 ]]; then
+            printf '%s\n' 'No workflow-run URL was present in the blocker; the blocker text above is the complete evidence.' >> "$report"
+          fi
+
+          for run_id in "${run_ids[@]}"; do
+            printf '\n### Run %s\n\n' "$run_id" >> "$report"
+            gh run view "$run_id" --repo "$repo" --json headSha,status,conclusion,url,jobs > "/tmp/run-${run_id}.json" || true
+            if [[ -s "/tmp/run-${run_id}.json" ]]; then
+              head_sha="$(jq -r '.headSha // "unknown"' "/tmp/run-${run_id}.json")"
+              status="$(jq -r '.status // "unknown"' "/tmp/run-${run_id}.json")"
+              conclusion="$(jq -r '.conclusion // "unknown"' "/tmp/run-${run_id}.json")"
+              failed="$(jq -r '[.jobs[]? | .steps[]? | select(.conclusion == "failure") | .name] | unique | join(", ")' "/tmp/run-${run_id}.json")"
+              printf -- '- Head: `%s`\n- Status: `%s`\n- Conclusion: `%s`\n- Failed steps: %s\n\n' "$head_sha" "$status" "$conclusion" "${failed:-none reported}" >> "$report"
+            fi
+            gh run view "$run_id" --repo "$repo" --log-failed > "/tmp/run-${run_id}-failed.log" 2>&1 || true
+            if [[ -s "/tmp/run-${run_id}-failed.log" ]]; then
+              {
+                printf '%s\n' '```text'
+                tail -n 220 "/tmp/run-${run_id}-failed.log" | sed -E \
+                  -e 's/(SUPABASE_SERVICE_ROLE_KEY|QA_SUPABASE_SERVICE_ROLE_KEY|VERCEL_[A-Z_]*TOKEN|CRON_SECRET|[A-Z0-9_]*PASSWORD)=([^[:space:]]+)/\1=[REDACTED]/g' \
+                  -e 's/(eyJ[a-zA-Z0-9._-]{30,})/[REDACTED_TOKEN]/g'
+                printf '%s\n' '```'
+              } >> "$report"
+            else
+              printf '%s\n' 'No failed-log payload was available from GitHub for this run.' >> "$report"
+            fi
+          done
+
+          cat >> "$report" <<'EOF'
+
+          PR #212 remains draft and unmerged. This evidence capture made no production database, deployment, payment, custody, payout, enterprise-integration, or institutional feature-flag change.
+          EOF
+          gh pr comment "$PR_NUMBER" --repo "$repo" --body-file "$report"
+          exit 1
