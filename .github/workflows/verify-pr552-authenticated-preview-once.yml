@@ -1,0 +1,646 @@
+name: One-time verify PR 552 authenticated protected Preview
+
+on:
+  push:
+    branches:
+      - ops/verify-pr552-authenticated-preview-20260807
+    paths:
+      - .github/workflows/verify-pr552-authenticated-preview-once.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: verify-pr552-authenticated-preview-once
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_PATH: .github/workflows/verify-pr552-authenticated-preview-once.yml
+  CONTROLLER_BRANCH: ops/verify-pr552-authenticated-preview-20260807
+  TARGET_BRANCH: hotfix/dashboard-account-security-visible-20260807
+  EXPECTED_HEAD: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+  EXPECTED_BASE: 3e2dc52dc128fd6f05935e2d74ace21db6f9b238
+  PREVIEW_DEPLOYMENT_ID: dpl_E4kcbFVK7QpYvdygM8m9sc841DpC
+  PREVIEW_URL: https://moraltrade-site-n539b73lz-ellen-s.vercel.app
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  EVIDENCE_DIR: pr552-authenticated-preview-evidence
+
+jobs:
+  verify:
+    if: github.repository == 'ghuser29384/Website2' && github.actor == 'ghuser29384'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+
+    steps:
+      - name: Check out exact PR 552 head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Remove the one-time controller from its operations branch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/$CONTROLLER_BRANCH"
+          blob_sha="$(gh api "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH?ref=$CONTROLLER_BRANCH" --jq .sha)"
+          jq -n \
+            --arg message 'Remove one-time PR 552 authenticated Preview verifier' \
+            --arg sha "$blob_sha" \
+            --arg branch "$CONTROLLER_BRANCH" \
+            '{message:$message,sha:$sha,branch:$branch}' \
+            | gh api --method DELETE "repos/$GITHUB_REPOSITORY/contents/$CONTROLLER_PATH" --input - >/dev/null
+
+      - name: Guard exact source, diff, project, and Preview identity
+        id: guard
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD"
+          test -n "$VERCEL_TOKEN"
+          git cat-file -e "${EXPECTED_BASE}^{commit}"
+          git merge-base --is-ancestor "$EXPECTED_BASE" "$EXPECTED_HEAD"
+
+          rm -rf "$EVIDENCE_DIR"
+          mkdir -p "$EVIDENCE_DIR" test-results/pr552-authenticated-preview
+
+          cat > "$EVIDENCE_DIR/expected-files.txt" <<'EOF'
+          .github/workflows/dashboard-account-security-hotfix-gates.yml
+          src/app/dashboard/dashboard-account-security.css
+          src/app/dashboard/layout.tsx
+          src/dashboard-account-security-visibility.test.ts
+          tests/dashboard-account-security-visibility.spec.ts
+          EOF
+          sort -o "$EVIDENCE_DIR/expected-files.txt" "$EVIDENCE_DIR/expected-files.txt"
+          git diff --name-only "$EXPECTED_BASE" "$EXPECTED_HEAD" | sort > "$EVIDENCE_DIR/actual-files.txt"
+          diff -u "$EVIDENCE_DIR/expected-files.txt" "$EVIDENCE_DIR/actual-files.txt"
+          git diff --check "$EXPECTED_BASE" "$EXPECTED_HEAD" | tee "$EVIDENCE_DIR/diff-check.log"
+
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$PREVIEW_DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            > /tmp/pr552-deployment.json
+
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const deployment = JSON.parse(fs.readFileSync('/tmp/pr552-deployment.json', 'utf8'));
+          const id = deployment.id ?? deployment.uid;
+          const state = deployment.readyState ?? deployment.state;
+          const project = deployment.projectId ?? deployment.project?.id;
+          const url = `https://${deployment.url}`;
+          const candidateSha = deployment.meta?.moralTradeCandidateSha;
+
+          if (id !== process.env.PREVIEW_DEPLOYMENT_ID) throw new Error(`Wrong deployment: ${id}`);
+          if (state !== 'READY') throw new Error(`Deployment is not READY: ${state}`);
+          if (deployment.target != null) throw new Error(`Expected Preview target, got ${deployment.target}`);
+          if (project !== process.env.VERCEL_PROJECT_ID) throw new Error(`Wrong project: ${project}`);
+          if (url !== process.env.PREVIEW_URL) throw new Error(`Wrong URL: ${url}`);
+          if (candidateSha !== process.env.EXPECTED_HEAD) {
+            throw new Error(`Wrong candidate metadata: ${candidateSha}`);
+          }
+
+          fs.writeFileSync(
+            `${process.env.EVIDENCE_DIR}/deployment.json`,
+            `${JSON.stringify({
+              deploymentId: id,
+              projectId: project,
+              candidateSha,
+              state,
+              target: deployment.target ?? null,
+              source: deployment.source ?? null,
+              url,
+            }, null, 2)}\n`,
+          );
+          NODE
+          rm -f /tmp/pr552-deployment.json
+
+      - name: Set up Node.js
+        if: steps.guard.outcome == 'success'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        id: install
+        if: steps.guard.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Pull the canonical project's Preview environment
+        id: pull
+        if: steps.install.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes \
+            --environment=preview \
+            --token="$VERCEL_TOKEN" \
+            2>&1 | tee "$EVIDENCE_DIR/vercel-pull.log"
+          test -s .vercel/.env.preview.local
+
+          node --env-file=.vercel/.env.preview.local <<'NODE'
+          const fs = require('node:fs');
+          const presence = {
+            nextPublicSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+            nextPublicSupabasePublishableKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY),
+            supabaseServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+          };
+          fs.writeFileSync(
+            `${process.env.EVIDENCE_DIR}/preview-environment-presence.json`,
+            `${JSON.stringify(presence, null, 2)}\n`,
+          );
+          if (!presence.supabaseServiceRoleKey) {
+            throw new Error('The Preview environment lacks SUPABASE_SERVICE_ROLE_KEY.');
+          }
+          NODE
+
+      - name: Create a temporary Vercel automation bypass
+        id: bypass
+        if: steps.pull.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          secret="$(python3 - <<'PY'
+          import secrets, string
+          alphabet = string.ascii_letters + string.digits
+          print(''.join(secrets.choice(alphabet) for _ in range(40)))
+          PY
+          )"
+          echo "::add-mask::$secret"
+          printf '%s' "$secret" > /tmp/pr552-bypass-secret
+          jq -n \
+            --arg secret "$secret" \
+            '{generate:{secret:$secret,note:"Temporary exact PR 552 authenticated Preview verification"}}' \
+            > /tmp/pr552-generate-bypass.json
+          curl --fail --silent --show-error --request PATCH \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/pr552-generate-bypass.json \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/protection-bypass?teamId=$VERCEL_ORG_ID" \
+            > /tmp/pr552-generate-bypass-response.json
+          rm -f /tmp/pr552-generate-bypass.json /tmp/pr552-generate-bypass-response.json
+
+      - name: Inspect the real authenticated Dashboard on desktop and mobile
+        id: inspect
+        if: steps.bypass.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          secret="$(cat /tmp/pr552-bypass-secret)"
+          echo "::add-mask::$secret"
+          VERCEL_AUTOMATION_BYPASS_SECRET="$secret" \
+            node --env-file=.vercel/.env.preview.local --input-type=module <<'NODE' \
+            2>&1 | tee "$EVIDENCE_DIR/authenticated-preview.log"
+          import assert from 'node:assert/strict';
+          import crypto from 'node:crypto';
+          import fs from 'node:fs';
+          import { chromium } from '@playwright/test';
+          import { createClient } from '@supabase/supabase-js';
+
+          const base = process.env.PREVIEW_URL;
+          const origin = new URL(base).origin;
+          const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+          const supabaseUrl =
+            process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://jnpoxvalyjtdghnperyu.supabase.co';
+          const publishableKey =
+            process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+            'sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT';
+          const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+          const evidenceDir = process.env.EVIDENCE_DIR;
+          const screenshotDir = 'test-results/pr552-authenticated-preview';
+          const usersFile = '/tmp/pr552-canary-users.json';
+
+          assert.equal(origin, base, 'PREVIEW_URL must be an origin without a path');
+          assert.ok(bypassSecret, 'Missing temporary Vercel bypass secret');
+          assert.ok(serviceRoleKey, 'Missing SUPABASE_SERVICE_ROLE_KEY');
+          assert.ok(evidenceDir, 'Missing evidence directory');
+          fs.mkdirSync(screenshotDir, { recursive: true });
+          fs.writeFileSync(usersFile, '[]\n');
+
+          const admin = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          });
+          const report = {
+            schemaVersion: 1,
+            deploymentId: process.env.PREVIEW_DEPLOYMENT_ID,
+            candidateSha: process.env.EXPECTED_HEAD,
+            previewOrigin: origin,
+            supabaseProject: new URL(supabaseUrl).hostname,
+            checkedAt: new Date().toISOString(),
+            status: 'pending',
+            scenarios: [],
+            cleanup: [],
+            errors: [],
+          };
+          const createdUsers = [];
+          let cleanupFailed = false;
+
+          function persistUsers() {
+            fs.writeFileSync(
+              usersFile,
+              `${JSON.stringify(createdUsers.map(({ id, label }) => ({ id, label })), null, 2)}\n`,
+            );
+          }
+
+          function errorText(error) {
+            return error instanceof Error ? error.stack ?? error.message : String(error);
+          }
+
+          function isExpectedNextAbort(request) {
+            const failure = request.failure();
+            if (failure?.errorText !== 'net::ERR_ABORTED') return false;
+            if (!request.url().startsWith(origin)) return false;
+            const url = new URL(request.url());
+            const headers = request.headers();
+            return (
+              request.method() === 'GET' &&
+              (url.searchParams.has('_rsc') ||
+                headers['next-router-prefetch'] === '1' ||
+                headers.rsc === '1' ||
+                Object.hasOwn(headers, 'next-url'))
+            );
+          }
+
+          async function createCanaryUser(label) {
+            const email = `pr552-${label}-${Date.now()}-${crypto.randomBytes(5).toString('hex')}@canary.moraltrade.org`;
+            const password = `${crypto.randomBytes(24).toString('base64url')}Aa1!`;
+            const { data, error } = await admin.auth.admin.createUser({
+              email,
+              password,
+              email_confirm: true,
+              user_metadata: { display_name: `PR 552 ${label} canary` },
+            });
+            if (error || !data.user) {
+              throw new Error(`Could not create ${label} canary user: ${error?.message ?? 'missing user'}`);
+            }
+            const user = { id: data.user.id, email, password, label };
+            createdUsers.push(user);
+            persistUsers();
+            return user;
+          }
+
+          async function cleanupUser(user) {
+            const record = { label: user.label, userIdSuffix: user.id.slice(-8), profileDeleted: false, authDeleted: false };
+            try {
+              const profileResult = await admin.from('profiles').delete().eq('id', user.id);
+              if (profileResult.error) throw profileResult.error;
+              record.profileDeleted = true;
+
+              const authResult = await admin.auth.admin.deleteUser(user.id);
+              if (authResult.error && !/not found/i.test(authResult.error.message)) {
+                throw authResult.error;
+              }
+              record.authDeleted = true;
+            } catch (error) {
+              cleanupFailed = true;
+              record.error = errorText(error);
+            }
+            report.cleanup.push(record);
+          }
+
+          async function inspectScenario(browser, label, viewport) {
+            const user = await createCanaryUser(label);
+            const state = {
+              label,
+              viewport,
+              status: 'pending',
+              finalUrl: null,
+              pageErrors: [],
+              consoleErrors: [],
+              failedSameOriginRequests: [],
+              expectedNextAborts: [],
+              sameOriginServerErrors: [],
+              dimensions: null,
+              unrelatedVisibleChildren: null,
+              screenshots: [],
+            };
+            let context;
+            let page;
+
+            try {
+              context = await browser.newContext({
+                viewport,
+                extraHTTPHeaders: {
+                  'x-vercel-protection-bypass': bypassSecret,
+                  'x-vercel-set-bypass-cookie': 'true',
+                },
+              });
+              await context.addCookies([
+                {
+                  name: 'mt_walkthrough_seen',
+                  value: '1',
+                  url: base,
+                  httpOnly: true,
+                  secure: true,
+                  sameSite: 'Lax',
+                },
+              ]);
+              page = await context.newPage();
+
+              const loginUrl = new URL('/login', base);
+              loginUrl.searchParams.set('method', 'email');
+              loginUrl.searchParams.set('next', '/dashboard#account-security');
+              const loginResponse = await page.goto(loginUrl.href, {
+                waitUntil: 'domcontentloaded',
+                timeout: 90_000,
+              });
+              assert.ok(loginResponse && loginResponse.status() < 400, `${label}: login returned ${loginResponse?.status()}`);
+              assert.equal(new URL(page.url()).origin, origin, `${label}: login left exact Preview origin`);
+
+              await page.locator('input[name="email"]').fill(user.email);
+              await page.locator('input[name="password"]').fill(user.password);
+              await Promise.all([
+                page.waitForURL(
+                  (url) => url.origin === origin && url.pathname === '/dashboard',
+                  { timeout: 90_000 },
+                ),
+                page.getByRole('button', { name: 'Log in' }).click(),
+              ]);
+
+              page.on('pageerror', (error) => state.pageErrors.push(error.message));
+              page.on('console', (message) => {
+                if (message.type() === 'error') state.consoleErrors.push(message.text());
+              });
+              page.on('requestfailed', (request) => {
+                if (!request.url().startsWith(origin)) return;
+                const record = `${request.method()} ${request.url()} — ${request.failure()?.errorText ?? 'unknown'}`;
+                if (isExpectedNextAbort(request)) state.expectedNextAborts.push(record);
+                else state.failedSameOriginRequests.push(record);
+              });
+              page.on('response', (response) => {
+                if (response.url().startsWith(origin) && response.status() >= 500) {
+                  state.sameOriginServerErrors.push(
+                    `${response.status()} ${response.request().method()} ${response.url()}`,
+                  );
+                }
+              });
+
+              const dashboardUrl = new URL('/dashboard#account-security', base).href;
+              const dashboardResponse = await page.goto(dashboardUrl, {
+                waitUntil: 'domcontentloaded',
+                timeout: 120_000,
+              });
+              assert.ok(
+                dashboardResponse && dashboardResponse.status() === 200,
+                `${label}: dashboard returned ${dashboardResponse?.status()}`,
+              );
+              await page.locator('#account-security').waitFor({ state: 'visible', timeout: 90_000 });
+              await page.waitForTimeout(1_000);
+
+              assert.equal(new URL(page.url()).origin, origin, `${label}: dashboard left exact Preview origin`);
+              assert.equal(new URL(page.url()).pathname, '/dashboard', `${label}: wrong dashboard path`);
+
+              const card = page.locator('#account-security');
+              await card.getByText('Account security', { exact: true }).waitFor({ state: 'visible' });
+              await card
+                .getByRole('heading', { name: 'Authenticator MFA for private wish data' })
+                .waitFor({ state: 'visible' });
+              await card.getByRole('button', { name: 'Create MFA setup' }).waitFor({ state: 'visible' });
+
+              const workspace = page.locator('#background-networking');
+              await workspace.waitFor({ state: 'visible' });
+              state.unrelatedVisibleChildren = await workspace
+                .locator(':scope > :not(.data-grid), :scope > .data-grid > :not(#account-security)')
+                .evaluateAll((elements) =>
+                  elements.filter((element) => getComputedStyle(element).display !== 'none').length,
+                );
+              assert.equal(
+                state.unrelatedVisibleChildren,
+                0,
+                `${label}: unrelated legacy workspace content remained visible`,
+              );
+
+              state.dimensions = await page.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                documentWidth: document.documentElement.scrollWidth,
+                bodyWidth: document.body.scrollWidth,
+              }));
+              assert.ok(
+                state.dimensions.documentWidth <= state.dimensions.viewportWidth + 1,
+                `${label}: document overflow ${JSON.stringify(state.dimensions)}`,
+              );
+              assert.ok(
+                state.dimensions.bodyWidth <= state.dimensions.viewportWidth + 1,
+                `${label}: body overflow ${JSON.stringify(state.dimensions)}`,
+              );
+
+              const beforePath = `${screenshotDir}/${label}-before-mfa-enrollment.png`;
+              await page.screenshot({ path: beforePath, fullPage: true });
+              state.screenshots.push(beforePath);
+
+              await card.locator('input[name="friendly_name"]').fill(`PR 552 ${label} canary`);
+              await card.getByRole('button', { name: 'Create MFA setup' }).click();
+              await card
+                .getByAltText('Authenticator app setup QR code')
+                .waitFor({ state: 'visible', timeout: 90_000 });
+              await card.getByRole('button', { name: 'Verify MFA setup' }).waitFor({ state: 'visible' });
+              await card
+                .locator('input[autocomplete="one-time-code"]')
+                .waitFor({ state: 'visible' });
+              await page.waitForTimeout(1_000);
+
+              const afterDimensions = await page.evaluate(() => ({
+                viewportWidth: window.innerWidth,
+                documentWidth: document.documentElement.scrollWidth,
+                bodyWidth: document.body.scrollWidth,
+              }));
+              assert.ok(
+                afterDimensions.documentWidth <= afterDimensions.viewportWidth + 1,
+                `${label}: post-enrollment document overflow ${JSON.stringify(afterDimensions)}`,
+              );
+              assert.ok(
+                afterDimensions.bodyWidth <= afterDimensions.viewportWidth + 1,
+                `${label}: post-enrollment body overflow ${JSON.stringify(afterDimensions)}`,
+              );
+              state.afterEnrollmentDimensions = afterDimensions;
+
+              const afterPath = `${screenshotDir}/${label}-after-mfa-enrollment.png`;
+              await page.screenshot({ path: afterPath, fullPage: true });
+              state.screenshots.push(afterPath);
+
+              assert.deepEqual(state.pageErrors, [], `${label}: page errors`);
+              assert.deepEqual(state.consoleErrors, [], `${label}: console errors`);
+              assert.deepEqual(
+                state.failedSameOriginRequests,
+                [],
+                `${label}: failed same-origin requests`,
+              );
+              assert.deepEqual(
+                state.sameOriginServerErrors,
+                [],
+                `${label}: same-origin server errors`,
+              );
+
+              state.finalUrl = page.url();
+              state.status = 'passed';
+              report.scenarios.push(state);
+            } catch (error) {
+              state.status = 'failed';
+              state.error = errorText(error);
+              state.finalUrl = page?.url() ?? null;
+              if (page) {
+                const failurePath = `${screenshotDir}/${label}-failure.png`;
+                await page.screenshot({ path: failurePath, fullPage: true }).catch(() => undefined);
+                state.screenshots.push(failurePath);
+              }
+              report.scenarios.push(state);
+              throw error;
+            } finally {
+              await context?.close().catch(() => undefined);
+              await cleanupUser(user);
+              persistUsers();
+            }
+          }
+
+          const browser = await chromium.launch({ headless: true });
+          let primaryError = null;
+          try {
+            await inspectScenario(browser, 'desktop-1440x1000', { width: 1440, height: 1000 });
+            await inspectScenario(browser, 'mobile-390x844', { width: 390, height: 844 });
+          } catch (error) {
+            primaryError = error;
+            report.errors.push(errorText(error));
+          } finally {
+            await browser.close();
+          }
+
+          report.status = primaryError || cleanupFailed ? 'failed' : 'passed';
+          report.finishedAt = new Date().toISOString();
+          fs.writeFileSync(
+            `${evidenceDir}/report.json`,
+            `${JSON.stringify(report, null, 2)}\n`,
+          );
+
+          if (primaryError) throw primaryError;
+          if (cleanupFailed) throw new Error('At least one in-process canary-user cleanup failed.');
+          NODE
+
+      - name: Sweep any remaining disposable canary users
+        id: sweep
+        if: always() && steps.pull.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          node --env-file=.vercel/.env.preview.local --input-type=module <<'NODE' \
+            2>&1 | tee "$EVIDENCE_DIR/cleanup-sweep.log"
+          import fs from 'node:fs';
+          import { createClient } from '@supabase/supabase-js';
+
+          const usersFile = '/tmp/pr552-canary-users.json';
+          const evidenceDir = process.env.EVIDENCE_DIR;
+          const supabaseUrl =
+            process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://jnpoxvalyjtdghnperyu.supabase.co';
+          const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+          if (!serviceRoleKey) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY during cleanup sweep.');
+
+          const users = fs.existsSync(usersFile)
+            ? JSON.parse(fs.readFileSync(usersFile, 'utf8'))
+            : [];
+          const admin = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+          });
+          const result = { status: 'pending', users: [], errors: [] };
+
+          for (const user of users) {
+            const record = { label: user.label, userIdSuffix: user.id.slice(-8) };
+            try {
+              const profileResult = await admin.from('profiles').delete().eq('id', user.id);
+              if (profileResult.error) throw profileResult.error;
+              record.profileDeleted = true;
+
+              const authResult = await admin.auth.admin.deleteUser(user.id);
+              if (authResult.error && !/not found/i.test(authResult.error.message)) {
+                throw authResult.error;
+              }
+              record.authDeletedOrAlreadyAbsent = true;
+            } catch (error) {
+              record.error = error instanceof Error ? error.message : String(error);
+              result.errors.push(`${user.label}: ${record.error}`);
+            }
+            result.users.push(record);
+          }
+
+          result.status = result.errors.length ? 'failed' : 'passed';
+          fs.writeFileSync(
+            `${evidenceDir}/cleanup-sweep.json`,
+            `${JSON.stringify(result, null, 2)}\n`,
+          );
+          if (result.errors.length) throw new Error(result.errors.join(' | '));
+          NODE
+
+      - name: Revoke the temporary Vercel automation bypass
+        id: revoke
+        if: always() && steps.bypass.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          secret="$(cat /tmp/pr552-bypass-secret)"
+          echo "::add-mask::$secret"
+          jq -n \
+            --arg secret "$secret" \
+            '{revoke:{secret:$secret,regenerate:false}}' \
+            > /tmp/pr552-revoke-bypass.json
+          curl --fail --silent --show-error --request PATCH \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data-binary @/tmp/pr552-revoke-bypass.json \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/protection-bypass?teamId=$VERCEL_ORG_ID" \
+            > /tmp/pr552-revoke-bypass-response.json
+          rm -f \
+            /tmp/pr552-bypass-secret \
+            /tmp/pr552-revoke-bypass.json \
+            /tmp/pr552-revoke-bypass-response.json
+
+      - name: Upload immutable authenticated-Preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-authenticated-preview-verification-${{ github.run_id }}
+          path: |
+            pr552-authenticated-preview-evidence/
+            test-results/pr552-authenticated-preview/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Enforce authenticated Preview verification and cleanup
+        if: always()
+        shell: bash
+        run: |
+          test '${{ steps.guard.outcome }}' = 'success'
+          test '${{ steps.install.outcome }}' = 'success'
+          test '${{ steps.pull.outcome }}' = 'success'
+          test '${{ steps.bypass.outcome }}' = 'success'
+          test '${{ steps.inspect.outcome }}' = 'success'
+          test '${{ steps.sweep.outcome }}' = 'success'
+          test '${{ steps.revoke.outcome }}' = 'success'
