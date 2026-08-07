@@ -15,8 +15,12 @@ The driver must not wait for the short-lived `MFA verified for this session.` ac
 
 If the durable postcondition is absent, the retained QA evidence includes the initial, post-action, and post-reload panel text; the server-action response status; whether an authentication cookie changed during the bounded settle interval; redacted cookie metadata that excludes cookie values; and a failure screenshot. This distinguishes an action failure, session-persistence failure, stale render, or selector failure without exposing authentication credentials.
 
+## Exact-head gate
+
+The bounded-settling implementation and its focused source contracts were published together. A direct repository commit after that bot-published repair intentionally starts the durable isolated-QA workflow on one exact feature head. That run must reach a successful terminal result and its retained artifact must be inspected before current-`main` integration, protected preview review, or any release decision.
+
 ## Scope
 
 This contract changes no MFA policy or authorization rule. Server actions, Supabase AAL checks, exact organization/program authority, personal-capacity isolation, and all downstream institutional authorization gates remain authoritative.
 
-The document makes the browser-test postcondition reviewable and triggers the durable exact-head isolated-QA workflow after the same contract is encoded in source tests.
+The document makes the browser-test postcondition and release gate reviewable.
