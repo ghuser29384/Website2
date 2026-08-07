@@ -1,4 +1,5 @@
 name: MPGF DAC pledge intent and canonical-ledger gates
+# Exact-head retrigger after the rollback-only DAC fixture was aligned with the approved quote contract.
 
 on:
   push:
