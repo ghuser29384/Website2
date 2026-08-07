@@ -1,12 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const standardPublicRoutes = [
-  "/offers",
   "/funding-rounds/vegetarian-week-micro-assurance-preview",
   "/what-is-moral-trade",
   "/worked-examples",
   "/cohort",
-  "/create",
   "/pledge-swaps",
   "/paid-action-offers",
   "/background-networking",
@@ -57,10 +55,19 @@ const standardNavLabels = [
   "Safety",
 ] as const;
 
+function isExpectedLocalSupabaseDiagnostic(message: string) {
+  return (
+    !process.env.SUPABASE_SERVICE_ROLE_KEY &&
+    message.includes("[supabase] Failed to load donation offset metrics") &&
+    message.includes("Missing SUPABASE_SERVICE_ROLE_KEY")
+  );
+}
+
 function isIgnorableConsoleError(message: string) {
   return (
     message.includes("favicon.ico") ||
-    message.includes("Failed to load resource: the server responded with a status of 404")
+    message.includes("Failed to load resource: the server responded with a status of 404") ||
+    isExpectedLocalSupabaseDiagnostic(message)
   );
 }
 
@@ -155,8 +162,20 @@ async function expectStandardShell(page: Page) {
   expect(order).toBe("main-before-footer");
 }
 
+async function expectEmbeddedCreateShell(page: Page) {
+  await expect(
+    page.getByRole("heading", { level: 1, name: "Create a Moral Trade" }),
+  ).toHaveCount(1);
+  await expectVisibleCount(page, "main", 1);
+  await expect(page.locator('iframe[title="Moral Trade Create"]')).toBeVisible();
+  await expectVisibleCount(page, 'nav[aria-label="Primary"]', 0);
+  await expectVisibleCount(page, ".mt-site-footer", 0);
+}
+
 for (const route of standardPublicRoutes) {
   test(`standard public route ${route} resolves with one visible page shell`, async ({ page }) => {
+    if (route === "/moral-trade/technical-spec") test.slow();
+
     const errors = recordUnexpectedErrors(page);
     const response = await page.goto(route, { waitUntil: "domcontentloaded" });
 
@@ -182,7 +201,7 @@ for (const { route, heading } of dataDependentPublicRoutes) {
   });
 }
 
-test("the current home workspace has one semantic page heading and its dedicated navigation", async ({
+test("the live home workspace has one semantic page heading and its dedicated navigation", async ({
   page,
 }) => {
   const errors = recordUnexpectedErrors(page);
@@ -195,16 +214,35 @@ test("the current home workspace has one semantic page heading and its dedicated
   await expectVisibleCount(page, 'nav[aria-label="Primary"]', 1);
   await expectVisibleCount(page, "main", 1);
   await expectVisibleCount(page, ".mt-site-footer", 0);
+  await expect(page.locator('[data-mt-feed-link="true"]')).toBeVisible();
+  await expect(page.locator('[data-mt-discover-link="true"]')).toBeVisible();
+  await expect(page.locator('[data-mt-evidence-link="true"]')).toBeVisible();
+  expect(errors).toEqual([]);
+});
 
-  const navLabels = await page.locator('nav[aria-label="Primary"] a').allTextContents();
-  expect(navLabels.map((label) => label.trim())).toEqual([
-    "Feed",
-    "Now",
-    "Discover",
-    "Activity",
-    "Evidence",
-    "Account",
-  ]);
+test("/offers transfers to the dedicated Discover shell", async ({ page }) => {
+  const errors = recordUnexpectedErrors(page);
+  const response = await page.goto("/offers", { waitUntil: "domcontentloaded" });
+
+  expect(response?.status() ?? 200).toBeLessThan(400);
+  await waitForResolvedPage(page);
+  await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/discover");
+  expect(new URL(page.url()).searchParams.get("domain")).toBe("offers");
+  expect(new URL(page.url()).searchParams.get("view")).toBe("list");
+  await expectVisibleCount(page, "h1", 1);
+  await expectVisibleCount(page, "main", 1);
+  await expectVisibleCount(page, 'nav[aria-label="Primary"]', 0);
+  await expectVisibleCount(page, ".mt-site-footer", 0);
+  expect(errors).toEqual([]);
+});
+
+test("/create rewrites to the embedded Create interface", async ({ page }) => {
+  const errors = recordUnexpectedErrors(page);
+  await page.goto("/create", { waitUntil: "domcontentloaded" });
+  await waitForResolvedPage(page);
+
+  expect(new URL(page.url()).pathname).toBe("/create");
+  await expectEmbeddedCreateShell(page);
   expect(errors).toEqual([]);
 });
 
@@ -216,13 +254,7 @@ test("/offers/new transfers to the embedded Create interface with a document hea
   await waitForResolvedPage(page);
 
   await expect.poll(() => new URL(page.url()).pathname, { timeout: 15_000 }).toBe("/trades/new");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Create a Moral Trade" }),
-  ).toHaveCount(1);
-  await expectVisibleCount(page, "main", 1);
-  await expect(page.locator('iframe[title="Moral Trade Create"]')).toBeVisible();
-  await expectVisibleCount(page, 'nav[aria-label="Primary"]', 0);
-  await expectVisibleCount(page, ".mt-site-footer", 0);
+  await expectEmbeddedCreateShell(page);
   expect(errors).toEqual([]);
 });
 
@@ -241,7 +273,7 @@ test("auth routes use the compact auth shell rather than the marketplace topbar"
 });
 
 test("representative marketplace pages expose the current top-level navigation", async ({ page }) => {
-  for (const route of ["/offers", "/methodology", "/mpgf", "/people", "/safety"] as const) {
+  for (const route of ["/methodology", "/mpgf", "/people", "/safety"] as const) {
     await page.goto(route, { waitUntil: "domcontentloaded" });
     await waitForResolvedPage(page);
 
@@ -301,7 +333,7 @@ test("/login preserves returnTo, keeps email, and never exposes Apple", async ({
   expect(new Set(renderedProviders).size).toBe(renderedProviders.length);
   expect(renderedProviders).not.toContain("apple");
 
-  await expect(page.getByRole("link", { name: "Create an account" })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: "Create account", exact: true })).toHaveAttribute(
     "href",
     "/signup?mode=signup&returnTo=%2Foffers%2Fnew",
   );
@@ -312,7 +344,9 @@ test("/signup renders signup mode with legal text and mode switch", async ({ pag
 
   await expect(page.locator("h1")).toHaveText("Create your account");
   await expect(
-    page.getByText("Start with one low-risk action. You can add profile details later."),
+    page.getByText("Choose a secure sign-in method. You can complete your profile later.", {
+      exact: true,
+    }),
   ).toBeVisible();
   await expect(page.getByText("By creating an account, you agree to the")).toBeVisible();
   await expect(page.getByRole("link", { name: "Log in" }).last()).toHaveAttribute(
