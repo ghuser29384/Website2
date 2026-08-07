@@ -1,0 +1,249 @@
+name: PR 212 integrate current main after green QA
+
+on:
+  push:
+    branches:
+      - ops/pr212-post-green-audit-20260807
+    paths:
+      - .github/workflows/pr212-integrate-main-after-green-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+
+concurrency:
+  group: pr212-integrate-main-after-green-20260807
+  cancel-in-progress: false
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FEATURE_BRANCH: feat/institutional-trade-system
+      EVIDENCE_BRANCH: ops/pr212-mfa-stable-state-20260807
+      QA_WORKFLOW: Institutional trade QA
+      REPORT_DIR: ops/pr212-integrated-qa-report
+    steps:
+      - name: Check out the feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Wait for validated pre-integration evidence
+        id: pre
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$REPORT_DIR"
+          pre_head=""
+          for attempt in $(seq 1 1080); do
+            git fetch --quiet origin "$EVIDENCE_BRANCH"
+            if git show "origin/${EVIDENCE_BRANCH}:ops/pr212-mfa-durable-repair-report/summary.json" >/tmp/pre-summary.json 2>/dev/null; then
+              conclusion="$(jq -r '.conclusion // empty' /tmp/pre-summary.json)"
+              evidence_status="$(jq -r '.evidence_status // empty' /tmp/pre-summary.json)"
+              pre_head="$(jq -r '.feature_head // empty' /tmp/pre-summary.json)"
+              if [[ "$conclusion" == "success" && "$evidence_status" == "validated" && -n "$pre_head" ]]; then
+                break
+              fi
+              if [[ -n "$conclusion" && "$conclusion" != "success" ]]; then
+                echo "Pre-integration exact-head QA is terminal but not green." >&2
+                exit 1
+              fi
+            fi
+            sleep 10
+          done
+          if [[ -z "$pre_head" ]]; then
+            echo "No validated green pre-integration evidence appeared within three hours." >&2
+            exit 1
+          fi
+          git fetch --quiet origin "$FEATURE_BRANCH" main
+          current_feature="$(git rev-parse "origin/${FEATURE_BRANCH}")"
+          if [[ "$current_feature" != "$pre_head" ]]; then
+            echo "Feature branch drifted after the validated run: evidence $pre_head, current $current_feature" >&2
+            exit 1
+          fi
+          main_head="$(git rev-parse origin/main)"
+          echo "pre_head=$pre_head" >> "$GITHUB_OUTPUT"
+          echo "main_head=$main_head" >> "$GITHUB_OUTPUT"
+
+      - name: Merge the pinned current-main commit without publishing conflicts
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout -B "$FEATURE_BRANCH" "${{ steps.pre.outputs.pre_head }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          set +e
+          git merge --no-ff --no-commit "${{ steps.pre.outputs.main_head }}"
+          merge_status=$?
+          set -e
+          if (( merge_status != 0 )); then
+            git diff --name-only --diff-filter=U | sort > "$REPORT_DIR/conflicts.txt"
+            git merge --abort || true
+            echo "Current-main integration produced conflicts; no feature-branch update was published." >&2
+            cat "$REPORT_DIR/conflicts.txt" >&2
+            exit 1
+          fi
+          git commit -m "Merge current main into institutional trade system"
+          integrated_head="$(git rev-parse HEAD)"
+          git diff --check "${{ steps.pre.outputs.pre_head }}..${integrated_head}"
+          echo "integrated_head=$integrated_head" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Pre-push integration gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/institutional-authorization-snapshot.test.ts \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-pool-record-trigger.test.ts \
+            src/institutional-trade-migration.test.ts \
+            src/institutional-trade-wiring.test.ts \
+            src/institutional-mfa-stable-state.test.ts \
+            src/lib/institutional-trade.test.ts \
+            src/lib/institutional-webhooks.test.ts
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+          npx tsc --noEmit --pretty false
+          npm run lint
+          npm run build
+
+      - name: Publish only if both source branches remain pinned
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --quiet origin "$FEATURE_BRANCH" main
+          current_feature="$(git rev-parse "origin/${FEATURE_BRANCH}")"
+          current_main="$(git rev-parse origin/main)"
+          if [[ "$current_feature" != "${{ steps.pre.outputs.pre_head }}" ]]; then
+            echo "Feature branch moved during integration validation." >&2
+            exit 1
+          fi
+          if [[ "$current_main" != "${{ steps.pre.outputs.main_head }}" ]]; then
+            echo "Main moved during integration validation; refusing to publish a stale integration." >&2
+            exit 1
+          fi
+          git push origin "HEAD:${FEATURE_BRANCH}"
+          echo "integrated_head=${{ steps.merge.outputs.integrated_head }}" >> "$GITHUB_OUTPUT"
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "Integrated pinned current main \`${{ steps.pre.outputs.main_head }}\` into the validated institutional head and published \`${{ steps.merge.outputs.integrated_head }}\` after focused institutional tests, absolute TypeScript, ESLint, and production build passed. PR remains draft and unmerged. Full isolated-QA rerun is now required on the integrated exact head."
+
+      - name: Wait for integrated exact-head QA
+        id: qa
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ steps.publish.outputs.integrated_head }}"
+          run_id=""
+          conclusion=""
+          for attempt in $(seq 1 720); do
+            gh run list --repo "$GITHUB_REPOSITORY" --workflow "$QA_WORKFLOW" --branch "$FEATURE_BRANCH" --limit 100 --json databaseId,headSha,status,conclusion,createdAt,url > /tmp/integrated-runs.json
+            run_id="$(jq -r --arg head "$target" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].databaseId // empty' /tmp/integrated-runs.json)"
+            status="$(jq -r --arg head "$target" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].status // empty' /tmp/integrated-runs.json)"
+            conclusion="$(jq -r --arg head "$target" '[.[] | select(.headSha == $head)] | sort_by(.createdAt) | reverse | .[0].conclusion // empty' /tmp/integrated-runs.json)"
+            if [[ -n "$run_id" && "$status" == "completed" ]]; then break; fi
+            sleep 15
+          done
+          if [[ -z "$run_id" ]]; then
+            echo "No integrated exact-head QA run was found." >&2
+            exit 1
+          fi
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          mkdir -p "$REPORT_DIR"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "$REPORT_DIR/run.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" > "$REPORT_DIR/jobs.json"
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --log-failed > "$REPORT_DIR/failed.log" 2>&1 || true
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --dir /tmp/integrated-artifacts || true
+
+      - name: Validate integrated evidence
+        id: evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ steps.publish.outputs.integrated_head }}"
+          run_id="${{ steps.qa.outputs.run_id }}"
+          conclusion="${{ steps.qa.outputs.conclusion }}"
+          artifact_root="$(find /tmp/integrated-artifacts -type f -name full-tests-differential.json -printf '%h\n' 2>/dev/null | head -1)"
+          if [[ -z "$artifact_root" ]]; then
+            echo "Missing integrated QA evidence artifact." >&2
+            exit 1
+          fi
+          cp -R "$artifact_root" "$REPORT_DIR/artifact"
+          differential="$artifact_root/full-tests-differential.json"
+          jq -e '.feature_only_failure_count == 0' "$differential" >/dev/null
+          jq -e '.feature_summary.tests >= .base_summary.tests' "$differential" >/dev/null
+          jq -e '.feature_summary.cancelled == 0 and .base_summary.cancelled == 0' "$differential" >/dev/null
+          residue_file="$(find /tmp/integrated-artifacts -type f -name post-suite-residue.txt | head -1)"
+          test -n "$residue_file"
+          grep -Eq 'auth\.users[[:space:]]*\|[[:space:]]*0' "$residue_file"
+          grep -Eq 'public\.profiles[[:space:]]*\|[[:space:]]*0' "$residue_file"
+          jq -n --arg generated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg feature_head "$target" --arg main_head "${{ steps.pre.outputs.main_head }}" --arg run_id "$run_id" --arg conclusion "$conclusion" '{generated_at:$generated_at,feature_head:$feature_head,main_head:$main_head,run_id:$run_id,conclusion:$conclusion,evidence_status:"validated"}' > "$REPORT_DIR/summary.json"
+          if [[ "$conclusion" != "success" ]]; then
+            echo "Integrated exact-head QA failed." >&2
+            exit 1
+          fi
+          echo "status=pass" >> "$GITHUB_OUTPUT"
+
+      - name: Publish integrated report
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$REPORT_DIR"
+          target="${{ steps.publish.outputs.integrated_head }}"
+          run_id="${{ steps.qa.outputs.run_id }}"
+          conclusion="${{ steps.qa.outputs.conclusion }}"
+          evidence_status="$(jq -r '.evidence_status // "unavailable"' "$REPORT_DIR/summary.json" 2>/dev/null || echo unavailable)"
+          cat > "$REPORT_DIR/report.md" <<EOF
+          # PR #212 integrated exact-head QA
+
+          - Feature head: \`${target:-unavailable}\`
+          - Integrated main: \`${{ steps.pre.outputs.main_head }}\`
+          - QA run: \`${run_id:-unavailable}\`
+          - Conclusion: \`${conclusion:-unavailable}\`
+          - Evidence: \`${evidence_status}\`
+          - Production changed: \`no\`
+          - PR merged or marked ready: \`no\`
+          EOF
+          git checkout ops/pr212-post-green-audit-20260807
+          git pull --ff-only origin ops/pr212-post-green-audit-20260807 || true
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$REPORT_DIR"
+          git commit -m "Record PR 212 integrated QA result" || true
+          git push origin HEAD:ops/pr212-post-green-audit-20260807 || true
+          if [[ "$conclusion" == "success" && "$evidence_status" == "validated" ]]; then
+            gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "PASS: integrated exact-head QA completed for \`${target}\` in run \`${run_id}\`, with differential and cleanup evidence validated. PR remains draft and unmerged. Remaining gates are protected-preview review, unresolved-thread audit, and final release decision; production payments and custody remain disabled."
+          else
+            failed_step="$(jq -r '[.jobs[]?.steps[]? | select(.conclusion == "failure") | .name][0] // "unknown"' "$REPORT_DIR/jobs.json" 2>/dev/null || echo unknown)"
+            gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "BLOCKED: integrated exact-head QA for \`${target}\` did not pass. Run \`${run_id}\`; first failed step \`${failed_step}\`. No production or merge action was taken."
+          fi
+
+      - name: Fail closed unless integrated QA passed
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.evidence.outputs.status }}" = "pass"
