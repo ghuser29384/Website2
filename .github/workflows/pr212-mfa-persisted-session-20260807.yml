@@ -1,0 +1,231 @@
+name: PR 212 persisted MFA QA repair
+
+on:
+  push:
+    branches:
+      - ops/pr212-mfa-persisted-session-20260807
+    paths:
+      - .github/workflows/pr212-mfa-persisted-session-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-mfa-persisted-session-20260807
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_HEAD: a36e06f494975d0a8a772ce65c3d639653afc0d4
+      FEATURE_BRANCH: feat/institutional-trade-system
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out exact feature head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FEATURE_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify exact head and apply persisted-session MFA QA repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_head="$(git rev-parse HEAD)"
+          if [[ "$actual_head" != "$EXPECTED_HEAD" ]]; then
+            echo "Feature branch moved: expected $EXPECTED_HEAD, got $actual_head" >&2
+            exit 1
+          fi
+
+          python - <<'PY'
+          from pathlib import Path
+
+          script_path = Path('.github/scripts/institutional-trade-qa-e2e.mjs')
+          script = script_path.read_text()
+          old_script = '''  if (/Session level\\s*aal2/i.test(await panel.innerText())) return;
+  const verifyForm = panel.locator("form").filter({ has: page.getByRole("button", { name: "Verify session" }) });
+  await verifyForm.waitFor({ state: "visible", timeout: 30_000 });
+  await verifyForm.locator('select[name="factor_id"]').selectOption(user.mfa.factorId);
+  await verifyForm.locator('input[name="code"]').fill(await freshTotp(user.mfa.secret));
+  await verifyForm.getByRole("button", { name: "Verify session" }).click();
+  await panel.getByText("AAL: aal2", { exact: true }).waitFor({ state: "visible", timeout: 30_000 });
+'''
+          new_script = '''  const initialPanelText = await panel.innerText();
+  if (/Session level\\s*aal2/i.test(initialPanelText) || /AAL:\\s*aal2/i.test(initialPanelText)) return;
+  const verifyForm = panel.locator("form").filter({ has: page.getByRole("button", { name: "Verify session" }) });
+  await verifyForm.waitFor({ state: "visible", timeout: 30_000 });
+  await verifyForm.locator('select[name="factor_id"]').selectOption(user.mfa.factorId);
+  await verifyForm.locator('input[name="code"]').fill(await freshTotp(user.mfa.secret));
+  const actionResponsePromise = page.waitForResponse(
+    (response) => {
+      const request = response.request();
+      if (request.method() !== "POST") return false;
+      try {
+        return new URL(response.url()).pathname === "/dashboard";
+      } catch {
+        return false;
+      }
+    },
+    { timeout: 30_000 },
+  );
+  const [actionResponse] = await Promise.all([
+    actionResponsePromise,
+    verifyForm.getByRole("button", { name: "Verify session" }).click(),
+  ]);
+  assert.equal(
+    actionResponse.status(),
+    200,
+    `MFA server action returned HTTP ${actionResponse.status()} for ${user.role}.`,
+  );
+  await page.waitForTimeout(500);
+  const postActionPanelText = await panel.innerText().catch(() => "");
+  await page.reload({ waitUntil: "domcontentloaded" });
+  const refreshedPanel = page.locator("article#account-security");
+  await refreshedPanel.waitFor({ state: "attached", timeout: 30_000 });
+  await refreshedPanel.scrollIntoViewIfNeeded();
+  await refreshedPanel.waitFor({ state: "visible", timeout: 30_000 });
+  const refreshedPanelText = await refreshedPanel.innerText();
+  if (
+    !/Session level\\s*aal2/i.test(refreshedPanelText) &&
+    !/AAL:\\s*aal2/i.test(refreshedPanelText)
+  ) {
+    const cookieMetadata = (await page.context().cookies())
+      .filter(({ name }) => name.startsWith("sb-") || name.includes("auth-token"))
+      .map(({ domain, expires, httpOnly, name, path: cookiePath, sameSite, secure, value }) => ({
+        domain,
+        expires,
+        httpOnly,
+        name,
+        path: cookiePath,
+        sameSite,
+        secure,
+        valueLength: value.length,
+      }));
+    await writeFile(
+      path.join(outputDir, `mfa-${user.role}-verification.json`),
+      `${JSON.stringify(
+        {
+          actionResponseStatus: actionResponse.status(),
+          cookieMetadata,
+          initialPanelText,
+          postActionPanelText,
+          refreshedPanelText,
+          role: user.role,
+          url: page.url(),
+        },
+        null,
+        2,
+      )}\\n`,
+    );
+    await screenshot(page, `mfa-${user.role}-verification-failed`);
+    throw new Error(
+      `MFA verification did not persist AAL2 for ${user.role}. ` +
+        `Post-action panel: ${postActionPanelText.slice(0, 500)} ` +
+        `Reloaded panel: ${refreshedPanelText.slice(0, 500)}`,
+    );
+  }
+'''
+          if script.count(old_script) != 1:
+              raise SystemExit(f'Expected one MFA QA block, found {script.count(old_script)}.')
+          script_path.write_text(script.replace(old_script, new_script))
+
+          wiring_path = Path('src/institutional-trade-wiring.test.ts')
+          wiring = wiring_path.read_text()
+          old_wiring = '''test("authenticated QA waits for the stable AAL2 session state after MFA verification", () => {
+  assert.match(qaScript, /panel\\.getByText\\("AAL: aal2", \\{ exact: true \\}\\)/);
+  assert.doesNotMatch(qaScript, /getByText\\("MFA verified for this session\\."\\)\\.waitFor/);
+});'''
+          new_wiring = '''test("authenticated QA verifies the persisted AAL2 session after the MFA action response", () => {
+  assert.match(qaScript, /page\\.waitForResponse/);
+  assert.match(qaScript, /page\\.reload\\(\\{ waitUntil: "domcontentloaded" \\}\\)/);
+  assert.match(qaScript, /Session level\\\\s\\*aal2/);
+  assert.match(qaScript, /mfa-\\$\\{user\\.role\\}-verification\\.json/);
+  assert.doesNotMatch(qaScript, /getByText\\("MFA verified for this session\\."\\)\\.waitFor/);
+});'''
+          if wiring.count(old_wiring) != 1:
+              raise SystemExit(f'Expected one wiring MFA contract, found {wiring.count(old_wiring)}.')
+          wiring_path.write_text(wiring.replace(old_wiring, new_wiring))
+
+          stable_path = Path('src/institutional-mfa-stable-state.test.ts')
+          stable = stable_path.read_text()
+          old_stable = '''test("institutional MFA QA waits for the stable rendered AAL2 session state", () => {
+  assert.match(
+    qaScript,
+    /panel\\.getByText\\("AAL: aal2", \\{ exact: true \\}\\)\\.waitFor/,
+  );
+  assert.doesNotMatch(
+    qaScript,
+    /getByText\\("MFA verified for this session\\."\\)\\.waitFor/,
+  );
+  assert.match(
+    accountSecurityPanel,
+    /useActionState\\(verifyBackgroundNetworkingMfaAction/,
+  );
+  assert.match(accountSecurityPanel, /AAL:\\s*\\{initialSummary\\.currentLevel\\}/);
+  assert.match(accountSecurityPanel, /router\\.refresh\\(\\)/);
+});'''
+          new_stable = '''test("institutional MFA QA verifies the persisted AAL2 session after a completed action", () => {
+  assert.match(qaScript, /page\\.waitForResponse/);
+  assert.match(qaScript, /page\\.reload\\(\\{ waitUntil: "domcontentloaded" \\}\\)/);
+  assert.match(qaScript, /Session level\\\\s\\*aal2/);
+  assert.match(qaScript, /AAL:\\\\s\\*aal2/);
+  assert.match(qaScript, /mfa-\\$\\{user\\.role\\}-verification\\.json/);
+  assert.doesNotMatch(
+    qaScript,
+    /getByText\\("MFA verified for this session\\."\\)\\.waitFor/,
+  );
+  assert.match(
+    accountSecurityPanel,
+    /useActionState\\(verifyBackgroundNetworkingMfaAction/,
+  );
+  assert.match(accountSecurityPanel, /initialSummary\\?\\.session\\.currentAal/);
+  assert.match(accountSecurityPanel, /router\\.refresh\\(\\)/);
+});'''
+          if stable.count(old_stable) != 1:
+              raise SystemExit(f'Expected one stable-state MFA contract, found {stable.count(old_stable)}.')
+          stable_path.write_text(stable.replace(old_stable, new_stable))
+          PY
+
+          git diff --check
+          node --check .github/scripts/institutional-trade-qa-e2e.mjs
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then exit 0; fi
+            if (( attempt == 4 )); then exit 1; fi
+            sleep $((attempt * 20))
+          done
+
+      - name: Run focused source contracts
+        run: node --import tsx --test src/institutional-trade-wiring.test.ts src/institutional-mfa-stable-state.test.ts
+
+      - name: Commit and push the verified repair
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/scripts/institutional-trade-qa-e2e.mjs src/institutional-trade-wiring.test.ts src/institutional-mfa-stable-state.test.ts
+          git commit -m "Verify persisted AAL2 state after MFA action"
+          new_head="$(git rev-parse HEAD)"
+          git push origin "HEAD:${FEATURE_BRANCH}"
+          echo "new_head=$new_head" >> "$GITHUB_OUTPUT"
+
+      - name: Record repair on PR 212
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "Published the narrow authenticated-MFA QA repair at \`${{ steps.publish.outputs.new_head }}\`. The browser flow now waits for the actual dashboard server-action response, performs a hard reload, and verifies persisted \`aal2\` state. If persistence still fails, the retained artifact contains redacted panel/cookie metadata and a failure screenshot. Focused source contracts passed. PR remains draft and unmerged pending complete exact-head QA."
