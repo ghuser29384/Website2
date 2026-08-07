@@ -1,0 +1,54 @@
+name: Direct Donation Upgrade current-main source export
+
+on:
+  push:
+    branches:
+      - integration/direct-donation-upgrade-current-main-20260807
+    paths:
+      - .github/workflows/direct-donation-upgrade-current-main-source-export-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-donation-upgrade-current-main-source-export-20260807
+  cancel-in-progress: false
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact branch head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Record exact source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD | tee exact-head.txt
+          git rev-parse HEAD^{tree} | tee exact-tree.txt
+          git status --short | tee worktree-status.txt
+          test ! -s worktree-status.txt
+
+      - name: Package exact repository source
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="direct-donation-upgrade-current-main-${GITHUB_SHA}.zip"
+          git archive --format=zip --output="$archive" HEAD
+          sha256sum "$archive" | tee source-sha256.txt
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-donation-upgrade-current-main-source-${{ github.run_id }}
+          path: |
+            direct-donation-upgrade-current-main-${{ github.sha }}.zip
+            exact-head.txt
+            exact-tree.txt
+            source-sha256.txt
+          retention-days: 7
