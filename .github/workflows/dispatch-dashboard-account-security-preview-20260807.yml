@@ -1,4 +1,4 @@
-name: Dispatch Account security exact preview once
+name: Cancel duplicate Account security preview release once
 
 on:
   push:
@@ -6,62 +6,54 @@ on:
       - ops/dispatch-dashboard-account-security-preview-20260807
     paths:
       - .github/workflows/dispatch-dashboard-account-security-preview-20260807.yml
-  workflow_dispatch:
 
 permissions:
   actions: write
   contents: read
 
 jobs:
-  dispatch:
+  cancel-duplicate:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      EXPECTED_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
-      RELEASE_REF: release/vercel-preview
+      DUPLICATE_RUN_ID: "31157379381"
     steps:
-      - name: Verify the immutable preview ref and dispatch the canonical release workflow
+      - name: Cancel only the queued duplicate release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
 
-          remote_sha="$(curl -fsSL \
+          status="$(curl -fsSL \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H 'Accept: application/vnd.github+json' \
             -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/ref/heads/${RELEASE_REF}" \
-            | jq -r '.object.sha')"
-          test "$remote_sha" = "$EXPECTED_SHA"
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${DUPLICATE_RUN_ID}" \
+            | jq -r '.status')"
 
-          jq -n \
-            --arg ref main \
-            --arg target preview \
-            --arg release_ref "$RELEASE_REF" \
-            --arg expected_sha "$EXPECTED_SHA" \
-            '{
-              ref: $ref,
-              inputs: {
-                target: $target,
-                ref: $release_ref,
-                expected_sha: $expected_sha
-              }
-            }' > dispatch.json
-
-          response_code="$(curl -sS \
-            -o dispatch-response.txt \
-            -w '%{http_code}' \
-            -X POST \
-            -H "Authorization: Bearer ${GH_TOKEN}" \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'X-GitHub-Api-Version: 2022-11-28' \
-            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/dispatches" \
-            --data-binary @dispatch.json)"
-          if [[ "$response_code" != '204' ]]; then
-            cat dispatch-response.txt >&2
-            echo "Workflow dispatch returned HTTP ${response_code}." >&2
-            exit 1
-          fi
-
-          echo "Dispatched exact preview release for ${EXPECTED_SHA}."
+          case "$status" in
+            queued|pending|in_progress|requested|waiting)
+              response_code="$(curl -sS \
+                -o cancel-response.txt \
+                -w '%{http_code}' \
+                -X POST \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${DUPLICATE_RUN_ID}/cancel")"
+              if [[ "$response_code" != '202' && "$response_code" != '409' ]]; then
+                cat cancel-response.txt >&2
+                echo "Cancel returned HTTP ${response_code}." >&2
+                exit 1
+              fi
+              echo "Cancellation requested for duplicate run ${DUPLICATE_RUN_ID}."
+              ;;
+            completed)
+              echo "Duplicate run ${DUPLICATE_RUN_ID} was already completed; no cancellation needed."
+              ;;
+            *)
+              echo "Unexpected duplicate-run status: ${status}" >&2
+              exit 1
+              ;;
+          esac
