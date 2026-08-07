@@ -1,0 +1,62 @@
+name: Configure PR 212 exact-head QA branch
+
+on:
+  push:
+    branches:
+      - ops/pr212-exact-head-qa-20260807
+    paths:
+      - .github/workflows/configure-pr212-exact-head-qa-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: configure-pr212-exact-head-qa-20260807
+  cancel-in-progress: false
+
+jobs:
+  configure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_PARENT: 47256293a3a63ce3b8d8d169841af608312b686e
+      QA_BRANCH: ops/pr212-exact-head-qa-20260807
+    steps:
+      - name: Check out QA branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.QA_BRANCH }}
+          fetch-depth: 2
+
+      - name: Retarget the durable institutional workflow to this isolated branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent="$(git rev-parse HEAD^)"
+          if [[ "$parent" != "$EXPECTED_PARENT" ]]; then
+            echo "Unexpected parent: expected $EXPECTED_PARENT, got $parent" >&2
+            exit 1
+          fi
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/institutional-trade-qa.yml')
+          text = path.read_text()
+          old = '      - feat/institutional-trade-system\n'
+          new = '      - ops/pr212-exact-head-qa-20260807\n'
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one feature-branch trigger, found {text.count(old)}.')
+          path.write_text(text.replace(old, new))
+          PY
+          git diff --check
+
+      - name: Commit isolated trigger configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/institutional-trade-qa.yml
+          git commit -m "Retarget institutional QA to isolated exact-head branch"
+          git push origin "HEAD:${QA_BRANCH}"
