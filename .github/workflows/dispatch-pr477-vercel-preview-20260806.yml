@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      CANDIDATE_SHA: '7bada6f910ecbc13c9964aaa07b5966040e99d1e'
+      CANDIDATE_SHA: 'c7d59ade20e40793d6cdff6669cc7dab0a022fc1'
       BASE_SHA: '87b093751a4c2de909555abdb7f181061bb36390'
       RELEASE_REF: release/vercel-preview
     steps:
@@ -43,7 +43,7 @@ jobs:
           release_sha="$(gh api "/repos/$GITHUB_REPOSITORY/git/ref/heads/$RELEASE_REF" --jq '.object.sha')"
           test "$release_sha" = "$CANDIDATE_SHA"
 
-          for attempt in 1 2 3 4; do
+          for attempt in 1 2 3 4 5; do
             if gh workflow run vercel-release.yml \
               --repo "$GITHUB_REPOSITORY" \
               --ref "$RELEASE_REF" \
@@ -53,8 +53,8 @@ jobs:
               -f rendered_base_sha="$BASE_SHA"; then
               exit 0
             fi
-            if [[ "$attempt" -eq 4 ]]; then
-              echo 'Workflow dispatch failed after four attempts.' >&2
+            if [[ "$attempt" -eq 5 ]]; then
+              echo 'Workflow dispatch failed after five attempts.' >&2
               exit 1
             fi
             sleep $((attempt * 10))
@@ -68,5 +68,5 @@ jobs:
             echo "- Candidate: \`$CANDIDATE_SHA\`"
             echo "- Exact merge base: \`$BASE_SHA\`"
             echo "- Release ref: \`$RELEASE_REF\`"
-            echo '- Dispatch retry policy: four attempts with bounded backoff'
+            echo '- Dispatch retry policy: five attempts with bounded backoff'
           } >> "$GITHUB_STEP_SUMMARY"
