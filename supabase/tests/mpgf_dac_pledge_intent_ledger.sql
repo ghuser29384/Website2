@@ -182,7 +182,7 @@ insert into public.mpgf_pool_proposals (
       "premiumIncludedInNetRecipientThreshold":false,
       "pricingMode":"experience_rated",
       "provisional":true,
-      "rationale":"Synthetic pending QA quote",
+      "rationale":"Provisional threshold 1 experience-rated quote; operator approval remains required.",
       "assumptions":{
         "successProbabilityBps":7500,
         "failureBonusRateBps":1000,
