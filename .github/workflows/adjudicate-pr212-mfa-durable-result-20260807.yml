@@ -1,0 +1,111 @@
+name: Adjudicate PR 212 durable MFA result
+
+on:
+  push:
+    branches:
+      - ops/pr212-failure-evidence-20260807
+    paths:
+      - .github/workflows/adjudicate-pr212-mfa-durable-result-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+
+concurrency:
+  group: adjudicate-pr212-mfa-durable-result-20260807
+  cancel-in-progress: false
+
+jobs:
+  adjudicate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    env:
+      GH_TOKEN: ${{ github.token }}
+      EVIDENCE_BRANCH: ops/pr212-mfa-stable-state-20260807
+      OUTPUT_DIR: ops/pr212-mfa-durable-adjudication
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/pr212-failure-evidence-20260807
+          fetch-depth: 0
+
+      - name: Wait for terminal evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          for attempt in $(seq 1 1080); do
+            git fetch --quiet origin "$EVIDENCE_BRANCH"
+            if git show "origin/${EVIDENCE_BRANCH}:ops/pr212-mfa-durable-repair-report/summary.json" > /tmp/summary.json 2>/dev/null; then
+              break
+            fi
+            sleep 10
+          done
+          test -s /tmp/summary.json
+          git show "origin/${EVIDENCE_BRANCH}:ops/pr212-mfa-durable-repair-report/jobs.json" > /tmp/jobs.json || printf '{"jobs":[]}' > /tmp/jobs.json
+          git show "origin/${EVIDENCE_BRANCH}:ops/pr212-mfa-durable-repair-report/failed.log" > /tmp/failed.log || :
+          conclusion="$(jq -r '.conclusion // "unknown"' /tmp/summary.json)"
+          run_id="$(jq -r '.run_id // "unknown"' /tmp/summary.json)"
+          head="$(jq -r '.feature_head // "unknown"' /tmp/summary.json)"
+          failed_step="$(jq -r '[.jobs[]?.steps[]? | select(.conclusion == "failure") | .name][0] // "none"' /tmp/jobs.json)"
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          text = Path('/tmp/failed.log').read_text(errors='replace') if Path('/tmp/failed.log').exists() else ''
+          patterns = [
+              r'locator\.(?:waitFor|click|fill|scrollIntoViewIfNeeded):[^\n]*(?:\n(?:.*\n){0,18})?',
+              r'AssertionError[^\n]*(?:\n(?:.*\n){0,18})?',
+              r'Error: MFA verification[^\n]*(?:\n(?:.*\n){0,12})?',
+              r'TimeoutError[^\n]*(?:\n(?:.*\n){0,12})?',
+              r'FAIL: Institutional authenticated five-participant QA suite(?:\n(?:.*\n){0,18})?',
+          ]
+          excerpts=[]
+          for pattern in patterns:
+              match=re.search(pattern,text,re.MULTILINE)
+              if match:
+                  excerpts.append(match.group(0).strip())
+          if not excerpts:
+              excerpts=['No recognized browser/assertion excerpt was present in the failed-step log.']
+          combined='\n\n---\n\n'.join(excerpts)
+          combined=re.sub(r'(?i)(password|token|secret|authorization)[=: ]+[^\s]+',r'\1=<redacted>',combined)
+          Path('/tmp/excerpt.txt').write_text(combined[:12000]+'\n')
+          PY
+          cp /tmp/summary.json "$OUTPUT_DIR/summary.json"
+          cp /tmp/jobs.json "$OUTPUT_DIR/jobs.json"
+          cp /tmp/excerpt.txt "$OUTPUT_DIR/failure-excerpt.txt"
+          cat > "$OUTPUT_DIR/report.md" <<EOF
+          # PR #212 durable MFA adjudication
+
+          - Feature head: \`$head\`
+          - QA run: \`$run_id\`
+          - Conclusion: \`$conclusion\`
+          - First failed step: \`$failed_step\`
+
+          ## Safe failure excerpt
+
+          \`\`\`text
+          $(cat /tmp/excerpt.txt)
+          \`\`\`
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$OUTPUT_DIR"
+          git commit -m "Record PR 212 durable MFA adjudication"
+          git push origin HEAD:ops/pr212-failure-evidence-20260807
+          if [[ "$conclusion" == "success" ]]; then
+            gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "The durable-MFA exact-head run \`$run_id\` on \`$head\` is green; the evidence monitor controls integration. No additional product patch was made by adjudication."
+          else
+            excerpt="$(head -c 3000 /tmp/excerpt.txt)"
+            gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body-file - <<EOF
+          BLOCKED: durable-MFA exact-head QA run \`$run_id\` on \`$head\` failed at \`$failed_step\`.
+
+          \`\`\`text
+          $excerpt
+          \`\`\`
+
+          This adjudicator made no product, production, database, payment, custody, or feature-flag change.
+          EOF
+          fi
