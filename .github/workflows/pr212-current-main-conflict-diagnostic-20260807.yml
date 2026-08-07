@@ -1,0 +1,66 @@
+name: Diagnose PR 212 current-main conflicts
+
+on:
+  push:
+    branches:
+      - ops/pr212-mfa-persisted-session-20260807
+    paths:
+      - .github/workflows/pr212-current-main-conflict-diagnostic-20260807.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr212-current-main-conflict-diagnostic-20260807
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact institutional candidate
+        uses: actions/checkout@v4
+        with:
+          ref: feat/institutional-trade-system
+          fetch-depth: 0
+
+      - name: Attempt a no-commit merge and report conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_feature_head='18c1c8936a78eb8d8e863fc377b63fd8e8294a9e'
+          observed_feature_head="$(git rev-parse HEAD)"
+          test "$observed_feature_head" = "$expected_feature_head"
+          git fetch --no-tags origin main
+          main_head="$(git rev-parse origin/main)"
+          merge_base="$(git merge-base HEAD origin/main)"
+          printf 'feature_head=%s\nmain_head=%s\nmerge_base=%s\n' \
+            "$observed_feature_head" "$main_head" "$merge_base"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          set +e
+          git merge --no-commit --no-ff origin/main
+          merge_status=$?
+          set -e
+
+          echo "merge_status=$merge_status"
+          echo '=== unresolved paths ==='
+          git diff --name-only --diff-filter=U | sort
+          echo '=== status ==='
+          git status --short
+          echo '=== combined conflict hunks ==='
+          git diff --cc --stat
+
+          if [[ "$merge_status" == '0' ]]; then
+            echo 'Current main merges cleanly into the institutional candidate.'
+          else
+            unresolved="$(git diff --name-only --diff-filter=U | wc -l | tr -d ' ')"
+            test "$unresolved" -gt 0
+            echo "Current main has $unresolved unresolved path(s)."
+          fi
+
+          git merge --abort 2>/dev/null || true
+          test "$(git rev-parse HEAD)" = "$expected_feature_head"
