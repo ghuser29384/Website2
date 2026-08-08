@@ -211,6 +211,35 @@ function runPsql(sql, variables = {}) {
     if (!isExpectedPrefetchAbort && !isExpectedServerActionNavigationAbort) {''',
     )
 
+    source = replace_literal(
+        source,
+        "post-verification probe",
+        '''    await pendingForm.locator('input[name="code"]').fill(desktopCode.code);
+    await pendingForm.getByRole("button", { name: "Verify MFA setup" }).click();
+    await expect(summaryValue(desktopPanel, "Verified factors")).toHaveText("1", {
+      timeout: 30_000,
+    });''',
+        '''    await pendingForm.locator('input[name="code"]').fill(desktopCode.code);
+    await pendingForm.getByRole("button", { name: "Verify MFA setup" }).click();
+    await sleep(2_000);
+    const postVerifySignIn = await signInWithPassword(state.email, state.password);
+    const postVerifyFactors = await listUserFactors(postVerifySignIn.client);
+    const postVerifyAal = await postVerifySignIn.client.auth.mfa.getAuthenticatorAssuranceLevel();
+    const postVerifyMessages = await desktopPanel.locator("p.route-text").allTextContents();
+    writeJson(path.join(OUTPUT_DIR, "desktop-post-verify-probe.json"), {
+      currentUrl: desktopPage.url(),
+      messages: postVerifyMessages,
+      factors: postVerifyFactors,
+      assurance: postVerifyAal.data ?? null,
+      assuranceError: postVerifyAal.error?.message ?? null,
+      summaryVerifiedFactors: await summaryValue(desktopPanel, "Verified factors").textContent(),
+      summarySessionLevel: await summaryValue(desktopPanel, "Session level").textContent(),
+    });
+    await expect(summaryValue(desktopPanel, "Verified factors")).toHaveText("1", {
+      timeout: 30_000,
+    });''',
+    )
+
     forbidden = [
         "PR552_PREVIEW_SHARE_URL",
         "PREVIEW_SHARE_URL",
@@ -233,6 +262,7 @@ function runPsql(sql, variables = {}) {
         "input: expandedSql": 1,
         'locator("xpath=ancestor::form")': 3,
         "isExpectedServerActionNavigationAbort": 2,
+        "desktop-post-verify-probe.json": 1,
         new_candidate_sha: 1,
         new_deployment_id: 1,
     }
