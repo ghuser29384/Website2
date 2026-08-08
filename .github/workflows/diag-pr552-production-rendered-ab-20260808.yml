@@ -1,0 +1,180 @@
+name: Diagnose PR 552 production rendered gate A/B
+
+on:
+  push:
+    branches:
+      - ops/diag-pr552-production-rendered-ab-20260808
+    paths:
+      - .github/workflows/diag-pr552-production-rendered-ab-20260808.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diag-pr552-production-rendered-ab-20260808
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: ba4b50386edc038d5297740d99a224a16ed69d71
+  CANDIDATE_SHA: 71e532dfbbb9e364ce5119bec84826a96e2fb338
+
+jobs:
+  rendered-ab:
+    name: Rendered gate — ${{ matrix.revision }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - revision: base
+            sha: ba4b50386edc038d5297740d99a224a16ed69d71
+          - revision: candidate
+            sha: 71e532dfbbb9e364ce5119bec84826a96e2fb338
+    env:
+      REVISION: ${{ matrix.revision }}
+      REVISION_SHA: ${{ matrix.sha }}
+      EVIDENCE_DIR: rendered-ab-${{ matrix.revision }}
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - name: Check out immutable revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+
+      - name: Guard exact A/B inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$REVISION_SHA"
+          git cat-file -e "${BASE_SHA}^{commit}"
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          git merge-base --is-ancestor "$BASE_SHA" "$CANDIDATE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          {
+            echo "revision=$REVISION"
+            echo "sha=$REVISION_SHA"
+            echo "tree=$(git show -s --format=%T HEAD)"
+            echo "node=$(node --version 2>/dev/null || true)"
+          } | tee "$EVIDENCE_DIR/revision.txt"
+          git diff --check HEAD^
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+          node --version | tee "$EVIDENCE_DIR/node-version.txt"
+          npm --version | tee "$EVIDENCE_DIR/npm-version.txt"
+          npx playwright --version | tee "$EVIDENCE_DIR/playwright-version.txt"
+
+      - name: Build exactly as the production release gate
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/production-build.log"
+
+      - name: Record rendered test inventory
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -o pipefail
+          npx playwright test --list --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/test-inventory.log"
+
+      - name: Run the canonical complete rendered gate and retain failure
+        id: canonical
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_JSON_OUTPUT_FILE: rendered-ab-${{ matrix.revision }}/canonical-results.json
+          PLAYWRIGHT_HTML_OUTPUT_DIR: rendered-ab-${{ matrix.revision }}/canonical-html
+        run: |
+          set +e
+          set -o pipefail
+          npm run test:e2e -- --reporter=line,json,html \
+            2>&1 | tee "$EVIDENCE_DIR/canonical-rendered.log"
+          code=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$code" | tee "$EVIDENCE_DIR/canonical-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Run serial no-retry adjudication and retain failure
+        id: serial
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_JSON_OUTPUT_FILE: rendered-ab-${{ matrix.revision }}/serial-results.json
+          PLAYWRIGHT_HTML_OUTPUT_DIR: rendered-ab-${{ matrix.revision }}/serial-html
+        run: |
+          set +e
+          set -o pipefail
+          npm run test:e2e -- --workers=1 --retries=0 --reporter=line,json,html \
+            2>&1 | tee "$EVIDENCE_DIR/serial-rendered.log"
+          code=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$code" | tee "$EVIDENCE_DIR/serial-exit-code.txt"
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize A/B revision result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          canonical='${{ steps.canonical.outputs.exit_code }}'
+          serial='${{ steps.serial.outputs.exit_code }}'
+          jq -n \
+            --arg revision "$REVISION" \
+            --arg sha "$REVISION_SHA" \
+            --arg canonicalExitCode "${canonical:-missing}" \
+            --arg serialExitCode "${serial:-missing}" \
+            '{schemaVersion:1,revision:$revision,sha:$sha,canonicalExitCode:$canonicalExitCode,serialExitCode:$serialExitCode}' \
+            | tee "$EVIDENCE_DIR/summary.json"
+          {
+            echo "### Rendered A/B — $REVISION"
+            echo
+            echo "- SHA: \`$REVISION_SHA\`"
+            echo "- Canonical exit: \`${canonical:-missing}\`"
+            echo "- Serial exit: \`${serial:-missing}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload complete diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-production-rendered-ab-${{ matrix.revision }}-${{ github.run_id }}
+          path: |
+            rendered-ab-${{ matrix.revision }}/
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Preserve truthful job conclusion
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          canonical='${{ steps.canonical.outputs.exit_code }}'
+          serial='${{ steps.serial.outputs.exit_code }}'
+          test "${canonical:-1}" -eq 0
+          test "${serial:-1}" -eq 0
