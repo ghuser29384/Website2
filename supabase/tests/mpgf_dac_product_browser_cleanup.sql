@@ -9,33 +9,35 @@ alter table public.mpgf_public_goods_pledges disable trigger mpgf_guard_dac_publ
 alter table public.mpgf_public_goods_campaigns disable trigger mpgf_public_goods_campaigns_published_terms_guard;
 alter table public.mpgf_pool_lifecycle_events disable trigger mpgf_pool_lifecycle_events_append_only;
 alter table public.mpgf_pool_proposal_versions disable trigger mpgf_pool_proposal_versions_append_only;
+alter table public.moral_trade_create_pool_terms disable trigger moral_trade_create_pool_terms_immutable;
+alter table public.mpgf_failure_bonus_premium_quotes disable trigger mpgf_failure_bonus_approved_quote_immutable;
 
 delete from public.mpgf_dac_campaign_outcomes
 where campaign_id in (
   'campaign-ce555555555545558555555555555555',
   'campaign-cf666666666646668666666666666666',
-  'campaign-c077777777774777877777777777777'
+  'campaign-c0777777777747778777777777777777'
 );
 
 delete from public.mpgf_dac_pledge_events
 where campaign_id in (
   'campaign-ce555555555545558555555555555555',
   'campaign-cf666666666646668666666666666666',
-  'campaign-c077777777774777877777777777777'
+  'campaign-c0777777777747778777777777777777'
 );
 
 delete from public.mpgf_public_goods_pledges
 where campaign_id in (
   'campaign-ce555555555545558555555555555555',
   'campaign-cf666666666646668666666666666666',
-  'campaign-c077777777774777877777777777777'
+  'campaign-c0777777777747778777777777777777'
 );
 
 delete from public.mpgf_dac_pledge_intents
 where campaign_id in (
   'campaign-ce555555555545558555555555555555',
   'campaign-cf666666666646668666666666666666',
-  'campaign-c077777777774777877777777777777'
+  'campaign-c0777777777747778777777777777777'
 );
 
 delete from public.mpgf_pool_lifecycle_events
@@ -49,7 +51,7 @@ delete from public.mpgf_public_goods_campaigns
 where id in (
   'campaign-ce555555555545558555555555555555',
   'campaign-cf666666666646668666666666666666',
-  'campaign-c077777777774777877777777777777'
+  'campaign-c0777777777747778777777777777777'
 );
 
 delete from public.mpgf_pool_proposal_versions
@@ -96,6 +98,8 @@ where id = 'qa-dac-product-match-20260807';
 delete from public.mpgf_pool_reviewers
 where reviewer_id = 'cb222222-2222-4222-8222-222222222222';
 
+alter table public.mpgf_failure_bonus_premium_quotes enable trigger mpgf_failure_bonus_approved_quote_immutable;
+alter table public.moral_trade_create_pool_terms enable trigger moral_trade_create_pool_terms_immutable;
 alter table public.mpgf_pool_proposal_versions enable trigger mpgf_pool_proposal_versions_append_only;
 alter table public.mpgf_pool_lifecycle_events enable trigger mpgf_pool_lifecycle_events_append_only;
 alter table public.mpgf_public_goods_campaigns enable trigger mpgf_public_goods_campaigns_published_terms_guard;

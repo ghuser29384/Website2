@@ -135,7 +135,16 @@ with shared as (
       "policyVersion":"mpgf_failure_bonus_success_premium_v0_1",
       "premiumPayer":"pool_creator_or_sponsor",
       "premiumIncludedInNetRecipientThreshold":false,
-      "eligibilityPolicy":{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"},
+      "eligibilityPolicy":{
+        "policyVersion":"mpgf_failure_bonus_eligibility_v0_1",
+        "contributorIdentityRule":"verified_unique_person",
+        "contributionTimingRule":"captured_before_deadline",
+        "relatedPartyRule":"exclude_creator_and_related_parties",
+        "paymentIntegrityRule":"exclude_duplicate_reversed_disputed_or_fraudulent",
+        "bonusBasis":"eligible_contribution",
+        "maxParticipants":100,
+        "maxBonusPerParticipantCents":2500
+      },
       "thresholds":[{
         "thresholdId":"qa-dac-product-threshold-1",
         "thresholdIndex":1,
@@ -149,7 +158,7 @@ with shared as (
         "premiumIncludedInNetRecipientThreshold":false,
         "pricingMode":"experience_rated",
         "provisional":true,
-        "rationale":"Synthetic provisional quote for isolated QA",
+        "rationale":"Provisional threshold 1 experience-rated quote; operator approval remains required.",
         "assumptions":{
           "successProbabilityBps":7500,
           "failureBonusRateBps":1000,
@@ -414,7 +423,7 @@ select set_config('request.jwt.claim.sub', 'cc333333-3333-4333-8333-333333333333
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 select * from public.mpgf_create_dac_pledge('campaign-cf666666666646668666666666666666',6000,'private_amount',null,'qa-dac-product-success-pledger-one');
-select * from public.mpgf_create_dac_pledge('campaign-c077777777774777877777777777777',1000,'private_amount',null,'qa-dac-product-lapse-pledger-one');
+select * from public.mpgf_create_dac_pledge('campaign-c0777777777747778777777777777777',1000,'private_amount',null,'qa-dac-product-lapse-pledger-one');
 reset role;
 
 select set_config('request.jwt.claim.sub', 'cd444444-4444-4444-8444-444444444444', true);
@@ -440,7 +449,7 @@ select * from public.mpgf_review_dac_pledge_eligibility(
   'Verify the second isolated-QA success supporter'
 );
 select * from public.mpgf_review_dac_pledge_eligibility(
-  (select id from public.mpgf_public_goods_pledges where campaign_id = 'campaign-c077777777774777877777777777777' and profile_id = 'cc333333-3333-4333-8333-333333333333'),
+  (select id from public.mpgf_public_goods_pledges where campaign_id = 'campaign-c0777777777747778777777777777777' and profile_id = 'cc333333-3333-4333-8333-333333333333'),
   'cb222222-2222-4222-8222-222222222222',
   'eligible',
   10000,
@@ -456,12 +465,12 @@ select * from public.mpgf_finalize_dac_campaign(
 select pg_sleep(
   greatest(
     0,
-    extract(epoch from ((select deadline_at from public.mpgf_public_goods_campaigns where id = 'campaign-c077777777774777877777777777777') - clock_timestamp())) + 1
+    extract(epoch from ((select deadline_at from public.mpgf_public_goods_campaigns where id = 'campaign-c0777777777747778777777777777777') - clock_timestamp())) + 1
   )
 );
 
 select * from public.mpgf_finalize_dac_campaign(
-  'campaign-c077777777774777877777777777777',
+  'campaign-c0777777777747778777777777777777',
   'cb222222-2222-4222-8222-222222222222',
   'The isolated-QA deadline passed below both exact thresholds; expire without payment'
 );
@@ -478,14 +487,14 @@ begin
   where id in (
     'campaign-ce555555555545558555555555555555',
     'campaign-cf666666666646668666666666666666',
-    'campaign-c077777777774777877777777777777'
+    'campaign-c0777777777747778777777777777777'
   );
 
   select count(*) into outcome_count
   from public.mpgf_dac_campaign_outcomes
   where campaign_id in (
     'campaign-cf666666666646668666666666666666',
-    'campaign-c077777777774777877777777777777'
+    'campaign-c0777777777747778777777777777777'
   );
 
   select count(*) into payment_count
@@ -493,7 +502,7 @@ begin
   where campaign_id in (
     'campaign-ce555555555545558555555555555555',
     'campaign-cf666666666646668666666666666666',
-    'campaign-c077777777774777877777777777777'
+    'campaign-c0777777777747778777777777777777'
   ) and (payment_intent_ref is not null or status = 'captured');
 
   select count(*) into public_terms_count
@@ -510,7 +519,7 @@ begin
      or public_terms_count <> 3
      or (select review_status from public.mpgf_public_goods_campaigns where slug = 'qa-dac-product-open') <> 'approved'
      or (select outcome_status from public.mpgf_dac_campaign_outcomes where campaign_id = 'campaign-cf666666666646668666666666666666') <> 'succeeded'
-     or (select outcome_status from public.mpgf_dac_campaign_outcomes where campaign_id = 'campaign-c077777777774777877777777777777') <> 'lapsed' then
+     or (select outcome_status from public.mpgf_dac_campaign_outcomes where campaign_id = 'campaign-c0777777777747778777777777777777') <> 'lapsed' then
     raise exception 'DAC product browser fixture invariant failed: campaigns %, outcomes %, payments %, public terms %', campaign_count, outcome_count, payment_count, public_terms_count;
   end if;
 end;
