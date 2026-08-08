@@ -1,0 +1,398 @@
+name: Custom Route current diagnostic c2d90782
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/custom-route-current-diagnostic-c2d90782.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: custom-route-current-diagnostic-c2d90782
+  cancel-in-progress: true
+
+env:
+  PRODUCT_SHA: c2d907827c4c7086fb66973bbe3d9619f1856f99
+  CONTROLLER_BRANCH: qa/custom-route-current-diagnostic-c2d90782
+  CONTROLLER_PATH: .github/workflows/custom-route-current-diagnostic-c2d90782.yml
+  EVIDENCE_DIR: custom-route-current-diagnostic-c2d90782
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+
+    steps:
+      - name: Guard immutable product and one-file controller scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.head.ref }}' = "$CONTROLLER_BRANCH"
+          test '${{ github.event.pull_request.base.ref }}' = 'main'
+          test '${{ github.event.pull_request.base.sha }}' = "$PRODUCT_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$PRODUCT_SHA"
+          actual_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename')"
+          test "$actual_files" = "$CONTROLLER_PATH"
+
+      - name: Check out immutable current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 1
+
+      - name: Prove checkout and Custom Route replacement source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test -f public/moral-trade-live-custom-route.js
+          test -f public/moral-trade-live-route-recommendations.js
+          test -f tests/exact-live-custom-route.spec.ts
+          grep -F 'if (window.__MT_LIVE_NOW_BOOTSTRAP__?.routePlanner) return;' \
+            public/moral-trade-live-custom-route.js
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$PRODUCT_SHA" > "$EVIDENCE_DIR/product-sha.txt"
+          sed -n '1,30p' public/moral-trade-live-custom-route.js \
+            > "$EVIDENCE_DIR/custom-route-source-boundary.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Write bounded Custom Route diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > tests/custom-route-current-diagnostic-c2d90782.spec.ts <<'TS'
+          import { mkdir, writeFile } from "node:fs/promises";
+          import path from "node:path";
+
+          import { expect, test, type Page } from "@playwright/test";
+
+          const evidenceDir = process.env.EVIDENCE_DIR ?? "custom-route-current-diagnostic-c2d90782";
+
+          interface Events {
+            consoleErrors: string[];
+            consoleWarnings: string[];
+            pageErrors: string[];
+            failedRequests: string[];
+            httpErrors: string[];
+          }
+
+          function observe(page: Page): Events {
+            const events: Events = {
+              consoleErrors: [],
+              consoleWarnings: [],
+              pageErrors: [],
+              failedRequests: [],
+              httpErrors: [],
+            };
+            page.on("console", (message) => {
+              if (message.type() === "error") events.consoleErrors.push(message.text());
+              if (message.type() === "warning") events.consoleWarnings.push(message.text());
+            });
+            page.on("pageerror", (error) => events.pageErrors.push(error.stack || error.message));
+            page.on("requestfailed", (request) => {
+              events.failedRequests.push(
+                `${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? "unknown"}`,
+              );
+            });
+            page.on("response", (response) => {
+              const pageOrigin = page.url().startsWith("http") ? new URL(page.url()).origin : "";
+              if (
+                pageOrigin &&
+                response.status() >= 400 &&
+                new URL(response.url()).origin === pageOrigin
+              ) {
+                events.httpErrors.push(
+                  `${response.status()} ${response.request().method()} ${response.url()}`,
+                );
+              }
+            });
+            return events;
+          }
+
+          function planner() {
+            return {
+              status: "ready",
+              checkedAt: "2026-08-08T08:00:00.000Z",
+              profile: {
+                goal: "Reduce preventable animal suffering",
+                causePriorities: ["Animal welfare"],
+                moneyBudgetCents: 4_000,
+                timeBudgetMinutes: 60,
+                actionBudgetCount: 3,
+                horizon: "month",
+                routeFormats: ["direct", "personal"],
+                evidencePreference: "high",
+                uncertaintyPreference: "balanced",
+                interactionPreference: "open",
+                privacyPreference: "private",
+                plannedDonationBaseline: false,
+                plannedDonationCents: 0,
+                otherwiseBaseline: "I would make no additional donation this month.",
+                calibrationCount: 0,
+                interviewCompleted: false,
+              },
+              needsMoreInput: [],
+              routes: [
+                {
+                  id: "best-fit",
+                  label: "Best fit",
+                  summary: "Fund a verified animal-welfare review",
+                  metrics: { fit: 91, friction: 24, evidence: 88, coordination: 72 },
+                  steps: [
+                    {
+                      sourceId: "offer-animal",
+                      sourceType: "offer",
+                      title: "Open animal-welfare review offer",
+                      detail: "Review the current verified terms.",
+                      href: "/offers/offer-animal",
+                      costCents: 1_000,
+                      timeMinutes: 10,
+                      evidenceLabel: "Public receipt",
+                      live: true,
+                      why: "Fits the stated goal, limits, and evidence preference.",
+                    },
+                  ],
+                  uncertainties: ["The source may close before you act."],
+                },
+              ],
+              comparison: null,
+              candidateCount: 1,
+            };
+          }
+
+          function liveNowPayload() {
+            return {
+              authenticated: true,
+              generatedAt: "2026-08-08T08:00:00.000Z",
+              matchingOpportunityCount: 0,
+              profile: {
+                causes: ["Animal welfare"],
+                weightedCauses: [],
+                openToPayment: true,
+                openToPledges: true,
+                signalSources: ["profile_priority"],
+                learningEnabled: true,
+              },
+              recentChanges: [],
+              recommendations: [],
+              ownedOpportunities: [],
+              ownedOpportunityCount: 0,
+              status: "no_matches",
+              routePlanner: planner(),
+            };
+          }
+
+          async function mockReadyPlanner(page: Page) {
+            await page.route("**/api/live-account", async (route) => {
+              await route.fulfill({
+                contentType: "application/json",
+                body: JSON.stringify({
+                  authenticated: true,
+                  profile: { displayName: "Diagnostic user", username: "diagnostic" },
+                }),
+              });
+            });
+            await page.route("**/api/live-now**", async (route) => {
+              await route.fulfill({
+                contentType: "application/json",
+                body: JSON.stringify(liveNowPayload()),
+              });
+            });
+          }
+
+          async function openPlan(page: Page) {
+            await page.goto("/moral-trade-live.html#now", { waitUntil: "domcontentloaded" });
+            await expect(page.locator("main#app")).toBeVisible({ timeout: 30_000 });
+            const plan = page.locator('[data-now="plan"]');
+            await expect(plan).toBeVisible({ timeout: 30_000 });
+            await plan.click();
+            await page.waitForTimeout(750);
+          }
+
+          async function snapshot(page: Page) {
+            return page.evaluate(() => {
+              const summarize = (element: Element | null) => {
+                if (!element) return null;
+                const html = element as HTMLElement;
+                const rect = html.getBoundingClientRect();
+                const style = getComputedStyle(html);
+                return {
+                  tag: element.tagName.toLowerCase(),
+                  id: html.id,
+                  className: html.className,
+                  text: (html.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 8_000),
+                  visible:
+                    style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    Number(style.opacity) !== 0 &&
+                    rect.width > 0 &&
+                    rect.height > 0,
+                  attributes: Object.fromEntries(
+                    [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
+                  ),
+                  outerHTML: html.outerHTML.slice(0, 30_000),
+                };
+              };
+
+              const controls = [
+                ...document.querySelectorAll('button, a[href], input, select, textarea, [role="button"]'),
+              ].slice(0, 250).map((element) => {
+                const html = element as HTMLElement;
+                const rect = html.getBoundingClientRect();
+                const style = getComputedStyle(html);
+                return {
+                  tag: element.tagName.toLowerCase(),
+                  text: (html.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 500),
+                  ariaLabel: html.getAttribute("aria-label"),
+                  href: element instanceof HTMLAnchorElement ? element.href : null,
+                  visible:
+                    style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    Number(style.opacity) !== 0 &&
+                    rect.width > 0 &&
+                    rect.height > 0,
+                  attributes: Object.fromEntries(
+                    [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
+                  ),
+                };
+              });
+
+              return {
+                url: location.href,
+                title: document.title,
+                bodyText: (document.body.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 20_000),
+                planButton: summarize(document.querySelector('[data-now="plan"]')),
+                currentRoutePlanner: summarize(document.querySelector('[data-mt-live-route-planner]')),
+                currentRouteCards: [
+                  ...document.querySelectorAll('[data-mt-live-route-card]'),
+                ].map(summarize),
+                currentComposer: summarize(document.querySelector('[data-mt-live-route-composer]')),
+                legacyCustomRoute: summarize(document.querySelector('[data-mt-custom-route]')),
+                legacyResourceMix: summarize(
+                  document.querySelector('[data-mt-custom-route="resource-mix"]'),
+                ),
+                customRouteButtons: controls.filter((control) =>
+                  /custom route/i.test(`${control.ariaLabel ?? ""} ${control.text}`),
+                ),
+                controls,
+                runtime: {
+                  customRouteWorkbench:
+                    (window as Window & { __MT_CUSTOM_ROUTE_WORKBENCH__?: boolean })
+                      .__MT_CUSTOM_ROUTE_WORKBENCH__ ?? null,
+                  bootstrapHasRoutePlanner: Boolean(
+                    (window as Window & { __MT_LIVE_NOW_BOOTSTRAP__?: { routePlanner?: unknown } })
+                      .__MT_LIVE_NOW_BOOTSTRAP__?.routePlanner,
+                  routePlannerStatus:
+                    (window as Window & {
+                      __MT_LIVE_NOW_BOOTSTRAP__?: { routePlanner?: { status?: string } };
+                    }).__MT_LIVE_NOW_BOOTSTRAP__?.routePlanner?.status ?? null,
+                  legacyLocalStorage: localStorage.getItem("moraltrade.plan-resources.v1"),
+                },
+                dimensions: {
+                  innerWidth: window.innerWidth,
+                  clientWidth: document.documentElement.clientWidth,
+                  scrollWidth: document.documentElement.scrollWidth,
+                  innerHeight: window.innerHeight,
+                  scrollHeight: document.documentElement.scrollHeight,
+                },
+              };
+            });
+          }
+
+          async function record(page: Page, events: Events, label: string) {
+            await mkdir(evidenceDir, { recursive: true });
+            const state = await snapshot(page);
+            await writeFile(
+              path.join(evidenceDir, `${label}.json`),
+              `${JSON.stringify({ label, recordedAt: new Date().toISOString(), state, events }, null, 2)}\n`,
+              "utf8",
+            );
+            await page.screenshot({ path: path.join(evidenceDir, `${label}.png`), fullPage: true });
+          }
+
+          test("records the canonical signed-out Plan state", async ({ page }) => {
+            const events = observe(page);
+            await page.addInitScript(() => {
+              localStorage.setItem(
+                "moraltrade.plan-resources.v1",
+                JSON.stringify({ activePeriod: "month", legacyDiagnostic: true }),
+              );
+            });
+            await openPlan(page);
+            await record(page, events, "signed-out-plan");
+          });
+
+          test("records the current authenticated authoritative planner and retired workbench", async ({
+            page,
+          }) => {
+            const events = observe(page);
+            await mockReadyPlanner(page);
+            await page.addInitScript(() => {
+              localStorage.setItem(
+                "moraltrade.plan-resources.v1",
+                JSON.stringify({ activePeriod: "month", legacyDiagnostic: true }),
+              );
+            });
+            await openPlan(page);
+            await expect(page.locator('[data-mt-live-route-planner="true"]')).toBeVisible({
+              timeout: 30_000,
+            });
+            await record(page, events, "ready-planner-desktop");
+          });
+
+          test("records the current authoritative planner on mobile without horizontal overflow", async ({
+            page,
+          }) => {
+            const events = observe(page);
+            await page.setViewportSize({ width: 390, height: 844 });
+            await mockReadyPlanner(page);
+            await openPlan(page);
+            await expect(page.locator('[data-mt-live-route-planner="true"]')).toBeVisible({
+              timeout: 30_000,
+            });
+            await record(page, events, "ready-planner-mobile");
+          });
+          TS
+
+      - name: Run current Custom Route diagnostic
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test tests/custom-route-current-diagnostic-c2d90782.spec.ts \
+            --workers=1 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/playwright.log"
+
+      - name: Upload immutable diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: custom-route-current-diagnostic-c2d90782
+          path: |
+            custom-route-current-diagnostic-c2d90782
+            test-results
+          if-no-files-found: error
+          retention-days: 14
