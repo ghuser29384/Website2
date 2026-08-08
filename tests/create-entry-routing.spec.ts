@@ -193,6 +193,25 @@ test.describe("Home, Trade, and Create entry routing", () => {
     expect(obsoleteAssetRequests).toEqual([]);
   });
 
+  test("fails malformed offer record routes closed before database rendering", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+
+    const response = await page.goto("/offers/null?source=route-test", {
+      waitUntil: "domcontentloaded",
+    });
+
+    expect(response?.status()).toBe(404);
+    await expect(page).toHaveURL(/\/offers\/null\?source=route-test$/);
+    await expect(page.getByRole("heading", { level: 1, name: "Unavailable" })).toBeVisible();
+    await expect(page.locator('a[href="/offers/null/credibility"]')).toHaveCount(0);
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+      "content",
+      /noindex/i,
+    );
+    expect(pageErrors).toEqual([]);
+  });
+
   test("uses the canonical favicon on document-replacement routes", async ({ page }) => {
     for (const route of ["/feed", "/walkthrough", "/discover"]) {
       await page.goto(route, { waitUntil: "domcontentloaded" });
