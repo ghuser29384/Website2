@@ -42,7 +42,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: mpgf-dac-product-lifecycle-${{ github.event.pull_request.number || github.ref }}
+  group: mpgf-dac-product-lifecycle-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
