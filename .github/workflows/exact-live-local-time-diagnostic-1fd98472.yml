@@ -1,0 +1,344 @@
+name: Exact live local-time current diagnostic 1fd98472
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/exact-live-local-time-diagnostic-1fd98472.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: exact-live-local-time-current-diagnostic-1fd98472
+  cancel-in-progress: true
+
+env:
+  PRODUCT_SHA: 1fd98472897330bc5256fe17e223cb0ac34deac4
+  CONTROLLER_BRANCH: qa/exact-live-local-time-diagnostic-1fd98472
+  CONTROLLER_PATH: .github/workflows/exact-live-local-time-diagnostic-1fd98472.yml
+  EVIDENCE_DIR: exact-live-local-time-current-diagnostic-1fd98472
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Guard immutable product and one-file controller scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.head.ref }}' = "$CONTROLLER_BRANCH"
+          test '${{ github.event.pull_request.base.ref }}' = 'main'
+          test '${{ github.event.pull_request.base.sha }}' = "$PRODUCT_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$PRODUCT_SHA"
+          actual_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename')"
+          test "$actual_files" = "$CONTROLLER_PATH"
+
+      - name: Check out immutable current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 1
+
+      - name: Prove checkout and source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test -f public/moral-trade-live-local-time.js
+          test -f public/moral-trade-live-navigation.js
+          test -f tests/exact-live-local-time.spec.ts
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$PRODUCT_SHA" > "$EVIDENCE_DIR/product-sha.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Write bounded authenticated local-time diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > tests/exact-live-local-time-current-diagnostic-1fd98472.spec.ts <<'TS'
+          import { mkdir, writeFile } from "node:fs/promises";
+          import path from "node:path";
+
+          import { expect, test, type Page } from "@playwright/test";
+
+          const evidenceDir =
+            process.env.EVIDENCE_DIR ?? "exact-live-local-time-current-diagnostic-1fd98472";
+          const crossZoneInstant = new Date("2026-07-17T01:30:00.000Z");
+
+          interface Events {
+            consoleErrors: string[];
+            pageErrors: string[];
+            failedRequests: string[];
+            httpErrors: string[];
+          }
+
+          function observe(page: Page): Events {
+            const events: Events = {
+              consoleErrors: [],
+              pageErrors: [],
+              failedRequests: [],
+              httpErrors: [],
+            };
+            page.on("console", (message) => {
+              if (message.type() === "error") events.consoleErrors.push(message.text());
+            });
+            page.on("pageerror", (error) => events.pageErrors.push(error.stack || error.message));
+            page.on("requestfailed", (request) => {
+              events.failedRequests.push(
+                `${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? "unknown"}`,
+              );
+            });
+            page.on("response", (response) => {
+              const origin = page.url().startsWith("http") ? new URL(page.url()).origin : "";
+              if (origin && response.status() >= 400 && new URL(response.url()).origin === origin) {
+                events.httpErrors.push(
+                  `${response.status()} ${response.request().method()} ${response.url()}`,
+                );
+              }
+            });
+            return events;
+          }
+
+          async function installAuthenticatedFixture(page: Page) {
+            await page.route("**/api/live-account", async (route) => {
+              await route.fulfill({
+                contentType: "application/json",
+                body: JSON.stringify({
+                  authenticated: true,
+                  account: {
+                    displayName: "Riley Morgan",
+                    firstName: "Riley",
+                    initials: "RM",
+                    memberSince: "2026-01-01T00:00:00.000Z",
+                    completedCommitments: 0,
+                    paymentAccount: { configured: false, label: "Not configured" },
+                    notifications: { enabled: null, label: "Not configured" },
+                    publicTrustProfile: { enabled: null, label: "Not configured" },
+                    defaultPrivacy: "Not configured",
+                    standardTerms: { href: "/terms", label: "Current site terms" },
+                  },
+                }),
+              });
+            });
+            await page.route("**/api/live-now**", async (route) => {
+              await route.fulfill({
+                contentType: "application/json",
+                body: JSON.stringify({
+                  authenticated: true,
+                  generatedAt: "2026-08-08T08:00:00.000Z",
+                  matchingOpportunityCount: 0,
+                  profile: {
+                    causes: ["Animal welfare"],
+                    weightedCauses: [],
+                    openToPayment: true,
+                    openToPledges: true,
+                    signalSources: ["profile_priority"],
+                    learningEnabled: true,
+                  },
+                  recentChanges: [],
+                  recommendations: [],
+                  ownedOpportunities: [],
+                  ownedOpportunityCount: 0,
+                  status: "no_matches",
+                  routePlanner: {
+                    status: "ready",
+                    checkedAt: "2026-08-08T08:00:00.000Z",
+                    profile: {
+                      goal: "Reduce preventable animal suffering",
+                      causePriorities: ["Animal welfare"],
+                      moneyBudgetCents: 0,
+                      timeBudgetMinutes: 0,
+                      actionBudgetCount: 0,
+                      horizon: "month",
+                      routeFormats: [],
+                      evidencePreference: "balanced",
+                      uncertaintyPreference: "balanced",
+                      interactionPreference: "open",
+                      privacyPreference: "private",
+                      plannedDonationBaseline: false,
+                      plannedDonationCents: 0,
+                      otherwiseBaseline: "",
+                      calibrationCount: 0,
+                      interviewCompleted: false,
+                    },
+                    needsMoreInput: [],
+                    routes: [],
+                    comparison: null,
+                    candidateCount: 0,
+                  },
+                }),
+              });
+            });
+          }
+
+          async function openLive(page: Page) {
+            await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
+            await expect(page.locator("main#app")).toBeVisible({ timeout: 30_000 });
+            await expect(page.locator(".head .date")).toBeVisible({ timeout: 30_000 });
+            await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible({
+              timeout: 30_000,
+            });
+            await page.waitForTimeout(500);
+          }
+
+          async function currentState(page: Page) {
+            return page.evaluate(() => {
+              const summarize = (element: Element) => ({
+                tag: element.tagName.toLowerCase(),
+                text: (element.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 1_000),
+                attributes: Object.fromEntries(
+                  [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
+                ),
+              });
+              const localDate = document.querySelector(".head .date");
+              return {
+                url: location.href,
+                localDate: localDate ? summarize(localDate) : null,
+                dateTime: localDate?.getAttribute("data-mt-local-date-time") ?? null,
+                dateLabel:
+                  localDate?.querySelector('time[data-mt-local-date="true"]')?.textContent?.trim() ??
+                  null,
+                greeting:
+                  localDate
+                    ?.querySelector('[data-mt-local-greeting="true"]')
+                    ?.textContent?.trim() ?? null,
+                pageButtons: [...document.querySelectorAll("button[data-page]")].map(summarize),
+                nowButtons: [...document.querySelectorAll("button[data-now]")].map(summarize),
+                primaryControls: [...document.querySelectorAll("header.topbar nav button")].map(
+                  summarize,
+                ),
+                tradeControl: document.querySelector('[data-action="create"]')
+                  ? summarize(document.querySelector('[data-action="create"]') as Element)
+                  : null,
+                commitmentsControls: [...document.querySelectorAll("button, a")]
+                  .filter((element) => /commitments/i.test(element.textContent ?? ""))
+                  .map(summarize),
+                dimensions: {
+                  innerWidth: window.innerWidth,
+                  scrollWidth: document.documentElement.scrollWidth,
+                },
+              };
+            });
+          }
+
+          async function record(page: Page, events: Events, label: string) {
+            await mkdir(evidenceDir, { recursive: true });
+            await writeFile(
+              path.join(evidenceDir, `${label}.json`),
+              `${JSON.stringify(
+                { label, recordedAt: new Date().toISOString(), state: await currentState(page), events },
+                null,
+                2,
+              )}\n`,
+              "utf8",
+            );
+            await page.screenshot({ path: path.join(evidenceDir, `${label}.png`), fullPage: true });
+          }
+
+          async function exerciseCurrentWorkspace(page: Page, events: Events, prefix: string) {
+            await record(page, events, `${prefix}-focus`);
+            for (const [value, label] of [
+              ["plan", "Plan resources"],
+              ["rules", "Standing rules"],
+              ["focus", "Focus"],
+            ] as const) {
+              await page.locator(`button[data-now="${value}"]`).click();
+              await expect(page.locator(".head .date")).toBeVisible();
+              await record(page, events, `${prefix}-${value}`, { label });
+            }
+          }
+
+          test.describe("America/Los_Angeles", () => {
+            test.use({ timezoneId: "America/Los_Angeles" });
+
+            test("records authenticated local time across the current Focus, Plan, and Rules workspace", async ({
+              page,
+            }) => {
+              const events = observe(page);
+              await page.clock.setFixedTime(crossZoneInstant);
+              await installAuthenticatedFixture(page);
+              await openLive(page);
+              await exerciseCurrentWorkspace(page, events, "los-angeles");
+            });
+          });
+
+          test.describe("Asia/Tokyo", () => {
+            test.use({ timezoneId: "Asia/Tokyo" });
+
+            test("records authenticated local time across the current Focus, Plan, and Rules workspace", async ({
+              page,
+            }) => {
+              const events = observe(page);
+              await page.clock.setFixedTime(crossZoneInstant);
+              await installAuthenticatedFixture(page);
+              await openLive(page);
+              await exerciseCurrentWorkspace(page, events, "tokyo");
+            });
+          });
+
+          test.describe("UTC refresh", () => {
+            test.use({ timezoneId: "UTC" });
+
+            test("records authenticated greeting and date before and after local midnight", async ({
+              page,
+            }) => {
+              const events = observe(page);
+              await page.clock.setFixedTime(new Date("2026-07-16T17:59:00.000Z"));
+              await installAuthenticatedFixture(page);
+              await openLive(page);
+              await record(page, events, "utc-before-midnight");
+
+              await page.clock.setFixedTime(new Date("2026-07-17T00:01:00.000Z"));
+              await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+              await page.waitForTimeout(250);
+              await record(page, events, "utc-after-midnight");
+            });
+          });
+          TS
+
+          npx playwright test tests/exact-live-local-time-current-diagnostic-1fd98472.spec.ts --list \
+            > "$EVIDENCE_DIR/test-list.txt"
+
+      - name: Run current authenticated local-time diagnostic
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test tests/exact-live-local-time-current-diagnostic-1fd98472.spec.ts \
+            --workers=1 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/playwright.log"
+
+      - name: Upload immutable diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-live-local-time-current-diagnostic-1fd98472
+          path: |
+            exact-live-local-time-current-diagnostic-1fd98472
+            test-results
+          if-no-files-found: error
+          retention-days: 14
