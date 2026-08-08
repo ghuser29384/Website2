@@ -42,43 +42,22 @@ jobs:
           python3 <<'PY'
           from pathlib import Path
 
-          def replace_once(path: str, old: str, new: str) -> None:
-              file_path = Path(path)
-              source = file_path.read_text(encoding="utf-8")
-              count = source.count(old)
-              if count != 1:
-                  raise SystemExit(f"{path}: expected one exact match, found {count}")
-              file_path.write_text(source.replace(old, new, 1), encoding="utf-8")
-
-          replace_once(
-              "src/app/dashboard/page.tsx",
+          path = Path("src/app/dashboard/page.tsx")
+          source = path.read_text(encoding="utf-8")
+          old = (
               "  const priorityFundSummary =\n"
-              "    viewer && supabaseReady ? await getPriorityCorrectionSummary(viewer.authUser.id) : null;\n",
+              "    viewer && supabaseReady ? await getPriorityCorrectionSummary(viewer.authUser.id) : null;\n"
+          )
+          new = (
               "  const priorityFundSummary =\n"
               "    viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY\n"
               "      ? await getPriorityCorrectionSummary(viewer.authUser.id)\n"
-              "      : null;\n",
+              "      : null;\n"
           )
-
-          replace_once(
-              ".github/workflows/dashboard-account-security-hotfix-gates.yml",
-              "      - \"src/app/dashboard/dashboard-account-security.css\"\n"
-              "      - \"src/app/dashboard/layout.tsx\"\n",
-              "      - \"src/app/dashboard/dashboard-account-security.css\"\n"
-              "      - \"src/app/dashboard/layout.tsx\"\n"
-              "      - \"src/app/dashboard/page.tsx\"\n",
-          )
-
-          replace_once(
-              ".github/workflows/dashboard-account-security-hotfix-gates.yml",
-              "          src/app/dashboard/dashboard-account-security.css\n"
-              "          src/app/dashboard/layout.tsx\n"
-              "          src/dashboard-account-security-visibility.test.ts\n",
-              "          src/app/dashboard/dashboard-account-security.css\n"
-              "          src/app/dashboard/layout.tsx\n"
-              "          src/app/dashboard/page.tsx\n"
-              "          src/dashboard-account-security-visibility.test.ts\n",
-          )
+          count = source.count(old)
+          if count != 1:
+              raise SystemExit(f"expected one exact priority-summary match, found {count}")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
           PY
 
       - name: Verify the exact patch scope
@@ -86,15 +65,8 @@ jobs:
         run: |
           set -euo pipefail
           git diff --check
-          git diff --name-only | sort > actual-repair-files.txt
-          cat > expected-repair-files.txt <<'EOF'
-          .github/workflows/dashboard-account-security-hotfix-gates.yml
-          src/app/dashboard/page.tsx
-          EOF
-          sort -o expected-repair-files.txt expected-repair-files.txt
-          diff -u expected-repair-files.txt actual-repair-files.txt
+          test "$(git diff --name-only)" = "src/app/dashboard/page.tsx"
           grep -F 'viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY' src/app/dashboard/page.tsx
-          grep -F 'src/app/dashboard/page.tsx' .github/workflows/dashboard-account-security-hotfix-gates.yml
 
       - name: Commit and push the repair
         shell: bash
@@ -102,8 +74,6 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            .github/workflows/dashboard-account-security-hotfix-gates.yml \
-            src/app/dashboard/page.tsx
+          git add src/app/dashboard/page.tsx
           git commit -m "Skip optional priority summary without service credentials"
           git push origin "HEAD:$TARGET_BRANCH"
