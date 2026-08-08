@@ -42,7 +42,7 @@ const OFFER_BATCH_SIZE = 1_000;
 const OWNED_OPPORTUNITY_LIMIT = 6;
 const INTERACTION_LIMIT = 500;
 const OFFER_PUBLIC_SELECT =
-  "id,owner_id,owner_alias,mode,offered_cause,requested_cause,compromise_cause,offer_action,request_action,verification,duration,trust_level,maximum_burden,privacy_scope,status,workflow_status,published_at,closed_at,deleted_at,created_at,updated_at";
+  "id,owner_id,owner_alias,mode,offered_cause,requested_cause,compromise_cause,offer_action,request_action,verification,duration,trust_level,maximum_burden,privacy_scope,status,workflow_status,published_at,closed_at,deleted_at,created_at,updated_at,terms_version";
 const OWNED_OFFER_SELECT = `${OFFER_PUBLIC_SELECT},no_trade_baseline`;
 const ROUTE_PROFILE_SELECT =
   "profile_id,goal,cause_priorities,money_budget_cents,time_budget_minutes,action_budget_count,horizon,route_formats,evidence_preference,uncertainty_preference,interaction_preference,privacy_preference,planned_donation_baseline,planned_donation_cents,otherwise_baseline,pairwise_answers,interview_answers,sensitive_ciphertexts,sensitive_encryption_version,created_at,updated_at";
@@ -116,6 +116,7 @@ interface OfferInventoryRow {
   deleted_at: string | null;
   created_at: string;
   updated_at: string;
+  terms_version: number;
 }
 
 function privateJson(body: unknown) {
@@ -417,6 +418,7 @@ async function loadPublishedOfferCandidates(
           trustLevel: offer.trust_level,
           createdAt: offer.created_at,
           updatedAt: offer.updated_at,
+          sourceRevision: offer.terms_version,
           opportunityType,
           sourceLabel: opportunityType === "donation_redirect" ? "Donation redirect" : undefined,
           summary: text(

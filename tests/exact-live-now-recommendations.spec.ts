@@ -383,6 +383,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     await page.goto("/feed", { waitUntil: "domcontentloaded" });
     const feed = page.locator('[data-mt-live-now="adaptive"]');
+    await expect(feed).toHaveAttribute("data-bound", "true");
     const card = feed.locator('[data-opportunity-id="rollback-offer"]');
     const save = card.getByRole("button", { name: "Save opportunity" });
 
