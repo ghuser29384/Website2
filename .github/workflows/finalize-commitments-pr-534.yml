@@ -1,0 +1,314 @@
+name: Finalize exact Commitments PR 534 state
+
+on:
+  push:
+    branches: [ops/commitments-draft-lifecycle-controller-20260808]
+    paths:
+      - ".github/workflows/finalize-commitments-pr-534.yml"
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: finalize-exact-commitments-pr-534
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      BASE_FEATURE_HEAD: a86464941e459e39b786da2d3d6ee14dfdc9285f
+      TARGET_BRANCH: feature/commitments-phase1-impact-accounting-20260806
+      PATCH_SHA256: 9ade3be68024219be25f9ff04a0fb6571448232740361d8c48dc4a27a8f9254d
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Preserve audited correction and verify controller identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/commitments-draft-lifecycle-controller-20260808'
+          test -s ops/commitments-draft-lifecycle.patch
+          cp ops/commitments-draft-lifecycle.patch /tmp/commitments-draft-lifecycle.patch
+          printf '%s  %s\n' "$PATCH_SHA256" /tmp/commitments-draft-lifecycle.patch | sha256sum -c -
+
+      - name: Materialize or verify the one exact lifecycle correction
+        id: feature
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$TARGET_BRANCH"
+          remote_head="$(git rev-parse "origin/$TARGET_BRANCH")"
+          if [[ "$remote_head" = "$BASE_FEATURE_HEAD" ]]; then
+            git checkout --detach "$BASE_FEATURE_HEAD"
+            git apply --check /tmp/commitments-draft-lifecycle.patch
+            git apply /tmp/commitments-draft-lifecycle.patch
+            git diff --check
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add \
+              .github/workflows/commitments-impact-accounting-gates.yml \
+              docs/commitments/impact-methodologies-v1-review.md \
+              docs/commitments/impact-methodologies-v1/*.json \
+              scripts/render-commitments-impact-methodologies-qa-sql.mjs \
+              scripts/validate-commitments-impact-methodologies.mjs
+            GIT_AUTHOR_DATE='2026-08-08T18:30:00Z' \
+            GIT_COMMITTER_DATE='2026-08-08T18:30:00Z' \
+              git commit -m 'Keep blocked impact methodologies in draft lifecycle'
+            candidate_head="$(git rev-parse HEAD)"
+            test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$BASE_FEATURE_HEAD"
+            git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+            remote_head="$candidate_head"
+          else
+            git merge-base --is-ancestor "$BASE_FEATURE_HEAD" "$remote_head"
+            test "$(git rev-list --count "$BASE_FEATURE_HEAD..$remote_head")" = '1'
+          fi
+          git checkout --detach "$remote_head"
+          node scripts/validate-commitments-impact-methodologies.mjs
+          jq -e '.methodologies | length == 6 and all(.lifecycleStatus == "draft")' docs/commitments/impact-methodologies-v1/manifest.json >/dev/null
+          for file in docs/commitments/impact-methodologies-v1/*.json; do
+            [[ "$(basename "$file")" = manifest.json ]] && continue
+            test "$(jq -r '.lifecycleStatus' "$file")" = draft
+            test "$(jq -r '.approvalBlockers | length > 0' "$file")" = true
+          done
+          git diff --check "$BASE_FEATURE_HEAD" "$remote_head"
+          printf 'head_sha=%s\n' "$remote_head" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$remote_head" > /tmp/exact-feature-head.txt
+
+      - name: Wait for both exact-head gate runs
+        id: gates
+        shell: bash
+        env:
+          HEAD_SHA: ${{ steps.feature.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          workflow='commitments-impact-accounting-gates.yml'
+          push_run=''
+          pr_run=''
+          for attempt in $(seq 1 150); do
+            runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=${TARGET_BRANCH}&per_page=100")"
+            push_run="$(jq -r --arg sha "$HEAD_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .event == "push" and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            pr_run="$(jq -r --arg sha "$HEAD_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .event == "pull_request" and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            failed="$(jq -r --arg sha "$HEAD_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .status == "completed" and .conclusion != "success" and (.event == "push" or .event == "pull_request"))] | length' <<<"$runs")"
+            test "$failed" = '0'
+            [[ -n "$push_run" && -n "$pr_run" ]] && break
+            sleep 20
+          done
+          test -n "$push_run"
+          test -n "$pr_run"
+          printf 'push_run=%s\npr_run=%s\n' "$push_run" "$pr_run" >> "$GITHUB_OUTPUT"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${push_run}" > /tmp/push-run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${pr_run}" > /tmp/pr-run.json
+
+      - name: Capture exact gate artifact identities
+        id: artifacts
+        shell: bash
+        env:
+          PUSH_RUN: ${{ steps.gates.outputs.push_run }}
+          PR_RUN: ${{ steps.gates.outputs.pr_run }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PUSH_RUN}/artifacts" > /tmp/push-artifacts.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PR_RUN}/artifacts" > /tmp/pr-artifacts.json
+          for pair in push-code push-qa pr-code pr-qa; do
+            case "$pair" in
+              push-code) file=/tmp/push-artifacts.json; prefix=commitments-impact-accounting-code- ;;
+              push-qa) file=/tmp/push-artifacts.json; prefix=commitments-impact-accounting-qa- ;;
+              pr-code) file=/tmp/pr-artifacts.json; prefix=commitments-impact-accounting-code- ;;
+              pr-qa) file=/tmp/pr-artifacts.json; prefix=commitments-impact-accounting-qa- ;;
+            esac
+            item="$(jq -c --arg prefix "$prefix" '[.artifacts[] | select(.expired == false and (.name | startswith($prefix)))] | sort_by(.created_at) | last' "$file")"
+            test "$item" != null
+            key="${pair//-/_}"
+            printf '%s_id=%s\n' "$key" "$(jq -r '.id' <<<"$item")" >> "$GITHUB_OUTPUT"
+            printf '%s_name=%s\n' "$key" "$(jq -r '.name' <<<"$item")" >> "$GITHUB_OUTPUT"
+            printf '%s_digest=%s\n' "$key" "$(jq -r '.digest' <<<"$item")" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client >/dev/null
+
+      - name: Validate exact MoralTrade QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          parsed = urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          expected = os.environ['EXPECTED_QA_REF']
+          if expected not in (parsed.username or ''):
+              raise SystemExit('Refusing a database URL outside exact MoralTrade QA.')
+          if parsed.hostname != 'aws-0-us-west-1.pooler.supabase.com' or parsed.port != 5432 or parsed.path != '/postgres':
+              raise SystemExit('Refusing unexpected database connection parameters.')
+          PY
+
+      - name: Idempotently stage six exact blocked drafts in QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMITMENTS_IMPACT_QA_STAGE_CONFIRM="$EXPECTED_QA_REF" node scripts/render-commitments-impact-methodologies-qa-sql.mjs --commit > /tmp/qa-stage.sql
+          grep -Fq 'commit;' /tmp/qa-stage.sql
+          ! grep -Fq "'under_review'" /tmp/qa-stage.sql
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --file /tmp/qa-stage.sql 2>&1 | tee /tmp/qa-stage.log
+
+      - name: Prove final QA authority boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc -AtF '|' <<'SQL' | tee /tmp/qa-final-state.txt
+          do $verify$
+          declare n integer;
+          begin
+            select count(*) into n from public.impact_model_versions
+            where model_key in (
+              'commitments-reciprocal-trade-v1','commitments-co-fund-v1','commitments-threshold-funding-v1',
+              'commitments-donation-upgrade-v1','commitments-threshold-sign-on-v1','commitments-donation-redirect-v1'
+            ) and version = 1 and lifecycle_status = 'draft' and cardinality(approval_blockers) > 0
+              and submitted_at is null and approved_at is null and activated_at is null;
+            if n <> 6 then raise exception 'Expected six exact blocked draft candidates, found %', n; end if;
+            if exists(select 1 from public.impact_model_approvers where active) then raise exception 'Active approver exists'; end if;
+            if exists(select 1 from public.impact_model_approval_events) then raise exception 'Approval event exists'; end if;
+            if exists(select 1 from public.impact_model_health_snapshots) then raise exception 'Health snapshot exists'; end if;
+            if exists(select 1 from public.impact_reference_observations) then raise exception 'Calibration observation exists'; end if;
+            if exists(select 1 from public.impact_estimate_snapshots) then raise exception 'Estimate snapshot exists'; end if;
+            if exists(select 1 from public.impact_refresh_queue) then raise exception 'Refresh job exists'; end if;
+          end $verify$;
+          select mechanism_family,model_key,version,lifecycle_status,methodology_hash,cardinality(approval_blockers),submitted_at,approved_at,activated_at
+          from public.impact_model_versions
+          where model_key like 'commitments-%-v1'
+          order by mechanism_family;
+          select (select count(*) from public.impact_model_versions),(select count(*) from public.impact_model_approvers where active),
+                 (select count(*) from public.impact_model_approval_events),(select count(*) from public.impact_model_health_snapshots),
+                 (select count(*) from public.impact_reference_observations),(select count(*) from public.impact_estimate_snapshots),
+                 (select count(*) from public.impact_refresh_queue);
+          SQL
+
+      - name: Rewrite PR 534 from exact verified state and keep it draft
+        shell: bash
+        env:
+          HEAD_SHA: ${{ steps.feature.outputs.head_sha }}
+          PUSH_RUN: ${{ steps.gates.outputs.push_run }}
+          PR_RUN: ${{ steps.gates.outputs.pr_run }}
+          PUSH_CODE_NAME: ${{ steps.artifacts.outputs.push_code_name }}
+          PUSH_CODE_ID: ${{ steps.artifacts.outputs.push_code_id }}
+          PUSH_CODE_DIGEST: ${{ steps.artifacts.outputs.push_code_digest }}
+          PUSH_QA_NAME: ${{ steps.artifacts.outputs.push_qa_name }}
+          PUSH_QA_ID: ${{ steps.artifacts.outputs.push_qa_id }}
+          PUSH_QA_DIGEST: ${{ steps.artifacts.outputs.push_qa_digest }}
+          PR_CODE_NAME: ${{ steps.artifacts.outputs.pr_code_name }}
+          PR_CODE_ID: ${{ steps.artifacts.outputs.pr_code_id }}
+          PR_CODE_DIGEST: ${{ steps.artifacts.outputs.pr_code_digest }}
+          PR_QA_NAME: ${{ steps.artifacts.outputs.pr_qa_name }}
+          PR_QA_ID: ${{ steps.artifacts.outputs.pr_qa_id }}
+          PR_QA_DIGEST: ${{ steps.artifacts.outputs.pr_qa_digest }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/pr-body.md <<EOF
+          ## Summary
+
+          Implement the fail-closed Phase 1 foundation for cross-mechanism conditional and causal-impact accounting in Commitments. The exact branch is synchronized with current \`main\`, least-privilege QA hardening is applied and verified, six exact-hash methodology candidates are staged in QA as blocked \`draft\` rows, and the exact corrected head passed both push and pull-request code/QA gates.
+
+          **No candidate has been submitted for review, approved, or activated. No model-health record, calibration observation, estimate snapshot, or refresh job exists. No production migration or production deployment has occurred. This PR must remain draft and must not be merged or released yet.**
+
+          ## Exact branch and gate state
+
+          - Current-main base incorporated: \`bb3b0e4608b7282aecc9d1fe11b5cb310c409347\`
+          - Exact corrected feature head: \`$HEAD_SHA\`
+          - Push gate run: \`$PUSH_RUN\` — success
+          - Pull-request gate run: \`$PR_RUN\` — success
+
+          Exact evidence artifacts:
+
+          - Push code: \`$PUSH_CODE_NAME\`, ID \`$PUSH_CODE_ID\`, digest \`$PUSH_CODE_DIGEST\`
+          - Push QA: \`$PUSH_QA_NAME\`, ID \`$PUSH_QA_ID\`, digest \`$PUSH_QA_DIGEST\`
+          - PR code: \`$PR_CODE_NAME\`, ID \`$PR_CODE_ID\`, digest \`$PR_CODE_DIGEST\`
+          - PR QA: \`$PR_QA_NAME\`, ID \`$PR_QA_ID\`, digest \`$PR_QA_DIGEST\`
+
+          ## Locked accounting semantics
+
+          - Receipts establish occurrence, not causal additionality.
+          - Success-case and expected impact remain distinct; expected values require mandatory 80% intervals and confidence labels.
+          - Direct causal attribution and cooperative allocation are alternative views and are never summed.
+          - Native units remain separate without an independently approved immutable conversion snapshot.
+          - Platform-funded DAC bonuses remain separate from participant-caused resources.
+          - Donation Upgrade and Donation Redirect classify the original planned donation as \`baseline_redirected\`, not new money.
+          - Open, unaccepted offers remain outside commitment-lifecycle accounting.
+
+          ## Six exact blocked draft candidates in MoralTrade QA
+
+          | Mechanism | Model key | Exact methodology hash |
+          |---|---|---|
+          | Reciprocal trade | \`commitments-reciprocal-trade-v1\` | \`sha256:bff759b15853ebb0d8870a24cba0665870d2e2ba285f1eb7f8551573559bfa3f\` |
+          | Co-Fund | \`commitments-co-fund-v1\` | \`sha256:c1f759e224712a07b30bc28a3be6fd714a0a21c32ee8c0a822779f9f706946ef\` |
+          | Threshold funding / DAC | \`commitments-threshold-funding-v1\` | \`sha256:8c915821978c45138467e13e05c96f58d1a695b1206d8a2f95849972899df15c\` |
+          | Donation Upgrade | \`commitments-donation-upgrade-v1\` | \`sha256:e917387ce26a21e98af936388fd88436782f0c199b986e0a408f46dace600463\` |
+          | Threshold Sign-On | \`commitments-threshold-sign-on-v1\` | \`sha256:f292553856e5d6f21aa2673b21158a91f7dc4cbf6464d0e35a3dfeafaebb9eff\` |
+          | Donation Redirect | \`commitments-donation-redirect-v1\` | \`sha256:2e3ee0e9de06e8a254a87cddf33834d557cdb9e5e6f674f639774dca0f8cfe5a\` |
+
+          QA proves all six have lifecycle \`draft\`, nonempty approval blockers, and null submission, approval, and activation timestamps. QA also proves zero active approvers, approval events, health snapshots, calibration observations, estimate snapshots, and refresh jobs.
+
+          ## QA RLS repair
+
+          Exact QA-only migration \`20260808174259_mpgf_public_goods_public_read_rls.sql\` revoked direct client writes, retained public reads, enabled RLS, and installed explicit read policies on the four public moral-public-goods summary tables. Exact normalized source SHA-256: \`33bc1fefed0298a1643bd37956b9c8850ccffd8805d66403439e4c1ab60e5bf4\`.
+
+          ## Remaining authority-dependent sequence
+
+          1. Enroll authenticator MFA for the selected founder approver and verify a real AAL2 session.
+          2. Through the governed AAL2 RPC, clear the exact candidate's blockers and submit that exact hash for review. No direct lifecycle bypass is permitted.
+          3. Review and explicitly approve each exact hash; any methodology change creates a new hash and review.
+          4. Populate eligible resolved observations and empirical calibration evidence; keep model health blocked until each exact methodology passes.
+          5. Activate at most one model per mechanism only after exact-hash approval and a current passing health snapshot.
+          6. Obtain separate explicit production authorization before applying migrations, configuring a production approver, merging, or deploying.
+
+          ## Release disposition
+
+          - [x] Current-main synchronized
+          - [x] Exact corrected push and pull-request gates passed
+          - [x] QA public-goods least-privilege repair applied and verified
+          - [x] Six exact candidates staged in QA as blocked drafts
+          - [ ] Founder authenticator MFA / AAL2 verified
+          - [ ] Any candidate submitted for review
+          - [ ] Any exact methodology hash approved
+          - [ ] Empirical calibration evidence registered
+          - [ ] Any current passing model-health record
+          - [ ] Production migration or release authorized
+          - [x] **Remain draft; do not merge or deploy**
+          EOF
+          gh pr edit 534 --repo "$GITHUB_REPOSITORY" --body-file /tmp/pr-body.md
+          is_draft="$(gh pr view 534 --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)"
+          if [[ "$is_draft" != true ]]; then
+            gh pr ready 534 --repo "$GITHUB_REPOSITORY" --undo
+          fi
+          gh pr comment 534 --repo "$GITHUB_REPOSITORY" --body "Exact corrected head \`$HEAD_SHA\` is green through push run \`$PUSH_RUN\` and PR run \`$PR_RUN\`. Six exact blocked methodology drafts are staged in MoralTrade QA; no submission, approval, activation, health, calibration, estimate, refresh, production migration, merge, or deployment occurred. Founder authenticator MFA/AAL2 is the next authority-dependent gate."
+
+      - name: Upload final evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: finalize-commitments-pr-534-${{ github.run_id }}
+          path: |
+            /tmp/exact-feature-head.txt
+            /tmp/push-run.json
+            /tmp/pr-run.json
+            /tmp/push-artifacts.json
+            /tmp/pr-artifacts.json
+            /tmp/qa-stage.sql
+            /tmp/qa-stage.log
+            /tmp/qa-final-state.txt
+            /tmp/pr-body.md
+          if-no-files-found: warn
+          retention-days: 30
