@@ -1,0 +1,73 @@
+name: Temporary repair PR 558 pledge receipt formatting assertions
+
+on:
+  push:
+    branches:
+      - temp/fix-pr558-pledge-receipt-format-20260808
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_HEAD_SHA: f3bd57b39d1b969909ac4d718ef7a82b34fe2cc2
+      TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
+
+    steps:
+      - name: Check out the exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Replace only the two currency-format-sensitive assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/mpgf-dac-product-lifecycle.spec.ts")
+          source = path.read_text()
+
+          replacements = {
+              '  await expect(page.getByRole("heading", { name: "$25.00 conditional pledge recorded" })).toBeVisible({ timeout: 20_000 });\n':
+              '  await expect(page.getByRole("heading", { name: /^\\$25(?:\\.00)? conditional pledge recorded$/ })).toBeVisible({ timeout: 20_000 });\n',
+              '  await expect(page.getByRole("heading", { name: "$25.00 · pledged" })).toBeVisible();\n':
+              '  await expect(page.getByRole("heading", { name: /^\\$25(?:\\.00)? · pledged$/ })).toBeVisible();\n',
+          }
+
+          for old, new in replacements.items():
+              if source.count(old) != 1:
+                  raise SystemExit(f"Expected exactly one assertion to replace: {old.strip()}")
+              source = source.replace(old, new)
+
+          if 'name: "$25.00 conditional pledge recorded"' in source:
+              raise SystemExit("Brittle pledge-success heading assertion remains.")
+          if 'name: "$25.00 · pledged"' in source:
+              raise SystemExit("Brittle private-receipt heading assertion remains.")
+          if source.count('/^\\$25(?:\\.00)? conditional pledge recorded$/') != 1:
+              raise SystemExit("Semantic pledge-success assertion was not installed exactly once.")
+          if source.count('/^\\$25(?:\\.00)? · pledged$/') != 1:
+              raise SystemExit("Semantic private-receipt assertion was not installed exactly once.")
+
+          path.write_text(source)
+          PY
+
+          git diff --check
+          git diff -- tests/mpgf-dac-product-lifecycle.spec.ts
+
+      - name: Commit the narrow assertion repair to the PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/mpgf-dac-product-lifecycle.spec.ts
+          git commit -m "test(mpgf): accept canonical pledge currency formatting"
+          git push origin "HEAD:${TARGET_BRANCH}"
