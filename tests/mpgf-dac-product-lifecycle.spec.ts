@@ -310,7 +310,9 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   page = await context.newPage();
   await gotoReady(page, ROUTES.creator);
   await expect(page.getByText("Creator lifecycle receipt", { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("heading", { name: "QA DAC open for conditional pledges" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 1, name: "QA DAC open for conditional pledges" }),
+  ).toBeVisible();
   await expect(page.getByText("Exact terms are locked", { exact: true })).toBeVisible();
   await expect(page.getByRole("link", { name: "View public campaign" })).toBeVisible();
   await expect(page.getByText("approved as candidate", { exact: true }).first()).toBeVisible();
