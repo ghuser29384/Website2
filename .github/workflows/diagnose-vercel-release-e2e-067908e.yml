@@ -1,0 +1,285 @@
+name: Diagnose exact rendered browser gate for 067908e
+
+on:
+  push:
+    branches:
+      - ops/diagnose-vercel-release-e2e-067908e-20260808
+    paths:
+      - .github/workflows/diagnose-vercel-release-e2e-067908e.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: diagnose-vercel-release-e2e-067908e
+  cancel-in-progress: false
+
+env:
+  EXPECTED_CANDIDATE_SHA: 067908e87e7bbb4894d35f0d3afd430fabdf5f3b
+  DIAGNOSTIC_BRANCH: ops/diagnose-vercel-release-e2e-067908e-20260808
+  EVIDENCE_DIR: docs/evidence/vercel-release-e2e-067908e
+
+jobs:
+  diagnose:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out the exact failed release candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 067908e87e7bbb4894d35f0d3afd430fabdf5f3b
+          fetch-depth: 0
+          path: candidate
+
+      - name: Guard the exact candidate identity
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git rev-parse HEAD^{tree})" = "772066fa8e3c6bef3c68657ca9f0dab5f3b816b0"
+          {
+            printf 'candidate_sha=%s\n' "$(git rev-parse HEAD)"
+            printf 'candidate_tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'source_release_run=%s\n' '31259851667'
+            printf 'source_release_job=%s\n' '93108859875'
+          } | tee browser-gate-candidate.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Install exact dependencies
+        working-directory: candidate
+        run: npm ci
+
+      - name: Install exact Chromium runtime
+        working-directory: candidate
+        run: npx playwright install --with-deps chromium
+
+      - name: Reproduce the complete rendered browser gate
+        id: browser_gate
+        working-directory: candidate
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-results.json
+        run: |
+          set -uo pipefail
+          set +e
+          npm run test:e2e -- --reporter=line,json 2>&1 | tee browser-gate.log
+          test_status=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$test_status" | tee browser-gate.exit-code
+          printf 'test_status=%s\n' "$test_status" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Build durable failure summary and select representative traces
+        if: always()
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          raw = Path('browser-gate.log').read_text(errors='replace') if Path('browser-gate.log').exists() else ''
+          clean = re.sub(r'\x1b\[[0-9;?]*[ -/]*[@-~]', '', raw)
+          Path('browser-gate.clean.log').write_text(clean)
+          PY
+
+          node <<'NODE'
+          const fs = require('fs');
+          const path = require('path');
+
+          const candidate = process.env.EXPECTED_CANDIDATE_SHA;
+          const exitCode = fs.existsSync('browser-gate.exit-code')
+            ? fs.readFileSync('browser-gate.exit-code', 'utf8').trim()
+            : 'missing';
+          const lines = [
+            '# Exact rendered browser-gate diagnostic',
+            '',
+            `- Candidate: \`${candidate}\``,
+            '- Candidate tree: `772066fa8e3c6bef3c68657ca9f0dab5f3b816b0`',
+            '- Source gated-release run: `31259851667`',
+            '- Source release job: `93108859875`',
+            `- Reproduction run: \`${process.env.GITHUB_RUN_ID || 'unknown'}\``,
+            `- Browser-gate exit code: \`${exitCode}\``,
+            '- Command: `npm run test:e2e -- --reporter=line,json`',
+            '- Runtime origin: `http://127.0.0.1:3210`',
+            '',
+          ];
+
+          let failed = [];
+          let stats = null;
+          if (fs.existsSync('playwright-results.json')) {
+            try {
+              const report = JSON.parse(fs.readFileSync('playwright-results.json', 'utf8'));
+              stats = report.stats || null;
+              const visitSuite = (suite, prefix = []) => {
+                const nextPrefix = suite.title ? [...prefix, suite.title] : prefix;
+                for (const spec of suite.specs || []) {
+                  for (const test of spec.tests || []) {
+                    const results = test.results || [];
+                    const badResults = results.filter((result) =>
+                      ['failed', 'timedOut', 'interrupted'].includes(result.status)
+                    );
+                    if (test.status === 'unexpected' || badResults.length > 0) {
+                      const errors = badResults.flatMap((result) => result.errors || []);
+                      const firstError = errors[0] || {};
+                      failed.push({
+                        file: spec.file || suite.file || 'unknown',
+                        line: spec.line || suite.line || 0,
+                        title: [...nextPrefix, spec.title].filter(Boolean).join(' › '),
+                        status: badResults[0]?.status || test.status || 'failed',
+                        error: String(firstError.message || firstError.stack || 'No structured error was emitted.')
+                          .replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '')
+                          .slice(0, 4000),
+                      });
+                    }
+                  }
+                }
+                for (const child of suite.suites || []) visitSuite(child, nextPrefix);
+              };
+              for (const suite of report.suites || []) visitSuite(suite, []);
+            } catch (error) {
+              lines.push(`Structured reporter parse failed: \`${String(error.message || error)}\``, '');
+            }
+          }
+
+          if (stats) {
+            lines.push('## Reporter totals', '');
+            for (const key of ['expected', 'unexpected', 'flaky', 'skipped']) {
+              if (Object.prototype.hasOwnProperty.call(stats, key)) {
+                lines.push(`- ${key}: ${stats[key]}`);
+              }
+            }
+            if (Object.prototype.hasOwnProperty.call(stats, 'duration')) {
+              lines.push(`- duration_ms: ${Math.round(stats.duration)}`);
+            }
+            lines.push('');
+          }
+
+          lines.push(`## Failed tests (${failed.length})`, '');
+          if (failed.length === 0) {
+            const cleanLog = fs.existsSync('browser-gate.clean.log')
+              ? fs.readFileSync('browser-gate.clean.log', 'utf8')
+              : '';
+            const tail = cleanLog.split(/\r?\n/).slice(-250).join('\n').slice(-16000);
+            lines.push('No structured failed-test rows were available. The final cleaned log excerpt follows.', '', '```text', tail, '```', '');
+          } else {
+            failed.forEach((failure, index) => {
+              lines.push(
+                `### ${index + 1}. ${failure.title}`,
+                '',
+                `- Location: \`${failure.file}:${failure.line}\``,
+                `- Status: \`${failure.status}\``,
+                '',
+                '```text',
+                failure.error,
+                '```',
+                '',
+              );
+            });
+          }
+
+          lines.push(
+            '## Evidence files',
+            '',
+            '- `browser-gate.clean.log`: complete ANSI-free browser-gate output',
+            '- `playwright-results.json`: structured Playwright report when emitted',
+            '- `selected-traces/`: representative Playwright traces selected deterministically from the failing run',
+            '- Full `test-results/` and reporter outputs are retained in the workflow artifact.',
+            '',
+          );
+          fs.writeFileSync('browser-gate-summary.md', lines.join('\n'));
+          NODE
+
+          rm -rf selected-traces
+          mkdir -p selected-traces
+          trace_count=0
+          while IFS= read -r trace_path; do
+            trace_count=$((trace_count + 1))
+            parent_name="$(basename "$(dirname "$trace_path")" | tr -cs 'A-Za-z0-9._-' '-')"
+            cp "$trace_path" "selected-traces/trace-${trace_count}-${parent_name}.zip"
+            printf '%s -> %s\n' "$trace_path" "selected-traces/trace-${trace_count}-${parent_name}.zip" \
+              >> selected-traces/manifest.txt
+            if [[ "$trace_count" -ge 3 ]]; then
+              break
+            fi
+          done < <(find test-results -type f -name trace.zip -print 2>/dev/null | sort)
+          printf 'selected_trace_count=%s\n' "$trace_count" >> selected-traces/manifest.txt
+
+      - name: Upload complete browser-gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-rendered-browser-gate-067908e-${{ github.run_id }}
+          path: |
+            candidate/browser-gate-candidate.txt
+            candidate/browser-gate.exit-code
+            candidate/browser-gate.log
+            candidate/browser-gate.clean.log
+            candidate/browser-gate-summary.md
+            candidate/playwright-results.json
+            candidate/selected-traces
+            candidate/test-results
+            candidate/playwright-report
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Check out the diagnostic evidence branch
+        if: always()
+        uses: actions/checkout@v4
+        with:
+          ref: ops/diagnose-vercel-release-e2e-067908e-20260808
+          fetch-depth: 0
+          path: evidence-repo
+
+      - name: Commit ordinary repository evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="evidence-repo/$EVIDENCE_DIR"
+          mkdir -p "$target"
+          cp candidate/browser-gate-candidate.txt "$target/"
+          cp candidate/browser-gate.exit-code "$target/"
+          cp candidate/browser-gate.clean.log "$target/"
+          cp candidate/browser-gate-summary.md "$target/"
+          if [[ -f candidate/playwright-results.json ]]; then
+            cp candidate/playwright-results.json "$target/"
+          fi
+          rm -rf "$target/selected-traces"
+          cp -R candidate/selected-traces "$target/selected-traces"
+
+          cd evidence-repo
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$EVIDENCE_DIR"
+          if git diff --cached --quiet; then
+            echo 'No new diagnostic evidence to commit.'
+          else
+            git commit -m 'evidence: persist exact rendered browser gate diagnostic for 067908e'
+            git push origin "HEAD:$DIAGNOSTIC_BRANCH"
+          fi
+
+      - name: Preserve the reproduced gate result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(cat candidate/browser-gate.exit-code)"
+          if [[ "$status" != '0' ]]; then
+            echo "Exact rendered browser gate reproduced with exit code $status."
+            exit "$status"
+          fi
+          echo 'Exact rendered browser gate passed during diagnostic reproduction.'
