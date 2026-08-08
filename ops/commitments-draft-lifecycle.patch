@@ -1,0 +1,338 @@
+diff --git a/.github/workflows/commitments-impact-accounting-gates.yml b/.github/workflows/commitments-impact-accounting-gates.yml
+--- a/.github/workflows/commitments-impact-accounting-gates.yml
++++ b/.github/workflows/commitments-impact-accounting-gates.yml
+@@ -9,4 +9,5 @@ on:
+       - "src/lib/impact-model-governance*.ts"
+       - "scripts/validate-commitments-impact-methodologies.mjs"
++      - "scripts/render-commitments-impact-methodologies-qa-sql.mjs"
+       - "docs/commitments/impact-methodologies-v1-review.md"
+       - "docs/commitments/impact-methodologies-v1/*.json"
+@@ -94,4 +95,5 @@ jobs:
+           docs/commitments/impact-methodologies-v1/trade.json
+           scripts/validate-commitments-impact-methodologies.mjs
++          scripts/render-commitments-impact-methodologies-qa-sql.mjs
+           src/lib/impact-accounting.test.ts
+           src/lib/impact-accounting.ts
+@@ -115,4 +117,5 @@ jobs:
+               docs/commitments/impact-methodologies-v1/*.json|\
+               scripts/validate-commitments-impact-methodologies.mjs|\
++              scripts/render-commitments-impact-methodologies-qa-sql.mjs|\
+               src/lib/impact-accounting.test.ts|\
+               src/lib/impact-accounting.ts|\
+@@ -215,4 +218,13 @@ jobs:
+             --file supabase/tests/commitments_public_goods_rls.sql \
+             2>&1 | tee qa-public-goods-rls.log
++      - name: Prove exact methodology candidates are database-valid blocked drafts
++        shell: bash
++        run: |
++          set -o pipefail
++          node scripts/render-commitments-impact-methodologies-qa-sql.mjs \
++            > qa-methodology-candidates.sql
++          psql "$QA_SUPABASE_DB_URL" --no-psqlrc \
++            --file qa-methodology-candidates.sql \
++            2>&1 | tee qa-methodology-candidates.log
+       - name: Run transactional Phase 1 SQL regression
+         shell: bash
+@@ -251,4 +263,6 @@ jobs:
+             registered-migrations/
+             qa-public-goods-rls.log
++            qa-methodology-candidates.sql
++            qa-methodology-candidates.log
+             qa-impact-accounting.log
+             qa-residue.log
+diff --git a/docs/commitments/impact-methodologies-v1-review.md b/docs/commitments/impact-methodologies-v1-review.md
+--- a/docs/commitments/impact-methodologies-v1-review.md
++++ b/docs/commitments/impact-methodologies-v1-review.md
+@@ -1,7 +1,7 @@
+ # Commitments impact-accounting continuation packet
+ 
+-**Status:** current-main synchronized; QA RLS hardening applied and verified; not approved; not active; not deployed to production
++**Status:** current-main synchronized; exact final-head gates passed; QA RLS hardening applied and verified; draft candidates prepared for controlled QA staging; not submitted; not approved; not active; not deployed to production
+ 
+-This packet advances the methodology-design and least-privilege work in PR #534. It contains a review manifest, one separate v1 methodology candidate file for each supported mechanism, canonical methodology hashes using the repository's recursive key-sorting algorithm, a structural validation contract, and the exact QA-applied RLS migration. None of the six methodology versions is approved or active, and no modeled estimate is authorized for production display.
++This packet advances the methodology-design and least-privilege work in PR #534. It contains a review manifest, one separate v1 methodology candidate file for each supported mechanism, canonical methodology hashes using the repository's recursive key-sorting algorithm, a structural validation contract, and the exact QA-applied RLS migration. None of the six methodology versions has been submitted for review, approved, or activated, and no modeled estimate is authorized for production display.
+ 
+ ## Exact repository and QA state
+@@ -89,7 +89,7 @@ Post-migration verification established, for all four tables, that RLS is enable
+ 
+ 1. Run the updated exact-current-main code, bundle-hash, migration-source, transactional SQL, RLS, lint, TypeScript, and build gates on the final continuation commit.
+-2. Keep all six candidates at `under_review`; do not activate them.
++2. Keep all six candidates at `draft` while blockers remain; do not activate them or represent them as submitted for review.
+ 3. Enroll authenticator MFA for the selected founder approver and verify a real AAL2 session on `/dashboard#account-security`.
+-4. Insert each candidate with its exact methodology hash only after the final exact-head gates pass.
++4. Stage each candidate in QA as `draft` with its exact methodology hash and explicit blockers after the final exact-head gates pass. Do not bypass the governed AAL2 submit-for-review RPC.
+ 5. Review the six exact hashes. Any textual or parameter change creates a new hash and requires a new review.
+ 6. Record explicit AAL2 founder approval for each exact hash.
+@@ -100,7 +100,6 @@ Post-migration verification established, for all four tables, that RLS is enable
+ ## Current blockers
+ 
+-- The final exact-current-main continuation gates have not yet completed on the commit containing this packet.
+ - Founder authenticator MFA / AAL2 has not been verified.
+-- No methodology hash is approved.
++- No methodology candidate has been submitted for review or approved.
+ - No empirical production calibration registry is populated.
+ - No model has a passing health record.
+diff --git a/docs/commitments/impact-methodologies-v1/co_fund.json b/docs/commitments/impact-methodologies-v1/co_fund.json
+--- a/docs/commitments/impact-methodologies-v1/co_fund.json
++++ b/docs/commitments/impact-methodologies-v1/co_fund.json
+@@ -3,5 +3,5 @@
+   "modelKey": "commitments-co-fund-v1",
+   "version": 1,
+-  "lifecycleStatus": "under_review",
++  "lifecycleStatus": "draft",
+   "methodologyHash": "sha256:c1f759e224712a07b30bc28a3be6fd714a0a21c32ee8c0a822779f9f706946ef",
+   "approvalBlockers": [
+diff --git a/docs/commitments/impact-methodologies-v1/donation_redirect.json b/docs/commitments/impact-methodologies-v1/donation_redirect.json
+--- a/docs/commitments/impact-methodologies-v1/donation_redirect.json
++++ b/docs/commitments/impact-methodologies-v1/donation_redirect.json
+@@ -3,5 +3,5 @@
+   "modelKey": "commitments-donation-redirect-v1",
+   "version": 1,
+-  "lifecycleStatus": "under_review",
++  "lifecycleStatus": "draft",
+   "methodologyHash": "sha256:2e3ee0e9de06e8a254a87cddf33834d557cdb9e5e6f674f639774dca0f8cfe5a",
+   "approvalBlockers": [
+diff --git a/docs/commitments/impact-methodologies-v1/donation_upgrade.json b/docs/commitments/impact-methodologies-v1/donation_upgrade.json
+--- a/docs/commitments/impact-methodologies-v1/donation_upgrade.json
++++ b/docs/commitments/impact-methodologies-v1/donation_upgrade.json
+@@ -3,5 +3,5 @@
+   "modelKey": "commitments-donation-upgrade-v1",
+   "version": 1,
+-  "lifecycleStatus": "under_review",
++  "lifecycleStatus": "draft",
+   "methodologyHash": "sha256:e917387ce26a21e98af936388fd88436782f0c199b986e0a408f46dace600463",
+   "approvalBlockers": [
+diff --git a/docs/commitments/impact-methodologies-v1/manifest.json b/docs/commitments/impact-methodologies-v1/manifest.json
+--- a/docs/commitments/impact-methodologies-v1/manifest.json
++++ b/docs/commitments/impact-methodologies-v1/manifest.json
+@@ -2,5 +2,5 @@
+   "bundleSchemaVersion": "moral-trade-impact-methodology-bundle-v1",
+   "generatedAtUtc": "2026-08-08T17:46:16Z",
+-  "status": "review_ready_current_main_synced_qa_rls_verified_not_approved_not_active",
++  "status": "draft_candidates_current_main_synced_qa_rls_verified_not_submitted_not_approved_not_active",
+   "sourceRepository": "ghuser29384/Website2",
+   "sourcePullRequest": 534,
+@@ -30,5 +30,5 @@
+       "modelKey": "commitments-reciprocal-trade-v1",
+       "version": 1,
+-      "lifecycleStatus": "under_review",
++      "lifecycleStatus": "draft",
+       "methodologyHash": "sha256:bff759b15853ebb0d8870a24cba0665870d2e2ba285f1eb7f8551573559bfa3f",
+       "approvalBlockers": [
+@@ -44,5 +44,5 @@
+       "modelKey": "commitments-co-fund-v1",
+       "version": 1,
+-      "lifecycleStatus": "under_review",
++      "lifecycleStatus": "draft",
+       "methodologyHash": "sha256:c1f759e224712a07b30bc28a3be6fd714a0a21c32ee8c0a822779f9f706946ef",
+       "approvalBlockers": [
+@@ -58,5 +58,5 @@
+       "modelKey": "commitments-threshold-funding-v1",
+       "version": 1,
+-      "lifecycleStatus": "under_review",
++      "lifecycleStatus": "draft",
+       "methodologyHash": "sha256:8c915821978c45138467e13e05c96f58d1a695b1206d8a2f95849972899df15c",
+       "approvalBlockers": [
+@@ -72,5 +72,5 @@
+       "modelKey": "commitments-donation-upgrade-v1",
+       "version": 1,
+-      "lifecycleStatus": "under_review",
++      "lifecycleStatus": "draft",
+       "methodologyHash": "sha256:e917387ce26a21e98af936388fd88436782f0c199b986e0a408f46dace600463",
+       "approvalBlockers": [
+@@ -86,5 +86,5 @@
+       "modelKey": "commitments-threshold-sign-on-v1",
+       "version": 1,
+-      "lifecycleStatus": "under_review",
++      "lifecycleStatus": "draft",
+       "methodologyHash": "sha256:f292553856e5d6f21aa2673b21158a91f7dc4cbf6464d0e35a3dfeafaebb9eff",
+       "approvalBlockers": [
+@@ -100,5 +100,5 @@
+       "modelKey": "commitments-donation-redirect-v1",
+       "version": 1,
+-      "lifecycleStatus": "under_review",
++      "lifecycleStatus": "draft",
+       "methodologyHash": "sha256:2e3ee0e9de06e8a254a87cddf33834d557cdb9e5e6f674f639774dca0f8cfe5a",
+       "approvalBlockers": [
+diff --git a/docs/commitments/impact-methodologies-v1/threshold_funding.json b/docs/commitments/impact-methodologies-v1/threshold_funding.json
+--- a/docs/commitments/impact-methodologies-v1/threshold_funding.json
++++ b/docs/commitments/impact-methodologies-v1/threshold_funding.json
+@@ -3,5 +3,5 @@
+   "modelKey": "commitments-threshold-funding-v1",
+   "version": 1,
+-  "lifecycleStatus": "under_review",
++  "lifecycleStatus": "draft",
+   "methodologyHash": "sha256:8c915821978c45138467e13e05c96f58d1a695b1206d8a2f95849972899df15c",
+   "approvalBlockers": [
+diff --git a/docs/commitments/impact-methodologies-v1/threshold_sign_on.json b/docs/commitments/impact-methodologies-v1/threshold_sign_on.json
+--- a/docs/commitments/impact-methodologies-v1/threshold_sign_on.json
++++ b/docs/commitments/impact-methodologies-v1/threshold_sign_on.json
+@@ -3,5 +3,5 @@
+   "modelKey": "commitments-threshold-sign-on-v1",
+   "version": 1,
+-  "lifecycleStatus": "under_review",
++  "lifecycleStatus": "draft",
+   "methodologyHash": "sha256:f292553856e5d6f21aa2673b21158a91f7dc4cbf6464d0e35a3dfeafaebb9eff",
+   "approvalBlockers": [
+diff --git a/docs/commitments/impact-methodologies-v1/trade.json b/docs/commitments/impact-methodologies-v1/trade.json
+--- a/docs/commitments/impact-methodologies-v1/trade.json
++++ b/docs/commitments/impact-methodologies-v1/trade.json
+@@ -3,5 +3,5 @@
+   "modelKey": "commitments-reciprocal-trade-v1",
+   "version": 1,
+-  "lifecycleStatus": "under_review",
++  "lifecycleStatus": "draft",
+   "methodologyHash": "sha256:bff759b15853ebb0d8870a24cba0665870d2e2ba285f1eb7f8551573559bfa3f",
+   "approvalBlockers": [
+diff --git a/scripts/render-commitments-impact-methodologies-qa-sql.mjs b/scripts/render-commitments-impact-methodologies-qa-sql.mjs
+new file mode 100644
+--- /dev/null
++++ b/scripts/render-commitments-impact-methodologies-qa-sql.mjs
+@@ -0,0 +1,130 @@
++import fs from "node:fs";
++import path from "node:path";
++
++const manifestPath = "docs/commitments/impact-methodologies-v1/manifest.json";
++const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
++const manifestDir = path.dirname(manifestPath);
++const commitRequested = process.argv.includes("--commit");
++
++if (commitRequested && process.env.COMMITMENTS_IMPACT_QA_STAGE_CONFIRM !== "hvmxfjjbdcgjjudmthdz") {
++  throw new Error(
++    "Persistent staging is QA-only and requires COMMITMENTS_IMPACT_QA_STAGE_CONFIRM=hvmxfjjbdcgjjudmthdz.",
++  );
++}
++
++function assert(condition, message) {
++  if (!condition) throw new Error(message);
++}
++
++function sqlLiteral(value) {
++  return `'${String(value).replaceAll("'", "''")}'`;
++}
++
++function sqlTextArray(values) {
++  return `array[${values.map(sqlLiteral).join(",")}]::text[]`;
++}
++
++assert(
++  manifest.bundleSchemaVersion === "moral-trade-impact-methodology-bundle-v1",
++  "Unexpected methodology bundle schema.",
++);
++assert(Array.isArray(manifest.methodologies) && manifest.methodologies.length === 6, "Expected six candidates.");
++
++const rows = manifest.methodologies.map((entry) => {
++  const wrapper = JSON.parse(fs.readFileSync(path.join(manifestDir, entry.methodologyFile), "utf8"));
++  assert(entry.lifecycleStatus === "draft", `${entry.mechanismFamily} manifest row must be draft.`);
++  assert(wrapper.lifecycleStatus === "draft", `${entry.mechanismFamily} wrapper must be draft.`);
++  assert(Array.isArray(entry.approvalBlockers) && entry.approvalBlockers.length > 0, "Manifest blockers required.");
++  assert(
++    JSON.stringify(entry.approvalBlockers) === JSON.stringify(wrapper.approvalBlockers),
++    `${entry.mechanismFamily} blocker drift.`,
++  );
++  assert(wrapper.methodologyHash === entry.methodologyHash, `${entry.mechanismFamily} hash drift.`);
++  assert(wrapper.methodology.mechanismFamily === entry.mechanismFamily, `${entry.mechanismFamily} family drift.`);
++  assert(wrapper.methodology.modelKey === entry.modelKey, `${entry.mechanismFamily} model-key drift.`);
++  return {
++    mechanismFamily: entry.mechanismFamily,
++    modelKey: entry.modelKey,
++    version: entry.version,
++    methodologyHash: entry.methodologyHash,
++    approvalBlockers: entry.approvalBlockers,
++    methodology: wrapper.methodology,
++  };
++});
++
++const lines = [
++  "\\set ON_ERROR_STOP on",
++  "begin;",
++  "",
++];
++
++for (const row of rows) {
++  const methodologyJson = JSON.stringify(row.methodology);
++  lines.push(
++    "insert into public.impact_model_versions (",
++    "  mechanism_family, model_key, version, lifecycle_status, methodology, methodology_hash, approval_blockers",
++    ")",
++    "select",
++    `  ${sqlLiteral(row.mechanismFamily)},`,
++    `  ${sqlLiteral(row.modelKey)},`,
++    `  ${row.version},`,
++    "  'draft',",
++    `  ${sqlLiteral(methodologyJson)}::jsonb,`,
++    `  ${sqlLiteral(row.methodologyHash)},`,
++    `  ${sqlTextArray(row.approvalBlockers)}`,
++    "where not exists (",
++    "  select 1 from public.impact_model_versions",
++    `  where model_key = ${sqlLiteral(row.modelKey)} and version = ${row.version}`,
++    ");",
++    "",
++  );
++}
++
++lines.push(
++  "do $verify$",
++  "declare",
++  "  expected_count integer := 0;",
++  "begin",
++);
++
++for (const row of rows) {
++  const methodologyJson = JSON.stringify(row.methodology);
++  lines.push(
++    "  if 1 <> (",
++    "    select count(*)",
++    "    from public.impact_model_versions",
++    `    where mechanism_family = ${sqlLiteral(row.mechanismFamily)}`,
++    `      and model_key = ${sqlLiteral(row.modelKey)}`,
++    `      and version = ${row.version}`,
++    "      and lifecycle_status = 'draft'",
++    `      and methodology = ${sqlLiteral(methodologyJson)}::jsonb`,
++    `      and methodology_hash = ${sqlLiteral(row.methodologyHash)}`,
++    `      and approval_blockers = ${sqlTextArray(row.approvalBlockers)}`,
++    "      and submitted_at is null",
++    "      and approved_at is null",
++    "      and activated_at is null",
++    "  ) then",
++    `    raise exception 'Exact draft methodology candidate missing or drifted: ${row.modelKey}';`,
++    "  end if;",
++    "  expected_count := expected_count + 1;",
++    "",
++  );
++}
++
++lines.push(
++  "  if expected_count <> 6 then",
++  "    raise exception 'Expected six exact draft methodology candidates';",
++  "  end if;",
++  "end",
++  "$verify$;",
++  "",
++  "select mechanism_family, model_key, version, lifecycle_status, methodology_hash, cardinality(approval_blockers) as blocker_count",
++  "from public.impact_model_versions",
++  `where model_key in (${rows.map((row) => sqlLiteral(row.modelKey)).join(",")})`,
++  "order by mechanism_family;",
++  "",
++  commitRequested ? "commit;" : "rollback;",
++  "",
++);
++
++process.stdout.write(lines.join("\n"));
+diff --git a/scripts/validate-commitments-impact-methodologies.mjs b/scripts/validate-commitments-impact-methodologies.mjs
+--- a/scripts/validate-commitments-impact-methodologies.mjs
++++ b/scripts/validate-commitments-impact-methodologies.mjs
+@@ -63,5 +63,5 @@ for (const entry of manifest.methodologies) {
+   assert(entry.methodologyFile === expectedFile, `Unexpected methodology filename for ${mechanism}.`);
+   assert(entry.version === 1, `Unexpected manifest version for ${mechanism}.`);
+-  assert(entry.lifecycleStatus === "under_review", `${mechanism} manifest entry must remain under_review.`);
++  assert(entry.lifecycleStatus === "draft", `${mechanism} manifest entry must remain draft until its blockers are cleared through the AAL2 review workflow.`);
+   assert(
+     Array.isArray(entry.approvalBlockers) && entry.approvalBlockers.length > 0,
+@@ -74,5 +74,5 @@ for (const entry of manifest.methodologies) {
+   assert(wrapper.modelKey === expectedModelKey, `${mechanism} file/wrapper model key mismatch.`);
+   assert(wrapper.version === 1, `Unexpected file version for ${mechanism}.`);
+-  assert(wrapper.lifecycleStatus === "under_review", `${mechanism} must remain under_review.`);
++  assert(wrapper.lifecycleStatus === "draft", `${mechanism} must remain draft until its blockers are cleared through the AAL2 review workflow.`);
+   assert(wrapper.approvedAt == null, `${mechanism} must not have approvedAt.`);
+   assert(wrapper.activatedAt == null, `${mechanism} must not have activatedAt.`);
