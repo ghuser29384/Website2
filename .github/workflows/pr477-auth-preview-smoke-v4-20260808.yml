@@ -1,0 +1,186 @@
+name: PR 477 authenticated exact Preview smoke v4
+
+on:
+  push:
+    branches:
+      - ops/pr477-auth-preview-smoke-v4-20260808
+    paths:
+      - .github/workflows/pr477-auth-preview-smoke-v4-20260808.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CONTROLLER_BRANCH: ops/pr477-auth-preview-smoke-v4-20260808
+  EXPECTED_MAIN_SHA: c2d907827c4c7086fb66973bbe3d9619f1856f99
+  EXPECTED_CANDIDATE_SHA: af435e30f438545c12348b5f58253436377aaf53
+  EXPECTED_RELEASE_BRANCH: release/vercel-preview
+  EXPECTED_DEPLOYMENT_ID: dpl_AGnkRPPLRXFiZo4LFRTJkL49hA7R
+  SOURCE_WORKFLOW_COMMIT: 2363407d91574ae5d3cd2b70fa431daea29ddd77
+  SOURCE_WORKFLOW_PATH: .github/workflows/pr477-auth-preview-smoke-20260808.yml
+  BASE_URL: https://moraltrade-site-51jpxawup-ellen-s.vercel.app
+  SHARE_URL: https://moraltrade-site-51jpxawup-ellen-s.vercel.app/?_vercel_share=d9zIQwbPItLxVzPRMsAA98jkAT6yqBgE
+  CREATOR_ID: 872f3bc3-f8a7-4698-98fd-31b7e91229f9
+  CREATOR_EMAIL: pr477-smoke-creator-20260808042404@example.test
+  CREATOR_USERNAME: pr477creator08042404
+  PARTICIPANT_ID: 74c49c29-1dbe-4837-820e-0e6b49681c92
+  PARTICIPANT_USERNAME: pr477member08042404
+
+jobs:
+  authenticated-preview-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Guard exact repository and deployment source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          observed_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)"
+          observed_candidate="$(gh api "repos/${GITHUB_REPOSITORY}/branches/${EXPECTED_RELEASE_BRANCH//\//%2F}" --jq .commit.sha)"
+          test "$observed_main" = "$EXPECTED_MAIN_SHA"
+          test "$observed_candidate" = "$EXPECTED_CANDIDATE_SHA"
+
+      - name: Check out exact candidate source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and Chromium
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Recover and harden the reviewed smoke runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --depth=1 origin "$SOURCE_WORKFLOW_COMMIT"
+          python3 - <<'PY'
+          import os, subprocess
+          from pathlib import Path
+
+          commit = os.environ['SOURCE_WORKFLOW_COMMIT']
+          path = os.environ['SOURCE_WORKFLOW_PATH']
+          text = subprocess.check_output(['git', 'show', f'{commit}:{path}'], text=True)
+          marker = "cat > /tmp/pr477-auth-preview-smoke.mjs <<'JS'\n"
+          start = text.index(marker) + len(marker)
+          end = text.index('\n          JS', start)
+          block = text[start:end]
+          lines = [line[10:] if line.startswith('          ') else line for line in block.splitlines()]
+          script = '\n'.join(lines) + '\n'
+
+          old = '''async function unlockAndLogin(page) {
+            await page.goto(share, { waitUntil: 'domcontentloaded' });
+            if ((await page.title()).toLowerCase().includes('log in to vercel')) {
+              throw new Error('Vercel share URL did not unlock the protected Preview');
+            }
+            await page.goto(`${base}/login?method=email&next=%2Ftrades%2Fnew`, { waitUntil: 'domcontentloaded' });
+            await page.getByLabel('Email').fill(creatorEmail);
+            await page.getByLabel('Password').fill(password);
+            await Promise.all([
+              page.waitForURL(/\\/trades\\/new(?:\\?|$)/, { timeout: 20000 }),
+              page.getByRole('button', { name: 'Log in', exact: true }).click(),
+            ]);
+          }
+'''
+          new = '''async function unlockAndLogin(page) {
+            const shareUrl = new URL(share);
+            const shareToken = shareUrl.searchParams.get('_vercel_share');
+            if (!shareToken) throw new Error('The protected Preview share token is missing.');
+            const loginUrl = new URL('/login', base);
+            loginUrl.searchParams.set('method', 'email');
+            loginUrl.searchParams.set('next', '/trades/new');
+            loginUrl.searchParams.set('_vercel_share', shareToken);
+            await page.goto(loginUrl.toString(), { waitUntil: 'domcontentloaded' });
+            try {
+              await page.getByLabel('Password').waitFor({ state: 'visible', timeout: 20000 });
+            } catch (error) {
+              await page.screenshot({ path: 'test-results/pr477-protected-login-failure.png', fullPage: true });
+              await writeFile('test-results/pr477-protected-login-failure.html', await page.content());
+              throw new Error(`Protected login did not reach the Moral Trade email form; url=${page.url()} title=${await page.title()} cause=${error instanceof Error ? error.message : String(error)}`);
+            }
+            await page.getByLabel('Email').fill(creatorEmail);
+            await page.getByLabel('Password').fill(password);
+            await Promise.all([
+              page.waitForURL(/\\/trades\\/new(?:\\?|$)/, { timeout: 20000 }),
+              page.getByRole('button', { name: 'Log in', exact: true }).click(),
+            ]);
+          }
+'''
+          if old not in script:
+              raise SystemExit('The reviewed login helper no longer matches the expected source.')
+          script = script.replace(old, new, 1)
+          Path('pr477-auth-preview-smoke.mjs').write_text(script, encoding='utf-8')
+          PY
+          test -s pr477-auth-preview-smoke.mjs
+
+      - name: Run authenticated desktop and mobile Preview smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-results
+          node ./pr477-auth-preview-smoke.mjs
+          cat pr477-auth-preview-smoke.json
+
+      - name: Upload exact hosted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr477-auth-preview-smoke-v4-${{ github.run_id }}
+          path: |
+            pr477-auth-preview-smoke.json
+            test-results
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish sanitized success marker
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          submission_id="$(node -e "const x=require('./pr477-auth-preview-smoke.json'); console.log(x.submission.id)")"
+          target_id="$(node -e "const x=require('./pr477-auth-preview-smoke.json'); console.log(x.submission.targetId)")"
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "<!-- pr477-auth-preview-smoke-v4 -->
+          ## Authenticated exact Preview smoke passed
+
+          - Candidate: \`$EXPECTED_CANDIDATE_SHA\`
+          - Deployment: \`$EXPECTED_DEPLOYMENT_ID\` at \`$BASE_URL\`
+          - Desktop and 390×844 mobile participant search resolved canonical account UUIDs.
+          - The account with public invitation mentions disabled rendered as a pending invitee.
+          - Self-selection was excluded.
+          - A private proposal-only Co-Act + Co-Fund submission persisted: submission \`$submission_id\`, target \`$target_id\`.
+          - No payment request, enrollment, acceptance, invitation, identity publication, or 5xx response was observed by the browser gate.
+          - Exact synthetic records require post-run database verification and cleanup before merge."
+
+      - name: Publish sanitized failure marker
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "<!-- pr477-auth-preview-smoke-v4-failure -->
+          Authenticated exact Preview smoke v4 failed in controller run \`$GITHUB_RUN_ID\` against \`$EXPECTED_DEPLOYMENT_ID\`. No merge or production application deployment was attempted. Exact synthetic database records must still be inspected and removed after diagnosis."
+
+      - name: Delete temporary controller branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          encoded_branch="${CONTROLLER_BRANCH//\//%2F}"
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded_branch}" || true
