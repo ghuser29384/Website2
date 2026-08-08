@@ -40,15 +40,19 @@ jobs:
                   raise SystemExit("Expected exactly one next/cache import anchor.")
               actions = actions.replace(cache_import, cache_import + redirect_import, 1)
 
-          action_tail = '''  revalidateMpgfDacLifecycleRoutes({ campaignId });
-}
-
-export async function finalizeMpgfDacCampaignAction'''
-          refreshed_action_tail = '''  revalidateMpgfDacLifecycleRoutes({ campaignId });
-  redirect("/mpgf/admin/dac-lifecycle");
-}
-
-export async function finalizeMpgfDacCampaignAction'''
+          action_tail = "\n".join([
+              "  revalidateMpgfDacLifecycleRoutes({ campaignId });",
+              "}",
+              "",
+              "export async function finalizeMpgfDacCampaignAction",
+          ])
+          refreshed_action_tail = "\n".join([
+              "  revalidateMpgfDacLifecycleRoutes({ campaignId });",
+              '  redirect("/mpgf/admin/dac-lifecycle");',
+              "}",
+              "",
+              "export async function finalizeMpgfDacCampaignAction",
+          ])
           if refreshed_action_tail not in actions:
               if actions.count(action_tail) != 1:
                   raise SystemExit("Expected exactly one eligibility-action completion anchor.")
@@ -57,17 +61,18 @@ export async function finalizeMpgfDacCampaignAction'''
 
           test_path = Path("src/lib/mpgf/dac-product-lifecycle.test.ts")
           test_source = test_path.read_text()
-          assertion_anchor = '''  assert.match(adminActions, /effectiveHumanScoreBps = eligibilityState === "eligible" \\? humanScoreBps : 0/);
-'''
-          regression = '''  const eligibilityActionStart = adminActions.indexOf("export async function reviewMpgfDacPledgeEligibilityAction");
-  const eligibilityActionEnd = adminActions.indexOf("export async function finalizeMpgfDacCampaignAction");
-  assert.ok(eligibilityActionStart >= 0 && eligibilityActionEnd > eligibilityActionStart);
-  const eligibilityAction = adminActions.slice(eligibilityActionStart, eligibilityActionEnd);
-  assert.match(
-    eligibilityAction,
-    /revalidateMpgfDacLifecycleRoutes\\(\\{ campaignId \\}\\);\\s*redirect\\("\\/mpgf\\/admin\\/dac-lifecycle"\\);/,
-  );
-'''
+          assertion_anchor = '  assert.match(adminActions, /effectiveHumanScoreBps = eligibilityState === "eligible" \\? humanScoreBps : 0/);\n'
+          regression = "\n".join([
+              '  const eligibilityActionStart = adminActions.indexOf("export async function reviewMpgfDacPledgeEligibilityAction");',
+              '  const eligibilityActionEnd = adminActions.indexOf("export async function finalizeMpgfDacCampaignAction");',
+              "  assert.ok(eligibilityActionStart >= 0 && eligibilityActionEnd > eligibilityActionStart);",
+              "  const eligibilityAction = adminActions.slice(eligibilityActionStart, eligibilityActionEnd);",
+              "  assert.match(",
+              "    eligibilityAction,",
+              '    /revalidateMpgfDacLifecycleRoutes\\(\\{ campaignId \\}\\);\\s*redirect\\("\\/mpgf\\/admin\\/dac-lifecycle"\\);/,',
+              "  );",
+              "",
+          ])
           if regression not in test_source:
               if test_source.count(assertion_anchor) != 1:
                   raise SystemExit("Expected exactly one reviewer assertion anchor.")
