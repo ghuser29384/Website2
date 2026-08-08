@@ -1,0 +1,107 @@
+name: Dispatch PR 552 current-main production release once
+
+on:
+  push:
+    branches:
+      - ops/pr552-dispatch-current-main-production-20260808
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: dispatch-pr552-current-main-production-release-once
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out the one-use controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard the immutable current-main release target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$EXPECTED_MAIN_SHA"
+          git cat-file -e "${EXPECTED_MAIN_SHA}^{commit}"
+          git diff --check "$EXPECTED_MAIN_SHA" "$GITHUB_SHA"
+          changed="$(git diff --name-only "$EXPECTED_MAIN_SHA" "$GITHUB_SHA")"
+          test "$changed" = '.github/workflows/dispatch-pr552-current-main-production-release-once.yml'
+
+      - name: Dispatch the canonical gated Production release
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          dispatched_after="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run vercel-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f target=production \
+            -f ref=main \
+            -f expected_sha="$EXPECTED_MAIN_SHA"
+
+          run_id=''
+          for attempt in $(seq 1 30); do
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&branch=main&per_page=20" \
+              > dispatched-runs.json
+            run_id="$(jq -r \
+              --arg sha "$EXPECTED_MAIN_SHA" \
+              --arg after "$dispatched_after" '
+                [.workflow_runs[]
+                  | select(.head_sha == $sha)
+                  | select(.created_at >= $after)
+                ]
+                | sort_by(.created_at)
+                | last
+                | .id // empty
+              ' dispatched-runs.json)"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 2
+          done
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          printf 'Canonical release run: https://github.com/%s/actions/runs/%s\n' \
+            "$GITHUB_REPOSITORY" "$run_id"
+
+      - name: Record dispatch evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg target production \
+            --arg ref main \
+            --arg expectedSha "$EXPECTED_MAIN_SHA" \
+            --arg runId "${{ steps.dispatch.outputs.run_id }}" \
+            --arg dispatchedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{repository:$repository,target:$target,ref:$ref,expectedSha:$expectedSha,runId:($runId|tonumber),dispatchedAt:$dispatchedAt}' \
+            > production-release-dispatch.json
+
+      - name: Upload one-use dispatch evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-production-release-dispatch-${{ github.run_id }}
+          path: |
+            production-release-dispatch.json
+            dispatched-runs.json
+          if-no-files-found: error
+          retention-days: 14
