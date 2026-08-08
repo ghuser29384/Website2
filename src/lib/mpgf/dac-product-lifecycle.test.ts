@@ -80,9 +80,10 @@ test("pledger and creator actions use the canonical DAC lifecycle without paymen
 });
 
 test("reviewer workspace exposes every non-payment lifecycle decision through authorized RPCs", async () => {
-  const [adminActions, reviewerPage] = await Promise.all([
+  const [adminActions, reviewerPage, loader] = await Promise.all([
     read(paths.adminActions),
     read(paths.reviewerPage),
+    read(paths.publicLoader),
   ]);
 
   for (const rpc of [
@@ -103,6 +104,9 @@ test("reviewer workspace exposes every non-payment lifecycle decision through au
   assert.match(reviewerPage, /Canonical pending DAC pledges/);
   assert.match(reviewerPage, /Evaluate success or lapse/);
   assert.match(reviewerPage, /These controls cannot create custody or settlement/);
+  assert.match(loader, /currentlyAuthorized: reviewerCurrentlyAuthorized/);
+  assert.match(reviewerPage, /Boolean\(authorization\?\.currentlyAuthorized\)/);
+  assert.doesNotMatch(reviewerPage, /Date\.now\(\)/);
 });
 
 test("public exact-term migration is privacy-sanitized and mechanically explicit about the no-payment boundary", async () => {
