@@ -1,0 +1,132 @@
+name: Temporary repair PR 558 streamed not-found assertion
+
+on:
+  push:
+    branches:
+      - temp/fix-pr558-streamed-notfound-20260808
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_HEAD_SHA: 04cba3e80159facbcba4ce2a1fe75570236b38ba
+      TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
+
+    steps:
+      - name: Check out the exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Assert the streamed not-found privacy boundary rather than a brittle status code
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          browser_path = Path("tests/mpgf-dac-product-lifecycle.spec.ts")
+          browser = browser_path.read_text()
+          old_block = (
+              "  const outsiderResponse = await gotoReady(page, ROUTES.creator);\n"
+              "  expect(outsiderResponse?.status()).toBe(404);\n"
+              "  await expect(page.getByText(\"Creator lifecycle receipt\", { exact: true })).toHaveCount(0);\n"
+          )
+          new_block = (
+              "  const outsiderResponse = await gotoReady(page, ROUTES.creator);\n"
+              "  expect([200, 404]).toContain(outsiderResponse?.status());\n"
+              "  await expect(page.locator('meta[name=\"robots\"][content*=\"noindex\"]')).toHaveCount(1);\n"
+              "  await expect(page.getByText(\"Creator lifecycle receipt\", { exact: true })).toHaveCount(0);\n"
+              "  await expect(page.getByRole(\"heading\", { level: 1, name: \"QA DAC open for conditional pledges\" })).toHaveCount(0);\n"
+          )
+          if browser.count(old_block) != 1:
+              raise SystemExit(
+                  f"Expected exactly one status-only outsider denial block, found {browser.count(old_block)}."
+              )
+          browser = browser.replace(old_block, new_block)
+          if "expect(outsiderResponse?.status()).toBe(404)" in browser:
+              raise SystemExit("The status-only streamed not-found assertion remains.")
+          for required in (
+              "expect([200, 404]).toContain(outsiderResponse?.status())",
+              "meta[name=\"robots\"][content*=\"noindex\"]",
+              "level: 1, name: \"QA DAC open for conditional pledges\"",
+          ):
+              if required not in browser:
+                  raise SystemExit(f"Missing outsider privacy assertion fragment: {required}")
+          browser_path.write_text(browser)
+
+          contract_path = Path("src/lib/mpgf/dac-browser-selector-contract.test.ts")
+          contract = contract_path.read_text()
+          old_name = (
+              'test("creator lifecycle proof targets the canonical page heading without strict-mode ambiguity", async () => {\n'
+          )
+          new_name = (
+              'test("creator lifecycle proof targets the canonical heading and streamed not-found privacy boundary", async () => {\n'
+          )
+          if contract.count(old_name) != 1:
+              raise SystemExit("Expected exactly one creator browser-contract test name.")
+          contract = contract.replace(old_name, new_name)
+          closing = "});\n"
+          if contract.count(closing) != 1:
+              raise SystemExit("Expected exactly one creator browser-contract closing.")
+          assertions = (
+              "\n  assert.ok(\n"
+              "    browserSpec.includes(\"expect([200, 404]).toContain(outsiderResponse?.status())\"),\n"
+              "    \"A streamed not-found response may be HTTP 200 or 404 depending on when headers commit.\",\n"
+              "  );\n"
+              "  assert.ok(\n"
+              "    browserSpec.includes('meta[name=\\\"robots\\\"][content*=\\\"noindex\\\"]'),\n"
+              "    \"The outsider proof must require Next.js not-found noindex metadata.\",\n"
+              "  );\n"
+              "  assert.ok(\n"
+              "    !browserSpec.includes(\"expect(outsiderResponse?.status()).toBe(404)\"),\n"
+              "    \"The browser proof must not confuse streamed not-found rendering with transport status.\",\n"
+              "  );\n"
+          )
+          if "streamed not-found response may be HTTP 200 or 404" in contract:
+              raise SystemExit("Streamed not-found regression assertions already exist unexpectedly.")
+          contract_path.write_text(contract.replace(closing, assertions + closing))
+          PY
+
+          git diff --check
+          git diff -- \
+            tests/mpgf-dac-product-lifecycle.spec.ts \
+            src/lib/mpgf/dac-browser-selector-contract.test.ts
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Prove the scoped browser contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/dac-browser-selector-contract.test.ts \
+            src/lib/mpgf/dac-pledge-currency-format.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Commit the proven repair to the PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            tests/mpgf-dac-product-lifecycle.spec.ts \
+            src/lib/mpgf/dac-browser-selector-contract.test.ts
+          git commit -m "test(mpgf): assert streamed creator denial semantically"
+          git push origin "HEAD:${TARGET_BRANCH}"
