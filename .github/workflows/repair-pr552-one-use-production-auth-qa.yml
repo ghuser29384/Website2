@@ -27,9 +27,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 .github/scripts/repair-pr552-one-use-production-auth-qa.py
+          python3 .github/scripts/repair-pr552-one-use-production-auth-qa-v2.py
           rm \
             .github/scripts/repair-pr552-one-use-production-auth-qa.py \
+            .github/scripts/repair-pr552-one-use-production-auth-qa-v2.py \
             .github/workflows/repair-pr552-one-use-production-auth-qa.yml
           git diff --check
           ruby -e 'require "yaml"; YAML.parse_file(ARGV.fetch(0)) or abort("invalid YAML")' \
