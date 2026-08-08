@@ -91,8 +91,20 @@ test("the reviewed career-backing lane remains available", () => {
   assert.equal(response.headers.get("x-middleware-rewrite"), null);
 });
 
-test("the queryless offers entry stays on the live offers directory", () => {
+test("a human queryless offers navigation transfers to Discover", () => {
   const response = proxy(makeRequest("/offers"));
+
+  assert.equal(response.status, 307);
+  assert.equal(
+    response.headers.get("location"),
+    "https://moraltrade.org/discover?domain=offers&view=list",
+  );
+});
+
+test("a queryless offers prefetch stays on the source route", () => {
+  const response = proxy(
+    makeRequest("/offers", { "next-router-prefetch": "1", purpose: "prefetch" }),
+  );
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("x-middleware-next"), "1");
