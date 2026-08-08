@@ -1,0 +1,96 @@
+name: PR 558 reviewer action refresh controller
+
+on:
+  push:
+    branches:
+      - ops/pr558-reviewer-action-refresh-20260808
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr558-reviewer-action-refresh-controller
+  cancel-in-progress: false
+
+jobs:
+  patch-and-push:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the exact PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: fix/mpgf-dac-product-lifecycle-20260807
+
+      - name: Patch deterministic post-mutation refresh
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "db3f305c7e531d5b07ac2527df709b5272ef61f3"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          actions_path = Path("src/app/mpgf/admin/actions.ts")
+          actions = actions_path.read_text()
+
+          cache_import = 'import { revalidatePath } from "next/cache";\n'
+          redirect_import = 'import { redirect } from "next/navigation";\n'
+          if redirect_import not in actions:
+              if actions.count(cache_import) != 1:
+                  raise SystemExit("Expected exactly one next/cache import anchor.")
+              actions = actions.replace(cache_import, cache_import + redirect_import, 1)
+
+          action_tail = '''  revalidateMpgfDacLifecycleRoutes({ campaignId });
+}
+
+export async function finalizeMpgfDacCampaignAction'''
+          refreshed_action_tail = '''  revalidateMpgfDacLifecycleRoutes({ campaignId });
+  redirect("/mpgf/admin/dac-lifecycle");
+}
+
+export async function finalizeMpgfDacCampaignAction'''
+          if refreshed_action_tail not in actions:
+              if actions.count(action_tail) != 1:
+                  raise SystemExit("Expected exactly one eligibility-action completion anchor.")
+              actions = actions.replace(action_tail, refreshed_action_tail, 1)
+          actions_path.write_text(actions)
+
+          test_path = Path("src/lib/mpgf/dac-product-lifecycle.test.ts")
+          test_source = test_path.read_text()
+          assertion_anchor = '''  assert.match(adminActions, /effectiveHumanScoreBps = eligibilityState === "eligible" \\? humanScoreBps : 0/);
+'''
+          regression = '''  const eligibilityActionStart = adminActions.indexOf("export async function reviewMpgfDacPledgeEligibilityAction");
+  const eligibilityActionEnd = adminActions.indexOf("export async function finalizeMpgfDacCampaignAction");
+  assert.ok(eligibilityActionStart >= 0 && eligibilityActionEnd > eligibilityActionStart);
+  const eligibilityAction = adminActions.slice(eligibilityActionStart, eligibilityActionEnd);
+  assert.match(
+    eligibilityAction,
+    /revalidateMpgfDacLifecycleRoutes\\(\\{ campaignId \\}\\);\\s*redirect\\("\\/mpgf\\/admin\\/dac-lifecycle"\\);/,
+  );
+'''
+          if regression not in test_source:
+              if test_source.count(assertion_anchor) != 1:
+                  raise SystemExit("Expected exactly one reviewer assertion anchor.")
+              test_source = test_source.replace(assertion_anchor, assertion_anchor + regression, 1)
+          test_path.write_text(test_source)
+          PY
+
+          git diff --check
+          git diff -- src/app/mpgf/admin/actions.ts src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused lifecycle regression
+        run: node --import tsx --test src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Commit and push the repaired PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/mpgf/admin/actions.ts src/lib/mpgf/dac-product-lifecycle.test.ts
+          git diff --cached --check
+          git commit -m "fix(mpgf): refresh reviewer state after eligibility decision"
+          git push origin HEAD:fix/mpgf-dac-product-lifecycle-20260807
