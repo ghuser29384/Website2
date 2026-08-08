@@ -1,0 +1,166 @@
+name: PR 552 MFA refresh repair fallback
+
+on:
+  push:
+    branches:
+      - ops/pr552-mfa-refresh-repair-fallback-20260808
+    paths:
+      - .github/workflows/pr552-mfa-refresh-repair-fallback-20260808.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr552-mfa-refresh-repair-fallback-20260808
+  cancel-in-progress: false
+
+jobs:
+  fallback:
+    name: Apply fallback only if the primary repair did not land
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_BRANCH: hotfix/dashboard-account-security-visible-20260807
+    steps:
+      - name: Wait for the primary repair or lock the current PR head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          for attempt in $(seq 1 75); do
+            response="$(curl -fsS \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              'https://api.github.com/repos/ghuser29384/Website2/pulls/552')"
+            test "$(jq -r '.state' <<<"$response")" = 'open'
+            test "$(jq -r '.head.ref' <<<"$response")" = "$TARGET_BRANCH"
+            sha="$(jq -r '.head.sha' <<<"$response")"
+            git fetch --no-tags origin "$sha"
+            component="$RUNNER_TEMP/pr552-fallback-panel.tsx"
+            git show "${sha}:src/components/dashboard/background-account-security-panel.tsx" > "$component"
+            if grep -Fq 'data-mfa-verification-refresh="router-refresh"' "$component" \
+              && grep -Fq 'router.refresh();' "$component"; then
+              printf '%s\n' "$sha" > "$RUNNER_TEMP/pr552-primary-repair-landed"
+              exit 0
+            fi
+            sleep 4
+          done
+          printf '%s\n' "$sha" > "$RUNNER_TEMP/pr552-fallback-pre-head"
+
+      - name: Check out the exact current PR head
+        if: ${{ hashFiles(format('{0}/pr552-primary-repair-landed', runner.temp)) == '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Apply the fallback refresh patch
+        if: ${{ hashFiles(format('{0}/pr552-primary-repair-landed', runner.temp)) == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(cat "$RUNNER_TEMP/pr552-fallback-pre-head")"
+          test "$(git rev-parse HEAD)" = "$expected"
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("src/components/dashboard/background-account-security-panel.tsx")
+          source = path.read_text(encoding="utf-8")
+          if 'data-mfa-verification-refresh="router-refresh"' in source:
+              raise SystemExit("Primary repair appeared after the fallback lock.")
+
+          header = '"use client";\n\n'
+          if source.count(header) != 1:
+              raise SystemExit("Unexpected client-component header.")
+          if 'from "next/navigation"' not in source:
+              source = source.replace(
+                  header,
+                  header + 'import { useRouter } from "next/navigation";\n',
+                  1,
+              )
+          elif "useRouter" not in source:
+              raise SystemExit("Existing next/navigation import requires manual adjudication.")
+          if "useEffect" not in source:
+              source = source.replace(
+                  header,
+                  header + 'import { useEffect } from "react";\n',
+                  1,
+              )
+
+          function = re.search(
+              r'export function BackgroundAccountSecurityPanel\([\s\S]*?\)\s*\{',
+              source,
+          )
+          if not function:
+              raise SystemExit("Component function not found.")
+          if "const router = useRouter();" not in source[function.end():]:
+              source = source[:function.end()] + "\n  const router = useRouter();" + source[function.end():]
+
+          verify = re.search(
+              r'const\s+\[\s*(?P<state>[A-Za-z_$][A-Za-z0-9_$]*)\s*,[\s\S]{0,300}?\]\s*=\s*useActionState\(\s*verifyBackgroundNetworkingMfaAction\s*,[\s\S]{0,500}?\);',
+              source,
+          )
+          if not verify:
+              raise SystemExit("Verification action state not found.")
+          state = verify.group("state")
+          return_at = source.find("\n  return (", verify.end())
+          if return_at < 0:
+              raise SystemExit("Component return boundary not found.")
+          effect = f'''\n\n  // data-mfa-verification-refresh="router-refresh"\n  useEffect(() => {{\n    if ({state}.status === "verified") {{\n      router.refresh();\n    }}\n  }}, [router, {state}.status]);'''
+          source = source[:return_at] + effect + source[return_at:]
+          path.write_text(source, encoding="utf-8")
+
+          test_path = Path("src/dashboard-account-security-visibility.test.ts")
+          test = test_path.read_text(encoding="utf-8")
+          name = "successful MFA verification refreshes the server-rendered security summary"
+          if name not in test:
+              test += f'''\n\ntest("{name}", () => {{\n  assert.match(accountSecurityPanel, /useRouter/);\n  assert.match(accountSecurityPanel, /useEffect/);\n  assert.match(accountSecurityPanel, /data-mfa-verification-refresh="router-refresh"/);\n  assert.match(accountSecurityPanel, /status === ["']verified["'][\\s\\S]*?router\\.refresh\\(\\)/);\n}});\n'''
+          test_path.write_text(test, encoding="utf-8")
+
+          workflow_path = Path(".github/workflows/dashboard-account-security-hotfix-gates.yml")
+          workflow = workflow_path.read_text(encoding="utf-8")
+          trigger = '      - "src/components/layout/site-topbar.tsx"\n'
+          if trigger not in workflow:
+              anchor = '      - "src/components/dashboard/background-account-security-panel.tsx"\n'
+              if workflow.count(anchor) != 1:
+                  raise SystemExit("Hotfix trigger anchor missing.")
+              workflow = workflow.replace(anchor, anchor + trigger, 1)
+          allow = '          src/components/layout/site-topbar.tsx\n'
+          if allow not in workflow:
+              anchor = '          src/components/dashboard/background-account-security-panel.tsx\n'
+              if workflow.count(anchor) != 1:
+                  raise SystemExit("Exact-diff anchor missing.")
+              workflow = workflow.replace(anchor, anchor + allow, 1)
+          workflow_path.write_text(workflow, encoding="utf-8")
+          PY
+
+      - name: Verify, test, and push without clobbering a concurrent change
+        if: ${{ hashFiles(format('{0}/pr552-primary-repair-landed', runner.temp)) == '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --name-only | sort > actual-files.txt
+          cat > expected-files.txt <<'FILES'
+          .github/workflows/dashboard-account-security-hotfix-gates.yml
+          src/components/dashboard/background-account-security-panel.tsx
+          src/dashboard-account-security-visibility.test.ts
+          FILES
+          diff -u expected-files.txt actual-files.txt
+          npm ci
+          node --import tsx --test src/dashboard-account-security-visibility.test.ts
+          expected="$(cat "$RUNNER_TEMP/pr552-fallback-pre-head")"
+          git fetch --no-tags origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$expected"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/workflows/dashboard-account-security-hotfix-gates.yml \
+            src/components/dashboard/background-account-security-panel.tsx \
+            src/dashboard-account-security-visibility.test.ts
+          git commit -m "Refresh Account security after MFA verification"
+          git push origin "HEAD:$TARGET_BRANCH"
