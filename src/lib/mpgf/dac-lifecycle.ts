@@ -540,14 +540,20 @@ export async function loadMpgfDacReviewerWorkspace(reviewerId: string): Promise<
     }));
 
   const reviewerRow = reviewerResult.data as Record<string, unknown> | null;
+  const reviewerExpiresAt = reviewerRow ? nullableString(reviewerRow.expires_at) : null;
+  const reviewerCurrentlyAuthorized = Boolean(
+    reviewerRow?.active &&
+    (!reviewerExpiresAt || Date.parse(reviewerExpiresAt) > Date.now()),
+  );
 
   return {
     reviewerAuthorization: reviewerRow ? {
       reviewerId: String(reviewerRow.reviewer_id),
       active: Boolean(reviewerRow.active),
+      currentlyAuthorized: reviewerCurrentlyAuthorized,
       rationale: String(reviewerRow.rationale ?? ""),
       authorizedAt: String(reviewerRow.authorized_at ?? ""),
-      expiresAt: nullableString(reviewerRow.expires_at),
+      expiresAt: reviewerExpiresAt,
     } : null,
     proposals,
     pendingPledges: ((pledgeResult.data ?? []) as unknown[]).map(mapMpgfDacReviewPledgeRow),

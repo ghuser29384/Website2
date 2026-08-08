@@ -74,10 +74,7 @@ export default async function MpgfDacLifecycleAdminPage() {
   }
 
   const authorization = workspace?.reviewerAuthorization ?? null;
-  const reviewerAuthorized = Boolean(
-    authorization?.active &&
-    (!authorization.expiresAt || Date.parse(authorization.expiresAt) > Date.now()),
-  );
+  const reviewerAuthorized = Boolean(authorization?.currentlyAuthorized);
 
   return (
     <MpgfPageFrame

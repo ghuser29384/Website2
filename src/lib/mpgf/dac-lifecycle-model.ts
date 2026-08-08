@@ -263,6 +263,7 @@ export interface MpgfDacReviewerWorkspace {
   reviewerAuthorization: {
     reviewerId: string;
     active: boolean;
+    currentlyAuthorized: boolean;
     rationale: string;
     authorizedAt: string;
     expiresAt: string | null;
