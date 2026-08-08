@@ -108,6 +108,21 @@ export default async function MpgfAdminPage() {
               </div>
             </div>
 
+            <div className="mpgf-admin-action-panel">
+              <p className="eyebrow">Self-service dominant assurance contracts</p>
+              <h3>Exact-version DAC lifecycle review</h3>
+              <p>
+                Review creator proposals, freeze one immutable terms version, publish eligible
+                campaigns, decide pledge eligibility, and record exactly one success or lapse
+                outcome. The workflow cannot authorize or move money.
+              </p>
+              <div>
+                <Link className="button button-primary" href="/mpgf/admin/dac-lifecycle">
+                  Open DAC lifecycle review
+                </Link>
+              </div>
+            </div>
+
             <div className="mpgf-gate-list">
               {controlPlane?.gates.map((gate) => (
                 <article key={gate.key} className="mpgf-gate-row">
