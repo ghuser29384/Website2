@@ -4,6 +4,12 @@ import sys
 from pathlib import Path
 
 
+OLD_CANDIDATE_SHA = "0f2164e893b3eee94d2f4033d013f2ebf6430cea"
+NEW_CANDIDATE_SHA = "795874493862c926f9eb2a4d2239a28a99e41968"
+OLD_DEPLOYMENT_ID = "dpl_E4kcbFVK7QpYvdygM8m9sc841DpC"
+NEW_DEPLOYMENT_ID = "dpl_GLdRTXio8G37tnM1xNMozY4oJ9AL"
+
+
 def fail(message: str) -> None:
     raise SystemExit(message)
 
@@ -53,6 +59,18 @@ def main() -> None:
         "bypass environment guard",
         'if (MODE === "test") required("PR552_PREVIEW_SHARE_URL", PREVIEW_SHARE_URL);',
         'if (MODE === "test") required("VERCEL_AUTOMATION_BYPASS_SECRET", VERCEL_BYPASS_SECRET);',
+    )
+    source = replace_literal(
+        source,
+        "candidate SHA guard",
+        f'if (EXPECTED_SHA !== "{OLD_CANDIDATE_SHA}") {{',
+        f'if (EXPECTED_SHA !== "{NEW_CANDIDATE_SHA}") {{',
+    )
+    source = replace_literal(
+        source,
+        "deployment ID guard",
+        f'if (EXPECTED_DEPLOYMENT_ID !== "{OLD_DEPLOYMENT_ID}") {{',
+        f'if (EXPECTED_DEPLOYMENT_ID !== "{NEW_DEPLOYMENT_ID}") {{',
     )
 
     source = replace_span(
@@ -145,6 +163,8 @@ function runPsql(sql, variables = {}) {
         "PREVIEW_SHARE_URL",
         'args.push("--set"',
         "    input: sql,",
+        OLD_CANDIDATE_SHA,
+        OLD_DEPLOYMENT_ID,
     ]
     for token in forbidden:
         if token in source:
@@ -158,6 +178,8 @@ function runPsql(sql, variables = {}) {
         "const expandedSql = expandPsqlVariables(sql, variables);": 1,
         "expanded.split(token).join(sqlLiteral(value))": 1,
         "input: expandedSql": 1,
+        NEW_CANDIDATE_SHA: 1,
+        NEW_DEPLOYMENT_ID: 1,
     }
     for token, expected_count in required_counts.items():
         actual_count = source.count(token)
