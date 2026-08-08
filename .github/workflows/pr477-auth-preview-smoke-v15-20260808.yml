@@ -1,0 +1,397 @@
+name: PR 477 protected Preview desktop and mobile smoke v15
+
+on:
+  push:
+    branches:
+      - ops/pr477-auth-preview-smoke-v15-20260808
+    paths:
+      - .github/workflows/pr477-auth-preview-smoke-v15-20260808.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  CONTROLLER_BRANCH: ops/pr477-auth-preview-smoke-v15-20260808
+  EXPECTED_MAIN_SHA: c2d907827c4c7086fb66973bbe3d9619f1856f99
+  EXPECTED_CANDIDATE_SHA: af435e30f438545c12348b5f58253436377aaf53
+  EXPECTED_RELEASE_BRANCH: release/vercel-preview
+  EXPECTED_DEPLOYMENT_ID: dpl_AGnkRPPLRXFiZo4LFRTJkL49hA7R
+  BASE_URL: https://moraltrade-site-51jpxawup-ellen-s.vercel.app
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  CREATOR_ID: 872f3bc3-f8a7-4698-98fd-31b7e91229f9
+  CREATOR_EMAIL: pr477-smoke-creator-20260808042404@example.test
+  CREATOR_USERNAME: pr477creator08042404
+  PARTICIPANT_ID: 74c49c29-1dbe-4837-820e-0e6b49681c92
+  PARTICIPANT_USERNAME: pr477member08042404
+
+jobs:
+  hosted-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Guard exact repository state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$EXPECTED_MAIN_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/${EXPECTED_RELEASE_BRANCH//\//%2F}" --jq .commit.sha)" = "$EXPECTED_CANDIDATE_SHA"
+
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and Chromium
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Generate a temporary custom Vercel bypass
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          test -n "${VERCEL_TOKEN:-}"
+          umask 077
+          cat > /tmp/pr477_bypass_v15.py <<'PY'
+          import json
+          import os
+          import secrets
+          import string
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          secret_path = Path('/tmp/pr477-v15-bypass-secret')
+          endpoint = (
+              f"https://api.vercel.com/v1/projects/{urllib.parse.quote(os.environ['VERCEL_PROJECT_ID'])}/protection-bypass"
+              f"?teamId={urllib.parse.quote(os.environ['VERCEL_ORG_ID'])}"
+          )
+
+          def patch(payload):
+              request = urllib.request.Request(
+                  endpoint,
+                  data=json.dumps(payload).encode('utf-8'),
+                  method='PATCH',
+                  headers={
+                      'Authorization': f"Bearer {os.environ['VERCEL_TOKEN']}",
+                      'Content-Type': 'application/json',
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      if response.status != 200:
+                          raise SystemExit(f'Unexpected Vercel status {response.status}')
+                      response.read()
+              except urllib.error.HTTPError as error:
+                  body = error.read().decode('utf-8', errors='replace')
+                  raise SystemExit(f'Vercel bypass API failed: {error.code} {body[:500]}')
+
+          command = sys.argv[1]
+          if command == 'generate':
+              alphabet = string.ascii_letters + string.digits
+              secret = ''.join(secrets.choice(alphabet) for _ in range(32))
+              patch({'generate': {'secret': secret, 'note': f'PR477 v15 run {os.environ["GITHUB_RUN_ID"]}'}})
+              secret_path.write_text(secret, encoding='utf-8')
+              os.chmod(secret_path, 0o600)
+              print(f'::add-mask::{secret}')
+              print('bypass_generated=true')
+          elif command == 'revoke':
+              if not secret_path.exists():
+                  print('bypass_revoke=skipped')
+                  raise SystemExit(0)
+              secret = secret_path.read_text(encoding='utf-8')
+              print(f'::add-mask::{secret}')
+              patch({'revoke': {'secret': secret, 'regenerate': False}})
+              print('bypass_revoked=true')
+          else:
+              raise SystemExit(f'Unsupported command {command!r}')
+          PY
+          chmod 700 /tmp/pr477_bypass_v15.py
+          python3 /tmp/pr477_bypass_v15.py generate
+
+      - name: Prove the bypass cookie works for follow-up requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          secret="$(cat /tmp/pr477-v15-bypass-secret)"
+          echo "::add-mask::$secret"
+          seed_status="$(curl --silent --show-error --location \
+            --cookie-jar /tmp/pr477-v15.cookies \
+            --output /tmp/pr477-v15-cookie-seed.body \
+            --write-out '%{http_code}' \
+            "$BASE_URL/api/create/participants?q=$PARTICIPANT_USERNAME&x-vercel-protection-bypass=$secret&x-vercel-set-bypass-cookie=samesitenone")"
+          test "$seed_status" = '401'
+          grep -Fq 'Sign in before searching Moral Trade participants' /tmp/pr477-v15-cookie-seed.body
+          grep -Eqi 'vercel.*bypass|bypass.*vercel|_vercel' /tmp/pr477-v15.cookies
+          reuse_status="$(curl --silent --show-error --max-redirs 0 \
+            --cookie /tmp/pr477-v15.cookies \
+            --output /tmp/pr477-v15-cookie-reuse.body \
+            --write-out '%{http_code}' \
+            "$BASE_URL/api/create/participants?q=$PARTICIPANT_USERNAME")"
+          test "$reuse_status" = '401'
+          grep -Fq 'Sign in before searching Moral Trade participants' /tmp/pr477-v15-cookie-reuse.body
+          printf 'bypass_cookie_followup=passed\n'
+
+      - name: Run desktop and narrow-mobile authenticated smoke without creating another proposal
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          mkdir -p test-results
+          secret="$(cat /tmp/pr477-v15-bypass-secret)"
+          echo "::add-mask::$secret"
+          VERCEL_AUTOMATION_BYPASS_SECRET="$secret" node <<'JS'
+          const { chromium } = require('@playwright/test');
+          const { createHash } = require('node:crypto');
+          const { writeFile } = require('node:fs/promises');
+
+          const base = process.env.BASE_URL;
+          const creatorId = process.env.CREATOR_ID;
+          const creatorEmail = process.env.CREATOR_EMAIL;
+          const creatorUsername = process.env.CREATOR_USERNAME;
+          const participantId = process.env.PARTICIPANT_ID;
+          const participantUsername = process.env.PARTICIPANT_USERNAME;
+          const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+          const password = createHash('sha256').update(`pr477-smoke-v1:${creatorId}`).digest('hex');
+          const protectedHost = new URL(base).hostname;
+          const browser = await chromium.launch({ headless: true });
+          const report = {
+            candidate: process.env.EXPECTED_CANDIDATE_SHA,
+            deploymentId: process.env.EXPECTED_DEPLOYMENT_ID,
+            startedAt: new Date().toISOString(),
+            desktop: {},
+            mobile: {},
+            diagnostics: {},
+          };
+
+          function diagnostics(page, label) {
+            const value = { consoleErrors: [], pageErrors: [], failedRequests: [], http4xx: [], http5xx: [], paymentRequests: [] };
+            page.on('console', message => { if (message.type() === 'error') value.consoleErrors.push(message.text()); });
+            page.on('pageerror', error => value.pageErrors.push(error.message));
+            page.on('requestfailed', request => value.failedRequests.push(`${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? ''}`));
+            page.on('response', response => {
+              const url = new URL(response.url());
+              if (url.hostname !== protectedHost) return;
+              const item = `${response.status()} ${url.pathname}`;
+              if (response.status() >= 500) value.http5xx.push(item);
+              else if (response.status() >= 400) value.http4xx.push(item);
+            });
+            page.on('request', request => {
+              if (/stripe|paymentintent|checkout|\/payments?(?:\/|\?|$)|\/ach(?:\/|\?|$)/i.test(request.url())) value.paymentRequests.push(request.url());
+            });
+            report.diagnostics[label] = value;
+            return value;
+          }
+
+          async function login(context, page) {
+            const loginUrl = new URL('/login', base);
+            loginUrl.searchParams.set('method', 'email');
+            loginUrl.searchParams.set('next', '/trades/new');
+            loginUrl.searchParams.set('x-vercel-protection-bypass', bypassSecret);
+            loginUrl.searchParams.set('x-vercel-set-bypass-cookie', 'samesitenone');
+            await page.goto(loginUrl.toString(), { waitUntil: 'domcontentloaded' });
+            await page.getByLabel('Password').waitFor({ state: 'visible', timeout: 20000 });
+            const cookieNames = (await context.cookies()).map(cookie => cookie.name);
+            if (!cookieNames.some(name => /vercel/i.test(name) && /bypass|protection/i.test(name))) {
+              throw new Error(`Expected a Vercel protection-bypass cookie, got ${JSON.stringify(cookieNames)}`);
+            }
+            await page.getByLabel('Email').fill(creatorEmail);
+            await page.getByLabel('Password').fill(password);
+            await Promise.all([
+              page.waitForURL(/\/trades\/new(?:\?|$)/, { timeout: 20000 }),
+              page.getByRole('button', { name: 'Log in', exact: true }).click(),
+            ]);
+            return cookieNames.filter(name => /vercel/i.test(name));
+          }
+
+          async function participantResponse(page, query) {
+            return page.evaluate(async q => {
+              const response = await fetch(`/api/create/participants?q=${encodeURIComponent(q)}`, { credentials: 'include', cache: 'no-store' });
+              return { status: response.status, body: await response.json() };
+            }, query);
+          }
+
+          async function openOfferStep(page) {
+            await page.goto(`${base}/trades/new`, { waitUntil: 'domcontentloaded' });
+            const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await create.getByRole('heading', { level: 1, name: 'What do you want to improve?' }).waitFor();
+            await create.getByRole('button', { name: 'Future flourishing' }).click();
+            await create.locator('[data-request-kind="commitment"]').click();
+            await create.getByLabel('What commitment do you want?').fill('Not eat meat for one meal per week');
+            await create.locator('#continueRequest').click();
+            await create.getByRole('heading', { level: 1, name: 'What could you offer?' }).waitFor();
+            await create.getByRole('button', { name: 'A behavior change' }).click();
+            await create.getByRole('button', { name: 'Money' }).click();
+            await create.locator('#continueOffers').click();
+            await create.locator('[data-mt-group-contribution-host]').first().waitFor();
+            const fields = [
+              [create.locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="action"]'), 'Avoid meat for one meal per week'],
+              [create.locator('[data-offer-entry-block][data-offer-id="behavior"] [data-offer-field="duration"]'), 'once per week for 12 weeks'],
+              [create.locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="amount"]'), '5.00'],
+              [create.locator('[data-offer-entry-block][data-offer-id="money"] [data-offer-field="organization"]'), 'Existential Risk Research Project'],
+            ];
+            for (const [field, value] of fields) { await field.fill(value); await field.press('Tab'); }
+            return create;
+          }
+
+          function behaviorHost(create) { return create.locator('[data-offer-entry-block][data-offer-id="behavior"] + [data-mt-group-contribution-host]'); }
+          function fundingHost(create) { return create.locator('[data-offer-entry-block][data-offer-id="money"] + [data-mt-group-contribution-host]'); }
+
+          try {
+            const desktop = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+            const desktopPage = await desktop.newPage();
+            const desktopDiagnostics = diagnostics(desktopPage, 'desktop');
+            const desktopCookieNames = await login(desktop, desktopPage);
+            const directory = await participantResponse(desktopPage, participantUsername);
+            if (directory.status !== 200 || directory.body?.ok !== true) throw new Error(`Desktop directory failed: ${JSON.stringify(directory)}`);
+            if (directory.body.viewer?.profileId !== creatorId || directory.body.viewer?.username !== creatorUsername) throw new Error('Desktop viewer identity mismatch');
+            const selected = directory.body.results?.find(row => row.profileId === participantId);
+            if (!selected || selected.username !== participantUsername || selected.publicMention !== 'pending-invitee') throw new Error(`Desktop participant mismatch: ${JSON.stringify(directory.body.results)}`);
+            const self = await participantResponse(desktopPage, creatorUsername);
+            if (self.body.results?.some(row => row.profileId === creatorId)) throw new Error('Desktop search returned self');
+            await desktopPage.goto(`${base}/trades/new`, { waitUntil: 'domcontentloaded' });
+            await desktopPage.frameLocator('iframe[title="Moral Trade Create"]').getByRole('heading', { level: 1, name: 'What do you want to improve?' }).waitFor();
+            await desktopPage.screenshot({ path: 'test-results/pr477-v15-desktop-create.png', fullPage: true });
+            report.desktop = { directoryStatus: 200, canonicalParticipant: true, selfExcluded: true, bypassCookieNames: desktopCookieNames };
+            const unexpectedDesktop4xx = desktopDiagnostics.http4xx.filter(item => !/^404 \/walkthrough$/.test(item));
+            if (desktopDiagnostics.pageErrors.length || desktopDiagnostics.http5xx.length || desktopDiagnostics.paymentRequests.length || unexpectedDesktop4xx.length) {
+              throw new Error(`Desktop diagnostics failed: ${JSON.stringify({ ...desktopDiagnostics, unexpectedDesktop4xx })}`);
+            }
+            await desktop.close();
+
+            const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
+            const mobilePage = await mobile.newPage();
+            const mobileDiagnostics = diagnostics(mobilePage, 'mobile');
+            const mobileCookieNames = await login(mobile, mobilePage);
+            const mobileDirectory = await participantResponse(mobilePage, participantUsername);
+            if (mobileDirectory.status !== 200 || !mobileDirectory.body.results?.some(row => row.profileId === participantId)) throw new Error(`Mobile directory failed: ${JSON.stringify(mobileDirectory)}`);
+            const create = await openOfferStep(mobilePage);
+            const coAct = behaviorHost(create);
+            await coAct.getByRole('button', { name: 'Act together' }).click();
+            await coAct.getByLabel('No, I am organizing only').check();
+            await coAct.getByLabel('Add participant or invitee').fill(participantUsername);
+            await coAct.getByRole('option', { name: new RegExp(`@${participantUsername}`) }).click();
+            const coFund = fundingHost(create);
+            await coFund.getByRole('button', { name: 'Fund together' }).click();
+            await coFund.getByLabel('Yes, I am a participant').check();
+            await coFund.getByLabel('Add participant or invitee').fill(participantUsername);
+            await coFund.getByRole('option', { name: new RegExp(`@${participantUsername}`) }).click();
+            await mobilePage.screenshot({ path: 'test-results/pr477-v15-mobile-participant-picker.png', fullPage: true });
+            const pageOverflow = await mobilePage.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth);
+            const frameOverflow = await create.locator('html').evaluate(element => element.scrollWidth > element.clientWidth);
+            if (pageOverflow || frameOverflow) throw new Error(`Mobile horizontal overflow: page=${pageOverflow}, frame=${frameOverflow}`);
+            report.mobile = { directoryStatus: 200, coActParticipantSelected: true, coFundParticipantSelected: true, pageOverflow, frameOverflow, bypassCookieNames: mobileCookieNames };
+            const unexpectedMobile4xx = mobileDiagnostics.http4xx.filter(item => !/^404 \/walkthrough$/.test(item));
+            if (mobileDiagnostics.pageErrors.length || mobileDiagnostics.http5xx.length || mobileDiagnostics.paymentRequests.length || unexpectedMobile4xx.length) {
+              throw new Error(`Mobile diagnostics failed: ${JSON.stringify({ ...mobileDiagnostics, unexpectedMobile4xx })}`);
+            }
+            await mobile.close();
+
+            report.finishedAt = new Date().toISOString();
+            await writeFile('pr477-v15-hosted-smoke.json', JSON.stringify(report, null, 2));
+          } catch (error) {
+            report.finishedAt = new Date().toISOString();
+            report.failure = error instanceof Error ? error.message : String(error);
+            await writeFile('pr477-v15-hosted-smoke.json', JSON.stringify(report, null, 2));
+            throw error;
+          } finally {
+            await browser.close();
+          }
+          JS
+          cat pr477-v15-hosted-smoke.json
+
+      - name: Upload exact hosted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr477-hosted-smoke-v15-${{ github.run_id }}
+          path: |
+            pr477-v15-hosted-smoke.json
+            test-results
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Revoke the bypass and prove the old secret no longer reaches the application
+        if: always()
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          if [[ ! -s /tmp/pr477-v15-bypass-secret ]]; then
+            echo 'bypass_revoke=skipped'
+            exit 0
+          fi
+          secret="$(cat /tmp/pr477-v15-bypass-secret)"
+          echo "::add-mask::$secret"
+          python3 /tmp/pr477_bypass_v15.py revoke
+          denied=0
+          for attempt in $(seq 1 45); do
+            status="$(curl --silent --show-error --max-redirs 0 \
+              --output /tmp/pr477-v15-revoked.body \
+              --write-out '%{http_code}' \
+              "$BASE_URL/api/create/participants?q=$PARTICIPANT_USERNAME&_revoke=$attempt&x-vercel-protection-bypass=$secret")"
+            if ! { [[ "$status" = '401' ]] && grep -Fq 'Sign in before searching Moral Trade participants' /tmp/pr477-v15-revoked.body; }; then
+              denied=1
+              break
+            fi
+            sleep 2
+          done
+          test "$denied" = '1'
+          rm -f /tmp/pr477-v15-bypass-secret
+          printf 'revoked_bypass_denial=passed\n'
+
+      - name: Publish sanitized success marker
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "<!-- pr477-hosted-smoke-v15 -->
+          ## Exact protected Preview desktop/mobile completion passed
+
+          - Candidate: \`$EXPECTED_CANDIDATE_SHA\`; deployment: \`$EXPECTED_DEPLOYMENT_ID\`.
+          - The documented bypass-cookie flow worked for follow-up requests; the temporary custom bypass was revoked and proven ineffective afterward.
+          - Desktop participant search resolved the exact canonical account, represented disabled public mentions as pending-invitee, and excluded self.
+          - At 390×844, both Co-Act and Co-Fund selected the exact account without page or iframe horizontal overflow.
+          - No additional Create proposal was submitted by this completion gate; no payment request or 5xx was observed.
+          - The only tolerated same-host 4xx is the pre-existing \`/walkthrough\` 404. Exact database verification and cleanup remain required."
+
+      - name: Publish sanitized failure marker
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh pr comment 477 --repo "$GITHUB_REPOSITORY" --body "<!-- pr477-hosted-smoke-v15-failure -->
+          Exact protected Preview desktop/mobile completion failed in run \`$GITHUB_RUN_ID\`. The temporary bypass revocation gate still ran. No additional proposal, merge, or production application deployment was authorized."
+
+      - name: Delete temporary controller branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          encoded_branch="${CONTROLLER_BRANCH//\//%2F}"
+          gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded_branch}" || true
