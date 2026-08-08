@@ -1,0 +1,283 @@
+name: Finalize Commitments draft candidates in QA
+
+on:
+  push:
+    branches: [ops/commitments-draft-lifecycle-controller-20260808]
+    paths:
+      - ".github/workflows/finalize-commitments-draft-candidates-qa.yml"
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: finalize-commitments-draft-candidates-qa-20260808
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      BASE_FEATURE_HEAD: a86464941e459e39b786da2d3d6ee14dfdc9285f
+      TARGET_BRANCH: feature/commitments-phase1-impact-accounting-20260806
+      PATCH_SHA256: 9ade3be68024219be25f9ff04a0fb6571448232740361d8c48dc4a27a8f9254d
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Preserve audited patch and verify controller identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/commitments-draft-lifecycle-controller-20260808'
+          test -s ops/commitments-draft-lifecycle.patch
+          cp ops/commitments-draft-lifecycle.patch /tmp/commitments-draft-lifecycle.patch
+          printf '%s  %s\n' "$PATCH_SHA256" /tmp/commitments-draft-lifecycle.patch | sha256sum -c -
+
+      - name: Ensure one exact lifecycle-correction commit exists on feature branch
+        id: feature
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$TARGET_BRANCH"
+          remote_head="$(git rev-parse "origin/$TARGET_BRANCH")"
+
+          if [[ "$remote_head" = "$BASE_FEATURE_HEAD" ]]; then
+            git checkout --detach "$BASE_FEATURE_HEAD"
+            git apply --check /tmp/commitments-draft-lifecycle.patch
+            git apply /tmp/commitments-draft-lifecycle.patch
+            git diff --check
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add \
+              .github/workflows/commitments-impact-accounting-gates.yml \
+              docs/commitments/impact-methodologies-v1-review.md \
+              docs/commitments/impact-methodologies-v1/*.json \
+              scripts/render-commitments-impact-methodologies-qa-sql.mjs \
+              scripts/validate-commitments-impact-methodologies.mjs
+            GIT_AUTHOR_DATE='2026-08-08T18:30:00Z' \
+            GIT_COMMITTER_DATE='2026-08-08T18:30:00Z' \
+              git commit -m 'Keep blocked impact methodologies in draft lifecycle'
+            candidate_head="$(git rev-parse HEAD)"
+            current_remote="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+            test "$current_remote" = "$BASE_FEATURE_HEAD"
+            git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+            remote_head="$candidate_head"
+          else
+            git merge-base --is-ancestor "$BASE_FEATURE_HEAD" "$remote_head"
+            test "$(git rev-list --count "$BASE_FEATURE_HEAD..$remote_head")" = '1'
+          fi
+
+          git checkout --detach "$remote_head"
+          test "$(git rev-parse HEAD)" = "$remote_head"
+          test -f scripts/render-commitments-impact-methodologies-qa-sql.mjs
+          node scripts/validate-commitments-impact-methodologies.mjs
+          for file in docs/commitments/impact-methodologies-v1/*.json; do
+            if [[ "$(basename "$file")" = 'manifest.json' ]]; then
+              continue
+            fi
+            test "$(jq -r '.lifecycleStatus' "$file")" = 'draft'
+          done
+          jq -e '.methodologies | length == 6 and all(.lifecycleStatus == "draft")' \
+            docs/commitments/impact-methodologies-v1/manifest.json >/dev/null
+          git diff --name-only "$BASE_FEATURE_HEAD" "$remote_head" | sort > /tmp/actual-files.txt
+          cat > /tmp/expected-files.txt <<'FILES'
+          .github/workflows/commitments-impact-accounting-gates.yml
+          docs/commitments/impact-methodologies-v1-review.md
+          docs/commitments/impact-methodologies-v1/co_fund.json
+          docs/commitments/impact-methodologies-v1/donation_redirect.json
+          docs/commitments/impact-methodologies-v1/donation_upgrade.json
+          docs/commitments/impact-methodologies-v1/manifest.json
+          docs/commitments/impact-methodologies-v1/threshold_funding.json
+          docs/commitments/impact-methodologies-v1/threshold_sign_on.json
+          docs/commitments/impact-methodologies-v1/trade.json
+          scripts/render-commitments-impact-methodologies-qa-sql.mjs
+          scripts/validate-commitments-impact-methodologies.mjs
+          FILES
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+          printf 'head_sha=%s\n' "$remote_head" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$remote_head" > /tmp/feature-head.txt
+
+      - name: Wait for exact-head push and pull-request gates
+        id: gates
+        shell: bash
+        env:
+          HEAD_SHA: ${{ steps.feature.outputs.head_sha }}
+        run: |
+          set -euo pipefail
+          workflow='commitments-impact-accounting-gates.yml'
+          push_run=''
+          pr_run=''
+          for attempt in $(seq 1 120); do
+            runs="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow}/runs?branch=${TARGET_BRANCH}&per_page=100")"
+            push_run="$(jq -r --arg sha "$HEAD_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .event == "push" and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            pr_run="$(jq -r --arg sha "$HEAD_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .event == "pull_request" and .status == "completed" and .conclusion == "success")] | sort_by(.created_at) | last | .id // empty' <<<"$runs")"
+            if [[ -n "$push_run" && -n "$pr_run" ]]; then
+              break
+            fi
+            failed="$(jq -r --arg sha "$HEAD_SHA" '[.workflow_runs[] | select(.head_sha == $sha and .status == "completed" and .conclusion != "success" and (.event == "push" or .event == "pull_request"))] | length' <<<"$runs")"
+            if [[ "$failed" != '0' ]]; then
+              jq -r --arg sha "$HEAD_SHA" '.workflow_runs[] | select(.head_sha == $sha and .status == "completed" and .conclusion != "success") | [.id,.event,.conclusion,.html_url] | @tsv' <<<"$runs" >&2
+              exit 1
+            fi
+            sleep 20
+          done
+          test -n "$push_run"
+          test -n "$pr_run"
+          printf 'push_run=%s\n' "$push_run" >> "$GITHUB_OUTPUT"
+          printf 'pr_run=%s\n' "$pr_run" >> "$GITHUB_OUTPUT"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${push_run}" > /tmp/push-run.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${pr_run}" > /tmp/pr-run.json
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client >/dev/null
+
+      - name: Validate exact MoralTrade QA database target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+          parsed = urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          expected = os.environ['EXPECTED_QA_REF']
+          if expected not in (parsed.username or ''):
+              raise SystemExit('Refusing a database URL outside exact MoralTrade QA.')
+          if parsed.hostname != 'aws-0-us-west-1.pooler.supabase.com' or parsed.port != 5432 or parsed.path != '/postgres':
+              raise SystemExit('Refusing unexpected database connection parameters.')
+          PY
+
+      - name: Persist the six exact blocked draft candidates in QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMITMENTS_IMPACT_QA_STAGE_CONFIRM="$EXPECTED_QA_REF" \
+            node scripts/render-commitments-impact-methodologies-qa-sql.mjs --commit \
+            > /tmp/commitments-draft-candidates-qa.sql
+          grep -Fq 'commit;' /tmp/commitments-draft-candidates-qa.sql
+          ! grep -Fq "'under_review'" /tmp/commitments-draft-candidates-qa.sql
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc \
+            --file /tmp/commitments-draft-candidates-qa.sql \
+            2>&1 | tee /tmp/commitments-draft-candidates-qa.log
+
+      - name: Prove exact QA staged state and absence of downstream authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc -AtF '|' <<'SQL' | tee /tmp/qa-final-state.txt
+          do $verify$
+          declare
+            candidate_count integer;
+          begin
+            select count(*) into candidate_count
+            from public.impact_model_versions
+            where model_key in (
+              'commitments-reciprocal-trade-v1',
+              'commitments-co-fund-v1',
+              'commitments-threshold-funding-v1',
+              'commitments-donation-upgrade-v1',
+              'commitments-threshold-sign-on-v1',
+              'commitments-donation-redirect-v1'
+            )
+              and version = 1
+              and lifecycle_status = 'draft'
+              and cardinality(approval_blockers) > 0
+              and submitted_at is null
+              and approved_at is null
+              and activated_at is null;
+            if candidate_count <> 6 then
+              raise exception 'Expected six exact blocked draft candidates; found %', candidate_count;
+            end if;
+            if exists (select 1 from public.impact_model_approvers where active) then
+              raise exception 'No QA impact-model approver may be active';
+            end if;
+            if exists (select 1 from public.impact_model_approval_events) then
+              raise exception 'No QA impact-model approval event may exist';
+            end if;
+            if exists (select 1 from public.impact_model_health_snapshots) then
+              raise exception 'No QA model-health snapshot may exist';
+            end if;
+            if exists (select 1 from public.impact_reference_observations) then
+              raise exception 'No QA calibration observation may exist';
+            end if;
+            if exists (select 1 from public.impact_estimate_snapshots) then
+              raise exception 'No QA estimate snapshot may exist';
+            end if;
+            if exists (select 1 from public.impact_refresh_queue) then
+              raise exception 'No QA refresh job may exist';
+            end if;
+          end
+          $verify$;
+
+          select mechanism_family, model_key, version, lifecycle_status, methodology_hash, cardinality(approval_blockers)
+          from public.impact_model_versions
+          where model_key in (
+            'commitments-reciprocal-trade-v1',
+            'commitments-co-fund-v1',
+            'commitments-threshold-funding-v1',
+            'commitments-donation-upgrade-v1',
+            'commitments-threshold-sign-on-v1',
+            'commitments-donation-redirect-v1'
+          )
+          order by mechanism_family;
+
+          select
+            (select count(*) from public.impact_model_versions) as model_versions,
+            (select count(*) from public.impact_model_approvers where active) as active_approvers,
+            (select count(*) from public.impact_model_approval_events) as approval_events,
+            (select count(*) from public.impact_model_health_snapshots) as health_snapshots,
+            (select count(*) from public.impact_reference_observations) as reference_observations,
+            (select count(*) from public.impact_estimate_snapshots) as estimate_snapshots,
+            (select count(*) from public.impact_refresh_queue) as refresh_jobs;
+          SQL
+
+      - name: Publish exact QA staging receipt to draft PR
+        shell: bash
+        env:
+          HEAD_SHA: ${{ steps.feature.outputs.head_sha }}
+          PUSH_RUN: ${{ steps.gates.outputs.push_run }}
+          PR_RUN: ${{ steps.gates.outputs.pr_run }}
+        run: |
+          set -euo pipefail
+          cat > /tmp/pr-comment.md <<EOF
+          ### Commitments methodology lifecycle correction and QA staging complete
+
+          - Exact feature head: \`$HEAD_SHA\`
+          - Exact push gate: \`$PUSH_RUN\` — success
+          - Exact pull-request gate: \`$PR_RUN\` — success
+          - Six exact methodology hashes are staged in MoralTrade QA as blocked \`draft\` rows.
+          - Zero active approvers, approval events, health snapshots, calibration observations, estimate snapshots, or refresh jobs exist in QA.
+          - No candidate was submitted for review, approved, or activated.
+          - Production database and production deployment remain unchanged.
+
+          The next authority-dependent step is founder authenticator MFA/AAL2 enrollment, followed by exact-hash review through the governed submit-for-review and approval RPCs. This comment does not authorize merge or production release.
+          EOF
+          gh pr comment 534 --repo "$GITHUB_REPOSITORY" --body-file /tmp/pr-comment.md
+
+      - name: Upload controlled QA staging evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-draft-candidates-qa-${{ github.run_id }}
+          path: |
+            /tmp/feature-head.txt
+            /tmp/push-run.json
+            /tmp/pr-run.json
+            /tmp/commitments-draft-candidates-qa.sql
+            /tmp/commitments-draft-candidates-qa.log
+            /tmp/qa-final-state.txt
+            /tmp/pr-comment.md
+          if-no-files-found: warn
+          retention-days: 30
