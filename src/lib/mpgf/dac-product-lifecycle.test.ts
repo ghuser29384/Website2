@@ -26,6 +26,10 @@ async function read(path: string) {
   return readFile(path, "utf8");
 }
 
+function countOccurrences(source: string, fragment: string) {
+  return source.split(fragment).length - 1;
+}
+
 test("live public DAC surfaces resolve exact published terms, terminal outcome, and owner-only receipts", async () => {
   const [loader, model, campaignPage, poolPage, publicApi, campaignView] = await Promise.all([
     read(paths.publicLoader),
@@ -166,6 +170,8 @@ test("permanent isolated-QA proof covers open pledge, creator, reviewer, termina
     read(paths.browserSpec),
     read(paths.workflow),
   ]);
+  const exactLapsedCampaignId = "'campaign-c0777777777747778777777777777777'";
+  const malformedLapsedCampaignId = "'campaign-c077777777774777877777777777777'";
 
   assert.match(fixture, /qa-dac-product-open/);
   assert.match(fixture, /qa-dac-product-succeeded/);
@@ -174,10 +180,30 @@ test("permanent isolated-QA proof covers open pledge, creator, reviewer, termina
   assert.match(fixture, /mpgf_review_dac_pledge_eligibility/);
   assert.match(fixture, /mpgf_finalize_dac_campaign/);
   assert.match(fixture, /payment_count <> 0/);
+  assert.equal(
+    countOccurrences(fixture, '"contributorIdentityRule":"verified_unique_person"'),
+    2,
+  );
+  assert.equal(
+    countOccurrences(
+      fixture,
+      "Provisional threshold 1 experience-rated quote; operator approval remains required.",
+    ),
+    1,
+  );
+  assert.equal(countOccurrences(fixture, exactLapsedCampaignId), 8);
+  assert.doesNotMatch(fixture, /'campaign-c077777777774777877777777777777'/);
+
   assert.match(cleanup, /mpgf_dac_campaign_outcomes_immutable/);
   assert.match(cleanup, /delete from auth\.mfa_factors/);
   assert.match(cleanup, /delete from moral_trade_private\.person_accounts/);
   assert.match(cleanup, /delete from auth\.users/);
+  assert.equal(countOccurrences(cleanup, exactLapsedCampaignId), 5);
+  assert.equal(countOccurrences(cleanup, "disable trigger moral_trade_create_pool_terms_immutable"), 1);
+  assert.equal(countOccurrences(cleanup, "enable trigger moral_trade_create_pool_terms_immutable"), 1);
+  assert.equal(countOccurrences(cleanup, "disable trigger mpgf_failure_bonus_approved_quote_immutable"), 1);
+  assert.equal(countOccurrences(cleanup, "enable trigger mpgf_failure_bonus_approved_quote_immutable"), 1);
+  assert.doesNotMatch(cleanup, /'campaign-c077777777774777877777777777777'/);
 
   assert.match(browser, /complete creator, reviewer, public pledge, success, lapse, privacy, and mobile DAC lifecycle/);
   assert.match(browser, /Record conditional pledge/);
@@ -205,6 +231,8 @@ test("permanent isolated-QA proof covers open pledge, creator, reviewer, termina
   assert.match(workflow, /moral_trade_private\.person_accounts/);
   assert.match(workflow, /fixture_residue=0/);
   assert.match(workflow, /payment_refs=0/);
+  assert.equal(countOccurrences(workflow, exactLapsedCampaignId), 2);
+  assert.doesNotMatch(workflow, /'campaign-c077777777774777877777777777777'/);
   assert.doesNotMatch(workflow, /PRODUCTION_SUPABASE_DB_URL/);
   assert.doesNotMatch(workflow, /vercel deploy|vercel promote|moraltrade\.org\/api/i);
 });
