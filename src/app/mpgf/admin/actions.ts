@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { evaluateAdminOperatorAccess, isAdminEmail } from "@/lib/admin";
 import { getViewer } from "@/lib/app-data";
@@ -607,6 +608,7 @@ export async function reviewMpgfDacPledgeEligibilityAction(formData: FormData) {
     auditJson: { eligibilityState, humanScoreBps: effectiveHumanScoreBps, reason, result },
   });
   revalidateMpgfDacLifecycleRoutes({ campaignId });
+  redirect("/mpgf/admin/dac-lifecycle");
 }
 
 export async function finalizeMpgfDacCampaignAction(formData: FormData) {

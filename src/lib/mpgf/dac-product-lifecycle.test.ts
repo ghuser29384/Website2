@@ -103,6 +103,14 @@ test("reviewer workspace exposes every non-payment lifecycle decision through au
     assert.ok(adminActions.includes(rpc), `Expected reviewer action to call ${rpc}`);
   }
   assert.match(adminActions, /effectiveHumanScoreBps = eligibilityState === "eligible" \? humanScoreBps : 0/);
+  const eligibilityActionStart = adminActions.indexOf("export async function reviewMpgfDacPledgeEligibilityAction");
+  const eligibilityActionEnd = adminActions.indexOf("export async function finalizeMpgfDacCampaignAction");
+  assert.ok(eligibilityActionStart >= 0 && eligibilityActionEnd > eligibilityActionStart);
+  const eligibilityAction = adminActions.slice(eligibilityActionStart, eligibilityActionEnd);
+  assert.match(
+    eligibilityAction,
+    /revalidateMpgfDacLifecycleRoutes\(\{ campaignId \}\);\s*redirect\("\/mpgf\/admin\/dac-lifecycle"\);/,
+  );
   assert.match(reviewerPage, /MFA-gated reviewer workspace/);
   assert.match(reviewerPage, /loadMpgfDacReviewerWorkspace/);
   assert.match(reviewerPage, /Reviewer registry required/);
