@@ -109,7 +109,7 @@ test("reviewer workspace exposes every non-payment lifecycle decision through au
   const eligibilityAction = adminActions.slice(eligibilityActionStart, eligibilityActionEnd);
   assert.match(
     eligibilityAction,
-    /revalidateMpgfDacLifecycleRoutes\(\{ campaignId \}\);\s*redirect\("\/mpgf\/admin\/dac-lifecycle"\);/,
+    /revalidateMpgfDacLifecycleRoutes\(\{ campaignId \}\);\s*redirect\(`\/mpgf\/admin\/dac-lifecycle\?reviewed=\$\{encodeURIComponent\(pledgeId\)\}`\);/,
   );
   assert.match(reviewerPage, /MFA-gated reviewer workspace/);
   assert.match(reviewerPage, /loadMpgfDacReviewerWorkspace/);

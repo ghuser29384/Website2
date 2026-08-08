@@ -608,7 +608,7 @@ export async function reviewMpgfDacPledgeEligibilityAction(formData: FormData) {
     auditJson: { eligibilityState, humanScoreBps: effectiveHumanScoreBps, reason, result },
   });
   revalidateMpgfDacLifecycleRoutes({ campaignId });
-  redirect("/mpgf/admin/dac-lifecycle");
+  redirect(`/mpgf/admin/dac-lifecycle?reviewed=${encodeURIComponent(pledgeId)}`);
 }
 
 export async function finalizeMpgfDacCampaignAction(formData: FormData) {
