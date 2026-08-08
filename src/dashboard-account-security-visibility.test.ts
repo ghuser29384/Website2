@@ -65,11 +65,20 @@ test("an optional priority summary cannot block the Account security surface", (
 });
 
 test("authenticator code inputs use a browser-valid pattern", () => {
-  const validPattern = String.raw`pattern="[0-9\s-]{6,8}"`;
-  const invalidPattern = String.raw`pattern="[0-9\\s-]{6,8}"`;
+  const validPattern = String.raw`[0-9 \-]{6,8}`;
+  const patterns = [...accountSecurityPanel.matchAll(/pattern="([^"]+)"/g)].map(
+    (match) => match[1],
+  );
 
-  assert.equal(accountSecurityPanel.split(validPattern).length - 1, 2);
-  assert.equal(accountSecurityPanel.includes(invalidPattern), false);
+  assert.deepEqual(patterns, [validPattern, validPattern]);
+
+  for (const pattern of patterns) {
+    const compiled = new RegExp(`^(?:${pattern})$`, "v");
+    assert.equal(compiled.test("123456"), true);
+    assert.equal(compiled.test("123 456"), true);
+    assert.equal(compiled.test("123-456"), true);
+    assert.equal(compiled.test("12345a"), false);
+  }
 });
 
 test("the stale Offers shortcut cannot prefetch a missing route", () => {
