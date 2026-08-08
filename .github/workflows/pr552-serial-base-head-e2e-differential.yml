@@ -1,0 +1,252 @@
+name: PR 552 serial base-head full E2E differential
+
+on:
+  push:
+    branches:
+      - ops/pr552-serial-base-head-e2e-differential-20260808
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr552-serial-base-head-e2e-differential
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: 00c322079a34e2d0cd26c0609409321bbb39d214
+  HEAD_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+
+jobs:
+  full-e2e:
+    name: Serial full E2E — ${{ matrix.label }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: exact-base
+            sha: 00c322079a34e2d0cd26c0609409321bbb39d214
+          - label: exact-head
+            sha: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_JSON_OUTPUT_NAME: e2e-report.json
+
+    steps:
+      - name: Check out immutable target
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.sha }}
+          fetch-depth: 0
+
+      - name: Verify immutable target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "${{ matrix.sha }}"
+          git diff --check
+          test -f playwright.config.ts
+          test -f package-lock.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run the complete rendered-browser suite serially
+        id: e2e
+        shell: bash
+        run: |
+          set -o pipefail
+          set +e
+          npm run test:e2e -- --workers=1 --reporter=line,json 2>&1 | tee e2e.log
+          exit_code=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$exit_code" > e2e-exit-code.txt
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+          test -s e2e-report.json
+          exit 0
+
+      - name: Normalize machine-readable result
+        if: always()
+        shell: bash
+        env:
+          MATRIX_LABEL: ${{ matrix.label }}
+          TARGET_SHA: ${{ matrix.sha }}
+          E2E_EXIT_CODE: ${{ steps.e2e.outputs.exit_code }}
+        run: |
+          set -euo pipefail
+          test -s e2e-report.json
+          node <<'NODE'
+          const fs = require('node:fs');
+          const { execFileSync } = require('node:child_process');
+          const report = JSON.parse(fs.readFileSync('e2e-report.json', 'utf8'));
+          const records = [];
+          function visitSuite(suite, parents = []) {
+            const nextParents = suite.title ? [...parents, suite.title] : parents;
+            for (const spec of suite.specs ?? []) {
+              const specParents = spec.title ? [...nextParents, spec.title] : nextParents;
+              for (const test of spec.tests ?? []) {
+                const results = test.results ?? [];
+                const finalResult = results.at(-1) ?? null;
+                const status = finalResult?.status ?? test.status ?? 'unknown';
+                const expectedStatus = test.expectedStatus ?? 'passed';
+                const failed =
+                  test.status === 'unexpected' ||
+                  ['failed', 'timedOut', 'interrupted'].includes(status) ||
+                  (expectedStatus === 'passed' && status === 'failed');
+                const skipped = status === 'skipped' || test.status === 'skipped';
+                const key = [
+                  spec.file ?? suite.file ?? 'unknown-file',
+                  specParents.join(' › '),
+                  test.projectName ?? 'default',
+                ].join(' :: ');
+                records.push({ key, status, expectedStatus, failed, skipped });
+              }
+            }
+            for (const child of suite.suites ?? []) visitSuite(child, nextParents);
+          }
+          for (const suite of report.suites ?? []) visitSuite(suite);
+          if (records.length === 0) throw new Error('Playwright JSON report contained no tests.');
+          const failed = records.filter((record) => record.failed);
+          const skipped = records.filter((record) => record.skipped);
+          const summary = {
+            schemaVersion: 1,
+            label: process.env.MATRIX_LABEL,
+            targetSha: process.env.TARGET_SHA,
+            checkedOutSha: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
+            exitCode: Number.parseInt(process.env.E2E_EXIT_CODE || '255', 10),
+            totalTestRecords: records.length,
+            failedTestCount: failed.length,
+            skippedTestCount: skipped.length,
+            failedTests: failed,
+            command: 'npm run test:e2e -- --workers=1 --reporter=line,json',
+          };
+          fs.writeFileSync('e2e-summary.json', `${JSON.stringify(summary, null, 2)}\n`);
+          console.log(JSON.stringify({
+            label: summary.label,
+            total: summary.totalTestRecords,
+            failed: summary.failedTestCount,
+            skipped: summary.skippedTestCount,
+            exitCode: summary.exitCode,
+          }));
+          NODE
+
+      - name: Upload immutable run evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-serial-differential-${{ matrix.label }}-${{ github.run_id }}
+          path: |
+            e2e.log
+            e2e-exit-code.txt
+            e2e-report.json
+            e2e-summary.json
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
+
+  compare:
+    name: Prove serial full-suite non-regression
+    needs: full-e2e
+    if: always()
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download immutable summaries
+        uses: actions/download-artifact@v4
+        with:
+          pattern: pr552-serial-differential-*
+          path: evidence
+          merge-multiple: false
+
+      - name: Compare exact base and head
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_summary="$(find evidence -path '*exact-base*' -name e2e-summary.json -print -quit)"
+          head_summary="$(find evidence -path '*exact-head*' -name e2e-summary.json -print -quit)"
+          test -n "$base_summary"
+          test -n "$head_summary"
+          BASE_SUMMARY="$base_summary" HEAD_SUMMARY="$head_summary" node <<'NODE'
+          const fs = require('node:fs');
+          const base = JSON.parse(fs.readFileSync(process.env.BASE_SUMMARY, 'utf8'));
+          const head = JSON.parse(fs.readFileSync(process.env.HEAD_SUMMARY, 'utf8'));
+          if (base.targetSha !== process.env.BASE_SHA) throw new Error(`Base SHA mismatch: ${base.targetSha}`);
+          if (head.targetSha !== process.env.HEAD_SHA) throw new Error(`Head SHA mismatch: ${head.targetSha}`);
+          const baseFailures = new Set(base.failedTests.map((record) => record.key));
+          const headFailures = new Set(head.failedTests.map((record) => record.key));
+          const sharedFailures = [...headFailures].filter((key) => baseFailures.has(key)).sort();
+          const headOnlyFailures = [...headFailures].filter((key) => !baseFailures.has(key)).sort();
+          const baseOnlyFailures = [...baseFailures].filter((key) => !headFailures.has(key)).sort();
+          const comparison = {
+            schemaVersion: 1,
+            baseSha: base.targetSha,
+            headSha: head.targetSha,
+            command: head.command,
+            base: {
+              totalTestRecords: base.totalTestRecords,
+              failedTestCount: base.failedTestCount,
+              skippedTestCount: base.skippedTestCount,
+              exitCode: base.exitCode,
+            },
+            head: {
+              totalTestRecords: head.totalTestRecords,
+              failedTestCount: head.failedTestCount,
+              skippedTestCount: head.skippedTestCount,
+              exitCode: head.exitCode,
+            },
+            sharedFailureCount: sharedFailures.length,
+            baseOnlyFailureCount: baseOnlyFailures.length,
+            headOnlyFailureCount: headOnlyFailures.length,
+            sharedFailures,
+            baseOnlyFailures,
+            headOnlyFailures,
+            nonRegressing: headOnlyFailures.length === 0,
+          };
+          fs.writeFileSync('comparison.json', `${JSON.stringify(comparison, null, 2)}\n`);
+          fs.writeFileSync('comparison.md', [
+            '# PR 552 serial exact full-E2E differential',
+            '',
+            `- Base: \`${comparison.baseSha}\` — ${comparison.base.failedTestCount} failed / ${comparison.base.totalTestRecords}`,
+            `- Head: \`${comparison.headSha}\` — ${comparison.head.failedTestCount} failed / ${comparison.head.totalTestRecords}`,
+            `- Shared failures: ${comparison.sharedFailureCount}`,
+            `- Base-only failures: ${comparison.baseOnlyFailureCount}`,
+            `- Head-only failures: ${comparison.headOnlyFailureCount}`,
+            `- Non-regressing: **${comparison.nonRegressing}**`,
+            '',
+            '## Head-only failures',
+            '',
+            ...(comparison.headOnlyFailures.length ? comparison.headOnlyFailures.map((key) => `- ${key}`) : ['None.']),
+            '',
+          ].join('\n'));
+          console.log(JSON.stringify(comparison, null, 2));
+          if (!comparison.nonRegressing) {
+            throw new Error(`Head introduced ${comparison.headOnlyFailureCount} serial full-suite failure(s).`);
+          }
+          NODE
+
+      - name: Upload exact comparison evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-serial-base-head-comparison-${{ github.run_id }}
+          path: |
+            comparison.json
+            comparison.md
+          if-no-files-found: error
+          retention-days: 14
