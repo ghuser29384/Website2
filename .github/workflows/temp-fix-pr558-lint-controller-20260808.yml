@@ -1,4 +1,4 @@
-name: Temporary repair PR 558 lint defect
+name: Temporary repair PR 558 public-terms QA fixture
 
 on:
   push:
@@ -11,19 +11,14 @@ permissions:
 jobs:
   repair:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 25
     env:
-      EXPECTED_HEAD_SHA: 93de460b9231bd1cdbe52f18ea3ad51562ddf96e
+      EXPECTED_HEAD_SHA: d10b836900e862d46640b3c826f219a9f1fe87e0
       TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
-      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
-      SITE_URL: https://www.moraltrade.org
-      VERCEL: "1"
-      VERCEL_ENV: preview
-      CONDITIONAL_PAYMENTS_MODE: disabled
-      TRADE_DONATION_POOL_ENABLED: "false"
-      TRADE_DONATION_POOL_MODE: disabled
-      DIRECT_DONATION_UPGRADES_ENABLED: "false"
-      DIRECT_DONATION_UPGRADE_MODE: disabled
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
 
     steps:
       - name: Check out the exact PR head branch
@@ -32,13 +27,7 @@ jobs:
           ref: ${{ env.TARGET_BRANCH }}
           fetch-depth: 0
 
-      - name: Use Node 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Verify exact head and repair only the observed React purity defect
+      - name: Verify exact head and repair only the observed constraint mismatch
         shell: bash
         run: |
           set -euo pipefail
@@ -46,107 +35,85 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          page_path = Path("src/app/mpgf/admin/dac-lifecycle/page.tsx")
-          page = page_path.read_text()
-          old_page = (
-              "  const authorization = workspace?.reviewerAuthorization ?? null;\n"
-              "  const reviewerAuthorized = Boolean(\n"
-              "    authorization?.active &&\n"
-              "    (!authorization.expiresAt || Date.parse(authorization.expiresAt) > Date.now()),\n"
-              "  );\n"
-          )
-          new_page = (
-              "  const authorization = workspace?.reviewerAuthorization ?? null;\n"
-              "  const reviewerAuthorized = Boolean(authorization?.currentlyAuthorized);\n"
-          )
-          if page.count(old_page) != 1:
-              raise SystemExit("Expected exactly one reviewer authorization render-time clock block.")
-          page = page.replace(old_page, new_page)
-          if "Date.now()" in page:
-              raise SystemExit("Render-time Date.now() remained in the reviewer page.")
-          page_path.write_text(page)
+          path = Path("supabase/tests/mpgf_dac_public_terms_api.sql")
+          source = path.read_text()
 
-          model_path = Path("src/lib/mpgf/dac-lifecycle-model.ts")
-          model = model_path.read_text()
-          old_model = "    active: boolean;\n    rationale: string;\n"
-          new_model = "    active: boolean;\n    currentlyAuthorized: boolean;\n    rationale: string;\n"
-          if model.count(old_model) != 1:
-              raise SystemExit("Expected exactly one reviewer authorization model block.")
-          model_path.write_text(model.replace(old_model, new_model))
+          old_policy = '    "eligibilityPolicy":{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"},\n'
+          new_policy = (
+              '    "eligibilityPolicy":{\n'
+              '      "policyVersion":"mpgf_failure_bonus_eligibility_v0_1",\n'
+              '      "contributorIdentityRule":"verified_unique_person",\n'
+              '      "contributionTimingRule":"captured_before_deadline",\n'
+              '      "relatedPartyRule":"exclude_creator_and_related_parties",\n'
+              '      "paymentIntegrityRule":"exclude_duplicate_reversed_disputed_or_fraudulent",\n'
+              '      "bonusBasis":"eligible_contribution",\n'
+              '      "maxParticipants":100,\n'
+              '      "maxBonusPerParticipantCents":2500\n'
+              '    },\n'
+          )
+          if source.count(old_policy) != 1:
+              raise SystemExit("Expected exactly one incomplete schedule eligibility policy.")
+          source = source.replace(old_policy, new_policy)
 
-          loader_path = Path("src/lib/mpgf/dac-lifecycle.ts")
-          loader = loader_path.read_text()
-          old_loader_prelude = (
-              "  const reviewerRow = reviewerResult.data as Record<string, unknown> | null;\n"
-              "\n"
-              "  return {\n"
+          old_rationale = '      "rationale":"Synthetic provisional quote",\n'
+          new_rationale = (
+              '      "rationale":"Provisional threshold 1 experience-rated quote; '
+              'operator approval remains required.",\n'
           )
-          new_loader_prelude = (
-              "  const reviewerRow = reviewerResult.data as Record<string, unknown> | null;\n"
-              "  const reviewerExpiresAt = reviewerRow ? nullableString(reviewerRow.expires_at) : null;\n"
-              "  const reviewerCurrentlyAuthorized = Boolean(\n"
-              "    reviewerRow?.active &&\n"
-              "    (!reviewerExpiresAt || Date.parse(reviewerExpiresAt) > Date.now()),\n"
-              "  );\n"
-              "\n"
-              "  return {\n"
-          )
-          if loader.count(old_loader_prelude) != 1:
-              raise SystemExit("Expected exactly one reviewer loader return prelude.")
-          loader = loader.replace(old_loader_prelude, new_loader_prelude)
+          if source.count(old_rationale) != 1:
+              raise SystemExit("Expected exactly one non-canonical provisional rationale.")
+          source = source.replace(old_rationale, new_rationale)
 
-          old_loader_fields = (
-              "      active: Boolean(reviewerRow.active),\n"
-              "      rationale: String(reviewerRow.rationale ?? \"\"),\n"
-              "      authorizedAt: String(reviewerRow.authorized_at ?? \"\"),\n"
-              "      expiresAt: nullableString(reviewerRow.expires_at),\n"
-          )
-          new_loader_fields = (
-              "      active: Boolean(reviewerRow.active),\n"
-              "      currentlyAuthorized: reviewerCurrentlyAuthorized,\n"
-              "      rationale: String(reviewerRow.rationale ?? \"\"),\n"
-              "      authorizedAt: String(reviewerRow.authorized_at ?? \"\"),\n"
-              "      expiresAt: reviewerExpiresAt,\n"
-          )
-          if loader.count(old_loader_fields) != 1:
-              raise SystemExit("Expected exactly one reviewer authorization mapping block.")
-          loader = loader.replace(old_loader_fields, new_loader_fields)
-          if loader.count("currentlyAuthorized") != 1:
-              raise SystemExit("Expected one mapped currentlyAuthorized field.")
-          loader_path.write_text(loader)
+          if source.count('"contributorIdentityRule":"verified_unique_person"') != 2:
+              raise SystemExit("The proposal and schedule must contain the same full eligibility policy.")
+          if source.count("Provisional threshold 1 experience-rated quote; operator approval remains required.") != 1:
+              raise SystemExit("The canonical pending-review rationale was not installed exactly once.")
+
+          path.write_text(source)
           PY
 
           git diff --check
-          git diff -- \
-            src/app/mpgf/admin/dac-lifecycle/page.tsx \
-            src/lib/mpgf/dac-lifecycle-model.ts \
-            src/lib/mpgf/dac-lifecycle.ts
+          git diff -- supabase/tests/mpgf_dac_public_terms_api.sql
 
-      - name: Install exact dependencies
-        run: npm ci
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
 
-      - name: Run focused product contracts
+      - name: Verify the exact TLS-only isolated QA target
         shell: bash
         run: |
           set -euo pipefail
-          node --import tsx --test \
-            src/lib/mpgf/dac-lifecycle-model.test.ts \
-            src/lib/mpgf/dac-public-terms-migration.test.ts \
-            src/lib/mpgf/dac-product-lifecycle.test.ts
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
 
-      - name: Run complete repository tests
-        run: npm test
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only Moral Trade QA target.")
+          PY
 
-      - name: Run repository lint
-        run: npm run lint -- --quiet
+      - name: Prove the repaired rollback-only public-terms regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_public_terms_api.sql
 
-      - name: Run strict TypeScript
-        run: npx tsc --noEmit
-
-      - name: Build the production application
-        run: npm run build
-
-      - name: Commit the narrowly scoped repair and update the PR branch
+      - name: Commit the narrowly scoped fixture repair and update the PR branch
         shell: bash
         run: |
           set -euo pipefail
@@ -154,9 +121,6 @@ jobs:
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            src/app/mpgf/admin/dac-lifecycle/page.tsx \
-            src/lib/mpgf/dac-lifecycle-model.ts \
-            src/lib/mpgf/dac-lifecycle.ts
-          git commit -m "fix(mpgf): evaluate reviewer expiry outside render"
+          git add supabase/tests/mpgf_dac_public_terms_api.sql
+          git commit -m "test(mpgf): align public terms fixture with frozen schedule constraints"
           git push origin "HEAD:${TARGET_BRANCH}"
