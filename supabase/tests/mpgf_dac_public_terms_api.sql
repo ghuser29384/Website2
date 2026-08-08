@@ -153,7 +153,16 @@ insert into public.mpgf_pool_proposals (
     "policyVersion":"mpgf_failure_bonus_success_premium_v0_1",
     "premiumPayer":"pool_creator_or_sponsor",
     "premiumIncludedInNetRecipientThreshold":false,
-    "eligibilityPolicy":{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"},
+    "eligibilityPolicy":{
+      "policyVersion":"mpgf_failure_bonus_eligibility_v0_1",
+      "contributorIdentityRule":"verified_unique_person",
+      "contributionTimingRule":"captured_before_deadline",
+      "relatedPartyRule":"exclude_creator_and_related_parties",
+      "paymentIntegrityRule":"exclude_duplicate_reversed_disputed_or_fraudulent",
+      "bonusBasis":"eligible_contribution",
+      "maxParticipants":100,
+      "maxBonusPerParticipantCents":2500
+    },
     "thresholds":[{
       "thresholdId":"qa-public-terms-threshold-1",
       "thresholdIndex":1,
@@ -167,7 +176,7 @@ insert into public.mpgf_pool_proposals (
       "premiumIncludedInNetRecipientThreshold":false,
       "pricingMode":"experience_rated",
       "provisional":true,
-      "rationale":"Synthetic provisional quote",
+      "rationale":"Provisional threshold 1 experience-rated quote; operator approval remains required.",
       "assumptions":{
         "successProbabilityBps":7500,
         "failureBonusRateBps":1000,
