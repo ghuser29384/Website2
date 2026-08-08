@@ -54,7 +54,8 @@ test("approved Feed drafts enter only the exact source counterparty's private de
   assert.match(deliveryMigration, /moral_trade_private\.pair_is_blocked/);
   assert.match(deliveryMigration, /insert into public\.trade_counterproposals/);
   assert.match(deliveryMigration, /Approved and delivered privately as a source-bound counterproposal/);
-  assert.doesNotMatch(deliveryMigration, /workflow_status\s*=\s*'published'/);
+  assert.match(deliveryMigration, /status = 'closed', workflow_status = 'closed'/);
+  assert.match(deliveryMigration, /published_at = null/);
   assert.match(deliveryMigration, /revoke all on function public\.moral_trade_feed_create_deliver_service[\s\S]*authenticated/);
   assert.match(deliveryMigration, /grant execute[\s\S]*to service_role/);
 });
