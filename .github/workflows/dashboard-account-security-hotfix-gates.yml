@@ -11,6 +11,7 @@ on:
     paths:
       - "src/app/dashboard/dashboard-account-security.css"
       - "src/app/dashboard/layout.tsx"
+      - "src/app/dashboard/page.tsx"
       - "src/components/dashboard/background-account-security-panel.tsx"
       - "src/dashboard-account-security-visibility.test.ts"
       - "tests/dashboard-account-security-visibility.spec.ts"
@@ -94,6 +95,7 @@ jobs:
           .github/workflows/dashboard-account-security-hotfix-gates.yml
           src/app/dashboard/dashboard-account-security.css
           src/app/dashboard/layout.tsx
+          src/app/dashboard/page.tsx
           src/dashboard-account-security-visibility.test.ts
           tests/dashboard-account-security-visibility.spec.ts
           EOF
