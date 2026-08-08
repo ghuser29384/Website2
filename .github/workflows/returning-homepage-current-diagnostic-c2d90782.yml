@@ -1,0 +1,453 @@
+name: Returning homepage current diagnostic c2d90782
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/returning-homepage-current-diagnostic-c2d90782.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: returning-homepage-current-diagnostic-c2d90782
+  cancel-in-progress: true
+
+env:
+  PRODUCT_SHA: c2d907827c4c7086fb66973bbe3d9619f1856f99
+  CONTROLLER_BRANCH: qa/returning-homepage-current-diagnostic-c2d90782
+  CONTROLLER_PATH: .github/workflows/returning-homepage-current-diagnostic-c2d90782.yml
+  EVIDENCE_DIR: returning-homepage-current-diagnostic-c2d90782
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+
+    steps:
+      - name: Guard immutable product and one-file controller scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.head.ref }}' = "$CONTROLLER_BRANCH"
+          test '${{ github.event.pull_request.base.ref }}' = 'main'
+          test '${{ github.event.pull_request.base.sha }}' = "$PRODUCT_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$PRODUCT_SHA"
+
+          actual_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename')"
+          test "$actual_files" = "$CONTROLLER_PATH"
+
+      - name: Check out immutable current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 1
+
+      - name: Prove checkout and source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test -f public/moral-trade-live.html
+          test -f public/moral-trade-live-local-time.js
+          test -f public/moral-trade-live-now.js
+          test -f tests/returning-homepage.spec.ts
+          test -f tests/returning-homepage-timezone.spec.ts
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$PRODUCT_SHA" > "$EVIDENCE_DIR/product-sha.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Write bounded returning-homepage diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > tests/returning-homepage-current-diagnostic-c2d90782.spec.ts <<'TS'
+          import { mkdir, writeFile } from "node:fs/promises";
+          import path from "node:path";
+
+          import { expect, test, type Page } from "@playwright/test";
+
+          const evidenceDir =
+            process.env.EVIDENCE_DIR ?? "returning-homepage-current-diagnostic-c2d90782";
+          const crossZoneInstant = new Date("2026-07-17T01:30:00.000Z");
+
+          interface EventEvidence {
+            consoleErrors: string[];
+            consoleWarnings: string[];
+            pageErrors: string[];
+            failedRequests: string[];
+            httpErrors: string[];
+          }
+
+          function observe(page: Page): EventEvidence {
+            const evidence: EventEvidence = {
+              consoleErrors: [],
+              consoleWarnings: [],
+              pageErrors: [],
+              failedRequests: [],
+              httpErrors: [],
+            };
+
+            page.on("console", (message) => {
+              if (message.type() === "error") evidence.consoleErrors.push(message.text());
+              if (message.type() === "warning") evidence.consoleWarnings.push(message.text());
+            });
+            page.on("pageerror", (error) => {
+              evidence.pageErrors.push(error.stack || error.message);
+            });
+            page.on("requestfailed", (request) => {
+              evidence.failedRequests.push(
+                `${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? "unknown"}`,
+              );
+            });
+            page.on("response", (response) => {
+              const pageOrigin = page.url().startsWith("http") ? new URL(page.url()).origin : "";
+              if (
+                response.status() >= 400 &&
+                pageOrigin &&
+                new URL(response.url()).origin === pageOrigin
+              ) {
+                evidence.httpErrors.push(
+                  `${response.status()} ${response.request().method()} ${response.url()}`,
+                );
+              }
+            });
+
+            return evidence;
+          }
+
+          async function openHome(page: Page) {
+            await page.goto("/", { waitUntil: "domcontentloaded" });
+            await expect(page.locator("main#app")).toBeVisible({ timeout: 30_000 });
+            await expect(page.locator("body")).not.toBeEmpty({ timeout: 30_000 });
+            await page.waitForLoadState("load").catch(() => undefined);
+            await page.waitForTimeout(1_000);
+          }
+
+          async function currentSnapshot(page: Page) {
+            return page.evaluate(() => {
+              const summarize = (element: Element | null) => {
+                if (!element) return null;
+                const html = element as HTMLElement;
+                const rect = html.getBoundingClientRect();
+                const style = getComputedStyle(html);
+                return {
+                  tag: element.tagName.toLowerCase(),
+                  id: html.id,
+                  className: html.className,
+                  text: (html.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 4_000),
+                  visible:
+                    style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    Number(style.opacity) !== 0 &&
+                    rect.width > 0 &&
+                    rect.height > 0,
+                  rect: {
+                    x: rect.x,
+                    y: rect.y,
+                    width: rect.width,
+                    height: rect.height,
+                  },
+                  attributes: Object.fromEntries(
+                    [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
+                  ),
+                  outerHTML: html.outerHTML.slice(0, 20_000),
+                };
+              };
+
+              const describeControl = (element: Element) => {
+                const html = element as HTMLInputElement | HTMLButtonElement | HTMLAnchorElement;
+                const rect = html.getBoundingClientRect();
+                const style = getComputedStyle(html);
+                const labelledBy = html.getAttribute("aria-labelledby");
+                const labelledByText = labelledBy
+                  ? labelledBy
+                      .split(/\s+/)
+                      .map((id) => document.getElementById(id)?.textContent ?? "")
+                      .join(" ")
+                  : "";
+                return {
+                  tag: element.tagName.toLowerCase(),
+                  id: html.id,
+                  className: html.className,
+                  text: (html.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 600),
+                  accessibleLabel: [
+                    html.getAttribute("aria-label"),
+                    labelledByText,
+                    html.getAttribute("title"),
+                    html.getAttribute("alt"),
+                    html.textContent,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .replace(/\s+/g, " ")
+                    .trim()
+                    .slice(0, 800),
+                  href: html instanceof HTMLAnchorElement ? html.href : null,
+                  type: html.getAttribute("type"),
+                  value: "value" in html ? html.value : null,
+                  disabled: "disabled" in html ? html.disabled : null,
+                  visible:
+                    style.display !== "none" &&
+                    style.visibility !== "hidden" &&
+                    Number(style.opacity) !== 0 &&
+                    rect.width > 0 &&
+                    rect.height > 0,
+                  attributes: Object.fromEntries(
+                    [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
+                  ),
+                };
+              };
+
+              const localDateContainers = [...document.querySelectorAll(".head .date")];
+              const liveNowRoot = document.querySelector("[data-mt-live-now]");
+              const recommendationCards = [
+                ...document.querySelectorAll("[data-mt-live-now-recommendation]"),
+              ];
+              const allDataAttributes = [...document.querySelectorAll("*")]
+                .flatMap((element) =>
+                  [...element.attributes]
+                    .filter(
+                      (attribute) =>
+                        attribute.name.startsWith("data-mt-") ||
+                        attribute.name === "data-testid",
+                    )
+                    .map((attribute) => ({
+                      tag: element.tagName.toLowerCase(),
+                      name: attribute.name,
+                      value: attribute.value,
+                      text: (element.textContent ?? "")
+                        .replace(/\s+/g, " ")
+                        .trim()
+                        .slice(0, 300),
+                    })),
+                )
+                .slice(0, 400);
+
+              return {
+                url: location.href,
+                title: document.title,
+                readyState: document.readyState,
+                bodyText: (document.body.textContent ?? "")
+                  .replace(/\s+/g, " ")
+                  .trim()
+                  .slice(0, 20_000),
+                mainApp: summarize(document.querySelector("main#app")),
+                liveNowRoot: summarize(liveNowRoot),
+                liveNowState:
+                  liveNowRoot?.getAttribute("data-mt-live-now-state") ??
+                  liveNowRoot?.getAttribute("data-state") ??
+                  null,
+                documentHeading: summarize(document.querySelector("#mt-live-document-heading")),
+                headings: [...document.querySelectorAll("h1, h2, h3")]
+                  .slice(0, 120)
+                  .map(summarize),
+                navigation: [...document.querySelectorAll("nav")].slice(0, 30).map(summarize),
+                landmarks: [...document.querySelectorAll("main, header, footer, aside")]
+                  .slice(0, 100)
+                  .map(summarize),
+                localDateContainers: localDateContainers.map(summarize),
+                localTimes: [
+                  ...document.querySelectorAll(
+                    'time[data-mt-local-date="true"], [data-mt-local-date-time]',
+                  ),
+                ].map(summarize),
+                greetings: [...document.querySelectorAll('[data-mt-local-greeting="true"]')].map(
+                  summarize,
+                ),
+                recommendationCards: recommendationCards.slice(0, 20).map(summarize),
+                controls: [
+                  ...document.querySelectorAll(
+                    'button, a[href], input, select, textarea, [role="button"], [role="tab"]',
+                  ),
+                ]
+                  .slice(0, 260)
+                  .map(describeControl),
+                forms: [...document.querySelectorAll("form")].slice(0, 40).map(summarize),
+                dataAttributes: allDataAttributes,
+                scripts: [...document.scripts]
+                  .map((script) => script.src)
+                  .filter(Boolean)
+                  .slice(0, 120),
+                dimensions: {
+                  innerWidth: window.innerWidth,
+                  innerHeight: window.innerHeight,
+                  clientWidth: document.documentElement.clientWidth,
+                  clientHeight: document.documentElement.clientHeight,
+                  scrollWidth: document.documentElement.scrollWidth,
+                  scrollHeight: document.documentElement.scrollHeight,
+                },
+              };
+            });
+          }
+
+          async function record(
+            page: Page,
+            events: EventEvidence,
+            label: string,
+            extra: Record<string, unknown> = {},
+          ) {
+            await mkdir(evidenceDir, { recursive: true });
+            const snapshot = await currentSnapshot(page);
+            await writeFile(
+              path.join(evidenceDir, `${label}.json`),
+              `${JSON.stringify(
+                {
+                  label,
+                  recordedAt: new Date().toISOString(),
+                  snapshot,
+                  events: structuredClone(events),
+                  extra,
+                },
+                null,
+                2,
+              )}\n`,
+              "utf8",
+            );
+            await page.screenshot({ path: path.join(evidenceDir, `${label}.png`), fullPage: true });
+          }
+
+          async function exerciseDisclosure(page: Page) {
+            return page.evaluate(() => {
+              const candidates = [
+                ...document.querySelectorAll('button, [role="button"]'),
+              ] as HTMLElement[];
+              const button = candidates.find((candidate) => {
+                const rect = candidate.getBoundingClientRect();
+                const style = getComputedStyle(candidate);
+                const label = `${candidate.getAttribute("aria-label") ?? ""} ${
+                  candidate.getAttribute("title") ?? ""
+                } ${candidate.textContent ?? ""}`
+                  .replace(/\s+/g, " ")
+                  .trim();
+                const isVisible =
+                  style.display !== "none" &&
+                  style.visibility !== "hidden" &&
+                  Number(style.opacity) !== 0 &&
+                  rect.width > 0 &&
+                  rect.height > 0;
+                return (
+                  isVisible &&
+                  /why|detail|explain|show more|more info|how (?:it|this)|view reason/i.test(label)
+                );
+              });
+
+              if (!button) return { attempted: false, reason: "No safe disclosure control found" };
+              const before = {
+                label: `${button.getAttribute("aria-label") ?? ""} ${button.textContent ?? ""}`
+                  .replace(/\s+/g, " ")
+                  .trim(),
+                expanded: button.getAttribute("aria-expanded"),
+                pressed: button.getAttribute("aria-pressed"),
+                html: button.outerHTML.slice(0, 4_000),
+              };
+              button.click();
+              return { attempted: true, before };
+            });
+          }
+
+          test.describe("current returning homepage desktop and mobile", () => {
+            test.use({ timezoneId: "UTC" });
+
+            test("records the desktop adaptive-home contract and safe disclosure interaction", async ({
+              page,
+            }) => {
+              const events = observe(page);
+              await page.setViewportSize({ width: 1487, height: 1058 });
+              await page.clock.setFixedTime(new Date("2026-07-16T15:00:00.000Z"));
+              await openHome(page);
+              await record(page, events, "desktop-initial");
+
+              const interaction = await exerciseDisclosure(page);
+              if (interaction.attempted) await page.waitForTimeout(500);
+              await record(page, events, "desktop-after-disclosure", { interaction });
+            });
+
+            test("records the 390 by 844 mobile adaptive-home contract", async ({ page }) => {
+              const events = observe(page);
+              await page.setViewportSize({ width: 390, height: 844 });
+              await page.clock.setFixedTime(new Date("2026-07-16T15:00:00.000Z"));
+              await openHome(page);
+              await record(page, events, "mobile");
+            });
+          });
+
+          test.describe("current returning homepage in America/Los_Angeles", () => {
+            test.use({ timezoneId: "America/Los_Angeles" });
+
+            test("records the previous local calendar date and evening greeting", async ({ page }) => {
+              const events = observe(page);
+              await page.clock.setFixedTime(crossZoneInstant);
+              await openHome(page);
+              await record(page, events, "los-angeles");
+            });
+          });
+
+          test.describe("current returning homepage in Asia/Tokyo", () => {
+            test.use({ timezoneId: "Asia/Tokyo" });
+
+            test("records the next local calendar date and morning greeting", async ({ page }) => {
+              const events = observe(page);
+              await page.clock.setFixedTime(crossZoneInstant);
+              await openHome(page);
+              await record(page, events, "tokyo");
+            });
+          });
+
+          test.describe("current returning homepage local-time refresh", () => {
+            test.use({ timezoneId: "UTC" });
+
+            test("records greeting and date before and after the local boundary", async ({ page }) => {
+              const events = observe(page);
+              await page.clock.setFixedTime(new Date("2026-07-16T17:59:00.000Z"));
+              await openHome(page);
+              await record(page, events, "utc-before-boundary");
+
+              await page.clock.setFixedTime(new Date("2026-07-17T00:01:00.000Z"));
+              await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+              await page.waitForTimeout(500);
+              await record(page, events, "utc-after-boundary");
+            });
+          });
+          TS
+
+      - name: Run current returning-homepage diagnostic
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test tests/returning-homepage-current-diagnostic-c2d90782.spec.ts \
+            --workers=1 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/playwright.log"
+
+      - name: Upload immutable diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: returning-homepage-current-diagnostic-c2d90782
+          path: |
+            returning-homepage-current-diagnostic-c2d90782
+            test-results
+          if-no-files-found: error
+          retention-days: 14
