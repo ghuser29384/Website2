@@ -1,0 +1,306 @@
+name: PR 552 exact Preview MFA finalizer
+
+on:
+  push:
+    branches:
+      - ops/pr552-mfa-refresh-finalizer-20260808
+    paths:
+      - .github/workflows/pr552-mfa-refresh-finalizer-20260808.yml
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr552-mfa-refresh-finalizer-20260808
+  cancel-in-progress: false
+
+env:
+  QA_BRANCH: ops/pr552-mfa-refresh-exact-preview-qa-20260808
+  QA_WORKFLOW_NAME: PR 552 refreshed exact Preview MFA lifecycle
+  TARGET_BRANCH: hotfix/dashboard-account-security-visible-20260807
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  EXPECTED_RELEASE_REASON: pr552-dashboard-account-security-preview-mfa-refresh-fixed
+  STATUS_DIR: pr552-finalizer
+
+jobs:
+  finalize:
+    name: Adjudicate exact Preview evidence and ready the PR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 115
+    steps:
+      - name: Check out the finalizer branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Wait for the exact Preview MFA QA conclusion
+        id: qa
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$STATUS_DIR" "$RUNNER_TEMP/pr552-finalizer-artifact"
+          run_id=''
+          conclusion=''
+          run_url=''
+          for attempt in $(seq 1 1350); do
+            response="$(curl -fsS \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              "https://api.github.com/repos/ghuser29384/Website2/actions/runs?branch=${QA_BRANCH}&per_page=30")"
+            run="$(jq -c --arg workflow "$QA_WORKFLOW_NAME" \
+              '[.workflow_runs[] | select(.name == $workflow)] | sort_by(.created_at) | reverse | .[0] // empty' \
+              <<<"$response")"
+            if [[ -n "$run" ]]; then
+              status="$(jq -r '.status' <<<"$run")"
+              if [[ "$status" = 'completed' ]]; then
+                run_id="$(jq -r '.id' <<<"$run")"
+                conclusion="$(jq -r '.conclusion' <<<"$run")"
+                run_url="$(jq -r '.html_url' <<<"$run")"
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test -n "$run_id"
+          printf '%s\n' "$run_id" | tee "$STATUS_DIR/qa-run-id.txt"
+          printf '%s\n' "$conclusion" | tee "$STATUS_DIR/qa-conclusion.txt"
+          printf '%s\n' "$run_url" | tee "$STATUS_DIR/qa-run-url.txt"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+
+      - name: Download and inspect the immutable QA artifact
+        id: evidence
+        if: ${{ steps.qa.outputs.conclusion == 'success' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          run_id="${{ steps.qa.outputs.run_id }}"
+          artifacts="$(curl -fsS \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/ghuser29384/Website2/actions/runs/${run_id}/artifacts")"
+          artifact="$(jq -c --arg name "pr552-mfa-refresh-exact-preview-qa-${run_id}" \
+            '.artifacts[] | select(.name == $name and (.expired | not))' <<<"$artifacts")"
+          test -n "$artifact"
+          artifact_id="$(jq -r '.id' <<<"$artifact")"
+          artifact_digest="$(jq -r '.digest' <<<"$artifact")"
+          archive="$RUNNER_TEMP/pr552-finalizer-artifact.zip"
+          curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/ghuser29384/Website2/actions/artifacts/${artifact_id}/zip" \
+            -o "$archive"
+          unzip -q "$archive" -d "$RUNNER_TEMP/pr552-finalizer-artifact"
+          summary="$(find "$RUNNER_TEMP/pr552-finalizer-artifact" -type f -name verified-summary.json -print -quit)"
+          candidate_file="$(find "$RUNNER_TEMP/pr552-finalizer-artifact" -type f -name candidate-sha.txt -print -quit)"
+          deployment_file="$(find "$RUNNER_TEMP/pr552-finalizer-artifact" -type f -name deployment-id.txt -print -quit)"
+          preview_file="$(find "$RUNNER_TEMP/pr552-finalizer-artifact" -type f -name preview-origin.txt -print -quit)"
+          deployment_json="$(find "$RUNNER_TEMP/pr552-finalizer-artifact" -type f -name exact-deployment.json -print -quit)"
+          test -s "$summary"
+          test -s "$candidate_file"
+          test -s "$deployment_file"
+          test -s "$preview_file"
+          test -s "$deployment_json"
+          candidate="$(tr -d '\r\n' < "$candidate_file")"
+          deployment_id="$(tr -d '\r\n' < "$deployment_file")"
+          preview_origin="$(tr -d '\r\n' < "$preview_file")"
+          [[ "$candidate" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$deployment_id" =~ ^dpl_[A-Za-z0-9]+$ ]]
+          case "$preview_origin" in https://*.vercel.app) ;; *) exit 1 ;; esac
+          jq -e \
+            --arg candidate "$candidate" \
+            --arg deploymentId "$deployment_id" '
+              .candidateSha == $candidate
+              and .deploymentId == $deploymentId
+              and .desktop.verifiedFactors == 1
+              and .desktop.sessionLevel == "aal2"
+              and .mobile.verifiedFactors == 1
+              and .mobile.sessionLevel == "aal2"
+              and .exactSingleNewFactor == true
+              and .temporaryUserAbsent == true
+              and .independentCleanupProvedAbsence == true
+              and .vercelBypassRevoked == true
+            ' "$summary" >/dev/null
+          jq -e \
+            --arg deploymentId "$deployment_id" \
+            --arg projectId "$VERCEL_PROJECT_ID" \
+            --arg candidate "$candidate" \
+            --arg releaseReason "$EXPECTED_RELEASE_REASON" '
+              ((.uid // .id) == $deploymentId)
+              and ((.projectId // .project.id // "") == $projectId)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // null) == null)
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitSha == $candidate)
+              and (.meta.moralTradeCandidateSha == $candidate)
+              and (.meta.releaseReason == $releaseReason)
+            ' "$deployment_json" >/dev/null
+          cp "$summary" "$STATUS_DIR/verified-summary.json"
+          jq -n \
+            --arg runId "$run_id" \
+            --arg runUrl "${{ steps.qa.outputs.run_url }}" \
+            --arg artifactId "$artifact_id" \
+            --arg artifactDigest "$artifact_digest" \
+            --arg candidateSha "$candidate" \
+            --arg deploymentId "$deployment_id" \
+            --arg previewOrigin "$preview_origin" \
+            '{schemaVersion:1,status:"success",qaRunId:($runId|tonumber),qaRunUrl:$runUrl,artifactId:($artifactId|tonumber),artifactDigest:$artifactDigest,candidateSha:$candidateSha,deploymentId:$deploymentId,previewOrigin:$previewOrigin,productionChanged:false}' \
+            > "$STATUS_DIR/status.json"
+          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "preview_origin=$preview_origin" >> "$GITHUB_OUTPUT"
+          echo "artifact_id=$artifact_id" >> "$GITHUB_OUTPUT"
+          echo "artifact_digest=$artifact_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Fail closed when exact QA did not pass
+        if: ${{ steps.qa.outputs.conclusion != 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg conclusion "${{ steps.qa.outputs.conclusion }}" \
+            --arg runId "${{ steps.qa.outputs.run_id }}" \
+            --arg runUrl "${{ steps.qa.outputs.run_url }}" \
+            '{schemaVersion:1,status:"failure",conclusion:$conclusion,qaRunId:($runId|tonumber),qaRunUrl:$runUrl,prChanged:false,productionChanged:false}' \
+            > "$STATUS_DIR/status.json"
+
+      - name: Guard that the proved candidate is still the live PR head
+        if: ${{ steps.qa.outputs.conclusion == 'success' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          response="$(curl -fsS \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            'https://api.github.com/repos/ghuser29384/Website2/pulls/552')"
+          test "$(jq -r '.state' <<<"$response")" = 'open'
+          test "$(jq -r '.draft' <<<"$response")" = 'true'
+          test "$(jq -r '.head.ref' <<<"$response")" = "$TARGET_BRANCH"
+          test "$(jq -r '.head.repo.full_name' <<<"$response")" = 'ghuser29384/Website2'
+          test "$(jq -r '.base.ref' <<<"$response")" = 'main'
+          test "$(jq -r '.head.sha' <<<"$response")" = "${{ steps.evidence.outputs.candidate }}"
+          printf '%s\n' "$(jq -r '.node_id' <<<"$response")" > "$STATUS_DIR/pr-node-id.txt"
+
+      - name: Record exact Preview proof on PR 552 and mark it ready
+        if: ${{ steps.qa.outputs.conclusion == 'success' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          candidate="${{ steps.evidence.outputs.candidate }}"
+          deployment_id="${{ steps.evidence.outputs.deployment_id }}"
+          preview_origin="${{ steps.evidence.outputs.preview_origin }}"
+          run_id="${{ steps.qa.outputs.run_id }}"
+          run_url="${{ steps.qa.outputs.run_url }}"
+          artifact_id="${{ steps.evidence.outputs.artifact_id }}"
+          artifact_digest="${{ steps.evidence.outputs.artifact_digest }}"
+          pr="$(curl -fsS \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            'https://api.github.com/repos/ghuser29384/Website2/pulls/552')"
+          body="$(jq -r '.body // ""' <<<"$pr")"
+          start='<!-- pr552-final-preview-evidence:start -->'
+          end='<!-- pr552-final-preview-evidence:end -->'
+          section="$(cat <<EOF
+          ${start}
+          ## Final exact Preview evidence
+
+          - **Verified candidate:** \`${candidate}\`
+          - **Exact Preview deployment:** \`${deployment_id}\`
+          - **Preview URL:** ${preview_origin}
+          - **GitHub Actions run:** ${run_url}
+          - **Evidence artifact:** \`${artifact_id}\` (\`${artifact_digest}\`)
+          - **Repository gates:** focused contracts, complete tests, ESLint, TypeScript, optimized build, and rendered desktop/mobile checks passed
+          - **Authenticated lifecycle:** one TOTP factor created, enrollment verified to AAL2 on desktop, a fresh mobile session verified to AAL2, and only the newly created factor was removed
+          - **Cleanup:** temporary user independently proved absent; one-use Vercel protection bypass revoked and prior bypass count restored
+          - **Release boundary:** Preview only; no production target or canonical alias changed
+          ${end}
+          EOF
+          )"
+          updated_body="$(BODY="$body" SECTION="$section" START="$start" END="$end" python3 <<'PY'
+          import os
+          body = os.environ["BODY"]
+          section = os.environ["SECTION"]
+          start = os.environ["START"]
+          end = os.environ["END"]
+          if start in body and end in body:
+              before, rest = body.split(start, 1)
+              _, after = rest.split(end, 1)
+              body = before.rstrip() + "\n\n" + section + after
+          else:
+              body = body.rstrip() + "\n\n" + section + "\n"
+          print(body)
+          PY
+          )"
+          jq -n --arg body "$updated_body" '{body:$body}' > "$RUNNER_TEMP/pr552-update.json"
+          curl -fsS -X PATCH \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' \
+            'https://api.github.com/repos/ghuser29384/Website2/pulls/552' \
+            --data-binary @"$RUNNER_TEMP/pr552-update.json" > "$STATUS_DIR/pr-after-body-update.json"
+          test "$(jq -r '.head.sha' "$STATUS_DIR/pr-after-body-update.json")" = "$candidate"
+
+          node_id="$(cat "$STATUS_DIR/pr-node-id.txt")"
+          jq -n --arg query 'mutation($id:ID!){markPullRequestReadyForReview(input:{pullRequestId:$id}){pullRequest{isDraft number}}}' \
+            --arg id "$node_id" '{query:$query,variables:{id:$id}}' > "$RUNNER_TEMP/pr552-ready.json"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            'https://api.github.com/graphql' \
+            --data-binary @"$RUNNER_TEMP/pr552-ready.json" > "$STATUS_DIR/ready-response.json"
+          jq -e '.data.markPullRequestReadyForReview.pullRequest.isDraft == false' \
+            "$STATUS_DIR/ready-response.json" >/dev/null
+
+          comment="$(cat <<EOF
+          Exact Preview verification is complete for \`${candidate}\`.
+
+          Desktop and mobile authenticator-MFA enrollment/step-up passed, exactly one new factor was created and removed, the temporary account was independently absent after cleanup, and the one-use Vercel bypass was revoked. Deployment: \`${deployment_id}\`. Evidence: run ${run_url}, artifact \`${artifact_id}\` (\`${artifact_digest}\`). No production target or alias changed.
+          EOF
+          )"
+          jq -n --arg body "$comment" '{body:$body}' > "$RUNNER_TEMP/pr552-comment.json"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' \
+            'https://api.github.com/repos/ghuser29384/Website2/issues/552/comments' \
+            --data-binary @"$RUNNER_TEMP/pr552-comment.json" > "$STATUS_DIR/comment.json"
+          jq -e '.id > 0' "$STATUS_DIR/comment.json" >/dev/null
+          jq '. + {prChanged:true,prReady:true}' "$STATUS_DIR/status.json" \
+            > "$STATUS_DIR/status.tmp.json"
+          mv "$STATUS_DIR/status.tmp.json" "$STATUS_DIR/status.json"
+
+      - name: Persist the finalizer status on its controller branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$STATUS_DIR/status.json"
+          git checkout "ops/pr552-mfa-refresh-finalizer-20260808"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$STATUS_DIR"
+          git commit -m "Record PR 552 exact Preview adjudication" || true
+          git push origin "HEAD:ops/pr552-mfa-refresh-finalizer-20260808"
+
+      - name: Enforce fail-closed result
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(jq -r '.status' "$STATUS_DIR/status.json")"
+          if [[ "$status" != 'success' ]]; then
+            exit 1
+          fi
