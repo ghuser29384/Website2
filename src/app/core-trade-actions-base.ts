@@ -1775,8 +1775,13 @@ export async function reviewCoreOfferAction(formData: FormData) {
     if (decision === "approve") update.published_at = now;
     if (decision === "close") update.closed_at = now;
 
+    const { error: updateError } = await supabase
+      .from("offers")
+      .update(update)
+      .eq("id", offerId);
+    if (updateError) throw new Error(updateError.message);
+
     await Promise.all([
-      supabase.from("offers").update(update).eq("id", offerId),
       supabase.from("trade_review_events").insert({
         offer_id: offerId,
         reviewer_id: viewer.authUser.id,

@@ -1,0 +1,110 @@
+\set ON_ERROR_STOP on
+
+begin;
+
+delete from public.trade_notifications
+where user_id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003',
+  'fa200000-0000-4000-8000-000000000001',
+  'fa200000-0000-4000-8000-000000000002'
+);
+
+delete from public.offers
+where id in (
+  select derived_offer_id
+  from public.moral_trade_feed_create_links
+  where creator_profile_id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003'
+  )
+);
+
+delete from public.offers
+where owner_id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003'
+)
+and submission_key like 'feed-create-browser-%';
+
+delete from public.recommendation_exposures
+where profile_id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003'
+)
+and model_key = 'feed-create-browser-v1';
+
+delete from public.offers
+where id in (
+  'fa300000-0000-4000-8000-000000000001',
+  'fa300000-0000-4000-8000-000000000002',
+  'fa300000-0000-4000-8000-000000000003',
+  'fa300000-0000-4000-8000-000000000004',
+  'fa300000-0000-4000-8000-000000000005',
+  'fa300000-0000-4000-8000-000000000006'
+);
+
+delete from auth.mfa_factors where user_id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003',
+  'fa200000-0000-4000-8000-000000000001',
+  'fa200000-0000-4000-8000-000000000002'
+);
+delete from auth.sessions where user_id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003',
+  'fa200000-0000-4000-8000-000000000001',
+  'fa200000-0000-4000-8000-000000000002'
+);
+delete from auth.refresh_tokens where user_id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003',
+  'fa200000-0000-4000-8000-000000000001',
+  'fa200000-0000-4000-8000-000000000002'
+);
+delete from auth.identities where user_id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003',
+  'fa200000-0000-4000-8000-000000000001',
+  'fa200000-0000-4000-8000-000000000002'
+);
+delete from moral_trade_private.person_accounts
+where profile_id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003',
+  'fa200000-0000-4000-8000-000000000001',
+  'fa200000-0000-4000-8000-000000000002'
+);
+
+delete from public.profiles where id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003',
+  'fa200000-0000-4000-8000-000000000001',
+  'fa200000-0000-4000-8000-000000000002'
+);
+delete from auth.users where id in (
+  'fa100000-0000-4000-8000-000000000001',
+  'fa100000-0000-4000-8000-000000000002',
+  'fa100000-0000-4000-8000-000000000003',
+  'fa200000-0000-4000-8000-000000000001',
+  'fa200000-0000-4000-8000-000000000002'
+);
+
+commit;
+
+select json_build_object(
+  'offers', (select count(*) from public.offers where id::text like 'fa300000-%' or (owner_id::text like 'fa100000-%' and submission_key like 'feed-create-browser-%')),
+  'exposures', (select count(*) from public.recommendation_exposures where model_key = 'feed-create-browser-v1'),
+  'profiles', (select count(*) from public.profiles where id::text like 'fa100000-%' or id::text like 'fa200000-%'),
+  'authUsers', (select count(*) from auth.users where id::text like 'fa100000-%' or id::text like 'fa200000-%')
+) as residue;
