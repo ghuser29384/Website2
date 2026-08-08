@@ -13,6 +13,8 @@ const accountSecurityPanel = readFileSync(
   "src/components/dashboard/background-account-security-panel.tsx",
   "utf8",
 );
+const siteTopbar = readFileSync("src/components/layout/site-topbar.tsx", "utf8");
+const siteFooter = readFileSync("src/components/layout/site-footer.tsx", "utf8");
 
 test("the dashboard loads the route-scoped Account security visibility repair", () => {
   assert.match(layout, /import\s+["']\.\/dashboard-account-security\.css["']/);
@@ -93,5 +95,21 @@ test("the stale Offers shortcut cannot prefetch a missing route", () => {
         "              >",
       ].join("\n"),
     ),
+  );
+});
+
+test("shared navigation cannot prefetch document-backed routes as missing RSC pages", () => {
+  const topbarLinks = siteTopbar.match(/<Link\b/g) ?? [];
+  const footerLinks = siteFooter.match(/<Link\b/g) ?? [];
+
+  assert.equal(topbarLinks.length, 4);
+  assert.equal(footerLinks.length, 6);
+  assert.equal(
+    (siteTopbar.match(/<Link prefetch=\{false\}/g) ?? []).length,
+    topbarLinks.length,
+  );
+  assert.equal(
+    (siteFooter.match(/<Link prefetch=\{false\}/g) ?? []).length,
+    footerLinks.length,
   );
 });
