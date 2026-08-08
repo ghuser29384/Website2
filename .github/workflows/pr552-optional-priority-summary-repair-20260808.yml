@@ -52,38 +52,32 @@ jobs:
 
           replace_once(
               "src/app/dashboard/page.tsx",
-              """  const priorityFundSummary =
-              viewer && supabaseReady ? await getPriorityCorrectionSummary(viewer.authUser.id) : null;
-          """,
-              """  const priorityFundSummary =
-              viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY
-                ? await getPriorityCorrectionSummary(viewer.authUser.id)
-                : null;
-          """,
+              "  const priorityFundSummary =\n"
+              "    viewer && supabaseReady ? await getPriorityCorrectionSummary(viewer.authUser.id) : null;\n",
+              "  const priorityFundSummary =\n"
+              "    viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY\n"
+              "      ? await getPriorityCorrectionSummary(viewer.authUser.id)\n"
+              "      : null;\n",
           )
 
           replace_once(
               ".github/workflows/dashboard-account-security-hotfix-gates.yml",
-              """      - \"src/app/dashboard/dashboard-account-security.css\"
-                    - \"src/app/dashboard/layout.tsx\"
-          """,
-              """      - \"src/app/dashboard/dashboard-account-security.css\"
-                    - \"src/app/dashboard/layout.tsx\"
-                    - \"src/app/dashboard/page.tsx\"
-          """,
+              "      - \"src/app/dashboard/dashboard-account-security.css\"\n"
+              "      - \"src/app/dashboard/layout.tsx\"\n",
+              "      - \"src/app/dashboard/dashboard-account-security.css\"\n"
+              "      - \"src/app/dashboard/layout.tsx\"\n"
+              "      - \"src/app/dashboard/page.tsx\"\n",
           )
 
           replace_once(
               ".github/workflows/dashboard-account-security-hotfix-gates.yml",
-              """          src/app/dashboard/dashboard-account-security.css
-                    src/app/dashboard/layout.tsx
-                    src/dashboard-account-security-visibility.test.ts
-          """,
-              """          src/app/dashboard/dashboard-account-security.css
-                    src/app/dashboard/layout.tsx
-                    src/app/dashboard/page.tsx
-                    src/dashboard-account-security-visibility.test.ts
-          """,
+              "          src/app/dashboard/dashboard-account-security.css\n"
+              "          src/app/dashboard/layout.tsx\n"
+              "          src/dashboard-account-security-visibility.test.ts\n",
+              "          src/app/dashboard/dashboard-account-security.css\n"
+              "          src/app/dashboard/layout.tsx\n"
+              "          src/app/dashboard/page.tsx\n"
+              "          src/dashboard-account-security-visibility.test.ts\n",
           )
           PY
 
