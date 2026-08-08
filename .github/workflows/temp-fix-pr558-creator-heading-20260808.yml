@@ -1,0 +1,123 @@
+name: Temporary repair PR 558 creator-heading assertion
+
+on:
+  push:
+    branches:
+      - temp/fix-pr558-creator-heading-20260808
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_HEAD_SHA: d0a52bda8dfaa4acbb60d8d1f37442f03de10936
+      TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
+
+    steps:
+      - name: Check out the exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Disambiguate the canonical creator-page heading
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          browser_path = Path("tests/mpgf-dac-product-lifecycle.spec.ts")
+          browser = browser_path.read_text()
+          old_block = (
+              '  await expect(page.getByText("Creator lifecycle receipt", { exact: true }).first()).toBeVisible();\n'
+              '  await expect(page.getByRole("heading", { name: "QA DAC open for conditional pledges" })).toBeVisible();\n'
+              '  await expect(page.getByText("Exact terms are locked", { exact: true })).toBeVisible();\n'
+          )
+          new_block = (
+              '  await expect(page.getByText("Creator lifecycle receipt", { exact: true }).first()).toBeVisible();\n'
+              '  await expect(\n'
+              '    page.getByRole("heading", { level: 1, name: "QA DAC open for conditional pledges" }),\n'
+              '  ).toBeVisible();\n'
+              '  await expect(page.getByText("Exact terms are locked", { exact: true })).toBeVisible();\n'
+          )
+          if browser.count(old_block) != 1:
+              raise SystemExit(
+                  f"Expected exactly one ambiguous creator-heading block, found {browser.count(old_block)}."
+              )
+          browser = browser.replace(old_block, new_block)
+          if old_block in browser:
+              raise SystemExit("The ambiguous creator-heading block remains.")
+          if browser.count(new_block) != 1:
+              raise SystemExit("The canonical level-one creator-heading block was not installed exactly once.")
+          browser_path.write_text(browser)
+
+          contract_path = Path("src/lib/mpgf/dac-browser-selector-contract.test.ts")
+          if contract_path.exists():
+              raise SystemExit("The creator-heading selector contract already exists unexpectedly.")
+          contract_path.write_text('''import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+test("creator lifecycle proof targets the canonical page heading without strict-mode ambiguity", async () => {
+  const browserSpec = await readFile("tests/mpgf-dac-product-lifecycle.spec.ts", "utf8");
+  const canonicalCreatorBlock = [
+    'page.getByText("Creator lifecycle receipt", { exact: true }).first()',
+    'page.getByRole("heading", { level: 1, name: "QA DAC open for conditional pledges" })',
+    'page.getByText("Exact terms are locked", { exact: true })',
+  ];
+
+  for (const fragment of canonicalCreatorBlock) {
+    assert.ok(browserSpec.includes(fragment), `Missing canonical creator proof fragment: ${fragment}`);
+  }
+
+  assert.ok(
+    !browserSpec.includes(
+      'page.getByText("Creator lifecycle receipt", { exact: true }).first()).toBeVisible();\\n  await expect(page.getByRole("heading", { name: "QA DAC open for conditional pledges" })',
+    ),
+    "The creator proof must not use a heading selector that matches both the page title and nested campaign title.",
+  );
+});
+''')
+          PY
+
+          git diff --check
+          git diff -- \
+            tests/mpgf-dac-product-lifecycle.spec.ts \
+            src/lib/mpgf/dac-browser-selector-contract.test.ts
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Prove the scoped browser-selector contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/dac-browser-selector-contract.test.ts \
+            src/lib/mpgf/dac-pledge-currency-format.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Commit the proven repair to the PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            tests/mpgf-dac-product-lifecycle.spec.ts \
+            src/lib/mpgf/dac-browser-selector-contract.test.ts
+          git commit -m "test(mpgf): target canonical creator page heading"
+          git push origin "HEAD:${TARGET_BRANCH}"
