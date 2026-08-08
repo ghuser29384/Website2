@@ -1,0 +1,280 @@
+name: Monitor PR 552 production release and canonical aliases
+
+on:
+  push:
+    branches:
+      - ops/pr552-merge-production-release-20260808
+    paths:
+      - .github/workflows/pr552-monitor-production-release-20260808.yml
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: pr552-monitor-production-release-20260808
+  cancel-in-progress: false
+
+env:
+  REPOSITORY: ghuser29384/Website2
+  PR_NUMBER: "552"
+  EXPECTED_HEAD_SHA: 1772ad71ac9036138bd7dc69beff05e65add57d6
+  EXPECTED_BASE_SHA: 1fd98472897330bc5256fe17e223cb0ac34deac4
+  RELEASE_WORKFLOW: vercel-release.yml
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  EVIDENCE_DIR: pr552-production-release-monitor
+
+jobs:
+  monitor:
+    name: Verify production workflow, deployment, and aliases
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and prove the exact merge commit
+        id: merge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$REPOSITORY"
+          mkdir -p "$EVIDENCE_DIR"
+
+          api_get() {
+            curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${REPOSITORY}$1"
+          }
+
+          for attempt in {1..60}; do
+            pr_json="$(api_get "/pulls/${PR_NUMBER}")"
+            merged="$(jq -r '.merged' <<<"$pr_json")"
+            [[ "$merged" = 'true' ]] && break
+            sleep 5
+          done
+          printf '%s\n' "$pr_json" > "$EVIDENCE_DIR/pr.json"
+          test "$merged" = 'true'
+          test "$(jq -r '.head.sha' <<<"$pr_json")" = "$EXPECTED_HEAD_SHA"
+          test "$(jq -r '.base.sha' <<<"$pr_json")" = "$EXPECTED_BASE_SHA"
+          merge_sha="$(jq -r '.merge_commit_sha' <<<"$pr_json")"
+          test -n "$merge_sha"
+          test "$merge_sha" != 'null'
+
+          for attempt in {1..30}; do
+            current_main="$(api_get '/git/ref/heads/main' | jq -r '.object.sha')"
+            [[ "$current_main" = "$merge_sha" ]] && break
+            sleep 2
+          done
+          test "$current_main" = "$merge_sha"
+
+          git fetch --no-tags origin "$EXPECTED_BASE_SHA" "$EXPECTED_HEAD_SHA" "$merge_sha" main
+          test "$(git rev-parse 'origin/main')" = "$merge_sha"
+          test "$(git rev-parse "${EXPECTED_HEAD_SHA}^{tree}")" = "$(git rev-parse "${merge_sha}^{tree}")"
+          read -r -a parents <<<"$(git show -s --format=%P "$merge_sha")"
+          test "${#parents[@]}" -eq 2
+          test "${parents[0]}" = "$EXPECTED_BASE_SHA"
+          test "${parents[1]}" = "$EXPECTED_HEAD_SHA"
+          git diff --exit-code "$EXPECTED_HEAD_SHA" "$merge_sha"
+
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$merge_sha" > "$EVIDENCE_DIR/merge-sha.txt"
+
+      - name: Wait for the canonical production release workflow
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        run: |
+          set -euo pipefail
+          release_run_id=''
+          release_status=''
+          release_conclusion=''
+
+          for attempt in {1..180}; do
+            runs="$(curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${REPOSITORY}/actions/workflows/${RELEASE_WORKFLOW}/runs?event=workflow_dispatch&branch=main&per_page=100")"
+            printf '%s\n' "$runs" > "$EVIDENCE_DIR/release-runs.json"
+            release_run_id="$(jq -r --arg sha "$MERGE_SHA" '
+              [.workflow_runs[] | select(.head_sha == $sha)]
+              | sort_by(.created_at)
+              | last
+              | .id // empty
+            ' <<<"$runs")"
+            if [[ -n "$release_run_id" ]]; then
+              run="$(curl -fsSL \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "https://api.github.com/repos/${REPOSITORY}/actions/runs/${release_run_id}")"
+              printf '%s\n' "$run" > "$EVIDENCE_DIR/release-run.json"
+              release_status="$(jq -r '.status' <<<"$run")"
+              release_conclusion="$(jq -r '.conclusion // ""' <<<"$run")"
+              [[ "$release_status" = 'completed' ]] && break
+            fi
+            sleep 20
+          done
+
+          test -n "$release_run_id"
+          test "$release_status" = 'completed'
+          test "$release_conclusion" = 'success'
+          echo "release_run_id=$release_run_id" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$release_run_id" > "$EVIDENCE_DIR/release-run-id.txt"
+
+      - name: Resolve the exact READY production deployment
+        id: deployment
+        shell: bash
+        env:
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          deployment_id=''
+          deployment_url=''
+
+          for attempt in {1..90}; do
+            curl -fsSL \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&limit=100" \
+              > "$EVIDENCE_DIR/vercel-production-deployments.json"
+            deployment_id="$(jq -r --arg sha "$MERGE_SHA" '
+              [.deployments[]
+               | select((.meta.githubCommitSha // "") == $sha)
+               | select((.target // "") == "production")]
+              | sort_by(.created)
+              | last
+              | (.uid // .id) // empty
+            ' "$EVIDENCE_DIR/vercel-production-deployments.json")"
+            [[ -n "$deployment_id" ]] && break
+            sleep 10
+          done
+          test -n "$deployment_id"
+
+          for attempt in {1..90}; do
+            curl -fsSL \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_ORG_ID}" \
+              > "$EVIDENCE_DIR/exact-production-deployment.json"
+            state="$(jq -r '.readyState // .state // ""' "$EVIDENCE_DIR/exact-production-deployment.json")"
+            [[ "$state" = 'READY' ]] && break
+            [[ "$state" = 'ERROR' || "$state" = 'CANCELED' ]] && exit 1
+            sleep 10
+          done
+          test "$state" = 'READY'
+          jq -e \
+            --arg id "$deployment_id" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$MERGE_SHA" '
+              ((.uid // .id) == $id)
+              and ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "") == "production")
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $sha)
+              and ((.aliasError // null) == null)
+            ' "$EVIDENCE_DIR/exact-production-deployment.json" >/dev/null
+
+          deployment_url="https://$(jq -r '.url' "$EVIDENCE_DIR/exact-production-deployment.json")"
+          aliases="$(jq -c '.alias // []' "$EVIDENCE_DIR/exact-production-deployment.json")"
+          jq -e 'index("moraltrade.org") != null' <<<"$aliases" >/dev/null
+          jq -e 'index("www.moraltrade.org") != null' <<<"$aliases" >/dev/null
+
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$deployment_id" > "$EVIDENCE_DIR/deployment-id.txt"
+          printf '%s\n' "$deployment_url" > "$EVIDENCE_DIR/deployment-url.txt"
+
+      - name: Smoke immutable deployment and both production aliases
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          : > "$EVIDENCE_DIR/http-smoke.tsv"
+
+          smoke() {
+            local label="$1"
+            local url="$2"
+            local headers="$EVIDENCE_DIR/${label}-headers.txt"
+            local body="$EVIDENCE_DIR/${label}-body.txt"
+            local code final_url
+            code="$(curl -sS -L \
+              --max-time 60 \
+              --connect-timeout 20 \
+              -D "$headers" \
+              -o "$body" \
+              -w '%{http_code}' \
+              "$url")"
+            final_url="$(curl -sS -L \
+              --max-time 60 \
+              --connect-timeout 20 \
+              -o /dev/null \
+              -w '%{url_effective}' \
+              "$url")"
+            printf '%s\t%s\t%s\t%s\n' "$label" "$code" "$url" "$final_url" \
+              | tee -a "$EVIDENCE_DIR/http-smoke.tsv"
+            test "$code" -ge 200
+            test "$code" -lt 400
+          }
+
+          smoke immutable-status "$DEPLOYMENT_URL/status"
+          smoke apex-status 'https://moraltrade.org/status'
+          smoke www-status 'https://www.moraltrade.org/status'
+          smoke apex-dashboard 'https://moraltrade.org/dashboard#account-security'
+          smoke www-dashboard 'https://www.moraltrade.org/dashboard#account-security'
+
+          grep -F $'apex-status\t' "$EVIDENCE_DIR/http-smoke.tsv" >/dev/null
+          grep -F $'www-status\t' "$EVIDENCE_DIR/http-smoke.tsv" >/dev/null
+
+      - name: Publish production release summary
+        shell: bash
+        env:
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+          RELEASE_RUN_ID: ${{ steps.release.outputs.release_run_id }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.deployment_url }}
+        run: |
+          jq -n \
+            --arg candidateSha "$EXPECTED_HEAD_SHA" \
+            --arg baseSha "$EXPECTED_BASE_SHA" \
+            --arg mergeSha "$MERGE_SHA" \
+            --arg releaseRunId "$RELEASE_RUN_ID" \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            --arg deploymentUrl "$DEPLOYMENT_URL" \
+            '{schemaVersion:1,candidateSha:$candidateSha,baseSha:$baseSha,mergeSha:$mergeSha,treePreserved:true,releaseRunId:$releaseRunId,deploymentId:$deploymentId,deploymentUrl:$deploymentUrl,target:"production",aliases:["moraltrade.org","www.moraltrade.org"],httpSmokePassed:true}' \
+            > "$EVIDENCE_DIR/verified-production-summary.json"
+
+          {
+            echo '### PR #552 production release verified'
+            echo
+            echo "- Candidate: \`$EXPECTED_HEAD_SHA\`"
+            echo "- Merge commit: \`$MERGE_SHA\`"
+            echo "- Production workflow: \`$RELEASE_RUN_ID\`"
+            echo "- Production deployment: \`$DEPLOYMENT_ID\`"
+            echo '- Both canonical aliases are attached to the exact READY production deployment.'
+            echo '- Immutable deployment, status routes, and dashboard entry routes passed HTTP smoke checks.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-production-release-monitor-${{ github.run_id }}
+          path: pr552-production-release-monitor/
+          if-no-files-found: warn
+          retention-days: 30
