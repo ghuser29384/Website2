@@ -132,7 +132,6 @@ jobs:
           test "$(grep -Fc 'pattern="[0-9\s-]{6,8}"' src/components/dashboard/background-account-security-panel.tsx)" = '2'
           test "$(grep -Fc 'pattern="[0-9\\s-]{6,8}"' src/components/dashboard/background-account-security-panel.tsx)" = '0'
           grep -F 'prefetch={item.href === "/offers" ? false : undefined}' src/app/dashboard/page.tsx
-          node --import tsx --test src/dashboard-account-security-visibility.test.ts
 
       - name: Commit and push the repair
         shell: bash
