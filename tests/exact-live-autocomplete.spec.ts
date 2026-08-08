@@ -1,278 +1,225 @@
-import { expect, test } from "@playwright/test";
+import {
+  expect,
+  test,
+  type FrameLocator,
+  type Page,
+} from "@playwright/test";
 
-async function installLiveFixtures(page: import("@playwright/test").Page) {
-  await page.route("**/api/live-account", (route) =>
-    route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ authenticated: false }),
-    }),
-  );
-  await page.route("**/api/live-now", (route) =>
-    route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        authenticated: false,
-        recommendations: [],
-        status: "unavailable",
-        routePlanner: {
-          status: "unavailable",
-          checkedAt: "2026-07-23T00:00:00.000Z",
-          profile: {},
-          needsMoreInput: [],
-          routes: [],
-          comparison: null,
-          candidateCount: 0,
-        },
-      }),
-    }),
-  );
-  await page.route("**/api/nonprofits/search**", (route) => {
-    const query = new URL(route.request().url()).searchParams.get("q") ?? "";
-    const results = /red cross/i.test(query)
-      ? [
-          {
-            label: "American National Red Cross",
-            description: "501(c)(3) charity · Washington, DC · EIN 53-0196605",
-            aliases: ["American Red Cross"],
-            kind: "organization",
-            source: "ProPublica Nonprofit Explorer / IRS",
-            ein: "53-0196605",
-            profileUrl: "https://projects.propublica.org/nonprofits/organizations/530196605",
-            subsection: 3,
-            score: 120,
-          },
-        ]
-      : [];
+test.setTimeout(90_000);
 
-    return route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        query,
-        results,
-        source: "ProPublica Nonprofit Explorer / IRS",
-      }),
-    });
+function captureRuntimeErrors(page: Page) {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.stack || error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(`console: ${message.text()}`);
   });
+  return errors;
 }
 
-test("the exact live trade clauses autocomplete causes, charities, and organizations", async ({
-  page,
-}, testInfo) => {
-  await installLiveFixtures(page);
-  await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
-
-  const offerClause = page.locator(".clause").filter({
-    has: page.locator(".clause-label", { hasText: "I offer" }),
+async function openCurrentCreate(page: Page): Promise<FrameLocator> {
+  await page.goto("/moral-trade-live.html#trade", {
+    waitUntil: "domcontentloaded",
   });
-  const amountToken = offerClause.locator('.token[contenteditable="true"]').first();
-  const recipientToken = offerClause.locator('.token[contenteditable="true"]').nth(1);
+  await expect(page).toHaveURL(/\/trades\/new(?:[?#]|$)/, {
+    timeout: 30_000,
+  });
+  await expect(page).toHaveTitle(/Moral Trade/i);
 
-  await expect(amountToken).not.toHaveAttribute("data-mt-autocomplete-ready", "true");
-  await expect(recipientToken).toHaveAttribute("data-mt-autocomplete-ready", "true");
-  await expect(recipientToken).toHaveAttribute("data-mt-autocomplete-context", "recipients");
+  const iframe = page.locator('iframe[title="Moral Trade Create"]');
+  await expect(iframe).toBeVisible({ timeout: 30_000 });
+  const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+  await expect(create.locator("body")).toBeVisible({ timeout: 30_000 });
+  return create;
+}
 
-  await recipientToken.fill("Globla poverty");
-  await expect(recipientToken).toHaveText("Global poverty", { timeout: 2_000 });
-  const correctionNotice = page.locator(".mt-input-assist-correction");
-  await expect(correctionNotice).toContainText(
-    "Changed “Globla poverty” to “Global poverty”.",
-  );
-  await correctionNotice.getByRole("button", { name: "Undo" }).click();
-  await expect(recipientToken).toHaveText("Globla poverty");
-  await page.waitForTimeout(800);
-  await expect(recipientToken).toHaveText("Globla poverty");
+async function reachCommitmentRequest(page: Page) {
+  const create = await openCurrentCreate(page);
+  const cause = create
+    .locator("button.cause-choice")
+    .filter({ hasText: "Wild animal suffering" });
+  await expect(cause).toHaveCount(1);
+  await cause.click();
 
-  const activationToken = page
-    .locator(".clause")
-    .filter({ has: page.locator(".clause-label", { hasText: "Activation condition" }) })
-    .locator('.token[contenteditable="true"]');
-  await expect(activationToken).not.toHaveAttribute("data-mt-autocomplete-ready", "true");
-
-  const panel = page.locator('[data-mt-live-token-panel="true"]');
-  await recipientToken.fill("Animal");
-  await expect(panel).toBeVisible();
-  await expect(panel.getByText("Animal welfare", { exact: true })).toBeVisible();
-  await expect(panel.getByText("ACE Recommended Charity Fund", { exact: true })).toBeVisible();
-  await expect(panel.locator('[data-mt-suggestion-kind="cause"]')).not.toHaveCount(0);
-  await expect(panel.locator('[data-mt-suggestion-kind="organization"]')).not.toHaveCount(0);
-
-  await recipientToken.fill("Longterm Futures Fund");
-  await expect(panel.getByText("EA Long-Term Future Fund", { exact: true })).toBeVisible();
-
-  await recipientToken.fill("Red Cross");
-  await expect(panel.getByText("American National Red Cross", { exact: true })).toBeVisible();
-  await expect(panel.locator('[data-mt-suggestion-kind="cause"]')).toHaveCount(0);
   await expect(
-    panel.getByText(/Organization · 501\(c\)\(3\) charity · Washington, DC/),
-  ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("organization-autocomplete-visible.png"),
-    fullPage: false,
-  });
-
-  await panel.getByText("American National Red Cross", { exact: true }).click();
-  await expect(recipientToken).toHaveText("American National Red Cross");
-  await expect(recipientToken).toHaveAttribute("data-mt-selected-kind", "organization");
-  await expect(recipientToken).toHaveAttribute("data-mt-selected-ein", "53-0196605");
-  await expect(panel).toBeHidden();
-
-  const proofToken = page
-    .locator(".clause")
-    .filter({ has: page.locator(".clause-label", { hasText: "Proof" }) })
-    .locator('.token[contenteditable="true"]')
-    .first();
-  await proofToken.fill("receipt");
-  await expect(panel).toBeVisible();
-  await expect(panel.locator(".mt-input-assist-option strong").first()).toHaveText(
-    "Redacted donation receipt",
-  );
-  await page.keyboard.press("Enter");
-  await expect(proofToken).toHaveText("Redacted donation receipt");
-
-  await page.locator('[data-trade="match"]').click();
-  await page.locator('[data-trade="build"]').click();
-  await expect(page.locator('.token[data-mt-autocomplete-ready="true"]')).toHaveCount(6);
-});
-
-test("the exact live commitment field composes topic-specific semantic matches", async ({
-  page,
-}, testInfo) => {
-  await installLiveFixtures(page);
-  await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
-  await page.locator('[data-mt-offer-type="behavior"]').click();
-
-  const behaviorClause = page.locator(".clause").filter({
-    has: page.locator(".clause-label", { hasText: "Behavior or commitment" }),
-  });
-  const commitmentToken = behaviorClause.locator(
-    '.mt-offer-primary [data-mt-autocomplete-context="commitments"]',
-  );
-  const panel = page.locator('[data-mt-live-token-panel="true"]');
-
-  await commitmentToken.fill("I'll do wild-animal-suffering research");
-  await expect(panel).toBeVisible();
-  const optionLabels = panel.locator(".mt-input-assist-option strong");
-  await expect(optionLabels.nth(0)).toHaveText(
-    "Research wild animal suffering for fixed hours",
-  );
-  await expect(optionLabels.nth(1)).toHaveText(
-    "Complete a defined wild animal suffering research deliverable",
-  );
-  await expect(optionLabels.nth(2)).toHaveText(
-    "Complete a wild animal suffering literature review",
-  );
-  await expect(optionLabels.nth(3)).toHaveText(
-    "Publish a wild animal suffering research output",
-  );
-
-  await page.keyboard.press("Enter");
-  await expect(commitmentToken).toHaveText(
-    "Research wild animal suffering for fixed hours",
-  );
-
-  await commitmentToken.fill("I'll do insect consciousness reserch");
-  await expect(
-    panel.getByText("Research insect consciousness for fixed hours", {
-      exact: true,
+    create.getByRole("heading", {
+      name: "What do you want other people to do?",
     }),
-  ).toBeVisible();
-  await page.screenshot({
-    path: testInfo.outputPath("semantic-commitment-options.png"),
-    fullPage: false,
-  });
-});
+  ).toBeVisible({ timeout: 10_000 });
 
-test("the exact live offer palette uses three offer types and collects shared attributes", async ({
+  const commitment = create
+    .locator("button.request-choice")
+    .filter({ hasText: "Commitment" });
+  await expect(commitment).toHaveCount(1);
+  await commitment.click();
+
+  const input = create.locator("#requestActionInput");
+  const list = create.locator("#actionSuggestions");
+  await expect(input).toBeVisible({ timeout: 10_000 });
+  return { create, input, list };
+}
+
+test("the retired Trade entry exposes the current ranked action autocomplete", async ({
   page,
 }, testInfo) => {
-  await installLiveFixtures(page);
-  await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
+  const runtimeErrors = captureRuntimeErrors(page);
+  const { create, input, list } = await reachCommitmentRequest(page);
 
-  const offerTypeLabels = page.locator(
-    '[data-mt-offer-type] .mt-offer-ingredient-label',
-  );
-  await expect(offerTypeLabels).toHaveText([
-    "Money",
-    "Behavior or commitment",
-    "Help or service",
-  ]);
-  await expect(page.locator('[data-ingredient="Time"]')).toHaveCount(0);
-  await expect(page.locator('[data-ingredient="Behavior"]')).toHaveCount(0);
-  await expect(page.locator('[data-ingredient="Skill"]')).toHaveCount(0);
-  await expect(page.locator(".mt-offer-group-label")).toHaveText([
-    "Offer type",
-    "Conditions and safeguards",
-  ]);
-
-  await page.locator('[data-mt-offer-type="behavior"]').click();
-  const behaviorClause = page.locator(".clause").filter({
-    has: page.locator(".clause-label", { hasText: "Behavior or commitment" }),
-  });
-  await expect(behaviorClause.locator(".mt-offer-attribute-label")).toHaveText([
-    "Estimated time",
-    "Relevant skills",
-    "Deliverable or completion condition",
-    "Verification method",
-  ]);
-  const behaviorTokens = behaviorClause.locator('.token[contenteditable="true"]');
-  await expect(behaviorTokens).toHaveCount(5);
-  await expect(behaviorTokens.first()).toHaveAttribute(
-    "data-mt-autocomplete-context",
-    "commitments",
-  );
-  await expect(behaviorTokens.last()).toHaveAttribute(
-    "data-mt-autocomplete-context",
-    "evidence",
-  );
-  for (let index = 0; index < 5; index += 1) {
-    await expect(behaviorTokens.nth(index)).toHaveAttribute(
-      "data-mt-autocomplete-ready",
-      "true",
-    );
-  }
-
-  await page.locator('[data-mt-offer-type="service"]').click();
-  const serviceClause = page.locator(".clause").filter({
-    has: page.locator(".clause-label", { hasText: "Help or service" }),
-  });
-  await expect(serviceClause.locator(".mt-offer-attribute-label")).toHaveText([
-    "Estimated time",
-    "Relevant skills",
-    "Deliverable or completion condition",
-    "Verification method",
-  ]);
-  await expect(serviceClause.locator('.token[contenteditable="true"]')).toHaveCount(5);
-
-  await page.locator('[data-mt-offer-type="money"]').click();
-  const moneyClause = page.locator(".clause").filter({
-    has: page.locator(".clause-label", { hasText: "Money" }),
-  });
-  await expect(moneyClause.locator(".mt-offer-attribute-label")).toHaveText([
-    "Estimated time",
-    "Relevant skills",
-    "Deliverable or completion condition",
-    "Verification method",
-  ]);
+  await expect(create.locator(".clause")).toHaveCount(0);
   await expect(
-    moneyClause.locator('[data-mt-autocomplete-disabled="true"]'),
-  ).toHaveCount(1);
+    create.locator('.token[contenteditable="true"]'),
+  ).toHaveCount(0);
+  await expect(create.locator("[data-mt-offer-type]")).toHaveCount(0);
+
+  await expect(input).toHaveAttribute("role", "combobox");
+  await expect(input).toHaveAttribute("aria-autocomplete", "list");
+  await expect(input).toHaveAttribute("aria-controls", "actionSuggestions");
+  await expect(input).toHaveAttribute("aria-expanded", "true");
+  await expect(input).toHaveAttribute(
+    "placeholder",
+    "e.g. Not eat meat for one meal",
+  );
+  await expect(list).toHaveAttribute("role", "listbox");
+  await expect(list).toHaveAttribute("aria-label", "Suggested actions");
+  await expect(list).toBeVisible();
+  await expect(list.getByRole("option")).toHaveCount(7);
+
+  await input.fill("read");
+  await expect(list).toBeVisible();
+  await expect(input).toHaveAttribute("aria-expanded", "true");
+  const options = list.getByRole("option");
+  await expect(options).toHaveCount(2);
   await expect(
-    moneyClause.locator('[data-mt-autocomplete-context="recipients"]'),
-  ).toHaveCount(1);
+    list.locator(".suggestion-option > span:last-child"),
+  ).toHaveText([
+    "Read a 30-minute introduction to wild animal suffering",
+    "Read a short introduction to Wild animal suffering",
+  ]);
 
   await page.screenshot({
-    path: testInfo.outputPath("structured-offer-types.png"),
+    path: testInfo.outputPath("current-action-autocomplete-open.png"),
     fullPage: true,
   });
 
-  await page.locator('[data-trade="match"]').click();
-  await page.locator('[data-trade="build"]').click();
-  await expect(offerTypeLabels).toHaveText([
+  await options.nth(1).click();
+  await expect(input).toHaveValue(
+    "Read a short introduction to Wild animal suffering",
+  );
+  await expect(input).toHaveAttribute("aria-expanded", "false");
+  await expect(list).toBeHidden();
+  await expect(create.locator("#continueRequest")).toBeEnabled();
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("keyboard selection and dismissal remain inside the request step", async ({
+  page,
+}, testInfo) => {
+  const runtimeErrors = captureRuntimeErrors(page);
+  const { create, input, list } = await reachCommitmentRequest(page);
+
+  await input.fill("read");
+  await expect(list).toBeVisible();
+  const options = list.getByRole("option");
+  await input.press("ArrowDown");
+  await expect(options.first()).toHaveAttribute("aria-selected", "true");
+  await input.press("Enter");
+  await expect(input).toHaveValue(
+    "Read a 30-minute introduction to wild animal suffering",
+  );
+  await expect(list).toBeHidden();
+
+  await input.fill("spend");
+  await expect(list).toBeVisible();
+  await input.press("Escape");
+  await expect(input).toBeVisible();
+  await expect(input).toHaveValue("spend");
+  await expect(input).toHaveAttribute("aria-expanded", "false");
+  await expect(list).toBeHidden();
+  await expect(create.locator("#screenRequest")).toHaveClass(/active/);
+  await expect(
+    create.getByRole("heading", {
+      name: "What do you want other people to do?",
+    }),
+  ).toBeVisible();
+
+  await page.screenshot({
+    path: testInfo.outputPath("escape-keeps-request-step.png"),
+    fullPage: true,
+  });
+
+  await input.fill("read");
+  await expect(list).toBeVisible();
+  await create.locator("#requestHeading").click();
+  await expect(input).toBeVisible();
+  await expect(input).toHaveValue("read");
+  await expect(input).toHaveAttribute("aria-expanded", "false");
+  await expect(list).toBeHidden();
+  await expect(create.locator("#screenRequest")).toHaveClass(/active/);
+  expect(runtimeErrors).toEqual([]);
+});
+
+test("the mobile current flow reaches the six-type contribution palette without overflow", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const runtimeErrors = captureRuntimeErrors(page);
+  const { create, input, list } = await reachCommitmentRequest(page);
+
+  await input.fill("read");
+  await expect(list).toBeVisible();
+  await list.getByRole("option").first().click();
+  const continueButton = create.locator("#continueRequest");
+  await expect(continueButton).toBeEnabled();
+  await continueButton.click();
+
+  await expect(
+    create.getByRole("heading", { name: "What could you offer?" }),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(create.locator(".offer-choice strong")).toHaveText([
     "Money",
-    "Behavior or commitment",
-    "Help or service",
+    "Time",
+    "A behavior change",
+    "Skilled work",
+    "An introduction",
+    "Support another cause",
   ]);
-  await expect(behaviorClause.locator(".mt-offer-attribute-label")).toHaveCount(4);
-  await expect(serviceClause.locator(".mt-offer-attribute-label")).toHaveCount(4);
-  await expect(moneyClause.locator(".mt-offer-attribute-label")).toHaveCount(4);
+  await expect(create.locator("[data-mt-offer-type]")).toHaveCount(0);
+
+  await create
+    .locator("button.offer-choice")
+    .filter({ hasText: "A behavior change" })
+    .click();
+  await create
+    .locator("button.offer-choice")
+    .filter({ hasText: "Skilled work" })
+    .click();
+  await expect(create.locator("#offerCount")).toHaveText(
+    "2 types selected",
+  );
+  await expect(create.locator("#continueOffers")).toBeEnabled();
+
+  const frameDimensions = await create.locator("body").evaluate(() => ({
+    innerWidth: window.innerWidth,
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(frameDimensions.clientWidth).toBe(frameDimensions.innerWidth);
+  expect(frameDimensions.scrollWidth).toBeLessThanOrEqual(
+    frameDimensions.innerWidth + 1,
+  );
+
+  const outerDimensions = await page.evaluate(() => ({
+    innerWidth: window.innerWidth,
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(outerDimensions.clientWidth).toBe(outerDimensions.innerWidth);
+  expect(outerDimensions.scrollWidth).toBeLessThanOrEqual(
+    outerDimensions.innerWidth + 1,
+  );
+
+  await page.screenshot({
+    path: testInfo.outputPath("mobile-current-contribution-palette.png"),
+    fullPage: true,
+  });
+  expect(runtimeErrors).toEqual([]);
 });

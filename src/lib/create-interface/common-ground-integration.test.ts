@@ -46,6 +46,19 @@ test("the integration preserves the static source and adds the compact funding c
   assert.match(integrated, /Threshold pool/);
 });
 
+test("the integration keeps autocomplete Escape dismissal inside the request step", () => {
+  const integrated = integrateCommonGroundCreateSource(source);
+
+  assert.doesNotMatch(
+    source,
+    /event\.preventDefault\(\);\s+event\.stopPropagation\(\);\s+closeSuggestions\(\);/,
+  );
+  assert.match(
+    integrated,
+    /if \(event\.key === "Escape" && autocompleteState\.open\) \{\s+event\.preventDefault\(\);\s+event\.stopPropagation\(\);\s+closeSuggestions\(\);\s+return;/,
+  );
+});
+
 test("the embedded Create document uses the canonical Moral Trade favicon", () => {
   const integrated = integrateCommonGroundCreateSource(source);
 
