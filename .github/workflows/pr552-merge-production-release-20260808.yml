@@ -1,0 +1,233 @@
+name: Merge exact PR 552 and dispatch production release
+
+on:
+  push:
+    branches:
+      - ops/pr552-merge-production-release-20260808
+    paths:
+      - .github/workflows/pr552-merge-production-release-20260808.yml
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr552-merge-production-release-20260808
+  cancel-in-progress: false
+
+env:
+  REPOSITORY: ghuser29384/Website2
+  PR_NUMBER: "552"
+  EXPECTED_HEAD_SHA: 1772ad71ac9036138bd7dc69beff05e65add57d6
+  EXPECTED_BASE_SHA: 1fd98472897330bc5256fe17e223cb0ac34deac4
+  EXPECTED_HEAD_REF: hotfix/dashboard-account-security-visible-20260807
+  RELEASE_WORKFLOW: vercel-release.yml
+  EVIDENCE_DIR: pr552-merge-production-dispatch
+
+jobs:
+  merge-and-dispatch:
+    name: Merge verified tree and dispatch exact production release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Merge only the exact verified pull-request head
+        id: merge
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$REPOSITORY"
+          test "$GITHUB_REF_NAME" = 'ops/pr552-merge-production-release-20260808'
+          mkdir -p "$EVIDENCE_DIR"
+
+          api_get() {
+            curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${REPOSITORY}$1"
+          }
+
+          pr_json="$(api_get "/pulls/${PR_NUMBER}")"
+          printf '%s\n' "$pr_json" > "$EVIDENCE_DIR/pr-before.json"
+
+          test "$(jq -r '.state' <<<"$pr_json")" = 'open' || \
+            test "$(jq -r '.merged' <<<"$pr_json")" = 'true'
+          test "$(jq -r '.draft' <<<"$pr_json")" = 'false'
+          test "$(jq -r '.head.repo.full_name' <<<"$pr_json")" = "$REPOSITORY"
+          test "$(jq -r '.head.ref' <<<"$pr_json")" = "$EXPECTED_HEAD_REF"
+          test "$(jq -r '.head.sha' <<<"$pr_json")" = "$EXPECTED_HEAD_SHA"
+          test "$(jq -r '.base.ref' <<<"$pr_json")" = 'main'
+          test "$(jq -r '.base.sha' <<<"$pr_json")" = "$EXPECTED_BASE_SHA"
+
+          merged="$(jq -r '.merged' <<<"$pr_json")"
+          if [[ "$merged" != 'true' ]]; then
+            current_main="$(api_get '/git/ref/heads/main' | jq -r '.object.sha')"
+            test "$current_main" = "$EXPECTED_BASE_SHA"
+
+            mergeable="$(jq -r '.mergeable // "null"' <<<"$pr_json")"
+            for attempt in {1..10}; do
+              [[ "$mergeable" != 'null' ]] && break
+              sleep 3
+              pr_json="$(api_get "/pulls/${PR_NUMBER}")"
+              mergeable="$(jq -r '.mergeable // "null"' <<<"$pr_json")"
+            done
+            test "$mergeable" = 'true'
+
+            jq -n \
+              --arg sha "$EXPECTED_HEAD_SHA" \
+              --arg title 'Expose Account security on the production dashboard (#552)' \
+              --arg message 'Merge the exact Preview-verified PR #552 head. The merged tree is required to equal the verified candidate tree before production dispatch.' \
+              '{sha:$sha,merge_method:"merge",commit_title:$title,commit_message:$message}' \
+              > "$EVIDENCE_DIR/merge-request.json"
+
+            status="$(curl -sS \
+              -o "$EVIDENCE_DIR/merge-response.json" \
+              -w '%{http_code}' \
+              -X PUT \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'Content-Type: application/json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${REPOSITORY}/pulls/${PR_NUMBER}/merge" \
+              --data-binary @"$EVIDENCE_DIR/merge-request.json")"
+            test "$status" = '200'
+            jq -e '.merged == true and (.sha | type == "string")' \
+              "$EVIDENCE_DIR/merge-response.json" >/dev/null
+            merge_sha="$(jq -r '.sha' "$EVIDENCE_DIR/merge-response.json")"
+          else
+            merge_sha="$(jq -r '.merge_commit_sha' <<<"$pr_json")"
+            test -n "$merge_sha"
+            test "$merge_sha" != 'null'
+          fi
+
+          for attempt in {1..30}; do
+            current_main="$(api_get '/git/ref/heads/main' | jq -r '.object.sha')"
+            [[ "$current_main" = "$merge_sha" ]] && break
+            sleep 2
+          done
+          test "$current_main" = "$merge_sha"
+
+          git fetch --no-tags origin \
+            "$EXPECTED_BASE_SHA" \
+            "$EXPECTED_HEAD_SHA" \
+            "$merge_sha" \
+            main
+          test "$(git rev-parse "origin/main")" = "$merge_sha"
+
+          candidate_tree="$(git rev-parse "${EXPECTED_HEAD_SHA}^{tree}")"
+          merge_tree="$(git rev-parse "${merge_sha}^{tree}")"
+          test "$candidate_tree" = "$merge_tree"
+
+          read -r -a parents <<<"$(git show -s --format=%P "$merge_sha")"
+          test "${#parents[@]}" -eq 2
+          test "${parents[0]}" = "$EXPECTED_BASE_SHA"
+          test "${parents[1]}" = "$EXPECTED_HEAD_SHA"
+          git diff --exit-code "$EXPECTED_HEAD_SHA" "$merge_sha"
+
+          pr_after="$(api_get "/pulls/${PR_NUMBER}")"
+          printf '%s\n' "$pr_after" > "$EVIDENCE_DIR/pr-after.json"
+          test "$(jq -r '.merged' <<<"$pr_after")" = 'true'
+          test "$(jq -r '.merge_commit_sha' <<<"$pr_after")" = "$merge_sha"
+
+          jq -n \
+            --arg candidateSha "$EXPECTED_HEAD_SHA" \
+            --arg baseSha "$EXPECTED_BASE_SHA" \
+            --arg mergeSha "$merge_sha" \
+            --arg candidateTree "$candidate_tree" \
+            --arg mergeTree "$merge_tree" \
+            '{schemaVersion:1,candidateSha:$candidateSha,baseSha:$baseSha,mergeSha:$mergeSha,candidateTree:$candidateTree,mergeTree:$mergeTree,treesEqual:($candidateTree==$mergeTree),mainAtMerge:true}' \
+            > "$EVIDENCE_DIR/merge-proof.json"
+
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+          echo "candidate_tree=$candidate_tree" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch canonical exact production release
+        id: dispatch
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$MERGE_SHA"
+          dispatch_started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          printf '%s\n' "$dispatch_started_at" > "$EVIDENCE_DIR/dispatch-started-at.txt"
+
+          curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/actions/workflows/${RELEASE_WORKFLOW}/runs?event=workflow_dispatch&per_page=100" \
+            | jq '[.workflow_runs[].id]' > "$EVIDENCE_DIR/runs-before.json"
+
+          jq -n \
+            --arg ref main \
+            --arg target production \
+            --arg releaseRef main \
+            --arg expectedSha "$MERGE_SHA" \
+            '{ref:$ref,inputs:{target:$target,ref:$releaseRef,expected_sha:$expectedSha}}' \
+            > "$EVIDENCE_DIR/dispatch-request.json"
+
+          status="$(curl -sS \
+            -o "$EVIDENCE_DIR/dispatch-response.txt" \
+            -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/actions/workflows/${RELEASE_WORKFLOW}/dispatches" \
+            --data-binary @"$EVIDENCE_DIR/dispatch-request.json")"
+          test "$status" = '204'
+
+          release_run_id=''
+          for attempt in {1..30}; do
+            runs="$(curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${REPOSITORY}/actions/workflows/${RELEASE_WORKFLOW}/runs?event=workflow_dispatch&branch=main&per_page=100")"
+            printf '%s\n' "$runs" > "$EVIDENCE_DIR/release-runs.json"
+            release_run_id="$(jq -r \
+              --arg sha "$MERGE_SHA" \
+              --slurpfile before "$EVIDENCE_DIR/runs-before.json" '
+                [.workflow_runs[]
+                 | select(.head_sha == $sha)
+                 | select((.id as $id | ($before[0] | index($id))) == null)]
+                | sort_by(.created_at)
+                | last
+                | .id // empty
+              ' <<<"$runs")"
+            [[ -n "$release_run_id" ]] && break
+            sleep 3
+          done
+          test -n "$release_run_id"
+          echo "release_run_id=$release_run_id" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$release_run_id" > "$EVIDENCE_DIR/release-run-id.txt"
+
+          {
+            echo '### PR #552 merged and production release dispatched'
+            echo
+            echo "- Verified candidate: \`$EXPECTED_HEAD_SHA\`"
+            echo "- Merge commit: \`$MERGE_SHA\`"
+            echo '- Merge tree equals the exact Preview-verified candidate tree.'
+            echo "- Canonical production release run: \`$release_run_id\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable merge and dispatch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-merge-production-dispatch-${{ github.run_id }}
+          path: pr552-merge-production-dispatch/
+          if-no-files-found: warn
+          retention-days: 30
