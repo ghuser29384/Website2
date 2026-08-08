@@ -70,7 +70,7 @@ function NavItem({ href, label, className }: { href: string; label: string; clas
   const isActive = isHrefActive(pathname, href);
 
   return (
-    <Link className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
+    <Link prefetch={false} className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>
       {label}
     </Link>
   );
@@ -120,7 +120,7 @@ function NavMenu({
           return item.href ? (
             <Fragment key={`${item.href}-${item.label}`}>
               {showSection ? <div className="topbar-menu-section">{item.section}</div> : null}
-              <Link
+              <Link prefetch={false}
                 className={["topbar-menu-link", isHrefActive(pathname, item.href) ? "is-active" : ""]
                   .filter(Boolean)
                   .join(" ")}
@@ -250,7 +250,7 @@ export function SiteTopbar({
       aria-label="Primary"
       className={showSearch ? "topbar mt-site-topbar topbar-with-search" : "topbar mt-site-topbar"}
     >
-      <Link aria-label="Moral Trade, home" className="brand mt-brand-link" href={brandHref}>
+      <Link prefetch={false} aria-label="Moral Trade, home" className="brand mt-brand-link" href={brandHref}>
         <MoralTradeWordmark />
       </Link>
       <div className="topbar-links">
@@ -372,7 +372,7 @@ export function SiteTopbar({
                 </div>
               ) : searchResults.length ? (
                 searchResults.map((result) => (
-                  <Link
+                  <Link prefetch={false}
                     className="topbar-search-result"
                     href={result.href}
                     key={`${result.kind}-${result.href}`}

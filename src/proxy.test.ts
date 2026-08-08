@@ -91,14 +91,13 @@ test("the reviewed career-backing lane remains available", () => {
   assert.equal(response.headers.get("x-middleware-rewrite"), null);
 });
 
-test("the legacy queryless offers entry opens Discover", () => {
+test("the queryless offers entry stays on the live offers directory", () => {
   const response = proxy(makeRequest("/offers"));
 
-  assert.equal(response.status, 307);
-  assert.equal(
-    response.headers.get("location"),
-    "https://moraltrade.org/discover?domain=offers&view=list",
-  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-middleware-next"), "1");
+  assert.equal(response.headers.get("location"), null);
+  assert.equal(response.headers.get("x-middleware-rewrite"), null);
 });
 
 test("query-driven offer searches continue to default to the live list", () => {
