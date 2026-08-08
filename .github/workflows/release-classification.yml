@@ -33,6 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           jq -n \
             --arg state pending \
             --arg target_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
@@ -66,7 +67,7 @@ jobs:
           PR_BODY: ${{ github.event.pull_request.body }}
         run: node scripts/validate-release-pr-body.mjs
 
-      - name: Publish the final required status
+      - name: Publish the final required status on the pull request head
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}

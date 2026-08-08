@@ -3,40 +3,61 @@ name: Complete Profile production canary
 on:
   pull_request:
     paths:
+      - ".github/scripts/complete-profile-canary-diagnostics.mjs"
       - ".github/scripts/complete-profile-production-canary.mjs"
       - ".github/workflows/complete-profile-production-canary.yml"
+      - "scripts/complete-profile-canary-diagnostics.test.mjs"
+      - "scripts/vercel-release-workflow.test.mjs"
   push:
     branches:
       - main
+    paths:
+      - ".github/scripts/complete-profile-canary-diagnostics.mjs"
+      - ".github/scripts/complete-profile-production-canary.mjs"
+      - ".github/workflows/complete-profile-production-canary.yml"
   schedule:
     - cron: "17 */6 * * *"
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Optional exact deployed Git SHA to verify; otherwise use the deployment currently serving both canonical aliases
+        required: false
+        type: string
 
 permissions:
   contents: read
   statuses: write
 
 concurrency:
-  group: complete-profile-production-canary-${{ github.sha }}
+  group: complete-profile-production-canary-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'production' }}
   cancel-in-progress: true
 
 jobs:
   source-check:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - name: Check out candidate
         uses: actions/checkout@v4
-      - name: Parse the production canary script
-        run: node --check .github/scripts/complete-profile-production-canary.mjs
+
+      - name: Parse and test the permanent canary controls
+        run: |
+          set -euo pipefail
+          node --check .github/scripts/complete-profile-canary-diagnostics.mjs
+          node --check .github/scripts/complete-profile-production-canary.mjs
+          node --test \
+            scripts/complete-profile-canary-diagnostics.test.mjs \
+            scripts/vercel-release-workflow.test.mjs
+          ruby -e 'require "yaml"; YAML.parse_file(ARGV.fetch(0)) or abort("invalid YAML")' \
+            .github/workflows/complete-profile-production-canary.yml
 
   production-canary:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     env:
-      EXPECTED_SHA: ${{ github.sha }}
+      CONTROL_SHA: ${{ github.sha }}
       STATUS_CONTEXT: QA / Complete Profile production canary
       VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
       VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
@@ -45,24 +66,179 @@ jobs:
       CANARY_OUTPUT_DIR: complete-profile-production-canary
 
     steps:
-      - name: Mark the exact commit pending
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
-            -f state=pending \
-            -f context="${STATUS_CONTEXT}" \
-            -f description="Waiting for the exact production deployment and running the Complete Profile canary" \
-            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-
-      - name: Check out the exact commit
+      - name: Check out the exact monitor control revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.EXPECTED_SHA }}
-          fetch-depth: 1
+          ref: ${{ env.CONTROL_SHA }}
+          fetch-depth: 0
 
-      - name: Verify the exact checkout
-        run: test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+      - name: Verify the exact monitor control checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CONTROL_SHA"
+
+      - name: Resolve the READY production deployment currently serving both canonical aliases
+        id: deployment
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+          REQUESTED_SHA: ${{ inputs.expected_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN_VALUE"
+          rm -rf "$CANARY_OUTPUT_DIR"
+          mkdir -p "$CANARY_OUTPUT_DIR/aliases"
+
+          selected_detail=''
+          deployment_id=''
+          apex_deployment_id=''
+          canonical_deployment_id=''
+
+          for attempt in $(seq 1 40); do
+            aliases_resolved=true
+            apex_deployment_id=''
+            canonical_deployment_id=''
+
+            for alias_name in moraltrade.org www.moraltrade.org; do
+              alias_key="${alias_name//./-}"
+              alias_path="$CANARY_OUTPUT_DIR/aliases/${alias_key}.json"
+              alias_api="https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}"
+
+              if ! curl -fsS \
+                -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+                "$alias_api" \
+                > "$alias_path"; then
+                aliases_resolved=false
+                break
+              fi
+
+              resolved_alias="$(jq -r '.alias // empty' "$alias_path")"
+              resolved_project="$(jq -r '.projectId // empty' "$alias_path")"
+              resolved_deployment="$(jq -r '.deploymentId // .deployment.id // .deployment.uid // empty' "$alias_path")"
+
+              if [[ "$resolved_alias" != "$alias_name" ]] \
+                || [[ "$resolved_project" != "$VERCEL_PROJECT_ID" ]] \
+                || [[ -z "$resolved_deployment" ]]; then
+                aliases_resolved=false
+                break
+              fi
+
+              if [[ "$alias_name" == 'moraltrade.org' ]]; then
+                apex_deployment_id="$resolved_deployment"
+              else
+                canonical_deployment_id="$resolved_deployment"
+              fi
+            done
+
+            if [[ "$aliases_resolved" != 'true' ]] \
+              || [[ -z "$apex_deployment_id" ]] \
+              || [[ "$apex_deployment_id" != "$canonical_deployment_id" ]]; then
+              sleep 15
+              continue
+            fi
+
+            deployment_id="$apex_deployment_id"
+            detail_path="$CANARY_OUTPUT_DIR/deployment-detail.json"
+            detail_api="https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_TEAM_ID}"
+
+            if ! curl -fsS \
+              -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+              "$detail_api" \
+              > "$detail_path"; then
+              sleep 15
+              continue
+            fi
+
+            if jq -e \
+              --arg project_id "$VERCEL_PROJECT_ID" \
+              --arg deployment_id "$deployment_id" \
+              --arg requested_sha "${REQUESTED_SHA:-}" '
+                ((.uid // .id) == $deployment_id)
+                and (.target == "production")
+                and ((.readyState // .state // "") == "READY")
+                and ((.projectId // .project.id // "") == $project_id)
+                and ((.aliasError // null) == null)
+                and (.meta.githubCommitOrg == "ghuser29384")
+                and (.meta.githubCommitRepo == "Website2")
+                and (.meta.githubCommitSha | test("^[0-9a-f]{40}$"))
+                and (($requested_sha == "") or (.meta.githubCommitSha == $requested_sha))
+              ' "$detail_path" >/dev/null; then
+              selected_detail="$detail_path"
+              break
+            fi
+
+            sleep 15
+          done
+
+          if [[ -z "$selected_detail" ]]; then
+            if [[ -n "${REQUESTED_SHA:-}" ]]; then
+              echo "No READY production deployment serving both aliases matched requested SHA $REQUESTED_SHA." >&2
+            else
+              echo "No READY production deployment currently serves both canonical aliases." >&2
+            fi
+            exit 1
+          fi
+
+          deployment_url="https://$(jq -r '.url // empty' "$selected_detail")"
+          expected_sha="$(jq -r '.meta.githubCommitSha // empty' "$selected_detail")"
+          test "$deployment_url" != 'https://'
+          test -n "$expected_sha"
+
+          if ! git cat-file -e "${expected_sha}^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$expected_sha"
+          fi
+          git cat-file -e "${expected_sha}^{commit}"
+          git merge-base --is-ancestor "$expected_sha" "$CONTROL_SHA"
+
+          jq -n \
+            --arg controlSha "$CONTROL_SHA" \
+            --arg expectedSha "$expected_sha" \
+            --arg deploymentId "$deployment_id" \
+            --arg deploymentUrl "$deployment_url" \
+            --arg projectId "$VERCEL_PROJECT_ID" \
+            --arg apexDeploymentId "$apex_deployment_id" \
+            --arg canonicalDeploymentId "$canonical_deployment_id" \
+            --argjson deployment "$(cat "$selected_detail")" '
+              {
+                controlSha: $controlSha,
+                expectedSha: $expectedSha,
+                deploymentId: $deploymentId,
+                deploymentUrl: $deploymentUrl,
+                projectId: $projectId,
+                aliasOwnership: {
+                  apexDeploymentId: $apexDeploymentId,
+                  canonicalDeploymentId: $canonicalDeploymentId
+                },
+                state: ($deployment.readyState // $deployment.state),
+                target: $deployment.target,
+                aliasError: $deployment.aliasError,
+                github: {
+                  org: $deployment.meta.githubCommitOrg,
+                  repo: $deployment.meta.githubCommitRepo,
+                  sha: $deployment.meta.githubCommitSha
+                }
+              }
+            ' > "$CANARY_OUTPUT_DIR/deployment.json"
+
+          {
+            echo "deployment_id=$deployment_id"
+            echo "deployment_url=$deployment_url"
+            echo "expected_sha=$expected_sha"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Mark the exact deployed commit pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ steps.deployment.outputs.expected_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Verifying the deployment currently serving both production aliases" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -70,133 +246,106 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Install dependencies
+      - name: Install monitor dependencies
         run: npm ci
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Resolve the exact READY production deployment
-        id: deployment
+      - name: Verify current alias ownership and both production routes
         env:
           VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+          EXPECTED_SHA: ${{ steps.deployment.outputs.expected_sha }}
+          EXPECTED_DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+        shell: bash
         run: |
           set -euo pipefail
-          test -n "$VERCEL_TOKEN_VALUE"
-          mkdir -p "$CANARY_OUTPUT_DIR"
+          verified=false
+          www_status='000'
+          apex_status='000'
 
-          api="https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&target=production&limit=100&teamId=${VERCEL_TEAM_ID}"
-          deployment=''
+          for attempt in $(seq 1 40); do
+            aliases_ready=true
 
-          for attempt in $(seq 1 300); do
-            if curl -fsS \
-              -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
-              "$api" \
-              > /tmp/moraltrade-production-deployments.json; then
-              deployment="$(jq -c --arg sha "$EXPECTED_SHA" '
-                [.deployments[]
-                  | select(.target == "production")
-                  | select(.meta.githubCommitSha == $sha)]
-                | sort_by(.created)
-                | reverse
-                | .[0] // empty
-              ' /tmp/moraltrade-production-deployments.json)"
-            fi
+            for alias_name in moraltrade.org www.moraltrade.org; do
+              alias_key="${alias_name//./-}"
+              alias_path="$CANARY_OUTPUT_DIR/aliases/${alias_key}-before-browser.json"
+              alias_api="https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}"
 
-            latest_main="$(git ls-remote origin refs/heads/main | cut -f1)"
-
-            if [[ -n "$deployment" ]]; then
-              state="$(jq -r '.state // "UNKNOWN"' <<<"$deployment")"
-              if [[ "$state" == "READY" ]]; then
+              if ! curl -fsS \
+                -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+                "$alias_api" \
+                > "$alias_path"; then
+                aliases_ready=false
                 break
               fi
-              if [[ "$state" == "ERROR" ]]; then
-                echo "The exact production deployment reached terminal state ERROR." >&2
-                exit 1
+
+              if ! jq -e \
+                --arg alias_name "$alias_name" \
+                --arg project_id "$VERCEL_PROJECT_ID" \
+                --arg deployment_id "$EXPECTED_DEPLOYMENT_ID" '
+                  (.alias == $alias_name)
+                  and (.projectId == $project_id)
+                  and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment_id)
+                ' "$alias_path" >/dev/null; then
+                aliases_ready=false
+                break
               fi
-              if [[ "$state" == "CANCELED" && "$latest_main" != "$EXPECTED_SHA" ]]; then
-                echo "superseded=true" >> "$GITHUB_OUTPUT"
-                jq -n \
-                  --arg expectedSha "$EXPECTED_SHA" \
-                  --arg latestMain "$latest_main" \
-                  --arg state "$state" \
-                  '{expectedSha:$expectedSha,latestMain:$latestMain,state:$state,superseded:true}' \
-                  > "$CANARY_OUTPUT_DIR/deployment.json"
-                exit 0
-              fi
-            elif [[ "$attempt" -ge 60 && "$latest_main" != "$EXPECTED_SHA" ]]; then
-              echo "superseded=true" >> "$GITHUB_OUTPUT"
-              jq -n \
-                --arg expectedSha "$EXPECTED_SHA" \
-                --arg latestMain "$latest_main" \
-                '{expectedSha:$expectedSha,latestMain:$latestMain,state:"not-created",superseded:true}' \
-                > "$CANARY_OUTPUT_DIR/deployment.json"
-              exit 0
+            done
+
+            detail_path="$CANARY_OUTPUT_DIR/deployment-before-browser.json"
+            detail_api="https://api.vercel.com/v13/deployments/${EXPECTED_DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}"
+            detail_ready=false
+
+            if curl -fsS \
+              -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+              "$detail_api" \
+              > "$detail_path" \
+              && jq -e \
+                --arg project_id "$VERCEL_PROJECT_ID" \
+                --arg deployment_id "$EXPECTED_DEPLOYMENT_ID" \
+                --arg expected_sha "$EXPECTED_SHA" '
+                  ((.uid // .id) == $deployment_id)
+                  and (.target == "production")
+                  and ((.readyState // .state // "") == "READY")
+                  and ((.projectId // .project.id // "") == $project_id)
+                  and ((.aliasError // null) == null)
+                  and (.meta.githubCommitSha == $expected_sha)
+                ' "$detail_path" >/dev/null; then
+              detail_ready=true
             fi
 
-            sleep 15
-          done
-
-          if [[ -z "$deployment" ]]; then
-            echo "No production deployment was found for exact commit $EXPECTED_SHA." >&2
-            exit 1
-          fi
-
-          state="$(jq -r '.state // "UNKNOWN"' <<<"$deployment")"
-          if [[ "$state" != "READY" ]]; then
-            echo "The exact production deployment did not become READY; final state: $state." >&2
-            exit 1
-          fi
-
-          deployment_id="$(jq -r '.uid // .id // empty' <<<"$deployment")"
-          deployment_url="https://$(jq -r .url <<<"$deployment")"
-          test -n "$deployment_id"
-          test "$deployment_id" != "null"
-          echo "superseded=false" >> "$GITHUB_OUTPUT"
-          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
-          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
-
-          jq -n \
-            --arg expectedSha "$EXPECTED_SHA" \
-            --arg deploymentId "$deployment_id" \
-            --arg deploymentUrl "$deployment_url" \
-            --arg state "$state" \
-            '{expectedSha:$expectedSha,deploymentId:$deploymentId,deploymentUrl:$deploymentUrl,state:$state,superseded:false}' \
-            > "$CANARY_OUTPUT_DIR/deployment.json"
-
-      - name: Verify the exact deployment through both production domains
-        id: domains
-        if: steps.deployment.outputs.superseded != 'true'
-        env:
-          EXPECTED_DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
-        run: |
-          set -euo pipefail
-
-          verified=false
-          for attempt in $(seq 1 40); do
-            www_status="$(curl -sS \
+            : > "$CANARY_OUTPUT_DIR/www-returning.headers"
+            : > "$CANARY_OUTPUT_DIR/apex.headers"
+            set +e
+            www_status="$(curl -sS --max-time 60 \
               --cookie 'mt_walkthrough_seen=1' \
               -D "$CANARY_OUTPUT_DIR/www-returning.headers" \
               -o "$CANARY_OUTPUT_DIR/www-returning.html" \
               -w '%{http_code}' \
               "$CANONICAL_ORIGIN/complete-profile")"
-
-            apex_status="$(curl -sS \
+            www_curl_status=$?
+            apex_status="$(curl -sS --max-time 60 \
               -D "$CANARY_OUTPUT_DIR/apex.headers" \
               -o /dev/null \
               -w '%{http_code}' \
               "$APEX_ORIGIN/complete-profile")"
+            apex_curl_status=$?
+            set -e
 
             tr -d '\r' < "$CANARY_OUTPUT_DIR/www-returning.headers" \
               > "$CANARY_OUTPUT_DIR/www-returning.normalized.headers"
             tr -d '\r' < "$CANARY_OUTPUT_DIR/apex.headers" \
               > "$CANARY_OUTPUT_DIR/apex.normalized.headers"
 
-            if [[ "$www_status" == "200" ]] \
-              && grep -Fq "$EXPECTED_DEPLOYMENT_ID" "$CANARY_OUTPUT_DIR/www-returning.html" \
+            if [[ "$aliases_ready" == 'true' ]] \
+              && [[ "$detail_ready" == 'true' ]] \
+              && [[ "$www_curl_status" -eq 0 ]] \
+              && [[ "$apex_curl_status" -eq 0 ]] \
+              && [[ "$www_status" == '200' ]] \
               && grep -Fq 'Spend 100 sparks of attention.' "$CANARY_OUTPUT_DIR/www-returning.html" \
               && grep -Fqx 'x-matched-path: /complete-profile' "$CANARY_OUTPUT_DIR/www-returning.normalized.headers" \
-              && [[ "$apex_status" == "308" ]] \
+              && [[ "$apex_status" == '308' ]] \
               && grep -Eq '^location: https://www\.moraltrade\.org/complete-profile([?].*)?$' "$CANARY_OUTPUT_DIR/apex.normalized.headers"; then
               verified=true
               break
@@ -205,55 +354,115 @@ jobs:
             sleep 15
           done
 
-          if [[ "$verified" != "true" ]]; then
-            latest_main="$(git ls-remote origin refs/heads/main | cut -f1)"
-            if [[ "$latest_main" != "$EXPECTED_SHA" ]]; then
-              echo "superseded=true" >> "$GITHUB_OUTPUT"
-              jq -n \
-                --arg expectedSha "$EXPECTED_SHA" \
-                --arg expectedDeploymentId "$EXPECTED_DEPLOYMENT_ID" \
-                --arg latestMain "$latest_main" \
-                '{expectedSha:$expectedSha,expectedDeploymentId:$expectedDeploymentId,latestMain:$latestMain,verified:false,superseded:true}' \
-                > "$CANARY_OUTPUT_DIR/domain-verification.json"
-              exit 0
-            fi
-
-            echo "The exact READY deployment never became live on both production domains." >&2
+          if [[ "$verified" != 'true' ]]; then
+            echo "The exact READY deployment did not retain both live aliases and the expected routes." >&2
             exit 1
           fi
 
-          echo "superseded=false" >> "$GITHUB_OUTPUT"
           jq -n \
+            --arg controlSha "$CONTROL_SHA" \
             --arg expectedSha "$EXPECTED_SHA" \
             --arg expectedDeploymentId "$EXPECTED_DEPLOYMENT_ID" \
             --arg wwwStatus "$www_status" \
-            --arg apexStatus "$apex_status" \
-            '{expectedSha:$expectedSha,expectedDeploymentId:$expectedDeploymentId,wwwStatus:$wwwStatus,apexStatus:$apexStatus,verified:true,superseded:false}' \
-            > "$CANARY_OUTPUT_DIR/domain-verification.json"
+            --arg apexStatus "$apex_status" '
+              {
+                controlSha: $controlSha,
+                expectedSha: $expectedSha,
+                expectedDeploymentId: $expectedDeploymentId,
+                wwwStatus: ($wwwStatus | tonumber),
+                apexStatus: ($apexStatus | tonumber),
+                aliasOwnershipVerified: true,
+                deploymentVerified: true,
+                routesVerified: true
+              }
+            ' > "$CANARY_OUTPUT_DIR/domain-verification.json"
 
       - name: Run the rendered first-time and returning-user canary
-        if: >-
-          steps.deployment.outputs.superseded != 'true' &&
-          steps.domains.outputs.superseded != 'true'
         env:
+          EXPECTED_SHA: ${{ steps.deployment.outputs.expected_sha }}
           EXPECTED_DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
         run: node .github/scripts/complete-profile-production-canary.mjs
 
+      - name: Reconfirm current alias ownership after the rendered canary
+        env:
+          VERCEL_TOKEN_VALUE: ${{ secrets.VERCEL_TOKEN }}
+          EXPECTED_SHA: ${{ steps.deployment.outputs.expected_sha }}
+          EXPECTED_DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            alias_key="${alias_name//./-}"
+            alias_path="$CANARY_OUTPUT_DIR/aliases/${alias_key}-after-browser.json"
+            alias_api="https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}"
+
+            curl -fsS \
+              -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+              "$alias_api" \
+              > "$alias_path"
+
+            jq -e \
+              --arg alias_name "$alias_name" \
+              --arg project_id "$VERCEL_PROJECT_ID" \
+              --arg deployment_id "$EXPECTED_DEPLOYMENT_ID" '
+                (.alias == $alias_name)
+                and (.projectId == $project_id)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment_id)
+              ' "$alias_path" >/dev/null
+          done
+
+          detail_path="$CANARY_OUTPUT_DIR/deployment-after-browser.json"
+          detail_api="https://api.vercel.com/v13/deployments/${EXPECTED_DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}"
+
+          curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN_VALUE}" \
+            "$detail_api" \
+            > "$detail_path"
+
+          jq -e \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg deployment_id "$EXPECTED_DEPLOYMENT_ID" \
+            --arg expected_sha "$EXPECTED_SHA" '
+              ((.uid // .id) == $deployment_id)
+              and (.target == "production")
+              and ((.readyState // .state // "") == "READY")
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitSha == $expected_sha)
+            ' "$detail_path" >/dev/null
+
+          jq -n \
+            --arg controlSha "$CONTROL_SHA" \
+            --arg expectedSha "$EXPECTED_SHA" \
+            --arg expectedDeploymentId "$EXPECTED_DEPLOYMENT_ID" '
+              {
+                controlSha: $controlSha,
+                expectedSha: $expectedSha,
+                expectedDeploymentId: $expectedDeploymentId,
+                aliasesStillCurrent: true,
+                deploymentStillReady: true
+              }
+            ' > "$CANARY_OUTPUT_DIR/post-canary-verification.json"
+
       - name: Summarize the canary
         if: always()
+        env:
+          EXPECTED_SHA: ${{ steps.deployment.outputs.expected_sha }}
+          EXPECTED_DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+        shell: bash
         run: |
           {
             echo '## Complete Profile production canary'
             echo
-            echo "- Commit: \`$EXPECTED_SHA\`"
-            echo "- Deployment: \`${{ steps.deployment.outputs.deployment_id }}\`"
-            if [[ "${{ steps.deployment.outputs.superseded }}" == "true" || "${{ steps.domains.outputs.superseded }}" == "true" ]]; then
-              echo '- Result: `superseded before becoming the live production alias`'
-            elif [[ -f "$CANARY_OUTPUT_DIR/report.json" ]]; then
+            echo "- Monitor control: \`$CONTROL_SHA\`"
+            echo "- Deployed commit: \`$EXPECTED_SHA\`"
+            echo "- Deployment: \`$EXPECTED_DEPLOYMENT_ID\`"
+            if [[ -f "$CANARY_OUTPUT_DIR/report.json" ]]; then
               echo "- Result: \`$(jq -r '.status // "unknown"' "$CANARY_OUTPUT_DIR/report.json")\`"
               echo "- Scenarios passed: \`$(jq '[.scenarios[] | select(.status == "passed")] | length' "$CANARY_OUTPUT_DIR/report.json")/6\`"
               echo "- Expected cancelled prefetches: \`$(jq -r '.expectedPrefetchAbortCount // 0' "$CANARY_OUTPUT_DIR/report.json")\`"
-              echo "- Known root-prefetch 404s: \`$(jq -r '.knownRootPrefetch404Count // 0' "$CANARY_OUTPUT_DIR/report.json")\`"
+              echo "- Expected first-time navigation cancellations: \`$(jq -r '.expectedNavigationAbortCount // 0' "$CANARY_OUTPUT_DIR/report.json")\`"
             else
               echo '- Result: `failed before the rendered canary`'
             fi
@@ -263,32 +472,31 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: complete-profile-production-canary-${{ github.sha }}
+          name: complete-profile-production-canary-${{ steps.deployment.outputs.expected_sha || github.sha }}
           path: complete-profile-production-canary
           if-no-files-found: error
           retention-days: 14
 
       - name: Publish the canary result
-        if: always()
+        if: always() && steps.deployment.outputs.expected_sha != ''
         env:
           GH_TOKEN: ${{ github.token }}
           JOB_STATUS: ${{ job.status }}
-          DEPLOYMENT_SUPERSEDED: ${{ steps.deployment.outputs.superseded }}
-          DOMAIN_SUPERSEDED: ${{ steps.domains.outputs.superseded }}
+          EXPECTED_SHA: ${{ steps.deployment.outputs.expected_sha }}
+        shell: bash
         run: |
-          if [[ "$JOB_STATUS" != "success" ]]; then
-            state=failure
-            description="Complete Profile production canary failed; inspect the run evidence"
-          elif [[ "$DEPLOYMENT_SUPERSEDED" == "true" || "$DOMAIN_SUPERSEDED" == "true" ]]; then
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == 'success' ]]; then
             state=success
-            description="Commit was superseded before becoming the live production alias"
+            description="Exact live production deployment passed all six Complete Profile canary scenarios"
           else
-            state=success
-            description="Exact production deployment passed all six Complete Profile canary scenarios"
+            state=failure
+            description="Complete Profile production canary failed; inspect the exact run evidence"
           fi
 
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${EXPECTED_SHA}" \
             -f state="$state" \
-            -f context="${STATUS_CONTEXT}" \
+            -f context="$STATUS_CONTEXT" \
             -f description="$description" \
             -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
