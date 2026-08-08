@@ -1,0 +1,3 @@
+Repository-only one-use trigger for the exact-head Institutional trade QA workflow.
+
+This file changes no runtime, production, database, payment, custody, payout, or feature-flag behavior. Remove it after the exact-head QA evidence is preserved.

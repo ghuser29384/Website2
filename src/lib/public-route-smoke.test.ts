@@ -37,13 +37,19 @@ function readRepoFile(path: string) {
   return readFileSync(join(process.cwd(), path), "utf8");
 }
 
-function flattenPrimaryNavHrefs() {
-  return getPrimaryNavLinks(false).flatMap((link) =>
-    "items" in link && link.items
-      ? link.items.map((item) => item.href)
-      : "href" in link && link.href
-        ? [link.href]
-        : [],
+interface RegressionPrimaryNavItem {
+  href: string;
+}
+
+interface RegressionPrimaryNavEntry {
+  href?: string;
+  items?: readonly RegressionPrimaryNavItem[];
+}
+
+function flattenPrimaryNavHrefs(): string[] {
+  const links = getPrimaryNavLinks(false) as readonly RegressionPrimaryNavEntry[];
+  return links.flatMap((link) =>
+    link.items?.map((item) => item.href) ?? (link.href ? [link.href] : []),
   );
 }
 
@@ -51,7 +57,7 @@ test("public navigation exposes professional marketplace routes", () => {
   const links = getPrimaryNavLinks(false);
   const labels = links.map((link) => link.label);
   const hrefs = flattenPrimaryNavHrefs();
-  const footerHrefs = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));
+  const footerHrefs: string[] = FOOTER_LINK_GROUPS.flatMap((group) => group.links.map((link) => link.href));
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const globalCss = readRepoFile("src/app/globals.css");

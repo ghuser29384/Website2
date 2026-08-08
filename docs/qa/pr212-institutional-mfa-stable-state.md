@@ -1,0 +1,26 @@
+# PR #212 institutional MFA stable-state QA contract
+
+The authenticated institutional QA flow must verify the durable postcondition of MFA verification rather than a transient server-action message.
+
+## Stable postcondition
+
+After submitting the current TOTP code, the Playwright driver must:
+
+1. observe a successful `POST /dashboard` server-action response;
+2. allow a short, bounded interval for refreshed authentication cookies to settle, without waiting indefinitely for the streamed response body to close;
+3. hard-reload the dashboard; and
+4. confirm that the reloaded account-security panel renders an `aal2` session, through either the `Session level` or `AAL` field.
+
+The driver must not wait for the short-lived `MFA verified for this session.` action result. That message can disappear during `router.refresh()` and does not independently prove that the browser retained the refreshed AAL2 session. It also must not make `response.finished()` an unbounded prerequisite: a Next.js server-action response can remain stream-open after its status and cookie headers have been delivered.
+
+If the durable postcondition is absent, the retained QA evidence includes the initial, post-action, and post-reload panel text; the server-action response status; whether an authentication cookie changed during the bounded settle interval; redacted cookie metadata that excludes cookie values; and a failure screenshot. This distinguishes an action failure, session-persistence failure, stale render, or selector failure without exposing authentication credentials.
+
+## Exact-head gate
+
+The bounded-settling implementation and its focused source contracts were published together. A direct repository commit after that bot-published repair intentionally starts the durable isolated-QA workflow on one exact feature head. That run must reach a successful terminal result and its retained artifact must be inspected before current-`main` integration, protected preview review, or any release decision.
+
+## Scope
+
+This contract changes no MFA policy or authorization rule. Server actions, Supabase AAL checks, exact organization/program authority, personal-capacity isolation, and all downstream institutional authorization gates remain authoritative.
+
+The document makes the browser-test postcondition and release gate reviewable.
