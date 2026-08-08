@@ -1,0 +1,111 @@
+name: Dispatch PR 552 canonical production release once
+
+on:
+  push:
+    branches:
+      - ops/pr552-dispatch-production-release-20260808
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: dispatch-pr552-production-release-once
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      MERGED_SHA: 71e532dfbbb9e364ce5119bec84826a96e2fb338
+    steps:
+      - name: Check out the exact controller branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard immutable merged revision and one-file controller diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$MERGED_SHA"
+          git cat-file -e "${MERGED_SHA}^{commit}"
+          git diff --check "$MERGED_SHA" "$GITHUB_SHA"
+          git diff --name-only "$MERGED_SHA" "$GITHUB_SHA" > controller-files.txt
+          printf '%s\n' '.github/workflows/dispatch-pr552-production-release-once.yml' > expected-controller-files.txt
+          diff -u expected-controller-files.txt controller-files.txt
+
+      - name: Dispatch the canonical production workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dispatched_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          gh workflow run vercel-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f target=production \
+            -f ref=main \
+            -f expected_sha="$MERGED_SHA"
+          printf '%s\n' "$dispatched_at" > dispatch-time.txt
+
+      - name: Prove exactly one new canonical release run exists
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dispatched_at="$(cat dispatch-time.txt)"
+          for attempt in $(seq 1 30); do
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&branch=main&per_page=20" \
+              > release-runs.json
+            jq --arg dispatched_at "$dispatched_at" --arg sha "$MERGED_SHA" '[
+              .workflow_runs[]
+              | select(.created_at >= $dispatched_at)
+              | select(.head_branch == "main")
+              | select(.head_sha == $sha)
+            ]' release-runs.json > matching-release-runs.json
+            count="$(jq 'length' matching-release-runs.json)"
+            if [[ "$count" == '1' ]]; then
+              break
+            fi
+            if [[ "$count" != '0' ]]; then
+              echo "Expected exactly one canonical release run, found $count." >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$(jq 'length' matching-release-runs.json)" = '1'
+          jq -n \
+            --arg mergedSha "$MERGED_SHA" \
+            --argjson run "$(jq '.[0]' matching-release-runs.json)" '
+              {
+                mergedSha: $mergedSha,
+                runId: $run.id,
+                workflow: $run.name,
+                event: $run.event,
+                headBranch: $run.head_branch,
+                headSha: $run.head_sha,
+                status: $run.status,
+                htmlUrl: $run.html_url,
+                createdAt: $run.created_at
+              }
+            ' > dispatched-release.json
+          cat dispatched-release.json
+
+      - name: Upload dispatch evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-production-release-dispatch-${{ github.run_id }}
+          path: |
+            controller-files.txt
+            expected-controller-files.txt
+            dispatch-time.txt
+            dispatched-release.json
+          if-no-files-found: error
+          retention-days: 14
