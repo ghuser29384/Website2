@@ -1,0 +1,203 @@
+name: Temporary repair PR 558 deterministic campaign identity v2
+
+on:
+  push:
+    branches:
+      - temp/fix-pr558-lint-controller-20260808
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_HEAD_SHA: 634af275da8f161ea73d9e0fa306695e82b0790e
+      TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Apply only the two proven fixture repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          fixture_path = Path("supabase/tests/mpgf_dac_product_browser_fixture.sql")
+          fixture = fixture_path.read_text()
+          old_policy = '      "eligibilityPolicy":{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"},\n'
+          new_policy = (
+              '      "eligibilityPolicy":{\n'
+              '        "policyVersion":"mpgf_failure_bonus_eligibility_v0_1",\n'
+              '        "contributorIdentityRule":"verified_unique_person",\n'
+              '        "contributionTimingRule":"captured_before_deadline",\n'
+              '        "relatedPartyRule":"exclude_creator_and_related_parties",\n'
+              '        "paymentIntegrityRule":"exclude_duplicate_reversed_disputed_or_fraudulent",\n'
+              '        "bonusBasis":"eligible_contribution",\n'
+              '        "maxParticipants":100,\n'
+              '        "maxBonusPerParticipantCents":2500\n'
+              '      },\n'
+          )
+          if fixture.count(old_policy) != 1:
+              raise SystemExit("Expected one incomplete browser-fixture eligibility policy.")
+          fixture = fixture.replace(old_policy, new_policy)
+
+          old_rationale = '        "rationale":"Synthetic provisional quote for isolated QA",\n'
+          new_rationale = (
+              '        "rationale":"Provisional threshold 1 experience-rated quote; '
+              'operator approval remains required.",\n'
+          )
+          if fixture.count(old_rationale) != 1:
+              raise SystemExit("Expected one non-canonical browser-fixture rationale.")
+          fixture_path.write_text(fixture.replace(old_rationale, new_rationale))
+
+          wrong = "'campaign-c077777777774777877777777777777'"
+          correct = "'campaign-c0777777777747778777777777777777'"
+          expected_counts = {
+              Path(".github/workflows/mpgf-dac-product-lifecycle-gates.yml"): 2,
+              Path("supabase/tests/mpgf_dac_product_browser_cleanup.sql"): 5,
+              Path("supabase/tests/mpgf_dac_product_browser_fixture.sql"): 8,
+          }
+          for path, expected in expected_counts.items():
+              source = path.read_text()
+              actual = source.count(wrong)
+              if actual != expected:
+                  raise SystemExit(f"Expected {expected} malformed IDs in {path}, found {actual}.")
+              repaired = source.replace(wrong, correct)
+              if wrong in repaired:
+                  raise SystemExit(f"Malformed quoted campaign ID remains in {path}.")
+              path.write_text(repaired)
+              print(f"Repaired {actual} exact campaign ID reference(s) in {path}")
+
+          for path in expected_counts:
+              if "campaign-c077777777774777877777777777777'" in path.read_text():
+                  raise SystemExit(f"Malformed campaign identity remains in {path}.")
+          PY
+          git diff --check
+          git diff --stat
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Verify exact TLS-only QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          if not (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          ):
+              raise SystemExit("Refusing a database URL outside the exact TLS-only Moral Trade QA target.")
+          PY
+
+      - name: Pre-clean exact synthetic records
+        run: psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file supabase/tests/mpgf_dac_product_browser_cleanup.sql
+
+      - name: Prove complete open, success, and lapse fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export MPGF_DAC_PRODUCT_QA_PASSWORD="$qa_password"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_fixture.sql
+
+      - name: Verify fixture state and no-payment boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align <<'SQL' | tee /tmp/proof.txt
+          select 'campaigns=' || count(*) from public.mpgf_public_goods_campaigns where id in (
+            'campaign-ce555555555545558555555555555555',
+            'campaign-cf666666666646668666666666666666',
+            'campaign-c0777777777747778777777777777777'
+          );
+          select 'outcomes=' || count(*) from public.mpgf_dac_campaign_outcomes where campaign_id in (
+            'campaign-cf666666666646668666666666666666',
+            'campaign-c0777777777747778777777777777777'
+          );
+          select 'payments=' || count(*) from public.mpgf_public_goods_pledges where campaign_id in (
+            'campaign-ce555555555545558555555555555555',
+            'campaign-cf666666666646668666666666666666',
+            'campaign-c0777777777747778777777777777777'
+          ) and (payment_intent_ref is not null or status = 'captured');
+          SQL
+          grep -Fxq 'campaigns=3' /tmp/proof.txt
+          grep -Fxq 'outcomes=2' /tmp/proof.txt
+          grep -Fxq 'payments=0' /tmp/proof.txt
+
+      - name: Remove synthetic records and credentials
+        if: always()
+        run: psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file supabase/tests/mpgf_dac_product_browser_cleanup.sql
+
+      - name: Prove zero residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          residue="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align <<'SQL'
+          select
+            (select count(*) from auth.users where id in (
+              'ca111111-1111-4111-8111-111111111111',
+              'cb222222-2222-4222-8222-222222222222',
+              'cc333333-3333-4333-8333-333333333333',
+              'cd444444-4444-4444-8444-444444444444'
+            ))
+            + (select count(*) from public.mpgf_pool_proposals where id in (
+              'ce555555-5555-4555-8555-555555555555',
+              'cf666666-6666-4666-8666-666666666666',
+              'c0777777-7777-4777-8777-777777777777'
+            ))
+            + (select count(*) from public.mpgf_public_goods_campaigns where id in (
+              'campaign-ce555555555545558555555555555555',
+              'campaign-cf666666666646668666666666666666',
+              'campaign-c0777777777747778777777777777777'
+            ))
+            + (select count(*) from public.mpgf_public_goods_rounds where id = 'qa-dac-product-round-20260807')
+            + (select count(*) from public.mpgf_public_goods_match_pools where id = 'qa-dac-product-match-20260807');
+          SQL
+          )"
+          test "$residue" = "0"
+
+      - name: Commit proven repair to PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/workflows/mpgf-dac-product-lifecycle-gates.yml \
+            supabase/tests/mpgf_dac_product_browser_cleanup.sql \
+            supabase/tests/mpgf_dac_product_browser_fixture.sql
+          git commit -m "test(mpgf): use exact deterministic DAC campaign identity"
+          git push origin "HEAD:${TARGET_BRANCH}"
