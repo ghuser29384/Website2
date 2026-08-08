@@ -226,8 +226,8 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   await expect(page.getByText("Dominant assurance contract", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "What happens under these exact DAC terms" })).toBeVisible();
   await expect(page.getByText("sealed until finalization", { exact: true })).toBeVisible();
-  await expect(page.getByText("10%", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("$102.01", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/The approved failure-bonus rate is 10%/)).toBeVisible();
+  await expect(page.getByText(/The gross success requirement is \$102\.01\./)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Sign in to bind a pledge to these exact terms." })).toBeVisible();
   await expect(page.getByText("Your private receipts", { exact: true })).toHaveCount(0);
   await screenshot(page, "01-open-anonymous-desktop");
