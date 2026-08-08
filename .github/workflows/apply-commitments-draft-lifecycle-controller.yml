@@ -1,0 +1,114 @@
+name: Apply Commitments draft-lifecycle correction
+
+on:
+  push:
+    branches: [ops/commitments-draft-lifecycle-controller-20260808]
+    paths:
+      - ".github/workflows/apply-commitments-draft-lifecycle-controller.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: commitments-draft-lifecycle-controller-20260808
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPECTED_FEATURE_HEAD: a86464941e459e39b786da2d3d6ee14dfdc9285f
+      TARGET_BRANCH: feature/commitments-phase1-impact-accounting-20260806
+      PATCH_SHA256: e9ed5f09f5914b71d13644f6d75f77fcc0b1ae666869b9a97133f8eda286f1d1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify controller and feature identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/commitments-draft-lifecycle-controller-20260808'
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$EXPECTED_FEATURE_HEAD"
+          git cat-file -e "${EXPECTED_FEATURE_HEAD}^{commit}"
+      - name: Check out exact feature head
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --detach "$EXPECTED_FEATURE_HEAD"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+      - name: Apply audited lifecycle correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64, gzip, pathlib
+          payload = """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"""
+          patch = gzip.decompress(base64.b64decode(payload))
+          pathlib.Path('/tmp/commitments-draft-lifecycle.patch').write_bytes(patch)
+          PY
+          printf '%s  %s\n' "$PATCH_SHA256" /tmp/commitments-draft-lifecycle.patch | sha256sum -c -
+          git apply --check /tmp/commitments-draft-lifecycle.patch
+          git apply /tmp/commitments-draft-lifecycle.patch
+          git diff --check
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validate corrected candidate lifecycle and generated SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/validate-commitments-impact-methodologies.mjs
+          node scripts/render-commitments-impact-methodologies-qa-sql.mjs > /tmp/candidates-rollback.sql
+          grep -Fq "'draft'" /tmp/candidates-rollback.sql
+          grep -Fq 'rollback;' /tmp/candidates-rollback.sql
+          ! grep -Fq "'under_review'" /tmp/candidates-rollback.sql
+          COMMITMENTS_IMPACT_QA_STAGE_CONFIRM=hvmxfjjbdcgjjudmthdz \
+            node scripts/render-commitments-impact-methodologies-qa-sql.mjs --commit \
+            > /tmp/candidates-commit.sql
+          grep -Fq 'commit;' /tmp/candidates-commit.sql
+          ! grep -Fq "'under_review'" /tmp/candidates-commit.sql
+      - name: Verify exact correction surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only "$EXPECTED_FEATURE_HEAD" | sort > /tmp/actual-files.txt
+          cat > /tmp/expected-files.txt <<'FILES'
+          .github/workflows/commitments-impact-accounting-gates.yml
+          docs/commitments/impact-methodologies-v1-review.md
+          docs/commitments/impact-methodologies-v1/co_fund.json
+          docs/commitments/impact-methodologies-v1/donation_redirect.json
+          docs/commitments/impact-methodologies-v1/donation_upgrade.json
+          docs/commitments/impact-methodologies-v1/manifest.json
+          docs/commitments/impact-methodologies-v1/threshold_funding.json
+          docs/commitments/impact-methodologies-v1/threshold_sign_on.json
+          docs/commitments/impact-methodologies-v1/trade.json
+          scripts/render-commitments-impact-methodologies-qa-sql.mjs
+          scripts/validate-commitments-impact-methodologies.mjs
+          FILES
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+      - name: Commit and push exact feature correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/workflows/commitments-impact-accounting-gates.yml \
+            docs/commitments/impact-methodologies-v1-review.md \
+            docs/commitments/impact-methodologies-v1/*.json \
+            scripts/render-commitments-impact-methodologies-qa-sql.mjs \
+            scripts/validate-commitments-impact-methodologies.mjs
+          git commit -m 'Keep blocked impact methodologies in draft lifecycle'
+          new_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_FEATURE_HEAD"
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$EXPECTED_FEATURE_HEAD"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          printf 'feature_head=%s\n' "$new_sha" >> "$GITHUB_OUTPUT"
+          echo "Pushed corrected feature head: $new_sha" >> "$GITHUB_STEP_SUMMARY"
