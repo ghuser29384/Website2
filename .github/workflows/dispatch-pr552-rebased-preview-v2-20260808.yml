@@ -1,0 +1,91 @@
+name: Dispatch PR 552 rebased exact Preview once
+
+on:
+  push:
+    branches:
+      - ops/dispatch-pr552-rebased-preview-v2-20260808
+    paths:
+      - .github/workflows/dispatch-pr552-rebased-preview-v2-20260808.yml
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: dispatch-pr552-rebased-preview-v2-20260808
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_SHA: 3f1b893986055a32b9a88d9f3cd81fd8d4dfbfd0
+      EXPECTED_BASE_SHA: ba4b50386edc038d5297740d99a224a16ed69d71
+      RELEASE_REF: release/vercel-preview
+      PR_NUMBER: "552"
+    steps:
+      - name: Guard immutable release inputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/dispatch-pr552-rebased-preview-v2-20260808'
+
+          pr="$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}")"
+          test "$(jq -r '.state' <<<"$pr")" = 'open'
+          test "$(jq -r '.draft' <<<"$pr")" = 'true'
+          test "$(jq -r '.head.ref' <<<"$pr")" = 'hotfix/dashboard-account-security-visible-20260807'
+          test "$(jq -r '.head.sha' <<<"$pr")" = "$EXPECTED_SHA"
+          test "$(jq -r '.base.ref' <<<"$pr")" = 'main'
+          test "$(jq -r '.base.sha' <<<"$pr")" = "$EXPECTED_BASE_SHA"
+
+          release_sha="$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/ref/heads/${RELEASE_REF}" \
+            | jq -r '.object.sha')"
+          test "$release_sha" = "$EXPECTED_SHA"
+
+      - name: Dispatch canonical gated Preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg ref main \
+            --arg target preview \
+            --arg release_ref "$RELEASE_REF" \
+            --arg expected_sha "$EXPECTED_SHA" \
+            '{ref:$ref,inputs:{target:$target,ref:$release_ref,expected_sha:$expected_sha}}' \
+            > dispatch.json
+
+          for attempt in 1 2 3 4; do
+            code="$(curl -sS \
+              -o dispatch-response.txt \
+              -w '%{http_code}' \
+              -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/dispatches" \
+              --data-binary @dispatch.json || true)"
+            if [[ "$code" == '204' ]]; then
+              echo "Dispatched gated Preview for ${EXPECTED_SHA}."
+              exit 0
+            fi
+            cat dispatch-response.txt >&2 || true
+            if [[ "$attempt" -eq 4 ]]; then
+              echo "Workflow dispatch failed after ${attempt} attempts with HTTP ${code}." >&2
+              exit 1
+            fi
+            sleep "$((attempt * 5))"
+          done
