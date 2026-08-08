@@ -1,0 +1,152 @@
+name: Returning homepage fast gates b84f9a54
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/returning-homepage-fast-b84f9a54.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: returning-homepage-fast-b84f9a54
+  cancel-in-progress: true
+
+env:
+  BASE_SHA: c2d907827c4c7086fb66973bbe3d9619f1856f99
+  CANDIDATE_SHA: b84f9a54b1db065ca7e76dc5426744606a0a84a5
+  PRODUCT_PR: "564"
+  CONTROLLER_PATH: .github/workflows/returning-homepage-fast-b84f9a54.yml
+  EVIDENCE_DIR: returning-homepage-fast-evidence-b84f9a54
+  STATUS_CONTEXT: QA / Returning homepage fast gates
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  focused:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+
+    steps:
+      - name: Mark immutable candidate pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Running repeated returning-homepage rendered gates" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Guard controller and immutable product scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.base.sha }}' = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+
+          controller_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename')"
+          test "$controller_files" = "$CONTROLLER_PATH"
+
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.sha <<<"$product_pr")" = "$BASE_SHA"
+          product_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename')"
+          test "$product_files" = $'tests/returning-homepage-timezone.spec.ts\ntests/returning-homepage.spec.ts'
+
+      - name: Check out immutable product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove exact two-file differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git fetch --depth=1 origin "$BASE_SHA"
+          test "$(git diff --name-only "$BASE_SHA" "$CANDIDATE_SHA")" = $'tests/returning-homepage-timezone.spec.ts\ntests/returning-homepage.spec.ts'
+          git diff --check "$BASE_SHA" "$CANDIDATE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          git diff --stat "$BASE_SHA" "$CANDIDATE_SHA" > "$EVIDENCE_DIR/diff-stat.txt"
+          printf '%s\n' "$BASE_SHA" > "$EVIDENCE_DIR/base-sha.txt"
+          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Lint the changed durable tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npx eslint \
+            tests/returning-homepage.spec.ts \
+            tests/returning-homepage-timezone.spec.ts \
+            --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+
+      - name: Repeat the complete returning-homepage contract
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test \
+            tests/returning-homepage.spec.ts \
+            tests/returning-homepage-timezone.spec.ts \
+            --workers=1 --repeat-each=5 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/focused-returning-homepage.log"
+
+      - name: Upload focused evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: returning-homepage-fast-gates-b84f9a54
+          path: returning-homepage-fast-evidence-b84f9a54
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish immutable candidate result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="Repeated returning-homepage gates passed"
+          else
+            state=failure
+            description="Returning-homepage focused gates failed"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
