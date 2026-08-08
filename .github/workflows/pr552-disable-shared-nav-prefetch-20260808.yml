@@ -1,0 +1,164 @@
+name: PR 552 disable shared navigation prefetch
+
+on:
+  push:
+    branches:
+      - ops/pr552-disable-shared-nav-prefetch-20260808
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr552-disable-shared-nav-prefetch-20260808
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Suppress invalid RSC prefetches on the PR head
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      TARGET_BRANCH: hotfix/dashboard-account-security-visible-20260807
+      EXPECTED_HEAD: 1b4ff5ebea9cfa294bbc9d8e4683b18e8f0097b1
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Guard the open pull request and immutable starting head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          response="$(curl -fsS \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            'https://api.github.com/repos/ghuser29384/Website2/pulls/552')"
+          test "$(jq -r '.state' <<<"$response")" = 'open'
+          test "$(jq -r '.draft' <<<"$response")" = 'true'
+          test "$(jq -r '.head.ref' <<<"$response")" = "$TARGET_BRANCH"
+          test "$(jq -r '.head.repo.full_name' <<<"$response")" = 'ghuser29384/Website2'
+          test "$(jq -r '.base.ref' <<<"$response")" = 'main'
+          test "$(jq -r '.head.sha' <<<"$response")" = "$EXPECTED_HEAD"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Disable Next App Router prefetch on shared navigation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          topbar_path = Path("src/components/layout/site-topbar.tsx")
+          footer_path = Path("src/components/layout/site-footer.tsx")
+          test_path = Path("src/dashboard-account-security-visibility.test.ts")
+          workflow_path = Path(".github/workflows/dashboard-account-security-hotfix-gates.yml")
+
+          def disable_all_link_prefetch(path: Path, expected_links: int) -> None:
+              source = path.read_text(encoding="utf-8")
+              if source.count("<Link") != expected_links:
+                  raise SystemExit(
+                      f"{path}: expected {expected_links} Link elements, found {source.count('<Link')}"
+                  )
+              if "prefetch={false}" in source:
+                  raise SystemExit(f"{path}: prefetch suppression already exists")
+              source = source.replace("<Link", "<Link prefetch={false}")
+              if source.count("<Link prefetch={false}") != expected_links:
+                  raise SystemExit(f"{path}: failed to suppress every Link prefetch")
+              path.write_text(source, encoding="utf-8")
+
+          disable_all_link_prefetch(topbar_path, 4)
+          disable_all_link_prefetch(footer_path, 6)
+
+          test_source = test_path.read_text(encoding="utf-8")
+          declaration_anchor = '''const accountSecurityPanel = readFileSync(
+            "src/components/dashboard/background-account-security-panel.tsx",
+            "utf8",
+          );'''
+          declaration_replacement = declaration_anchor + '''
+          const siteTopbar = readFileSync("src/components/layout/site-topbar.tsx", "utf8");
+          const siteFooter = readFileSync("src/components/layout/site-footer.tsx", "utf8");'''
+          if test_source.count(declaration_anchor) != 1:
+              raise SystemExit("focused test declaration anchor changed")
+          test_source = test_source.replace(declaration_anchor, declaration_replacement, 1)
+
+          new_test = '''
+
+          test("shared navigation cannot prefetch document-backed routes as missing RSC pages", () => {
+            const topbarLinks = siteTopbar.match(/<Link\\b/g) ?? [];
+            const footerLinks = siteFooter.match(/<Link\\b/g) ?? [];
+
+            assert.equal(topbarLinks.length, 4);
+            assert.equal(footerLinks.length, 6);
+            assert.equal(
+              (siteTopbar.match(/<Link prefetch=\\{false\\}/g) ?? []).length,
+              topbarLinks.length,
+            );
+            assert.equal(
+              (siteFooter.match(/<Link prefetch=\\{false\\}/g) ?? []).length,
+              footerLinks.length,
+            );
+          });
+          '''.strip("\n")
+          if 'test("shared navigation cannot prefetch document-backed routes' in test_source:
+              raise SystemExit("focused navigation-prefetch test already exists")
+          test_source = test_source.rstrip() + "\n\n" + new_test + "\n"
+          test_path.write_text(test_source, encoding="utf-8")
+
+          workflow = workflow_path.read_text(encoding="utf-8")
+          path_anchor = '      - "src/components/dashboard/background-account-security-panel.tsx"\n'
+          path_replacement = path_anchor + (
+              '      - "src/components/layout/site-footer.tsx"\n'
+              '      - "src/components/layout/site-topbar.tsx"\n'
+          )
+          if workflow.count(path_anchor) != 1:
+              raise SystemExit("workflow path anchor changed")
+          workflow = workflow.replace(path_anchor, path_replacement, 1)
+
+          expected_anchor = "          src/components/dashboard/background-account-security-panel.tsx\n"
+          expected_replacement = expected_anchor + (
+              "          src/components/layout/site-footer.tsx\n"
+              "          src/components/layout/site-topbar.tsx\n"
+          )
+          if workflow.count(expected_anchor) != 1:
+              raise SystemExit("workflow expected-file anchor changed")
+          workflow = workflow.replace(expected_anchor, expected_replacement, 1)
+          workflow_path.write_text(workflow, encoding="utf-8")
+          PY
+
+      - name: Verify exact repair and focused contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --name-only | sort > actual-repair-files.txt
+          cat > expected-repair-files.txt <<'FILES'
+          .github/workflows/dashboard-account-security-hotfix-gates.yml
+          src/components/layout/site-footer.tsx
+          src/components/layout/site-topbar.tsx
+          src/dashboard-account-security-visibility.test.ts
+          FILES
+          diff -u expected-repair-files.txt actual-repair-files.txt
+          node --import tsx --test src/dashboard-account-security-visibility.test.ts
+
+      - name: Commit and push exact repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$EXPECTED_HEAD"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/workflows/dashboard-account-security-hotfix-gates.yml \
+            src/components/layout/site-footer.tsx \
+            src/components/layout/site-topbar.tsx \
+            src/dashboard-account-security-visibility.test.ts
+          git commit -m "Suppress shared navigation RSC prefetches"
+          git push origin "HEAD:$TARGET_BRANCH"
