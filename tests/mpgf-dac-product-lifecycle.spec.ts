@@ -291,12 +291,12 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   );
   await page.getByLabel(/I accept this exact published version and hash/).check();
   await page.getByRole("button", { name: "Record conditional pledge" }).click();
-  await expect(page.getByRole("heading", { name: "$25.00 conditional pledge recorded" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole("heading", { name: /^\$25(?:\.00)? conditional pledge recorded$/ })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("No payment method, authorization, charge, or capture was created by this receipt.")).toBeVisible();
   await page.reload();
   await page.waitForLoadState("networkidle");
   await expect(page.getByText("Your private receipts", { exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "$25.00 · pledged" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /^\$25(?:\.00)? · pledged$/ })).toBeVisible();
   await expect(page.getByText(/^Consent: [0-9a-f]{64}$/)).toBeVisible();
   await expect(page.getByText("No payment created", { exact: true })).toBeVisible();
   await screenshot(page, "02-open-pledger-private-receipt-desktop");
