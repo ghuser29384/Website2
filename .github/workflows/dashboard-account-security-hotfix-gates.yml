@@ -14,6 +14,8 @@ on:
       - "src/app/dashboard/page.tsx"
       - "src/components/dashboard/background-account-security-panel.tsx"
       - "src/dashboard-account-security-visibility.test.ts"
+      - "src/proxy.test.ts"
+      - "src/proxy.ts"
       - "tests/dashboard-account-security-visibility.spec.ts"
       - ".github/workflows/dashboard-account-security-hotfix-gates.yml"
   push:
@@ -47,11 +49,13 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
-      - name: Run focused visibility contract
+      - name: Run focused visibility and routing contracts
         shell: bash
         run: |
           set -o pipefail
-          node --import tsx --test src/dashboard-account-security-visibility.test.ts \
+          node --import tsx --test \
+            src/dashboard-account-security-visibility.test.ts \
+            src/proxy.test.ts \
             2>&1 | tee focused-dashboard-account-security.log
 
       - name: Run complete repository tests
@@ -98,6 +102,8 @@ jobs:
           src/app/dashboard/page.tsx
           src/components/dashboard/background-account-security-panel.tsx
           src/dashboard-account-security-visibility.test.ts
+          src/proxy.test.ts
+          src/proxy.ts
           tests/dashboard-account-security-visibility.spec.ts
           EOF
           sort -o expected-files.txt expected-files.txt
