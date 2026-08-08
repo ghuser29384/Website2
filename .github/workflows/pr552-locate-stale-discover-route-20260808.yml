@@ -22,13 +22,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          search_roots=(src public tests .github)
           echo '=== exact URL ==='
-          rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' 'discover\?domain=offers&view=list' . || true
+          grep -RInF --exclude-dir=.git --exclude-dir=node_modules 'discover?domain=offers&view=list' "${search_roots[@]}" || true
           echo '=== domain=offers ==='
-          rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' 'domain["'"'=: ]+offers|domain=offers' . || true
+          grep -RInF --exclude-dir=.git --exclude-dir=node_modules 'domain=offers' "${search_roots[@]}" || true
+          echo '=== domain tokens ==='
+          grep -RInE --exclude-dir=.git --exclude-dir=node_modules 'domain.{0,24}offers|offers.{0,24}domain' "${search_roots[@]}" || true
           echo '=== view=list ==='
-          rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' 'view["'"'=: ]+list|view=list' . || true
+          grep -RInF --exclude-dir=.git --exclude-dir=node_modules 'view=list' "${search_roots[@]}" || true
+          echo '=== view/list tokens ==='
+          grep -RInE --exclude-dir=.git --exclude-dir=node_modules 'view.{0,24}list|list.{0,24}view' "${search_roots[@]}" || true
           echo '=== discover references ==='
-          rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' '/discover|"discover"|\x27discover\x27' src public tests .github || true
+          grep -RInE --exclude-dir=.git --exclude-dir=node_modules '/discover|["'"']discover["'"']' "${search_roots[@]}" || true
           echo '=== offers navigation references ==='
-          rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' 'href.*offers|offers.*href|router\.(push|replace).*offers' src public tests .github || true
+          grep -RInE --exclude-dir=.git --exclude-dir=node_modules 'href.{0,80}offers|offers.{0,80}href|router\.(push|replace).{0,80}offers' "${search_roots[@]}" || true
