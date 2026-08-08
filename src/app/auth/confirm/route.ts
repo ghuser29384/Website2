@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { ensureAccountRowsForUser, getViewer } from "@/lib/app-data";
 import { buildAuthPath, normalizeAuthMode } from "@/lib/auth-routes";
+import { synchronizeOnePersonCredentialInventory } from "@/lib/identity/server";
 import { getSafeInternalPath } from "@/lib/paths";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
@@ -45,6 +46,7 @@ export async function GET(request: NextRequest) {
     if (!error) {
       if (data.user) {
         await ensureAccountRowsForUser(data.user, supabase);
+        await synchronizeOnePersonCredentialInventory(data.user.id).catch(() => null);
       } else {
         await getViewer();
       }
@@ -69,6 +71,7 @@ export async function GET(request: NextRequest) {
     if (!error) {
       if (data.user) {
         await ensureAccountRowsForUser(data.user, supabase);
+        await synchronizeOnePersonCredentialInventory(data.user.id).catch(() => null);
       } else {
         await getViewer();
       }
