@@ -86,7 +86,12 @@ export function proxy(request: NextRequest) {
   }
 
   if (request.nextUrl.searchParams.size === 0) {
-    return NextResponse.next();
+    const discoverUrl = request.nextUrl.clone();
+    discoverUrl.pathname = "/discover";
+    discoverUrl.searchParams.set("domain", "offers");
+    discoverUrl.searchParams.set("view", "list");
+
+    return NextResponse.redirect(discoverUrl);
   }
 
   if (
