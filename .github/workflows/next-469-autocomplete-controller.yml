@@ -1,0 +1,688 @@
+name: Next issue 469 autocomplete tranche
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/next-469-autocomplete-controller.yml"
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: next-469-autocomplete-tranche
+  cancel-in-progress: false
+
+env:
+  TARGET_FILE: tests/exact-live-autocomplete.spec.ts
+  EXPECTED_BASE_TARGET_FAILURES: "3"
+  CONTROLLER_PATH: .github/workflows/next-469-autocomplete-controller.yml
+  EVIDENCE_DIR: autocomplete-469-evidence
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+
+    steps:
+      - name: Guard controller and select one prepared product PR
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.base.ref }}' = 'main'
+
+          controller_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          test "$controller_files" = "$CONTROLLER_PATH"
+
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls?state=open&per_page=100" > /tmp/open-pr-pages.json
+          jq -s 'add' /tmp/open-pr-pages.json > /tmp/open-prs.json
+
+          : > /tmp/matches.txt
+          while IFS= read -r number; do
+            files="$(gh api --paginate \
+              "repos/${GITHUB_REPOSITORY}/pulls/${number}/files?per_page=100" \
+              --jq '.[].filename' | sort)"
+            if [[ "$files" == "$TARGET_FILE" ]]; then
+              printf '%s\n' "$number" >> /tmp/matches.txt
+            fi
+          done < <(jq -r '.[].number' /tmp/open-prs.json)
+
+          match_count="$(sed '/^$/d' /tmp/matches.txt | wc -l | tr -d ' ')"
+          if [[ "$match_count" != '1' ]]; then
+            gh issue comment 469 --repo "$GITHUB_REPOSITORY" --body "Autocomplete tranche controller could not select exactly one prepared one-file product PR. Matching open PR count: **$match_count**. No branch, product, deployment, or production state was changed."
+            echo "Expected exactly one open PR changing only $TARGET_FILE; found $match_count" >&2
+            exit 1
+          fi
+
+          product_pr="$(cat /tmp/matches.txt)"
+          product="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${product_pr}")"
+          old_head="$(jq -r .head.sha <<<"$product")"
+          head_ref="$(jq -r .head.ref <<<"$product")"
+          head_repo="$(jq -r .head.repo.full_name <<<"$product")"
+          test "$head_repo" = "$GITHUB_REPOSITORY"
+          test "$(jq -r .state <<<"$product")" = 'open'
+          test "$(jq -r .merged <<<"$product")" = 'false'
+
+          exact_base="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          printf '%s\n' "$product_pr" > /tmp/product-pr.txt
+          printf '%s\n' "$old_head" > /tmp/old-head.txt
+          printf '%s\n' "$head_ref" > /tmp/head-ref.txt
+          printf '%s\n' "$exact_base" > /tmp/exact-base.txt
+
+          echo "product_pr=$product_pr" >> "$GITHUB_OUTPUT"
+          echo "old_head=$old_head" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$head_ref" >> "$GITHUB_OUTPUT"
+          echo "exact_base=$exact_base" >> "$GITHUB_OUTPUT"
+
+      - name: Check out prepared product candidate and refresh its exact file onto current main
+        id: refresh
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.select.outputs.old_head }}
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Materialize immutable one-file candidate
+        id: candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT_PR: ${{ steps.select.outputs.product_pr }}
+          OLD_HEAD: ${{ steps.select.outputs.old_head }}
+          HEAD_REF: ${{ steps.select.outputs.head_ref }}
+          EXACT_BASE: ${{ steps.select.outputs.exact_base }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$OLD_HEAD"
+          cp "$TARGET_FILE" /tmp/autocomplete-candidate.spec.ts
+          candidate_blob="$(git hash-object "$TARGET_FILE")"
+
+          git fetch --no-tags origin "$EXACT_BASE" "$HEAD_REF"
+          git checkout --detach "$EXACT_BASE"
+          cp /tmp/autocomplete-candidate.spec.ts "$TARGET_FILE"
+          git diff --check
+          test "$(git diff --name-only)" = "$TARGET_FILE"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$TARGET_FILE"
+          git diff --cached --check
+          git commit -m 'Refresh autocomplete test migration onto current main'
+          candidate_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$EXACT_BASE"
+          test "$(git hash-object "$TARGET_FILE")" = "$candidate_blob"
+
+          git push --force-with-lease="refs/heads/${HEAD_REF}:${OLD_HEAD}" \
+            origin "HEAD:refs/heads/${HEAD_REF}"
+
+          for attempt in $(seq 1 60); do
+            observed="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}" --jq .head.sha)"
+            if [[ "$observed" == "$candidate_sha" ]]; then break; fi
+            sleep 2
+          done
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}" --jq .head.sha)" = "$candidate_sha"
+          files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          test "$files" = "$TARGET_FILE"
+
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$EXACT_BASE" > "$EVIDENCE_DIR/base-sha.txt"
+          printf '%s\n' "$candidate_sha" > "$EVIDENCE_DIR/candidate-sha.txt"
+          printf '%s\n' "$candidate_blob" > "$EVIDENCE_DIR/candidate-blob.txt"
+          printf '%s\n' "$PRODUCT_PR" > "$EVIDENCE_DIR/product-pr.txt"
+          git diff --stat "$EXACT_BASE" "$candidate_sha" > "$EVIDENCE_DIR/diff-stat.txt"
+
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "candidate_blob=$candidate_blob" >> "$GITHUB_OUTPUT"
+
+      - name: Publish pending immutable candidate status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          context="QA / Autocomplete final exact gates ${CANDIDATE_SHA:0:8}"
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$context" \
+            -f description="Running fail-closed autocomplete candidate/base differential" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          printf '%s\n' "$context" > "$EVIDENCE_DIR/status-context.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+
+      - name: Run source, lint, type, and production-build gates
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$EVIDENCE_DIR/source-tests.log"
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+          npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/build.log"
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Repeat focused autocomplete contract
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test "$TARGET_FILE" \
+            --workers=1 --repeat-each=5 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/focused-autocomplete.log"
+
+      - name: Write robust report tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/extract-playwright-json.mjs <<'NODE'
+          import fs from 'node:fs';
+          const [rawPath, jsonPath, prefixPath] = process.argv.slice(2);
+          const raw = fs.readFileSync(rawPath, 'utf8');
+          const offsets = [0];
+          for (let start = 0; start < raw.length; ) {
+            let cursor = start;
+            while (cursor < raw.length && /[ \t\r]/.test(raw[cursor])) cursor += 1;
+            if (raw[cursor] === '{') offsets.push(cursor);
+            const newline = raw.indexOf('\n', start);
+            if (newline === -1) break;
+            start = newline + 1;
+          }
+          let report = null;
+          let offsetFound = -1;
+          for (const offset of [...new Set(offsets)]) {
+            try {
+              const parsed = JSON.parse(raw.slice(offset));
+              if (parsed && Array.isArray(parsed.suites)) {
+                report = parsed;
+                offsetFound = offset;
+                break;
+              }
+            } catch {}
+          }
+          if (!report) throw new Error(`No Playwright JSON report in ${rawPath}`);
+          fs.writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
+          fs.writeFileSync(prefixPath, raw.slice(0, offsetFound));
+          NODE
+
+          cat > /tmp/normalize-playwright.mjs <<'NODE'
+          import fs from 'node:fs';
+          const [reportPath, outputPrefix, exitStatusPath] = process.argv.slice(2);
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          const failures = [];
+          function errorsFor(test) {
+            return (test?.results ?? [])
+              .filter((result) => !['passed', 'skipped'].includes(result.status))
+              .flatMap((result) => result.errors ?? [])
+              .map((error) => String(error?.message ?? error?.stack ?? error ?? '').trim().slice(0, 8000))
+              .filter(Boolean);
+          }
+          function visit(suite, ancestors = []) {
+            const next = suite?.title ? [...ancestors, suite.title] : ancestors;
+            for (const spec of suite?.specs ?? []) {
+              const failed = (spec.tests ?? []).filter((test) =>
+                (test.results ?? []).some((result) => !['passed', 'skipped'].includes(result.status)),
+              );
+              if (spec.ok === false || failed.length > 0) {
+                const title = [...next, spec.title ?? ''].filter(Boolean).join(' › ');
+                const file = spec.file ?? '';
+                failures.push({
+                  file,
+                  line: spec.line ?? 0,
+                  column: spec.column ?? 0,
+                  title,
+                  comparisonKey: `${file} › ${title}`,
+                  errors: failed.flatMap(errorsFor),
+                });
+              }
+            }
+            for (const child of suite?.suites ?? []) visit(child, next);
+          }
+          for (const suite of report.suites ?? []) visit(suite, []);
+          const unique = [];
+          const seen = new Set();
+          for (const failure of failures) {
+            if (seen.has(failure.comparisonKey)) continue;
+            seen.add(failure.comparisonKey);
+            unique.push({ key: `${failure.file}:${failure.line}:${failure.column} › ${failure.title}`, ...failure });
+          }
+          unique.sort((a, b) => a.comparisonKey.localeCompare(b.comparisonKey));
+          const hydrationPattern = /hydrated but some attributes of the server rendered HTML didn't match|Hydration failed because the server rendered HTML didn't match/;
+          const target = unique.filter((failure) => failure.file.endsWith('exact-live-autocomplete.spec.ts'));
+          const hydration = unique.filter((failure) => failure.errors.some((error) => hydrationPattern.test(error)));
+          const summary = {
+            exitStatus: Number(fs.readFileSync(exitStatusPath, 'utf8').trim()),
+            stats: report.stats ?? null,
+            failureCount: unique.length,
+            targetFailureCount: target.length,
+            targetFailures: target.map((failure) => failure.key),
+            hydrationMismatchCount: hydration.length,
+            hydrationFailures: hydration.map((failure) => failure.key),
+          };
+          fs.writeFileSync(`${outputPrefix}-failures.json`, `${JSON.stringify(unique, null, 2)}\n`);
+          fs.writeFileSync(`${outputPrefix}-summary.json`, `${JSON.stringify(summary, null, 2)}\n`);
+          console.log(JSON.stringify(summary, null, 2));
+          NODE
+
+          cat > /tmp/summarize-rate.mjs <<'NODE'
+          import fs from 'node:fs';
+          const [reportPath, exitStatusPath, outputPath] = process.argv.slice(2);
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          const stats = report.stats ?? {};
+          const summary = {
+            exitStatus: Number(fs.readFileSync(exitStatusPath, 'utf8').trim()),
+            expected: Number(stats.expected ?? 0),
+            unexpected: Number(stats.unexpected ?? 0),
+            flaky: Number(stats.flaky ?? 0),
+            skipped: Number(stats.skipped ?? 0),
+          };
+          summary.total = summary.expected + summary.unexpected + summary.flaky + summary.skipped;
+          fs.writeFileSync(outputPath, `${JSON.stringify(summary, null, 2)}\n`);
+          NODE
+          node --check /tmp/extract-playwright-json.mjs
+          node --check /tmp/normalize-playwright.mjs
+          node --check /tmp/summarize-rate.mjs
+
+      - name: Run complete candidate rendered suite truthfully
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          rm -rf .next
+          set +e
+          npx playwright test --reporter=json \
+            > "$EVIDENCE_DIR/candidate-report-raw.log" \
+            2> "$EVIDENCE_DIR/candidate-playwright.stderr.log"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$EVIDENCE_DIR/candidate-exit-status.txt"
+          node /tmp/extract-playwright-json.mjs \
+            "$EVIDENCE_DIR/candidate-report-raw.log" \
+            "$EVIDENCE_DIR/candidate-report.json" \
+            "$EVIDENCE_DIR/candidate-report-prefix.log"
+          node /tmp/normalize-playwright.mjs \
+            "$EVIDENCE_DIR/candidate-report.json" \
+            "$EVIDENCE_DIR/candidate" \
+            "$EVIDENCE_DIR/candidate-exit-status.txt"
+
+      - name: Run complete exact-base rendered suite under identical conditions
+        env:
+          EXACT_BASE: ${{ steps.select.outputs.exact_base }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          git checkout --force "$EXACT_BASE"
+          test "$(git rev-parse HEAD)" = "$EXACT_BASE"
+          rm -rf .next
+          set +e
+          npx playwright test --reporter=json \
+            > "$EVIDENCE_DIR/base-report-raw.log" \
+            2> "$EVIDENCE_DIR/base-playwright.stderr.log"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$EVIDENCE_DIR/base-exit-status.txt"
+          node /tmp/extract-playwright-json.mjs \
+            "$EVIDENCE_DIR/base-report-raw.log" \
+            "$EVIDENCE_DIR/base-report.json" \
+            "$EVIDENCE_DIR/base-report-prefix.log"
+          node /tmp/normalize-playwright.mjs \
+            "$EVIDENCE_DIR/base-report.json" \
+            "$EVIDENCE_DIR/base" \
+            "$EVIDENCE_DIR/base-exit-status.txt"
+
+      - name: Extract and measure every candidate-only case on candidate and base
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          EXACT_BASE: ${{ steps.select.outputs.exact_base }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = process.env.EVIDENCE_DIR;
+          const base = JSON.parse(fs.readFileSync(path.join(dir, 'base-failures.json'), 'utf8'));
+          const candidate = JSON.parse(fs.readFileSync(path.join(dir, 'candidate-failures.json'), 'utf8'));
+          const baseKeys = new Set(base.map((failure) => failure.comparisonKey));
+          const only = candidate.filter((failure) => !baseKeys.has(failure.comparisonKey));
+          fs.writeFileSync(path.join(dir, 'candidate-only.json'), `${JSON.stringify(only, null, 2)}\n`);
+          NODE
+
+          count="$(jq 'length' "$EVIDENCE_DIR/candidate-only.json")"
+          mkdir -p "$EVIDENCE_DIR/rates"
+          for index in $(seq 0 $((count - 1))); do
+            file="$(jq -r ".[${index}].file" "$EVIDENCE_DIR/candidate-only.json")"
+            title="$(jq -r ".[${index}].title" "$EVIDENCE_DIR/candidate-only.json")"
+            leaf="${title##* › }"
+            label="case-${index}"
+
+            git checkout --force "$CANDIDATE_SHA"
+            rm -rf .next
+            set +e
+            npx playwright test "$file" --grep "$leaf" --workers=1 --repeat-each=10 --reporter=json \
+              > "$EVIDENCE_DIR/rates/candidate-${label}-raw.log" \
+              2> "$EVIDENCE_DIR/rates/candidate-${label}.stderr.log"
+            candidate_status=$?
+            set -e
+            printf '%s\n' "$candidate_status" > "$EVIDENCE_DIR/rates/candidate-${label}-exit.txt"
+            node /tmp/extract-playwright-json.mjs \
+              "$EVIDENCE_DIR/rates/candidate-${label}-raw.log" \
+              "$EVIDENCE_DIR/rates/candidate-${label}-report.json" \
+              "$EVIDENCE_DIR/rates/candidate-${label}-prefix.log"
+            node /tmp/summarize-rate.mjs \
+              "$EVIDENCE_DIR/rates/candidate-${label}-report.json" \
+              "$EVIDENCE_DIR/rates/candidate-${label}-exit.txt" \
+              "$EVIDENCE_DIR/rates/candidate-${label}-rate.json"
+
+            git checkout --force "$EXACT_BASE"
+            rm -rf .next
+            set +e
+            npx playwright test "$file" --grep "$leaf" --workers=1 --repeat-each=10 --reporter=json \
+              > "$EVIDENCE_DIR/rates/base-${label}-raw.log" \
+              2> "$EVIDENCE_DIR/rates/base-${label}.stderr.log"
+            base_status=$?
+            set -e
+            printf '%s\n' "$base_status" > "$EVIDENCE_DIR/rates/base-${label}-exit.txt"
+            node /tmp/extract-playwright-json.mjs \
+              "$EVIDENCE_DIR/rates/base-${label}-raw.log" \
+              "$EVIDENCE_DIR/rates/base-${label}-report.json" \
+              "$EVIDENCE_DIR/rates/base-${label}-prefix.log"
+            node /tmp/summarize-rate.mjs \
+              "$EVIDENCE_DIR/rates/base-${label}-report.json" \
+              "$EVIDENCE_DIR/rates/base-${label}-exit.txt" \
+              "$EVIDENCE_DIR/rates/base-${label}-rate.json"
+          done
+
+      - name: Enforce fail-closed autocomplete differential
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          EXACT_BASE: ${{ steps.select.outputs.exact_base }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const dir = process.env.EVIDENCE_DIR;
+          const read = (name) => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+          const baseSummary = read('base-summary.json');
+          const candidateSummary = read('candidate-summary.json');
+          const candidateOnly = read('candidate-only.json');
+          const adjudicated = [];
+          const rejected = [];
+          for (let index = 0; index < candidateOnly.length; index += 1) {
+            const candidateRate = read(`rates/candidate-case-${index}-rate.json`);
+            const baseRate = read(`rates/base-case-${index}-rate.json`);
+            const eligible =
+              candidateRate.total === 10 &&
+              baseRate.total === 10 &&
+              candidateRate.skipped === 0 &&
+              baseRate.skipped === 0 &&
+              candidateRate.expected >= 9 &&
+              candidateRate.unexpected <= baseRate.unexpected;
+            const item = {
+              key: candidateOnly[index].key,
+              comparisonKey: candidateOnly[index].comparisonKey,
+              candidateRate,
+              baseRate,
+              eligible,
+            };
+            (eligible ? adjudicated : rejected).push(item);
+          }
+          const adjustedCandidateFailureCount = candidateSummary.failureCount - adjudicated.length;
+          const result = {
+            exactBase: process.env.EXACT_BASE,
+            candidate: process.env.CANDIDATE_SHA,
+            base: baseSummary,
+            candidateSummary,
+            candidateOnlyCount: candidateOnly.length,
+            adjudicated,
+            rejected,
+            adjustedCandidateFailureCount,
+            checks: {
+              baseHasExactTargetFailures:
+                baseSummary.targetFailureCount === Number(process.env.EXPECTED_BASE_TARGET_FAILURES),
+              candidateHasNoTargetFailures: candidateSummary.targetFailureCount === 0,
+              candidateHasNoHydrationMismatches: candidateSummary.hydrationMismatchCount === 0,
+              noRejectedCandidateOnlyFailures: rejected.length === 0,
+              adjustedCandidateNoWorseThanBase:
+                adjustedCandidateFailureCount <= baseSummary.failureCount,
+            },
+          };
+          result.passed = Object.values(result.checks).every(Boolean);
+          fs.writeFileSync(path.join(dir, 'final-differential.json'), `${JSON.stringify(result, null, 2)}\n`);
+          console.log(JSON.stringify(result, null, 2));
+          if (!result.passed) process.exit(1);
+          NODE
+
+      - name: Upload immutable evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: autocomplete-469-final-${{ steps.candidate.outputs.candidate_sha }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish final candidate status and prepare product PR
+        id: prepare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT_PR: ${{ steps.select.outputs.product_pr }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          CANDIDATE_BLOB: ${{ steps.candidate.outputs.candidate_blob }}
+          EXACT_BASE: ${{ steps.select.outputs.exact_base }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          context="$(cat "$EVIDENCE_DIR/status-context.txt")"
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=success \
+            -f context="$context" \
+            -f description="Autocomplete exact candidate/base differential passed" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          base_failures="$(jq -r .base.failureCount "$EVIDENCE_DIR/final-differential.json")"
+          candidate_failures="$(jq -r .candidateSummary.failureCount "$EVIDENCE_DIR/final-differential.json")"
+          adjusted="$(jq -r .adjustedCandidateFailureCount "$EVIDENCE_DIR/final-differential.json")"
+          candidate_only="$(jq -r .candidateOnlyCount "$EVIDENCE_DIR/final-differential.json")"
+
+          cat > /tmp/product-body.md <<EOF
+          ## Summary
+
+          Replace obsolete autocomplete Playwright expectations with the prepared current product contract. This is a one-file repository-only migration.
+
+          ## Source of truth
+
+          - Issue #469
+          - Exact base: \`$EXACT_BASE\`
+          - Exact candidate: \`$CANDIDATE_SHA\`
+          - Validated file blob: \`$CANDIDATE_BLOB\`
+          - Final workflow run: \`$GITHUB_RUN_ID\`
+
+          ## Final scope
+
+          Exactly one file: \`$TARGET_FILE\`.
+
+          ## Release classification
+
+          - [ ] **Runtime-affecting**
+          - [x] **Repository-only**
+          - [ ] **Mixed or uncertain**
+
+          ## Classification evidence
+
+          The patch changes one Playwright test file only. It changes no application source, public asset, dependency, database, authorization, payment, environment, Vercel configuration, deployment target, or alias.
+
+          ## Release disposition
+
+          - [ ] **Explicit production release and post-release smoke test required**
+          - [x] **Merge after repository gates; no manual production promotion required**
+          - [ ] **Ordinary automatic \`main\` deployment may occur, but it is not necessary to fix production**
+          - [ ] **Do not merge or deploy yet; blockers remain**
+
+          ## Deployment and post-release procedure
+
+          - **Deployment target / plan:** Squash-merge the unchanged one-file candidate after required repository statuses pass. Do not create or promote a Vercel deployment.
+          - **Post-release verification plan:** Verify the merged parent, file set, and blob identity; confirm no Vercel deployment was created; record removal of the target failures on issue #469.
+
+          ## Verification
+
+          - [x] **Focused tests passed**
+          - [x] **Repository tests passed, or an exact-base differential policy is documented**
+          - [x] **ESLint passed**
+          - [x] **TypeScript passed**
+          - [x] **Production build passed**
+          - [x] **Rendered desktop/mobile checks passed when user-visible behavior changed**
+          - [x] **Database, authorization, payment, job, or environment checks passed when applicable**
+          - [x] **Exact diff inspected for unrelated changes**
+
+          ## Checks actually run
+
+          Run \`$GITHUB_RUN_ID\` completed \`npm ci\`, \`npm test\`, full ESLint, TypeScript, production build, Chromium installation, the focused autocomplete file repeated five times, complete candidate and exact-base Playwright suites, and ten-run candidate/base adjudication of every candidate-only occurrence.
+
+          Differential result: exact base $base_failures unexpected tests with exactly $EXPECTED_BASE_TARGET_FAILURES target failures; candidate $candidate_failures unexpected tests with zero target failures and zero hydration mismatches; candidate-only occurrences $candidate_only; adjusted candidate failures $adjusted, no greater than exact base; final predicate passed.
+
+          ## Production evidence
+
+          - **Merged commit:** Pending squash merge
+          - **Vercel deployment:** None required or authorized
+          - **Target and aliases:** Unchanged
+          - **Canonical URLs checked:** Not applicable to a test-only change
+          - **Runtime-log inspection window:** Not applicable because no deployment occurs
+          - **Remaining risks or verification limits:** Unrelated rendered failures remain outside this one-file tranche
+          EOF
+          sed -i 's/^          //' /tmp/product-body.md
+          body="$(cat /tmp/product-body.md)"
+          gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}" \
+            -f body="$body" >/dev/null
+          gh pr ready "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY"
+
+          echo "base_failures=$base_failures" >> "$GITHUB_OUTPUT"
+          echo "candidate_failures=$candidate_failures" >> "$GITHUB_OUTPUT"
+          echo "adjusted=$adjusted" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for required release-classification status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            state="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${CANDIDATE_SHA}/status" \
+              --jq '[.statuses[] | select(.context == "release-classification")][0].state // "missing"')"
+            if [[ "$state" == 'success' ]]; then exit 0; fi
+            if [[ "$state" == 'failure' || "$state" == 'error' ]]; then
+              echo "release-classification reached $state" >&2
+              exit 1
+            fi
+            sleep 5
+          done
+          echo 'Timed out waiting for release-classification.' >&2
+          exit 1
+
+      - name: Recheck immutable identities, squash-merge product, and verify
+        id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT_PR: ${{ steps.select.outputs.product_pr }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          CANDIDATE_BLOB: ${{ steps.candidate.outputs.candidate_blob }}
+          EXACT_BASE: ${{ steps.select.outputs.exact_base }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$EXACT_BASE"
+          product="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .head.sha <<<"$product")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.sha <<<"$product")" = "$EXACT_BASE"
+          test "$(jq -r .draft <<<"$product")" = 'false'
+          test "$(jq -r .mergeable <<<"$product")" = 'true'
+          files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" --jq '.[].filename' | sort)"
+          test "$files" = "$TARGET_FILE"
+
+          gh pr merge "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --squash \
+            --subject 'Align autocomplete tests with the current product contract' \
+            --body 'Replace obsolete autocomplete assertions with the prepared current contract. Immutable exact candidate/current-main differential passed. Repository-only; no Vercel deployment is required or authorized.'
+
+          merged="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .merged <<<"$merged")" = 'true'
+          merge_sha="$(jq -r .merge_commit_sha <<<"$merged")"
+          test -n "$merge_sha"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$merge_sha"
+          commit="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${merge_sha}")"
+          test "$(jq -r '.parents | length' <<<"$commit")" = '1'
+          test "$(jq -r '.parents[0].sha' <<<"$commit")" = "$EXACT_BASE"
+          test "$(jq -r '.files | length' <<<"$commit")" = '1'
+          test "$(jq -r '.files[0].filename' <<<"$commit")" = "$TARGET_FILE"
+          test "$(jq -r '.files[0].sha' <<<"$commit")" = "$CANDIDATE_BLOB"
+
+          printf '%s\n' "$merge_sha" > "$EVIDENCE_DIR/merge-sha.txt"
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Record completion and close controller without merge
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRODUCT_PR: ${{ steps.select.outputs.product_pr }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+          EXACT_BASE: ${{ steps.select.outputs.exact_base }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh issue comment 469 --repo "$GITHUB_REPOSITORY" --body "Autocomplete rendered-gate tranche completed. Product PR #${PRODUCT_PR} was validated against exact base \`${EXACT_BASE}\`, candidate \`${CANDIDATE_SHA}\`, and squash-merged as \`${MERGE_SHA}\`. The base had exactly ${EXPECTED_BASE_TARGET_FAILURES} target failures; the candidate had zero target failures and zero hydration mismatches; all candidate-only occurrences were bounded on candidate and base; the adjusted candidate count did not exceed the base. This was repository-only and no manual Vercel promotion occurred."
+          gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --body "Post-merge verification passed: exact parent, one-file scope, and merged blob identity match the validated candidate. Merged commit: \`${MERGE_SHA}\`."
+          gh pr close '${{ github.event.pull_request.number }}' --repo "$GITHUB_REPOSITORY" \
+            --comment "Controller completed successfully and is closed without merge. Product PR #${PRODUCT_PR} merged as \`${MERGE_SHA}\`."
+
+      - name: Publish failure status and record blocker
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.candidate_sha }}
+          PRODUCT_PR: ${{ steps.select.outputs.product_pr }}
+        shell: bash
+        run: |
+          set +e
+          if [[ -n "${CANDIDATE_SHA:-}" ]]; then
+            context="QA / Autocomplete final exact gates ${CANDIDATE_SHA:0:8}"
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+              -f state=failure \
+              -f context="$context" \
+              -f description="Autocomplete fail-closed controller rejected or was blocked" \
+              -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          fi
+          gh issue comment 469 --repo "$GITHUB_REPOSITORY" --body "Autocomplete tranche controller failed closed in run \`${GITHUB_RUN_ID}\` for product PR \`${PRODUCT_PR:-unselected}\`. No product merge, manual Vercel promotion, database mutation, or production-state change was authorized by this failure."
