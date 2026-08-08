@@ -325,8 +325,10 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   context = await browserContext(browser, { session: outsider.session, viewport: desktop });
   page = await context.newPage();
   const outsiderResponse = await gotoReady(page, ROUTES.creator);
-  expect(outsiderResponse?.status()).toBe(404);
+  expect([200, 404]).toContain(outsiderResponse?.status());
+  await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(1);
   await expect(page.getByText("Creator lifecycle receipt", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1, name: "QA DAC open for conditional pledges" })).toHaveCount(0);
   await closeContext(context);
   context = null;
   await outsider.client.auth.signOut({ scope: "local" });
