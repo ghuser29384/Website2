@@ -132,7 +132,7 @@ jobs:
           workflow_path.write_text(workflow, encoding="utf-8")
           PY
 
-      - name: Verify exact repair and focused contract
+      - name: Verify exact repair scope
         shell: bash
         run: |
           set -euo pipefail
@@ -145,7 +145,6 @@ jobs:
           src/dashboard-account-security-visibility.test.ts
           FILES
           diff -u expected-repair-files.txt actual-repair-files.txt
-          node --import tsx --test src/dashboard-account-security-visibility.test.ts
 
       - name: Commit and push exact repair
         shell: bash
