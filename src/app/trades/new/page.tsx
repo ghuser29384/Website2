@@ -296,9 +296,7 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
         }
       : undefined;
   const templateLabel = sourceOffer
-    ? `Counteroffer to ${
-        sourceOffer.ownerProfile?.resolvedName ?? sourceOffer.owner_alias
-      }`
+    ? `Counteroffer to ${sourceOffer.ownerProfile?.resolvedName ?? sourceOffer.owner_alias}`
     : templateValues
       ? getTradeDraftTemplateLabel(templateId)
       : null;
