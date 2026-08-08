@@ -345,11 +345,11 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   await expect(page.getByRole("heading", { name: "This operator can invoke lifecycle decisions" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "QA DAC open for conditional pledges" })).toBeVisible();
   await expect(page.getByRole("heading", {
-    name: "$25.00 · campaign-ce555555555545558555555555555555",
+    name: "$25 · campaign-ce555555555545558555555555555555",
   })).toBeVisible();
   const pendingPledgeRow = page.locator(".mpgf-dac-review-row").filter({
     has: page.getByRole("heading", {
-      name: "$25.00 · campaign-ce555555555545558555555555555555",
+      name: "$25 · campaign-ce555555555545558555555555555555",
     }),
   });
   await expect(pendingPledgeRow.getByRole("button", { name: "Record final eligibility" })).toBeEnabled();
@@ -359,7 +359,7 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
     timeout: 20_000,
   });
   await expect(page.getByRole("heading", {
-    name: "$25.00 · campaign-ce555555555545558555555555555555",
+    name: "$25 · campaign-ce555555555545558555555555555555",
   })).toHaveCount(0);
   await screenshot(page, "05-reviewer-eligibility-recorded-desktop");
   await closeContext(context);
@@ -372,7 +372,7 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   await gotoReady(page, ROUTES.success);
   await expect(page.getByRole("heading", { name: "QA DAC succeeded" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Campaign succeeded" })).toBeVisible();
-  await expect(page.getByText("$110.00", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("$110", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Both frozen thresholds were met by eligible canonical pledges.")).toBeVisible();
   await expect(page.getByText(/does not claim capture or settlement/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "This campaign is not accepting new pledge intents." })).toBeVisible();
@@ -381,7 +381,7 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   await gotoReady(page, ROUTES.lapse);
   await expect(page.getByRole("heading", { name: "QA DAC lapsed" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Campaign lapsed" })).toBeVisible();
-  await expect(page.getByText("$10.00", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("$10", { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/Still-active signed pledge intents were expired/)).toBeVisible();
   await expect(page.getByText(/no refund or bonus payout is claimed/)).toBeVisible();
   await screenshot(page, "07-lapse-desktop");
