@@ -1,0 +1,113 @@
+name: Temporary repair PR 558 consent hash assertion
+
+on:
+  push:
+    branches:
+      - temp/fix-pr558-consent-hash-20260808
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_HEAD_SHA: 71f40796a826c161d4f7f3ff3d8cd2b502bb0950
+      TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
+
+    steps:
+      - name: Check out the exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Match the canonical prefixed consent hash rendered by the product
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          browser_path = Path("tests/mpgf-dac-product-lifecycle.spec.ts")
+          browser = browser_path.read_text()
+          old_assertion = '  await expect(page.getByText(/^Consent: [0-9a-f]{64}$/)).toBeVisible();\n'
+          new_assertion = '  await expect(page.getByText(/^Consent: sha256:[0-9a-f]{64}$/)).toBeVisible();\n'
+          if browser.count(old_assertion) != 1:
+              raise SystemExit(
+                  f"Expected exactly one unprefixed consent assertion, found {browser.count(old_assertion)}."
+              )
+          browser = browser.replace(old_assertion, new_assertion)
+          if "^Consent: [0-9a-f]{64}$" in browser:
+              raise SystemExit("The unprefixed consent assertion remains.")
+          if browser.count("^Consent: sha256:[0-9a-f]{64}$") != 1:
+              raise SystemExit("The canonical prefixed consent assertion was not installed exactly once.")
+          browser_path.write_text(browser)
+
+          contract_path = Path("src/lib/mpgf/dac-pledge-currency-format.test.ts")
+          contract = contract_path.read_text()
+          old_name = 'test("rendered DAC pledge assertions accept canonical whole-dollar and two-decimal formatting", async () => {\n'
+          new_name = 'test("rendered DAC pledge assertions match canonical currency and consent-hash formatting", async () => {\n'
+          if contract.count(old_name) != 1:
+              raise SystemExit("Expected exactly one pledge assertion contract name.")
+          contract = contract.replace(old_name, new_name)
+          anchor = (
+              '  assert.ok(\n'
+              '    !browserSpec.includes(\'name: "$25.00 · pledged"\'),\n'
+              '    "The browser gate must not require a non-canonical trailing .00 in a private pledge receipt.",\n'
+              '  );\n'
+          )
+          addition = anchor + (
+              '  assert.ok(\n'
+              '    browserSpec.includes("/^Consent: sha256:[0-9a-f]{64}$/"),\n'
+              '    "The private receipt assertion must require the canonical sha256: consent-hash prefix.",\n'
+              '  );\n'
+              '  assert.ok(\n'
+              '    !browserSpec.includes("/^Consent: [0-9a-f]{64}$/"),\n'
+              '    "The browser gate must not expect an unprefixed consent hash.",\n'
+              '  );\n'
+          )
+          if contract.count(anchor) != 1:
+              raise SystemExit("Expected exactly one pledge assertion contract anchor.")
+          if "canonical sha256: consent-hash prefix" in contract:
+              raise SystemExit("Consent-hash regression contract already exists unexpectedly.")
+          contract_path.write_text(contract.replace(anchor, addition))
+          PY
+
+          git diff --check
+          git diff -- \
+            tests/mpgf-dac-product-lifecycle.spec.ts \
+            src/lib/mpgf/dac-pledge-currency-format.test.ts
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Prove the corrected assertion contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/dac-pledge-currency-format.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Commit the proven repair to the PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            tests/mpgf-dac-product-lifecycle.spec.ts \
+            src/lib/mpgf/dac-pledge-currency-format.test.ts
+          git commit -m "test(mpgf): assert canonical consent hash prefix"
+          git push origin "HEAD:${TARGET_BRANCH}"
