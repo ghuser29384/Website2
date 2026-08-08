@@ -1,0 +1,155 @@
+name: Temporary repair PR 558 lint defect
+
+on:
+  push:
+    branches:
+      - temp/fix-pr558-lint-controller-20260808
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      EXPECTED_HEAD_SHA: 93de460b9231bd1cdbe52f18ea3ad51562ddf96e
+      TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      DIRECT_DONATION_UPGRADES_ENABLED: "false"
+      DIRECT_DONATION_UPGRADE_MODE: disabled
+
+    steps:
+      - name: Check out the exact PR head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact head and repair only the observed React purity defect
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          page_path = Path("src/app/mpgf/admin/dac-lifecycle/page.tsx")
+          page = page_path.read_text()
+          old_page = '''  const authorization = workspace?.reviewerAuthorization ?? null;
+          const reviewerAuthorized = Boolean(
+            authorization?.active &&
+            (!authorization.expiresAt || Date.parse(authorization.expiresAt) > Date.now()),
+          );
+          '''
+          new_page = '''  const authorization = workspace?.reviewerAuthorization ?? null;
+          const reviewerAuthorized = Boolean(authorization?.currentlyAuthorized);
+          '''
+          if page.count(old_page) != 1:
+            raise SystemExit("Expected exactly one reviewer authorization render-time clock block.")
+          page_path.write_text(page.replace(old_page, new_page))
+
+          model_path = Path("src/lib/mpgf/dac-lifecycle-model.ts")
+          model = model_path.read_text()
+          old_model = '''    active: boolean;
+            rationale: string;
+          '''
+          new_model = '''    active: boolean;
+            currentlyAuthorized: boolean;
+            rationale: string;
+          '''
+          if model.count(old_model) != 1:
+            raise SystemExit("Expected exactly one reviewer authorization model block.")
+          model_path.write_text(model.replace(old_model, new_model))
+
+          loader_path = Path("src/lib/mpgf/dac-lifecycle.ts")
+          loader = loader_path.read_text()
+          old_loader_prelude = '''  const reviewerRow = reviewerResult.data as Record<string, unknown> | null;
+
+          return {
+          '''
+          new_loader_prelude = '''  const reviewerRow = reviewerResult.data as Record<string, unknown> | null;
+          const reviewerExpiresAt = reviewerRow ? nullableString(reviewerRow.expires_at) : null;
+          const reviewerCurrentlyAuthorized = Boolean(
+            reviewerRow?.active &&
+            (!reviewerExpiresAt || Date.parse(reviewerExpiresAt) > Date.now()),
+          );
+
+          return {
+          '''
+          if loader.count(old_loader_prelude) != 1:
+            raise SystemExit("Expected exactly one reviewer loader return prelude.")
+          loader = loader.replace(old_loader_prelude, new_loader_prelude)
+
+          old_loader_fields = '''      active: Boolean(reviewerRow.active),
+                rationale: String(reviewerRow.rationale ?? ""),
+                authorizedAt: String(reviewerRow.authorized_at ?? ""),
+                expiresAt: nullableString(reviewerRow.expires_at),
+              '''
+          new_loader_fields = '''      active: Boolean(reviewerRow.active),
+                currentlyAuthorized: reviewerCurrentlyAuthorized,
+                rationale: String(reviewerRow.rationale ?? ""),
+                authorizedAt: String(reviewerRow.authorized_at ?? ""),
+                expiresAt: reviewerExpiresAt,
+              '''
+          if loader.count(old_loader_fields) != 1:
+            raise SystemExit("Expected exactly one reviewer authorization mapping block.")
+          loader_path.write_text(loader.replace(old_loader_fields, new_loader_fields))
+          PY
+
+          git diff --check
+          git diff -- \
+            src/app/mpgf/admin/dac-lifecycle/page.tsx \
+            src/lib/mpgf/dac-lifecycle-model.ts \
+            src/lib/mpgf/dac-lifecycle.ts
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused product contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/dac-lifecycle-model.test.ts \
+            src/lib/mpgf/dac-public-terms-migration.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run repository lint
+        run: npm run lint -- --quiet
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build the production application
+        run: npm run build
+
+      - name: Commit the narrowly scoped repair and update the PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/app/mpgf/admin/dac-lifecycle/page.tsx \
+            src/lib/mpgf/dac-lifecycle-model.ts \
+            src/lib/mpgf/dac-lifecycle.ts
+          git commit -m "fix(mpgf): evaluate reviewer expiry outside render"
+          git push origin "HEAD:${TARGET_BRANCH}"
