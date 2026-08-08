@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ops/pr552-authenticated-diagnostics-repair-20260808
+    paths:
+      - .github/scripts/pr552-authenticated-diagnostics-repair-20260808.py
+      - .github/workflows/pr552-authenticated-diagnostics-repair-20260808.yml
 
 permissions:
   contents: write
@@ -20,6 +23,7 @@ jobs:
     env:
       TARGET_BRANCH: hotfix/dashboard-account-security-visible-20260807
       EXPECTED_TARGET_SHA: 795874493862c926f9eb2a4d2239a28a99e41968
+      PATCHER_PATH: .github/scripts/pr552-authenticated-diagnostics-repair-20260808.py
     steps:
       - name: Check out exact target
         uses: actions/checkout@v4
@@ -28,77 +32,22 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Guard target
+      - name: Guard target and materialize patcher
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test "$(git branch --show-current)" = "$TARGET_BRANCH"
           test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_SHA"
+          git cat-file -e "${GITHUB_SHA}^{commit}"
+          git show "${GITHUB_SHA}:${PATCHER_PATH}" > "$RUNNER_TEMP/pr552-diagnostics-patcher.py"
+          python3 -m py_compile "$RUNNER_TEMP/pr552-diagnostics-patcher.py"
 
       - name: Apply repairs
         shell: bash
         run: |
           set -euo pipefail
-          python3 <<'PY'
-          from pathlib import Path
-
-          def replace_exact(path: str, old: str, new: str, expected: int = 1) -> None:
-              p = Path(path)
-              s = p.read_text(encoding="utf-8")
-              count = s.count(old)
-              if count != expected:
-                  raise SystemExit(f"{path}: expected {expected} match(es), found {count}")
-              p.write_text(s.replace(old, new), encoding="utf-8")
-
-          replace_exact(
-              "src/components/dashboard/background-account-security-panel.tsx",
-              r'pattern="[0-9\\s-]{6,8}"',
-              r'pattern="[0-9\s-]{6,8}"',
-              expected=2,
-          )
-          replace_exact(
-              "src/app/dashboard/page.tsx",
-              '              <Link className="v72-shortcut-tile" href={item.href} key={item.label}>',
-              "              <Link\n"
-              '                className="v72-shortcut-tile"\n'
-              "                href={item.href}\n"
-              "                key={item.label}\n"
-              '                prefetch={item.href === "/offers" ? false : undefined}\n'
-              "              >",
-          )
-
-          p = Path("src/dashboard-account-security-visibility.test.ts")
-          s = p.read_text(encoding="utf-8")
-          if "authenticator code inputs use a browser-valid pattern" in s:
-              raise SystemExit("focused diagnostics tests already exist")
-          addition = r'''
-
-test("authenticator code inputs use a browser-valid pattern", () => {
-  const validPattern = String.raw`pattern="[0-9\s-]{6,8}"`;
-  const invalidPattern = String.raw`pattern="[0-9\\s-]{6,8}"`;
-
-  assert.equal(accountSecurityPanel.split(validPattern).length - 1, 2);
-  assert.equal(accountSecurityPanel.includes(invalidPattern), false);
-});
-
-test("the stale Offers shortcut cannot prefetch a missing route", () => {
-  assert.ok(
-    dashboard.includes(
-      [
-        "              <Link",
-        '                className="v72-shortcut-tile"',
-        "                href={item.href}",
-        "                key={item.label}",
-        '                prefetch={item.href === "/offers" ? false : undefined}',
-        "              >",
-      ].join("\n"),
-    ),
-  );
-});
-'''
-          p.write_text(s.rstrip() + addition, encoding="utf-8")
-          PY
+          python3 "$RUNNER_TEMP/pr552-diagnostics-patcher.py"
 
       - name: Verify exact scope
         shell: bash
