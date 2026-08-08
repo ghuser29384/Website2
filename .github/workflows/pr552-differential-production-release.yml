@@ -1,0 +1,392 @@
+name: PR 552 differential-gated Production release
+
+on:
+  push:
+    branches:
+      - ops/pr552-differential-production-release-20260808
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: pr552-differential-production-release
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+  BASE_SHA: 00c322079a34e2d0cd26c0609409321bbb39d214
+  DIFFERENTIAL_RUN_ID: '31266883917'
+  DIFFERENTIAL_ARTIFACT_ID: '9024573752'
+  DIFFERENTIAL_ARTIFACT_DIGEST: sha256:e03276d6a4046709ac3d467d083ec6bc6c3900beff76a94d26e2d5a6243a74d1
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  RELEASE_REASON: pr552-account-security-production-after-serial-differential
+  EVIDENCE_DIR: pr552-differential-production-release
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out one-use release controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard exact current-main target and controller-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_SHA"
+          git cat-file -e "${EXPECTED_SHA}^{commit}"
+          git cat-file -e "${BASE_SHA}^{commit}"
+          git diff --check "$EXPECTED_SHA" "$GITHUB_SHA"
+          changed="$(git diff --name-only "$EXPECTED_SHA" "$GITHUB_SHA")"
+          test "$changed" = '.github/workflows/pr552-differential-production-release.yml'
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$changed" > "$EVIDENCE_DIR/controller-files.txt"
+
+      - name: Prove immutable serial base-head non-regression evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DIFFERENTIAL_RUN_ID}" \
+            > "$EVIDENCE_DIR/differential-run.json"
+          jq -e \
+            --arg expected_sha a1ede772e2681df3fbb35ee6f4338c460049d4c6 '
+              .status == "completed"
+              and .conclusion == "success"
+              and .head_sha == $expected_sha
+            ' "$EVIDENCE_DIR/differential-run.json" >/dev/null
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${DIFFERENTIAL_RUN_ID}/artifacts" \
+            > "$EVIDENCE_DIR/differential-artifacts.json"
+          jq -e \
+            --argjson artifact_id "$DIFFERENTIAL_ARTIFACT_ID" \
+            --arg digest "$DIFFERENTIAL_ARTIFACT_DIGEST" '
+              any(.artifacts[];
+                .id == $artifact_id
+                and .name == "pr552-serial-base-head-comparison-31266883917"
+                and .expired == false
+                and .digest == $digest
+              )
+            ' "$EVIDENCE_DIR/differential-artifacts.json" >/dev/null
+
+          mkdir -p "$EVIDENCE_DIR/differential"
+          gh run download "$DIFFERENTIAL_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name pr552-serial-base-head-comparison-31266883917 \
+            --dir "$EVIDENCE_DIR/differential"
+          comparison="$EVIDENCE_DIR/differential/comparison.json"
+          test -s "$comparison"
+          jq -e \
+            --arg base "$BASE_SHA" \
+            --arg head "$EXPECTED_SHA" '
+              .baseSha == $base
+              and .headSha == $head
+              and .command == "npm run test:e2e -- --workers=1 --reporter=line,json"
+              and .base.totalTestRecords == 180
+              and .head.totalTestRecords == 180
+              and .base.failedTestCount == 26
+              and .head.failedTestCount == 25
+              and .sharedFailureCount == 25
+              and .baseOnlyFailureCount == 1
+              and .headOnlyFailureCount == 0
+              and .headOnlyFailures == []
+              and .nonRegressing == true
+            ' "$comparison" >/dev/null
+
+      - name: Check out the exact approved main commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Reconfirm exact current-main target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_SHA"
+          git diff --check
+          mkdir -p "$EVIDENCE_DIR"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run complete non-browser quality gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$EVIDENCE_DIR/repository-tests.log"
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/repository-lint.log"
+          npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/next-build.log"
+
+      - name: Run release-specific rendered contracts serially
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -o pipefail
+          npx playwright install --with-deps chromium
+          npx playwright test \
+            tests/dashboard-account-security-visibility.spec.ts \
+            tests/public-routes.spec.ts \
+            --grep 'Account security|/offers transfers to the dedicated Discover shell' \
+            --workers=1 \
+            --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/release-specific-browser.log"
+
+      - name: Link only the canonical Vercel project
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${VERCEL_TOKEN:-}"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Record the prior READY Production deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&state=READY&limit=20" \
+            > "$EVIDENCE_DIR/production-before.json"
+          jq -e '.deployments | length > 0' "$EVIDENCE_DIR/production-before.json" >/dev/null
+          jq '.deployments | sort_by(.createdAt) | last | {uid,url,createdAt,target,state,readyState,meta}' \
+            "$EVIDENCE_DIR/production-before.json" \
+            > "$EVIDENCE_DIR/prior-production-deployment.json"
+
+      - name: Pull the exact Production environment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" pull \
+            --yes \
+            --environment=production \
+            --token="$VERCEL_TOKEN"
+
+      - name: Build the Production artifact on GitHub Actions compute
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -o pipefail
+          npx --yes "vercel@${VERCEL_CLI_VERSION}" build \
+            --prod \
+            --token="$VERCEL_TOKEN" \
+            2>&1 | tee "$EVIDENCE_DIR/vercel-build.log"
+
+      - name: Deploy the exact prebuilt artifact to Production
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes "vercel@${VERCEL_CLI_VERSION}" deploy \
+            --prebuilt \
+            --prod \
+            --token="$VERCEL_TOKEN" \
+            --meta "githubCommitOrg=ghuser29384" \
+            --meta "githubCommitRepo=Website2" \
+            --meta "githubCommitSha=${EXPECTED_SHA}" \
+            --meta "moralTradeCandidateSha=${EXPECTED_SHA}" \
+            --meta "releaseReason=${RELEASE_REASON}")"
+          test -n "$deployment_url"
+          deployment_host="${deployment_url#https://}"
+          deployment_host="${deployment_host%/}"
+          test -n "$deployment_host"
+          printf 'deployment_url=%s\n' "$deployment_url" >> "$GITHUB_OUTPUT"
+          printf 'deployment_host=%s\n' "$deployment_host" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$deployment_url" > "$EVIDENCE_DIR/deployment-url.txt"
+
+      - name: Resolve and verify the exact READY Production deployment
+        id: resolve
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_HOST: ${{ steps.deploy.outputs.deployment_host }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          deployment_id=''
+          for attempt in $(seq 1 60); do
+            if curl -fsS \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v13/deployments/${DEPLOYMENT_HOST}?teamId=${VERCEL_ORG_ID}" \
+              > "$EVIDENCE_DIR/deployment-detail.json"; then
+              deployment_id="$(jq -r '.uid // .id // empty' "$EVIDENCE_DIR/deployment-detail.json")"
+              if jq -e \
+                --arg project "$VERCEL_PROJECT_ID" \
+                --arg sha "$EXPECTED_SHA" \
+                --arg host "$DEPLOYMENT_HOST" \
+                --arg reason "$RELEASE_REASON" '
+                  ((.projectId // .project.id // "") == $project)
+                  and ((.readyState // .state // "") == "READY")
+                  and (.target == "production")
+                  and ((.aliasError // null) == null)
+                  and (.url == $host)
+                  and (.meta.githubCommitOrg == "ghuser29384")
+                  and (.meta.githubCommitRepo == "Website2")
+                  and (.meta.githubCommitSha == $sha)
+                  and (.meta.moralTradeCandidateSha == $sha)
+                  and (.meta.releaseReason == $reason)
+                ' "$EVIDENCE_DIR/deployment-detail.json" >/dev/null; then
+                break
+              fi
+            fi
+            deployment_id=''
+            sleep 10
+          done
+          test -n "$deployment_id"
+          printf 'deployment_id=%s\n' "$deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Prove both canonical aliases name the exact deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_ID: ${{ steps.resolve.outputs.deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          aliases_ready=false
+          mkdir -p "$EVIDENCE_DIR/aliases"
+          for attempt in $(seq 1 60); do
+            aliases_ready=true
+            for alias_name in moraltrade.org www.moraltrade.org; do
+              alias_path="$EVIDENCE_DIR/aliases/${alias_name//./-}.json"
+              if ! curl -fsS \
+                -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+                "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" \
+                > "$alias_path"; then
+                aliases_ready=false
+                break
+              fi
+              if ! jq -e \
+                --arg alias "$alias_name" \
+                --arg project "$VERCEL_PROJECT_ID" \
+                --arg deployment "$DEPLOYMENT_ID" '
+                  .alias == $alias
+                  and .projectId == $project
+                  and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+                ' "$alias_path" >/dev/null; then
+                aliases_ready=false
+                break
+              fi
+            done
+            if [[ "$aliases_ready" == true ]]; then
+              break
+            fi
+            sleep 10
+          done
+          test "$aliases_ready" = true
+
+      - name: Verify canonical public routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS --max-time 60 \
+            -D "$EVIDENCE_DIR/apex-dashboard.headers" \
+            -o /dev/null \
+            https://moraltrade.org/dashboard
+          tr -d '\r' < "$EVIDENCE_DIR/apex-dashboard.headers" \
+            > "$EVIDENCE_DIR/apex-dashboard.normalized.headers"
+          grep -Eq '^HTTP/[0-9.]+ 308$' "$EVIDENCE_DIR/apex-dashboard.normalized.headers"
+          grep -Eq '^location: https://www\.moraltrade\.org/dashboard([?].*)?$' \
+            "$EVIDENCE_DIR/apex-dashboard.normalized.headers"
+
+          curl -sS --max-time 60 \
+            -D "$EVIDENCE_DIR/offers.headers" \
+            -o /dev/null \
+            https://www.moraltrade.org/offers
+          tr -d '\r' < "$EVIDENCE_DIR/offers.headers" \
+            > "$EVIDENCE_DIR/offers.normalized.headers"
+          grep -Eq '^HTTP/[0-9.]+ 307$' "$EVIDENCE_DIR/offers.normalized.headers"
+          grep -Eq '^location: /discover\?domain=offers&view=list$|^location: https://www\.moraltrade\.org/discover\?domain=offers&view=list$' \
+            "$EVIDENCE_DIR/offers.normalized.headers"
+
+          dashboard_status="$(curl -sS -L --max-time 60 \
+            --cookie 'mt_walkthrough_seen=1' \
+            -D "$EVIDENCE_DIR/www-dashboard.headers" \
+            -o "$EVIDENCE_DIR/www-dashboard.html" \
+            -w '%{http_code}' \
+            https://www.moraltrade.org/dashboard)"
+          test "$dashboard_status" = '200'
+          grep -Fq 'Moral Trade' "$EVIDENCE_DIR/www-dashboard.html"
+          ! grep -Eq 'HTTP/[0-9.]+ 5[0-9][0-9]' "$EVIDENCE_DIR/www-dashboard.headers"
+
+      - name: Record release result
+        env:
+          DEPLOYMENT_ID: ${{ steps.resolve.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg exactSha "$EXPECTED_SHA" \
+            --arg baseSha "$BASE_SHA" \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            --arg deploymentUrl "$DEPLOYMENT_URL" \
+            --arg differentialRunId "$DIFFERENTIAL_RUN_ID" \
+            --arg releasedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" '
+              {
+                exactSha:$exactSha,
+                baseSha:$baseSha,
+                deploymentId:$deploymentId,
+                deploymentUrl:$deploymentUrl,
+                differentialRunId:($differentialRunId|tonumber),
+                serialFullSuiteNonRegressing:true,
+                headOnlyFailureCount:0,
+                canonicalAliasesVerified:true,
+                publicRoutesVerified:true,
+                releasedAt:$releasedAt
+              }
+            ' > "$EVIDENCE_DIR/release-result.json"
+          {
+            echo '### PR 552 differential-gated Production release'
+            echo
+            echo "- Exact main commit: \`$EXPECTED_SHA\`"
+            echo "- Deployment: \`$DEPLOYMENT_ID\`"
+            echo "- URL: $DEPLOYMENT_URL"
+            echo "- Serial full-suite differential: 0 head-only failures"
+            echo '- Canonical apex and www aliases: verified'
+            echo '- Public Dashboard and /offers routing: verified'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload complete Production release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-differential-production-release-${{ github.run_id }}
+          path: pr552-differential-production-release/
+          if-no-files-found: warn
+          retention-days: 30
