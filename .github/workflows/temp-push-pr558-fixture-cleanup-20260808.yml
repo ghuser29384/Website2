@@ -1,0 +1,123 @@
+name: Temporary push proven PR 558 fixture and cleanup repairs
+
+on:
+  push:
+    branches:
+      - temp/push-pr558-fixture-cleanup-20260808
+
+permissions:
+  contents: write
+
+jobs:
+  push-repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_HEAD_SHA: 634af275da8f161ea73d9e0fa306695e82b0790e
+      TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
+
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Apply the already-proven non-workflow repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          fixture_path = Path("supabase/tests/mpgf_dac_product_browser_fixture.sql")
+          fixture = fixture_path.read_text()
+          old_policy = '      "eligibilityPolicy":{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"},\n'
+          new_policy = (
+              '      "eligibilityPolicy":{\n'
+              '        "policyVersion":"mpgf_failure_bonus_eligibility_v0_1",\n'
+              '        "contributorIdentityRule":"verified_unique_person",\n'
+              '        "contributionTimingRule":"captured_before_deadline",\n'
+              '        "relatedPartyRule":"exclude_creator_and_related_parties",\n'
+              '        "paymentIntegrityRule":"exclude_duplicate_reversed_disputed_or_fraudulent",\n'
+              '        "bonusBasis":"eligible_contribution",\n'
+              '        "maxParticipants":100,\n'
+              '        "maxBonusPerParticipantCents":2500\n'
+              '      },\n'
+          )
+          if fixture.count(old_policy) != 1:
+              raise SystemExit("Expected one incomplete browser-fixture eligibility policy.")
+          fixture = fixture.replace(old_policy, new_policy)
+
+          old_rationale = '        "rationale":"Synthetic provisional quote for isolated QA",\n'
+          new_rationale = (
+              '        "rationale":"Provisional threshold 1 experience-rated quote; '
+              'operator approval remains required.",\n'
+          )
+          if fixture.count(old_rationale) != 1:
+              raise SystemExit("Expected one non-canonical browser-fixture rationale.")
+          fixture = fixture.replace(old_rationale, new_rationale)
+
+          wrong = "'campaign-c077777777774777877777777777777'"
+          correct = "'campaign-c0777777777747778777777777777777'"
+          if fixture.count(wrong) != 8:
+              raise SystemExit("Expected eight malformed lapsed-campaign IDs in the browser fixture.")
+          fixture = fixture.replace(wrong, correct)
+          if wrong in fixture:
+              raise SystemExit("Malformed lapsed-campaign ID remains in the browser fixture.")
+          fixture_path.write_text(fixture)
+
+          cleanup_path = Path("supabase/tests/mpgf_dac_product_browser_cleanup.sql")
+          cleanup = cleanup_path.read_text()
+          if cleanup.count(wrong) != 5:
+              raise SystemExit("Expected five malformed lapsed-campaign IDs in cleanup.")
+          cleanup = cleanup.replace(wrong, correct)
+
+          disable_anchor = (
+              "alter table public.mpgf_pool_proposal_versions disable trigger "
+              "mpgf_pool_proposal_versions_append_only;\n"
+          )
+          disable_block = disable_anchor + (
+              "alter table public.moral_trade_create_pool_terms disable trigger "
+              "moral_trade_create_pool_terms_immutable;\n"
+              "alter table public.mpgf_failure_bonus_premium_quotes disable trigger "
+              "mpgf_failure_bonus_approved_quote_immutable;\n"
+          )
+          if cleanup.count(disable_anchor) != 1:
+              raise SystemExit("Expected one cleanup disable anchor.")
+          cleanup = cleanup.replace(disable_anchor, disable_block)
+
+          enable_anchor = (
+              "alter table public.mpgf_pool_proposal_versions enable trigger "
+              "mpgf_pool_proposal_versions_append_only;\n"
+          )
+          enable_block = (
+              "alter table public.mpgf_failure_bonus_premium_quotes enable trigger "
+              "mpgf_failure_bonus_approved_quote_immutable;\n"
+              "alter table public.moral_trade_create_pool_terms enable trigger "
+              "moral_trade_create_pool_terms_immutable;\n"
+          ) + enable_anchor
+          if cleanup.count(enable_anchor) != 1:
+              raise SystemExit("Expected one cleanup enable anchor.")
+          cleanup = cleanup.replace(enable_anchor, enable_block)
+
+          for clause in (
+              "disable trigger moral_trade_create_pool_terms_immutable",
+              "enable trigger moral_trade_create_pool_terms_immutable",
+              "disable trigger mpgf_failure_bonus_approved_quote_immutable",
+              "enable trigger mpgf_failure_bonus_approved_quote_immutable",
+          ):
+              if cleanup.count(clause) != 1:
+                  raise SystemExit(f"Expected exactly one clause: {clause}")
+          cleanup_path.write_text(cleanup)
+          PY
+
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            supabase/tests/mpgf_dac_product_browser_fixture.sql \
+            supabase/tests/mpgf_dac_product_browser_cleanup.sql
+          git commit -m "test(mpgf): harden deterministic DAC lifecycle fixtures"
+          git push origin "HEAD:${TARGET_BRANCH}"
