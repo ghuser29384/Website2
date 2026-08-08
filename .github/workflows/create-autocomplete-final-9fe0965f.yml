@@ -1,0 +1,549 @@
+name: Create autocomplete final exact gates 9fe0965f
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/create-autocomplete-final-9fe0965f.yml"
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: read
+  statuses: write
+
+concurrency:
+  group: create-autocomplete-final-exact-gates-9fe0965f
+  cancel-in-progress: true
+
+env:
+  BASE_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+  CANDIDATE_SHA: 9fe0965f760de23452500bf5f3f18f2d19fa632e
+  PRODUCT_PR: "585"
+  CONTROLLER_BRANCH: qa/create-autocomplete-final-9fe0965f
+  CONTROLLER_PATH: .github/workflows/create-autocomplete-final-9fe0965f.yml
+  STATUS_CONTEXT: QA / Create autocomplete final exact gates 9fe0965f
+  EVIDENCE_DIR: create-autocomplete-final-evidence-9fe0965f
+  TARGET_TEST: tests/exact-live-autocomplete.spec.ts
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  exact-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+
+    steps:
+      - name: Mark immutable candidate pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description="Running final Create autocomplete differential gates" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Guard controller, product PR, immutable base, and exact scopes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test '${{ github.event.pull_request.head.ref }}' = "$CONTROLLER_BRANCH"
+          test '${{ github.event.pull_request.base.ref }}' = 'main'
+          test '${{ github.event.pull_request.base.sha }}' = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+
+          controller_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          test "$controller_files" = "$CONTROLLER_PATH"
+
+          product_pr="$(gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
+          test "$(jq -r .base.sha <<<"$product_pr")" = "$BASE_SHA"
+
+          product_files="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort)"
+          expected_product_files=$'src/lib/create-interface/common-ground-integration.test.ts\nsrc/lib/create-interface/common-ground-integration.ts\ntests/exact-live-autocomplete.spec.ts'
+          test "$product_files" = "$expected_product_files"
+
+      - name: Check out immutable product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Prove candidate identity and exact three-file differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git fetch --depth=1 origin "$BASE_SHA"
+          git diff --name-only "$BASE_SHA" "$CANDIDATE_SHA" | sort > /tmp/candidate-files.txt
+          printf '%s\n' \
+            'src/lib/create-interface/common-ground-integration.test.ts' \
+            'src/lib/create-interface/common-ground-integration.ts' \
+            'tests/exact-live-autocomplete.spec.ts' \
+            | sort > /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/candidate-files.txt
+          git diff --check "$BASE_SHA" "$CANDIDATE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          cp /tmp/candidate-files.txt "$EVIDENCE_DIR/candidate-files.txt"
+          git diff --stat "$BASE_SHA" "$CANDIDATE_SHA" > "$EVIDENCE_DIR/diff-stat.txt"
+          git diff "$BASE_SHA" "$CANDIDATE_SHA" > "$EVIDENCE_DIR/exact.diff"
+          printf '%s\n' "$BASE_SHA" > "$EVIDENCE_DIR/base-sha.txt"
+          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+
+      - name: Run source, lint, type, and production-build gates
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$EVIDENCE_DIR/source-tests.log"
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+          npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/build.log"
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright install --with-deps chromium \
+            2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Repeat focused current Create autocomplete contract
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next test-results playwright-report
+          npx playwright test "$TARGET_TEST" \
+            --workers=1 --repeat-each=5 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/focused-autocomplete.log"
+
+      - name: Write robust Playwright report tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/extract-playwright-json.mjs <<'NODE'
+          import fs from 'node:fs';
+
+          const [rawPath, jsonPath, prefixPath] = process.argv.slice(2);
+          const raw = fs.readFileSync(rawPath, 'utf8');
+          const offsets = [0];
+
+          for (let lineStart = 0; lineStart < raw.length; ) {
+            let cursor = lineStart;
+            while (cursor < raw.length && /[ \t\r]/.test(raw[cursor])) cursor += 1;
+            if (raw[cursor] === '{') offsets.push(cursor);
+            const newline = raw.indexOf('\n', lineStart);
+            if (newline === -1) break;
+            lineStart = newline + 1;
+          }
+
+          for (const offset of [...new Set(offsets)]) {
+            try {
+              const report = JSON.parse(raw.slice(offset));
+              if (report && typeof report === 'object' && Array.isArray(report.suites)) {
+                fs.writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
+                fs.writeFileSync(prefixPath, raw.slice(0, offset));
+                process.exit(0);
+              }
+            } catch {}
+          }
+
+          throw new Error(`No Playwright JSON report found in ${rawPath}`);
+          NODE
+
+          cat > /tmp/normalize-playwright.mjs <<'NODE'
+          import fs from 'node:fs';
+
+          const [reportPath, outputPrefix, exitStatusPath] = process.argv.slice(2);
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          const failures = [];
+
+          function errorsFor(test) {
+            return (test?.results ?? [])
+              .filter((result) => !['passed', 'skipped'].includes(result.status))
+              .flatMap((result) => result.errors ?? [])
+              .map((error) =>
+                String(error?.message ?? error?.stack ?? error ?? '').trim().slice(0, 8000),
+              )
+              .filter(Boolean);
+          }
+
+          function visit(suite, ancestors = []) {
+            const next = suite?.title ? [...ancestors, suite.title] : ancestors;
+            for (const spec of suite?.specs ?? []) {
+              const failed = (spec.tests ?? []).filter((test) =>
+                (test.results ?? []).some(
+                  (result) => !['passed', 'skipped'].includes(result.status),
+                ),
+              );
+              if (spec.ok === false || failed.length > 0) {
+                const title = [...next, spec.title ?? ''].filter(Boolean).join(' › ');
+                const file = spec.file ?? '';
+                failures.push({
+                  file,
+                  line: spec.line ?? 0,
+                  column: spec.column ?? 0,
+                  title,
+                  comparisonKey: `${file} › ${title}`,
+                  errors: failed.flatMap(errorsFor),
+                });
+              }
+            }
+            for (const child of suite?.suites ?? []) visit(child, next);
+          }
+
+          for (const suite of report.suites ?? []) visit(suite, []);
+
+          const unique = [];
+          const seen = new Set();
+          for (const failure of failures) {
+            if (seen.has(failure.comparisonKey)) continue;
+            seen.add(failure.comparisonKey);
+            unique.push({
+              key: `${failure.file}:${failure.line}:${failure.column} › ${failure.title}`,
+              ...failure,
+            });
+          }
+          unique.sort((left, right) => left.comparisonKey.localeCompare(right.comparisonKey));
+
+          const hydrationPattern =
+            /hydrated but some attributes of the server rendered HTML didn't match|Hydration failed because the server rendered HTML didn't match/;
+          const target = unique.filter((failure) =>
+            failure.file.endsWith('exact-live-autocomplete.spec.ts'),
+          );
+          const hydration = unique.filter((failure) =>
+            failure.errors.some((error) => hydrationPattern.test(error)),
+          );
+          const summary = {
+            exitStatus: Number(fs.readFileSync(exitStatusPath, 'utf8').trim()),
+            stats: report.stats ?? null,
+            failureCount: unique.length,
+            targetFailureCount: target.length,
+            targetFailures: target.map((failure) => failure.key),
+            hydrationMismatchCount: hydration.length,
+            hydrationFailures: hydration.map((failure) => failure.key),
+          };
+
+          fs.writeFileSync(
+            `${outputPrefix}-failures.json`,
+            `${JSON.stringify(unique, null, 2)}\n`,
+          );
+          fs.writeFileSync(
+            `${outputPrefix}-summary.json`,
+            `${JSON.stringify(summary, null, 2)}\n`,
+          );
+          fs.writeFileSync(
+            `${outputPrefix}-failures.txt`,
+            `${unique.map((failure) => failure.key).join('\n')}${unique.length ? '\n' : ''}`,
+          );
+          console.log(JSON.stringify(summary, null, 2));
+          NODE
+
+          cat > /tmp/summarize-rate.mjs <<'NODE'
+          import fs from 'node:fs';
+
+          const [reportPath, exitStatusPath, outputPath] = process.argv.slice(2);
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          const stats = report.stats ?? {};
+          const summary = {
+            exitStatus: Number(fs.readFileSync(exitStatusPath, 'utf8').trim()),
+            expected: Number(stats.expected ?? 0),
+            unexpected: Number(stats.unexpected ?? 0),
+            flaky: Number(stats.flaky ?? 0),
+            skipped: Number(stats.skipped ?? 0),
+          };
+          summary.total =
+            summary.expected + summary.unexpected + summary.flaky + summary.skipped;
+          fs.writeFileSync(outputPath, `${JSON.stringify(summary, null, 2)}\n`);
+          console.log(JSON.stringify(summary));
+          NODE
+
+          node --check /tmp/extract-playwright-json.mjs
+          node --check /tmp/normalize-playwright.mjs
+          node --check /tmp/summarize-rate.mjs
+
+      - name: Run complete candidate rendered suite truthfully
+        shell: bash
+        run: |
+          set -uo pipefail
+          rm -rf .next
+          set +e
+          npx playwright test --reporter=json \
+            > "$EVIDENCE_DIR/candidate-report-raw.log" \
+            2> "$EVIDENCE_DIR/candidate-playwright.stderr.log"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$EVIDENCE_DIR/candidate-exit-status.txt"
+          node /tmp/extract-playwright-json.mjs \
+            "$EVIDENCE_DIR/candidate-report-raw.log" \
+            "$EVIDENCE_DIR/candidate-report.json" \
+            "$EVIDENCE_DIR/candidate-report-prefix.log"
+          node /tmp/normalize-playwright.mjs \
+            "$EVIDENCE_DIR/candidate-report.json" \
+            "$EVIDENCE_DIR/candidate" \
+            "$EVIDENCE_DIR/candidate-exit-status.txt"
+
+      - name: Check out immutable base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git checkout --force "$BASE_SHA"
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+
+      - name: Run complete immutable base rendered suite under identical conditions
+        shell: bash
+        run: |
+          set -uo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          rm -rf .next
+          set +e
+          npx playwright test --reporter=json \
+            > "$EVIDENCE_DIR/base-report-raw.log" \
+            2> "$EVIDENCE_DIR/base-playwright.stderr.log"
+          status=$?
+          set -e
+          printf '%s\n' "$status" > "$EVIDENCE_DIR/base-exit-status.txt"
+          node /tmp/extract-playwright-json.mjs \
+            "$EVIDENCE_DIR/base-report-raw.log" \
+            "$EVIDENCE_DIR/base-report.json" \
+            "$EVIDENCE_DIR/base-report-prefix.log"
+          node /tmp/normalize-playwright.mjs \
+            "$EVIDENCE_DIR/base-report.json" \
+            "$EVIDENCE_DIR/base" \
+            "$EVIDENCE_DIR/base-exit-status.txt"
+
+      - name: Extract candidate-only cases for bounded same-run adjudication
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const dir = process.env.EVIDENCE_DIR;
+          const candidate = JSON.parse(
+            fs.readFileSync(path.join(dir, 'candidate-failures.json'), 'utf8'),
+          );
+          const base = JSON.parse(
+            fs.readFileSync(path.join(dir, 'base-failures.json'), 'utf8'),
+          );
+          const baseKeys = new Set(base.map((failure) => failure.comparisonKey));
+          const candidateOnly = candidate.filter(
+            (failure) => !baseKeys.has(failure.comparisonKey),
+          );
+
+          const cases = candidateOnly.map((failure, index) => {
+            let file = String(failure.file ?? '');
+            if (!file.includes('/')) file = `tests/${file}`;
+            if (!file.startsWith('tests/') || file.includes('..') || /[\t\r\n]/.test(file)) {
+              throw new Error(`Unsafe candidate-only file: ${file}`);
+            }
+            const fullTitle = String(failure.title ?? '');
+            const leafTitle = fullTitle.split(' › ').at(-1)?.trim() ?? '';
+            if (!leafTitle || /[\t\r\n]/.test(leafTitle)) {
+              throw new Error(`Unsafe candidate-only title: ${fullTitle}`);
+            }
+            const grep = leafTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            return {
+              index,
+              key: failure.key,
+              comparisonKey: failure.comparisonKey,
+              file,
+              leafTitle,
+              grep,
+            };
+          });
+
+          fs.writeFileSync(
+            path.join(dir, 'candidate-only-cases.json'),
+            `${JSON.stringify(cases, null, 2)}\n`,
+          );
+          fs.writeFileSync(
+            path.join(dir, 'candidate-only-cases.tsv'),
+            `${cases
+              .map((item) => `${item.index}\t${item.file}\t${item.grep}\t${item.key}`)
+              .join('\n')}${cases.length ? '\n' : ''}`,
+          );
+          console.log(JSON.stringify({ candidateOnlyCount: cases.length }, null, 2));
+          NODE
+
+      - name: Measure every candidate-only case on candidate and base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR/adjudication"
+
+          run_case() {
+            local ref="$1"
+            local side="$2"
+            local index="$3"
+            local file="$4"
+            local pattern="$5"
+
+            git checkout --force "$ref"
+            test "$(git rev-parse HEAD)" = "$ref"
+            rm -rf .next
+            set +e
+            npx playwright test "$file" --grep "$pattern" \
+              --workers=1 --repeat-each=10 --reporter=json \
+              > "$EVIDENCE_DIR/adjudication/${side}-${index}-raw.log" \
+              2> "$EVIDENCE_DIR/adjudication/${side}-${index}.stderr.log"
+            local status=$?
+            set -e
+            printf '%s\n' "$status" \
+              > "$EVIDENCE_DIR/adjudication/${side}-${index}-exit-status.txt"
+            node /tmp/extract-playwright-json.mjs \
+              "$EVIDENCE_DIR/adjudication/${side}-${index}-raw.log" \
+              "$EVIDENCE_DIR/adjudication/${side}-${index}-report.json" \
+              "$EVIDENCE_DIR/adjudication/${side}-${index}-prefix.log"
+            node /tmp/summarize-rate.mjs \
+              "$EVIDENCE_DIR/adjudication/${side}-${index}-report.json" \
+              "$EVIDENCE_DIR/adjudication/${side}-${index}-exit-status.txt" \
+              "$EVIDENCE_DIR/adjudication/${side}-${index}-rate.json"
+          }
+
+          while IFS=$'\t' read -r index file pattern key; do
+            test -n "$index"
+            run_case "$CANDIDATE_SHA" candidate "$index" "$file" "$pattern"
+            run_case "$BASE_SHA" base "$index" "$file" "$pattern"
+          done < "$EVIDENCE_DIR/candidate-only-cases.tsv"
+
+      - name: Enforce autocomplete repair and fail-closed differential
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+
+          const dir = process.env.EVIDENCE_DIR;
+          const read = (name) =>
+            JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+
+          const baseSummary = read('base-summary.json');
+          const candidateSummary = read('candidate-summary.json');
+          const baseFailures = read('base-failures.json');
+          const candidateFailures = read('candidate-failures.json');
+          const cases = read('candidate-only-cases.json');
+
+          const baseKeys = new Set(
+            baseFailures.map((failure) => failure.comparisonKey),
+          );
+          const candidateOnly = candidateFailures.filter(
+            (failure) => !baseKeys.has(failure.comparisonKey),
+          );
+
+          const rates = cases.map((item) => {
+            const candidate = read(`adjudication/candidate-${item.index}-rate.json`);
+            const base = read(`adjudication/base-${item.index}-rate.json`);
+            const eligible =
+              candidate.total === 10 &&
+              base.total === 10 &&
+              candidate.skipped === 0 &&
+              base.skipped === 0 &&
+              candidate.expected >= 9 &&
+              candidate.unexpected <= base.unexpected;
+            return { ...item, candidate, base, eligible };
+          });
+
+          const eligibleKeys = new Set(
+            rates.filter((rate) => rate.eligible).map((rate) => rate.comparisonKey),
+          );
+          const unadjudicatedCandidateOnly = candidateOnly.filter(
+            (failure) => !eligibleKeys.has(failure.comparisonKey),
+          );
+          const adjustedCandidateFailureCount =
+            candidateSummary.failureCount -
+            candidateOnly.filter((failure) =>
+              eligibleKeys.has(failure.comparisonKey),
+            ).length;
+
+          const result = {
+            baseSha: process.env.BASE_SHA,
+            candidateSha: process.env.CANDIDATE_SHA,
+            base: baseSummary,
+            candidate: candidateSummary,
+            candidateOnlyFailureCount: candidateOnly.length,
+            candidateOnlyFailures: candidateOnly.map((failure) => failure.key),
+            rates,
+            unadjudicatedCandidateOnly: unadjudicatedCandidateOnly.map(
+              (failure) => failure.key,
+            ),
+            adjustedCandidateFailureCount,
+            checks: {
+              baseHasExactlyThreeTargetFailures:
+                baseSummary.targetFailureCount === 3,
+              candidateHasNoTargetFailures:
+                candidateSummary.targetFailureCount === 0,
+              candidateHasNoHydrationMismatches:
+                candidateSummary.hydrationMismatchCount === 0,
+              allCandidateOnlyCasesEligible:
+                rates.every((rate) => rate.eligible),
+              noUnadjudicatedCandidateOnlyFailures:
+                unadjudicatedCandidateOnly.length === 0,
+              adjustedCandidateNoWorseThanBase:
+                adjustedCandidateFailureCount <= baseSummary.failureCount,
+            },
+          };
+          result.passed = Object.values(result.checks).every(Boolean);
+
+          fs.writeFileSync(
+            path.join(dir, 'current-main-differential.json'),
+            `${JSON.stringify(result, null, 2)}\n`,
+          );
+          console.log(JSON.stringify(result, null, 2));
+          if (!result.passed) process.exit(1);
+          NODE
+
+      - name: Upload immutable final gate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-autocomplete-final-gates-9fe0965f
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Publish immutable candidate result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description="Create autocomplete exact differential passed"
+          else
+            state=failure
+            description="Create autocomplete exact differential failed"
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          test "$state" = success
