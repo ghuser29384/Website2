@@ -1,0 +1,142 @@
+name: Temporary repair PR 558 canonical lifecycle currency assertions
+
+on:
+  push:
+    branches:
+      - temp/fix-pr558-canonical-currency-20260808
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_HEAD_SHA: 4af6620fad0328a669cfa543529f69098cf9cd1c
+      TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
+
+    steps:
+      - name: Check out the exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Match the product's canonical whole-dollar lifecycle formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          browser_path = Path("tests/mpgf-dac-product-lifecycle.spec.ts")
+          browser = browser_path.read_text()
+          replacements = {
+              '$25.00 · campaign-ce555555555545558555555555555555': (
+                  '$25 · campaign-ce555555555545558555555555555555',
+                  3,
+              ),
+              'page.getByText("$110.00", { exact: true }).first()': (
+                  'page.getByText("$110", { exact: true }).first()',
+                  1,
+              ),
+              'page.getByText("$10.00", { exact: true }).first()': (
+                  'page.getByText("$10", { exact: true }).first()',
+                  1,
+              ),
+          }
+          for old, (new, expected_count) in replacements.items():
+              actual_count = browser.count(old)
+              if actual_count != expected_count:
+                  raise SystemExit(
+                      f"Expected {expected_count} stale lifecycle currency assertion(s) for {old!r}, found {actual_count}."
+                  )
+              browser = browser.replace(old, new)
+              if old in browser:
+                  raise SystemExit(f"Stale lifecycle currency assertion remains: {old}")
+              if browser.count(new) != expected_count:
+                  raise SystemExit(
+                      f"Canonical lifecycle currency assertion count for {new!r} is not {expected_count}."
+                  )
+          browser_path.write_text(browser)
+
+          contract_path = Path("src/lib/mpgf/dac-pledge-currency-format.test.ts")
+          contract = contract_path.read_text()
+          old_name = (
+              'test("rendered DAC pledge assertions match canonical currency and consent-hash formatting", async () => {\n'
+          )
+          new_name = (
+              'test("rendered DAC lifecycle assertions match canonical currency and consent-hash formatting", async () => {\n'
+          )
+          if contract.count(old_name) != 1:
+              raise SystemExit("Expected exactly one rendered DAC currency contract name.")
+          contract = contract.replace(old_name, new_name)
+
+          closing = '});\n'
+          if contract.count(closing) != 1:
+              raise SystemExit("Expected exactly one rendered DAC currency contract closing.")
+          assertions = (
+              '  const canonicalReviewerHeading = \'name: "$25 · campaign-ce555555555545558555555555555555"\';\n'
+              '  assert.equal(\n'
+              '    browserSpec.split(canonicalReviewerHeading).length - 1,\n'
+              '    3,\n'
+              '    "The reviewer proof must use the canonical whole-dollar pledge amount in every heading selector.",\n'
+              '  );\n'
+              '  assert.ok(\n'
+              '    !browserSpec.includes(\'$25.00 · campaign-ce555555555545558555555555555555\'),\n'
+              '    "The reviewer proof must not require a non-canonical trailing .00.",\n'
+              '  );\n'
+              '  assert.ok(\n'
+              '    browserSpec.includes(\'page.getByText("$110", { exact: true }).first()\'),\n'
+              '    "The successful terminal proof must require canonical whole-dollar formatting.",\n'
+              '  );\n'
+              '  assert.ok(\n'
+              '    browserSpec.includes(\'page.getByText("$10", { exact: true }).first()\'),\n'
+              '    "The lapsed terminal proof must require canonical whole-dollar formatting.",\n'
+              '  );\n'
+              '  assert.ok(!browserSpec.includes(\'page.getByText("$110.00", { exact: true })\'));\n'
+              '  assert.ok(!browserSpec.includes(\'page.getByText("$10.00", { exact: true })\'));\n'
+          )
+          if "canonicalReviewerHeading" in contract:
+              raise SystemExit("Lifecycle-wide currency regression assertions already exist unexpectedly.")
+          contract_path.write_text(contract.replace(closing, assertions + closing))
+          PY
+
+          git diff --check
+          git diff -- \
+            tests/mpgf-dac-product-lifecycle.spec.ts \
+            src/lib/mpgf/dac-pledge-currency-format.test.ts
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Prove the scoped currency and selector contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/dac-browser-selector-contract.test.ts \
+            src/lib/mpgf/dac-pledge-currency-format.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Commit the proven repair to the PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            tests/mpgf-dac-product-lifecycle.spec.ts \
+            src/lib/mpgf/dac-pledge-currency-format.test.ts
+          git commit -m "test(mpgf): assert canonical lifecycle currency formatting"
+          git push origin "HEAD:${TARGET_BRANCH}"
