@@ -326,7 +326,9 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   page = await context.newPage();
   const outsiderResponse = await gotoReady(page, ROUTES.creator);
   expect([200, 404]).toContain(outsiderResponse?.status());
-  await expect(page.locator('meta[name="robots"][content*="noindex"]')).toHaveCount(1);
+  await expect(
+    page.locator('meta[name="robots"][content*="noindex"]').first(),
+  ).toHaveAttribute("content", /noindex/);
   await expect(page.getByText("Creator lifecycle receipt", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("heading", { level: 1, name: "QA DAC open for conditional pledges" })).toHaveCount(0);
   await closeContext(context);

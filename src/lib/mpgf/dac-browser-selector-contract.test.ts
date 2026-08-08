@@ -30,6 +30,14 @@ test("creator lifecycle proof targets the canonical heading and streamed not-fou
     "The outsider proof must require Next.js not-found noindex metadata.",
   );
   assert.ok(
+    browserSpec.includes(".first(),\n  ).toHaveAttribute(\"content\", /noindex/)"),
+    "The outsider proof must accept duplicate framework-generated noindex metadata while requiring at least one canonical marker.",
+  );
+  assert.ok(
+    !browserSpec.includes("meta[name=\"robots\"][content*=\"noindex\"]')).toHaveCount(1)"),
+    "The browser proof must not require exactly one framework-generated noindex element.",
+  );
+  assert.ok(
     !browserSpec.includes("expect(outsiderResponse?.status()).toBe(404)"),
     "The browser proof must not confuse streamed not-found rendering with transport status.",
   );
