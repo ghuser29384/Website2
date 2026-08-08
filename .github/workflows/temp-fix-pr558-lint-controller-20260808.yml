@@ -1,4 +1,4 @@
-name: Temporary repair PR 558 browser fixture
+name: Temporary repair PR 558 deterministic campaign identity
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 jobs:
   repair:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       EXPECTED_HEAD_SHA: 634af275da8f161ea73d9e0fa306695e82b0790e
       TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
@@ -27,16 +27,17 @@ jobs:
           ref: ${{ env.TARGET_BRANCH }}
           fetch-depth: 0
 
-      - name: Verify exact head and repair only the observed browser-fixture constraint mismatch
+      - name: Verify exact head and repair only the observed fixture defects
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
           python3 - <<'PY'
           from pathlib import Path
+          import subprocess
 
-          path = Path("supabase/tests/mpgf_dac_product_browser_fixture.sql")
-          source = path.read_text()
+          fixture_path = Path("supabase/tests/mpgf_dac_product_browser_fixture.sql")
+          fixture = fixture_path.read_text()
 
           old_policy = '      "eligibilityPolicy":{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"},\n'
           new_policy = (
@@ -51,31 +52,80 @@ jobs:
               '        "maxBonusPerParticipantCents":2500\n'
               '      },\n'
           )
-          if source.count(old_policy) != 1:
+          if fixture.count(old_policy) != 1:
               raise SystemExit("Expected exactly one incomplete browser-fixture schedule eligibility policy.")
-          source = source.replace(old_policy, new_policy)
+          fixture = fixture.replace(old_policy, new_policy)
 
           old_rationale = '        "rationale":"Synthetic provisional quote for isolated QA",\n'
           new_rationale = (
               '        "rationale":"Provisional threshold 1 experience-rated quote; '
               'operator approval remains required.",\n'
           )
-          if source.count(old_rationale) != 1:
+          if fixture.count(old_rationale) != 1:
               raise SystemExit("Expected exactly one non-canonical browser-fixture provisional rationale.")
-          source = source.replace(old_rationale, new_rationale)
+          fixture = fixture.replace(old_rationale, new_rationale)
+          fixture_path.write_text(fixture)
 
-          if source.count('"contributorIdentityRule":"verified_unique_person"') != 2:
+          wrong_campaign_id = "campaign-c077777777774777877777777777777"
+          correct_campaign_id = "campaign-c0777777777747778777777777777777"
+          result = subprocess.run(
+              ["git", "grep", "-l", "-F", wrong_campaign_id, "--", "."],
+              check=False,
+              capture_output=True,
+              text=True,
+          )
+          paths = {Path(line) for line in result.stdout.splitlines() if line.strip()}
+          required_paths = {
+              Path(".github/workflows/mpgf-dac-product-lifecycle-gates.yml"),
+              Path("supabase/tests/mpgf_dac_product_browser_cleanup.sql"),
+              Path("supabase/tests/mpgf_dac_product_browser_fixture.sql"),
+          }
+          allowed_paths = required_paths | {
+              Path("tests/mpgf-dac-product-lifecycle.spec.ts"),
+              Path("src/lib/mpgf/dac-product-lifecycle.test.ts"),
+          }
+          if not required_paths.issubset(paths):
+              missing = sorted(str(path) for path in required_paths - paths)
+              raise SystemExit(f"Expected malformed campaign identity in every fixture contract; missing {missing}")
+          unexpected = paths - allowed_paths
+          if unexpected:
+              raise SystemExit(
+                  "Malformed campaign identity appeared outside the scoped fixture contracts: "
+                  + ", ".join(sorted(str(path) for path in unexpected))
+              )
+          for path in sorted(paths):
+              source = path.read_text()
+              count = source.count(wrong_campaign_id)
+              if count < 1:
+                  raise SystemExit(f"Expected malformed campaign identity in {path}")
+              path.write_text(source.replace(wrong_campaign_id, correct_campaign_id))
+              print(f"Repaired {count} deterministic campaign ID reference(s) in {path}")
+
+          remaining = subprocess.run(
+              ["git", "grep", "-n", "-F", wrong_campaign_id, "--", "."],
+              check=False,
+              capture_output=True,
+              text=True,
+          )
+          if remaining.stdout.strip():
+              raise SystemExit("A malformed deterministic campaign identity remains:\n" + remaining.stdout)
+
+          repaired_fixture = fixture_path.read_text()
+          if repaired_fixture.count('"contributorIdentityRule":"verified_unique_person"') != 2:
               raise SystemExit("The browser fixture proposal and schedule must carry the same full eligibility policy.")
-          if source.count("Provisional threshold 1 experience-rated quote; operator approval remains required.") != 1:
+          if repaired_fixture.count("Provisional threshold 1 experience-rated quote; operator approval remains required.") != 1:
               raise SystemExit("The browser fixture canonical pending-review rationale was not installed exactly once.")
-          if '"eligibilityPolicy":{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"}' in source:
-              raise SystemExit("An incomplete browser-fixture schedule eligibility policy remains.")
-
-          path.write_text(source)
+          if repaired_fixture.count(correct_campaign_id) < 7:
+              raise SystemExit("The browser fixture does not consistently use the exact deterministic campaign identity.")
           PY
 
           git diff --check
-          git diff -- supabase/tests/mpgf_dac_product_browser_fixture.sql
+          git diff -- \
+            .github/workflows/mpgf-dac-product-lifecycle-gates.yml \
+            supabase/tests/mpgf_dac_product_browser_cleanup.sql \
+            supabase/tests/mpgf_dac_product_browser_fixture.sql \
+            tests/mpgf-dac-product-lifecycle.spec.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts
 
       - name: Install PostgreSQL client
         run: |
@@ -148,21 +198,21 @@ jobs:
           where id in (
             'campaign-ce555555555545558555555555555555',
             'campaign-cf666666666646668666666666666666',
-            'campaign-c077777777774777877777777777777'
+            'campaign-c0777777777747778777777777777777'
           );
           select 'outcome_count=' || count(*)
           from public.mpgf_dac_campaign_outcomes
           where campaign_id in (
             'campaign-ce555555555545558555555555555555',
             'campaign-cf666666666646668666666666666666',
-            'campaign-c077777777774777877777777777777'
+            'campaign-c0777777777747778777777777777777'
           );
           select 'payment_refs=' || count(*)
           from public.mpgf_public_goods_pledges
           where campaign_id in (
             'campaign-ce555555555545558555555555555555',
             'campaign-cf666666666646668666666666666666',
-            'campaign-c077777777774777877777777777777'
+            'campaign-c0777777777747778777777777777777'
           )
             and (payment_intent_ref is not null or status = 'captured');
           SQL
@@ -181,18 +231,63 @@ jobs:
             --set ON_ERROR_STOP=1 \
             --file supabase/tests/mpgf_dac_product_browser_cleanup.sql
 
-      - name: Prove zero fixture residue
+      - name: Prove complete zero fixture residue
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          residue="$(psql "$QA_SUPABASE_DB_URL" \
+          psql "$QA_SUPABASE_DB_URL" \
             --no-psqlrc \
             --set ON_ERROR_STOP=1 \
             --tuples-only \
-            --no-align \
-            --command "select count(*) from auth.users where id in ('ca111111-1111-4111-8111-111111111111','cb222222-2222-4222-8222-222222222222','cc333333-3333-4333-8333-333333333333','cd444444-4444-4444-8444-444444444444');")"
-          test "$residue" = "0"
+            --no-align <<'SQL' | tee /tmp/mpgf-dac-browser-zero-residue.txt
+          with ids as (
+            select array[
+              'ca111111-1111-4111-8111-111111111111'::uuid,
+              'cb222222-2222-4222-8222-222222222222'::uuid,
+              'cc333333-3333-4333-8333-333333333333'::uuid,
+              'cd444444-4444-4444-8444-444444444444'::uuid
+            ] as users,
+            array[
+              'ce555555-5555-4555-8555-555555555555'::uuid,
+              'cf666666-6666-4666-8666-666666666666'::uuid,
+              'c0777777-7777-4777-8777-777777777777'::uuid
+            ] as proposals,
+            array[
+              'campaign-ce555555555545558555555555555555',
+              'campaign-cf666666666646668666666666666666',
+              'campaign-c0777777777747778777777777777777'
+            ] as campaigns
+          )
+          select 'fixture_residue=' || (
+            (select count(*) from auth.users, ids where auth.users.id = any(ids.users))
+            + (select count(*) from auth.identities, ids where auth.identities.user_id = any(ids.users))
+            + (select count(*) from auth.sessions, ids where auth.sessions.user_id = any(ids.users))
+            + (select count(*) from auth.refresh_tokens, ids where auth.refresh_tokens.user_id = any(array(select user_id::text from unnest(ids.users) as user_id)))
+            + (select count(*) from auth.mfa_factors, ids where auth.mfa_factors.user_id = any(ids.users))
+            + (select count(*) from moral_trade_private.person_accounts, ids where profile_id = any(ids.users))
+            + (select count(*) from public.profiles, ids where public.profiles.id = any(ids.users))
+            + (select count(*) from public.mpgf_pool_reviewers, ids where reviewer_id = any(ids.users))
+            + (select count(*) from public.mpgf_pool_proposals, ids where id = any(ids.proposals))
+            + (select count(*) from public.mpgf_pool_proposal_versions, ids where proposal_id = any(ids.proposals))
+            + (select count(*) from public.mpgf_pool_lifecycle_events, ids where proposal_id = any(ids.proposals))
+            + (select count(*) from public.moral_trade_create_pool_terms, ids where pool_proposal_id = any(ids.proposals))
+            + (select count(*) from public.mpgf_failure_bonus_premium_quotes, ids where pool_proposal_id = any(ids.proposals))
+            + (select count(*) from public.mpgf_public_goods_campaigns, ids where id = any(ids.campaigns))
+            + (select count(*) from public.mpgf_public_goods_pledges, ids where campaign_id = any(ids.campaigns))
+            + (select count(*) from public.mpgf_dac_pledge_intents, ids where campaign_id = any(ids.campaigns))
+            + (select count(*) from public.mpgf_dac_pledge_events, ids where campaign_id = any(ids.campaigns))
+            + (select count(*) from public.mpgf_dac_campaign_outcomes, ids where campaign_id = any(ids.campaigns))
+            + (select count(*) from public.moral_trade_create_submissions where id in (
+              'd1111111-1111-4111-8111-111111111111',
+              'd2222222-2222-4222-8222-222222222222',
+              'd3333333-3333-4333-8333-333333333333'
+            ))
+            + (select count(*) from public.mpgf_public_goods_rounds where id = 'qa-dac-product-round-20260807')
+            + (select count(*) from public.mpgf_public_goods_match_pools where id = 'qa-dac-product-match-20260807')
+          ) from ids;
+          SQL
+          grep -Fxq 'fixture_residue=0' /tmp/mpgf-dac-browser-zero-residue.txt
 
       - name: Commit the narrowly scoped fixture repair and update the PR branch
         shell: bash
@@ -202,6 +297,12 @@ jobs:
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add supabase/tests/mpgf_dac_product_browser_fixture.sql
-          git commit -m "test(mpgf): align browser fixture with frozen schedule constraints"
+          git add \
+            .github/workflows/mpgf-dac-product-lifecycle-gates.yml \
+            supabase/tests/mpgf_dac_product_browser_cleanup.sql \
+            supabase/tests/mpgf_dac_product_browser_fixture.sql
+          if ! git diff --cached --quiet -- tests/mpgf-dac-product-lifecycle.spec.ts src/lib/mpgf/dac-product-lifecycle.test.ts; then
+            git add tests/mpgf-dac-product-lifecycle.spec.ts src/lib/mpgf/dac-product-lifecycle.test.ts
+          fi
+          git commit -m "test(mpgf): use exact deterministic DAC campaign identity"
           git push origin "HEAD:${TARGET_BRANCH}"
