@@ -158,11 +158,44 @@ function runPsql(sql, variables = {}) {
         '    input: expandedSql,',
     )
 
+    source = replace_literal(
+        source,
+        "create-form scoping",
+        '''    const createForm = desktopPanel.locator("form").filter({
+      has: desktopPanel.getByRole("button", { name: "Create MFA setup" }),
+    });''',
+        '''    const createForm = desktopPanel
+      .getByRole("button", { name: "Create MFA setup" })
+      .locator("xpath=ancestor::form");''',
+    )
+    source = replace_literal(
+        source,
+        "pending-form scoping",
+        '''    const pendingForm = desktopPanel.locator("form").filter({
+      has: desktopPanel.getByRole("button", { name: "Verify MFA setup" }),
+    });''',
+        '''    const pendingForm = desktopPanel
+      .getByRole("button", { name: "Verify MFA setup" })
+      .locator("xpath=ancestor::form");''',
+    )
+    source = replace_literal(
+        source,
+        "verify-session form scoping",
+        '''    const verifySessionForm = mobilePanel.locator("form").filter({
+      has: mobilePanel.getByRole("button", { name: "Verify session" }),
+    });''',
+        '''    const verifySessionForm = mobilePanel
+      .getByRole("button", { name: "Verify session" })
+      .locator("xpath=ancestor::form");''',
+    )
+
     forbidden = [
         "PR552_PREVIEW_SHARE_URL",
         "PREVIEW_SHARE_URL",
         'args.push("--set"',
         "    input: sql,",
+        'desktopPanel.locator("form").filter({',
+        'mobilePanel.locator("form").filter({',
         OLD_CANDIDATE_SHA,
         OLD_DEPLOYMENT_ID,
     ]
@@ -178,6 +211,7 @@ function runPsql(sql, variables = {}) {
         "const expandedSql = expandPsqlVariables(sql, variables);": 1,
         "expanded.split(token).join(sqlLiteral(value))": 1,
         "input: expandedSql": 1,
+        'locator("xpath=ancestor::form")': 3,
         NEW_CANDIDATE_SHA: 1,
         NEW_DEPLOYMENT_ID: 1,
     }
