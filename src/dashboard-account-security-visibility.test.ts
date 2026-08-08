@@ -50,3 +50,16 @@ test("the exposed card contains the complete authenticator enrollment flow", () 
   assert.match(accountSecurityPanel, />\s*Verify MFA setup\s*</);
   assert.match(accountSecurityPanel, /autoComplete="one-time-code"/);
 });
+
+test("an optional priority summary cannot block the Account security surface", () => {
+  assert.ok(
+    dashboard.includes(
+      [
+        "  const priorityFundSummary =",
+        "    viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY",
+        "      ? await getPriorityCorrectionSummary(viewer.authUser.id)",
+        "      : null;",
+      ].join("\n"),
+    ),
+  );
+});
