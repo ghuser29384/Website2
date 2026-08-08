@@ -1,0 +1,152 @@
+name: PR 552 production release monitor
+
+on:
+  push:
+    branches:
+      - ops/pr552-production-release-monitor-20260808
+    paths:
+      - .github/workflows/pr552-production-release-monitor-20260808.yml
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: pr552-production-release-monitor-20260808
+  cancel-in-progress: false
+
+env:
+  REPOSITORY: ghuser29384/Website2
+  RELEASE_WORKFLOW_FILE: pr552-merge-production-release-20260808.yml
+  RELEASE_BRANCH: ops/pr552-merge-production-release-20260808
+  PR_NUMBER: "552"
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 125
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out monitor branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Wait for release workflow terminal result
+        id: wait
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-monitor
+          encoded_branch="$(python3 -c 'import urllib.parse,os; print(urllib.parse.quote(os.environ["RELEASE_BRANCH"], safe=""))')"
+          run_id=''
+          for attempt in $(seq 1 60); do
+            curl -fsS \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${REPOSITORY}/actions/workflows/${RELEASE_WORKFLOW_FILE}/runs?branch=${encoded_branch}&per_page=10" \
+              > release-monitor/runs.json
+            run_id="$(jq -r '.workflow_runs[0].id // empty' release-monitor/runs.json)"
+            if [[ -n "$run_id" ]]; then break; fi
+            sleep 5
+          done
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+
+          for attempt in $(seq 1 720); do
+            curl -fsS \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${REPOSITORY}/actions/runs/${run_id}" \
+              > release-monitor/release-run.json
+            status="$(jq -r '.status' release-monitor/release-run.json)"
+            if [[ "$status" == 'completed' ]]; then break; fi
+            sleep 10
+          done
+          jq -e '.status == "completed"' release-monitor/release-run.json >/dev/null
+          conclusion="$(jq -r '.conclusion' release-monitor/release-run.json)"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+          curl -fsS \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100" \
+            > release-monitor/jobs.json
+          curl -fsS \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/pulls/${PR_NUMBER}" \
+            > release-monitor/pr.json
+          curl -fsS \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/git/ref/heads/main" \
+            > release-monitor/main.json
+
+          jq -n \
+            --argjson releaseRun "$(cat release-monitor/release-run.json)" \
+            --argjson pr "$(cat release-monitor/pr.json)" \
+            --argjson main "$(cat release-monitor/main.json)" \
+            --argjson jobs "$(cat release-monitor/jobs.json)" \
+            '{
+              schemaVersion:1,
+              releaseRun:{id:$releaseRun.id,status:$releaseRun.status,conclusion:$releaseRun.conclusion,htmlUrl:$releaseRun.html_url,createdAt:$releaseRun.created_at,updatedAt:$releaseRun.updated_at},
+              pullRequest:{number:$pr.number,state:$pr.state,merged:$pr.merged,mergeCommitSha:$pr.merge_commit_sha,headSha:$pr.head.sha,baseSha:$pr.base.sha},
+              mainSha:$main.object.sha,
+              failedSteps:[
+                $jobs.jobs[]?.steps[]?
+                | select(.conclusion == "failure")
+                | {name:.name,number:.number}
+              ]
+            }' > release-monitor/final-status.json
+
+      - name: Comment failure details on PR 552
+        if: steps.wait.outputs.conclusion != 'success'
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.wait.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          failed="$(jq -c '.failedSteps' release-monitor/final-status.json)"
+          jq -n \
+            --arg run "https://github.com/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" \
+            --arg failed "$failed" \
+            '{body:("## Production release did not complete successfully\n\n- Release workflow: "+$run+"\n- Failed steps: `"+$failed+"`\n- No success claim should be made until the blocker is repaired and the full release/smoke workflow passes.")}' \
+            > release-monitor/failure-comment.json
+          curl -fsS \
+            -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --data-binary @release-monitor/failure-comment.json \
+            > release-monitor/failure-comment-response.json
+
+      - name: Commit terminal monitor record
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          mkdir -p .release-status
+          cp release-monitor/final-status.json .release-status/pr552-production-release.json
+          git add .release-status/pr552-production-release.json
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "Record PR 552 production release terminal status"
+          git push origin HEAD:ops/pr552-production-release-monitor-20260808
+
+      - name: Fail monitor when release failed
+        if: steps.wait.outputs.conclusion != 'success'
+        run: exit 1
