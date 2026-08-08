@@ -13,6 +13,8 @@ on:
       - "src/app/dashboard/layout.tsx"
       - "src/app/dashboard/page.tsx"
       - "src/components/dashboard/background-account-security-panel.tsx"
+      - "src/components/layout/site-footer.tsx"
+      - "src/components/layout/site-topbar.tsx"
       - "src/dashboard-account-security-visibility.test.ts"
       - "src/proxy.test.ts"
       - "src/proxy.ts"
@@ -101,6 +103,8 @@ jobs:
           src/app/dashboard/layout.tsx
           src/app/dashboard/page.tsx
           src/components/dashboard/background-account-security-panel.tsx
+          src/components/layout/site-footer.tsx
+          src/components/layout/site-topbar.tsx
           src/dashboard-account-security-visibility.test.ts
           src/proxy.test.ts
           src/proxy.ts
