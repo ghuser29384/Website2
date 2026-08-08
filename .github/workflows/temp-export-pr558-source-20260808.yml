@@ -1,0 +1,39 @@
+name: Temporary export exact PR 558 source
+
+on:
+  push:
+    branches:
+      - temp/export-pr558-source-20260808
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out temporary export commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify and archive exact PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="f3e1dd119e3f76c5e37a904b5228f7981f584ab7"
+          actual="$(git rev-parse HEAD^)"
+          test "$actual" = "$expected"
+          git archive --format=tar.gz --prefix=moraltrade-pr558/ -o /tmp/moraltrade-pr558.tar.gz "$actual"
+          sha256sum /tmp/moraltrade-pr558.tar.gz | tee /tmp/moraltrade-pr558.sha256
+
+      - name: Upload exact source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr558-exact-source
+          path: |
+            /tmp/moraltrade-pr558.tar.gz
+            /tmp/moraltrade-pr558.sha256
+          if-no-files-found: error
+          retention-days: 1
