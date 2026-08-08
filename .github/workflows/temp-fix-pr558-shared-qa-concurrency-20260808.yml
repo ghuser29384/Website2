@@ -1,0 +1,121 @@
+name: Temporary repair PR 558 shared isolated-QA concurrency
+
+on:
+  push:
+    branches:
+      - temp/fix-pr558-shared-qa-concurrency-20260808
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_HEAD_SHA: ba6793fd0d293abd93345a49a4a7d06682a15bc0
+      TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      CONDITIONAL_PAYMENTS_MODE: disabled
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      DIRECT_DONATION_UPGRADES_ENABLED: "false"
+      DIRECT_DONATION_UPGRADE_MODE: disabled
+
+    steps:
+      - name: Check out the exact PR head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Serialize push and pull-request runs that share fixed QA fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          workflow_path = Path(".github/workflows/mpgf-dac-product-lifecycle-gates.yml")
+          workflow = workflow_path.read_text()
+          old_group = (
+              "  group: mpgf-dac-product-lifecycle-${{ "
+              "github.event.pull_request.number || github.ref }}\n"
+          )
+          new_group = (
+              "  group: mpgf-dac-product-lifecycle-${{ "
+              "github.event.pull_request.head.ref || github.ref_name }}\n"
+          )
+          if workflow.count(old_group) != 1:
+              raise SystemExit(
+                  f"Expected exactly one event-split concurrency group, found {workflow.count(old_group)}."
+              )
+          workflow = workflow.replace(old_group, new_group)
+          if "github.event.pull_request.number || github.ref" in workflow:
+              raise SystemExit("The event-split QA concurrency expression remains.")
+          if workflow.count("github.event.pull_request.head.ref || github.ref_name") != 1:
+              raise SystemExit("The shared branch concurrency expression was not installed exactly once.")
+          workflow_path.write_text(workflow)
+
+          test_path = Path("src/lib/mpgf/dac-product-lifecycle.test.ts")
+          source_test = test_path.read_text()
+          anchor = "  assert.match(workflow, /npm test/);\n"
+          assertions = (
+              "  assert.match(\n"
+              "    workflow,\n"
+              "    /group: mpgf-dac-product-lifecycle-\\$\\{\\{ "
+              "github\\.event\\.pull_request\\.head\\.ref \\|\\| github\\.ref_name \\}\\}/,\n"
+              "  );\n"
+              "  assert.doesNotMatch(\n"
+              "    workflow,\n"
+              "    /github\\.event\\.pull_request\\.number \\|\\| github\\.ref/,\n"
+              "  );\n"
+              "  assert.match(workflow, /cancel-in-progress: true/);\n"
+          )
+          if source_test.count(anchor) != 1:
+              raise SystemExit(f"Expected exactly one workflow assertion anchor, found {source_test.count(anchor)}.")
+          if "github\\.event\\.pull_request\\.head\\.ref" in source_test:
+              raise SystemExit("Shared-QA concurrency regression assertions already exist unexpectedly.")
+          source_test = source_test.replace(anchor, assertions + anchor)
+          test_path.write_text(source_test)
+          PY
+
+          git diff --check
+          git diff -- \
+            .github/workflows/mpgf-dac-product-lifecycle-gates.yml \
+            src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Prove the permanent concurrency contract and pledge-format regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/dac-product-lifecycle.test.ts \
+            src/lib/mpgf/dac-pledge-currency-format.test.ts
+
+      - name: Commit the proven concurrency repair to the PR branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/workflows/mpgf-dac-product-lifecycle-gates.yml \
+            src/lib/mpgf/dac-product-lifecycle.test.ts
+          git commit -m "ci(mpgf): serialize shared isolated-QA fixtures"
+          git push origin "HEAD:${TARGET_BRANCH}"
