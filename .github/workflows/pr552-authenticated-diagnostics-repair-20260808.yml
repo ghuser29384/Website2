@@ -63,41 +63,45 @@ jobs:
           replace_exact(
               "src/app/dashboard/page.tsx",
               '              <Link className="v72-shortcut-tile" href={item.href} key={item.label}>',
-              '''              <Link
-                className="v72-shortcut-tile"
-                href={item.href}
-                key={item.label}
-                prefetch={item.href === "/offers" ? false : undefined}
-              >''',
+              "              <Link\n"
+              '                className="v72-shortcut-tile"\n'
+              "                href={item.href}\n"
+              "                key={item.label}\n"
+              '                prefetch={item.href === "/offers" ? false : undefined}\n'
+              "              >",
           )
 
           test_path = Path("src/dashboard-account-security-visibility.test.ts")
           test_source = test_path.read_text(encoding="utf-8")
-          addition = r'''
-
-test("authenticator code inputs use a browser-valid pattern", () => {
-  const validPattern = String.raw`pattern="[0-9\s-]{6,8}"`;
-  const invalidPattern = String.raw`pattern="[0-9\\s-]{6,8}"`;
-
-  assert.equal(accountSecurityPanel.split(validPattern).length - 1, 2);
-  assert.equal(accountSecurityPanel.includes(invalidPattern), false);
-});
-
-test("the stale Offers shortcut cannot prefetch a missing route", () => {
-  assert.ok(
-    dashboard.includes(
-      [
-        "              <Link",
-        '                className="v72-shortcut-tile"',
-        "                href={item.href}",
-        "                key={item.label}",
-        '                prefetch={item.href === "/offers" ? false : undefined}',
-        "              >",
-      ].join("\n"),
-    ),
-  );
-});
-'''
+          addition = "\n".join(
+              [
+                  "",
+                  "",
+                  'test("authenticator code inputs use a browser-valid pattern", () => {',
+                  '  const validPattern = String.raw`pattern="[0-9\\s-]{6,8}"`;',
+                  '  const invalidPattern = String.raw`pattern="[0-9\\\\s-]{6,8}"`;',
+                  "",
+                  "  assert.equal(accountSecurityPanel.split(validPattern).length - 1, 2);",
+                  "  assert.equal(accountSecurityPanel.includes(invalidPattern), false);",
+                  "});",
+                  "",
+                  'test("the stale Offers shortcut cannot prefetch a missing route", () => {',
+                  "  assert.ok(",
+                  "    dashboard.includes(",
+                  "      [",
+                  '        "              <Link",',
+                  "        '                className=\"v72-shortcut-tile\"',",
+                  '        "                href={item.href}",',
+                  '        "                key={item.label}",',
+                  "        '                prefetch={item.href === \"/offers\" ? false : undefined}',",
+                  '        "              >",',
+                  '      ].join("\\n"),',
+                  "    ),",
+                  "  );",
+                  "});",
+                  "",
+              ]
+          )
           if "authenticator code inputs use a browser-valid pattern" in test_source:
               raise SystemExit("focused diagnostics tests already exist")
           test_path.write_text(test_source.rstrip() + addition, encoding="utf-8")
