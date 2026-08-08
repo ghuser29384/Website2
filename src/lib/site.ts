@@ -19,8 +19,8 @@ export interface SiteFooterLinkGroup {
 
 export function getPrimaryNavLinks(_isAuthenticated = false): SiteNavLinkItem[] {
   return [
-    { href: "/", label: "Feed" },
-    { href: "/offers", label: "Discover" },
+    { href: "/feed", label: "Feed" },
+    { href: "/discover", label: "Discover" },
     { href: "/trades/new", label: "Create" },
     { href: "/invite", label: "Invite" },
     { href: "/messages", label: "Messages" },
@@ -49,8 +49,8 @@ export const FOOTER_LINK_GROUPS: SiteFooterLinkGroup[] = [
   {
     title: "Marketplace",
     links: [
-      { href: "/", label: "Personalized feed" },
-      { href: "/offers", label: "Discover opportunities" },
+      { href: "/feed", label: "Personalized feed" },
+      { href: "/discover", label: "Discover opportunities" },
       { href: "/trades/new", label: "Create a trade" },
       { href: "/messages", label: "Private messages" },
       { href: "/commitments", label: "Track commitments" },
