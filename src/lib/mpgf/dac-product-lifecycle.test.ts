@@ -15,6 +15,7 @@ const paths = {
   poolPage: "src/app/mpgf/pools/[poolId]/page.tsx",
   publicApi: "src/app/api/mpgf/dac/campaigns/[campaignId]/route.ts",
   publicTermsMigration: "supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql",
+  publicTermsRegression: "supabase/tests/mpgf_dac_public_terms_api.sql",
   browserFixture: "supabase/tests/mpgf_dac_product_browser_fixture.sql",
   browserCleanup: "supabase/tests/mpgf_dac_product_browser_cleanup.sql",
   browserSpec: "tests/mpgf-dac-product-lifecycle.spec.ts",
@@ -110,7 +111,10 @@ test("reviewer workspace exposes every non-payment lifecycle decision through au
 });
 
 test("public exact-term migration is privacy-sanitized and mechanically explicit about the no-payment boundary", async () => {
-  const migration = await read(paths.publicTermsMigration);
+  const [migration, regression] = await Promise.all([
+    read(paths.publicTermsMigration),
+    read(paths.publicTermsRegression),
+  ]);
 
   assert.match(migration, /security definer/);
   assert.match(migration, /published_terms_version/);
@@ -138,6 +142,21 @@ test("public exact-term migration is privacy-sanitized and mechanically explicit
   }
   assert.doesNotMatch(migration, /proposer_id|reviewed_by|review_reason|idempotency_key_hash/);
   assert.match(migration, /grant execute on function public\.mpgf_public_dac_campaign_terms\(text\)[\s\S]*to anon, authenticated, service_role/);
+
+  assert.equal(
+    regression.match(/"contributorIdentityRule":"verified_unique_person"/g)?.length,
+    2,
+    "The proposal and pending schedule must carry the same complete eligibility policy.",
+  );
+  assert.equal(
+    regression.match(/Provisional threshold 1 experience-rated quote; operator approval remains required\./g)?.length,
+    1,
+    "The rollback fixture must use the canonical pending-review rationale.",
+  );
+  assert.doesNotMatch(
+    regression,
+    /"eligibilityPolicy":\{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"\}/,
+  );
 });
 
 test("permanent isolated-QA proof covers open pledge, creator, reviewer, terminal states, privacy, mobile, and cleanup", async () => {
