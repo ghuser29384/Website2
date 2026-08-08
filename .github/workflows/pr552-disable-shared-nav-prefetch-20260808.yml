@@ -58,7 +58,6 @@ jobs:
           topbar_path = Path("src/components/layout/site-topbar.tsx")
           footer_path = Path("src/components/layout/site-footer.tsx")
           test_path = Path("src/dashboard-account-security-visibility.test.ts")
-          workflow_path = Path(".github/workflows/dashboard-account-security-hotfix-gates.yml")
 
           def disable_all_link_prefetch(path: Path, expected_links: int) -> None:
               source = path.read_text(encoding="utf-8")
@@ -110,26 +109,6 @@ jobs:
               raise SystemExit("focused navigation-prefetch test already exists")
           test_source = test_source.rstrip() + "\n\n" + new_test + "\n"
           test_path.write_text(test_source, encoding="utf-8")
-
-          workflow = workflow_path.read_text(encoding="utf-8")
-          path_anchor = '      - "src/components/dashboard/background-account-security-panel.tsx"\n'
-          path_replacement = path_anchor + (
-              '      - "src/components/layout/site-footer.tsx"\n'
-              '      - "src/components/layout/site-topbar.tsx"\n'
-          )
-          if workflow.count(path_anchor) != 1:
-              raise SystemExit("workflow path anchor changed")
-          workflow = workflow.replace(path_anchor, path_replacement, 1)
-
-          expected_anchor = "          src/components/dashboard/background-account-security-panel.tsx\n"
-          expected_replacement = expected_anchor + (
-              "          src/components/layout/site-footer.tsx\n"
-              "          src/components/layout/site-topbar.tsx\n"
-          )
-          if workflow.count(expected_anchor) != 1:
-              raise SystemExit("workflow expected-file anchor changed")
-          workflow = workflow.replace(expected_anchor, expected_replacement, 1)
-          workflow_path.write_text(workflow, encoding="utf-8")
           PY
 
       - name: Verify exact repair scope
@@ -139,7 +118,6 @@ jobs:
           git diff --check
           git diff --name-only | sort > actual-repair-files.txt
           cat > expected-repair-files.txt <<'FILES'
-          .github/workflows/dashboard-account-security-hotfix-gates.yml
           src/components/layout/site-footer.tsx
           src/components/layout/site-topbar.tsx
           src/dashboard-account-security-visibility.test.ts
@@ -155,7 +133,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
-            .github/workflows/dashboard-account-security-hotfix-gates.yml \
             src/components/layout/site-footer.tsx \
             src/components/layout/site-topbar.tsx \
             src/dashboard-account-security-visibility.test.ts
