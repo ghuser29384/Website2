@@ -1,0 +1,166 @@
+name: PR 552 shared Offers prefetch repair
+
+on:
+  push:
+    branches:
+      - ops/pr552-shared-offers-prefetch-repair-20260808
+    paths:
+      - .github/workflows/pr552-shared-offers-prefetch-repair-20260808.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr552-shared-offers-prefetch-repair-20260808
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Patch shared Dashboard navigation on the exact PR head
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_BRANCH: hotfix/dashboard-account-security-visible-20260807
+      EXPECTED_TARGET_SHA: a5393648b8a8b25c36fa01088e1ca79daf97cd00
+    steps:
+      - name: Check out exact target
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Guard exact target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_SHA"
+
+      - name: Apply the shared-navigation repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str, expected: int = 1) -> None:
+              file_path = Path(path)
+              source = file_path.read_text(encoding="utf-8")
+              count = source.count(old)
+              if count != expected:
+                  raise SystemExit(f"{path}: expected {expected} match(es), found {count}")
+              file_path.write_text(source.replace(old, new, expected), encoding="utf-8")
+
+          marketplace_path = Path("src/components/marketplace/marketplace-components.tsx")
+          marketplace = marketplace_path.read_text(encoding="utf-8")
+          marker = "export function MarketplaceBottomNav({"
+          if marketplace.count(marker) != 1:
+              raise SystemExit("MarketplaceBottomNav marker cardinality mismatch")
+          start = marketplace.index(marker)
+          before, bottom_nav = marketplace[:start], marketplace[start:]
+          old_bottom_nav = "          href={item.href}\n          key={item.key}\n"
+          new_bottom_nav = (
+              "          href={item.href}\n"
+              '          prefetch={item.href === "/offers" ? false : undefined}\n'
+              "          key={item.key}\n"
+          )
+          if bottom_nav.count(old_bottom_nav) != 1:
+              raise SystemExit(
+                  f"MarketplaceBottomNav: expected one Link target, found {bottom_nav.count(old_bottom_nav)}"
+              )
+          marketplace_path.write_text(
+              before + bottom_nav.replace(old_bottom_nav, new_bottom_nav, 1),
+              encoding="utf-8",
+          )
+
+          replace_exact(
+              "src/components/layout/site-topbar.tsx",
+              '    <Link className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")} href={href}>',
+              '''    <Link
+              className={[className, isActive ? "is-active" : ""].filter(Boolean).join(" ")}
+              href={href}
+              prefetch={getHrefPath(href) === "/offers" ? false : undefined}
+            >''',
+          )
+          replace_exact(
+              "src/components/layout/site-topbar.tsx",
+              "                href={item.href}\n                onClick={() => onOpenChange(false)}\n",
+              "                href={item.href}\n"
+              "                onClick={() => onOpenChange(false)}\n"
+              '                prefetch={getHrefPath(item.href) === "/offers" ? false : undefined}\n',
+          )
+
+          test_path = Path("src/dashboard-account-security-visibility.test.ts")
+          test_source = test_path.read_text(encoding="utf-8")
+          old_constants = '''const accountSecurityPanel = readFileSync(
+            "src/components/dashboard/background-account-security-panel.tsx",
+            "utf8",
+          );
+          '''
+          new_constants = old_constants + '''const marketplaceComponents = readFileSync(
+            "src/components/marketplace/marketplace-components.tsx",
+            "utf8",
+          );
+          const siteTopbar = readFileSync("src/components/layout/site-topbar.tsx", "utf8");
+          '''
+          if test_source.count(old_constants) != 1:
+              raise SystemExit("focused test constants anchor mismatch")
+          test_source = test_source.replace(old_constants, new_constants, 1)
+          addition = '''
+
+          test("shared Dashboard navigation cannot prefetch the legacy Offers rewrite", () => {
+            assert.ok(
+              marketplaceComponents.includes(
+                'prefetch={item.href === "/offers" ? false : undefined}',
+              ),
+            );
+            assert.ok(
+              siteTopbar.includes(
+                'prefetch={getHrefPath(href) === "/offers" ? false : undefined}',
+              ),
+            );
+            assert.ok(
+              siteTopbar.includes(
+                'prefetch={getHrefPath(item.href) === "/offers" ? false : undefined}',
+              ),
+            );
+          });
+          '''
+          if "shared Dashboard navigation cannot prefetch the legacy Offers rewrite" in test_source:
+              raise SystemExit("shared-navigation focused test already exists")
+          test_path.write_text(test_source.rstrip() + addition, encoding="utf-8")
+          PY
+
+      - name: Verify exact repaired scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --name-only | sort > actual-repair-files.txt
+          cat > expected-repair-files.txt <<'EOF'
+          src/components/layout/site-topbar.tsx
+          src/components/marketplace/marketplace-components.tsx
+          src/dashboard-account-security-visibility.test.ts
+          EOF
+          diff -u expected-repair-files.txt actual-repair-files.txt
+          grep -F 'prefetch={item.href === "/offers" ? false : undefined}' \
+            src/components/marketplace/marketplace-components.tsx
+          grep -F 'prefetch={getHrefPath(href) === "/offers" ? false : undefined}' \
+            src/components/layout/site-topbar.tsx
+          grep -F 'prefetch={getHrefPath(item.href) === "/offers" ? false : undefined}' \
+            src/components/layout/site-topbar.tsx
+
+      - name: Commit and push
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/components/layout/site-topbar.tsx \
+            src/components/marketplace/marketplace-components.tsx \
+            src/dashboard-account-security-visibility.test.ts
+          git commit -m "Prevent stale Offers prefetches on Dashboard"
+          git push origin "HEAD:$TARGET_BRANCH"
