@@ -1,0 +1,145 @@
+name: PR 552 authenticated diagnostics repair
+
+on:
+  push:
+    branches:
+      - ops/pr552-authenticated-diagnostics-repair-20260808
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr552-authenticated-diagnostics-repair-20260808
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Patch the exact PR 552 branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_BRANCH: hotfix/dashboard-account-security-visible-20260807
+      EXPECTED_TARGET_SHA: 795874493862c926f9eb2a4d2239a28a99e41968
+    steps:
+      - name: Check out the exact target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Guard target and repair scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_SHA"
+
+      - name: Apply browser-diagnostics repairs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str, expected: int = 1) -> None:
+              file_path = Path(path)
+              source = file_path.read_text(encoding="utf-8")
+              count = source.count(old)
+              if count != expected:
+                  raise SystemExit(
+                      f"{path}: expected {expected} exact match(es), found {count}"
+                  )
+              file_path.write_text(source.replace(old, new), encoding="utf-8")
+
+          replace_exact(
+              "src/components/dashboard/background-account-security-panel.tsx",
+              r'pattern="[0-9\\s-]{6,8}"',
+              r'pattern="[0-9\s-]{6,8}"',
+              expected=2,
+          )
+
+          replace_exact(
+              "src/app/dashboard/page.tsx",
+              '              <Link className="v72-shortcut-tile" href={item.href} key={item.label}>',
+              '''              <Link
+                className="v72-shortcut-tile"
+                href={item.href}
+                key={item.label}
+                prefetch={item.href === "/offers" ? false : undefined}
+              >''',
+          )
+
+          test_path = Path("src/dashboard-account-security-visibility.test.ts")
+          test_source = test_path.read_text(encoding="utf-8")
+          addition = r'''
+
+test("authenticator code inputs use a browser-valid pattern", () => {
+  const validPattern = String.raw`pattern="[0-9\s-]{6,8}"`;
+  const invalidPattern = String.raw`pattern="[0-9\\s-]{6,8}"`;
+
+  assert.equal(accountSecurityPanel.split(validPattern).length - 1, 2);
+  assert.equal(accountSecurityPanel.includes(invalidPattern), false);
+});
+
+test("the stale Offers shortcut cannot prefetch a missing route", () => {
+  assert.ok(
+    dashboard.includes(
+      [
+        "              <Link",
+        '                className="v72-shortcut-tile"',
+        "                href={item.href}",
+        "                key={item.label}",
+        '                prefetch={item.href === "/offers" ? false : undefined}',
+        "              >",
+      ].join("\n"),
+    ),
+  );
+});
+'''
+          if "authenticator code inputs use a browser-valid pattern" in test_source:
+              raise SystemExit("focused diagnostics tests already exist")
+          test_path.write_text(test_source.rstrip() + addition, encoding="utf-8")
+
+          replace_exact(
+              ".github/workflows/dashboard-account-security-hotfix-gates.yml",
+              "          src/app/dashboard/page.tsx\n"
+              "          src/dashboard-account-security-visibility.test.ts\n",
+              "          src/app/dashboard/page.tsx\n"
+              "          src/components/dashboard/background-account-security-panel.tsx\n"
+              "          src/dashboard-account-security-visibility.test.ts\n",
+          )
+          PY
+
+      - name: Verify exact repaired diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --name-only | sort > actual-repair-files.txt
+          cat > expected-repair-files.txt <<'EOF'
+          .github/workflows/dashboard-account-security-hotfix-gates.yml
+          src/app/dashboard/page.tsx
+          src/components/dashboard/background-account-security-panel.tsx
+          src/dashboard-account-security-visibility.test.ts
+          EOF
+          diff -u expected-repair-files.txt actual-repair-files.txt
+          test "$(grep -Fc 'pattern="[0-9\s-]{6,8}"' src/components/dashboard/background-account-security-panel.tsx)" = '2'
+          test "$(grep -Fc 'pattern="[0-9\\s-]{6,8}"' src/components/dashboard/background-account-security-panel.tsx)" = '0'
+          grep -F 'prefetch={item.href === "/offers" ? false : undefined}' src/app/dashboard/page.tsx
+          node --import tsx --test src/dashboard-account-security-visibility.test.ts
+
+      - name: Commit and push the repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/workflows/dashboard-account-security-hotfix-gates.yml \
+            src/app/dashboard/page.tsx \
+            src/components/dashboard/background-account-security-panel.tsx \
+            src/dashboard-account-security-visibility.test.ts
+          git commit -m "Fix Account security browser diagnostics"
+          git push origin "HEAD:$TARGET_BRANCH"
