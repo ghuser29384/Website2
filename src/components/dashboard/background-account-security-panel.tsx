@@ -150,7 +150,7 @@ export function BackgroundAccountSecurityPanel({
                 inputMode="numeric"
                 maxLength={8}
                 name="code"
-                pattern="[0-9\s-]{6,8}"
+                pattern="[0-9 \-]{6,8}"
                 placeholder="123456"
               />
             </label>
@@ -197,7 +197,7 @@ export function BackgroundAccountSecurityPanel({
               inputMode="numeric"
               maxLength={8}
               name="code"
-              pattern="[0-9\s-]{6,8}"
+              pattern="[0-9 \-]{6,8}"
               placeholder="123456"
             />
           </label>
