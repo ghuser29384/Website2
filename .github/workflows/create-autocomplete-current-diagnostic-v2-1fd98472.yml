@@ -1,0 +1,201 @@
+name: Create autocomplete current diagnostic v2 1fd98472
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/create-autocomplete-current-diagnostic-v2-1fd98472.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: create-autocomplete-current-diagnostic-v2-1fd98472
+  cancel-in-progress: true
+
+env:
+  PRODUCT_SHA: 1fd98472897330bc5256fe17e223cb0ac34deac4
+  CONTROLLER_BRANCH: qa/create-autocomplete-current-diagnostic-v2-1fd98472
+  CONTROLLER_PATH: .github/workflows/create-autocomplete-current-diagnostic-v2-1fd98472.yml
+  EVIDENCE_DIR: create-autocomplete-current-diagnostic-v2-1fd98472
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+
+    steps:
+      - name: Guard immutable product and one-file scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ github.event.pull_request.head.ref }}' = "$CONTROLLER_BRANCH"
+          test '${{ github.event.pull_request.base.sha }}' = "$PRODUCT_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$PRODUCT_SHA"
+          test "$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename')" = "$CONTROLLER_PATH"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PRODUCT_SHA }}
+          fetch-depth: 1
+
+      - name: Prove checkout and source markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PRODUCT_SHA"
+          test -f public/moral-trade-create/index.html
+          test -f tests/exact-live-autocomplete.spec.ts
+          mkdir -p "$EVIDENCE_DIR"
+          grep -n -E 'role="combobox"|aria-autocomplete|actionSuggestions|Choose a suggestion or write your own' \
+            public/moral-trade-create/index.html > "$EVIDENCE_DIR/source-markers.txt" || true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies and Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+          npx playwright install --with-deps chromium 2>&1 | tee "$EVIDENCE_DIR/chromium.log"
+
+      - name: Write corrected diagnostic
+        shell: bash
+        run: |
+          cat > tests/create-autocomplete-current-diagnostic-v2-1fd98472.spec.ts <<'TS'
+          import { mkdir, writeFile } from "node:fs/promises";
+          import path from "node:path";
+          import { expect, test, type Frame, type Page } from "@playwright/test";
+
+          const dir = process.env.EVIDENCE_DIR!;
+
+          async function openCreate(page: Page) {
+            await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
+            await expect(page).toHaveURL(/\/trades\/new(?:[?#]|$)/, { timeout: 30_000 });
+            const iframe = page.locator('iframe[title="Moral Trade Create"]');
+            await expect(iframe).toBeVisible({ timeout: 30_000 });
+            const frame = await (await iframe.elementHandle())?.contentFrame();
+            if (!frame) throw new Error("Create iframe unavailable");
+            await expect(frame.locator("body")).not.toBeEmpty({ timeout: 30_000 });
+            return frame;
+          }
+
+          async function reachAutocomplete(frame: Frame) {
+            await frame.getByRole("button", { name: /^Wild animal suffering/ }).click();
+            await frame.getByRole("button", { name: "Continue →", exact: true }).click();
+            await expect(frame.getByRole("heading", { name: "What do you want other people to do?" })).toBeVisible();
+            await frame.getByRole("button", { name: /^Commitment/ }).click();
+            const input = frame.locator('input[role="combobox"]:visible').first();
+            await expect(input).toBeVisible({ timeout: 10_000 });
+            return input;
+          }
+
+          async function snapshot(page: Page, frame: Frame, label: string, extra = {}) {
+            await mkdir(dir, { recursive: true });
+            const state = await frame.evaluate(() => ({
+              title: document.title,
+              bodyText: (document.body.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 12000),
+              comboboxes: [...document.querySelectorAll('[role="combobox"]')].map((el) => ({
+                value: (el as HTMLInputElement).value,
+                attributes: Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])),
+              })),
+              options: [...document.querySelectorAll('[role="option"]')].map((el) => ({
+                text: (el.textContent ?? "").trim(),
+                attributes: Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])),
+              })),
+              listboxes: [...document.querySelectorAll('[role="listbox"]')].map((el) => ({
+                text: (el.textContent ?? "").replace(/\s+/g, " ").trim(),
+                attributes: Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])),
+              })),
+              legacyClauseCount: document.querySelectorAll('.clause').length,
+              legacyTokenCount: document.querySelectorAll('.token[contenteditable="true"]').length,
+              legacyOfferTypeCount: document.querySelectorAll('[data-mt-offer-type]').length,
+              dimensions: {
+                innerWidth: window.innerWidth,
+                clientWidth: document.documentElement.clientWidth,
+                scrollWidth: document.documentElement.scrollWidth,
+              },
+            }));
+            await writeFile(path.join(dir, `${label}.json`), `${JSON.stringify({ outerUrl: page.url(), state, extra }, null, 2)}\n`);
+            await page.screenshot({ path: path.join(dir, `${label}.png`), fullPage: true });
+          }
+
+          async function exercise(page: Page, frame: Frame, prefix: string) {
+            const input = await reachAutocomplete(frame);
+            await snapshot(page, frame, `${prefix}-initial`, {
+              placeholder: await input.getAttribute("placeholder"),
+              ariaControls: await input.getAttribute("aria-controls"),
+              ariaExpanded: await input.getAttribute("aria-expanded"),
+              ariaAutocomplete: await input.getAttribute("aria-autocomplete"),
+            });
+
+            await input.fill("write");
+            await expect(frame.locator('[role="option"]:visible').first()).toBeVisible();
+            const optionTexts = await frame.locator('[role="option"]:visible').allTextContents();
+            await snapshot(page, frame, `${prefix}-write-options`, { optionTexts });
+
+            await input.press("ArrowDown");
+            const active = await input.getAttribute("aria-activedescendant");
+            await input.press("Enter");
+            await snapshot(page, frame, `${prefix}-selected`, {
+              active,
+              value: await input.inputValue(),
+              expanded: await input.getAttribute("aria-expanded"),
+            });
+
+            await input.fill("donate");
+            await expect(frame.locator('[role="option"]:visible').first()).toBeVisible();
+            await input.press("Escape");
+            await expect(input).toHaveAttribute("aria-expanded", "false");
+            await snapshot(page, frame, `${prefix}-escape`, { value: await input.inputValue() });
+
+            await input.fill("volunteer");
+            await expect(frame.locator('[role="option"]:visible').first()).toBeVisible();
+            await frame.getByRole("heading", { name: "What do you want other people to do?" }).click();
+            await expect(input).toHaveAttribute("aria-expanded", "false");
+            await snapshot(page, frame, `${prefix}-outside-click`, { value: await input.inputValue() });
+          }
+
+          test("desktop current Create autocomplete", async ({ page }) => {
+            await page.setViewportSize({ width: 1440, height: 1000 });
+            await exercise(page, await openCreate(page), "desktop");
+          });
+
+          test("mobile current Create autocomplete", async ({ page }) => {
+            await page.setViewportSize({ width: 390, height: 844 });
+            const frame = await openCreate(page);
+            await exercise(page, frame, "mobile");
+            const width = await frame.evaluate(() => ({ inner: innerWidth, scroll: document.documentElement.scrollWidth }));
+            expect(width.scroll).toBeLessThanOrEqual(width.inner + 1);
+          });
+          TS
+          npx playwright test tests/create-autocomplete-current-diagnostic-v2-1fd98472.spec.ts --list > "$EVIDENCE_DIR/test-list.txt"
+
+      - name: Run corrected diagnostic
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next
+          npx playwright test tests/create-autocomplete-current-diagnostic-v2-1fd98472.spec.ts \
+            --workers=1 --reporter=line 2>&1 | tee "$EVIDENCE_DIR/playwright.log"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-autocomplete-current-diagnostic-v2-1fd98472
+          path: |
+            create-autocomplete-current-diagnostic-v2-1fd98472
+            test-results
+          if-no-files-found: error
+          retention-days: 14
