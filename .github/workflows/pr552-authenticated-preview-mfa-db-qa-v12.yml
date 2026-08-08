@@ -1,0 +1,132 @@
+name: PR 552 authenticated exact Preview MFA QA v12
+
+on:
+  push:
+    branches:
+      - ops/pr552-authenticated-preview-mfa-db-qa-v12-20260808
+    paths:
+      - .github/scripts/pr552-patch-authenticated-preview-harness-v12.py
+      - .github/scripts/pr552-run-authenticated-preview-mfa-v12.sh
+      - .github/workflows/pr552-authenticated-preview-mfa-db-qa-v12.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr552-authenticated-preview-mfa-db-qa-v12
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 1772ad71ac9036138bd7dc69beff05e65add57d6
+  CONTROLLER_BASE_SHA: 1772ad71ac9036138bd7dc69beff05e65add57d6
+  CANDIDATE_BRANCH: hotfix/dashboard-account-security-visible-20260807
+  HARNESS_COMMIT: 928a81e30c6eae8f35e56513ac6f0f1a428fd825
+  HARNESS_BLOB: 394366c478fc01d93d6c7f245aba496986f56762
+  DEPLOYMENT_ID: dpl_A5tRpw1PNKkTt2XQzGTvvT61B2Er
+  PREVIEW_ORIGIN: https://moraltrade-site-10xmb0asi-ellen-s.vercel.app
+  EXPECTED_RELEASE_REASON: pr552-dashboard-account-security-preview-nav-prefetch-fixed
+  EXPECTED_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  NEXT_PUBLIC_SUPABASE_URL: https://jnpoxvalyjtdghnperyu.supabase.co
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  PATCHER_PATH: .github/scripts/pr552-patch-authenticated-preview-harness-v12.py
+  RUNNER_PATH: .github/scripts/pr552-run-authenticated-preview-mfa-v12.sh
+  HARNESS_PATH: .qa-runtime/pr552-authenticated-preview-mfa-db.mjs
+  PRIVATE_STATE_PATH: .qa-private/pr552-authenticated-preview-mfa-db-v12.json
+  OUTPUT_DIR: pr552-authenticated-preview-mfa-db-v12
+
+jobs:
+  authenticated-preview-mfa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Check out exact QA controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard candidate and controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/pr552-authenticated-preview-mfa-db-qa-v12-20260808'
+          git cat-file -e "${CANDIDATE_SHA}^{commit}"
+          git cat-file -e "${HARNESS_COMMIT}^{commit}"
+          git merge-base --is-ancestor "$CONTROLLER_BASE_SHA" "$GITHUB_SHA"
+          test "$CANDIDATE_SHA" = "$CONTROLLER_BASE_SHA"
+          remote_candidate="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_candidate" = "$CANDIDATE_SHA"
+          git diff --check "$CONTROLLER_BASE_SHA" "$GITHUB_SHA"
+          git diff --name-only "$CONTROLLER_BASE_SHA" "$GITHUB_SHA" | sort > controller-files.txt
+          cat > expected-controller-files.txt <<'FILES'
+          .github/scripts/pr552-patch-authenticated-preview-harness-v12.py
+          .github/scripts/pr552-run-authenticated-preview-mfa-v12.sh
+          .github/workflows/pr552-authenticated-preview-mfa-db-qa-v12.yml
+          FILES
+          diff -u expected-controller-files.txt controller-files.txt
+          python3 -m py_compile "$PATCHER_PATH"
+          bash -n "$RUNNER_PATH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and browser runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+
+      - name: Materialize and patch immutable harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$(dirname "$HARNESS_PATH")"
+          git show "${HARNESS_COMMIT}:.github/scripts/pr552-authenticated-preview-mfa-db.mjs" > "$HARNESS_PATH"
+          test "$(git hash-object "$HARNESS_PATH")" = "$HARNESS_BLOB"
+          python3 "$PATCHER_PATH" "$HARNESS_PATH"
+          node --check "$HARNESS_PATH"
+          sha256sum "$HARNESS_PATH" > patched-harness.sha256
+
+      - name: Exercise desktop and mobile MFA with guaranteed cleanup
+        shell: bash
+        run: bash "$RUNNER_PATH"
+
+      - name: Publish verified summary
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo '### PR 552 authenticated exact Preview MFA QA v12'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Deployment: \`$DEPLOYMENT_ID\`"
+            echo '- Desktop and mobile reached AAL2 with exactly one run-created authenticator factor.'
+            echo '- Browser console, page, request, HTTP, and horizontal-overflow diagnostics were clean.'
+            echo '- The exact factor and temporary user were removed; an independent cleanup pass confirmed absence.'
+            echo '- The one-use Vercel bypass was revoked and the pre-test bypass count restored.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Archive exact Preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-authenticated-preview-mfa-db-v12-${{ github.run_id }}
+          path: |
+            controller-files.txt
+            expected-controller-files.txt
+            exact-deployment.json
+            patched-harness.sha256
+            pr552-authenticated-preview-mfa-db-v12/
+          if-no-files-found: warn
+          retention-days: 30
