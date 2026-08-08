@@ -1,0 +1,1572 @@
+
+> moral-trade@0.1.0 test:e2e
+> playwright test --reporter=line,json
+
+
+Running 181 tests using 2 workers
+
+[1/181] tests/complete-profile-connections.spec.ts:6:5 › Complete Profile shows truthful optional account-source states
+[2/181] tests/commitments-live-portfolio.spec.ts:69:5 › Commitments exposes truthful live-data sections and no visual-fixture values
+[3/181] tests/complete-profile-connections.spec.ts:26:5 › account-source dialog has no horizontal overflow on a narrow screen
+[4/181] tests/complete-profile-review.spec.ts:6:5 › 100-Spark Mosaic ranks priorities and preserves the account completion flow
+  1) tests/commitments-live-portfolio.spec.ts:69:5 › Commitments exposes truthful live-data sections and no visual-fixture values 
+
+    Error: expect(received).toEqual(expected) // deep equality
+
+    - Expected  - 1
+    + Received  + 4
+
+    - Array []
+    + Array [
+    +   "GET http://127.0.0.1:3210/_next/static/chunks/main-app.js?v=1786212419155: net::ERR_ABORTED",
+    +   "GET http://127.0.0.1:3210/moral-trade-input-standards.json: net::ERR_ABORTED",
+    + ]
+
+      111 |   expect(failures.consoleErrors).toEqual([]);
+      112 |   expect(failures.pageErrors).toEqual([]);
+    > 113 |   expect(failures.failedRequests).toEqual([]);
+          |                                   ^
+      114 | });
+      115 |
+      116 | for (const viewport of [
+        at /home/runner/work/Website2/Website2/candidate/tests/commitments-live-portfolio.spec.ts:113:35
+
+    Error Context: test-results/commitments-live-portfolio-ec30f-nd-no-visual-fixture-values/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/commitments-live-portfolio-ec30f-nd-no-visual-fixture-values/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/commitments-live-portfolio-ec30f-nd-no-visual-fixture-values/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[5/181] tests/commitments-live-portfolio.spec.ts:120:7 › Commitments remains readable without horizontal overflow at 390×844
+[6/181] tests/commitments-live-portfolio.spec.ts:120:7 › Commitments remains readable without horizontal overflow at 320×568
+[7/181] tests/complete-profile-review.spec.ts:56:5 › all twelve priorities remain reachable on a narrow screen
+[8/181] tests/create-common-ground-pool.spec.ts:4:7 › compact Co-Fund in Create › builds and submits the worked split without the advanced threshold editor
+[9/181] tests/complete-profile-review.spec.ts:69:5 › a first-time Complete Profile visit is still sent to the mandatory Walkthrough
+[10/181] tests/complete-profile-review.spec.ts:83:5 › a returning-user Complete Profile visit opens the 100-spark page instead of the Walkthrough
+[11/181] tests/create-common-ground-pool.spec.ts:113:7 › compact Co-Fund in Create › stays compact without horizontal overflow on mobile
+[12/181] tests/complete-profile-review.spec.ts:102:5 › the returning-user Complete Profile page remains usable at 390 by 844
+[13/181] tests/create-entry-routing.spec.ts:115:7 › Home, Trade, and Create entry routing › keeps the root route on the live Feed and opens Create from Trade
+[14/181] tests/complete-profile-review.spec.ts:114:5 › the Complete Profile brand link does not prefetch the rewritten home route
+[15/181] tests/create-entry-routing.spec.ts:131:7 › Home, Trade, and Create entry routing › replaces a direct legacy Trade hash without replacing Home
+[16/181] tests/create-route-workbench.spec.ts:38:7 › Create route workbench › routes /create into the unified, no-capture Create interface
+[17/181] tests/create-entry-routing.spec.ts:139:7 › Home, Trade, and Create entry routing › keeps Create and Create Offer entries on the unified wizard
+[18/181] tests/create-route-workbench.spec.ts:115:7 › Create route workbench › keeps the unified Common Ground editor usable without horizontal overflow on mobile
+[19/181] tests/create-entry-routing.spec.ts:149:7 › Home, Trade, and Create entry routing › keeps Feed item and exposure identity on /feed without loading the obsolete Trade sidebar
+[20/181] tests/create-entry-routing.spec.ts:196:7 › Home, Trade, and Create entry routing › uses the canonical favicon on document-replacement routes
+[21/181] tests/create-route-workbench.spec.ts:143:7 › Create route workbench › keeps the Donation Upgrade entry usable without horizontal overflow on mobile
+[22/181] tests/discover-cofund.spec.ts:43:5 › Discover treats Co-Funds as a first-class Offer subtype with one canonical listing
+[23/181] tests/discover-cofund.spec.ts:114:5 › the Offer subtype switcher includes Co-Funds by default and isolates each subtype
+[24/181] tests/discover-cofund.spec.ts:147:5 › legacy saved Pool state migrates to the canonical Co-Fund without resetting preferences
+[25/181] tests/discover-cofund.spec.ts:172:5 › standalone Pools exclude reciprocal Co-Funds and legacy Pool links migrate
+[26/181] tests/create-route-workbench.spec.ts:170:7 › Create route workbench › opens a bounded Back intake without publishing or authorizing it
+[27/181] tests/discover-cofund.spec.ts:207:5 › Co-Funds remain scan-efficient and overflow-free on mobile
+[28/181] tests/discover-cofund.spec.ts:244:5 › natural-language group-buying searches route to Offers → Co-Funds
+[29/181] tests/discover-cofund.spec.ts:313:5 › dominant-assurance searches route to standalone Pools even without a server routing hint
+[30/181] tests/discover-live-search.spec.ts:108:5 › clear cause search updates live results in place without document navigation
+[31/181] tests/discover-payload-cache.spec.ts:3:5 › Discover bypasses stale payload caches with content-versioned part URLs
+[32/181] tests/discover-live-search.spec.ts:145:5 › Enter and Search use the same in-place submission path
+[33/181] tests/discover-payload-cache.spec.ts:44:5 › Discover automatically recovers from one corrupted cached payload part
+[34/181] tests/discover-live-search.spec.ts:160:5 › a newer query cannot be overwritten by a slower stale response
+[35/181] tests/discover-pledge-clarity.spec.ts:17:5 › desktop pool inspector shows exact mechanical pledge arithmetic
+[36/181] tests/discover-pledge-clarity.spec.ts:36:5 › mobile selected-pool sheet preserves the same explanation and stays within the viewport
+[37/181] tests/discover-live-search.spec.ts:188:5 › ambiguous money asks one inline clarification and preserves the original query
+[38/181] tests/discover-preflight-filter.spec.ts:98:5 › filters selected before the first query are snapshotted into the request, URL, and history state
+[39/181] tests/discover-live-search.spec.ts:239:5 › domain routing updates counts and renders the live pool directory in place
+[40/181] tests/discover-live-search.spec.ts:274:5 › zero and retrieval-failure states are explicit and never relabel unrelated rows as matches
+[41/181] tests/discover-live-search.spec.ts:307:7 › live two-sided search results remain stacked without horizontal overflow at 390×844
+[42/181] tests/discover-query-audit.spec.ts:37:5 › Discover shows the complete two-sided exchange at a glance on desktop
+[43/181] tests/discover-live-search.spec.ts:307:7 › live two-sided search results remain stacked without horizontal overflow at 320×568
+[44/181] tests/discover-query-audit.spec.ts:107:7 › Discover stacks both exchange sides without horizontal overflow at 390×844
+[45/181] tests/discovery-local-time.spec.ts:70:7 › Discovery local time in America/Los_Angeles › uses the visitor's previous calendar date for the header and urgency
+[46/181] tests/discovery-local-time.spec.ts:82:7 › Discovery local time in Asia/Tokyo › uses the visitor's next calendar date for the header and urgency
+[47/181] tests/discover-query-audit.spec.ts:107:7 › Discover stacks both exchange sides without horizontal overflow at 320×568
+[48/181] tests/discovery-local-time.spec.ts:94:7 › Discovery local-date refresh › rerenders the header and deadline arithmetic after local midnight
+[49/181] tests/discovery-local-time.spec.ts:111:7 › Discovery deadline parsing › resolves named deadlines to the current or next local year
+[50/181] tests/discover-query-audit.spec.ts:148:5 › Discover filters and indexes the two exchange sides separately
+[51/181] tests/discovery-local-time.spec.ts:127:7 › Discovery deadline parsing › preserves an explicit valid ISO calendar date
+[52/181] tests/evidence-weighted-payment-authenticated.spec.ts:306:7 › authenticated evidence-weighted payment release gate › completes every role, viewport, and negative-authorization path
+[53/181] tests/exact-account-identity-all-pages.spec.ts:23:7 › /moral-trade-live.html uses the authenticated account instead of the legacy AJ identity
+[54/181] tests/exact-account-identity-all-pages.spec.ts:23:7 › /discover uses the authenticated account instead of the legacy AJ identity
+[55/181] tests/exact-account-identity-all-pages.spec.ts:23:7 › /walkthrough uses the authenticated account instead of the legacy AJ identity
+[56/181] tests/exact-live-account.spec.ts:35:7 › exact live interface account data › uses authenticated profile and persisted settings instead of placeholders
+[WebServer] Discover live search failed Error: TypeError: fetch failed
+[WebServer]     at hydrateOffers (src/lib/app-data.ts:861:11)
+[WebServer]     at async listAllLiveOfferListings (src/app/api/discover/search/route.ts:108:22)
+[WebServer]     at async POST (src/app/api/discover/search/route.ts:217:59)
+[WebServer]   859 |
+[WebServer]   860 |   if (recommendationsError) {
+[WebServer] > 861 |     throw new Error(recommendationsError.message);
+[WebServer]       |           ^
+[WebServer]   862 |   }
+[WebServer]   863 |   if (commentsError) {
+[WebServer]   864 |     throw new Error(commentsError.message);
+
+[57/181] tests/discover-query-audit.spec.ts:200:5 › Discover sends natural-language queries through the shared interpreter
+[58/181] tests/exact-live-autocomplete.spec.ts:58:5 › the exact live trade clauses autocomplete causes, charities, and organizations
+  2) tests/exact-live-account.spec.ts:35:7 › exact live interface account data › uses authenticated profile and persisted settings instead of placeholders 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('[data-mt-live-account-row="currency"] [data-mt-live-account-detail="true"]')
+    Expected: "Not configured"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" with timeout 5000ms
+      - waiting for locator('[data-mt-live-account-row="currency"] [data-mt-live-account-detail="true"]')
+
+
+      58 |     await expect(
+      59 |       page.locator('[data-mt-live-account-row="currency"] [data-mt-live-account-detail="true"]'),
+    > 60 |     ).toHaveText("Not configured");
+         |       ^
+      61 |     await expect(
+      62 |       page.locator('[data-mt-live-account-row="safe-cap"] [data-mt-live-account-detail="true"]'),
+      63 |     ).toHaveText("Not configured");
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-account.spec.ts:60:7
+
+    Error Context: test-results/exact-live-account-exact-l-6dc6d-ngs-instead-of-placeholders/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-account-exact-l-6dc6d-ngs-instead-of-placeholders/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-account-exact-l-6dc6d-ngs-instead-of-placeholders/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[59/181] tests/exact-live-account.spec.ts:104:7 › exact live interface account data › renders a neutral account state when no viewer is authenticated
+  3) tests/exact-live-autocomplete.spec.ts:58:5 › the exact live trade clauses autocomplete causes, charities, and organizations 
+
+    Error: expect(locator).not.toHaveAttribute(expected) failed
+
+    Locator: locator('.clause').filter({ has: locator('.clause-label').filter({ hasText: 'I offer' }) }).locator('.token[contenteditable="true"]').first()
+    Expected: not "true"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "not toHaveAttribute" with timeout 5000ms
+      - waiting for locator('.clause').filter({ has: locator('.clause-label').filter({ hasText: 'I offer' }) }).locator('.token[contenteditable="true"]').first()
+
+
+      68 |   const recipientToken = offerClause.locator('.token[contenteditable="true"]').nth(1);
+      69 |
+    > 70 |   await expect(amountToken).not.toHaveAttribute("data-mt-autocomplete-ready", "true");
+         |                                 ^
+      71 |   await expect(recipientToken).toHaveAttribute("data-mt-autocomplete-ready", "true");
+      72 |   await expect(recipientToken).toHaveAttribute("data-mt-autocomplete-context", "recipients");
+      73 |
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-autocomplete.spec.ts:70:33
+
+    Error Context: test-results/exact-live-autocomplete-th-4a766-charities-and-organizations/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-autocomplete-th-4a766-charities-and-organizations/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-autocomplete-th-4a766-charities-and-organizations/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[60/181] tests/exact-live-autocomplete.spec.ts:137:5 › the exact live commitment field composes topic-specific semantic matches
+  4) tests/exact-live-account.spec.ts:104:7 › exact live interface account data › renders a neutral account state when no viewer is authenticated 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('[data-mt-live-account-row="currency"] [data-mt-live-account-detail="true"]')
+    Expected: "Sign in to view"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveText" with timeout 5000ms
+      - waiting for locator('[data-mt-live-account-row="currency"] [data-mt-live-account-detail="true"]')
+
+
+      126 |     await expect(
+      127 |       page.locator('[data-mt-live-account-row="currency"] [data-mt-live-account-detail="true"]'),
+    > 128 |     ).toHaveText("Sign in to view");
+          |       ^
+      129 |     await expect(page.getByText("Alex Johnson", { exact: true })).toHaveCount(0);
+      130 |   });
+      131 | });
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-account.spec.ts:128:7
+
+    Error Context: test-results/exact-live-account-exact-l-72ee7--no-viewer-is-authenticated/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-account-exact-l-72ee7--no-viewer-is-authenticated/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-account-exact-l-72ee7--no-viewer-is-authenticated/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[61/181] tests/exact-live-command-center.spec.ts:7:7 › live Command Center › hands the command to the real private draft editor without a false success
+  5) tests/exact-live-command-center.spec.ts:7:7 › live Command Center › hands the command to the real private draft editor without a false success 
+
+    Error: expect(page).toHaveURL(expected) failed
+
+    Expected pattern: /\/trades\/new\?handoff=command-center$/
+    Received string:  "http://127.0.0.1:3210/trades/new"
+    Timeout: 5000ms
+
+    Call log:
+      - Expect "toHaveURL" with timeout 5000ms
+        12 × unexpected value "http://127.0.0.1:3210/trades/new"
+
+
+      18 |     await page.getByRole("button", { name: "Build this offer" }).click();
+      19 |
+    > 20 |     await expect(page).toHaveURL(/\/trades\/new\?handoff=command-center$/);
+         |                        ^
+      21 |     await expect(
+      22 |       page.getByRole("heading", { name: "Sign in to build a trade." }),
+      23 |     ).toBeVisible();
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-command-center.spec.ts:20:24
+
+    Error Context: test-results/exact-live-command-center--be09a-tor-without-a-false-success/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-command-center--be09a-tor-without-a-false-success/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-command-center--be09a-tor-without-a-false-success/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[62/181] tests/exact-live-custom-route.spec.ts:14:7 › Exact live Custom Route workbench › separates planned donation flow from added-resource accounting
+  6) tests/exact-live-autocomplete.spec.ts:137:5 › the exact live commitment field composes topic-specific semantic matches 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-mt-offer-type="behavior"]')
+
+
+      140 |   await installLiveFixtures(page);
+      141 |   await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
+    > 142 |   await page.locator('[data-mt-offer-type="behavior"]').click();
+          |                                                         ^
+      143 |
+      144 |   const behaviorClause = page.locator(".clause").filter({
+      145 |     has: page.locator(".clause-label", { hasText: "Behavior or commitment" }),
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-autocomplete.spec.ts:142:57
+
+    Error Context: test-results/exact-live-autocomplete-th-c4afe-c-specific-semantic-matches/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-autocomplete-th-c4afe-c-specific-semantic-matches/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-autocomplete-th-c4afe-c-specific-semantic-matches/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[63/181] tests/exact-live-autocomplete.spec.ts:185:5 › the exact live offer palette uses three offer types and collects shared attributes
+  7) tests/exact-live-autocomplete.spec.ts:185:5 › the exact live offer palette uses three offer types and collects shared attributes 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: locator('[data-mt-offer-type] .mt-offer-ingredient-label')
+    Timeout: 5000ms
+    - Expected  - 5
+    + Received  + 1
+
+    - Array [
+    -   "Money",
+    -   "Behavior or commitment",
+    -   "Help or service",
+    - ]
+    + Array []
+
+    Call log:
+      - Expect "toHaveText" with timeout 5000ms
+      - waiting for locator('[data-mt-offer-type] .mt-offer-ingredient-label')
+        11 × locator resolved to 0 elements
+
+
+      192 |     '[data-mt-offer-type] .mt-offer-ingredient-label',
+      193 |   );
+    > 194 |   await expect(offerTypeLabels).toHaveText([
+          |                                 ^
+      195 |     "Money",
+      196 |     "Behavior or commitment",
+      197 |     "Help or service",
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-autocomplete.spec.ts:194:33
+
+    Error Context: test-results/exact-live-autocomplete-th-aa569--collects-shared-attributes/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-autocomplete-th-aa569--collects-shared-attributes/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-autocomplete-th-aa569--collects-shared-attributes/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[64/181] tests/exact-live-itinerary-editor.spec.ts:22:7 › exact live inline itinerary editor › edits in place, supports draft controls, and cancels without changing the plan
+  8) tests/exact-live-custom-route.spec.ts:14:7 › Exact live Custom Route workbench › separates planned donation flow from added-resource accounting 
+
+    Test timeout of 30000ms exceeded while running "beforeEach" hook.
+
+      2 |
+      3 | test.describe("Exact live Custom Route workbench", () => {
+    > 4 |   test.beforeEach(async ({ page }) => {
+        |        ^
+      5 |     await page.addInitScript(() => {
+      6 |       window.localStorage.removeItem("moraltrade.plan-resources.v1");
+      7 |     });
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-custom-route.spec.ts:4:8
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Custom route', exact: true })
+
+
+       8 |     await page.goto("/moral-trade-live.html#now");
+       9 |     await page.locator('[data-now="plan"]').click();
+    > 10 |     await page.getByRole("button", { name: "Custom route", exact: true }).click();
+         |                                                                           ^
+      11 |     await expect(page.locator('[data-mt-custom-route="resource-mix"]')).toBeVisible();
+      12 |   });
+      13 |
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-custom-route.spec.ts:10:75
+
+    Error Context: test-results/exact-live-custom-route-Ex-6cfe2-m-added-resource-accounting/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-custom-route-Ex-6cfe2-m-added-resource-accounting/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-custom-route-Ex-6cfe2-m-added-resource-accounting/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[65/181] tests/exact-live-custom-route.spec.ts:37:7 › Exact live Custom Route workbench › keeps top-ups, fees, setup time, and actions inside added resources
+  9) tests/exact-live-itinerary-editor.spec.ts:22:7 › exact live inline itinerary editor › edits in place, supports draft controls, and cancels without changing the plan 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('.itinerary')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('.itinerary')
+
+
+       8 |   await page.evaluate((key) => window.localStorage.removeItem(key), storageKey);
+       9 |   await page.reload({ waitUntil: "domcontentloaded" });
+    > 10 |   await expect(page.locator(".itinerary")).toBeVisible();
+         |                                            ^
+      11 | }
+      12 |
+      13 | async function openEditor(page: Page) {
+        at openCleanNow (/home/runner/work/Website2/Website2/candidate/tests/exact-live-itinerary-editor.spec.ts:10:44)
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-itinerary-editor.spec.ts:23:5
+
+    Error Context: test-results/exact-live-itinerary-edito-55428-s-without-changing-the-plan/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-itinerary-edito-55428-s-without-changing-the-plan/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-itinerary-edito-55428-s-without-changing-the-plan/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[66/181] tests/exact-live-itinerary-editor.spec.ts:44:7 › exact live inline itinerary editor › saves titles, amounts, dates, proof rules, and order across reloads
+  10) tests/exact-live-itinerary-editor.spec.ts:44:7 › exact live inline itinerary editor › saves titles, amounts, dates, proof rules, and order across reloads 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('.itinerary')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('.itinerary')
+
+
+       8 |   await page.evaluate((key) => window.localStorage.removeItem(key), storageKey);
+       9 |   await page.reload({ waitUntil: "domcontentloaded" });
+    > 10 |   await expect(page.locator(".itinerary")).toBeVisible();
+         |                                            ^
+      11 | }
+      12 |
+      13 | async function openEditor(page: Page) {
+        at openCleanNow (/home/runner/work/Website2/Website2/candidate/tests/exact-live-itinerary-editor.spec.ts:10:44)
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-itinerary-editor.spec.ts:45:5
+
+    Error Context: test-results/exact-live-itinerary-edito-e4ed6-es-and-order-across-reloads/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-itinerary-edito-e4ed6-es-and-order-across-reloads/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-itinerary-edito-e4ed6-es-and-order-across-reloads/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[67/181] tests/exact-live-itinerary-editor.spec.ts:92:7 › exact live inline itinerary editor › uses the compact in-card editor without horizontal overflow
+  11) tests/exact-live-itinerary-editor.spec.ts:92:7 › exact live inline itinerary editor › uses the compact in-card editor without horizontal overflow 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('.itinerary')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('.itinerary')
+
+
+       8 |   await page.evaluate((key) => window.localStorage.removeItem(key), storageKey);
+       9 |   await page.reload({ waitUntil: "domcontentloaded" });
+    > 10 |   await expect(page.locator(".itinerary")).toBeVisible();
+         |                                            ^
+      11 | }
+      12 |
+      13 | async function openEditor(page: Page) {
+        at openCleanNow (/home/runner/work/Website2/Website2/candidate/tests/exact-live-itinerary-editor.spec.ts:10:44)
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-itinerary-editor.spec.ts:94:5
+
+    Error Context: test-results/exact-live-itinerary-edito-45d0b-without-horizontal-overflow/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-itinerary-edito-45d0b-without-horizontal-overflow/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-itinerary-edito-45d0b-without-horizontal-overflow/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[68/181] tests/exact-live-local-time.spec.ts:60:9 › exact live interface local time › America/Los_Angeles › uses the visitor's previous local day across Now, Trade, and Activity
+  12) tests/exact-live-local-time.spec.ts:60:9 › exact live interface local time › America/Los_Angeles › uses the visitor's previous local day across Now, Trade, and Activity 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator: locator('.head .date')
+    Expected: "2026-07-16"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAttribute" with timeout 5000ms
+      - waiting for locator('.head .date')
+
+
+      31 | ) {
+      32 |   const localHeader = page.locator(".head .date");
+    > 33 |   await expect(localHeader).toHaveAttribute("data-mt-local-date-time", expected.dateTime);
+         |                             ^
+      34 |   await expect(localHeader.locator('time[data-mt-local-date="true"]')).toHaveAttribute(
+      35 |     "datetime",
+      36 |     expected.dateTime,
+        at expectLocalHeader (/home/runner/work/Website2/Website2/candidate/tests/exact-live-local-time.spec.ts:33:29)
+        at expectHeaderAcrossPrimaryPages (/home/runner/work/Website2/Website2/candidate/tests/exact-live-local-time.spec.ts:52:11)
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-local-time.spec.ts:65:7
+
+    Error Context: test-results/exact-live-local-time-exac-add03-ross-Now-Trade-and-Activity/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-local-time-exac-add03-ross-Now-Trade-and-Activity/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-local-time-exac-add03-ross-Now-Trade-and-Activity/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[69/181] tests/exact-live-local-time.spec.ts:76:9 › exact live interface local time › Asia/Tokyo › uses the visitor's next local day across Now, Trade, and Activity
+  13) tests/exact-live-local-time.spec.ts:76:9 › exact live interface local time › Asia/Tokyo › uses the visitor's next local day across Now, Trade, and Activity 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator: locator('.head .date')
+    Expected: "2026-07-17"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAttribute" with timeout 5000ms
+      - waiting for locator('.head .date')
+
+
+      31 | ) {
+      32 |   const localHeader = page.locator(".head .date");
+    > 33 |   await expect(localHeader).toHaveAttribute("data-mt-local-date-time", expected.dateTime);
+         |                             ^
+      34 |   await expect(localHeader.locator('time[data-mt-local-date="true"]')).toHaveAttribute(
+      35 |     "datetime",
+      36 |     expected.dateTime,
+        at expectLocalHeader (/home/runner/work/Website2/Website2/candidate/tests/exact-live-local-time.spec.ts:33:29)
+        at expectHeaderAcrossPrimaryPages (/home/runner/work/Website2/Website2/candidate/tests/exact-live-local-time.spec.ts:52:11)
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-local-time.spec.ts:81:7
+
+    Error Context: test-results/exact-live-local-time-exac-23458-ross-Now-Trade-and-Activity/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-local-time-exac-23458-ross-Now-Trade-and-Activity/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-local-time-exac-23458-ross-Now-Trade-and-Activity/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[70/181] tests/exact-live-local-time.spec.ts:92:9 › exact live interface local time › refresh › refreshes after the local date and greeting period change
+[71/181] tests/exact-live-now-recommendations.spec.ts:107:7 › adaptive moral-opportunity Now feed › renders different live opportunities for disjoint profiles and survives a tab rerender
+[72/181] tests/exact-live-now-recommendations.spec.ts:160:7 › adaptive moral-opportunity Now feed › interleaves Action, Redirect, and Public Goods as compact visual cards
+[73/181] tests/exact-live-now-recommendations.spec.ts:248:7 › adaptive moral-opportunity Now feed › keeps the compact ready-state cards usable on a phone
+  14) tests/exact-live-custom-route.spec.ts:37:7 › Exact live Custom Route workbench › keeps top-ups, fees, setup time, and actions inside added resources 
+
+    Test timeout of 30000ms exceeded while running "beforeEach" hook.
+
+      2 |
+      3 | test.describe("Exact live Custom Route workbench", () => {
+    > 4 |   test.beforeEach(async ({ page }) => {
+        |        ^
+      5 |     await page.addInitScript(() => {
+      6 |       window.localStorage.removeItem("moraltrade.plan-resources.v1");
+      7 |     });
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-custom-route.spec.ts:4:8
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Custom route', exact: true })
+
+
+       8 |     await page.goto("/moral-trade-live.html#now");
+       9 |     await page.locator('[data-now="plan"]').click();
+    > 10 |     await page.getByRole("button", { name: "Custom route", exact: true }).click();
+         |                                                                           ^
+      11 |     await expect(page.locator('[data-mt-custom-route="resource-mix"]')).toBeVisible();
+      12 |   });
+      13 |
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-custom-route.spec.ts:10:75
+
+    Error Context: test-results/exact-live-custom-route-Ex-0458d-ions-inside-added-resources/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-custom-route-Ex-0458d-ions-inside-added-resources/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-custom-route-Ex-0458d-ions-inside-added-resources/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[74/181] tests/exact-live-now-recommendations.spec.ts:322:7 › adaptive moral-opportunity Now feed › records direct action-difficulty feedback and removes unwanted cards locally
+[75/181] tests/exact-live-custom-route.spec.ts:64:7 › Exact live Custom Route workbench › keeps weekly and monthly declarations and limits independent
+[76/181] tests/exact-live-now-recommendations.spec.ts:360:7 › adaptive moral-opportunity Now feed › rolls back Save, difficulty, and Show less when the API accepts zero events
+[77/181] tests/exact-live-now-recommendations.spec.ts:415:7 › adaptive moral-opportunity Now feed › shows a truthful signed-out state with no demo recommendations
+[78/181] tests/exact-live-now-recommendations.spec.ts:454:7 › adaptive moral-opportunity Now feed › keeps the mobile fallback within the viewport
+[79/181] tests/exact-live-now-recommendations.spec.ts:490:7 › adaptive moral-opportunity Now feed › exposes a real Feed route and keeps owned listings useful without calling them matches
+[80/181] tests/exact-live-now-recommendations.spec.ts:561:7 › adaptive moral-opportunity Now feed › exposes Evidence as a first-class destination after Commitments
+[81/181] tests/exact-live-plan-resources.spec.ts:12:7 › exact live Plan Resources controls › all five controls update the route and remain set after rerender
+  15) tests/exact-live-custom-route.spec.ts:64:7 › Exact live Custom Route workbench › keeps weekly and monthly declarations and limits independent 
+
+    Test timeout of 30000ms exceeded while running "beforeEach" hook.
+
+      2 |
+      3 | test.describe("Exact live Custom Route workbench", () => {
+    > 4 |   test.beforeEach(async ({ page }) => {
+        |        ^
+      5 |     await page.addInitScript(() => {
+      6 |       window.localStorage.removeItem("moraltrade.plan-resources.v1");
+      7 |     });
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-custom-route.spec.ts:4:8
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Custom route', exact: true })
+
+
+       8 |     await page.goto("/moral-trade-live.html#now");
+       9 |     await page.locator('[data-now="plan"]').click();
+    > 10 |     await page.getByRole("button", { name: "Custom route", exact: true }).click();
+         |                                                                           ^
+      11 |     await expect(page.locator('[data-mt-custom-route="resource-mix"]')).toBeVisible();
+      12 |   });
+      13 |
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-custom-route.spec.ts:10:75
+
+    Error Context: test-results/exact-live-custom-route-Ex-d850b-ions-and-limits-independent/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-custom-route-Ex-d850b-ions-and-limits-independent/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-custom-route-Ex-d850b-ions-and-limits-independent/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[82/181] tests/exact-live-custom-route.spec.ts:81:7 › Exact live Custom Route workbench › itemizes the route before a fail-closed review confirmation
+  16) tests/exact-live-plan-resources.spec.ts:12:7 › exact live Plan Resources controls › all five controls update the route and remain set after rerender 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-mt-plan-control="goal"]')
+
+
+      18 |     const summary = page.locator("[data-mt-plan-summary]");
+      19 |
+    > 20 |     await goal.selectOption("bio");
+         |                ^
+      21 |     await expect(page.locator(".route h2")).toContainText("Strengthen biosecurity");
+      22 |
+      23 |     await horizon.selectOption("week");
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-plan-resources.spec.ts:20:16
+
+    Error Context: test-results/exact-live-plan-resources--2cdbf-d-remain-set-after-rerender/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-plan-resources--2cdbf-d-remain-set-after-rerender/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-plan-resources--2cdbf-d-remain-set-after-rerender/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[83/181] tests/exact-live-plan-resources.spec.ts:58:7 › exact live Plan Resources controls › Reset restores every control and the allocation table
+  17) tests/exact-live-custom-route.spec.ts:81:7 › Exact live Custom Route workbench › itemizes the route before a fail-closed review confirmation 
+
+    Test timeout of 30000ms exceeded while running "beforeEach" hook.
+
+      2 |
+      3 | test.describe("Exact live Custom Route workbench", () => {
+    > 4 |   test.beforeEach(async ({ page }) => {
+        |        ^
+      5 |     await page.addInitScript(() => {
+      6 |       window.localStorage.removeItem("moraltrade.plan-resources.v1");
+      7 |     });
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-custom-route.spec.ts:4:8
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Custom route', exact: true })
+
+
+       8 |     await page.goto("/moral-trade-live.html#now");
+       9 |     await page.locator('[data-now="plan"]').click();
+    > 10 |     await page.getByRole("button", { name: "Custom route", exact: true }).click();
+         |                                                                           ^
+      11 |     await expect(page.locator('[data-mt-custom-route="resource-mix"]')).toBeVisible();
+      12 |   });
+      13 |
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-custom-route.spec.ts:10:75
+
+    Error Context: test-results/exact-live-custom-route-Ex-effb5--closed-review-confirmation/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-custom-route-Ex-effb5--closed-review-confirmation/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-custom-route-Ex-effb5--closed-review-confirmation/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[84/181] tests/exact-live-custom-route.spec.ts:104:7 › Exact live Custom Route workbench › returns to Routes and stays free of horizontal overflow on mobile
+  18) tests/exact-live-plan-resources.spec.ts:58:7 › exact live Plan Resources controls › Reset restores every control and the allocation table 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.selectOption: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for locator('[data-mt-plan-control="goal"]')
+
+
+      64 |     const reset = page.locator('button[data-mt-plan-reset="true"]');
+      65 |
+    > 66 |     await page.locator('[data-mt-plan-control="goal"]').selectOption("civic");
+         |                                                         ^
+      67 |     await page.locator('[data-mt-plan-control="horizon"]').selectOption("quarter");
+      68 |     await page.locator('[data-mt-plan-control="budget"]').fill("25");
+      69 |     await page.locator('[data-mt-plan-control="time"]').selectOption("1h");
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-plan-resources.spec.ts:66:57
+
+    Error Context: test-results/exact-live-plan-resources--8320c-ol-and-the-allocation-table/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-plan-resources--8320c-ol-and-the-allocation-table/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-plan-resources--8320c-ol-and-the-allocation-table/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[85/181] tests/exact-live-route-recommendations.spec.ts:188:7 › live route recommendation planner › saves the progressive composer and refreshes the authoritative routePlanner in place
+  19) tests/exact-live-route-recommendations.spec.ts:188:7 › live route recommendation planner › saves the progressive composer and refreshes the authoritative routePlanner in place 
+
+    Error: locator.fill: Error: strict mode violation: locator('[data-mt-live-route-composer]').getByLabel('Goal') resolved to 2 elements:
+        1) <input value="" name="goal" required="" maxlength="180" id="mt-lrp-goal" aria-haspopup="listbox" aria-autocomplete="list" placeholder="What should change?" data-mt-autocomplete-ready="true" data-mt-autocomplete-context="commitments"/> aka getByRole('textbox', { name: 'Goal', exact: true })
+        2) <input required="" maxlength="120" id="mt-lrp-cause" name="causePriority" value="Animal welfare" aria-haspopup="listbox" aria-autocomplete="list" data-mt-autocomplete-ready="true" data-mt-autocomplete-context="priorities" placeholder="For example: Farmed-animal welfare"/> aka getByRole('textbox', { name: 'Cause area used for matching' })
+
+    Call log:
+      - waiting for locator('[data-mt-live-route-composer]').getByLabel('Goal')
+
+
+      207 |
+      208 |     const composer = page.locator("[data-mt-live-route-composer]");
+    > 209 |     await composer.getByLabel("Goal").fill("Reduce preventable animal suffering");
+          |                                       ^
+      210 |     await composer.getByLabel("Cause area used for matching").fill("Farmed-animal welfare");
+      211 |     await composer.getByLabel("Money").fill("35");
+      212 |     await composer.getByLabel("Minutes").fill("45");
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-route-recommendations.spec.ts:209:39
+
+    Error Context: test-results/exact-live-route-recommend-bef5a-ative-routePlanner-in-place/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-route-recommend-bef5a-ative-routePlanner-in-place/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-route-recommend-bef5a-ative-routePlanner-in-place/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[86/181] tests/exact-live-route-recommendations.spec.ts:237:7 › live route recommendation planner › records a hypothetical comparison as preference-only structured input
+[87/181] tests/exact-live-route-recommendations.spec.ts:281:7 › live route recommendation planner › reviews and confirms the guided interview before posting it
+  20) tests/exact-live-route-recommendations.spec.ts:281:7 › live route recommendation planner › reviews and confirms the guided interview before posting it 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByText('interview confirmed')
+    Expected: visible
+    Error: strict mode violation: getByText('interview confirmed') resolved to 2 elements:
+        1) <small>0 comparisons saved · interview confirmed</small> aka getByText('0 comparisons saved ·')
+        2) <p aria-live="polite" class="mt-lrp-request-status">Interview confirmed. Routes refreshed.</p> aka getByText('Interview confirmed. Routes')
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByText('interview confirmed')
+
+
+      307 |     await dialog.getByRole("button", { name: "Confirm profile" }).click();
+      308 |
+    > 309 |     await expect(page.getByText("interview confirmed", { exact: false })).toBeVisible();
+          |                                                                           ^
+      310 |     expect(posts).toHaveLength(1);
+      311 |     expect(posts[0]).toEqual({
+      312 |       action: "save_interview",
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-route-recommendations.spec.ts:309:75
+
+    Error Context: test-results/exact-live-route-recommend-44557-interview-before-posting-it/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-route-recommend-44557-interview-before-posting-it/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-route-recommend-44557-interview-before-posting-it/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[88/181] tests/exact-live-route-recommendations.spec.ts:325:7 › live route recommendation planner › renders at most three result cards and links only sanitized live sources
+[89/181] tests/exact-live-route-recommendations.spec.ts:377:7 › live route recommendation planner › shows a truthful no-live state without a generic recommendation
+[90/181] tests/exact-live-route-recommendations.spec.ts:394:7 › live route recommendation planner › shows a truthful signed-out state without personalized or demo routes
+[91/181] tests/exact-live-route-recommendations.spec.ts:409:7 › live route recommendation planner › keeps the planner and comparison dialog within a 390px viewport
+[92/181] tests/exact-live-templates.spec.ts:4:7 › live Trade template system › opens from the Trade control and uses a template in one click
+  21) tests/exact-live-templates.spec.ts:4:7 › live Trade template system › opens from the Trade control and uses a template in one click 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('.compose-grid')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for locator('.compose-grid')
+
+
+       5 |     await page.setViewportSize({ width: 1440, height: 1000 });
+       6 |     await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
+    >  7 |     await expect(page.locator(".compose-grid")).toBeVisible();
+         |                                                 ^
+       8 |
+       9 |     const obsoleteOverflowControl = page
+      10 |       .locator(".compose-grid button, .compose-grid a")
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-templates.spec.ts:7:49
+
+    Error Context: test-results/exact-live-templates-live--b27d4-ses-a-template-in-one-click/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-templates-live--b27d4-ses-a-template-in-one-click/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-templates-live--b27d4-ses-a-template-in-one-click/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[93/181] tests/exact-live-templates.spec.ts:37:7 › live Trade template system › completes all three guided questions and hands pledge templates to the safe editor
+  22) tests/exact-live-custom-route.spec.ts:104:7 › Exact live Custom Route workbench › returns to Routes and stays free of horizontal overflow on mobile 
+
+    Test timeout of 30000ms exceeded while running "beforeEach" hook.
+
+      2 |
+      3 | test.describe("Exact live Custom Route workbench", () => {
+    > 4 |   test.beforeEach(async ({ page }) => {
+        |        ^
+      5 |     await page.addInitScript(() => {
+      6 |       window.localStorage.removeItem("moraltrade.plan-resources.v1");
+      7 |     });
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-custom-route.spec.ts:4:8
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Custom route', exact: true })
+
+
+       8 |     await page.goto("/moral-trade-live.html#now");
+       9 |     await page.locator('[data-now="plan"]').click();
+    > 10 |     await page.getByRole("button", { name: "Custom route", exact: true }).click();
+         |                                                                           ^
+      11 |     await expect(page.locator('[data-mt-custom-route="resource-mix"]')).toBeVisible();
+      12 |   });
+      13 |
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-custom-route.spec.ts:10:75
+
+    Error Context: test-results/exact-live-custom-route-Ex-602b4-rizontal-overflow-on-mobile/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-custom-route-Ex-602b4-rizontal-overflow-on-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-custom-route-Ex-602b4-rizontal-overflow-on-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[94/181] tests/exact-live-verification.spec.ts:24:7 › complete verification › uses connected evidence, exception-only review, and a locked settlement gate
+[95/181] tests/exact-live-verification.spec.ts:38:7 › complete verification › supports the guided-evidence fallback when no live source exists
+[96/181] tests/exact-live-verification.spec.ts:49:7 › complete verification › adds optional dual attestation for consequential or disputed trades
+[97/181] tests/exact-live-verification.spec.ts:75:7 › complete verification › routes the existing calendar action into the verification workflow
+  23) tests/exact-live-templates.spec.ts:37:7 › live Trade template system › completes all three guided questions and hands pledge templates to the safe editor 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: 'Help me choose' })
+
+
+      37 |   test("completes all three guided questions and hands pledge templates to the safe editor", async ({ page }) => {
+      38 |     await page.goto("/offers?view=templates");
+    > 39 |     await page.getByRole("button", { name: "Help me choose" }).click();
+         |                                                                ^
+      40 |
+      41 |     await expect(page.getByText("Question 1 of 3", { exact: true })).toBeVisible();
+      42 |     await expect(page.getByRole("button", { name: /An action/ })).toHaveAttribute("aria-pressed", "true");
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-templates.spec.ts:39:64
+
+    Error Context: test-results/exact-live-templates-live--e051e-emplates-to-the-safe-editor/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-templates-live--e051e-emplates-to-the-safe-editor/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-templates-live--e051e-emplates-to-the-safe-editor/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[98/181] tests/exact-live-templates.spec.ts:66:7 › live Trade template system › keeps the library and guide usable without horizontal overflow on mobile
+  24) tests/exact-live-templates.spec.ts:66:7 › live Trade template system › keeps the library and guide usable without horizontal overflow on mobile 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Choose a template.' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('heading', { name: 'Choose a template.' })
+
+
+      67 |     await page.setViewportSize({ width: 390, height: 844 });
+      68 |     await page.goto("/offers?view=templates");
+    > 69 |     await expect(page.getByRole("heading", { name: "Choose a template." })).toBeVisible();
+         |                                                                             ^
+      70 |
+      71 |     const libraryOverflow = await page.evaluate(
+      72 |       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-templates.spec.ts:69:77
+
+    Error Context: test-results/exact-live-templates-live--64b0f-rizontal-overflow-on-mobile/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-templates-live--64b0f-rizontal-overflow-on-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-templates-live--64b0f-rizontal-overflow-on-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[99/181] tests/feed-create-phase1-authenticated.spec.ts:564:7 › authenticated Feed-to-Create Phase 1 › two users receive distinct receipt-bound source drafts on desktop and 390px mobile
+  25) tests/feed-create-phase1-authenticated.spec.ts:564:7 › authenticated Feed-to-Create Phase 1 › two users receive distinct receipt-bound source drafts on desktop and 390px mobile 
+
+    Error: FEED_CREATE_QA_PASSWORD is required.
+
+      268 |
+      269 | async function signIn(email: string) {
+    > 270 |   if (!QA_PASSWORD) throw new Error("FEED_CREATE_QA_PASSWORD is required.");
+          |                           ^
+      271 |   const client = authClient();
+      272 |   const { data, error } = await client.auth.signInWithPassword({
+      273 |     email,
+        at signIn (/home/runner/work/Website2/Website2/candidate/tests/feed-create-phase1-authenticated.spec.ts:270:27)
+        at finishSourceFlow (/home/runner/work/Website2/Website2/candidate/tests/feed-create-phase1-authenticated.spec.ts:498:25)
+        at /home/runner/work/Website2/Website2/candidate/tests/feed-create-phase1-authenticated.spec.ts:567:11
+
+    Error Context: test-results/feed-create-phase1-authent-b6263-on-desktop-and-390px-mobile/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/feed-create-phase1-authent-b6263-on-desktop-and-390px-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/feed-create-phase1-authent-b6263-on-desktop-and-390px-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[100/181] tests/feed-create-phase1-authenticated.spec.ts:585:7 › authenticated Feed-to-Create Phase 1 › zero-data, own-item, pool, redirect, and payment feeds never flash or show the action
+[101/181] tests/feed-create-phase1-authenticated.spec.ts:636:7 › authenticated Feed-to-Create Phase 1 › spoofed, zero-data, own, payment, redirect, pool, incomplete, and stale source URLs fail closed
+[102/181] tests/feed-create-phase1-authenticated.spec.ts:747:7 › authenticated Feed-to-Create Phase 1 › an existing active draft produces an explicit duplicate acknowledgement gate
+[103/181] tests/input-assist-hydration.spec.ts:41:5 › lazy input assist enhances topbar and route controls without racing React hydration
+  26) tests/exact-live-verification.spec.ts:75:7 › complete verification › routes the existing calendar action into the verification workflow 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: locator('[data-mt-complete-verification="true"], button:has-text("Complete verification"), a:has-text("Complete verification")').first()
+    Expected: visible
+    Timeout: 20000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 20000ms
+      - waiting for locator('[data-mt-complete-verification="true"], button:has-text("Complete verification"), a:has-text("Complete verification")').first()
+
+
+      79 |     ).first();
+      80 |
+    > 81 |     await expect(completeVerification).toBeVisible({ timeout: 20_000 });
+         |                                        ^
+      82 |     await completeVerification.click();
+      83 |     await expect(page).toHaveURL(/\/complete-verification\.html\?/);
+      84 |     await expect(page.getByRole("heading", { name: "Complete verification" })).toBeVisible();
+        at /home/runner/work/Website2/Website2/candidate/tests/exact-live-verification.spec.ts:81:40
+
+    Error Context: test-results/exact-live-verification-co-2c292-o-the-verification-workflow/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/exact-live-verification-co-2c292-o-the-verification-workflow/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/exact-live-verification-co-2c292-o-the-verification-workflow/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[104/181] tests/meta-explanatory-copy.spec.ts:30:5 › removes meta-explanatory inventory and internal-metric copy from source
+[105/181] tests/meta-explanatory-copy.spec.ts:39:5 › renders concise states on the affected routes
+[WebServer] ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+
+[WebServer] [supabase] Failed to load donation offset metrics { message: 'Missing SUPABASE_SERVICE_ROLE_KEY.' }
+
+[WebServer] ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[WebServer] ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+
+[WebServer] ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+
+[WebServer] ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+
+[WebServer] [supabase] Failed to load donation offset metrics { message: 'Missing SUPABASE_SERVICE_ROLE_KEY.' }
+
+[WebServer] [supabase] Failed to load donation offset metrics { message: 'Missing SUPABASE_SERVICE_ROLE_KEY.' }
+
+  27) tests/meta-explanatory-copy.spec.ts:39:5 › renders concise states on the affected routes ─────
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: /Test one moral trade/, level: 1 })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('heading', { name: /Test one moral trade/, level: 1 })
+        - waiting for" http://127.0.0.1:3210/start" navigation to finish...
+        - navigated to "http://127.0.0.1:3210/start"
+
+
+      47 |
+      48 |   await page.goto("/pilot");
+    > 49 |   await expect(page.getByRole("heading", { level: 1, name: /Test one moral trade/ })).toBeVisible();
+         |                                                                                       ^
+      50 |   await expect(page.locator("body")).not.toContainText("distinguish a serious first user");
+      51 | });
+      52 |
+        at /home/runner/work/Website2/Website2/candidate/tests/meta-explanatory-copy.spec.ts:49:87
+
+    Error Context: test-results/meta-explanatory-copy-rend-4d5df-ates-on-the-affected-routes/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/meta-explanatory-copy-rend-4d5df-ates-on-the-affected-routes/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/meta-explanatory-copy-rend-4d5df-ates-on-the-affected-routes/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[106/181] tests/moral-trade-brand.spec.ts:27:7 › canonical Moral Trade brand › replaces the legacy live-interface wordmark
+[107/181] tests/moral-trade-brand.spec.ts:32:7 › canonical Moral Trade brand › replaces the legacy Discover wordmark
+[108/181] tests/moral-trade-brand.spec.ts:37:7 › canonical Moral Trade brand › adapts the compact mark and sans wordmark to dark and light headers
+[WebServer] [supabase] Failed to load donation offset metrics { message: 'Missing SUPABASE_SERVICE_ROLE_KEY.' }
+
+  28) tests/moral-trade-brand.spec.ts:37:7 › canonical Moral Trade brand › adapts the compact mark and sans wordmark to dark and light headers 
+
+    Error: expect(locator).toHaveCount(expected) failed
+
+    Locator:  locator('[data-mt-brand-canonical="true"]')
+    Expected: 2
+    Received: 0
+    Timeout:  5000ms
+
+    Call log:
+      - Expect "toHaveCount" with timeout 5000ms
+      - waiting for locator('[data-mt-brand-canonical="true"]')
+        14 × locator resolved to 0 elements
+           - unexpected value "0"
+
+
+      47 |
+      48 |     const brands = page.locator('[data-mt-brand-canonical="true"]');
+    > 49 |     await expect(brands).toHaveCount(2);
+         |                          ^
+      50 |     await expect(brands.nth(0)).toHaveCSS("color", "rgb(255, 255, 255)");
+      51 |     await expect(brands.nth(1)).toHaveCSS("color", "rgb(23, 24, 21)");
+      52 |   });
+        at /home/runner/work/Website2/Website2/candidate/tests/moral-trade-brand.spec.ts:49:26
+
+    Error Context: test-results/moral-trade-brand-canonica-3da6d-k-to-dark-and-light-headers/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/moral-trade-brand-canonica-3da6d-k-to-dark-and-light-headers/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/moral-trade-brand-canonica-3da6d-k-to-dark-and-light-headers/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[109/181] tests/mpgf-dac-product-lifecycle.spec.ts:214:5 › complete creator, reviewer, public pledge, success, lapse, privacy, and mobile DAC lifecycle
+[110/181] tests/mpgf-governance-local-date-time.spec.ts:8:7 › MPGF governance dates in America/Los_Angeles › renders the public round start on the visitor's prior calendar day
+[111/181] tests/mpgf-governance-local-date-time.spec.ts:21:7 › MPGF governance dates in Asia/Tokyo › renders the public round start on the visitor's local calendar day
+[WebServer] [supabase] Failed to load donation offset metrics { message: 'Missing SUPABASE_SERVICE_ROLE_KEY.' }
+
+[112/181] tests/pilot-copy.spec.ts:4:7 › Legacy pilot route › redirects to the action-first start page
+[WebServer] [supabase] Failed to load donation offset metrics { message: 'Missing SUPABASE_SERVICE_ROLE_KEY.' }
+
+[113/181] tests/pledge-swaps-intuitive.spec.ts:22:7 › Pledge swaps explainer › makes the mechanism and reliance boundary obvious
+[114/181] tests/public-evidence.spec.ts:87:7 › public Evidence outcome ledger › serves only the privacy-safe outcome directory
+[115/181] tests/pledge-swaps-intuitive.spec.ts:60:7 › Pledge swaps explainer › stays readable without horizontal overflow on mobile
+[116/181] tests/public-routes.spec.ts:176:7 › standard public route /funding-rounds/vegetarian-week-micro-assurance-preview resolves with one visible page shell
+[117/181] tests/public-evidence.spec.ts:97:7 › public Evidence outcome ledger › retires record-specific public dossiers without exposing source artifacts
+[118/181] tests/public-evidence.spec.ts:117:7 › public Evidence outcome ledger › keeps the privacy-safe ledger readable on mobile
+[119/181] tests/public-routes.spec.ts:176:7 › standard public route /what-is-moral-trade resolves with one visible page shell
+[120/181] tests/public-evidence.spec.ts:125:7 › public Evidence outcome ledger › keeps the retired-record notice readable on mobile without artifact controls
+[121/181] tests/public-routes.spec.ts:176:7 › standard public route /worked-examples resolves with one visible page shell
+[122/181] tests/retired-explainer-navigation.spec.ts:4:7 › Retired explainer navigation › omits How It Works and Trust from primary and footer navigation
+[123/181] tests/retired-explainer-navigation.spec.ts:17:7 › Retired explainer navigation › redirects the legacy Trust URL to Safety
+[124/181] tests/public-routes.spec.ts:176:7 › standard public route /cohort resolves with one visible page shell
+[WebServer] [supabase] Failed to load donation offset metrics { message: 'Missing SUPABASE_SERVICE_ROLE_KEY.' }
+
+[125/181] tests/public-routes.spec.ts:176:7 › standard public route /pledge-swaps resolves with one visible page shell
+[126/181] tests/returning-homepage-timezone.spec.ts:19:7 › Returning homepage in America/Los_Angeles › uses the visitor's previous local date and evening greeting
+[127/181] tests/public-routes.spec.ts:176:7 › standard public route /paid-action-offers resolves with one visible page shell
+[128/181] tests/public-routes.spec.ts:176:7 › standard public route /background-networking resolves with one visible page shell
+  29) tests/returning-homepage-timezone.spec.ts:19:7 › Returning homepage in America/Los_Angeles › uses the visitor's previous local date and evening greeting 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator: getByTestId('local-date-greeting')
+    Expected: "true"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAttribute" with timeout 5000ms
+      - waiting for getByTestId('local-date-greeting')
+
+
+       8 | ) {
+       9 |   const localGreeting = page.getByTestId("local-date-greeting");
+    > 10 |   await expect(localGreeting).toHaveAttribute("data-ready", "true");
+         |                               ^
+      11 |   await expect(localGreeting.locator("time")).toHaveAttribute("datetime", expected.dateTime);
+      12 |   await expect(localGreeting.locator("time")).toHaveText(expected.dateLabel);
+      13 |   await expect(localGreeting.getByText(expected.greeting, { exact: true })).toBeVisible();
+        at expectLocalGreeting (/home/runner/work/Website2/Website2/candidate/tests/returning-homepage-timezone.spec.ts:10:31)
+        at /home/runner/work/Website2/Website2/candidate/tests/returning-homepage-timezone.spec.ts:23:11
+
+    Error Context: test-results/returning-homepage-timezon-fa7a6-l-date-and-evening-greeting/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/returning-homepage-timezon-fa7a6-l-date-and-evening-greeting/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/returning-homepage-timezon-fa7a6-l-date-and-evening-greeting/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[129/181] tests/returning-homepage-timezone.spec.ts:34:7 › Returning homepage in Asia/Tokyo › uses the visitor's next local date and morning greeting
+[130/181] tests/public-routes.spec.ts:176:7 › standard public route /reasoning-standards resolves with one visible page shell
+[131/181] tests/public-routes.spec.ts:176:7 › standard public route /donate resolves with one visible page shell
+  30) tests/returning-homepage-timezone.spec.ts:34:7 › Returning homepage in Asia/Tokyo › uses the visitor's next local date and morning greeting 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator: getByTestId('local-date-greeting')
+    Expected: "true"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAttribute" with timeout 5000ms
+      - waiting for getByTestId('local-date-greeting')
+
+
+       8 | ) {
+       9 |   const localGreeting = page.getByTestId("local-date-greeting");
+    > 10 |   await expect(localGreeting).toHaveAttribute("data-ready", "true");
+         |                               ^
+      11 |   await expect(localGreeting.locator("time")).toHaveAttribute("datetime", expected.dateTime);
+      12 |   await expect(localGreeting.locator("time")).toHaveText(expected.dateLabel);
+      13 |   await expect(localGreeting.getByText(expected.greeting, { exact: true })).toBeVisible();
+        at expectLocalGreeting (/home/runner/work/Website2/Website2/candidate/tests/returning-homepage-timezone.spec.ts:10:31)
+        at /home/runner/work/Website2/Website2/candidate/tests/returning-homepage-timezone.spec.ts:38:11
+
+    Error Context: test-results/returning-homepage-timezon-3fb2c-l-date-and-morning-greeting/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/returning-homepage-timezon-3fb2c-l-date-and-morning-greeting/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/returning-homepage-timezon-3fb2c-l-date-and-morning-greeting/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[132/181] tests/returning-homepage-timezone.spec.ts:49:7 › Returning homepage local-time refresh › refreshes after the local date and greeting period change
+[133/181] tests/public-routes.spec.ts:176:7 › standard public route /methodology resolves with one visible page shell
+[134/181] tests/public-routes.spec.ts:176:7 › standard public route /reasoning-center resolves with one visible page shell
+  31) tests/returning-homepage-timezone.spec.ts:49:7 › Returning homepage local-time refresh › refreshes after the local date and greeting period change 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator: getByTestId('local-date-greeting')
+    Expected: "true"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAttribute" with timeout 5000ms
+      - waiting for getByTestId('local-date-greeting')
+
+
+       8 | ) {
+       9 |   const localGreeting = page.getByTestId("local-date-greeting");
+    > 10 |   await expect(localGreeting).toHaveAttribute("data-ready", "true");
+         |                               ^
+      11 |   await expect(localGreeting.locator("time")).toHaveAttribute("datetime", expected.dateTime);
+      12 |   await expect(localGreeting.locator("time")).toHaveText(expected.dateLabel);
+      13 |   await expect(localGreeting.getByText(expected.greeting, { exact: true })).toBeVisible();
+        at expectLocalGreeting (/home/runner/work/Website2/Website2/candidate/tests/returning-homepage-timezone.spec.ts:10:31)
+        at /home/runner/work/Website2/Website2/candidate/tests/returning-homepage-timezone.spec.ts:53:11
+
+    Error Context: test-results/returning-homepage-timezon-d0de8--and-greeting-period-change/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/returning-homepage-timezon-d0de8--and-greeting-period-change/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/returning-homepage-timezon-d0de8--and-greeting-period-change/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[135/181] tests/returning-homepage.spec.ts:21:7 › Returning-user homepage › matches the approved desktop trade-deck contract
+[136/181] tests/public-routes.spec.ts:176:7 › standard public route /moral-trade/technical-spec resolves with one visible page shell
+  32) tests/returning-homepage.spec.ts:21:7 › Returning-user homepage › matches the approved desktop trade-deck contract 
+
+    Error: expect(locator).toHaveText(expected) failed
+
+    Locator: getByRole('navigation', { name: 'Primary' }).getByRole('link')
+    Timeout: 5000ms
+    - Expected  - 8
+    + Received  + 1
+
+    - Array [
+    -   "Feed",
+    -   "Now",
+    -   "Discover",
+    -   "Activity",
+    -   "Evidence",
+    -   "Account",
+    - ]
+    + Array []
+
+    Call log:
+      - Expect "toHaveText" with timeout 5000ms
+      - waiting for getByRole('navigation', { name: 'Primary' }).getByRole('link')
+        14 × locator resolved to 0 elements
+
+
+      26 |
+      27 |     const primary = page.getByRole("navigation", { name: "Primary" });
+    > 28 |     await expect(primary.getByRole("link")).toHaveText([
+         |                                             ^
+      29 |       "Feed",
+      30 |       "Now",
+      31 |       "Discover",
+        at /home/runner/work/Website2/Website2/candidate/tests/returning-homepage.spec.ts:28:45
+
+    Error Context: test-results/returning-homepage-Returni-3d017-desktop-trade-deck-contract/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/returning-homepage-Returni-3d017-desktop-trade-deck-contract/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/returning-homepage-Returni-3d017-desktop-trade-deck-contract/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[137/181] tests/returning-homepage.spec.ts:170:7 › Returning-user homepage › keeps the approved controls interactive
+[138/181] tests/public-routes.spec.ts:176:7 › standard public route /wish-registry resolves with one visible page shell
+[139/181] tests/public-routes.spec.ts:176:7 › standard public route /people resolves with one visible page shell
+[140/181] tests/public-routes.spec.ts:176:7 › standard public route /mpgf resolves with one visible page shell
+[141/181] tests/public-routes.spec.ts:176:7 › standard public route /public-goods-fund resolves with one visible page shell
+  33) tests/returning-homepage.spec.ts:170:7 › Returning-user homepage › keeps the approved controls interactive 
+
+    Test timeout of 30000ms exceeded.
+
+    Error: locator.fill: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('slider', { name: 'Trips per month' })
+
+
+      174 |     const trips = page.getByRole("slider", { name: "Trips per month" });
+      175 |     const amount = page.getByRole("slider", { name: "Funding amount" });
+    > 176 |     await trips.fill("10");
+          |                 ^
+      177 |     await amount.fill("25");
+      178 |     await expect(trips).toHaveValue("10");
+      179 |     await expect(amount).toHaveValue("25");
+        at /home/runner/work/Website2/Website2/candidate/tests/returning-homepage.spec.ts:176:17
+
+    Error Context: test-results/returning-homepage-Returni-71c8b-proved-controls-interactive/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/returning-homepage-Returni-71c8b-proved-controls-interactive/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/returning-homepage-Returni-71c8b-proved-controls-interactive/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[142/181] tests/returning-homepage.spec.ts:211:7 › Returning-user homepage › stacks the trade deck without horizontal overflow on mobile
+[143/181] tests/public-routes.spec.ts:176:7 › standard public route /mpgf/contribute resolves with one visible page shell
+  34) tests/returning-homepage.spec.ts:211:7 › Returning-user homepage › stacks the trade deck without horizontal overflow on mobile 
+
+    Error: expect(locator).toHaveAttribute(expected) failed
+
+    Locator: getByTestId('home-offer-trade')
+    Expected: "/offers?view=templates"
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toHaveAttribute" with timeout 5000ms
+      - waiting for getByTestId('home-offer-trade')
+
+
+      215 |     await expect(page.getByText("A trade worth considering.", { exact: true })).toHaveCount(0);
+      216 |     await expect(page.getByRole("navigation", { name: "Primary" })).toBeHidden();
+    > 217 |     await expect(page.getByTestId("home-offer-trade")).toHaveAttribute(
+          |                                                        ^
+      218 |       "href",
+      219 |       "/offers?view=templates",
+      220 |     );
+        at /home/runner/work/Website2/Website2/candidate/tests/returning-homepage.spec.ts:217:56
+
+    Error Context: test-results/returning-homepage-Returni-15b54-rizontal-overflow-on-mobile/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/returning-homepage-Returni-15b54-rizontal-overflow-on-mobile/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/returning-homepage-Returni-15b54-rizontal-overflow-on-mobile/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[144/181] tests/trade-controls.spec.ts:3:5 › trade controls previews integrity and a complete multi-party circle
+[145/181] tests/public-routes.spec.ts:176:7 › standard public route /mpgf/account/contributions resolves with one visible page shell
+[146/181] tests/public-routes.spec.ts:176:7 › standard public route /mpgf/pools resolves with one visible page shell
+  35) tests/trade-controls.spec.ts:3:5 › trade controls previews integrity and a complete multi-party circle 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('heading', { name: 'Ready for human review.' })
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 5000ms
+      - waiting for getByRole('heading', { name: 'Ready for human review.' })
+
+
+      19 |   }
+      20 |
+    > 21 |   await expect(page.getByRole("heading", { name: "Ready for human review." })).toBeVisible();
+         |                                                                                ^
+      22 |
+      23 |   await controlsNavigation.getByRole("button", { name: /Trade circles/ }).click();
+      24 |   await expect(page.getByRole("heading", { name: "Multi-party Trade Circles" })).toBeVisible();
+        at /home/runner/work/Website2/Website2/candidate/tests/trade-controls.spec.ts:21:80
+
+    Error Context: test-results/trade-controls-trade-contr-473c6-complete-multi-party-circle/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/trade-controls-trade-contr-473c6-complete-multi-party-circle/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/trade-controls-trade-contr-473c6-complete-multi-party-circle/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[147/181] tests/walkthrough.spec.ts:27:5 › a first homepage visit opens the mandatory walkthrough without a skip control
+[148/181] tests/walkthrough.spec.ts:42:5 › Third Option leads to Find the Mix and a real trade draft handoff
+[149/181] tests/public-routes.spec.ts:176:7 › standard public route /mpgf/technical-spec resolves with one visible page shell
+[150/181] tests/public-routes.spec.ts:176:7 › standard public route /privacy resolves with one visible page shell
+[151/181] tests/walkthrough.spec.ts:77:5 › Make the trade stays fully visible on a wide, short screen
+[152/181] tests/public-routes.spec.ts:176:7 › standard public route /terms resolves with one visible page shell
+[153/181] tests/walkthrough.spec.ts:92:5 › Crowd and Redirect preserve the requested copy, coalition trade, and routing
+[154/181] tests/public-routes.spec.ts:176:7 › standard public route /safety resolves with one visible page shell
+[155/181] tests/public-routes.spec.ts:176:7 › standard public route /anti-threat-rules resolves with one visible page shell
+[156/181] tests/walkthrough.spec.ts:180:5 › The Crowd can close a verified salary gap for a higher-impact job
+[157/181] tests/public-routes.spec.ts:176:7 › standard public route /status resolves with one visible page shell
+[WebServer] [supabase] Failed to load donation offset metrics { message: 'Missing SUPABASE_SERVICE_ROLE_KEY.' }
+
+[158/181] tests/public-routes.spec.ts:176:7 › standard public route /team-and-governance resolves with one visible page shell
+[159/181] tests/walkthrough.spec.ts:233:5 › walkthrough preserves its guided keyboard flow and has no mobile overflow
+[160/181] tests/public-routes.spec.ts:176:7 › standard public route /pilot-updates resolves with one visible page shell
+[161/181] tests/public-routes.spec.ts:176:7 › standard public route /faq resolves with one visible page shell
+[162/181] tests/public-routes.spec.ts:190:7 › /donation-offsets renders live data or a truthful recovery shell
+[163/181] tests/walkthrough.spec.ts:284:5 › salary-gap actions fit the mid-size walkthrough layout
+[WebServer] ⨯ Error: Missing SUPABASE_SERVICE_ROLE_KEY.
+[WebServer]     at getSupabaseServiceEnv (src/lib/supabase/config.ts:94:11)
+[WebServer]     at createServiceClient (src/lib/supabase/server.ts:32:56)
+[WebServer]     at getDonationOffsetOverview (src/lib/app-data.ts:1201:39)
+[WebServer]     at DonationOffsetsPage (src/app/donation-offsets/page.tsx:135:70)
+[WebServer]   92 |
+[WebServer]   93 |   if (!serviceRoleKey) {
+[WebServer] > 94 |     throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
+[WebServer]      |           ^
+[WebServer]   95 |   }
+[WebServer]   96 |
+[WebServer]   97 |   return { url, serviceRoleKey }; {
+[WebServer]   digest: '2025040436'
+[WebServer] }
+
+[164/181] tests/public-routes.spec.ts:190:7 › /priority-correction-fund renders live data or a truthful recovery shell
+[WebServer] ⨯ Error: Missing SUPABASE_SERVICE_ROLE_KEY.
+[WebServer]     at getSupabaseServiceEnv (src/lib/supabase/config.ts:94:11)
+[WebServer]     at createServiceClient (src/lib/supabase/server.ts:32:56)
+[WebServer]     at getServiceClient (src/lib/priority-correction.ts:205:29)
+[WebServer]     at getPriorityCorrectionPageData (src/lib/priority-correction.ts:487:20)
+[WebServer]     at PriorityCorrectionFundPage (src/app/priority-correction-fund/page.tsx:99:42)
+[WebServer]   92 |
+[WebServer]   93 |   if (!serviceRoleKey) {
+[WebServer] > 94 |     throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
+[WebServer]      |           ^
+[WebServer]   95 |   }
+[WebServer]   96 |
+[WebServer]   97 |   return { url, serviceRoleKey }; {
+[WebServer]   digest: '3784665504'
+[WebServer] }
+
+[165/181] tests/your-match-viewport.spec.ts:9:7 › Your Match keeps its title, cards, and action visible at the reported 1662x934 viewport
+[166/181] tests/public-routes.spec.ts:204:5 › the live home workspace has one semantic page heading and its dedicated navigation
+[167/181] tests/public-routes.spec.ts:229:5 › /offers transfers to the dedicated Discover shell
+[168/181] tests/public-routes.spec.ts:245:5 › /create rewrites to the embedded Create interface
+[169/181] tests/public-routes.spec.ts:255:5 › /offers/new transfers to the embedded Create interface with a document heading
+  36) tests/your-match-viewport.spec.ts:9:7 › Your Match keeps its title, cards, and action visible at the reported 1662x934 viewport 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tab', { name: /Your match/i })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tab', { name: /Your match/i })
+
+
+      15 |
+      16 |     const matchTab = page.getByRole("tab", { name: /Your match/i });
+    > 17 |     await expect(matchTab).toBeVisible({ timeout: 15_000 });
+         |                            ^
+      18 |     await matchTab.click();
+      19 |     await page.getByRole("button", { name: /^Money\b/ }).click();
+      20 |
+        at /home/runner/work/Website2/Website2/candidate/tests/your-match-viewport.spec.ts:17:28
+
+    Error Context: test-results/your-match-viewport-Your-M-2376e--reported-1662x934-viewport/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/your-match-viewport-Your-M-2376e--reported-1662x934-viewport/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/your-match-viewport-Your-M-2376e--reported-1662x934-viewport/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[170/181] tests/your-match-viewport.spec.ts:9:7 › Your Match keeps its title, cards, and action visible at the compact 1366x768 viewport
+[171/181] tests/public-routes.spec.ts:267:5 › auth routes use the compact auth shell rather than the marketplace topbar
+[172/181] tests/public-routes.spec.ts:281:5 › representative marketplace pages expose the current top-level navigation
+  37) tests/your-match-viewport.spec.ts:9:7 › Your Match keeps its title, cards, and action visible at the compact 1366x768 viewport 
+
+    Error: expect(locator).toBeVisible() failed
+
+    Locator: getByRole('tab', { name: /Your match/i })
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+      - Expect "toBeVisible" with timeout 15000ms
+      - waiting for getByRole('tab', { name: /Your match/i })
+
+
+      15 |
+      16 |     const matchTab = page.getByRole("tab", { name: /Your match/i });
+    > 17 |     await expect(matchTab).toBeVisible({ timeout: 15_000 });
+         |                            ^
+      18 |     await matchTab.click();
+      19 |     await page.getByRole("button", { name: /^Money\b/ }).click();
+      20 |
+        at /home/runner/work/Website2/Website2/candidate/tests/your-match-viewport.spec.ts:17:28
+
+    Error Context: test-results/your-match-viewport-Your-M-ef9bd-e-compact-1366x768-viewport/error-context.md
+
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/your-match-viewport-Your-M-ef9bd-e-compact-1366x768-viewport/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/your-match-viewport-Your-M-ef9bd-e-compact-1366x768-viewport/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+[173/181] tests/public-routes.spec.ts:294:5 › /offers/new offset creation layout stays broad without mobile overflow
+[174/181] tests/public-routes.spec.ts:325:5 › /login preserves returnTo, keeps email, and never exposes Apple
+[175/181] tests/public-routes.spec.ts:348:5 › /signup renders signup mode with legal text and mode switch
+[176/181] tests/public-routes.spec.ts:364:5 › auth mode switch preserves returnTo
+[177/181] tests/public-routes.spec.ts:376:5 › auth email flow exposes compact required email/password form
+[178/181] tests/public-routes.spec.ts:390:5 › signup email flow asks only email and password before onboarding details
+[179/181] tests/public-routes.spec.ts:400:5 › /mpgf assurance funding receipt recalculates expected other funding
+[180/181] tests/public-routes.spec.ts:421:7 › signed-out /dashboard resolves away from the loading shell
+[181/181] tests/public-routes.spec.ts:439:5 › /cart redirects to the signed-out saved-offers planner without a commitment
+[WebServer] ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+
+  37 failed
+    tests/commitments-live-portfolio.spec.ts:69:5 › Commitments exposes truthful live-data sections and no visual-fixture values 
+    tests/exact-live-account.spec.ts:35:7 › exact live interface account data › uses authenticated profile and persisted settings instead of placeholders 
+    tests/exact-live-account.spec.ts:104:7 › exact live interface account data › renders a neutral account state when no viewer is authenticated 
+    tests/exact-live-autocomplete.spec.ts:58:5 › the exact live trade clauses autocomplete causes, charities, and organizations 
+    tests/exact-live-autocomplete.spec.ts:137:5 › the exact live commitment field composes topic-specific semantic matches 
+    tests/exact-live-autocomplete.spec.ts:185:5 › the exact live offer palette uses three offer types and collects shared attributes 
+    tests/exact-live-command-center.spec.ts:7:7 › live Command Center › hands the command to the real private draft editor without a false success 
+    tests/exact-live-custom-route.spec.ts:14:7 › Exact live Custom Route workbench › separates planned donation flow from added-resource accounting 
+    tests/exact-live-custom-route.spec.ts:37:7 › Exact live Custom Route workbench › keeps top-ups, fees, setup time, and actions inside added resources 
+    tests/exact-live-custom-route.spec.ts:64:7 › Exact live Custom Route workbench › keeps weekly and monthly declarations and limits independent 
+    tests/exact-live-custom-route.spec.ts:81:7 › Exact live Custom Route workbench › itemizes the route before a fail-closed review confirmation 
+    tests/exact-live-custom-route.spec.ts:104:7 › Exact live Custom Route workbench › returns to Routes and stays free of horizontal overflow on mobile 
+    tests/exact-live-itinerary-editor.spec.ts:22:7 › exact live inline itinerary editor › edits in place, supports draft controls, and cancels without changing the plan 
+    tests/exact-live-itinerary-editor.spec.ts:44:7 › exact live inline itinerary editor › saves titles, amounts, dates, proof rules, and order across reloads 
+    tests/exact-live-itinerary-editor.spec.ts:92:7 › exact live inline itinerary editor › uses the compact in-card editor without horizontal overflow 
+    tests/exact-live-local-time.spec.ts:60:9 › exact live interface local time › America/Los_Angeles › uses the visitor's previous local day across Now, Trade, and Activity 
+    tests/exact-live-local-time.spec.ts:76:9 › exact live interface local time › Asia/Tokyo › uses the visitor's next local day across Now, Trade, and Activity 
+    tests/exact-live-plan-resources.spec.ts:12:7 › exact live Plan Resources controls › all five controls update the route and remain set after rerender 
+    tests/exact-live-plan-resources.spec.ts:58:7 › exact live Plan Resources controls › Reset restores every control and the allocation table 
+    tests/exact-live-route-recommendations.spec.ts:188:7 › live route recommendation planner › saves the progressive composer and refreshes the authoritative routePlanner in place 
+    tests/exact-live-route-recommendations.spec.ts:281:7 › live route recommendation planner › reviews and confirms the guided interview before posting it 
+    tests/exact-live-templates.spec.ts:4:7 › live Trade template system › opens from the Trade control and uses a template in one click 
+    tests/exact-live-templates.spec.ts:37:7 › live Trade template system › completes all three guided questions and hands pledge templates to the safe editor 
+    tests/exact-live-templates.spec.ts:66:7 › live Trade template system › keeps the library and guide usable without horizontal overflow on mobile 
+    tests/exact-live-verification.spec.ts:75:7 › complete verification › routes the existing calendar action into the verification workflow 
+    tests/feed-create-phase1-authenticated.spec.ts:564:7 › authenticated Feed-to-Create Phase 1 › two users receive distinct receipt-bound source drafts on desktop and 390px mobile 
+    tests/meta-explanatory-copy.spec.ts:39:5 › renders concise states on the affected routes ───────
+    tests/moral-trade-brand.spec.ts:37:7 › canonical Moral Trade brand › adapts the compact mark and sans wordmark to dark and light headers 
+    tests/returning-homepage-timezone.spec.ts:19:7 › Returning homepage in America/Los_Angeles › uses the visitor's previous local date and evening greeting 
+    tests/returning-homepage-timezone.spec.ts:34:7 › Returning homepage in Asia/Tokyo › uses the visitor's next local date and morning greeting 
+    tests/returning-homepage-timezone.spec.ts:49:7 › Returning homepage local-time refresh › refreshes after the local date and greeting period change 
+    tests/returning-homepage.spec.ts:21:7 › Returning-user homepage › matches the approved desktop trade-deck contract 
+    tests/returning-homepage.spec.ts:170:7 › Returning-user homepage › keeps the approved controls interactive 
+    tests/returning-homepage.spec.ts:211:7 › Returning-user homepage › stacks the trade deck without horizontal overflow on mobile 
+    tests/trade-controls.spec.ts:3:5 › trade controls previews integrity and a complete multi-party circle 
+    tests/your-match-viewport.spec.ts:9:7 › Your Match keeps its title, cards, and action visible at the reported 1662x934 viewport 
+    tests/your-match-viewport.spec.ts:9:7 › Your Match keeps its title, cards, and action visible at the compact 1366x768 viewport 
+  2 skipped
+  3 did not run
+  139 passed (9.5m)

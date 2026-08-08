@@ -1,0 +1,4 @@
+test-results/commitments-live-portfolio-ec30f-nd-no-visual-fixture-values/trace.zip -> selected-traces/trace-1-commitments-live-portfolio-ec30f-nd-no-visual-fixture-values-.zip
+test-results/exact-live-account-exact-l-6dc6d-ngs-instead-of-placeholders/trace.zip -> selected-traces/trace-2-exact-live-account-exact-l-6dc6d-ngs-instead-of-placeholders-.zip
+test-results/exact-live-account-exact-l-72ee7--no-viewer-is-authenticated/trace.zip -> selected-traces/trace-3-exact-live-account-exact-l-72ee7-no-viewer-is-authenticated-.zip
+selected_trace_count=3
