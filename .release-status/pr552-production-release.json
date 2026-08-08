@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "releaseRun": {
+    "id": 31264187678,
+    "status": "completed",
+    "conclusion": "failure",
+    "htmlUrl": "https://github.com/ghuser29384/Website2/actions/runs/31264187678",
+    "createdAt": "2026-08-08T15:19:56Z",
+    "updatedAt": "2026-08-08T15:20:09Z"
+  },
+  "pullRequest": {
+    "number": 552,
+    "state": "closed",
+    "merged": true,
+    "mergeCommitSha": "71e532dfbbb9e364ce5119bec84826a96e2fb338",
+    "headSha": "3f1b893986055a32b9a88d9f3cd81fd8d4dfbfd0",
+    "baseSha": "ba4b50386edc038d5297740d99a224a16ed69d71"
+  },
+  "mainSha": "00c322079a34e2d0cd26c0609409321bbb39d214",
+  "failedSteps": [
+    {
+      "name": "Merge only the exact verified pull-request head",
+      "number": 3
+    }
+  ]
+}
