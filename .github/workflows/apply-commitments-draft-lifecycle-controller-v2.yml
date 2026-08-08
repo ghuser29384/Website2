@@ -1,0 +1,116 @@
+name: Apply Commitments draft-lifecycle correction v2
+
+on:
+  push:
+    branches: [ops/commitments-draft-lifecycle-controller-20260808]
+    paths:
+      - ".github/workflows/apply-commitments-draft-lifecycle-controller-v2.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: commitments-draft-lifecycle-controller-v2-20260808
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPECTED_FEATURE_HEAD: a86464941e459e39b786da2d3d6ee14dfdc9285f
+      TARGET_BRANCH: feature/commitments-phase1-impact-accounting-20260806
+      PATCH_SHA256: 9ade3be68024219be25f9ff04a0fb6571448232740361d8c48dc4a27a8f9254d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Preserve and verify audited patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/commitments-draft-lifecycle-controller-20260808'
+          test -s ops/commitments-draft-lifecycle.patch
+          cp ops/commitments-draft-lifecycle.patch /tmp/commitments-draft-lifecycle.patch
+          printf '%s  %s\n' "$PATCH_SHA256" /tmp/commitments-draft-lifecycle.patch | sha256sum -c -
+
+      - name: Verify and check out exact feature head
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$EXPECTED_FEATURE_HEAD"
+          git cat-file -e "${EXPECTED_FEATURE_HEAD}^{commit}"
+          git checkout --detach "$EXPECTED_FEATURE_HEAD"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_FEATURE_HEAD"
+
+      - name: Apply audited lifecycle correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git apply --check /tmp/commitments-draft-lifecycle.patch
+          git apply /tmp/commitments-draft-lifecycle.patch
+          git diff --check
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate corrected candidate lifecycle and generated SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/validate-commitments-impact-methodologies.mjs
+          node scripts/render-commitments-impact-methodologies-qa-sql.mjs > /tmp/candidates-rollback.sql
+          grep -Fq "'draft'" /tmp/candidates-rollback.sql
+          grep -Fq 'rollback;' /tmp/candidates-rollback.sql
+          ! grep -Fq "'under_review'" /tmp/candidates-rollback.sql
+          COMMITMENTS_IMPACT_QA_STAGE_CONFIRM=hvmxfjjbdcgjjudmthdz \
+            node scripts/render-commitments-impact-methodologies-qa-sql.mjs --commit \
+            > /tmp/candidates-commit.sql
+          grep -Fq 'commit;' /tmp/candidates-commit.sql
+          ! grep -Fq "'under_review'" /tmp/candidates-commit.sql
+
+      - name: Verify exact correction surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only "$EXPECTED_FEATURE_HEAD" | sort > /tmp/actual-files.txt
+          cat > /tmp/expected-files.txt <<'FILES'
+          .github/workflows/commitments-impact-accounting-gates.yml
+          docs/commitments/impact-methodologies-v1-review.md
+          docs/commitments/impact-methodologies-v1/co_fund.json
+          docs/commitments/impact-methodologies-v1/donation_redirect.json
+          docs/commitments/impact-methodologies-v1/donation_upgrade.json
+          docs/commitments/impact-methodologies-v1/manifest.json
+          docs/commitments/impact-methodologies-v1/threshold_funding.json
+          docs/commitments/impact-methodologies-v1/threshold_sign_on.json
+          docs/commitments/impact-methodologies-v1/trade.json
+          scripts/render-commitments-impact-methodologies-qa-sql.mjs
+          scripts/validate-commitments-impact-methodologies.mjs
+          FILES
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+      - name: Commit and push exact feature correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .github/workflows/commitments-impact-accounting-gates.yml \
+            docs/commitments/impact-methodologies-v1-review.md \
+            docs/commitments/impact-methodologies-v1/*.json \
+            scripts/render-commitments-impact-methodologies-qa-sql.mjs \
+            scripts/validate-commitments-impact-methodologies.mjs
+          git commit -m 'Keep blocked impact methodologies in draft lifecycle'
+          new_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_FEATURE_HEAD"
+          remote_head="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          test "$remote_head" = "$EXPECTED_FEATURE_HEAD"
+          git push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          echo "Pushed corrected feature head: $new_sha" >> "$GITHUB_STEP_SUMMARY"
