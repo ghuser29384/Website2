@@ -1,0 +1,92 @@
+name: PR 552 head-only failure stability recheck
+
+on:
+  push:
+    branches:
+      - ops/pr552-head-only-stability-recheck-20260808
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr552-head-only-failure-stability-recheck
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+
+jobs:
+  stability:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Guard immutable target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_SHA"
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Repeat the three differential-only failures serially
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e -- \
+            tests/exact-live-now-recommendations.spec.ts \
+            tests/input-assist-hydration.spec.ts \
+            tests/trade-controls.spec.ts \
+            --grep 'rolls back Save, difficulty, and Show less|lazy input assist enhances topbar and route controls|trade controls previews integrity and a complete multi-party circle' \
+            --repeat-each=5 \
+            --workers=1 \
+            --reporter=line \
+            2>&1 | tee head-only-stability.log
+
+      - name: Re-run the release-specific rendered contracts
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e -- \
+            tests/dashboard-account-security-visibility.spec.ts \
+            tests/public-routes.spec.ts \
+            --grep 'Account security|/offers transfers to the dedicated Discover shell' \
+            --workers=1 \
+            --reporter=line \
+            2>&1 | tee release-specific-rendered.log
+
+      - name: Upload stability evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-head-only-stability-${{ github.run_id }}
+          path: |
+            head-only-stability.log
+            release-specific-rendered.log
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 14
