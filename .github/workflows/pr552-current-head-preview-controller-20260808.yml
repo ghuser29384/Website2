@@ -1,0 +1,102 @@
+name: PR 552 current-head Preview controller
+
+on:
+  push:
+    branches:
+      - ops/pr552-current-head-preview-controller-20260808
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr552-current-head-preview-controller-20260808
+  cancel-in-progress: false
+
+jobs:
+  update-release-controller:
+    name: Pin and launch exact current-head Preview
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_BRANCH: ops/release-pr552-preview-after-differential-20260807
+      EXPECTED_TARGET_SHA: 968e03ea51d05e14a599fb23a22b604192cc22e9
+      OLD_CANDIDATE_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+      NEW_CANDIDATE_SHA: 795874493862c926f9eb2a4d2239a28a99e41968
+      RELEASE_WORKFLOW: .github/workflows/release-pr552-exact-preview-20260807.yml
+    steps:
+      - name: Check out exact release-controller branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Guard exact controller and candidate heads
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_SHA"
+          remote_candidate="$(git ls-remote origin refs/heads/hotfix/dashboard-account-security-visible-20260807 | awk '{print $1}')"
+          test "$remote_candidate" = "$NEW_CANDIDATE_SHA"
+
+      - name: Pin the release workflow to the repaired candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["RELEASE_WORKFLOW"])
+          source = path.read_text(encoding="utf-8")
+          old = os.environ["OLD_CANDIDATE_SHA"]
+          new = os.environ["NEW_CANDIDATE_SHA"]
+
+          count = source.count(old)
+          if count != 2:
+              raise SystemExit(f"expected exactly two old candidate pins, found {count}")
+          source = source.replace(old, new)
+
+          old_files = (
+              "          src/app/dashboard/dashboard-account-security.css\n"
+              "          src/app/dashboard/layout.tsx\n"
+              "          src/dashboard-account-security-visibility.test.ts\n"
+          )
+          new_files = (
+              "          src/app/dashboard/dashboard-account-security.css\n"
+              "          src/app/dashboard/layout.tsx\n"
+              "          src/app/dashboard/page.tsx\n"
+              "          src/dashboard-account-security-visibility.test.ts\n"
+          )
+          if source.count(old_files) != 1:
+              raise SystemExit("expected exactly one five-file release manifest")
+          source = source.replace(old_files, new_files, 1)
+
+          if source.count(new) != 2:
+              raise SystemExit("new candidate pin cardinality mismatch")
+          if source.count("src/app/dashboard/page.tsx") != 1:
+              raise SystemExit("dashboard page must occur exactly once in release manifest")
+          path.write_text(source, encoding="utf-8")
+          PY
+
+      - name: Verify exact release-controller diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test "$(git diff --name-only)" = "$RELEASE_WORKFLOW"
+          grep -F "CANDIDATE_SHA: $NEW_CANDIDATE_SHA" "$RELEASE_WORKFLOW"
+          grep -F "sha: $NEW_CANDIDATE_SHA" "$RELEASE_WORKFLOW"
+          grep -F 'src/app/dashboard/page.tsx' "$RELEASE_WORKFLOW"
+
+      - name: Commit and push the pinned release workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$RELEASE_WORKFLOW"
+          git commit -m "Release repaired PR 552 current head to exact Preview"
+          git push origin "HEAD:$TARGET_BRANCH"
