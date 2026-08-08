@@ -1,4 +1,4 @@
-name: Temporary repair PR 558 public-terms QA fixture
+name: Temporary repair PR 558 browser fixture
 
 on:
   push:
@@ -11,9 +11,9 @@ permissions:
 jobs:
   repair:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 30
     env:
-      EXPECTED_HEAD_SHA: d10b836900e862d46640b3c826f219a9f1fe87e0
+      EXPECTED_HEAD_SHA: 634af275da8f161ea73d9e0fa306695e82b0790e
       TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
       EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
@@ -27,7 +27,7 @@ jobs:
           ref: ${{ env.TARGET_BRANCH }}
           fetch-depth: 0
 
-      - name: Verify exact head and repair only the observed constraint mismatch
+      - name: Verify exact head and repair only the observed browser-fixture constraint mismatch
         shell: bash
         run: |
           set -euo pipefail
@@ -35,45 +35,47 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("supabase/tests/mpgf_dac_public_terms_api.sql")
+          path = Path("supabase/tests/mpgf_dac_product_browser_fixture.sql")
           source = path.read_text()
 
-          old_policy = '    "eligibilityPolicy":{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"},\n'
+          old_policy = '      "eligibilityPolicy":{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"},\n'
           new_policy = (
-              '    "eligibilityPolicy":{\n'
-              '      "policyVersion":"mpgf_failure_bonus_eligibility_v0_1",\n'
-              '      "contributorIdentityRule":"verified_unique_person",\n'
-              '      "contributionTimingRule":"captured_before_deadline",\n'
-              '      "relatedPartyRule":"exclude_creator_and_related_parties",\n'
-              '      "paymentIntegrityRule":"exclude_duplicate_reversed_disputed_or_fraudulent",\n'
-              '      "bonusBasis":"eligible_contribution",\n'
-              '      "maxParticipants":100,\n'
-              '      "maxBonusPerParticipantCents":2500\n'
-              '    },\n'
+              '      "eligibilityPolicy":{\n'
+              '        "policyVersion":"mpgf_failure_bonus_eligibility_v0_1",\n'
+              '        "contributorIdentityRule":"verified_unique_person",\n'
+              '        "contributionTimingRule":"captured_before_deadline",\n'
+              '        "relatedPartyRule":"exclude_creator_and_related_parties",\n'
+              '        "paymentIntegrityRule":"exclude_duplicate_reversed_disputed_or_fraudulent",\n'
+              '        "bonusBasis":"eligible_contribution",\n'
+              '        "maxParticipants":100,\n'
+              '        "maxBonusPerParticipantCents":2500\n'
+              '      },\n'
           )
           if source.count(old_policy) != 1:
-              raise SystemExit("Expected exactly one incomplete schedule eligibility policy.")
+              raise SystemExit("Expected exactly one incomplete browser-fixture schedule eligibility policy.")
           source = source.replace(old_policy, new_policy)
 
-          old_rationale = '      "rationale":"Synthetic provisional quote",\n'
+          old_rationale = '        "rationale":"Synthetic provisional quote for isolated QA",\n'
           new_rationale = (
-              '      "rationale":"Provisional threshold 1 experience-rated quote; '
+              '        "rationale":"Provisional threshold 1 experience-rated quote; '
               'operator approval remains required.",\n'
           )
           if source.count(old_rationale) != 1:
-              raise SystemExit("Expected exactly one non-canonical provisional rationale.")
+              raise SystemExit("Expected exactly one non-canonical browser-fixture provisional rationale.")
           source = source.replace(old_rationale, new_rationale)
 
           if source.count('"contributorIdentityRule":"verified_unique_person"') != 2:
-              raise SystemExit("The proposal and schedule must contain the same full eligibility policy.")
+              raise SystemExit("The browser fixture proposal and schedule must carry the same full eligibility policy.")
           if source.count("Provisional threshold 1 experience-rated quote; operator approval remains required.") != 1:
-              raise SystemExit("The canonical pending-review rationale was not installed exactly once.")
+              raise SystemExit("The browser fixture canonical pending-review rationale was not installed exactly once.")
+          if '"eligibilityPolicy":{"policyVersion":"mpgf_failure_bonus_eligibility_v0_1"}' in source:
+              raise SystemExit("An incomplete browser-fixture schedule eligibility policy remains.")
 
           path.write_text(source)
           PY
 
           git diff --check
-          git diff -- supabase/tests/mpgf_dac_public_terms_api.sql
+          git diff -- supabase/tests/mpgf_dac_product_browser_fixture.sql
 
       - name: Install PostgreSQL client
         run: |
@@ -104,14 +106,93 @@ jobs:
               raise SystemExit("Refusing a database URL outside the exact TLS-only Moral Trade QA target.")
           PY
 
-      - name: Prove the repaired rollback-only public-terms regression
+      - name: Remove interrupted synthetic lifecycle before proof
         shell: bash
         run: |
           set -euo pipefail
           psql "$QA_SUPABASE_DB_URL" \
             --no-psqlrc \
             --set ON_ERROR_STOP=1 \
-            --file supabase/tests/mpgf_dac_public_terms_api.sql
+            --file supabase/tests/mpgf_dac_product_browser_cleanup.sql
+
+      - name: Prove the repaired deterministic browser fixture end to end
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export MPGF_DAC_PRODUCT_QA_PASSWORD="$qa_password"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_fixture.sql
+
+      - name: Verify all three lifecycle fixtures and the no-payment boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align <<'SQL' | tee /tmp/mpgf-dac-browser-fixture-proof.txt
+          select 'proposal_count=' || count(*)
+          from public.mpgf_pool_proposals
+          where id in (
+            'ce555555-5555-4555-8555-555555555555',
+            'cf666666-6666-4666-8666-666666666666',
+            'c0777777-7777-4777-8777-777777777777'
+          );
+          select 'campaign_count=' || count(*)
+          from public.mpgf_public_goods_campaigns
+          where id in (
+            'campaign-ce555555555545558555555555555555',
+            'campaign-cf666666666646668666666666666666',
+            'campaign-c077777777774777877777777777777'
+          );
+          select 'outcome_count=' || count(*)
+          from public.mpgf_dac_campaign_outcomes
+          where campaign_id in (
+            'campaign-ce555555555545558555555555555555',
+            'campaign-cf666666666646668666666666666666',
+            'campaign-c077777777774777877777777777777'
+          );
+          select 'payment_refs=' || count(*)
+          from public.mpgf_public_goods_pledges
+          where campaign_id in (
+            'campaign-ce555555555545558555555555555555',
+            'campaign-cf666666666646668666666666666666',
+            'campaign-c077777777774777877777777777777'
+          )
+            and (payment_intent_ref is not null or status = 'captured');
+          SQL
+          grep -Fxq 'proposal_count=3' /tmp/mpgf-dac-browser-fixture-proof.txt
+          grep -Fxq 'campaign_count=3' /tmp/mpgf-dac-browser-fixture-proof.txt
+          grep -Fxq 'outcome_count=2' /tmp/mpgf-dac-browser-fixture-proof.txt
+          grep -Fxq 'payment_refs=0' /tmp/mpgf-dac-browser-fixture-proof.txt
+
+      - name: Remove synthetic lifecycle and invalidate credentials
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_cleanup.sql
+
+      - name: Prove zero fixture residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          residue="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --tuples-only \
+            --no-align \
+            --command "select count(*) from auth.users where id in ('ca111111-1111-4111-8111-111111111111','cb222222-2222-4222-8222-222222222222','cc333333-3333-4333-8333-333333333333','cd444444-4444-4444-8444-444444444444');")"
+          test "$residue" = "0"
 
       - name: Commit the narrowly scoped fixture repair and update the PR branch
         shell: bash
@@ -121,6 +202,6 @@ jobs:
           git diff --check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add supabase/tests/mpgf_dac_public_terms_api.sql
-          git commit -m "test(mpgf): align public terms fixture with frozen schedule constraints"
+          git add supabase/tests/mpgf_dac_product_browser_fixture.sql
+          git commit -m "test(mpgf): align browser fixture with frozen schedule constraints"
           git push origin "HEAD:${TARGET_BRANCH}"
