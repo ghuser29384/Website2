@@ -297,7 +297,7 @@ test("complete creator, reviewer, public pledge, success, lapse, privacy, and mo
   await page.waitForLoadState("networkidle");
   await expect(page.getByText("Your private receipts", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: /^\$25(?:\.00)? · pledged$/ })).toBeVisible();
-  await expect(page.getByText(/^Consent: [0-9a-f]{64}$/)).toBeVisible();
+  await expect(page.getByText(/^Consent: sha256:[0-9a-f]{64}$/)).toBeVisible();
   await expect(page.getByText("No payment created", { exact: true })).toBeVisible();
   await screenshot(page, "02-open-pledger-private-receipt-desktop");
   await closeContext(context);
