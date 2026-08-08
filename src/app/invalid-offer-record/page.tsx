@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-
-import NotFound from "@/app/not-found";
+import { notFound } from "next/navigation";
 
 export const metadata: Metadata = {
   title: "Offer not found",
@@ -11,5 +10,5 @@ export const metadata: Metadata = {
 };
 
 export default function InvalidOfferRecordPage() {
-  return <NotFound />;
+  notFound();
 }
