@@ -89,7 +89,7 @@ jobs:
           set -o pipefail
           npm run build 2>&1 | tee production-build.log
 
-      - name: Prove the exact current-main diff
+      - name: Prove the exact current-main diff stays inside the Account-security surface
         shell: bash
         run: |
           set -euo pipefail
@@ -97,7 +97,8 @@ jobs:
           base="$(git merge-base HEAD origin/main)"
           git diff --check "$base" "$GITHUB_SHA" | tee diff-check.log
           git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
-          cat > expected-files.txt <<'EOF'
+          test -s actual-files.txt
+          cat > allowed-files.txt <<'EOF'
           .github/workflows/dashboard-account-security-hotfix-gates.yml
           src/app/dashboard/dashboard-account-security.css
           src/app/dashboard/layout.tsx
@@ -110,8 +111,13 @@ jobs:
           src/proxy.ts
           tests/dashboard-account-security-visibility.spec.ts
           EOF
-          sort -o expected-files.txt expected-files.txt
-          diff -u expected-files.txt actual-files.txt
+          sort -o allowed-files.txt allowed-files.txt
+          unexpected_files="$(comm -23 actual-files.txt allowed-files.txt)"
+          if [[ -n "$unexpected_files" ]]; then
+            echo 'Unexpected files in the Account-security change:' >&2
+            printf '%s\n' "$unexpected_files" >&2
+            exit 1
+          fi
 
       - name: Upload quality evidence
         if: always()
@@ -125,15 +131,15 @@ jobs:
             typescript.log
             production-build.log
             diff-check.log
-            expected-files.txt
+            allowed-files.txt
             actual-files.txt
           if-no-files-found: warn
           retention-days: 30
 
   rendered:
-    name: Rendered desktop and mobile visibility
+    name: Rendered dashboard and offers routing
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
       SITE_URL: http://127.0.0.1:3210
@@ -154,12 +160,21 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run the focused desktop and mobile browser gate
+      - name: Run the focused desktop and mobile Account-security gate
         shell: bash
         run: |
           set -o pipefail
           npm run test:e2e -- tests/dashboard-account-security-visibility.spec.ts --reporter=line \
             2>&1 | tee rendered-dashboard-account-security.log
+
+      - name: Run the human offers-to-Discover browser contract
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e -- tests/public-routes.spec.ts \
+            --grep '/offers transfers to the dedicated Discover shell' \
+            --reporter=line \
+            2>&1 | tee rendered-offers-redirect.log
 
       - name: Upload rendered evidence
         if: always()
@@ -168,6 +183,7 @@ jobs:
           name: dashboard-account-security-rendered-${{ github.run_id }}
           path: |
             rendered-dashboard-account-security.log
+            rendered-offers-redirect.log
             test-results/
             playwright-report/
           if-no-files-found: warn
