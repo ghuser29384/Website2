@@ -427,7 +427,7 @@ jobs:
             array[
               'campaign-ce555555555545558555555555555555',
               'campaign-cf666666666646668666666666666666',
-              'campaign-c077777777774777877777777777777'
+              'campaign-c0777777777747778777777777777777'
             ] as campaigns
           )
           select 'fixture_residue=' || (
@@ -462,7 +462,7 @@ jobs:
             select array[
               'campaign-ce555555555545558555555555555555',
               'campaign-cf666666666646668666666666666666',
-              'campaign-c077777777774777877777777777777'
+              'campaign-c0777777777747778777777777777777'
             ] as campaigns
           )
           select 'payment_refs=' || count(*)
