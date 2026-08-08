@@ -48,13 +48,21 @@ jobs:
 
           workflow_path = Path(".github/workflows/mpgf-dac-product-lifecycle-gates.yml")
           workflow = workflow_path.read_text()
+          expression_open = "$" + "{{ "
+          expression_close = " }}"
           old_group = (
-              "  group: mpgf-dac-product-lifecycle-${{ "
-              "github.event.pull_request.number || github.ref }}\n"
+              "  group: mpgf-dac-product-lifecycle-"
+              + expression_open
+              + "github.event.pull_request.number || github.ref"
+              + expression_close
+              + "\n"
           )
           new_group = (
-              "  group: mpgf-dac-product-lifecycle-${{ "
-              "github.event.pull_request.head.ref || github.ref_name }}\n"
+              "  group: mpgf-dac-product-lifecycle-"
+              + expression_open
+              + "github.event.pull_request.head.ref || github.ref_name"
+              + expression_close
+              + "\n"
           )
           if workflow.count(old_group) != 1:
               raise SystemExit(
