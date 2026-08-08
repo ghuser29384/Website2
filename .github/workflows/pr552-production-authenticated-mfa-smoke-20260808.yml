@@ -1,0 +1,402 @@
+name: Verify PR 552 production MFA lifecycle and finalize release record
+
+on:
+  push:
+    branches:
+      - ops/pr552-merge-production-release-20260808
+    paths:
+      - .github/workflows/pr552-production-authenticated-mfa-smoke-20260808.yml
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: pr552-production-authenticated-mfa-smoke-20260808
+  cancel-in-progress: false
+
+env:
+  REPOSITORY: ghuser29384/Website2
+  PR_NUMBER: "552"
+  EXPECTED_CANDIDATE_SHA: 1772ad71ac9036138bd7dc69beff05e65add57d6
+  EXPECTED_BASE_SHA: 1fd98472897330bc5256fe17e223cb0ac34deac4
+  RELEASE_WORKFLOW: vercel-release.yml
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  EXPECTED_SUPABASE_REF: jnpoxvalyjtdghnperyu
+  NEXT_PUBLIC_SUPABASE_URL: https://jnpoxvalyjtdghnperyu.supabase.co
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Pcmy5vefKiaEhuYTOSU75Q_NklsZOrT
+  HARNESS_COMMIT: 928a81e30c6eae8f35e56513ac6f0f1a428fd825
+  HARNESS_BLOB: 394366c478fc01d93d6c7f245aba496986f56762
+  V12_CONTROLLER_COMMIT: 108b0ba4575c3248969490d3bf06028b5732d11c
+  PATCHER_PATH: .qa-runtime/pr552-patch-production-harness.py
+  RUNNER_PATH: .qa-runtime/pr552-run-production-mfa.sh
+  HARNESS_PATH: .qa-runtime/pr552-production-mfa.mjs
+  PRIVATE_STATE_PATH: .qa-private/pr552-production-mfa.json
+  OUTPUT_DIR: pr552-production-authenticated-mfa-smoke
+  EVIDENCE_DIR: pr552-production-authenticated-mfa-smoke/release
+
+jobs:
+  production-authenticated-smoke:
+    name: Exercise exact production MFA with guaranteed cleanup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      PROD_SUPABASE_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve exact merge, successful release, and READY production deployment
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$REPOSITORY"
+          test -n "$VERCEL_TOKEN"
+          test -n "$PROD_SUPABASE_DB_URL"
+          echo "::add-mask::$PROD_SUPABASE_DB_URL"
+          mkdir -p "$OUTPUT_DIR" "$EVIDENCE_DIR"
+
+          api_get() {
+            curl -fsSL \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/${REPOSITORY}$1"
+          }
+
+          for attempt in {1..120}; do
+            pr_json="$(api_get "/pulls/${PR_NUMBER}")"
+            [[ "$(jq -r '.merged' <<<"$pr_json")" = 'true' ]] && break
+            sleep 5
+          done
+          printf '%s\n' "$pr_json" > "$EVIDENCE_DIR/pr.json"
+          test "$(jq -r '.merged' <<<"$pr_json")" = 'true'
+          test "$(jq -r '.head.sha' <<<"$pr_json")" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(jq -r '.base.sha' <<<"$pr_json")" = "$EXPECTED_BASE_SHA"
+          merge_sha="$(jq -r '.merge_commit_sha' <<<"$pr_json")"
+          test -n "$merge_sha"
+          test "$merge_sha" != 'null'
+
+          for attempt in {1..30}; do
+            main_sha="$(api_get '/git/ref/heads/main' | jq -r '.object.sha')"
+            [[ "$main_sha" = "$merge_sha" ]] && break
+            sleep 2
+          done
+          test "$main_sha" = "$merge_sha"
+
+          git fetch --no-tags origin "$EXPECTED_BASE_SHA" "$EXPECTED_CANDIDATE_SHA" "$merge_sha" main
+          test "$(git rev-parse "${EXPECTED_CANDIDATE_SHA}^{tree}")" = "$(git rev-parse "${merge_sha}^{tree}")"
+          read -r -a parents <<<"$(git show -s --format=%P "$merge_sha")"
+          test "${#parents[@]}" -eq 2
+          test "${parents[0]}" = "$EXPECTED_BASE_SHA"
+          test "${parents[1]}" = "$EXPECTED_CANDIDATE_SHA"
+          git diff --exit-code "$EXPECTED_CANDIDATE_SHA" "$merge_sha"
+
+          release_run_id=''
+          for attempt in {1..240}; do
+            runs="$(api_get "/actions/workflows/${RELEASE_WORKFLOW}/runs?event=workflow_dispatch&branch=main&per_page=100")"
+            release_run_id="$(jq -r --arg sha "$merge_sha" '
+              [.workflow_runs[] | select(.head_sha == $sha)]
+              | sort_by(.created_at)
+              | last
+              | .id // empty
+            ' <<<"$runs")"
+            if [[ -n "$release_run_id" ]]; then
+              run_json="$(api_get "/actions/runs/${release_run_id}")"
+              status="$(jq -r '.status' <<<"$run_json")"
+              conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
+              [[ "$status" = 'completed' ]] && break
+            fi
+            sleep 15
+          done
+          test -n "$release_run_id"
+          test "$status" = 'completed'
+          test "$conclusion" = 'success'
+          printf '%s\n' "$run_json" > "$EVIDENCE_DIR/release-run.json"
+
+          deployment_id=''
+          for attempt in {1..120}; do
+            curl -fsSL \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&limit=100" \
+              > "$EVIDENCE_DIR/deployments.json"
+            deployment_id="$(jq -r --arg sha "$merge_sha" '
+              [.deployments[]
+               | select((.meta.githubCommitSha // "") == $sha)
+               | select((.target // "") == "production")]
+              | sort_by(.created)
+              | last
+              | (.uid // .id) // empty
+            ' "$EVIDENCE_DIR/deployments.json")"
+            [[ -n "$deployment_id" ]] && break
+            sleep 10
+          done
+          test -n "$deployment_id"
+
+          for attempt in {1..120}; do
+            curl -fsSL \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_ORG_ID}" \
+              > "$EVIDENCE_DIR/exact-production-deployment.json"
+            deployment_state="$(jq -r '.readyState // .state // ""' "$EVIDENCE_DIR/exact-production-deployment.json")"
+            [[ "$deployment_state" = 'READY' ]] && break
+            [[ "$deployment_state" = 'ERROR' || "$deployment_state" = 'CANCELED' ]] && exit 1
+            sleep 10
+          done
+          test "$deployment_state" = 'READY'
+          jq -e \
+            --arg deploymentId "$deployment_id" \
+            --arg projectId "$VERCEL_PROJECT_ID" \
+            --arg sha "$merge_sha" '
+              ((.uid // .id) == $deploymentId)
+              and ((.projectId // .project.id // "") == $projectId)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "") == "production")
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $sha)
+              and ((.aliasError // null) == null)
+            ' "$EVIDENCE_DIR/exact-production-deployment.json" >/dev/null
+
+          aliases="$(jq -c '.alias // []' "$EVIDENCE_DIR/exact-production-deployment.json")"
+          jq -e 'index("moraltrade.org") != null' <<<"$aliases" >/dev/null
+          jq -e 'index("www.moraltrade.org") != null' <<<"$aliases" >/dev/null
+
+          deployment_origin="https://$(jq -r '.url' "$EVIDENCE_DIR/exact-production-deployment.json")"
+          release_reason="$(jq -r '.meta.releaseReason // ""' "$EVIDENCE_DIR/exact-production-deployment.json")"
+          test -n "$release_reason"
+
+          echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+          echo "release_run_id=$release_run_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_origin=$deployment_origin" >> "$GITHUB_OUTPUT"
+          echo "release_reason=$release_reason" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js and browser/database clients
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and browser runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq postgresql-client
+
+      - name: Materialize and production-adapt the immutable harness controls
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.resolve.outputs.merge_sha }}
+          DEPLOYMENT_ID: ${{ steps.resolve.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p .qa-runtime .qa-private
+          git show "${V12_CONTROLLER_COMMIT}:.github/scripts/pr552-patch-authenticated-preview-harness-v12.py" > "$PATCHER_PATH"
+          git show "${V12_CONTROLLER_COMMIT}:.github/scripts/pr552-run-authenticated-preview-mfa-v12.sh" > "$RUNNER_PATH"
+          git show "${HARNESS_COMMIT}:.github/scripts/pr552-authenticated-preview-mfa-db.mjs" > "$HARNESS_PATH"
+          test "$(git hash-object "$HARNESS_PATH")" = "$HARNESS_BLOB"
+
+          python3 "$PATCHER_PATH" "$HARNESS_PATH"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          runner_path = Path('.qa-runtime/pr552-run-production-mfa.sh')
+          source = runner_path.read_text(encoding='utf-8')
+          replacements = {
+              'and ((.target // null) == null)': 'and ((.target // "") == "production")',
+              'and (.meta.moralTradeCandidateSha == $sha)': 'and ((.meta.moralTradeCandidateSha // .meta.githubCommitSha) == $sha)',
+              'PR552 exact Preview MFA QA v12 run': 'PR552 exact production MFA QA run',
+              'Authenticated Preview lifecycle failed.': 'Authenticated production lifecycle failed.',
+          }
+          for old, new in replacements.items():
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'Runner production adaptation cardinality mismatch for {old!r}: {count}')
+              source = source.replace(old, new, 1)
+          runner_path.write_text(source, encoding='utf-8')
+          PY
+
+          python3 -m py_compile "$PATCHER_PATH"
+          bash -n "$RUNNER_PATH"
+          node --check "$HARNESS_PATH"
+          sha256sum "$HARNESS_PATH" "$PATCHER_PATH" "$RUNNER_PATH" > "$EVIDENCE_DIR/runtime-controls.sha256"
+
+      - name: Exercise production desktop and mobile MFA with guaranteed cleanup
+        shell: bash
+        env:
+          CANDIDATE_SHA: ${{ steps.resolve.outputs.merge_sha }}
+          DEPLOYMENT_ID: ${{ steps.resolve.outputs.deployment_id }}
+          PREVIEW_ORIGIN: ${{ steps.resolve.outputs.deployment_origin }}
+          EXPECTED_RELEASE_REASON: ${{ steps.resolve.outputs.release_reason }}
+        run: bash "$RUNNER_PATH"
+
+      - name: Verify canonical alias routing after authenticated lifecycle
+        shell: bash
+        env:
+          DEPLOYMENT_ORIGIN: ${{ steps.resolve.outputs.deployment_origin }}
+        run: |
+          set -euo pipefail
+          : > "$EVIDENCE_DIR/canonical-alias-smoke.tsv"
+          smoke() {
+            local label="$1"
+            local url="$2"
+            local code final_url
+            code="$(curl -sS -L --max-time 60 --connect-timeout 20 -o "$EVIDENCE_DIR/${label}.body" -w '%{http_code}' "$url")"
+            final_url="$(curl -sS -L --max-time 60 --connect-timeout 20 -o /dev/null -w '%{url_effective}' "$url")"
+            printf '%s\t%s\t%s\t%s\n' "$label" "$code" "$url" "$final_url" | tee -a "$EVIDENCE_DIR/canonical-alias-smoke.tsv"
+            test "$code" -ge 200
+            test "$code" -lt 400
+          }
+          smoke immutable-status "$DEPLOYMENT_ORIGIN/status"
+          smoke apex-status 'https://moraltrade.org/status'
+          smoke www-status 'https://www.moraltrade.org/status'
+          smoke apex-dashboard 'https://moraltrade.org/dashboard#account-security'
+          smoke www-dashboard 'https://www.moraltrade.org/dashboard#account-security'
+
+      - name: Sanitize and publish final production evidence
+        shell: bash
+        env:
+          MERGE_SHA: ${{ steps.resolve.outputs.merge_sha }}
+          RELEASE_RUN_ID: ${{ steps.resolve.outputs.release_run_id }}
+          DEPLOYMENT_ID: ${{ steps.resolve.outputs.deployment_id }}
+          DEPLOYMENT_ORIGIN: ${{ steps.resolve.outputs.deployment_origin }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          root = Path('pr552-production-authenticated-mfa-smoke')
+          sensitive = ('password', 'secret', 'token', 'email', 'totp')
+
+          def redact(value):
+              if isinstance(value, dict):
+                  return {
+                      key: ('[redacted]' if any(term in key.lower() for term in sensitive) else redact(item))
+                      for key, item in value.items()
+                  }
+              if isinstance(value, list):
+                  return [redact(item) for item in value]
+              return value
+
+          for path in root.rglob('*.json'):
+              try:
+                  data = json.loads(path.read_text(encoding='utf-8'))
+              except Exception:
+                  continue
+              path.write_text(json.dumps(redact(data), indent=2) + '\n', encoding='utf-8')
+          PY
+
+          test ! -e "$PRIVATE_STATE_PATH"
+          test ! -e "$HARNESS_PATH"
+
+          jq -n \
+            --arg candidateSha "$EXPECTED_CANDIDATE_SHA" \
+            --arg baseSha "$EXPECTED_BASE_SHA" \
+            --arg mergeSha "$MERGE_SHA" \
+            --arg releaseRunId "$RELEASE_RUN_ID" \
+            --arg deploymentId "$DEPLOYMENT_ID" \
+            --arg deploymentOrigin "$DEPLOYMENT_ORIGIN" \
+            '{schemaVersion:1,candidateSha:$candidateSha,baseSha:$baseSha,mergeSha:$mergeSha,treePreserved:true,releaseRunId:$releaseRunId,deploymentId:$deploymentId,deploymentOrigin:$deploymentOrigin,target:"production",aliases:["moraltrade.org","www.moraltrade.org"],desktopAal2:true,mobileAal2:true,exactSingleFactorCreatedAndDeleted:true,temporaryUserAbsent:true,independentCleanupConfirmed:true,oneUseVercelBypassRevoked:true,browserDiagnosticsClean:true,canonicalAliasSmokePassed:true}' \
+            > "$EVIDENCE_DIR/final-production-summary.json"
+
+          {
+            echo '### PR #552 production release and authenticated smoke: PASS'
+            echo
+            echo "- Candidate: \`$EXPECTED_CANDIDATE_SHA\`"
+            echo "- Merge commit: \`$MERGE_SHA\`"
+            echo "- Production workflow: \`$RELEASE_RUN_ID\`"
+            echo "- Production deployment: \`$DEPLOYMENT_ID\`"
+            echo '- Desktop and mobile reached AAL2 against the exact production deployment.'
+            echo '- Exactly one run-created authenticator factor was removed, and temporary-user absence was independently reconfirmed.'
+            echo '- The one-use Vercel bypass was revoked and its prior count restored.'
+            echo '- Both canonical aliases and dashboard entry routes passed post-release smoke checks.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Update PR release record and add final evidence comment
+        shell: bash
+        env:
+          MERGE_SHA: ${{ steps.resolve.outputs.merge_sha }}
+          RELEASE_RUN_ID: ${{ steps.resolve.outputs.release_run_id }}
+          DEPLOYMENT_ID: ${{ steps.resolve.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          pr_json="$(curl -fsSL \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/pulls/${PR_NUMBER}")"
+          current_body="$(jq -r '.body // ""' <<<"$pr_json")"
+
+          python3 - "$MERGE_SHA" "$RELEASE_RUN_ID" "$DEPLOYMENT_ID" <<'PY' > "$EVIDENCE_DIR/final-pr-body.md"
+          import os
+          import sys
+
+          merge_sha, release_run_id, deployment_id = sys.argv[1:]
+          body = os.environ['CURRENT_BODY']
+          marker = '## Production evidence'
+          prefix = body.split(marker, 1)[0].rstrip()
+          section = f'''## Production evidence
+
+- **Verified candidate:** `1772ad71ac9036138bd7dc69beff05e65add57d6`
+- **Merged commit:** `{merge_sha}`; its tree was proved identical to the exact Preview-verified candidate tree
+- **Canonical production release run:** `{release_run_id}` — successful
+- **Exact READY production deployment:** `{deployment_id}`
+- **Aliases:** `moraltrade.org` and `www.moraltrade.org` attached to the exact deployment
+- **Authenticated production smoke:** desktop enrollment reached AAL2; a fresh mobile session reached AAL2
+- **Cleanup:** exactly one run-created factor was removed; temporary-user absence was independently reconfirmed; the one-use Vercel bypass was revoked and its prior count restored
+- **Diagnostics:** browser console, page, request, HTTP, and horizontal-overflow checks passed; canonical status and dashboard entry routes passed post-release smoke
+'''
+          print(prefix + '\n\n' + section)
+          PY
+
+          jq -n --rawfile body "$EVIDENCE_DIR/final-pr-body.md" '{body:$body}' > "$EVIDENCE_DIR/update-pr-request.json"
+          update_code="$(curl -sS \
+            -o "$EVIDENCE_DIR/update-pr-response.json" \
+            -w '%{http_code}' \
+            -X PATCH \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/pulls/${PR_NUMBER}" \
+            --data-binary @"$EVIDENCE_DIR/update-pr-request.json")"
+          test "$update_code" = '200'
+
+          jq -n \
+            --arg body "Production release PASS for PR #552. Exact candidate ${EXPECTED_CANDIDATE_SHA} merged as ${MERGE_SHA}; canonical release run ${RELEASE_RUN_ID} succeeded; exact production deployment ${DEPLOYMENT_ID} is READY on both canonical aliases. Desktop and fresh-mobile AAL2 MFA checks passed. Exactly one test factor and the temporary user were removed; cleanup was independently reconfirmed; the one-use Vercel bypass was revoked and its prior count restored. See the immutable workflow artifact for sanitized evidence." \
+            '{body:$body}' > "$EVIDENCE_DIR/comment-request.json"
+          comment_code="$(curl -sS \
+            -o "$EVIDENCE_DIR/comment-response.json" \
+            -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" \
+            --data-binary @"$EVIDENCE_DIR/comment-request.json")"
+          test "$comment_code" = '201'
+        env:
+          CURRENT_BODY: ${{ toJSON('') }}
+
+      - name: Upload sanitized immutable production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-production-authenticated-mfa-smoke-${{ github.run_id }}
+          path: pr552-production-authenticated-mfa-smoke/
+          if-no-files-found: warn
+          retention-days: 30
