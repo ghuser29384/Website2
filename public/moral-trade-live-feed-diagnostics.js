@@ -96,8 +96,25 @@
   }
 
   function diagnosticRows(data) {
+    const externalSemantics = data.inventorySemanticsVersion === "external-candidate-funnel-v1";
+    if (externalSemantics) {
+      return [
+        ["Platform live inventory", finiteCount(data.platformInventoryCount)],
+        ["Your listings excluded", finiteCount(data.viewerOwnedExcludedCount)],
+        ["External opportunities available", finiteCount(data.externalInventoryCount)],
+        ["Candidates evaluated", finiteCount(data.evaluatedCandidateCount)],
+        ["Hard-eligible", finiteCount(data.eligibleCount)],
+        ["Semantic retrieval pool", finiteCount(data.retrievalPoolCount)],
+        ["Semantically relevant", finiteCount(data.semanticCandidateCount)],
+        ["Direct matches", finiteCount(data.directCount)],
+        ["Near-matches", finiteCount(data.nearMatchCount)],
+        ["Adjacent", finiteCount(data.adjacentCount)],
+        ["Discovery", finiteCount(data.discoveryCount)],
+        ["Shown in this batch", finiteCount(data.selectedCount)],
+      ];
+    }
     return [
-      ["Inventory checked", finiteCount(data.checkedInventoryCount)],
+      ["External candidates evaluated", finiteCount(data.checkedInventoryCount)],
       ["Hard-eligible", finiteCount(data.eligibleCount)],
       ["Semantic retrieval pool", finiteCount(data.retrievalPoolCount)],
       ["Semantically relevant", finiteCount(data.semanticCandidateCount)],
@@ -111,11 +128,7 @@
 
   function blockerChips(data) {
     const entries = [];
-    for (const source of [
-      data.excludedByReason,
-      data.softBlockers,
-      data.knownConstraintBlockers,
-    ]) {
+    for (const source of [data.excludedByReason, data.softBlockers, data.knownConstraintBlockers]) {
       if (!source || typeof source !== "object") continue;
       Object.entries(source).forEach(([key, rawCount]) => {
         const count = finiteCount(rawCount);
@@ -127,21 +140,18 @@
     if (!entries.length) return '<span class="mt-feed-diagnostic-chip">No recorded blockers</span>';
     return entries
       .slice(0, 6)
-      .map(
-        ([label, count]) =>
-          `<span class="mt-feed-diagnostic-chip">${escapeHtml(label)} <b>${escapeHtml(count)}</b></span>`,
-      )
+      .map(([label, count]) => `<span class="mt-feed-diagnostic-chip">${escapeHtml(label)} <b>${escapeHtml(count)}</b></span>`)
       .join("");
   }
 
   function readyDiagnosticsMarkup(data) {
     const rows = diagnosticRows(data);
     const coverage = finiteCount(data.embeddingCoveragePercent);
+    const external = finiteCount(data.externalInventoryCount ?? data.checkedInventoryCount);
+    const evaluated = finiteCount(data.evaluatedCandidateCount ?? data.checkedInventoryCount);
     return `<section class="mt-feed-diagnostics" aria-label="Recommendation matching diagnostics">
       <div class="mt-feed-diagnostics-head">
-        <div><div class="eyebrow blue">Matching funnel</div><h3>${escapeHtml(
-          rows[0][1],
-        )} live opportunities checked</h3></div>
+        <div><div class="eyebrow blue">External candidate funnel</div><h3>${escapeHtml(external)} external opportunities available · ${escapeHtml(evaluated)} evaluated</h3></div>
         <div class="mt-feed-diagnostics-summary" aria-label="Feed class counts">
           <span><b>${escapeHtml(data.directCount || 0)}</b> direct</span>
           <span><b>${escapeHtml(data.nearMatchCount || 0)}</b> near</span>
@@ -152,15 +162,8 @@
       <details class="mt-feed-diagnostics-details">
         <summary>How this batch was built <span aria-hidden="true">＋</span></summary>
         <div class="mt-feed-diagnostics-grid">
-          <ol>${rows
-            .map(
-              ([label, count]) =>
-                `<li><span>${escapeHtml(label)}</span><b>${escapeHtml(count)}</b></li>`,
-            )
-            .join("")}</ol>
-          <div><p><b>${escapeHtml(modeLabel(data.retrievalMode))}</b> · ${escapeHtml(
-            coverage,
-          )}% of the retrieval pool represented in the semantic vector space.</p>
+          <ol>${rows.map(([label, count]) => `<li><span>${escapeHtml(label)}</span><b>${escapeHtml(count)}</b></li>`).join("")}</ol>
+          <div><p><b>${escapeHtml(modeLabel(data.retrievalMode))}</b> · ${escapeHtml(coverage)}% of the retrieval pool represented in the semantic vector space.</p>
           <div class="mt-feed-diagnostic-chips">${blockerChips(data)}</div>
           <p class="mt-feed-diagnostics-privacy">Only public opportunity text and fixed public cause concepts may be sent to the embedding provider. Private profile prose stays inside Moral Trade.</p></div>
         </div>
@@ -175,9 +178,7 @@
       const id = card.getAttribute("data-opportunity-id") || "";
       const type = card.getAttribute("data-opportunity-type") || "offer";
       const recommendation = byId.get(`${type}:${id}`);
-      const matchClass = classOrder.includes(recommendation?.matchClass)
-        ? recommendation.matchClass
-        : "direct";
+      const matchClass = classOrder.includes(recommendation?.matchClass) ? recommendation.matchClass : "direct";
       displayedCounts.set(matchClass, (displayedCounts.get(matchClass) || 0) + 1);
     });
     const shown = new Set();
@@ -185,9 +186,7 @@
       const id = card.getAttribute("data-opportunity-id") || "";
       const type = card.getAttribute("data-opportunity-type") || "offer";
       const recommendation = byId.get(`${type}:${id}`);
-      const matchClass = classOrder.includes(recommendation?.matchClass)
-        ? recommendation.matchClass
-        : "direct";
+      const matchClass = classOrder.includes(recommendation?.matchClass) ? recommendation.matchClass : "direct";
       card.dataset.matchClass = matchClass;
       card.classList.add(`mt-feed-match--${matchClass}`);
       const copy = classCopy[matchClass];
@@ -210,9 +209,7 @@
         const heading = document.createElement("header");
         heading.className = `mt-feed-class-heading mt-feed-class-heading--${matchClass}`;
         const total = finiteCount(displayedCounts.get(matchClass));
-        heading.innerHTML = `<div><span>${escapeHtml(copy.label)}</span><h3>${escapeHtml(
-          copy.title,
-        )}</h3><p>${escapeHtml(copy.description)}</p></div><b>${escapeHtml(total)}</b>`;
+        heading.innerHTML = `<div><span>${escapeHtml(copy.label)}</span><h3>${escapeHtml(copy.title)}</h3><p>${escapeHtml(copy.description)}</p></div><b>${escapeHtml(total)}</b>`;
         card.insertAdjacentElement("beforebegin", heading);
       }
     });
@@ -223,27 +220,17 @@
     const toolbar = root.querySelector(".mt-feed-toolbar");
     if (!feed || !toolbar) return;
     const cardIds = [...feed.querySelectorAll(".mt-feed-card[data-opportunity-id]")]
-      .map(
-        (card) =>
-          `${card.getAttribute("data-opportunity-id") || ""}:${card.hasAttribute("hidden") ? "hidden" : "shown"}`,
-      )
+      .map((card) => `${card.getAttribute("data-opportunity-id") || ""}:${card.hasAttribute("hidden") ? "hidden" : "shown"}`)
       .join("|");
     const signature = `ready:${String(data.checkedAt || "")}:${cardIds}`;
     if (root.dataset.reciprocalDiagnostics === signature) return;
-    let panel = root.querySelector(".mt-feed-diagnostics");
-    if (!panel) {
-      toolbar.insertAdjacentHTML("afterend", readyDiagnosticsMarkup(data));
-      panel = root.querySelector(".mt-feed-diagnostics");
-    }
+    if (!root.querySelector(".mt-feed-diagnostics")) toolbar.insertAdjacentHTML("afterend", readyDiagnosticsMarkup(data));
     const toolbarTitle = toolbar.querySelector(".mt-feed-toolbar-title h2");
     if (toolbarTitle && !toolbarTitle.dataset.reciprocalTitle) {
       toolbarTitle.dataset.reciprocalTitle = "true";
-      const total = finiteCount(data.selectedCount);
-      toolbarTitle.innerHTML = `Matches and discovery <span>${escapeHtml(total)}</span>`;
+      toolbarTitle.innerHTML = `Matches and discovery <span>${escapeHtml(finiteCount(data.selectedCount))}</span>`;
     }
-    const cards = [
-      ...feed.querySelectorAll(".mt-feed-card[data-opportunity-id]:not([hidden])"),
-    ];
+    const cards = [...feed.querySelectorAll(".mt-feed-card[data-opportunity-id]:not([hidden])")];
     addClassHeadings(feed, cards, recommendationsById());
     root.dataset.reciprocalDiagnostics = signature;
   }
@@ -251,14 +238,8 @@
   function emptyDiagnosticsMarkup(data) {
     const rows = diagnosticRows(data);
     return `<details class="mt-feed-empty-diagnostics">
-      <summary>See what was checked <span aria-hidden="true">＋</span></summary>
-      <div><ol>${rows
-        .slice(0, 5)
-        .map(
-          ([label, count]) =>
-            `<li><span>${escapeHtml(label)}</span><b>${escapeHtml(count)}</b></li>`,
-        )
-        .join("")}</ol><div class="mt-feed-diagnostic-chips">${blockerChips(data)}</div>
+      <summary>See the external candidate funnel <span aria-hidden="true">＋</span></summary>
+      <div><ol>${rows.slice(0, 7).map(([label, count]) => `<li><span>${escapeHtml(label)}</span><b>${escapeHtml(count)}</b></li>`).join("")}</ol><div class="mt-feed-diagnostic-chips">${blockerChips(data)}</div>
         <p>Retrieval: ${escapeHtml(modeLabel(data.retrievalMode))}. Private profile prose was not sent to the embedding provider.</p></div>
     </details>`;
   }
@@ -266,19 +247,37 @@
   function enhanceEmpty(root, data) {
     const urgent = root.querySelector(".panel.black.urgent");
     if (!urgent) return;
-    const signature = `empty:${String(data.checkedAt || "")}:${finiteCount(data.checkedInventoryCount)}`;
+    const platform = finiteCount(data.platformInventoryCount);
+    const owned = finiteCount(data.viewerOwnedExcludedCount);
+    const external = finiteCount(data.externalInventoryCount ?? data.checkedInventoryCount);
+    const evaluated = finiteCount(data.evaluatedCandidateCount ?? data.checkedInventoryCount);
+    const signature = `empty:${String(data.checkedAt || "")}:${platform}:${owned}:${external}:${evaluated}`;
     if (root.dataset.reciprocalDiagnostics === signature) return;
     const title = urgent.querySelector("h2");
     const copy = urgent.querySelector("p.muted");
     const facts = urgent.querySelectorAll(".terms strong");
-    if (title) title.textContent = "No direct match currently clears your criteria.";
-    if (copy) {
-      copy.textContent = `We checked ${finiteCount(
-        data.checkedInventoryCount,
-      )} live opportunities. None currently clears every reciprocal and feasibility threshold; this does not mean that no relevant opportunity exists.`;
+
+    if (data.inventorySemanticsVersion === "external-candidate-funnel-v1" && external === 0) {
+      if (title) title.textContent = "No external opportunities are available yet.";
+      if (copy) {
+        copy.textContent = platform
+          ? `The platform has ${platform} live opportunities. ${owned} belong to you and appear below; your own listings are not recommended back to you.`
+          : "The platform currently has no live opportunities. No matching threshold was evaluated.";
+      }
+      if (facts[0]) facts[0].textContent = "0 external opportunities available";
+      if (facts[1]) facts[1].textContent = "0 candidates evaluated";
+    } else if (external > 0 && evaluated === 0) {
+      if (title) title.textContent = "External opportunities exist, but none were eligible to evaluate.";
+      if (copy) copy.textContent = `${external} external opportunities are live, but current mode, visibility, completeness, or feasibility rules excluded them before matching.`;
+      if (facts[0]) facts[0].textContent = `${external} external opportunities available`;
+      if (facts[1]) facts[1].textContent = "0 candidates evaluated";
+    } else {
+      if (title) title.textContent = "No direct match currently clears your criteria.";
+      if (copy) copy.textContent = `We evaluated ${evaluated} external opportunities. None currently clears every reciprocal and feasibility threshold; relevant near-matches may still exist.`;
+      if (facts[0]) facts[0].textContent = `${evaluated} external candidates evaluated`;
+      if (facts[1]) facts[1].textContent = "0 direct matches";
     }
-    if (facts[0]) facts[0].textContent = `${finiteCount(data.checkedInventoryCount)} live opportunities checked`;
-    if (facts[1]) facts[1].textContent = "0 direct matches";
+
     if (!urgent.querySelector(".mt-feed-empty-diagnostics")) {
       const terms = urgent.querySelector(".terms");
       if (terms) terms.insertAdjacentHTML("afterend", emptyDiagnosticsMarkup(data));
@@ -308,9 +307,7 @@
 
   window.addEventListener("mt:live-now-ready", scheduleEnhance);
   scheduleEnhance();
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", scheduleEnhance, { once: true });
-  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", scheduleEnhance, { once: true });
   const observer = new MutationObserver(scheduleEnhance);
   observer.observe(document.documentElement, {
     childList: true,
