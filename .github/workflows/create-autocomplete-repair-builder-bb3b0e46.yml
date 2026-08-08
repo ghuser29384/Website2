@@ -1,0 +1,430 @@
+name: Build Create autocomplete current-contract repair bb3b0e46
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/create-autocomplete-repair-builder-bb3b0e46.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: create-autocomplete-repair-builder-bb3b0e46
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+  CONTROLLER_BRANCH: qa/create-autocomplete-repair-builder-bb3b0e46
+  CONTROLLER_PATH: .github/workflows/create-autocomplete-repair-builder-bb3b0e46.yml
+  PRODUCT_BRANCH: fix/create-autocomplete-current-contract-20260808
+  PRODUCT_FILE: public/moral-trade-create/index.html
+  TEST_FILE: tests/exact-live-autocomplete.spec.ts
+  EVIDENCE_DIR: create-autocomplete-repair-builder-bb3b0e46
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+  SITE_URL: http://127.0.0.1:3210
+  PLAYWRIGHT_HTML_OPEN: never
+  CI: "1"
+
+jobs:
+  build-and-validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Guard immutable base, controller scope, and unused product branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "ghuser29384/Website2"
+          test '${{ github.event.pull_request.head.ref }}' = "$CONTROLLER_BRANCH"
+          test '${{ github.event.pull_request.base.ref }}' = "main"
+          test '${{ github.event.pull_request.base.sha }}' = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)" = "$BASE_SHA"
+          changed="$(gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/pulls/${{ github.event.pull_request.number }}/files?per_page=100" \
+            --jq '.[].filename')"
+          test "$changed" = "$CONTROLLER_PATH"
+          if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${PRODUCT_BRANCH}" >/dev/null 2>&1; then
+            echo "Product branch already exists: $PRODUCT_BRANCH" >&2
+            exit 1
+          fi
+
+      - name: Check out immutable current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.BASE_SHA }}
+          fetch-depth: 1
+          token: ${{ github.token }}
+
+      - name: Apply the narrow product repair and durable current-contract tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$BASE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$BASE_SHA" > "$EVIDENCE_DIR/base-sha.txt"
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("public/moral-trade-create/index.html")
+          text = path.read_text(encoding="utf-8")
+          old = '''      if (event.key === "Escape" && autocompleteState.open) {
+                event.preventDefault();
+                closeSuggestions();
+                return;
+              }
+          '''
+          new = '''      if (event.key === "Escape" && autocompleteState.open) {
+                event.preventDefault();
+                event.stopPropagation();
+                closeSuggestions();
+                return;
+              }
+          '''
+          if text.count(old) != 1:
+              raise SystemExit(f"unexpected Escape-handler inventory: {text.count(old)}")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+
+          cat > "$TEST_FILE" <<'TS'
+          import {
+            expect,
+            test,
+            type FrameLocator,
+            type Page,
+          } from "@playwright/test";
+
+          test.setTimeout(90_000);
+
+          function captureRuntimeErrors(page: Page) {
+            const errors: string[] = [];
+            page.on("pageerror", (error) => errors.push(error.stack || error.message));
+            page.on("console", (message) => {
+              if (message.type() === "error") errors.push(`console: ${message.text()}`);
+            });
+            return errors;
+          }
+
+          async function openCurrentCreate(page: Page): Promise<FrameLocator> {
+            await page.goto("/moral-trade-live.html#trade", {
+              waitUntil: "domcontentloaded",
+            });
+            await expect(page).toHaveURL(/\/trades\/new(?:[?#]|$)/, {
+              timeout: 30_000,
+            });
+            await expect(page).toHaveTitle(/Moral Trade/i);
+
+            const iframe = page.locator('iframe[title="Moral Trade Create"]');
+            await expect(iframe).toBeVisible({ timeout: 30_000 });
+            const create = page.frameLocator('iframe[title="Moral Trade Create"]');
+            await expect(create.locator("body")).toBeVisible({ timeout: 30_000 });
+            return create;
+          }
+
+          async function reachCommitmentRequest(page: Page) {
+            const create = await openCurrentCreate(page);
+            const cause = create
+              .locator("button.cause-choice")
+              .filter({ hasText: "Wild animal suffering" });
+            await expect(cause).toHaveCount(1);
+            await cause.click();
+
+            await expect(
+              create.getByRole("heading", {
+                name: "What do you want other people to do?",
+              }),
+            ).toBeVisible({ timeout: 10_000 });
+
+            const commitment = create
+              .locator("button.request-choice")
+              .filter({ hasText: "Commitment" });
+            await expect(commitment).toHaveCount(1);
+            await commitment.click();
+
+            const input = create.locator("#requestActionInput");
+            const list = create.locator("#actionSuggestions");
+            await expect(input).toBeVisible({ timeout: 10_000 });
+            return { create, input, list };
+          }
+
+          test("the retired Trade entry exposes the current ranked action autocomplete", async ({
+            page,
+          }, testInfo) => {
+            const runtimeErrors = captureRuntimeErrors(page);
+            const { create, input, list } = await reachCommitmentRequest(page);
+
+            await expect(create.locator(".clause")).toHaveCount(0);
+            await expect(
+              create.locator('.token[contenteditable="true"]'),
+            ).toHaveCount(0);
+            await expect(create.locator("[data-mt-offer-type]")).toHaveCount(0);
+
+            await expect(input).toHaveAttribute("role", "combobox");
+            await expect(input).toHaveAttribute("aria-autocomplete", "list");
+            await expect(input).toHaveAttribute(
+              "aria-controls",
+              "actionSuggestions",
+            );
+            await expect(input).toHaveAttribute("aria-expanded", "false");
+            await expect(input).toHaveAttribute(
+              "placeholder",
+              "e.g. Not eat meat for one meal",
+            );
+            await expect(list).toHaveAttribute("role", "listbox");
+            await expect(list).toHaveAttribute(
+              "aria-label",
+              "Suggested actions",
+            );
+
+            await input.fill("read");
+            await expect(list).toBeVisible();
+            await expect(input).toHaveAttribute("aria-expanded", "true");
+            const options = list.getByRole("option");
+            await expect(options).toHaveCount(2);
+            await expect(
+              list.locator(".suggestion-option > span:last-child"),
+            ).toHaveText([
+              "Read a 30-minute introduction to wild animal suffering",
+              "Read a short introduction to Wild animal suffering",
+            ]);
+
+            await page.screenshot({
+              path: testInfo.outputPath("current-action-autocomplete-open.png"),
+              fullPage: true,
+            });
+
+            await options.nth(1).click();
+            await expect(input).toHaveValue(
+              "Read a short introduction to Wild animal suffering",
+            );
+            await expect(input).toHaveAttribute("aria-expanded", "false");
+            await expect(list).toBeHidden();
+            await expect(create.locator("#continueRequest")).toBeEnabled();
+            expect(runtimeErrors).toEqual([]);
+          });
+
+          test("keyboard selection and dismissal remain inside the request step", async ({
+            page,
+          }, testInfo) => {
+            const runtimeErrors = captureRuntimeErrors(page);
+            const { create, input, list } = await reachCommitmentRequest(page);
+
+            await input.fill("read");
+            await expect(list).toBeVisible();
+            const options = list.getByRole("option");
+            await input.press("ArrowDown");
+            await expect(options.first()).toHaveAttribute(
+              "aria-selected",
+              "true",
+            );
+            await input.press("Enter");
+            await expect(input).toHaveValue(
+              "Read a 30-minute introduction to wild animal suffering",
+            );
+            await expect(list).toBeHidden();
+
+            await input.fill("spend");
+            await expect(list).toBeVisible();
+            await input.press("Escape");
+            await expect(input).toBeVisible();
+            await expect(input).toHaveValue("spend");
+            await expect(input).toHaveAttribute("aria-expanded", "false");
+            await expect(list).toBeHidden();
+            await expect(create.locator("#screenRequest")).toHaveClass(/active/);
+            await expect(
+              create.getByRole("heading", {
+                name: "What do you want other people to do?",
+              }),
+            ).toBeVisible();
+
+            await page.screenshot({
+              path: testInfo.outputPath("escape-keeps-request-step.png"),
+              fullPage: true,
+            });
+
+            await input.fill("read");
+            await expect(list).toBeVisible();
+            await create.locator("#requestHeading").click();
+            await expect(input).toBeVisible();
+            await expect(input).toHaveValue("read");
+            await expect(input).toHaveAttribute("aria-expanded", "false");
+            await expect(list).toBeHidden();
+            await expect(create.locator("#screenRequest")).toHaveClass(/active/);
+            expect(runtimeErrors).toEqual([]);
+          });
+
+          test("the mobile current flow reaches the six-type contribution palette without overflow", async ({
+            page,
+          }, testInfo) => {
+            await page.setViewportSize({ width: 390, height: 844 });
+            const runtimeErrors = captureRuntimeErrors(page);
+            const { create, input, list } = await reachCommitmentRequest(page);
+
+            await input.fill("read");
+            await expect(list).toBeVisible();
+            await list.getByRole("option").first().click();
+            const continueButton = create.locator("#continueRequest");
+            await expect(continueButton).toBeEnabled();
+            await continueButton.click();
+
+            await expect(
+              create.getByRole("heading", { name: "What could you offer?" }),
+            ).toBeVisible({ timeout: 10_000 });
+            await expect(create.locator(".offer-choice strong")).toHaveText([
+              "Money",
+              "Time",
+              "A behavior change",
+              "Skilled work",
+              "An introduction",
+              "Support another cause",
+            ]);
+            await expect(create.locator("[data-mt-offer-type]")).toHaveCount(0);
+
+            await create
+              .locator("button.offer-choice")
+              .filter({ hasText: "A behavior change" })
+              .click();
+            await create
+              .locator("button.offer-choice")
+              .filter({ hasText: "Skilled work" })
+              .click();
+            await expect(create.locator("#offerCount")).toHaveText(
+              "2 things selected",
+            );
+            await expect(create.locator("#continueOffers")).toBeEnabled();
+
+            const frameDimensions = await create.locator("body").evaluate(() => ({
+              innerWidth: window.innerWidth,
+              clientWidth: document.documentElement.clientWidth,
+              scrollWidth: document.documentElement.scrollWidth,
+            }));
+            expect(frameDimensions.clientWidth).toBe(frameDimensions.innerWidth);
+            expect(frameDimensions.scrollWidth).toBeLessThanOrEqual(
+              frameDimensions.innerWidth + 1,
+            );
+
+            const outerDimensions = await page.evaluate(() => ({
+              innerWidth: window.innerWidth,
+              clientWidth: document.documentElement.clientWidth,
+              scrollWidth: document.documentElement.scrollWidth,
+            }));
+            expect(outerDimensions.clientWidth).toBe(outerDimensions.innerWidth);
+            expect(outerDimensions.scrollWidth).toBeLessThanOrEqual(
+              outerDimensions.innerWidth + 1,
+            );
+
+            await page.screenshot({
+              path: testInfo.outputPath("mobile-current-contribution-palette.png"),
+              fullPage: true,
+            });
+            expect(runtimeErrors).toEqual([]);
+          });
+          TS
+
+          git diff --check
+          git diff --name-only | sort > "$EVIDENCE_DIR/actual-files.txt"
+          cat > "$EVIDENCE_DIR/expected-files.txt" <<EOF
+          $PRODUCT_FILE
+          $TEST_FILE
+          EOF
+          sort -o "$EVIDENCE_DIR/expected-files.txt" "$EVIDENCE_DIR/expected-files.txt"
+          diff -u "$EVIDENCE_DIR/expected-files.txt" "$EVIDENCE_DIR/actual-files.txt"
+          grep -n -A6 -B2 'event.key === "Escape" && autocompleteState.open' \
+            "$PRODUCT_FILE" > "$EVIDENCE_DIR/escape-handler.txt"
+          cp "$TEST_FILE" "$EVIDENCE_DIR/exact-live-autocomplete.spec.ts"
+
+      - name: Commit the exact candidate locally
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$PRODUCT_FILE" "$TEST_FILE"
+          git diff --cached --check
+          git commit -m "Keep autocomplete Escape inside the current Create step"
+          candidate_sha="$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          product_blob="$(git rev-parse "HEAD:$PRODUCT_FILE")"
+          test_blob="$(git rev-parse "HEAD:$TEST_FILE")"
+          printf '%s\n' "$candidate_sha" > "$EVIDENCE_DIR/candidate-sha.txt"
+          printf '%s\n' "$product_blob" > "$EVIDENCE_DIR/product-blob.txt"
+          printf '%s\n' "$test_blob" > "$EVIDENCE_DIR/test-blob.txt"
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
+          echo "product_blob=$product_blob" >> "$GITHUB_OUTPUT"
+          echo "test_blob=$test_blob" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+
+      - name: Run source, lint, type, and production-build gates
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$EVIDENCE_DIR/source-tests.log"
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+          npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/production-build.log"
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright install --with-deps chromium 2>&1 | tee "$EVIDENCE_DIR/chromium.log"
+
+      - name: Repeat the current autocomplete contract on desktop and mobile
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf .next test-results playwright-report
+          npx playwright test "$TEST_FILE" \
+            --workers=1 --repeat-each=5 --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/focused-playwright.log"
+
+      - name: Re-prove immutable candidate identity and exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '${{ steps.candidate.outputs.candidate_sha }}'
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          test "$(git rev-parse "HEAD:$PRODUCT_FILE")" = '${{ steps.candidate.outputs.product_blob }}'
+          test "$(git rev-parse "HEAD:$TEST_FILE")" = '${{ steps.candidate.outputs.test_blob }}'
+          git diff-tree --no-commit-id --name-only -r HEAD | sort > "$EVIDENCE_DIR/committed-files.txt"
+          diff -u "$EVIDENCE_DIR/expected-files.txt" "$EVIDENCE_DIR/committed-files.txt"
+
+      - name: Push the validated product candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git push origin "HEAD:refs/heads/$PRODUCT_BRANCH"
+          observed="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${PRODUCT_BRANCH}" --jq .object.sha)"
+          test "$observed" = '${{ steps.candidate.outputs.candidate_sha }}'
+          gh pr comment '${{ github.event.pull_request.number }}' --repo "$GITHUB_REPOSITORY" --body "Validated Create autocomplete candidate \`${{ steps.candidate.outputs.candidate_sha }}\` from exact base \`$BASE_SHA\` and pushed \`$PRODUCT_BRANCH\`. Source, ESLint, TypeScript, production build, and 15 focused desktop/mobile executions passed. Product blob: \`${{ steps.candidate.outputs.product_blob }}\`; test blob: \`${{ steps.candidate.outputs.test_blob }}\`. No deployment or production action occurred."
+
+      - name: Upload immutable builder evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: create-autocomplete-repair-builder-bb3b0e46
+          path: |
+            create-autocomplete-repair-builder-bb3b0e46
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 30
