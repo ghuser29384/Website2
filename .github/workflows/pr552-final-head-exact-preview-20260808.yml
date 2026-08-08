@@ -1,0 +1,204 @@
+name: PR 552 final-head exact Preview
+
+on:
+  push:
+    branches:
+      - ops/pr552-final-head-exact-preview-20260808
+    paths:
+      - .github/workflows/pr552-final-head-exact-preview-20260808.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr552-final-head-exact-preview-20260808
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: 3e2dc52dc128fd6f05935e2d74ace21db6f9b238
+  CANDIDATE_SHA: 9c1c330bc77084d18a9a73588be2d981927911e3
+  CANDIDATE_BRANCH: hotfix/dashboard-account-security-visible-20260807
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  EVIDENCE_DIR: pr552-final-head-exact-preview
+
+jobs:
+  verify-and-release:
+    name: Verify final head and release Preview only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: preview
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - name: Check out immutable candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Guard exact candidate and seven-file diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+          remote_sha="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$CANDIDATE_SHA"
+          git cat-file -e "${BASE_SHA}^{commit}"
+          git merge-base --is-ancestor "$BASE_SHA" "$CANDIDATE_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          git diff --check "$BASE_SHA" "$CANDIDATE_SHA" | tee "$EVIDENCE_DIR/diff-check.log"
+          git diff --name-only "$BASE_SHA" "$CANDIDATE_SHA" | sort > "$EVIDENCE_DIR/actual-files.txt"
+          cat > "$EVIDENCE_DIR/expected-files.txt" <<'EOF'
+          .github/workflows/dashboard-account-security-hotfix-gates.yml
+          src/app/dashboard/dashboard-account-security.css
+          src/app/dashboard/layout.tsx
+          src/app/dashboard/page.tsx
+          src/components/dashboard/background-account-security-panel.tsx
+          src/dashboard-account-security-visibility.test.ts
+          tests/dashboard-account-security-visibility.spec.ts
+          EOF
+          diff -u "$EVIDENCE_DIR/expected-files.txt" "$EVIDENCE_DIR/actual-files.txt"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run focused source contract
+        shell: bash
+        run: |
+          set -o pipefail
+          node --import tsx --test src/dashboard-account-security-visibility.test.ts \
+            2>&1 | tee "$EVIDENCE_DIR/focused-source.log"
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$EVIDENCE_DIR/repository-tests.log"
+
+      - name: Run complete ESLint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+
+      - name: Run TypeScript
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+
+      - name: Run optimized build without optional service credentials
+        shell: bash
+        run: |
+          set -o pipefail
+          test -z "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/application-build.log"
+
+      - name: Run rendered desktop and mobile gate
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -o pipefail
+          npm run test:e2e -- tests/dashboard-account-security-visibility.spec.ts --reporter=line \
+            2>&1 | tee "$EVIDENCE_DIR/focused-rendered.log"
+
+      - name: Link canonical Vercel project
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+      - name: Pull Preview environment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes --environment=preview --token="$VERCEL_TOKEN" \
+            2>&1 | tee "$EVIDENCE_DIR/vercel-pull.log"
+
+      - name: Build prebuilt Vercel artifact
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -o pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build --token="$VERCEL_TOKEN" \
+            2>&1 | tee "$EVIDENCE_DIR/vercel-build.log"
+
+      - name: Upload exact candidate as Preview only
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+            --prebuilt \
+            --meta moralTradeCandidateSha="$CANDIDATE_SHA" \
+            --meta releaseReason=pr552-dashboard-account-security-preview-final \
+            --token="$VERCEL_TOKEN" \
+            2> >(tee "$EVIDENCE_DIR/vercel-deploy.stderr.log" >&2))"
+          test -n "$deployment_url"
+          case "$deployment_url" in https://*) ;; *) exit 1 ;; esac
+          printf '%s\n' "$deployment_url" | tee "$EVIDENCE_DIR/deployment-url.txt"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify Preview readiness
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_url="${{ steps.deploy.outputs.deployment_url }}"
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$deployment_url" \
+            --token="$VERCEL_TOKEN" 2>&1 | tee "$EVIDENCE_DIR/vercel-inspect.log"
+          status="$(curl --silent --show-error --output /dev/null \
+            --write-out '%{http_code}' --max-time 45 "$deployment_url/status" || true)"
+          printf 'status=%s\n' "$status" | tee "$EVIDENCE_DIR/preview-smoke.log"
+          test "$status" -ge 200
+          test "$status" -lt 400
+          {
+            echo '### PR 552 final-head exact Preview'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Deployment: $deployment_url"
+            echo "- Unauthenticated /status response: \`$status\`"
+            echo '- Preview only; no production target or alias changed.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-final-head-exact-preview-${{ github.run_id }}
+          path: |
+            pr552-final-head-exact-preview/
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 30
