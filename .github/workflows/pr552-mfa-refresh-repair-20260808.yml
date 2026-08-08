@@ -1,0 +1,200 @@
+name: PR 552 MFA verification refresh repair
+
+on:
+  push:
+    branches:
+      - ops/pr552-mfa-refresh-repair-20260808
+    paths:
+      - .github/workflows/pr552-mfa-refresh-repair-20260808.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr552-mfa-refresh-repair-20260808
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Patch and push the exact PR head
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_BRANCH: hotfix/dashboard-account-security-visible-20260807
+    steps:
+      - name: Check out the live PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Guard PR 552 and capture the pre-repair head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+          response="$(curl -fsS \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            'https://api.github.com/repos/ghuser29384/Website2/pulls/552')"
+          test "$(jq -r '.state' <<<"$response")" = 'open'
+          test "$(jq -r '.draft' <<<"$response")" = 'true'
+          test "$(jq -r '.head.ref' <<<"$response")" = "$TARGET_BRANCH"
+          test "$(jq -r '.head.repo.full_name' <<<"$response")" = 'ghuser29384/Website2'
+          test "$(jq -r '.base.ref' <<<"$response")" = 'main'
+          head_sha="$(jq -r '.head.sha' <<<"$response")"
+          test "$(git rev-parse HEAD)" = "$head_sha"
+          printf '%s\n' "$head_sha" > "$RUNNER_TEMP/pr552-pre-refresh-repair-head"
+
+      - name: Add a post-verification route refresh and regression contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          component_path = Path(
+              "src/components/dashboard/background-account-security-panel.tsx"
+          )
+          source = component_path.read_text(encoding="utf-8")
+
+          if 'from "next/navigation";' not in source:
+              marker = '"use client";\n\n'
+              if source.count(marker) != 1:
+                  raise SystemExit("Could not locate the client-component header.")
+              source = source.replace(
+                  marker,
+                  marker + 'import { useRouter } from "next/navigation";\n',
+                  1,
+              )
+          elif "useRouter" not in source:
+              navigation_import = re.compile(
+                  r'import\s*\{(?P<body>[^}]*)\}\s*from\s*"next/navigation";',
+                  re.DOTALL,
+              )
+              match = navigation_import.search(source)
+              if not match:
+                  raise SystemExit("Unsupported next/navigation import shape.")
+              body = match.group("body").strip()
+              replacement = f'import {{ {body}, useRouter }} from "next/navigation";'
+              source = source[: match.start()] + replacement + source[match.end() :]
+
+          react_import = re.compile(
+              r'import\s*\{(?P<body>[^}]*)\}\s*from\s*"react";',
+              re.DOTALL,
+          )
+          match = react_import.search(source)
+          if not match:
+              raise SystemExit("Could not locate the React named import.")
+          imports = [part.strip() for part in match.group("body").split(",") if part.strip()]
+          if "useEffect" not in imports:
+              imports.append("useEffect")
+              replacement = 'import { ' + ", ".join(imports) + ' } from "react";'
+              source = source[: match.start()] + replacement + source[match.end() :]
+
+          function_match = re.search(
+              r'export function BackgroundAccountSecurityPanel\([\s\S]*?\)\s*\{',
+              source,
+          )
+          if not function_match:
+              raise SystemExit("Could not locate BackgroundAccountSecurityPanel.")
+          function_start = function_match.end()
+          function_tail = source[function_start:]
+
+          if "const router = useRouter();" not in function_tail:
+              source = (
+                  source[:function_start]
+                  + "\n  const router = useRouter();"
+                  + source[function_start:]
+              )
+
+          verify_match = re.search(
+              r'const\s+\[\s*(?P<state>[A-Za-z_$][A-Za-z0-9_$]*)\s*,[\s\S]*?\]\s*=\s*useActionState\(\s*verifyBackgroundNetworkingMfaAction\s*,[\s\S]*?\);',
+              source,
+          )
+          if not verify_match:
+              raise SystemExit("Could not identify the MFA verification action state.")
+          verify_state = verify_match.group("state")
+
+          refresh_marker = 'data-mfa-verification-refresh="router-refresh"'
+          if refresh_marker not in source:
+              hook_end = verify_match.end()
+              refresh_effect = f'''\n\n  // {refresh_marker}\n  useEffect(() => {{\n    if ({verify_state}.status === "verified") {{\n      router.refresh();\n    }}\n  }}, [router, {verify_state}.status]);'''
+              source = source[:hook_end] + refresh_effect + source[hook_end:]
+
+          component_path.write_text(source, encoding="utf-8")
+
+          test_path = Path("src/dashboard-account-security-visibility.test.ts")
+          test_source = test_path.read_text(encoding="utf-8")
+          test_name = "successful MFA verification refreshes the server-rendered security summary"
+          if test_name not in test_source:
+              test_source += f'''\n\ntest("{test_name}", () => {{\n  assert.match(accountSecurityPanel, /useRouter/);\n  assert.match(accountSecurityPanel, /useEffect/);\n  assert.match(accountSecurityPanel, /data-mfa-verification-refresh="router-refresh"/);\n  assert.match(\n    accountSecurityPanel,\n    /\.status === ["']verified["'][\\s\\S]*?router\.refresh\(\)/,\n  );\n}});\n'''
+              test_path.write_text(test_source, encoding="utf-8")
+
+          workflow_path = Path(
+              ".github/workflows/dashboard-account-security-hotfix-gates.yml"
+          )
+          workflow = workflow_path.read_text(encoding="utf-8")
+          topbar_line = '      - "src/components/layout/site-topbar.tsx"\n'
+          if topbar_line not in workflow:
+              anchor = '      - "src/components/dashboard/background-account-security-panel.tsx"\n'
+              if workflow.count(anchor) != 1:
+                  raise SystemExit("Could not update the hotfix path trigger.")
+              workflow = workflow.replace(anchor, anchor + topbar_line, 1)
+          expected_line = '          src/components/layout/site-topbar.tsx\n'
+          if expected_line not in workflow:
+              anchor = '          src/components/dashboard/background-account-security-panel.tsx\n'
+              if workflow.count(anchor) != 1:
+                  raise SystemExit("Could not update the exact-diff allowlist.")
+              workflow = workflow.replace(anchor, anchor + expected_line, 1)
+          workflow_path.write_text(workflow, encoding="utf-8")
+          PY
+
+      - name: Prove the repair and its exact scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --name-only | sort > actual-repair-files.txt
+          cat > expected-repair-files.txt <<'FILES'
+          .github/workflows/dashboard-account-security-hotfix-gates.yml
+          src/components/dashboard/background-account-security-panel.tsx
+          src/dashboard-account-security-visibility.test.ts
+          FILES
+          diff -u expected-repair-files.txt actual-repair-files.txt
+          grep -F 'data-mfa-verification-refresh="router-refresh"' \
+            src/components/dashboard/background-account-security-panel.tsx
+          grep -F 'router.refresh();' \
+            src/components/dashboard/background-account-security-panel.tsx
+          grep -F 'successful MFA verification refreshes the server-rendered security summary' \
+            src/dashboard-account-security-visibility.test.ts
+          grep -F 'src/components/layout/site-topbar.tsx' \
+            .github/workflows/dashboard-account-security-hotfix-gates.yml
+
+      - name: Install exact dependencies and run the focused contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test src/dashboard-account-security-visibility.test.ts
+
+      - name: Commit and push without overwriting a concurrent PR update
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_head="$(cat "$RUNNER_TEMP/pr552-pre-refresh-repair-head")"
+          git fetch --no-tags origin "$TARGET_BRANCH"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$expected_head"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/workflows/dashboard-account-security-hotfix-gates.yml \
+            src/components/dashboard/background-account-security-panel.tsx \
+            src/dashboard-account-security-visibility.test.ts
+          git commit -m "Refresh Account security after MFA verification"
+          git push origin "HEAD:$TARGET_BRANCH"
