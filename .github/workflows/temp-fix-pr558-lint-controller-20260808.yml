@@ -48,65 +48,72 @@ jobs:
 
           page_path = Path("src/app/mpgf/admin/dac-lifecycle/page.tsx")
           page = page_path.read_text()
-          old_page = '''  const authorization = workspace?.reviewerAuthorization ?? null;
-          const reviewerAuthorized = Boolean(
-            authorization?.active &&
-            (!authorization.expiresAt || Date.parse(authorization.expiresAt) > Date.now()),
-          );
-          '''
-          new_page = '''  const authorization = workspace?.reviewerAuthorization ?? null;
-          const reviewerAuthorized = Boolean(authorization?.currentlyAuthorized);
-          '''
+          old_page = (
+              "  const authorization = workspace?.reviewerAuthorization ?? null;\n"
+              "  const reviewerAuthorized = Boolean(\n"
+              "    authorization?.active &&\n"
+              "    (!authorization.expiresAt || Date.parse(authorization.expiresAt) > Date.now()),\n"
+              "  );\n"
+          )
+          new_page = (
+              "  const authorization = workspace?.reviewerAuthorization ?? null;\n"
+              "  const reviewerAuthorized = Boolean(authorization?.currentlyAuthorized);\n"
+          )
           if page.count(old_page) != 1:
-            raise SystemExit("Expected exactly one reviewer authorization render-time clock block.")
-          page_path.write_text(page.replace(old_page, new_page))
+              raise SystemExit("Expected exactly one reviewer authorization render-time clock block.")
+          page = page.replace(old_page, new_page)
+          if "Date.now()" in page:
+              raise SystemExit("Render-time Date.now() remained in the reviewer page.")
+          page_path.write_text(page)
 
           model_path = Path("src/lib/mpgf/dac-lifecycle-model.ts")
           model = model_path.read_text()
-          old_model = '''    active: boolean;
-            rationale: string;
-          '''
-          new_model = '''    active: boolean;
-            currentlyAuthorized: boolean;
-            rationale: string;
-          '''
+          old_model = "    active: boolean;\n    rationale: string;\n"
+          new_model = "    active: boolean;\n    currentlyAuthorized: boolean;\n    rationale: string;\n"
           if model.count(old_model) != 1:
-            raise SystemExit("Expected exactly one reviewer authorization model block.")
+              raise SystemExit("Expected exactly one reviewer authorization model block.")
           model_path.write_text(model.replace(old_model, new_model))
 
           loader_path = Path("src/lib/mpgf/dac-lifecycle.ts")
           loader = loader_path.read_text()
-          old_loader_prelude = '''  const reviewerRow = reviewerResult.data as Record<string, unknown> | null;
-
-          return {
-          '''
-          new_loader_prelude = '''  const reviewerRow = reviewerResult.data as Record<string, unknown> | null;
-          const reviewerExpiresAt = reviewerRow ? nullableString(reviewerRow.expires_at) : null;
-          const reviewerCurrentlyAuthorized = Boolean(
-            reviewerRow?.active &&
-            (!reviewerExpiresAt || Date.parse(reviewerExpiresAt) > Date.now()),
-          );
-
-          return {
-          '''
+          old_loader_prelude = (
+              "  const reviewerRow = reviewerResult.data as Record<string, unknown> | null;\n"
+              "\n"
+              "  return {\n"
+          )
+          new_loader_prelude = (
+              "  const reviewerRow = reviewerResult.data as Record<string, unknown> | null;\n"
+              "  const reviewerExpiresAt = reviewerRow ? nullableString(reviewerRow.expires_at) : null;\n"
+              "  const reviewerCurrentlyAuthorized = Boolean(\n"
+              "    reviewerRow?.active &&\n"
+              "    (!reviewerExpiresAt || Date.parse(reviewerExpiresAt) > Date.now()),\n"
+              "  );\n"
+              "\n"
+              "  return {\n"
+          )
           if loader.count(old_loader_prelude) != 1:
-            raise SystemExit("Expected exactly one reviewer loader return prelude.")
+              raise SystemExit("Expected exactly one reviewer loader return prelude.")
           loader = loader.replace(old_loader_prelude, new_loader_prelude)
 
-          old_loader_fields = '''      active: Boolean(reviewerRow.active),
-                rationale: String(reviewerRow.rationale ?? ""),
-                authorizedAt: String(reviewerRow.authorized_at ?? ""),
-                expiresAt: nullableString(reviewerRow.expires_at),
-              '''
-          new_loader_fields = '''      active: Boolean(reviewerRow.active),
-                currentlyAuthorized: reviewerCurrentlyAuthorized,
-                rationale: String(reviewerRow.rationale ?? ""),
-                authorizedAt: String(reviewerRow.authorized_at ?? ""),
-                expiresAt: reviewerExpiresAt,
-              '''
+          old_loader_fields = (
+              "      active: Boolean(reviewerRow.active),\n"
+              "      rationale: String(reviewerRow.rationale ?? \"\"),\n"
+              "      authorizedAt: String(reviewerRow.authorized_at ?? \"\"),\n"
+              "      expiresAt: nullableString(reviewerRow.expires_at),\n"
+          )
+          new_loader_fields = (
+              "      active: Boolean(reviewerRow.active),\n"
+              "      currentlyAuthorized: reviewerCurrentlyAuthorized,\n"
+              "      rationale: String(reviewerRow.rationale ?? \"\"),\n"
+              "      authorizedAt: String(reviewerRow.authorized_at ?? \"\"),\n"
+              "      expiresAt: reviewerExpiresAt,\n"
+          )
           if loader.count(old_loader_fields) != 1:
-            raise SystemExit("Expected exactly one reviewer authorization mapping block.")
-          loader_path.write_text(loader.replace(old_loader_fields, new_loader_fields))
+              raise SystemExit("Expected exactly one reviewer authorization mapping block.")
+          loader = loader.replace(old_loader_fields, new_loader_fields)
+          if loader.count("currentlyAuthorized") != 1:
+              raise SystemExit("Expected one mapped currentlyAuthorized field.")
+          loader_path.write_text(loader)
           PY
 
           git diff --check
