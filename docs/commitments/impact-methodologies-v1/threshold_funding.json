@@ -1,0 +1,198 @@
+{
+  "mechanismFamily": "threshold_funding",
+  "modelKey": "commitments-threshold-funding-v1",
+  "version": 1,
+  "lifecycleStatus": "under_review",
+  "methodologyHash": "sha256:8c915821978c45138467e13e05c96f58d1a695b1206d8a2f95849972899df15c",
+  "approvalBlockers": [
+    "founder_exact_hash_approval_not_recorded",
+    "founder_aal2_session_not_yet_verified",
+    "exact_current_main_continuation_gates_must_pass",
+    "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
+  ],
+  "methodology": {
+    "schemaVersion": "moral-trade-impact-model-methodology-v1",
+    "mechanismFamily": "threshold_funding",
+    "modelKey": "commitments-threshold-funding-v1",
+    "displayName": "Threshold funding and dominant-assurance impact model v1",
+    "estimands": [
+      "success_case_additional",
+      "expected_additional",
+      "direct_causal_attribution",
+      "verified_additional",
+      "cooperative_allocation",
+      "platform_funded_bonus"
+    ],
+    "estimandDefinitions": {
+      "success_case_additional": "Other eligible participant funding activated if the frozen threshold is met, excluding the participant’s own pledge, pre-existing unconditional funding, and any platform-funded failure bonus.",
+      "expected_additional": "The modeled increase in threshold-success probability caused by the participant’s pledge multiplied by other eligible funding activated on success.",
+      "direct_causal_attribution": "Other verified eligible funding attributable to the participant under the approved pivotality model, capped at other verified eligible funding and reported separately from cooperative allocation.",
+      "verified_additional": "Other eligible funding actually captured or externally verified after threshold success, net of refunds, duplicates, ineligible pledges, unconditional baseline funding, and platform subsidies.",
+      "cooperative_allocation": "A non-additive Shapley allocation of coalition-created eligible funding under the frozen threshold and participant ledger.",
+      "platform_funded_bonus": "Any failure bonus or other subsidy paid from Moral Trade or a sponsor, labeled separately and excluded from participant-caused resource totals."
+    },
+    "baselineDefinition": "State-hash the exact threshold amount and supporter rule, deadline, eligible pledge ledger, current eligible funding, unconditional baseline funding, participant’s proposed pledge, payment or intent status, verification rules, refund and failure-bonus rules, and pool lifecycle state immediately before the pledge is accepted.",
+    "algorithmDescription": "Compute the deterministic success-case amount from other eligible pledges. Estimate success probability with and without the participant pledge from the narrowest healthy hierarchical class, accounting for time to deadline, progress, participant count, pledge-size distribution, and failure-bonus design. Multiply the probability change by other eligible funding for expected additionality. After resolution, use verified capture or external receipt state, and compute direct pivotality and Shapley allocation as separate views. Never count the platform-funded bonus as participant-caused resources.",
+    "referenceClassPolicy": {
+      "strategy": "hierarchical",
+      "narrowFields": [
+        "threshold-size band",
+        "funding-progress band",
+        "time-to-deadline band",
+        "eligible supporter-count band",
+        "pledge-size distribution",
+        "cause area",
+        "assurance or dominant-assurance design"
+      ],
+      "broadeningOrder": [
+        "cause area",
+        "pledge-size distribution",
+        "supporter-count band",
+        "threshold-size band",
+        "mechanism family"
+      ],
+      "minimumSampleSize": 60,
+      "noDefensibleClassAction": "withhold",
+      "uncertaintyExpansionRule": "At each approved broadening step, preserve deadline and progress effects, add between-pool variance, and widen the 80% interval. Withhold when success probability or eligible-funding calibration is unavailable."
+    },
+    "uncertaintyPolicy": {
+      "intervalLevelBps": 8000,
+      "method": "Use a calibrated hierarchical event-time model for threshold success, posterior simulation for with-pledge versus without-pledge success, and deterministic or seeded-permutation cooperative allocation with approximation error included.",
+      "confidencePolicy": "Withhold when model health is blocked or stale. Label low confidence only after health passes and the eligible sample is at least 60; moderate requires at least 120 eligible resolved observations, no more than one approved reference-class broadening step, and no blocking calibration failure; high requires at least 240 observations, the narrowest approved class, empirical 80% coverage between 75% and 85%, calibration slope between 0.8 and 1.2, and no active warnings.",
+      "drivers": [
+        "pivotality",
+        "time to deadline",
+        "future pledge arrivals",
+        "eligibility and payment failure",
+        "refunds",
+        "failure-bonus response",
+        "reference-class fit",
+        "coalition-allocation approximation"
+      ]
+    },
+    "freshnessPolicy": {
+      "maxAgeSeconds": 900,
+      "requireStateHash": true,
+      "requiredStateFields": [
+        "threshold terms",
+        "deadline",
+        "eligible pledge ledger",
+        "funded amount",
+        "supporter count",
+        "participant pledge",
+        "verification rules",
+        "failure-bonus and refund rules",
+        "pool lifecycle state"
+      ],
+      "invalidateOnLifecycleStates": [
+        "succeeded",
+        "lapsed",
+        "cancelled",
+        "settled",
+        "refunded",
+        "superseded"
+      ]
+    },
+    "healthPolicy": {
+      "requiredCalibrationMetrics": [
+        "eligible resolved-observation count",
+        "80% interval empirical coverage",
+        "probability calibration intercept and slope",
+        "Brier score for modeled completion or activation probability",
+        "out-of-domain input rate",
+        "required-state-field missingness rate",
+        "reference-class broadening rate",
+        "success-probability calibration by progress and deadline band",
+        "eligible-capture calibration",
+        "refund-rate calibration",
+        "Shapley Monte Carlo relative error"
+      ],
+      "blockedConditions": [
+        "no current exact-hash methodology approval",
+        "no current passing model-health snapshot",
+        "eligible resolved-observation count below the methodology minimum",
+        "80% interval empirical coverage outside the approved tolerance",
+        "material probability-calibration failure",
+        "required state is missing or does not match the immutable state hash",
+        "input is outside the approved domain",
+        "unresolved evidence-integrity, duplication, or overlap failure",
+        "threshold, deadline, or supporter rule is mutable",
+        "eligible pledge ledger cannot be reconstructed",
+        "platform bonus is commingled with participant funding"
+      ],
+      "warningConditions": [
+        "reference class broadened beyond the narrowest approved class",
+        "sample size below the high-confidence threshold",
+        "calibration drift within the warning band",
+        "material share of observations relies on participant attestation rather than independent evidence",
+        "pool uses signed intent rather than stored payment or verified external handoff",
+        "dominant-assurance bonus design has sparse history"
+      ]
+    },
+    "sourceDataRequirements": [
+      "immutable threshold, deadline, supporter, verification, refund, and failure rules",
+      "participant-scoped pledge and eligibility ledger with stable deduplication keys",
+      "current eligible funded amount and supporter count",
+      "payment, signed-intent, or external-handoff state without provider secrets",
+      "resolution, refund, capture, and external receipt evidence",
+      "separate platform or sponsor subsidy ledger",
+      "audited resolved threshold and dominant-assurance outcomes"
+    ],
+    "calibrationEvidenceRefs": [
+      "github-actions:ghuser29384/Website2:31115065783",
+      "source:toby-ord-moral-trade-2015",
+      "source:forethought-moral-public-goods-2026",
+      "source:forethought-convergence-and-compromise-2025",
+      "moraltrade:threshold-funding-outcome-calibration-registry:v1",
+      "registry:moral-trade-production-calibration-evidence-required-before-activation"
+    ],
+    "knownFailureModes": [
+      "strategic pledge timing or pledge splitting",
+      "free-riding and selection into unusually salient campaigns",
+      "duplicate or ineligible identities inflate the ledger",
+      "off-platform funding is omitted from the baseline",
+      "payment authorization fails after apparent threshold success",
+      "platform-funded failure bonuses are misreported as participant impact",
+      "the same activated resources are summed as direct and cooperative attribution"
+    ],
+    "outOfDomainConditions": [
+      "non-monetary threshold without a separately approved native-unit model",
+      "mutable threshold, deadline, or eligibility terms",
+      "private pool whose eligible ledger cannot be audited",
+      "unverified or materially duplicated supporter identities",
+      "threat, coercion, or perverse-incentive design that changes the no-pledge baseline"
+    ],
+    "materialChangeTriggers": [
+      "estimand definition changes",
+      "baseline or counterfactual definition changes",
+      "reference-class fields, broadening order, or minimum sample size changes",
+      "probability, uncertainty, or confidence method changes",
+      "new data source or evidence-quality tier",
+      "aggregation, overlap, or double-counting rule changes",
+      "native-unit or value-adjustment conversion changes",
+      "new participant role or lifecycle state",
+      "change to threshold, supporter, refund, or failure-bonus semantics",
+      "change to pivotality or pledge-arrival model",
+      "change to coalition characteristic function"
+    ],
+    "aggregationPolicy": {
+      "directAndCooperativeNeverSummed": true,
+      "heterogeneousNativeUnitsRemainSeparate": true,
+      "overlapHandling": "A verified resource, action, signer, or deliverable may appear in multiple explanatory views, but may enter an additive platform aggregate at most once. Direct causal attribution and cooperative allocation are alternative attribution lenses and are never summed. Currency, count, duration, and value-adjusted quantities remain separate unless an independently approved immutable conversion snapshot exists."
+    },
+    "shapleyPolicy": {
+      "enabled": true,
+      "characteristicFunctionDefinition": "For any subset of eligible participants, coalition value is the other eligible funding that would be activated by that subset under the frozen threshold, deadline, eligibility, payment, refund, and failure-bonus rules, relative to unconditional baseline funding.",
+      "maximumExactPlayers": 10,
+      "approximationMethod": "Above 10 participants, use 25,000 deterministic seeded random permutations, publish the Monte Carlo standard error, and withhold the allocation if the error exceeds 5% of the coalition value or if coalition-value monotonicity checks fail."
+    },
+    "parameters": {
+      "minimumEligibleResolvedObservations": 60,
+      "successCaseExcludesParticipantOwnPledge": true,
+      "successCaseExcludesPlatformFundedBonus": true,
+      "directAttributionCap": "other_verified_eligible_funding",
+      "cooperativeAllocationIsNonAdditive": true,
+      "publicationRule": "withhold modeled components unless exact-hash model approval and current health pass exist"
+    }
+  }
+}

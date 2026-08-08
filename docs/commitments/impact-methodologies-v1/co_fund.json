@@ -1,0 +1,190 @@
+{
+  "mechanismFamily": "co_fund",
+  "modelKey": "commitments-co-fund-v1",
+  "version": 1,
+  "lifecycleStatus": "under_review",
+  "methodologyHash": "sha256:c1f759e224712a07b30bc28a3be6fd714a0a21c32ee8c0a822779f9f706946ef",
+  "approvalBlockers": [
+    "founder_exact_hash_approval_not_recorded",
+    "founder_aal2_session_not_yet_verified",
+    "exact_current_main_continuation_gates_must_pass",
+    "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
+  ],
+  "methodology": {
+    "schemaVersion": "moral-trade-impact-model-methodology-v1",
+    "mechanismFamily": "co_fund",
+    "modelKey": "commitments-co-fund-v1",
+    "displayName": "Co-Fund project additionality and cooperative allocation model v1",
+    "estimands": [
+      "success_case_additional",
+      "expected_additional",
+      "direct_causal_attribution",
+      "verified_additional",
+      "cooperative_allocation"
+    ],
+    "estimandDefinitions": {
+      "success_case_additional": "The project resource or deliverable that would be created if the frozen Co-Fund succeeds, net of any project quantity that a participant or identified outside funder would supply under the frozen no-pool defaults.",
+      "expected_additional": "The change in project-delivery probability caused by the participant’s inclusion multiplied by the success-case additional quantity, reported in each native unit.",
+      "direct_causal_attribution": "The verified project quantity attributable to a participant under the approved inclusion-versus-exclusion model, capped at verified additional project quantity and not summed with cooperative allocation.",
+      "verified_additional": "The project resource or deliverable independently verified after settlement and delivery, net of frozen no-pool defaults and any independently funded substitute.",
+      "cooperative_allocation": "A non-additive Shapley allocation of verified or expected coalition-created project quantity across participants, using the frozen contribution and fallback structure."
+    },
+    "baselineDefinition": "Before publication, freeze each participant’s maximum budget, no-pool purchase plan, any outside funding, the exact project cost, split rule, deliverables, substitution rule, withdrawal rule, and what happens if a participant exits. A project is additional only to the extent that the same or a substitutable project would not be funded under those defaults.",
+    "algorithmDescription": "Compute the deterministic project gap and success-case deliverables from frozen terms. Estimate delivery probability with and without each participant using a hierarchical model of resolved Co-Funds. Report each participant’s direct inclusion effect separately. Compute a Shapley allocation over the coalition value function for a fairness view, but never add that allocation to direct causal attribution. After delivery, replace modeled deliverables with verified quantities and retain model uncertainty for counterfactual additionality.",
+    "referenceClassPolicy": {
+      "strategy": "hierarchical",
+      "narrowFields": [
+        "project type",
+        "participant count band",
+        "cost band",
+        "funding-gap fraction",
+        "split rule",
+        "exit rule",
+        "evidence tier"
+      ],
+      "broadeningOrder": [
+        "project type",
+        "cost band",
+        "participant count band",
+        "split rule",
+        "mechanism family"
+      ],
+      "minimumSampleSize": 40,
+      "noDefensibleClassAction": "withhold",
+      "uncertaintyExpansionRule": "Expand the predictive interval for each dropped matching field and add coalition-composition variance. Withhold if no class supports both delivery probability and no-pool-default calibration."
+    },
+    "uncertaintyPolicy": {
+      "intervalLevelBps": 8000,
+      "method": "Use hierarchical survival and completion models for funding and delivery, posterior simulation for no-pool substitution, and deterministic or seeded-permutation Shapley calculations with Monte Carlo error included in the 80% interval.",
+      "confidencePolicy": "Withhold when model health is blocked or stale. Label low confidence only after health passes and the eligible sample is at least 40; moderate requires at least 80 eligible resolved observations, no more than one approved reference-class broadening step, and no blocking calibration failure; high requires at least 160 observations, the narrowest approved class, empirical 80% coverage between 75% and 85%, calibration slope between 0.8 and 1.2, and no active warnings.",
+      "drivers": [
+        "participant withdrawal",
+        "shortfall coverage",
+        "project substitution",
+        "cost overrun",
+        "delivery verification",
+        "coalition-value approximation error",
+        "reference-class fit"
+      ]
+    },
+    "freshnessPolicy": {
+      "maxAgeSeconds": 3600,
+      "requireStateHash": true,
+      "requiredStateFields": [
+        "frozen project specification",
+        "exact cost and currency",
+        "participant set",
+        "contribution caps and split",
+        "no-pool defaults",
+        "exit and shortfall rules",
+        "funding and delivery state"
+      ],
+      "invalidateOnLifecycleStates": [
+        "cancelled",
+        "lapsed",
+        "funded",
+        "delivered",
+        "failed",
+        "superseded"
+      ]
+    },
+    "healthPolicy": {
+      "requiredCalibrationMetrics": [
+        "eligible resolved-observation count",
+        "80% interval empirical coverage",
+        "probability calibration intercept and slope",
+        "Brier score for modeled completion or activation probability",
+        "out-of-domain input rate",
+        "required-state-field missingness rate",
+        "reference-class broadening rate",
+        "delivery-probability calibration",
+        "no-pool-substitution calibration",
+        "Shapley Monte Carlo relative error",
+        "cost-overrun calibration"
+      ],
+      "blockedConditions": [
+        "no current exact-hash methodology approval",
+        "no current passing model-health snapshot",
+        "eligible resolved-observation count below the methodology minimum",
+        "80% interval empirical coverage outside the approved tolerance",
+        "material probability-calibration failure",
+        "required state is missing or does not match the immutable state hash",
+        "input is outside the approved domain",
+        "unresolved evidence-integrity, duplication, or overlap failure",
+        "coalition value is non-monotone under the approved project definition",
+        "no-pool defaults are missing for any material participant"
+      ],
+      "warningConditions": [
+        "reference class broadened beyond the narrowest approved class",
+        "sample size below the high-confidence threshold",
+        "calibration drift within the warning band",
+        "material share of observations relies on participant attestation rather than independent evidence",
+        "automatic obligation increases are enabled",
+        "project has a close substitute with uncertain outside funding"
+      ]
+    },
+    "sourceDataRequirements": [
+      "immutable project specification, invoice or quoted cost, and deliverables",
+      "participant identities or stable pseudonymous participant keys",
+      "each participant’s frozen no-pool default and budget cap",
+      "exact split, withdrawal, shortfall, and substitution rules",
+      "settlement and external payment evidence references",
+      "delivery evidence and independent review outcome",
+      "audited resolved Co-Fund outcomes including failures and substitutions"
+    ],
+    "calibrationEvidenceRefs": [
+      "github-actions:ghuser29384/Website2:31115065783",
+      "source:toby-ord-moral-trade-2015",
+      "source:forethought-moral-public-goods-2026",
+      "source:forethought-convergence-and-compromise-2025",
+      "moraltrade:co-fund-outcome-calibration-registry:v1",
+      "registry:moral-trade-production-calibration-evidence-required-before-activation"
+    ],
+    "knownFailureModes": [
+      "participants strategically exaggerate no-pool defaults or willingness to pay",
+      "an outside funder would have supplied the project anyway",
+      "project quality differs from the frozen specification",
+      "participants substitute equivalent off-platform projects",
+      "Shapley approximation error is hidden or treated as direct causation",
+      "currency totals are combined without an immutable conversion snapshot"
+    ],
+    "outOfDomainConditions": [
+      "project cost or deliverables remain materially mutable after terms freeze",
+      "participant obligations are unbounded or cannot be expressed in stable native units",
+      "project creates material uncompensated third-party harms",
+      "no defensible no-pool default exists for one or more material participants",
+      "coalition exceeds the approved approximation capacity or fails monotonicity checks"
+    ],
+    "materialChangeTriggers": [
+      "estimand definition changes",
+      "baseline or counterfactual definition changes",
+      "reference-class fields, broadening order, or minimum sample size changes",
+      "probability, uncertainty, or confidence method changes",
+      "new data source or evidence-quality tier",
+      "aggregation, overlap, or double-counting rule changes",
+      "native-unit or value-adjustment conversion changes",
+      "new participant role or lifecycle state",
+      "coalition characteristic-function change",
+      "change to shortfall, withdrawal, substitution, or automatic-obligation rules",
+      "change to exact-versus-approximate Shapley threshold"
+    ],
+    "aggregationPolicy": {
+      "directAndCooperativeNeverSummed": true,
+      "heterogeneousNativeUnitsRemainSeparate": true,
+      "overlapHandling": "A verified resource, action, signer, or deliverable may appear in multiple explanatory views, but may enter an additive platform aggregate at most once. Direct causal attribution and cooperative allocation are alternative attribution lenses and are never summed. Currency, count, duration, and value-adjusted quantities remain separate unless an independently approved immutable conversion snapshot exists."
+    },
+    "shapleyPolicy": {
+      "enabled": true,
+      "characteristicFunctionDefinition": "For any subset of participants, coalition value is the additional verified or expected project quantity delivered by that subset under the frozen cost, split, fallback, shortfall, and substitution rules, relative to the frozen no-pool defaults.",
+      "maximumExactPlayers": 12,
+      "approximationMethod": "Above 12 participants, use 20,000 deterministic seeded random permutations, publish the Monte Carlo standard error, and withhold the allocation if the error exceeds 5% of the coalition value or if coalition-value monotonicity checks fail."
+    },
+    "parameters": {
+      "minimumEligibleResolvedObservations": 40,
+      "successCaseExcludesParticipantOwnContribution": true,
+      "projectAdditionalityRequiresNoSingleParticipantOrOutsideFunderDefault": true,
+      "cooperativeAllocationIsNonAdditive": true,
+      "publicationRule": "withhold modeled components unless exact-hash model approval and current health pass exist"
+    }
+  }
+}

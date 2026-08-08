@@ -1,0 +1,195 @@
+{
+  "mechanismFamily": "donation_upgrade",
+  "modelKey": "commitments-donation-upgrade-v1",
+  "version": 1,
+  "lifecycleStatus": "under_review",
+  "methodologyHash": "sha256:e917387ce26a21e98af936388fd88436782f0c199b986e0a408f46dace600463",
+  "approvalBlockers": [
+    "founder_exact_hash_approval_not_recorded",
+    "founder_aal2_session_not_yet_verified",
+    "exact_current_main_continuation_gates_must_pass",
+    "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
+  ],
+  "methodology": {
+    "schemaVersion": "moral-trade-impact-model-methodology-v1",
+    "mechanismFamily": "donation_upgrade",
+    "modelKey": "commitments-donation-upgrade-v1",
+    "displayName": "Donation Upgrade additional donation and redirection model v1",
+    "estimands": [
+      "success_case_additional",
+      "expected_additional",
+      "direct_causal_attribution",
+      "verified_additional",
+      "baseline_redirected"
+    ],
+    "estimandDefinitions": {
+      "success_case_additional": "The genuinely new matcher or top-up donation completed on the upgraded branch, excluding the original donor’s frozen planned donation and excluding any platform-funded subsidy.",
+      "expected_additional": "The new matcher or top-up amount multiplied by the modeled probability that the exact upgraded branch completes because the participant joins, with baseline credibility and provider-verification failure included.",
+      "direct_causal_attribution": "Participant-specific verified effect under the approved role model: new donation caused by the original donor’s conditional offer, or baseline redirection caused by the matcher’s qualifying donation. A single verified donation enters additive platform aggregates at most once.",
+      "verified_additional": "The new matcher or top-up donation verified by the exact approved provider event and destination identity, net of reversals, refunds, duplicates, and baseline funding.",
+      "baseline_redirected": "The original donor’s frozen planned amount that was completed at the upgraded destination rather than the fallback destination. It is a redirected baseline resource, not an additional dollar."
+    },
+    "baselineDefinition": "Before publication, freeze the original donor’s genuine planned amount, original recipient identity, planned time window, fallback branch, upgraded recipient identity, matcher amount, deadline, participant roles, visibility, and evidence standard. Preserve the original plan as the fallback if no qualifying match completes.",
+    "algorithmDescription": "Treat the original planned donation as baseline and the matcher or top-up amount as the only success-case additional money. Estimate exact-branch completion from resolved provider-verified upgrades, conditional on baseline evidence, participant role, amount, deadline, destination, and backup-matcher state. Report the original amount separately as baseline redirected. After exact provider verification, cap verified additional at the new donation and never claim a universal two-times welfare or value multiplier.",
+    "referenceClassPolicy": {
+      "strategy": "hierarchical",
+      "narrowFields": [
+        "participant role",
+        "baseline evidence tier",
+        "matcher amount band",
+        "deadline band",
+        "destination identity class",
+        "primary or backup matcher",
+        "privacy mode"
+      ],
+      "broadeningOrder": [
+        "destination identity class",
+        "privacy mode",
+        "deadline band",
+        "amount band",
+        "mechanism family"
+      ],
+      "minimumSampleSize": 50,
+      "noDefensibleClassAction": "withhold",
+      "uncertaintyExpansionRule": "Widen intervals for each broadened field and separately inflate baseline-credibility uncertainty. Withhold when the original plan is not credible or when exact provider verification is unavailable."
+    },
+    "uncertaintyPolicy": {
+      "intervalLevelBps": 8000,
+      "method": "Use a calibrated hierarchical competing-risks model for upgraded-branch completion, fallback completion, default, and reversal; propagate baseline-credibility and provider-verification uncertainty by posterior simulation.",
+      "confidencePolicy": "Withhold when model health is blocked or stale. Label low confidence only after health passes and the eligible sample is at least 50; moderate requires at least 100 eligible resolved observations, no more than one approved reference-class broadening step, and no blocking calibration failure; high requires at least 200 observations, the narrowest approved class, empirical 80% coverage between 75% and 85%, calibration slope between 0.8 and 1.2, and no active warnings.",
+      "drivers": [
+        "original-plan credibility",
+        "matcher default",
+        "backup promotion",
+        "provider verification",
+        "destination mismatch",
+        "refund or reversal",
+        "deadline",
+        "reference-class fit"
+      ]
+    },
+    "freshnessPolicy": {
+      "maxAgeSeconds": 3600,
+      "requireStateHash": true,
+      "requiredStateFields": [
+        "frozen original plan and fallback recipient",
+        "upgraded recipient identity",
+        "original and matcher amounts",
+        "participant roles",
+        "deadline",
+        "candidate and obligation state",
+        "provider verification state"
+      ],
+      "invalidateOnLifecycleStates": [
+        "completed",
+        "defaulted",
+        "expired",
+        "cancelled",
+        "reversed",
+        "superseded"
+      ]
+    },
+    "healthPolicy": {
+      "requiredCalibrationMetrics": [
+        "eligible resolved-observation count",
+        "80% interval empirical coverage",
+        "probability calibration intercept and slope",
+        "Brier score for modeled completion or activation probability",
+        "out-of-domain input rate",
+        "required-state-field missingness rate",
+        "reference-class broadening rate",
+        "baseline-plan credibility calibration",
+        "upgraded-branch completion calibration",
+        "provider-event replay rejection rate",
+        "refund and reversal calibration"
+      ],
+      "blockedConditions": [
+        "no current exact-hash methodology approval",
+        "no current passing model-health snapshot",
+        "eligible resolved-observation count below the methodology minimum",
+        "80% interval empirical coverage outside the approved tolerance",
+        "material probability-calibration failure",
+        "required state is missing or does not match the immutable state hash",
+        "input is outside the approved domain",
+        "unresolved evidence-integrity, duplication, or overlap failure",
+        "exact provider destination or amount cannot be verified",
+        "original planned donation lacks contemporaneous baseline evidence",
+        "same new donation would be additively credited to more than one participant"
+      ],
+      "warningConditions": [
+        "reference class broadened beyond the narrowest approved class",
+        "sample size below the high-confidence threshold",
+        "calibration drift within the warning band",
+        "material share of observations relies on participant attestation rather than independent evidence",
+        "backup matcher was promoted",
+        "destination effectiveness changed after terms freeze",
+        "provider webhook latency exceeds the expected window"
+      ]
+    },
+    "sourceDataRequirements": [
+      "immutable original plan, fallback recipient, upgraded recipient, amounts, deadline, and roles",
+      "contemporaneous baseline evidence for the original planned donation",
+      "exact provider destination identifiers and participant-specific donation references",
+      "authenticated provider webhook or approved external receipt event with replay protection",
+      "primary and backup matcher lifecycle history",
+      "refund, reversal, and default state",
+      "audited resolved Donation Upgrade outcomes"
+    ],
+    "calibrationEvidenceRefs": [
+      "github-actions:ghuser29384/Website2:31115065783",
+      "source:toby-ord-moral-trade-2015",
+      "source:forethought-convergence-and-compromise-2025",
+      "moraltrade:donation-upgrade-product-contract-v1",
+      "moraltrade:donation-upgrade-outcome-calibration-registry:v1",
+      "registry:moral-trade-production-calibration-evidence-required-before-activation"
+    ],
+    "knownFailureModes": [
+      "original donor fabricates or inflates the baseline plan",
+      "provider receipt has wrong recipient, amount, donor role, or metadata",
+      "webhook replay or altered replay creates duplicate credit",
+      "matcher donation would have occurred without the offer",
+      "baseline redirected dollars are mislabeled as additional money",
+      "both participants receive additive credit for the same donation",
+      "a value-adjusted two-times claim is inferred without an approved conversion model"
+    ],
+    "outOfDomainConditions": [
+      "original plan is not frozen or lacks a credible fallback",
+      "recipient identity cannot be resolved to the exact approved destination",
+      "donation is custodial, pooled, split, or settled by Moral Trade",
+      "provider event cannot be authenticated and replay-protected",
+      "non-monetary or multi-stage upgrade without a separately approved model"
+    ],
+    "materialChangeTriggers": [
+      "estimand definition changes",
+      "baseline or counterfactual definition changes",
+      "reference-class fields, broadening order, or minimum sample size changes",
+      "probability, uncertainty, or confidence method changes",
+      "new data source or evidence-quality tier",
+      "aggregation, overlap, or double-counting rule changes",
+      "native-unit or value-adjustment conversion changes",
+      "new participant role or lifecycle state",
+      "change to original-plan, fallback, matcher, backup, or provider-verification semantics",
+      "change to participant-specific attribution ownership",
+      "introduction of any value-adjusted destination comparison"
+    ],
+    "aggregationPolicy": {
+      "directAndCooperativeNeverSummed": true,
+      "heterogeneousNativeUnitsRemainSeparate": true,
+      "overlapHandling": "A verified resource, action, signer, or deliverable may appear in multiple explanatory views, but may enter an additive platform aggregate at most once. Direct causal attribution and cooperative allocation are alternative attribution lenses and are never summed. Currency, count, duration, and value-adjusted quantities remain separate unless an independently approved immutable conversion snapshot exists."
+    },
+    "shapleyPolicy": {
+      "enabled": false,
+      "characteristicFunctionDefinition": "Not used for this methodology.",
+      "maximumExactPlayers": null,
+      "approximationMethod": null
+    },
+    "parameters": {
+      "minimumEligibleResolvedObservations": 50,
+      "onlyMatcherOrTopUpMoneyIsAdditional": true,
+      "originalPlannedAmountKind": "baseline_redirected",
+      "universalTwoTimesValueClaimPermitted": false,
+      "providerVerificationRequiredForVerifiedCredit": true,
+      "publicationRule": "withhold modeled components unless exact-hash model approval and current health pass exist"
+    }
+  }
+}
