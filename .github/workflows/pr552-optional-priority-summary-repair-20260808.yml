@@ -1,0 +1,115 @@
+name: PR 552 optional priority-summary repair
+
+on:
+  push:
+    branches:
+      - ops/pr552-optional-priority-summary-repair-20260808
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr552-optional-priority-summary-repair-20260808
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Patch the exact PR 552 branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_BRANCH: hotfix/dashboard-account-security-visible-20260807
+      EXPECTED_TARGET_SHA: 0f2164e893b3eee94d2f4033d013f2ebf6430cea
+    steps:
+      - name: Check out the exact target branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Guard the target revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_SHA"
+          test "$(git branch --show-current)" = "$TARGET_BRANCH"
+
+      - name: Apply the fail-closed optional-summary repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file_path = Path(path)
+              source = file_path.read_text(encoding="utf-8")
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one exact match, found {count}")
+              file_path.write_text(source.replace(old, new, 1), encoding="utf-8")
+
+          replace_once(
+              "src/app/dashboard/page.tsx",
+              """  const priorityFundSummary =
+              viewer && supabaseReady ? await getPriorityCorrectionSummary(viewer.authUser.id) : null;
+          """,
+              """  const priorityFundSummary =
+              viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY
+                ? await getPriorityCorrectionSummary(viewer.authUser.id)
+                : null;
+          """,
+          )
+
+          replace_once(
+              ".github/workflows/dashboard-account-security-hotfix-gates.yml",
+              """      - \"src/app/dashboard/dashboard-account-security.css\"
+                    - \"src/app/dashboard/layout.tsx\"
+          """,
+              """      - \"src/app/dashboard/dashboard-account-security.css\"
+                    - \"src/app/dashboard/layout.tsx\"
+                    - \"src/app/dashboard/page.tsx\"
+          """,
+          )
+
+          replace_once(
+              ".github/workflows/dashboard-account-security-hotfix-gates.yml",
+              """          src/app/dashboard/dashboard-account-security.css
+                    src/app/dashboard/layout.tsx
+                    src/dashboard-account-security-visibility.test.ts
+          """,
+              """          src/app/dashboard/dashboard-account-security.css
+                    src/app/dashboard/layout.tsx
+                    src/app/dashboard/page.tsx
+                    src/dashboard-account-security-visibility.test.ts
+          """,
+          )
+          PY
+
+      - name: Verify the exact patch scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          git diff --name-only | sort > actual-repair-files.txt
+          cat > expected-repair-files.txt <<'EOF'
+          .github/workflows/dashboard-account-security-hotfix-gates.yml
+          src/app/dashboard/page.tsx
+          EOF
+          sort -o expected-repair-files.txt expected-repair-files.txt
+          diff -u expected-repair-files.txt actual-repair-files.txt
+          grep -F 'viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY' src/app/dashboard/page.tsx
+          grep -F 'src/app/dashboard/page.tsx' .github/workflows/dashboard-account-security-hotfix-gates.yml
+
+      - name: Commit and push the repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/workflows/dashboard-account-security-hotfix-gates.yml \
+            src/app/dashboard/page.tsx
+          git commit -m "Skip optional priority summary without service credentials"
+          git push origin "HEAD:$TARGET_BRANCH"
