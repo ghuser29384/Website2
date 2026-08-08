@@ -1,0 +1,34 @@
+name: Locate stale PR 552 discover route
+
+on:
+  push:
+    branches:
+      - ops/pr552-authenticated-preview-mfa-db-qa-v10-20260808
+    paths:
+      - .github/workflows/pr552-locate-stale-discover-route-20260808.yml
+
+permissions:
+  contents: read
+
+jobs:
+  locate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Locate exact and constructed stale routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== exact URL ==='
+          rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' 'discover\?domain=offers&view=list' . || true
+          echo '=== domain=offers ==='
+          rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' 'domain["'"'=: ]+offers|domain=offers' . || true
+          echo '=== view=list ==='
+          rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' 'view["'"'=: ]+list|view=list' . || true
+          echo '=== discover references ==='
+          rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' '/discover|"discover"|\x27discover\x27' src public tests .github || true
+          echo '=== offers navigation references ==='
+          rg -n --hidden --glob '!node_modules/**' --glob '!.git/**' 'href.*offers|offers.*href|router\.(push|replace).*offers' src public tests .github || true
