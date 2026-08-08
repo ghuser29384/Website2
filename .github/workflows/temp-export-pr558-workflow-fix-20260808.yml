@@ -1,0 +1,59 @@
+name: Temporary export corrected PR 558 permanent workflow
+
+on:
+  push:
+    branches:
+      - temp/export-pr558-workflow-fix-20260808
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_HEAD_SHA: e4d46b4253d2de21a9b4d74a90a5f7d06cbfb2fa
+      TARGET_BRANCH: fix/mpgf-dac-product-lifecycle-20260807
+
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Correct and verify only the two stale workflow campaign identifiers
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path(".github/workflows/mpgf-dac-product-lifecycle-gates.yml")
+          source = path.read_text()
+          wrong = "'campaign-c077777777774777877777777777777'"
+          correct = "'campaign-c0777777777747778777777777777777'"
+          if source.count(wrong) != 2:
+              raise SystemExit(f"Expected exactly two stale workflow campaign IDs, found {source.count(wrong)}.")
+          source = source.replace(wrong, correct)
+          if wrong in source:
+              raise SystemExit("A stale workflow campaign ID remains.")
+          if source.count(correct) != 2:
+              raise SystemExit(f"Expected exactly two exact workflow campaign IDs, found {source.count(correct)}.")
+          path.write_text(source)
+          PY
+          git diff --check
+          sha256sum .github/workflows/mpgf-dac-product-lifecycle-gates.yml \
+            | tee corrected-workflow.sha256
+
+      - name: Upload the exact corrected workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr558-corrected-permanent-workflow
+          path: |
+            .github/workflows/mpgf-dac-product-lifecycle-gates.yml
+            corrected-workflow.sha256
+          if-no-files-found: error
+          retention-days: 1
