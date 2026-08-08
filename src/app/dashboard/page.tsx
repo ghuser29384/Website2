@@ -589,7 +589,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               { href: "/offers", label: "Browse", destination: "Offers" },
               { href: "/contact", label: "Support", destination: "Contact" },
             ].map((item) => (
-              <Link className="v72-shortcut-tile" href={item.href} key={item.label}>
+              <Link
+                className="v72-shortcut-tile"
+                href={item.href}
+                key={item.label}
+                prefetch={item.href === "/offers" ? false : undefined}
+              >
                 <strong>{item.label}</strong>
                 <span>{item.destination}</span>
               </Link>

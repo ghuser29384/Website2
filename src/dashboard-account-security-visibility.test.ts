@@ -63,3 +63,26 @@ test("an optional priority summary cannot block the Account security surface", (
     ),
   );
 });
+
+test("authenticator code inputs use a browser-valid pattern", () => {
+  const validPattern = String.raw`pattern="[0-9\s-]{6,8}"`;
+  const invalidPattern = String.raw`pattern="[0-9\\s-]{6,8}"`;
+
+  assert.equal(accountSecurityPanel.split(validPattern).length - 1, 2);
+  assert.equal(accountSecurityPanel.includes(invalidPattern), false);
+});
+
+test("the stale Offers shortcut cannot prefetch a missing route", () => {
+  assert.ok(
+    dashboard.includes(
+      [
+        "              <Link",
+        '                className="v72-shortcut-tile"',
+        "                href={item.href}",
+        "                key={item.label}",
+        '                prefetch={item.href === "/offers" ? false : undefined}',
+        "              >",
+      ].join("\n"),
+    ),
+  );
+});
