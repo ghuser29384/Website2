@@ -62,11 +62,11 @@ jobs:
           mkdir -p "$EVIDENCE_DIR"
           printf '%s\n' "$PRODUCT_SHA" > "$EVIDENCE_DIR/product-sha.txt"
           grep -n -E \
-            'data-mtg-action-autocomplete|data-mtg-action-options|action-autocomplete|showActionSuggestions|selectActionSuggestion|role="combobox"' \
+            'role="combobox"|actionSuggestions|action-autocomplete|Describe the action|Choose a suggestion or write your own' \
             public/moral-trade-create/index.html \
             > "$EVIDENCE_DIR/current-autocomplete-source-markers.txt" || true
           grep -n -E \
-            'moral-trade-live\.html#trade|/trades/new|Moral Trade Create|data-create-interface-frame' \
+            '/trades/new|Moral Trade Create|data-create-interface-frame' \
             public/moral-trade-live.html \
             src/app/trades/new/page.tsx \
             src/components/create/create-interface-frame.tsx \
@@ -126,12 +126,8 @@ jobs:
               );
             });
             page.on("response", (response) => {
-              const pageOrigin = page.url().startsWith("http") ? new URL(page.url()).origin : "";
-              if (
-                pageOrigin &&
-                response.status() >= 400 &&
-                new URL(response.url()).origin === pageOrigin
-              ) {
+              const origin = page.url().startsWith("http") ? new URL(page.url()).origin : "";
+              if (origin && response.status() >= 400 && new URL(response.url()).origin === origin) {
                 events.httpErrors.push(
                   `${response.status()} ${response.request().method()} ${response.url()}`,
                 );
@@ -140,74 +136,7 @@ jobs:
             return events;
           }
 
-          async function installFixtures(page: Page) {
-            await page.route("**/api/live-account", async (route) => {
-              await route.fulfill({
-                contentType: "application/json",
-                body: JSON.stringify({ authenticated: false }),
-              });
-            });
-            await page.route("**/api/live-now**", async (route) => {
-              await route.fulfill({
-                contentType: "application/json",
-                body: JSON.stringify({
-                  authenticated: false,
-                  generatedAt: "2026-08-08T08:00:00.000Z",
-                  matchingOpportunityCount: 0,
-                  profile: {
-                    causes: [],
-                    weightedCauses: [],
-                    openToPayment: null,
-                    openToPledges: null,
-                    signalSources: [],
-                    learningEnabled: true,
-                  },
-                  recentChanges: [],
-                  recommendations: [],
-                  ownedOpportunities: [],
-                  ownedOpportunityCount: 0,
-                  status: "signed_out",
-                  routePlanner: {
-                    status: "signed_out",
-                    checkedAt: "2026-08-08T08:00:00.000Z",
-                    profile: {},
-                    needsMoreInput: [],
-                    routes: [],
-                    comparison: null,
-                    candidateCount: 0,
-                  },
-                }),
-              });
-            });
-            await page.route("**/api/nonprofits/search**", async (route) => {
-              const query = new URL(route.request().url()).searchParams.get("q") ?? "";
-              await route.fulfill({
-                contentType: "application/json",
-                body: JSON.stringify({
-                  query,
-                  results: /red cross/i.test(query)
-                    ? [
-                        {
-                          label: "American National Red Cross",
-                          description: "501(c)(3) charity · Washington, DC · EIN 53-0196605",
-                          aliases: ["American Red Cross"],
-                          kind: "organization",
-                          source: "ProPublica Nonprofit Explorer / IRS",
-                          ein: "53-0196605",
-                          profileUrl:
-                            "https://projects.propublica.org/nonprofits/organizations/530196605",
-                          subsection: 3,
-                          score: 120,
-                        },
-                      ]
-                    : [],
-                  source: "ProPublica Nonprofit Explorer / IRS",
-                }),
-              });
-            });
-          }
-
-          async function openCreateThroughLegacyEntry(page: Page) {
+          async function openCreate(page: Page) {
             await page.goto("/moral-trade-live.html#trade", { waitUntil: "domcontentloaded" });
             await expect(page).toHaveURL(/\/trades\/new(?:[?#]|$)/, { timeout: 30_000 });
             const iframe = page.locator('iframe[title="Moral Trade Create"]');
@@ -216,28 +145,25 @@ jobs:
             const frame = await handle?.contentFrame();
             if (!frame) throw new Error("Moral Trade Create frame did not become available");
             await expect(frame.locator("body")).not.toBeEmpty({ timeout: 30_000 });
-            await frame.waitForTimeout(500);
             return frame;
           }
 
-          async function currentAutocomplete(frame: Frame) {
-            const candidates = [
-              frame.locator("[data-mtg-action-autocomplete]"),
-              frame.locator(".action-autocomplete input"),
-              frame.locator('input[role="combobox"]'),
-            ];
+          async function reachActionAutocomplete(frame: Frame) {
+            await frame.getByRole("button", { name: "Wild animal suffering", exact: true }).click();
+            await frame.getByRole("button", { name: "Continue →", exact: true }).click();
+            await expect(
+              frame.getByRole("heading", { name: "What do you want other people to do?" }),
+            ).toBeVisible();
+            await frame
+              .getByRole("button", { name: /Commitment A bounded action/ })
+              .click();
 
-            for (const locator of candidates) {
-              const count = await locator.count();
-              for (let index = 0; index < count; index += 1) {
-                const item = locator.nth(index);
-                if (await item.isVisible().catch(() => false)) return item;
-              }
-            }
-            return null;
+            const input = frame.locator('input[role="combobox"]').filter({ visible: true }).first();
+            await expect(input).toBeVisible({ timeout: 10_000 });
+            return input;
           }
 
-          async function snapshot(frame: Frame) {
+          async function state(frame: Frame) {
             return frame.evaluate(() => {
               const visible = (element: Element) => {
                 const html = element as HTMLElement;
@@ -251,74 +177,39 @@ jobs:
                   rect.height > 0
                 );
               };
-              const summarize = (element: Element) => {
-                const html = element as HTMLElement;
-                const rect = html.getBoundingClientRect();
-                return {
-                  tag: element.tagName.toLowerCase(),
-                  id: html.id,
-                  className: html.className,
-                  text: (html.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 2_000),
-                  value:
-                    element instanceof HTMLInputElement ||
-                    element instanceof HTMLTextAreaElement ||
-                    element instanceof HTMLSelectElement
-                      ? element.value
-                      : null,
-                  visible: visible(element),
-                  rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
-                  attributes: Object.fromEntries(
-                    [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
-                  ),
-                  outerHTML: html.outerHTML.slice(0, 12_000),
-                };
-              };
-
-              const controls = [
-                ...document.querySelectorAll(
-                  'input, textarea, select, button, a[href], [role="option"], [role="combobox"], [role="listbox"]',
+              const summarize = (element: Element) => ({
+                tag: element.tagName.toLowerCase(),
+                text: (element.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 1_200),
+                value:
+                  element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+                    ? element.value
+                    : null,
+                visible: visible(element),
+                attributes: Object.fromEntries(
+                  [...element.attributes].map((attribute) => [attribute.name, attribute.value]),
                 ),
-              ].slice(0, 300).map(summarize);
-              const relevantData = [...document.querySelectorAll("*")]
-                .flatMap((element) =>
-                  [...element.attributes]
-                    .filter(
-                      (attribute) =>
-                        attribute.name.startsWith("data-mtg-") ||
-                        attribute.name.startsWith("data-mt-") ||
-                        attribute.name === "data-testid",
-                    )
-                    .map((attribute) => ({
-                      tag: element.tagName.toLowerCase(),
-                      name: attribute.name,
-                      value: attribute.value,
-                      text: (element.textContent ?? "")
-                        .replace(/\s+/g, " ")
-                        .trim()
-                        .slice(0, 400),
-                    })),
-                )
-                .slice(0, 600);
+              });
 
               return {
-                url: location.href,
                 title: document.title,
-                bodyText: (document.body.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 20_000),
+                bodyText: (document.body.textContent ?? "").replace(/\s+/g, " ").trim().slice(0, 12_000),
                 headings: [...document.querySelectorAll("h1, h2, h3")].map(summarize),
-                actionAutocomplete: [
-                  ...document.querySelectorAll("[data-mtg-action-autocomplete]"),
-                ].map(summarize),
-                actionOptions: [...document.querySelectorAll("[data-mtg-action-options]")].map(
-                  summarize,
-                ),
-                autocompleteContainers: [...document.querySelectorAll(".action-autocomplete")].map(
-                  summarize,
-                ),
-                comboboxes: [...document.querySelectorAll('[role="combobox"]')].map(summarize),
-                listboxes: [...document.querySelectorAll('[role="listbox"]')].map(summarize),
-                options: [...document.querySelectorAll('[role="option"]')].map(summarize),
-                controls,
-                relevantData,
+                visibleComboboxes: [...document.querySelectorAll('[role="combobox"]')]
+                  .filter(visible)
+                  .map(summarize),
+                visibleListboxes: [...document.querySelectorAll('[role="listbox"]')]
+                  .filter(visible)
+                  .map(summarize),
+                visibleOptions: [...document.querySelectorAll('[role="option"]')]
+                  .filter(visible)
+                  .map(summarize),
+                offerChoiceButtons: [...document.querySelectorAll("button")]
+                  .filter((element) =>
+                    /Commitment|Skill|Fund|Pledge-swap|Donation redirect|Donation Upgrade|Co-Fund|Threshold pool/.test(
+                      element.textContent ?? "",
+                    ),
+                  )
+                  .map(summarize),
                 legacyClauseCount: document.querySelectorAll(".clause").length,
                 legacyTokenCount: document.querySelectorAll('.token[contenteditable="true"]').length,
                 legacyOfferTypeCount: document.querySelectorAll("[data-mt-offer-type]").length,
@@ -326,8 +217,6 @@ jobs:
                   innerWidth: window.innerWidth,
                   clientWidth: document.documentElement.clientWidth,
                   scrollWidth: document.documentElement.scrollWidth,
-                  innerHeight: window.innerHeight,
-                  scrollHeight: document.documentElement.scrollHeight,
                 },
               };
             });
@@ -341,7 +230,6 @@ jobs:
             extra: Record<string, unknown> = {},
           ) {
             await mkdir(evidenceDir, { recursive: true });
-            const state = await snapshot(frame);
             await writeFile(
               path.join(evidenceDir, `${label}.json`),
               `${JSON.stringify(
@@ -349,7 +237,7 @@ jobs:
                   label,
                   recordedAt: new Date().toISOString(),
                   outerUrl: page.url(),
-                  state,
+                  state: await state(frame),
                   events: structuredClone(events),
                   extra,
                 },
@@ -361,81 +249,63 @@ jobs:
             await page.screenshot({ path: path.join(evidenceDir, `${label}.png`), fullPage: true });
           }
 
-          async function exerciseAutocomplete(page: Page, frame: Frame, events: Events, prefix: string) {
-            const input = await currentAutocomplete(frame);
-            if (!input) {
-              await record(page, frame, events, `${prefix}-no-autocomplete`, {
-                attempted: false,
-                reason: "No visible current action autocomplete was present",
-              });
-              return;
-            }
-
+          async function exercise(page: Page, frame: Frame, events: Events, prefix: string) {
+            await record(page, frame, events, `${prefix}-cause-step`);
+            const input = await reachActionAutocomplete(frame);
             const initial = {
               placeholder: await input.getAttribute("placeholder"),
-              ariaLabel: await input.getAttribute("aria-label"),
               ariaControls: await input.getAttribute("aria-controls"),
               ariaExpanded: await input.getAttribute("aria-expanded"),
-              role: await input.getAttribute("role"),
+              ariaAutocomplete: await input.getAttribute("aria-autocomplete"),
             };
-            await record(page, frame, events, `${prefix}-initial`, { initial });
+            await record(page, frame, events, `${prefix}-action-initial`, { initial });
 
             await input.fill("write");
-            await frame.waitForTimeout(400);
-            const optionsAfterWrite = await frame
-              .locator('[role="option"], [data-mtg-action-options] button, [data-mtg-action-options] li')
-              .allTextContents();
-            await record(page, frame, events, `${prefix}-write-suggestions`, {
-              initial,
-              optionsAfterWrite,
-            });
+            await frame.waitForTimeout(250);
+            const writeOptions = await frame.locator('[role="option"]:visible').allTextContents();
+            await record(page, frame, events, `${prefix}-write-options`, { writeOptions });
 
             await input.press("ArrowDown");
-            await frame.waitForTimeout(100);
             const activeAfterArrow = await input.getAttribute("aria-activedescendant");
             await input.press("Enter");
-            await frame.waitForTimeout(300);
-            await record(page, frame, events, `${prefix}-after-keyboard-selection`, {
+            await frame.waitForTimeout(100);
+            await record(page, frame, events, `${prefix}-keyboard-selection`, {
               activeAfterArrow,
-              valueAfterEnter: await input.inputValue(),
+              selectedValue: await input.inputValue(),
+              expandedAfterEnter: await input.getAttribute("aria-expanded"),
             });
 
             await input.fill("donate");
-            await frame.waitForTimeout(300);
+            await frame.waitForTimeout(200);
             await input.press("Escape");
-            await frame.waitForTimeout(100);
-            await record(page, frame, events, `${prefix}-after-escape`, {
-              valueAfterEscape: await input.inputValue(),
-              expandedAfterEscape: await input.getAttribute("aria-expanded"),
+            await record(page, frame, events, `${prefix}-escape`, {
+              value: await input.inputValue(),
+              expanded: await input.getAttribute("aria-expanded"),
             });
 
             await input.fill("volunteer");
-            await frame.waitForTimeout(300);
-            const heading = frame.locator("h1, h2").first();
-            if (await heading.isVisible().catch(() => false)) await heading.click();
-            await frame.waitForTimeout(100);
-            await record(page, frame, events, `${prefix}-after-outside-click`, {
-              valueAfterOutsideClick: await input.inputValue(),
-              expandedAfterOutsideClick: await input.getAttribute("aria-expanded"),
+            await frame.waitForTimeout(200);
+            await frame.getByRole("heading", { name: "What do you want other people to do?" }).click();
+            await record(page, frame, events, `${prefix}-outside-click`, {
+              value: await input.inputValue(),
+              expanded: await input.getAttribute("aria-expanded"),
             });
           }
 
-          test("records the current desktop Create action autocomplete reached from the legacy Trade hash", async ({
+          test("records the current desktop autocomplete reached through the legacy Trade entry", async ({
             page,
           }) => {
             const events = observe(page);
-            await installFixtures(page);
             await page.setViewportSize({ width: 1440, height: 1000 });
-            const frame = await openCreateThroughLegacyEntry(page);
-            await exerciseAutocomplete(page, frame, events, "desktop");
+            const frame = await openCreate(page);
+            await exercise(page, frame, events, "desktop");
           });
 
-          test("records the current mobile Create autocomplete and viewport contract", async ({ page }) => {
+          test("records the current mobile autocomplete and viewport contract", async ({ page }) => {
             const events = observe(page);
-            await installFixtures(page);
             await page.setViewportSize({ width: 390, height: 844 });
-            const frame = await openCreateThroughLegacyEntry(page);
-            await exerciseAutocomplete(page, frame, events, "mobile");
+            const frame = await openCreate(page);
+            await exercise(page, frame, events, "mobile");
           });
           TS
 
