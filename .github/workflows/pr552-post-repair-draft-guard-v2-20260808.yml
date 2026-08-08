@@ -1,0 +1,171 @@
+name: PR 552 post-repair draft guard v2
+
+on:
+  push:
+    branches:
+      - ops/pr552-post-repair-draft-guard-v2-20260808
+    paths:
+      - .github/workflows/pr552-post-repair-draft-guard-v2-20260808.yml
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr552-post-repair-draft-guard-v2-20260808
+  cancel-in-progress: false
+
+env:
+  SUPERSEDED_GUARD_BRANCH: ops/pr552-post-repair-draft-guard-20260808
+  TARGET_BRANCH: hotfix/dashboard-account-security-visible-20260807
+  STATUS_DIR: pr552-post-repair-draft-guard-v2
+
+jobs:
+  guard:
+    name: Keep an unproved repaired head draft without racing finalization
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Check out the guard controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cancel only the superseded guard
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          response="$(curl -fsS \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/ghuser29384/Website2/actions/runs?branch=${SUPERSEDED_GUARD_BRANCH}&per_page=50")"
+          while read -r run_id; do
+            [[ -n "$run_id" ]] || continue
+            curl -fsS -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              "https://api.github.com/repos/ghuser29384/Website2/actions/runs/${run_id}/cancel" \
+              >/dev/null || true
+          done < <(jq -r '.workflow_runs[] | select(.status != "completed") | .id' <<<"$response")
+
+      - name: Wait for the final redirect-backed repair and classify readiness
+        id: head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$STATUS_DIR"
+          candidate=''
+          pr_node_id=''
+          was_draft=''
+          has_current_evidence='false'
+          for attempt in $(seq 1 240); do
+            response="$(curl -fsS \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H 'Accept: application/vnd.github+json' \
+              'https://api.github.com/repos/ghuser29384/Website2/pulls/552')"
+            test "$(jq -r '.state' <<<"$response")" = 'open'
+            test "$(jq -r '.head.ref' <<<"$response")" = "$TARGET_BRANCH"
+            test "$(jq -r '.head.repo.full_name' <<<"$response")" = 'ghuser29384/Website2'
+            test "$(jq -r '.base.ref' <<<"$response")" = 'main'
+            sha="$(jq -r '.head.sha' <<<"$response")"
+            git fetch --no-tags origin "$sha"
+            actions_file="$RUNNER_TEMP/pr552-draft-guard-v2-actions.ts"
+            component_file="$RUNNER_TEMP/pr552-draft-guard-v2-panel.tsx"
+            git show "${sha}:src/app/background-networking/actions.ts" > "$actions_file"
+            git show "${sha}:src/components/dashboard/background-account-security-panel.tsx" > "$component_file"
+            if grep -Fq 'redirectWithMessage(returnTo, "message", "MFA verified for this session.");' "$actions_file" \
+              && grep -Fq 'data-mfa-verification-refresh="router-refresh"' "$component_file" \
+              && grep -Fq 'router.refresh();' "$component_file"; then
+              candidate="$sha"
+              pr_node_id="$(jq -r '.node_id' <<<"$response")"
+              was_draft="$(jq -r '.draft' <<<"$response")"
+              body="$(jq -r '.body // ""' <<<"$response")"
+              if grep -Fq '<!-- pr552-final-preview-evidence:start -->' <<<"$body" \
+                && grep -Fq '<!-- pr552-final-preview-evidence:end -->' <<<"$body" \
+                && grep -Fq "**Verified candidate:** \`${sha}\`" <<<"$body"; then
+                has_current_evidence='true'
+              fi
+              break
+            fi
+            sleep 4
+          done
+          test -n "$candidate"
+          test -n "$pr_node_id"
+          printf '%s\n' "$candidate" | tee "$STATUS_DIR/candidate-sha.txt"
+          printf '%s\n' "$was_draft" | tee "$STATUS_DIR/was-draft.txt"
+          printf '%s\n' "$has_current_evidence" | tee "$STATUS_DIR/has-current-evidence.txt"
+          echo "candidate=$candidate" >> "$GITHUB_OUTPUT"
+          echo "pr_node_id=$pr_node_id" >> "$GITHUB_OUTPUT"
+          echo "was_draft=$was_draft" >> "$GITHUB_OUTPUT"
+          echo "has_current_evidence=$has_current_evidence" >> "$GITHUB_OUTPUT"
+
+      - name: Convert an unproved changed head back to draft
+        if: ${{ steps.head.outputs.was_draft != 'true' && steps.head.outputs.has_current_evidence != 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg query 'mutation($id:ID!){convertPullRequestToDraft(input:{pullRequestId:$id}){pullRequest{isDraft number headRefOid}}}' \
+            --arg id '${{ steps.head.outputs.pr_node_id }}' \
+            '{query:$query,variables:{id:$id}}' > "$RUNNER_TEMP/pr552-convert-draft-v2.json"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            'https://api.github.com/graphql' \
+            --data-binary @"$RUNNER_TEMP/pr552-convert-draft-v2.json" \
+            > "$STATUS_DIR/convert-response.json"
+          jq -e \
+            --arg sha '${{ steps.head.outputs.candidate }}' '
+              (.errors // []) | length == 0
+              and .data.convertPullRequestToDraft.pullRequest.isDraft == true
+              and .data.convertPullRequestToDraft.pullRequest.headRefOid == $sha
+            ' "$STATUS_DIR/convert-response.json" >/dev/null
+
+      - name: Prove the final fail-closed state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          response="$(curl -fsS \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H 'Accept: application/vnd.github+json' \
+            'https://api.github.com/repos/ghuser29384/Website2/pulls/552')"
+          test "$(jq -r '.state' <<<"$response")" = 'open'
+          test "$(jq -r '.head.sha' <<<"$response")" = '${{ steps.head.outputs.candidate }}'
+          test "$(jq -r '.head.ref' <<<"$response")" = "$TARGET_BRANCH"
+          is_draft="$(jq -r '.draft' <<<"$response")"
+          has_current_evidence='false'
+          body="$(jq -r '.body // ""' <<<"$response")"
+          if grep -Fq '<!-- pr552-final-preview-evidence:start -->' <<<"$body" \
+            && grep -Fq '<!-- pr552-final-preview-evidence:end -->' <<<"$body" \
+            && grep -Fq "**Verified candidate:** \`${{ steps.head.outputs.candidate }}\`" <<<"$body"; then
+            has_current_evidence='true'
+          fi
+          if [[ "$is_draft" != 'true' && "$has_current_evidence" != 'true' ]]; then
+            echo 'PR is review-ready without exact evidence for the live head.' >&2
+            exit 1
+          fi
+          jq -n \
+            --arg candidateSha '${{ steps.head.outputs.candidate }}' \
+            --argjson wasDraft '${{ steps.head.outputs.was_draft }}' \
+            --argjson isDraft "$is_draft" \
+            --argjson hasCurrentEvidence "$has_current_evidence" \
+            '{schemaVersion:1,status:"success",candidateSha:$candidateSha,wasDraft:$wasDraft,isDraft:$isDraft,hasCurrentEvidence:$hasCurrentEvidence,productionChanged:false}' \
+            > "$STATUS_DIR/status.json"
+
+      - name: Archive guard evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-post-repair-draft-guard-v2-${{ github.run_id }}
+          path: pr552-post-repair-draft-guard-v2/
+          if-no-files-found: warn
+          retention-days: 30
