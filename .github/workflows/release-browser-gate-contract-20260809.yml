@@ -1,0 +1,158 @@
+name: Release browser-gate contract repair
+
+on:
+  push:
+    branches:
+      - ops/release-browser-gate-contract-20260809
+    paths:
+      - ".github/workflows/release-browser-gate-contract-20260809.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-browser-gate-contract-20260809
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_MAIN_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+      PLAYWRIGHT_JSON_OUTPUT_NAME: playwright-results.json
+
+    steps:
+      - name: Check out the exact repair branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard the current-main ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
+          printf 'head=%s\nbase=%s\ntree=%s\n' \
+            "$(git rev-parse HEAD)" \
+            "$EXPECTED_MAIN_SHA" \
+            "$(git rev-parse HEAD^{tree})" \
+            | tee exact-current-main.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium runtime
+        run: npx playwright install --with-deps chromium
+
+      - name: Reproduce the complete release browser gate
+        id: gate
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          npm run test:e2e -- --reporter=line,json 2>&1 | tee browser-gate.log
+          status=${PIPESTATUS[0]}
+          set -e
+          printf '%s\n' "$status" | tee browser-gate.exit-code
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Build structured failure summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('playwright-results.json', 'utf8'));
+          const failures = [];
+          const visit = (suite, prefix = []) => {
+            const next = suite.title ? [...prefix, suite.title] : prefix;
+            for (const spec of suite.specs || []) {
+              for (const test of spec.tests || []) {
+                const bad = (test.results || []).filter((result) =>
+                  ['failed', 'timedOut', 'interrupted'].includes(result.status)
+                );
+                if (test.status === 'unexpected' || bad.length) {
+                  const error = bad.flatMap((result) => result.errors || [])[0] || {};
+                  failures.push({
+                    file: spec.file || suite.file || 'unknown',
+                    line: spec.line || suite.line || 0,
+                    title: [...next, spec.title].filter(Boolean).join(' › '),
+                    status: bad[0]?.status || test.status,
+                    error: String(error.message || error.stack || '').replace(/\u001b\[[0-9;?]*[ -/]*[@-~]/g, '').slice(0, 1200),
+                  });
+                }
+              }
+            }
+            for (const child of suite.suites || []) visit(child, next);
+          };
+          for (const suite of report.suites || []) visit(suite);
+          const counts = new Map();
+          for (const failure of failures) counts.set(failure.file, (counts.get(failure.file) || 0) + 1);
+          const lines = [
+            '# Current-main complete browser-gate baseline',
+            '',
+            `- Head: \`${process.env.GITHUB_SHA}\``,
+            `- Base main: \`${process.env.EXPECTED_MAIN_SHA}\``,
+            `- Exit code: \`${fs.readFileSync('browser-gate.exit-code', 'utf8').trim()}\``,
+            `- Expected: \`${report.stats?.expected ?? 'unknown'}\``,
+            `- Unexpected: \`${report.stats?.unexpected ?? 'unknown'}\``,
+            `- Flaky: \`${report.stats?.flaky ?? 'unknown'}\``,
+            `- Skipped: \`${report.stats?.skipped ?? 'unknown'}\``,
+            '',
+            '## Failing files',
+            '',
+            ...[...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([file, count]) => `- \`${file}\`: ${count}`),
+            '',
+            `## Failures (${failures.length})`,
+            '',
+          ];
+          failures.forEach((failure, index) => {
+            lines.push(
+              `### ${index + 1}. ${failure.title}`,
+              '',
+              `- Location: \`${failure.file}:${failure.line}\``,
+              `- Status: \`${failure.status}\``,
+              '',
+              '```text',
+              failure.error,
+              '```',
+              '',
+            );
+          });
+          fs.writeFileSync('browser-gate-summary.md', lines.join('\n'));
+          fs.writeFileSync('browser-gate-failures.json', JSON.stringify(failures, null, 2));
+          NODE
+          cat browser-gate-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload complete diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-browser-gate-current-main-${{ github.run_id }}
+          path: |
+            exact-current-main.txt
+            browser-gate.exit-code
+            browser-gate.log
+            browser-gate-summary.md
+            browser-gate-failures.json
+            playwright-results.json
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Preserve the reproduced status
+        if: always()
+        shell: bash
+        run: exit "${{ steps.gate.outputs.status }}"
