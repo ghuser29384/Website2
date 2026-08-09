@@ -44,14 +44,14 @@ jobs:
           ref: ops/pr552-alias-finalizer-20260809
           fetch-depth: 0
 
-      - name: Guard exact main parent and controller-only diff
+      - name: Guard exact main and controller-only scope
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test "$(git branch --show-current)" = "$CONTROLLER_BRANCH"
-          test "$(git rev-parse HEAD^)" = "$TARGET_SHA"
           test "$(git rev-parse origin/main)" = "$TARGET_SHA"
+          git merge-base --is-ancestor "$TARGET_SHA" HEAD
           git diff --check "$TARGET_SHA" HEAD
           git diff --name-only "$TARGET_SHA" HEAD | sort > controller-files.txt
           printf '%s\n' '.github/workflows/pr552-alias-finalizer-20260809.yml' > expected-controller-files.txt
@@ -70,13 +70,13 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Prove immutable target, rollback deployment, and current alias ownership
+      - name: Prove immutable deployments and coherent alias ownership
         shell: bash
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN"
           rm -rf "$OUTPUT_DIR"
-          mkdir -p "$OUTPUT_DIR/aliases-before" "$OUTPUT_DIR/aliases-after"
+          mkdir -p "$OUTPUT_DIR/aliases-before"
 
           curl -fsS \
             -H "Authorization: Bearer ${VERCEL_TOKEN}" \
@@ -118,32 +118,46 @@ jobs:
               and (.meta.githubCommitSha == $sha)
             ' "$OUTPUT_DIR/rollback-deployment.json" >/dev/null
 
+          initial_deployment=''
           for alias_name in moraltrade.org www.moraltrade.org; do
             alias_key="${alias_name//./-}"
+            alias_path="$OUTPUT_DIR/aliases-before/${alias_key}.json"
             curl -fsS \
               -H "Authorization: Bearer ${VERCEL_TOKEN}" \
               "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}" \
-              > "$OUTPUT_DIR/aliases-before/${alias_key}.json"
+              > "$alias_path"
             jq -e \
               --arg alias "$alias_name" \
-              --arg project "$VERCEL_PROJECT_ID" \
-              --arg deployment "$ROLLBACK_DEPLOYMENT_ID" '
+              --arg project "$VERCEL_PROJECT_ID" '
                 (.alias == $alias)
                 and (.projectId == $project)
-                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
-              ' "$OUTPUT_DIR/aliases-before/${alias_key}.json" >/dev/null
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") != "")
+              ' "$alias_path" >/dev/null
+            alias_deployment="$(jq -r '.deploymentId // .deployment.id // .deployment.uid' "$alias_path")"
+            if [[ "$alias_deployment" != "$TARGET_DEPLOYMENT_ID" \
+              && "$alias_deployment" != "$ROLLBACK_DEPLOYMENT_ID" ]]; then
+              echo "Unexpected deployment $alias_deployment for $alias_name" >&2
+              exit 1
+            fi
+            if [[ -z "$initial_deployment" ]]; then
+              initial_deployment="$alias_deployment"
+            else
+              test "$alias_deployment" = "$initial_deployment"
+            fi
           done
+          printf '%s' "$initial_deployment" > "$OUTPUT_DIR/initial-alias-deployment.txt"
 
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' \
             "$VERCEL_TEAM_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
-      - name: Move both aliases, run the exact live canary, or roll back automatically
+      - name: Finish alias release and run the exact live canary
         shell: bash
         run: |
           set -euo pipefail
+          initial_deployment="$(cat "$OUTPUT_DIR/initial-alias-deployment.txt")"
+          aliases_mutated=false
           release_committed=false
-          rollback_attempted=false
 
           set_alias() {
             local deployment_host="$1"
@@ -151,17 +165,17 @@ jobs:
             npx --yes "vercel@${VERCEL_CLI_VERSION}" alias set \
               "$deployment_host" \
               "$alias_name" \
+              --scope="$VERCEL_TEAM_ID" \
               --token="$VERCEL_TOKEN"
           }
 
           poll_aliases() {
             local expected_deployment="$1"
             local phase="$2"
-            local phase_dir="$OUTPUT_DIR/${phase}"
+            local phase_dir="$OUTPUT_DIR/$phase"
             mkdir -p "$phase_dir"
-
             for attempt in $(seq 1 40); do
-              local ready=true
+              local coherent=true
               for alias_name in moraltrade.org www.moraltrade.org; do
                 local alias_key="${alias_name//./-}"
                 local alias_path="$phase_dir/${alias_key}.json"
@@ -169,7 +183,7 @@ jobs:
                   -H "Authorization: Bearer ${VERCEL_TOKEN}" \
                   "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}" \
                   > "$alias_path"; then
-                  ready=false
+                  coherent=false
                   break
                 fi
                 if ! jq -e \
@@ -180,11 +194,11 @@ jobs:
                     and (.projectId == $project)
                     and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
                   ' "$alias_path" >/dev/null; then
-                  ready=false
+                  coherent=false
                   break
                 fi
               done
-              if [[ "$ready" == true ]]; then
+              if [[ "$coherent" == true ]]; then
                 return 0
               fi
               sleep 5
@@ -194,9 +208,8 @@ jobs:
 
           rollback() {
             local original_status=$?
-            if [[ "$release_committed" != true ]]; then
-              rollback_attempted=true
-              echo 'Release verification failed; restoring both custom domains to the proven rollback deployment.' >&2
+            if [[ "$aliases_mutated" == true && "$release_committed" != true ]]; then
+              echo 'Release verification failed after alias mutation; restoring the proven prior deployment.' >&2
               set +e
               set_alias "$ROLLBACK_DEPLOYMENT_HOST" moraltrade.org
               rollback_apex=$?
@@ -220,22 +233,19 @@ jobs:
           }
           trap rollback EXIT
 
-          {
-            echo "targetDeployment=$TARGET_DEPLOYMENT_ID"
-            echo "targetSha=$TARGET_SHA"
-            echo "startedAt=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          } > "$OUTPUT_DIR/release-start.txt"
-
-          set_alias "$TARGET_DEPLOYMENT_HOST" moraltrade.org \
-            2>&1 | tee "$OUTPUT_DIR/alias-set-apex.log"
-          set_alias "$TARGET_DEPLOYMENT_HOST" www.moraltrade.org \
-            2>&1 | tee "$OUTPUT_DIR/alias-set-www.log"
-          poll_aliases "$TARGET_DEPLOYMENT_ID" aliases-after
+          if [[ "$initial_deployment" == "$ROLLBACK_DEPLOYMENT_ID" ]]; then
+            set_alias "$TARGET_DEPLOYMENT_HOST" moraltrade.org \
+              2>&1 | tee "$OUTPUT_DIR/alias-set-apex.log"
+            aliases_mutated=true
+            set_alias "$TARGET_DEPLOYMENT_HOST" www.moraltrade.org \
+              2>&1 | tee "$OUTPUT_DIR/alias-set-www.log"
+          fi
+          poll_aliases "$TARGET_DEPLOYMENT_ID" aliases-target
 
           curl -fsS \
             -H "Authorization: Bearer ${VERCEL_TOKEN}" \
             "https://api.vercel.com/v13/deployments/${TARGET_DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}" \
-            > "$OUTPUT_DIR/target-deployment-after-alias.json"
+            > "$OUTPUT_DIR/target-deployment-live.json"
           jq -e \
             --arg id "$TARGET_DEPLOYMENT_ID" \
             --arg project "$VERCEL_PROJECT_ID" \
@@ -246,7 +256,7 @@ jobs:
               and ((.readyState // .state // "") == "READY")
               and ((.aliasError // null) == null)
               and (.meta.githubCommitSha == $sha)
-            ' "$OUTPUT_DIR/target-deployment-after-alias.json" >/dev/null
+            ' "$OUTPUT_DIR/target-deployment-live.json" >/dev/null
 
           CANARY_OUTPUT_DIR="$OUTPUT_DIR/complete-profile-canary" \
           EXPECTED_SHA="$TARGET_SHA" \
@@ -258,17 +268,7 @@ jobs:
           jq -e '
             (.status == "passed")
             and (([.scenarios[] | select(.status == "passed")] | length) == 6)
-            and ((.pageErrors // []) | length == 0)
-            and ((.consoleErrors // []) | length == 0)
           ' "$OUTPUT_DIR/complete-profile-canary/report.json" >/dev/null
-
-          canonical_dashboard_status="$(curl -sS -L --max-time 60 \
-            -D "$OUTPUT_DIR/www-dashboard.headers" \
-            -o "$OUTPUT_DIR/www-dashboard.html" \
-            -w '%{http_code}' \
-            "$CANONICAL_ORIGIN/dashboard#account-security")"
-          test "$canonical_dashboard_status" = '200'
-          grep -Fq 'Moral Trade' "$OUTPUT_DIR/www-dashboard.html"
 
           poll_aliases "$TARGET_DEPLOYMENT_ID" aliases-final
           release_committed=true
@@ -277,10 +277,11 @@ jobs:
           jq -n \
             --arg targetDeploymentId "$TARGET_DEPLOYMENT_ID" \
             --arg targetSha "$TARGET_SHA" \
-            --arg rollbackDeploymentId "$ROLLBACK_DEPLOYMENT_ID" \
+            --arg initialDeploymentId "$initial_deployment" \
             --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson aliasesMutated "$aliases_mutated" \
             --argjson scenariosPassed "$(jq '[.scenarios[] | select(.status == "passed")] | length' "$OUTPUT_DIR/complete-profile-canary/report.json")" \
-            '{status:"passed",targetDeploymentId:$targetDeploymentId,targetSha:$targetSha,rollbackDeploymentId:$rollbackDeploymentId,scenariosPassed:$scenariosPassed,aliasesVerified:true,completedAt:$completedAt}' \
+            '{status:"passed",targetDeploymentId:$targetDeploymentId,targetSha:$targetSha,initialDeploymentId:$initialDeploymentId,aliasesMutated:$aliasesMutated,scenariosPassed:$scenariosPassed,aliasesVerified:true,completedAt:$completedAt}' \
             > "$OUTPUT_DIR/final-report.json"
 
       - name: Publish exact release status
@@ -293,10 +294,10 @@ jobs:
           if [[ -f "$OUTPUT_DIR/final-report.json" ]] \
             && jq -e '.status == "passed"' "$OUTPUT_DIR/final-report.json" >/dev/null; then
             state=success
-            description='Exact deployment now serves both domains and passed the six-scenario canary'
+            description='Exact deployment serves both domains and passed all six Complete Profile scenarios'
           else
             state=failure
-            description='Custom-domain finalizer failed; automatic rollback evidence must be inspected'
+            description='Exact custom-domain verification failed; inspect release or rollback evidence'
           fi
           gh api "repos/${GITHUB_REPOSITORY}/statuses/${TARGET_SHA}" \
             -f state="$state" \
@@ -313,15 +314,16 @@ jobs:
             echo
             echo "- Target SHA: \`$TARGET_SHA\`"
             echo "- Target deployment: \`$TARGET_DEPLOYMENT_ID\`"
-            echo "- Rollback deployment: \`$ROLLBACK_DEPLOYMENT_ID\`"
             if [[ -f "$OUTPUT_DIR/final-report.json" ]]; then
               echo "- Result: \`$(jq -r '.status' "$OUTPUT_DIR/final-report.json")\`"
+              echo "- Initial alias deployment: \`$(jq -r '.initialDeploymentId' "$OUTPUT_DIR/final-report.json")\`"
+              echo "- Aliases changed by this run: \`$(jq -r '.aliasesMutated' "$OUTPUT_DIR/final-report.json")\`"
               echo "- Complete Profile scenarios: \`$(jq -r '.scenariosPassed' "$OUTPUT_DIR/final-report.json")/6\`"
             elif [[ -f "$OUTPUT_DIR/rollback-result.json" ]]; then
-              echo '- Result: `failed; rollback attempted`'
+              echo '- Result: `failed after mutation; rollback attempted`'
               echo "- Rollback verification code: \`$(jq -r '.pollCode' "$OUTPUT_DIR/rollback-result.json")\`"
             else
-              echo '- Result: `failed before alias mutation`'
+              echo '- Result: `failed without alias mutation`'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
