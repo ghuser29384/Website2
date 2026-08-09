@@ -1,0 +1,224 @@
+name: PR 552 exact live Complete Profile canary
+
+on:
+  push:
+    branches:
+      - ops/pr552-live-canary-final-20260809
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: pr552-exact-live-complete-profile-canary
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/pr552-live-canary-final-20260809
+  TARGET_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+  TARGET_DEPLOYMENT_ID: dpl_6VxCNaMke5Mpe7qZjPhD4tdkuyrx
+  TARGET_DEPLOYMENT_HOST: moraltrade-site-n12ni5u3j-ellen-s.vercel.app
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_TEAM_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  CANONICAL_ORIGIN: https://www.moraltrade.org
+  APEX_ORIGIN: https://moraltrade.org
+  OUTPUT_DIR: pr552-exact-live-canary
+  STATUS_CONTEXT: QA / PR552 exact custom-domain release
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out the one-use controller
+        uses: actions/checkout@v4
+        with:
+          ref: ops/pr552-live-canary-final-20260809
+          fetch-depth: 0
+
+      - name: Guard exact target and controller-only scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git branch --show-current)" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$TARGET_SHA"
+          test "$(git rev-parse origin/main)" = "$TARGET_SHA"
+          git diff --check "$TARGET_SHA" HEAD
+          git diff --name-only "$TARGET_SHA" HEAD | sort > controller-files.txt
+          printf '%s\n' '.github/workflows/pr552-live-canary-final-20260809.yml' > expected-controller-files.txt
+          diff -u expected-controller-files.txt controller-files.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Prove exact READY deployment and both aliases before browser testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          rm -rf "$OUTPUT_DIR"
+          mkdir -p "$OUTPUT_DIR/aliases-before" "$OUTPUT_DIR/aliases-after"
+
+          curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments/${TARGET_DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}" \
+            > "$OUTPUT_DIR/deployment-before.json"
+          jq -e \
+            --arg id "$TARGET_DEPLOYMENT_ID" \
+            --arg host "$TARGET_DEPLOYMENT_HOST" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$TARGET_SHA" '
+              ((.uid // .id) == $id)
+              and (.url == $host)
+              and ((.projectId // .project.id // "") == $project)
+              and (.target == "production")
+              and ((.readyState // .state // "") == "READY")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $sha)
+              and (.meta.moralTradeCandidateSha == $sha)
+              and (.meta.releaseReason == "pr552-account-security-production-after-serial-differential")
+            ' "$OUTPUT_DIR/deployment-before.json" >/dev/null
+
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            alias_key="${alias_name//./-}"
+            alias_path="$OUTPUT_DIR/aliases-before/${alias_key}.json"
+            curl -fsS \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}" \
+              > "$alias_path"
+            jq -e \
+              --arg alias "$alias_name" \
+              --arg project "$VERCEL_PROJECT_ID" \
+              --arg deployment "$TARGET_DEPLOYMENT_ID" '
+                (.alias == $alias)
+                and (.projectId == $project)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+              ' "$alias_path" >/dev/null
+          done
+
+      - name: Run all six rendered Complete Profile scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          CONTROL_SHA="$TARGET_SHA" \
+          EXPECTED_SHA="$TARGET_SHA" \
+          EXPECTED_DEPLOYMENT_ID="$TARGET_DEPLOYMENT_ID" \
+          CANONICAL_ORIGIN="$CANONICAL_ORIGIN" \
+          APEX_ORIGIN="$APEX_ORIGIN" \
+          CANARY_OUTPUT_DIR="$OUTPUT_DIR/browser" \
+            node .github/scripts/complete-profile-production-canary.mjs
+
+          jq -e '
+            (.status == "passed")
+            and (([.scenarios[] | select(.status == "passed")] | length) == 6)
+          ' "$OUTPUT_DIR/browser/report.json" >/dev/null
+
+      - name: Reconfirm exact deployment and both aliases after browser testing
+        shell: bash
+        run: |
+          set -euo pipefail
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            alias_key="${alias_name//./-}"
+            alias_path="$OUTPUT_DIR/aliases-after/${alias_key}.json"
+            curl -fsS \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_TEAM_ID}" \
+              > "$alias_path"
+            jq -e \
+              --arg alias "$alias_name" \
+              --arg project "$VERCEL_PROJECT_ID" \
+              --arg deployment "$TARGET_DEPLOYMENT_ID" '
+                (.alias == $alias)
+                and (.projectId == $project)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+              ' "$alias_path" >/dev/null
+          done
+
+          curl -fsS \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            "https://api.vercel.com/v13/deployments/${TARGET_DEPLOYMENT_ID}?teamId=${VERCEL_TEAM_ID}" \
+            > "$OUTPUT_DIR/deployment-after.json"
+          jq -e \
+            --arg id "$TARGET_DEPLOYMENT_ID" \
+            --arg sha "$TARGET_SHA" '
+              ((.uid // .id) == $id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitSha == $sha)
+            ' "$OUTPUT_DIR/deployment-after.json" >/dev/null
+
+          jq -n \
+            --arg targetSha "$TARGET_SHA" \
+            --arg targetDeploymentId "$TARGET_DEPLOYMENT_ID" \
+            --arg completedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --argjson scenariosPassed "$(jq '[.scenarios[] | select(.status == "passed")] | length' "$OUTPUT_DIR/browser/report.json")" \
+            '{status:"passed",targetSha:$targetSha,targetDeploymentId:$targetDeploymentId,aliasesVerifiedBeforeAndAfter:true,scenariosPassed:$scenariosPassed,completedAt:$completedAt}' \
+            > "$OUTPUT_DIR/final-report.json"
+
+      - name: Publish exact release status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f "$OUTPUT_DIR/final-report.json" ]] \
+            && jq -e '.status == "passed"' "$OUTPUT_DIR/final-report.json" >/dev/null; then
+            state=success
+            description='Exact deployment serves both domains and passed all six Complete Profile scenarios'
+          else
+            state=failure
+            description='Exact live Complete Profile canary failed; inspect immutable evidence'
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/statuses/${TARGET_SHA}" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+      - name: Summarize exact live result
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## PR 552 exact live Complete Profile canary'
+            echo
+            echo "- Target SHA: \`$TARGET_SHA\`"
+            echo "- Target deployment: \`$TARGET_DEPLOYMENT_ID\`"
+            if [[ -f "$OUTPUT_DIR/final-report.json" ]]; then
+              echo "- Result: \`$(jq -r '.status' "$OUTPUT_DIR/final-report.json")\`"
+              echo "- Scenarios: \`$(jq -r '.scenariosPassed' "$OUTPUT_DIR/final-report.json")/6\`"
+              echo '- Both alias records: `verified before and after`'
+            else
+              echo '- Result: `failed`'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload immutable browser and alias evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr552-exact-live-canary-${{ github.run_id }}
+          path: |
+            pr552-exact-live-canary
+            controller-files.txt
+            expected-controller-files.txt
+          if-no-files-found: warn
+          retention-days: 30
