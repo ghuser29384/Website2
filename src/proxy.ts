@@ -7,7 +7,7 @@ import { WALKTHROUGH_SEEN_COOKIE_NAME } from "@/lib/walkthrough-state";
 export const WALKTHROUGH_SEEN_COOKIE = WALKTHROUGH_SEEN_COOKIE_NAME;
 
 const WALKTHROUGH_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
-const STATIC_OFFER_SEGMENTS = new Set(["examples", "new"]);
+const STATIC_OFFER_SEGMENTS = new Set(["examples", "new", "plane"]);
 
 function isPrefetch(request: NextRequest) {
   const purpose = [
