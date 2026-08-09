@@ -21,6 +21,7 @@ jobs:
     env:
       EXPECTED_MAIN_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
       CLEAN_BRANCH: fix/release-browser-gate-contract-20260809
+      REPAIR_REVISION: "6"
 
     steps:
       - name: Check out the exact repair branch
