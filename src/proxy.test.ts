@@ -177,6 +177,7 @@ test("valid offer record identifiers and static offer routes pass through", () =
     "/offers/1c6b0e57-bfed-3f29-c51f-6f8c23d1960b/credibility",
     "/offers/new",
     "/offers/examples",
+    "/offers/plane",
   ]) {
     const response = proxy(makeRequest(path));
 
