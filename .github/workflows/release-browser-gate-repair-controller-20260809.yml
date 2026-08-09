@@ -17,9 +17,10 @@ concurrency:
 jobs:
   repair-and-prove:
     runs-on: ubuntu-24.04
-    timeout-minutes: 100
+    timeout-minutes: 120
     env:
       EXPECTED_MAIN_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
+      CLEAN_BRANCH: fix/release-browser-gate-contract-20260809
 
     steps:
       - name: Check out the exact repair branch
@@ -27,196 +28,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Guard current-main ancestry
+      - name: Guard current-main ancestry and repair inputs
         shell: bash
         run: |
           set -euo pipefail
-          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
           test "$(git rev-parse --abbrev-ref HEAD)" = 'ops/release-browser-gate-contract-20260809'
+          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
+          node --check scripts/apply-release-browser-gate-repair.mjs
 
-      - name: Apply the release-gate contract repair
+      - name: Apply the deterministic repair
         shell: bash
         run: |
           set -euo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-
-          function read(path) {
-            return fs.readFileSync(path, 'utf8');
-          }
-
-          function write(path, content) {
-            fs.mkdirSync(require('path').dirname(path), { recursive: true });
-            fs.writeFileSync(path, content);
-          }
-
-          function replaceRequired(source, before, after, label) {
-            if (!source.includes(before)) {
-              throw new Error(`Missing expected ${label}`);
-            }
-            return source.replace(before, after);
-          }
-
-          const retiredReleaseSpecs = [
-            'exact-live-account.spec.ts',
-            'exact-live-autocomplete.spec.ts',
-            'exact-live-custom-route.spec.ts',
-            'exact-live-itinerary-editor.spec.ts',
-            'exact-live-plan-resources.spec.ts',
-            'exact-live-templates.spec.ts',
-            'returning-homepage-timezone.spec.ts',
-            'returning-homepage.spec.ts',
-            'your-match-viewport.spec.ts',
-            'feed-create-phase1-authenticated.spec.ts',
-          ];
-
-          {
-            const path = 'playwright.config.ts';
-            let source = read(path);
-            if (!source.includes('testIgnore: [')) {
-              const marker = '  testMatch: /.*\\.spec\\.ts/,\n';
-              const block = [
-                marker.trimEnd(),
-                '  // Release CI covers the current product contract. The excluded files either',
-                '  // require isolated authenticated fixtures or assert interfaces that were deliberately',
-                '  // superseded by the unified Create route and current live-home workspace.',
-                '  testIgnore: [',
-                ...retiredReleaseSpecs.map((name) => `    "**/${name}",`),
-                '  ],',
-                '  fullyParallel: false,',
-                '  workers: process.env.CI ? 1 : undefined,',
-                '',
-              ].join('\n');
-              source = replaceRequired(source, marker, `${block}\n`, 'Playwright testMatch marker');
-            }
-            write(path, source);
-          }
-
-          {
-            const path = 'package.json';
-            const json = JSON.parse(read(path));
-            const scripts = {};
-            for (const [name, value] of Object.entries(json.scripts || {})) {
-              scripts[name] = value;
-              if (name === 'test:e2e') {
-                scripts['test:e2e:release'] = 'playwright test';
-                scripts['test:e2e:authenticated'] =
-                  'playwright test tests/feed-create-phase1-authenticated.spec.ts';
-              }
-            }
-            json.scripts = scripts;
-            write(path, `${JSON.stringify(json, null, 2)}\n`);
-          }
-
-          {
-            const path = '.github/workflows/vercel-release.yml';
-            let source = read(path);
-            source = replaceRequired(
-              source,
-              'npm run test:e2e -- --reporter=line',
-              'npm run test:e2e:release -- --reporter=line',
-              'named Vercel release browser command',
-            );
-            write(path, source);
-          }
-
-          {
-            const path = 'tests/exact-live-command-center.spec.ts';
-            let source = read(path);
-            source = replaceRequired(
-              source,
-              'await expect(page).toHaveURL(/\\/trades\\/new\\?handoff=command-center$/);',
-              'await expect(page).toHaveURL(/\\/trades\\/new$/);',
-              'Command Center canonical URL assertion',
-            );
-            source = replaceRequired(
-              source,
-              '"/signup?returnTo=%2Ftrades%2Fnew%3Fhandoff%3Dcommand-center",',
-              '"/signup?returnTo=%2Ftrades%2Fnew",',
-              'Command Center signup returnTo assertion',
-            );
-            write(path, source);
-          }
-
-          {
-            const path = 'tests/exact-live-local-time.spec.ts';
-            let source = read(path);
-            source = replaceRequired(
-              source,
-              'for (const pageName of ["now", "trade", "activity"]) {',
-              'for (const pageName of ["now", "activity"]) {',
-              'current live-home page list',
-            );
-            source = source.replaceAll(
-              'across Now, Trade, and Activity',
-              'across Now and Activity',
-            );
-            write(path, source);
-          }
-
-          {
-            const path = 'tests/exact-live-route-recommendations.spec.ts';
-            let source = read(path);
-            source = replaceRequired(
-              source,
-              'await composer.getByLabel("Goal").fill("Reduce preventable animal suffering");',
-              'await composer.getByLabel("Goal", { exact: true }).fill("Reduce preventable animal suffering");',
-              'exact Goal label selector',
-            );
-            source = replaceRequired(
-              source,
-              'await expect(page.getByText("interview confirmed", { exact: false })).toBeVisible();',
-              'await expect(page.getByText("Interview confirmed. Routes refreshed.", { exact: true })).toBeVisible();',
-              'unique interview confirmation selector',
-            );
-            write(path, source);
-          }
-
-          {
-            const path = 'tests/meta-explanatory-copy.spec.ts';
-            let source = read(path);
-            source = replaceRequired(
-              source,
-              '  await page.goto("/pilot");\n  await expect(page.getByRole("heading", { level: 1, name: /Test one moral trade/ })).toBeVisible();\n  await expect(page.locator("body")).not.toContainText("distinguish a serious first user");',
-              '  await page.goto("/pilot");\n  await expect(page).toHaveURL(/\\/start(?:\\?.*)?$/);\n  await expect(page.getByRole("heading", { level: 1, name: "Choose a real first action." })).toBeVisible();\n  await expect(page.locator("body")).not.toContainText("distinguish a serious first user");',
-              'retired pilot-route browser assertion',
-            );
-            write(path, source);
-          }
-
-          {
-            const path = 'tests/moral-trade-brand.spec.ts';
-            let source = read(path);
-            if (!source.includes('old mark')) throw new Error('Missing brand fixture marker');
-            source = source.replaceAll('<span aria-hidden="true">old mark</span>', '<span aria-hidden="true"></span>');
-            write(path, source);
-          }
-
-          {
-            const path = 'tests/exact-live-verification.spec.ts';
-            let source = read(path);
-            const before = `  test("routes the existing calendar action into the verification workflow", async ({ page }) => {\n    await page.goto("/moral-trade-live.html");\n    const completeVerification = page.locator(\n      '[data-mt-complete-verification="true"], button:has-text("Complete verification"), a:has-text("Complete verification")',\n    ).first();\n\n    await expect(completeVerification).toBeVisible({ timeout: 20_000 });\n    await completeVerification.click();\n    await expect(page).toHaveURL(/\\/complete-verification\\.html\\?/);\n    await expect(page.getByRole("heading", { name: "Complete verification" })).toBeVisible();\n  });`;
-            const after = `  test("routes a dynamically rendered verification action into the verification workflow", async ({ page }) => {\n    await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });\n    await page.evaluate(() => {\n      const control = document.createElement("button");\n      control.type = "button";\n      control.textContent = "Complete verification";\n      document.body.appendChild(control);\n    });\n    await page.addScriptTag({ url: "/moral-trade-live-verification.js" });\n\n    const completeVerification = page.getByRole("button", { name: "Complete verification" });\n    await expect(completeVerification).toHaveAttribute(\n      "data-mt-complete-verification",\n      "true",\n      { timeout: 20_000 },\n    );\n    await completeVerification.click();\n    await expect(page).toHaveURL(\n      /\\/complete-verification\\.html\\?record=wild-animal-research&from=calendar$/,
-    );\n    await expect(page.getByRole("heading", { name: "Complete verification" })).toBeVisible();\n  });`;
-            source = replaceRequired(source, before, after, 'verification bridge host assertion');
-            write(path, source);
-          }
-
-          write(
-            'src/lib/release-browser-gate-contract.test.ts',
-            `import assert from "node:assert/strict";\nimport { test } from "node:test";\nimport { readFile } from "node:fs/promises";\n\nconst excludedSpecs = ${JSON.stringify(retiredReleaseSpecs, null, 2)} as const;\n\ntest("release browser gate names its credential-free current-product contract", async () => {\n  const [config, packageSource, workflow, createRouting, publicRoutes] = await Promise.all([\n    readFile("playwright.config.ts", "utf8"),\n    readFile("package.json", "utf8"),\n    readFile(".github/workflows/vercel-release.yml", "utf8"),\n    readFile("tests/create-entry-routing.spec.ts", "utf8"),\n    readFile("tests/public-routes.spec.ts", "utf8"),\n  ]);\n  const packageJson = JSON.parse(packageSource) as { scripts?: Record<string, string> };\n\n  assert.match(config, /workers: process\\.env\\.CI \\? 1 : undefined/);\n  assert.match(config, /fullyParallel: false/);\n  for (const spec of excludedSpecs) {\n    assert.ok(config.includes(\`"**/\${spec}"\`), \`missing explicit exclusion for \${spec}\`);\n  }\n\n  assert.equal(packageJson.scripts?.["test:e2e:release"], "playwright test");\n  assert.equal(\n    packageJson.scripts?.["test:e2e:authenticated"],\n    "playwright test tests/feed-create-phase1-authenticated.spec.ts",\n  );\n  assert.match(workflow, /npm run test:e2e:release -- --reporter=line/);\n  assert.doesNotMatch(workflow, /npm run test:e2e -- --reporter=line/);\n\n  assert.match(createRouting, /replaces a direct legacy Trade hash without replacing Home/);\n  assert.match(createRouting, /obsolete Trade sidebar/);\n  assert.match(publicRoutes, /the live home workspace has one semantic page heading/);\n});\n`,
-          );
-
-          write(
-            'docs/testing/release-browser-gate.md',
-            `# Release browser-gate contract\n\nThe Vercel release workflow runs \`npm run test:e2e:release\`. This is the credential-free browser contract for the current product. GitHub Actions runs it with one Playwright worker because the suite shares one Next.js development server; serial execution prevents unrelated route compilations and navigations from aborting each other's asset requests.\n\nThe default release suite explicitly excludes one authenticated fixture suite, \`feed-create-phase1-authenticated.spec.ts\`. That suite remains enforced by \`.github/workflows/feed-create-phase1-release-qa.yml\`, which creates isolated QA identities and database fixtures before running it.\n\nThe release suite also excludes historical browser specifications for interfaces that were deliberately superseded: the legacy \`#trade\` composer and template library, the old account drawer, the old custom-route and itinerary planners, the prior returning-homepage trade deck, and the prior Your Match viewport. Their current replacement contracts are covered by \`create-entry-routing.spec.ts\`, \`create-route-workbench.spec.ts\`, \`public-routes.spec.ts\`, \`exact-live-now-recommendations.spec.ts\`, and \`exact-live-route-recommendations.spec.ts\`.\n\nA test may be removed from the release contract only when the retired surface and its replacement coverage are named explicitly. Credentialed tests must remain in an isolated workflow rather than silently passing or failing without their fixtures.\n`,
-          );
-          NODE
-
+          node scripts/apply-release-browser-gate-repair.mjs
           git diff --check
           git status --short
 
-      - name: Commit the repair candidate before validation
+      - name: Commit the exact local candidate
         id: candidate
         shell: bash
         run: |
@@ -224,22 +52,26 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
-            playwright.config.ts \
+            playwright.release.config.ts \
             package.json \
             .github/workflows/vercel-release.yml \
-            tests/exact-live-command-center.spec.ts \
+            public/moral-trade-live-create-router.js \
+            src/lib/command-center-handoff.test.ts \
+            src/lib/release-browser-gate-contract.test.ts \
             tests/exact-live-local-time.spec.ts \
             tests/exact-live-route-recommendations.spec.ts \
+            tests/exact-live-verification.spec.ts \
             tests/meta-explanatory-copy.spec.ts \
             tests/moral-trade-brand.spec.ts \
-            tests/exact-live-verification.spec.ts \
-            src/lib/release-browser-gate-contract.test.ts \
             docs/testing/release-browser-gate.md
           git commit -m 'test: repair release browser-gate contract'
-          git push origin HEAD:ops/release-browser-gate-contract-20260809
           candidate_sha="$(git rev-parse HEAD)"
           echo "sha=$candidate_sha" >> "$GITHUB_OUTPUT"
-          printf 'candidate=%s\ntree=%s\n' "$candidate_sha" "$(git rev-parse HEAD^{tree})" | tee release-gate-candidate.txt
+          printf 'candidate=%s\ntree=%s\nbase=%s\n' \
+            "$candidate_sha" \
+            "$(git rev-parse HEAD^{tree})" \
+            "$EXPECTED_MAIN_SHA" \
+            | tee release-gate-candidate.txt
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -277,6 +109,7 @@ jobs:
           set -euo pipefail
           npm run test:e2e:release -- \
             tests/commitments-live-portfolio.spec.ts \
+            tests/create-common-ground-pool.spec.ts \
             tests/create-entry-routing.spec.ts \
             tests/exact-live-command-center.spec.ts \
             tests/exact-live-local-time.spec.ts \
@@ -301,11 +134,38 @@ jobs:
         run: |
           set -uo pipefail
           set +e
-          npm run test:e2e:release -- --reporter=line,json 2>&1 | tee release-gate-browser.log
+          npm run test:e2e:release -- --reporter=line,json 2>&1 \
+            | tee release-gate-browser.log
           status=${PIPESTATUS[0]}
           set -e
           printf '%s\n' "$status" | tee release-gate-browser.exit-code
           echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      - name: Build browser-gate summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const lines = ['# Release browser-gate repair', ''];
+          const status = fs.existsSync('release-gate-browser.exit-code')
+            ? fs.readFileSync('release-gate-browser.exit-code', 'utf8').trim()
+            : 'not-run';
+          lines.push(`- Candidate: \`${process.env.CANDIDATE_SHA || 'unknown'}\``);
+          lines.push(`- Browser exit code: \`${status}\``);
+          if (fs.existsSync('release-playwright-results.json')) {
+            const report = JSON.parse(fs.readFileSync('release-playwright-results.json', 'utf8'));
+            for (const key of ['expected', 'unexpected', 'flaky', 'skipped']) {
+              lines.push(`- ${key}: \`${report.stats?.[key] ?? 'unknown'}\``);
+            }
+          }
+          lines.push('');
+          fs.writeFileSync('release-gate-summary.md', `${lines.join('\n')}\n`);
+          NODE
+          cat release-gate-summary.md >> "$GITHUB_STEP_SUMMARY"
+        env:
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
 
       - name: Upload complete repair evidence
         if: always()
@@ -314,6 +174,7 @@ jobs:
           name: release-browser-gate-repair-${{ github.run_id }}
           path: |
             release-gate-candidate.txt
+            release-gate-summary.md
             release-gate-*.log
             release-gate-browser.exit-code
             release-playwright-results.json
@@ -322,7 +183,24 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Publish a clean candidate branch after every gate passes
+        if: ${{ steps.browser.outputs.status == '0' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate_sha="${{ steps.candidate.outputs.sha }}"
+          git switch --detach "$EXPECTED_MAIN_SHA"
+          git cherry-pick "$candidate_sha"
+          git push origin "HEAD:refs/heads/$CLEAN_BRANCH"
+          printf 'clean_branch=%s\nclean_sha=%s\n' \
+            "$CLEAN_BRANCH" \
+            "$(git rev-parse HEAD)" \
+            | tee release-gate-clean-branch.txt
+
       - name: Preserve complete browser-gate status
         if: always()
         shell: bash
-        run: exit "${{ steps.browser.outputs.status || 1 }}"
+        run: |
+          status="${{ steps.browser.outputs.status }}"
+          if [[ -z "$status" ]]; then status=1; fi
+          exit "$status"
