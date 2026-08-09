@@ -35,12 +35,14 @@ jobs:
           test "$(git rev-parse --abbrev-ref HEAD)" = 'ops/release-browser-gate-contract-20260809'
           git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
           node --check scripts/apply-release-browser-gate-repair.mjs
+          node --check scripts/apply-release-browser-gate-followup.mjs
 
       - name: Apply the deterministic repair
         shell: bash
         run: |
           set -euo pipefail
           node scripts/apply-release-browser-gate-repair.mjs
+          node scripts/apply-release-browser-gate-followup.mjs
           git diff --check
           git status --short
 
@@ -56,6 +58,7 @@ jobs:
             package.json \
             .github/workflows/vercel-release.yml \
             public/moral-trade-live-create-router.js \
+            scripts/vercel-release-workflow.test.mjs \
             src/lib/command-center-handoff.test.ts \
             src/lib/release-browser-gate-contract.test.ts \
             tests/exact-live-local-time.spec.ts \
