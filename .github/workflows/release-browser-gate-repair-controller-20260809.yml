@@ -36,6 +36,7 @@ jobs:
           git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
           node --check scripts/apply-release-browser-gate-repair.mjs
           node --check scripts/apply-release-browser-gate-followup.mjs
+          node --check scripts/apply-release-browser-gate-focused-fixes.mjs
 
       - name: Apply the deterministic repair
         shell: bash
@@ -43,6 +44,7 @@ jobs:
           set -euo pipefail
           node scripts/apply-release-browser-gate-repair.mjs
           node scripts/apply-release-browser-gate-followup.mjs
+          node scripts/apply-release-browser-gate-focused-fixes.mjs
           git diff --check
           git status --short
 
@@ -61,6 +63,7 @@ jobs:
             scripts/vercel-release-workflow.test.mjs \
             src/lib/command-center-handoff.test.ts \
             src/lib/release-browser-gate-contract.test.ts \
+            tests/commitments-live-portfolio.spec.ts \
             tests/exact-live-local-time.spec.ts \
             tests/exact-live-route-recommendations.spec.ts \
             tests/exact-live-verification.spec.ts \
