@@ -39,7 +39,7 @@ function replaceRequired(source, before, after, label) {
   source = replaceRequired(
     source,
     `    await dialog.getByLabel("Evidence").selectOption("connected");`,
-    `    const evidence = dialog.getByLabel("Evidence");\n    await expect(\n      evidence.getByRole("option", { name: "Connected proof — no eligible inventory yet" }),\n    ).toBeDisabled();\n    await evidence.selectOption("standard");`,
+    `    const evidence = dialog.getByLabel("Evidence");\n    await expect(\n      evidence.getByRole("option", { name: "Connected proof — no eligible inventory yet" }),\n    ).toHaveAttribute("disabled", "");\n    await evidence.selectOption("standard");`,
     "fail-closed evidence selection",
   );
   source = replaceRequired(
