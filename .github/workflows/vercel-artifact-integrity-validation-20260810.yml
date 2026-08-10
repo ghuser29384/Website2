@@ -1,0 +1,155 @@
+name: Validate Vercel prebuilt artifact integrity
+
+on:
+  push:
+    branches:
+      - ops/validate-vercel-artifact-integrity-20260810
+    paths:
+      - ".github/workflows/vercel-artifact-integrity-validation-20260810.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-vercel-prebuilt-artifact-integrity-20260810
+  cancel-in-progress: true
+
+env:
+  EXPECTED_HEAD_SHA: 457267bd970a342f2d880ee0b6b2bb8a6749b4d7
+  TARGET_BRANCH: fix/vercel-prebuilt-artifact-integrity-20260810
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  RECOVERY_DEPLOYMENT_URL: https://moraltrade-site-8ww833z7f-ellen-s.vercel.app
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Verify immutable candidate identity and exact diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')" = "$EXPECTED_HEAD_SHA"
+          git merge-base --is-ancestor 0778577c98c7a86417057caeb939c01f77e22c89 HEAD
+          git diff --check 0778577c98c7a86417057caeb939c01f77e22c89 HEAD
+          git diff --name-only 0778577c98c7a86417057caeb939c01f77e22c89 HEAD \
+            | sort | tee vercel-artifact-integrity-diff.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused and complete repository gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          npm run test:vercel-controls | tee vercel-artifact-integrity-focused.log
+          npm test | tee vercel-artifact-integrity-unit.log
+          npm run lint -- --quiet | tee vercel-artifact-integrity-lint.log
+          npx tsc --noEmit | tee vercel-artifact-integrity-typescript.log
+          npm run build | tee vercel-artifact-integrity-app-build.log
+
+      - name: Link only the canonical Vercel project and pull production environment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes \
+            --environment=production \
+            --token="$VERCEL_TOKEN"
+
+      - name: Build a clean production artifact without deploying
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf .next .vercel/output
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+            --prod \
+            --token="$VERCEL_TOKEN" \
+            | tee vercel-artifact-integrity-vercel-build.log
+
+      - name: Prove every prebuilt public asset exactly matches source
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest='vercel-prebuilt-public-assets.sha256'
+          : > "$manifest"
+          count=0
+          while IFS= read -r -d '' source; do
+            relative="${source#public/}"
+            built=".vercel/output/static/$relative"
+            test -f "$built"
+            cmp --silent "$source" "$built"
+            sha256sum "$source" | sed "s#  public/#  #" >> "$manifest"
+            count=$((count + 1))
+          done < <(find public -type f -print0 | sort -z)
+          test "$count" -gt 0
+          printf '%s\n' "$count" | tee vercel-prebuilt-public-assets.count
+          sort -o "$manifest" "$manifest"
+          sha256sum "$manifest" | tee vercel-prebuilt-public-manifest.sha256
+
+      - name: Prove authenticated immutable-deployment retrieval matches source
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p vercel-authenticated-assets
+          : > vercel-authenticated-assets.sha256
+          assets=(
+            moral-trade-live-create-router.js
+            moral-trade-live-command-center.js
+          )
+          for relative in "${assets[@]}"; do
+            output="vercel-authenticated-assets/$relative"
+            npx --yes "vercel@$VERCEL_CLI_VERSION" curl \
+              "/$relative?integrity=$EXPECTED_HEAD_SHA-$GITHUB_RUN_ID" \
+              --deployment="$RECOVERY_DEPLOYMENT_URL" \
+              --token="$VERCEL_TOKEN" \
+              > "$output"
+            cmp --silent "public/$relative" "$output"
+            sha256sum "$output" >> vercel-authenticated-assets.sha256
+          done
+
+      - name: Upload exact validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-prebuilt-artifact-integrity-${{ github.run_id }}
+          path: |
+            vercel-artifact-integrity-*.txt
+            vercel-artifact-integrity-*.log
+            vercel-prebuilt-public-assets.sha256
+            vercel-prebuilt-public-assets.count
+            vercel-prebuilt-public-manifest.sha256
+            vercel-authenticated-assets.sha256
+          if-no-files-found: warn
+          retention-days: 30
