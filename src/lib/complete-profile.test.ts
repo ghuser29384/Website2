@@ -21,6 +21,8 @@ const priorityAllocation = serializeProfilePriorityAllocation(
 test("normalizes a review and refine submission", () => {
   const result = normalizeCompleteProfileSubmission({
     displayName: "  Alex   Morgan ",
+    username: "Alex-Morgan",
+    publicInvitationMentionsEnabled: "on",
     role: "Policy researcher",
     affiliation: "  Future   Institute ",
     bio: "Interested in bounded, verifiable exchanges.",
@@ -36,6 +38,8 @@ test("normalizes a review and refine submission", () => {
 
   assert.ok(result);
   assert.equal(result.displayName, "Alex Morgan");
+  assert.equal(result.username, "alex-morgan");
+  assert.equal(result.publicInvitationMentionsEnabled, true);
   assert.equal(result.affiliation, "Future Institute");
   assert.equal(result.maxCommitment, 100);
   assert.equal(result.monthlyTime, "4 hours");
@@ -60,6 +64,8 @@ test("maps privacy and offer openness conservatively", () => {
 test("builds bounded matching summaries without claiming a commitment", () => {
   const result = normalizeCompleteProfileSubmission({
     displayName: "Mina Park",
+    username: "mina-park",
+    publicInvitationMentionsEnabled: false,
     role: "Researcher",
     affiliation: "University of Oxford",
     bio: "Open to introductions with clear evidence requirements.",
@@ -85,6 +91,8 @@ test("builds bounded matching summaries without claiming a commitment", () => {
 test("rejects a submission with a forged or over-budget priority allocation", () => {
   const result = normalizeCompleteProfileSubmission({
     displayName: "Mina Park",
+    username: "mina-park",
+    publicInvitationMentionsEnabled: false,
     role: "Researcher",
     offerType: "Time",
     causeArea: "Animal welfare",
@@ -99,6 +107,8 @@ test("rejects a submission with a forged or over-budget priority allocation", ()
 test("builds direct profile capability text without inferring an offer type", () => {
   const result = normalizeCompleteProfileSubmission({
     displayName: "Mina Park",
+    username: "mina-park",
+    publicInvitationMentionsEnabled: false,
     role: "Researcher",
     affiliation: "Future Institute",
     maxCommitment: 50,

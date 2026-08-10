@@ -4,6 +4,21 @@ import {
   CREATE_FORMULA_LANGUAGE_VERSION,
   validateTimingFormula,
 } from "./formula";
+import { readGroupContributionProposalFlags } from "./group-contribution-flags";
+import {
+  validateParticipantOwnedFundingTerms,
+  validateParticipantTargets,
+  type CreatorParticipation,
+} from "./participant-target";
+import type { GroupContributionProposalPayload } from "./group-contribution-payload";
+import {
+  GROUP_CONTRIBUTION_REVIEW_RECORD_KEY,
+  type GroupContributionReviewRecordFragment,
+} from "./group-contribution-review-record";
+import {
+  validateGroupContributionProposalForPersistence,
+  type AuthoritativeProposalOption,
+} from "./group-contribution-server";
 import {
   CREATE_INTERFACE_VERSION,
   CREATE_SUBMISSION_KINDS,
@@ -215,10 +230,9 @@ function validateCommonGround(raw: unknown): NonNullable<ValidatedCreatePoolTerm
   const input = objectValue(raw, "Co-Fund terms");
   const allowedTopLevel = new Set([
     "targetAmountCents",
-    "calculationPolicy",
+    "allocationStatus",
+    "creatorParticipation",
     "privateValueEstimatesStored",
-    "participantGainChecked",
-    "baselineConfirmed",
     "participants",
   ]);
   for (const key of Object.keys(input)) {
@@ -232,88 +246,66 @@ function validateCommonGround(raw: unknown): NonNullable<ValidatedCreatePoolTerm
     "Co-Fund target",
     { minimum: 1 },
   );
-  if (input.calculationPolicy !== "balanced_surplus_v1") {
-    throw new Error("Co-Fund calculation policy is invalid.");
+  if (input.allocationStatus !== "open") {
+    throw new Error("A proposal-stage Co-Fund allocation must remain open.");
   }
+  const creatorParticipation = enumValue(
+    input.creatorParticipation,
+    ["participating", "organizer-only"] as const,
+    "Creator participation",
+  );
   if (input.privateValueEstimatesStored !== false) {
     throw new Error("Private Co-Fund value estimates must not be submitted.");
   }
-  if (input.participantGainChecked !== true || input.baselineConfirmed !== true) {
-    throw new Error("Co-Fund gain and no-pool baseline confirmations are required.");
-  }
-  if (!Array.isArray(input.participants) || input.participants.length < 2 || input.participants.length > 8) {
-    throw new Error("A Co-Fund requires between two and eight participants.");
+  if (!Array.isArray(input.participants)) {
+    throw new Error("Co-Fund participants must be an array.");
   }
 
-  const seen = new Set<string>();
-  const participants = input.participants.map((rawParticipant, index) => {
-    const participant = objectValue(rawParticipant, `Co-Fund participant ${index + 1}`);
-    const allowedParticipantFields = new Set([
-      "id",
-      "name",
-      "defaultProject",
-      "budgetCents",
-      "contributionCents",
-    ]);
+  const rawTargets = input.participants.map((value, index) => {
+    const participant = objectValue(value, `Co-Fund participant ${index + 1}`);
+    const allowedParticipantFields = new Set(["target", "participantTerms"]);
     for (const key of Object.keys(participant)) {
       if (!allowedParticipantFields.has(key)) {
         throw new Error("Co-Fund participant terms contain an unsupported or private field.");
       }
     }
-
-    const id = textValue(participant.id, `Co-Fund participant ${index + 1} id`, 2, 80);
-    if (!/^[A-Za-z0-9:_-]+$/.test(id)) {
-      throw new Error(`Co-Fund participant ${index + 1} id contains unsupported characters.`);
-    }
-    if (seen.has(id)) throw new Error("Co-Fund participant ids must be unique.");
-    seen.add(id);
-
-    const budgetCents = exactIntegerValue(
-      participant.budgetCents,
-      `Co-Fund participant ${index + 1} budget`,
-      { minimum: 1 },
-    );
-    const contributionCents = exactIntegerValue(
-      participant.contributionCents,
-      `Co-Fund participant ${index + 1} contribution`,
-      { minimum: 1 },
-    );
-    if (contributionCents > budgetCents) {
-      throw new Error(`Co-Fund participant ${index + 1} contribution exceeds their controlled budget.`);
-    }
-
-    return {
-      id,
-      name: textValue(participant.name, `Co-Fund participant ${index + 1} name`, 1, 80),
-      defaultProject: textValue(
-        participant.defaultProject,
-        `Co-Fund participant ${index + 1} no-pool default`,
-        1,
-        160,
-      ),
-      budgetCents,
-      contributionCents,
-    };
+    return participant.target;
+  });
+  const targets = validateParticipantTargets(rawTargets, {
+    minimum: 2,
+    maximum: 100,
+    creatorParticipation: creatorParticipation as CreatorParticipation,
   });
 
-  const contributionTotal = participants.reduce(
-    (sum, participant) => sum + participant.contributionCents,
-    0,
-  );
-  if (!Number.isSafeInteger(contributionTotal) || contributionTotal !== targetAmountCents) {
-    throw new Error("Co-Fund participant contributions must equal the target exactly.");
-  }
+  const participants = input.participants.map((value, index) => {
+    const participant = objectValue(value, `Co-Fund participant ${index + 1}`);
+    const target = targets[index]!;
+    if (target.isCreator) {
+      if (participant.participantTerms == null) {
+        throw new Error("A participating creator must enter their own private Co-Fund terms.");
+      }
+      return {
+        target,
+        participantTerms: validateParticipantOwnedFundingTerms(
+          participant.participantTerms,
+          "Creator Co-Fund terms",
+        ),
+      };
+    }
+    if (participant.participantTerms != null) {
+      throw new Error("A creator cannot enter another participant's private or financial terms.");
+    }
+    return { target, participantTerms: null };
+  });
 
   return {
     targetAmountCents,
-    calculationPolicy: "balanced_surplus_v1",
+    allocationStatus: "open",
+    creatorParticipation,
     privateValueEstimatesStored: false,
-    participantGainChecked: true,
-    baselineConfirmed: true,
     participants,
   };
 }
-
 function validatePool(raw: unknown): ValidatedCreatePoolTerms {
   const input = objectValue(raw, "Pool terms");
   const commonGround = input.commonGround == null ? null : validateCommonGround(input.commonGround);
@@ -525,12 +517,58 @@ function parsePayload(raw: unknown): MoralTradeCreatePayload {
     existingPoolCurrency: optionalText(input.existingPoolCurrency, 16),
     offers: input.offers as CreateOfferContribution[],
     pool: input.pool == null ? null : input.pool as MoralTradeCreatePayload["pool"],
+    groupContributionTerms: input.groupContributionTerms ?? null,
   };
+}
+
+function authoritativeGroupContributionOptions(
+  offers: CreateOfferContribution[],
+): AuthoritativeProposalOption[] {
+  return offers.flatMap((offer) =>
+    offer.options.map((_, index) => ({
+      optionKey: `${offer.id}:${index + 1}`,
+      contributionKind: offer.id === "money" ? "financial" : "nonfinancial",
+    })),
+  );
+}
+
+function validateGroupContributionReviewTerms(
+  raw: unknown,
+  offers: CreateOfferContribution[],
+): {
+  terms: GroupContributionProposalPayload;
+  reviewRecord: GroupContributionReviewRecordFragment | null;
+} {
+  const rawField = raw == null ? null : JSON.stringify(raw);
+  const validated = validateGroupContributionProposalForPersistence({
+    rawField,
+    authoritativeOptions: authoritativeGroupContributionOptions(offers),
+    flags: readGroupContributionProposalFlags(),
+  });
+  if (!validated.ok) {
+    const details = validated.issues
+      .slice(0, 6)
+      .map((issue) => `${issue.path || "groupContributionTerms"}: ${issue.message}`)
+      .join(" ");
+    throw new Error(`Group-contribution terms are invalid. ${details}`.trim());
+  }
+
+  const reviewRecord = validated.value.options.length > 0
+    ? {
+        [GROUP_CONTRIBUTION_REVIEW_RECORD_KEY]: {
+          visibility: "private-review" as const,
+          execution: "proposal-only" as const,
+          canonicalJson: validated.canonicalJson,
+        },
+      }
+    : null;
+
+  return { terms: validated.value, reviewRecord };
 }
 
 export function validateCreatePayload(raw: unknown): ValidatedCreatePayload {
   const serialized = JSON.stringify(raw);
-  if (Buffer.byteLength(serialized, "utf8") > MAX_PAYLOAD_BYTES) {
+  if (new TextEncoder().encode(serialized).byteLength > MAX_PAYLOAD_BYTES) {
     throw new Error("The Create submission is too large.");
   }
   const source = parsePayload(raw);
@@ -557,6 +595,14 @@ export function validateCreatePayload(raw: unknown): ValidatedCreatePayload {
     throw new Error("A directly created pool cannot include reciprocal contribution options.");
   }
   const offeredSummary = directPool ? "No reciprocal contribution required." : summarizeOffers(offeredTerms);
+  const groupContribution = validateGroupContributionReviewTerms(
+    source.groupContributionTerms,
+    offeredTerms,
+  );
+  const canonicalSource: MoralTradeCreatePayload = {
+    ...source,
+    groupContributionTerms: groupContribution.terms,
+  };
   const poolTerms = directPool ? validatePool(source.pool) : null;
   if (directPool && !source.pool) throw new Error("Direct pool terms are required.");
   if (!directPool && source.pool) throw new Error("Pool terms may only be supplied for direct pool creation.");
@@ -574,7 +620,7 @@ export function validateCreatePayload(raw: unknown): ValidatedCreatePayload {
 
   const payloadHash = createHash("sha256").update(serialized).digest("hex");
   return {
-    source,
+    source: canonicalSource,
     kind,
     cause: source.cause,
     requestedAction: source.requestAction,
@@ -584,6 +630,8 @@ export function validateCreatePayload(raw: unknown): ValidatedCreatePayload {
     existingPoolAmountCents,
     existingPoolCurrency,
     poolTerms,
+    groupContributionTerms: groupContribution.terms,
+    groupContributionReviewRecord: groupContribution.reviewRecord,
     payloadHash,
   };
 }

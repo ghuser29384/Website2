@@ -1,0 +1,295 @@
+name: Account-bound participant picker gates
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/account-bound-participant-picker-gates.yml"
+      - "public/moral-trade-create/common-ground.css"
+      - "public/moral-trade-create/common-ground.js"
+      - "public/moral-trade-create/participant-picker.js"
+      - "src/app/actions.ts"
+      - "src/app/api/create/participants/route.ts"
+      - "src/app/api/create/publish/route.ts"
+      - "src/app/auth/confirm/route.ts"
+      - "src/components/profile/complete-profile-review.tsx"
+      - "src/lib/complete-profile.ts"
+      - "src/lib/profile-username*"
+      - "src/lib/create-interface/*participant*"
+      - "src/lib/create-interface/common-ground*"
+      - "src/lib/create-interface/group-contribution*"
+      - "src/lib/create-interface/persistence*"
+      - "src/lib/create-interface/source-contract.test.ts"
+      - "src/lib/create-interface/types.ts"
+      - "src/lib/create-interface/validation*"
+      - "supabase/migrations/20260805152000_account_bound_participant_directory_v2.sql"
+      - "supabase/tests/account_bound_participant_directory_v2.sql"
+      - "tests/create-group-contribution-proposal.spec.ts"
+  push:
+    branches:
+      - feature/account-bound-participant-picker-20260805
+    paths:
+      - ".github/workflows/account-bound-participant-picker-gates.yml"
+      - "public/moral-trade-create/common-ground.css"
+      - "public/moral-trade-create/common-ground.js"
+      - "public/moral-trade-create/participant-picker.js"
+      - "src/app/actions.ts"
+      - "src/app/api/create/participants/route.ts"
+      - "src/app/api/create/publish/route.ts"
+      - "src/app/auth/confirm/route.ts"
+      - "src/components/profile/complete-profile-review.tsx"
+      - "src/lib/complete-profile.ts"
+      - "src/lib/profile-username*"
+      - "src/lib/create-interface/*participant*"
+      - "src/lib/create-interface/common-ground*"
+      - "src/lib/create-interface/group-contribution*"
+      - "src/lib/create-interface/persistence*"
+      - "src/lib/create-interface/source-contract.test.ts"
+      - "src/lib/create-interface/types.ts"
+      - "src/lib/create-interface/validation*"
+      - "supabase/migrations/20260805152000_account_bound_participant_directory_v2.sql"
+      - "supabase/tests/account_bound_participant_directory_v2.sql"
+      - "tests/create-group-contribution-proposal.spec.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: account-bound-participant-picker-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  code-and-rendered-gates:
+    name: Contracts, lint, typecheck, build, and rendered interaction
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - name: Check out exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused participant identity contracts
+        run: >-
+          node --import tsx --test
+          src/lib/profile-username.test.ts
+          src/lib/create-interface/participant-target.test.ts
+          src/lib/create-interface/participant-target-server.test.ts
+          src/lib/create-interface/group-contribution*.test.ts
+          src/lib/create-interface/persistence.test.ts
+          src/lib/create-interface/source-contract.test.ts
+          src/lib/create-interface/validation.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Verify exact diff and no temporary materialization machinery
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            BASE_SHA="$PR_BASE_SHA"
+            git cat-file -e "$BASE_SHA^{commit}"
+          else
+            git fetch origin feature/co-act-co-fund-create-v3-20260803
+            BASE_SHA="$(git rev-parse origin/feature/co-act-co-fund-create-v3-20260803)"
+          fi
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+          git diff --check "$BASE_SHA"...HEAD
+          test ! -e .github/workflows/export-current-abpp-source-20260805.yml
+          test ! -e .github/workflows/materialize-account-bound-participant-picker-20260805.yml
+          if find .github -maxdepth 2 -type f -name 'account-bound-participant-picker.patch*' | grep -q .; then
+            echo "Temporary participant-picker patch payload remains." >&2
+            exit 1
+          fi
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Exercise real Create iframe participant flow
+        env:
+          CREATE_ROUTE_CAPTURE: "1"
+        run: npx playwright test tests/create-group-contribution-proposal.spec.ts
+
+      - name: Upload rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-bound-participant-picker-rendered-${{ github.run_id }}
+          path: |
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14
+
+  qa-database:
+    name: Exact QA migration, authorization, and zero-residue regression
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+    steps:
+      - name: Check out exact candidate head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Validate exact QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected = os.environ["EXPECTED_QA_REF"]
+          if expected not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL outside the exact MoralTrade QA project.")
+          if parsed.hostname != "aws-0-us-west-1.pooler.supabase.com":
+              raise SystemExit(f"Refusing unexpected database host: {parsed.hostname}")
+          if parsed.port != 5432 or parsed.path != "/postgres":
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Preflight exact migration and full SQL contract with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration_path = Path("supabase/migrations/20260805152000_account_bound_participant_directory_v2.sql")
+          test_path = Path("supabase/tests/account_bound_participant_directory_v2.sql")
+          migration = migration_path.read_text().splitlines()
+          tests = test_path.read_text().splitlines()
+
+          def strip_boundary(lines, first, last):
+              out = list(lines)
+              for index, line in enumerate(out):
+                  if line.strip().lower() == first:
+                      out.pop(index)
+                      break
+              else:
+                  raise SystemExit(f"Missing {first} in SQL source")
+              for index in range(len(out) - 1, -1, -1):
+                  if out[index].strip().lower() == last:
+                      out.pop(index)
+                      break
+              else:
+                  raise SystemExit(f"Missing {last} in SQL source")
+              return out
+
+          combined = ["begin;"]
+          combined.extend(strip_boundary(migration, "begin;", "commit;"))
+          combined.extend(strip_boundary(tests, "begin;", "rollback;"))
+          combined.append("rollback;")
+          Path("qa-participant-preflight.sql").write_text("\n".join(combined) + "\n")
+          PY
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file qa-participant-preflight.sql \
+            | tee qa-participant-preflight.log
+
+      - name: Apply exact candidate migration to QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/migrations/20260805152000_account_bound_participant_directory_v2.sql \
+            | tee qa-participant-migration.log
+
+      - name: Run post-apply SQL regression with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/account_bound_participant_directory_v2.sql \
+            | tee qa-participant-regression.log
+
+      - name: Prove no synthetic residue and exact authorization surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --tuples-only --no-align <<'SQL' \
+            | sed '/^[[:space:]]*$/d' | tee qa-participant-post-state.log
+          select 'synthetic_auth_users=' || count(*)
+          from auth.users
+          where email like 'abpp-%@example.test';
+
+          select 'synthetic_profiles=' || count(*)
+          from public.profiles
+          where email like 'abpp-%@example.test';
+
+          select 'legacy_generated_usernames=' || count(*)
+          from public.profiles
+          where username ~ ' · [0-9a-f]{8}$';
+
+          select 'search_authenticated_execute=' ||
+            has_function_privilege('authenticated','public.search_create_participants_v2(uuid,text,integer)','execute');
+
+          select 'search_service_execute=' ||
+            has_function_privilege('service_role','public.search_create_participants_v2(uuid,text,integer)','execute');
+
+          select 'claims_authenticated_select=' ||
+            has_table_privilege('authenticated','public.profile_username_claims','select');
+          SQL
+          grep -qx 'synthetic_auth_users=0' qa-participant-post-state.log
+          grep -qx 'synthetic_profiles=0' qa-participant-post-state.log
+          grep -qx 'legacy_generated_usernames=0' qa-participant-post-state.log
+          grep -qx 'search_authenticated_execute=false' qa-participant-post-state.log
+          grep -qx 'search_service_execute=true' qa-participant-post-state.log
+          grep -qx 'claims_authenticated_select=false' qa-participant-post-state.log
+
+      - name: Upload QA database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: account-bound-participant-picker-qa-${{ github.run_id }}
+          path: |
+            qa-participant-preflight.sql
+            qa-participant-preflight.log
+            qa-participant-migration.log
+            qa-participant-regression.log
+            qa-participant-post-state.log
+          if-no-files-found: warn
+          retention-days: 30
