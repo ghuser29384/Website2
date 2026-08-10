@@ -35,15 +35,15 @@ test("Discover reuses the canonical home navigation and hard-edged visual langua
 
   assert.match(styles, /--paper:\s*#f5f2e9/);
   assert.match(styles, /--blue:\s*#154cff/);
-  assert.match(styles, /\.app-header\s*\{[^}]*background:\s*#050505/s);
+  assert.match(styles, /\.app-header\s*\{[^}]*background:\s*#050505/);
   assert.match(styles, /\.top-nav a\.active,[\s\S]*background:\s*var\(--paper-strong\)/);
-  assert.match(styles, /\.left-rail\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/s);
-  assert.match(styles, /\.full-rail\s*\{[^}]*display:\s*flex/s);
+  assert.match(styles, /\.left-rail\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
+  assert.match(styles, /\.full-rail\s*\{[^}]*display:\s*flex/);
   assert.match(
     styles,
-    /\.rail-tab\[aria-selected="true"\]::after\s*\{[^}]*background:\s*var\(--blue\)/s,
+    /\.rail-tab\[aria-selected="true"\]::after\s*\{[^}]*background:\s*var\(--blue\)/,
   );
-  assert.match(styles, /\.command-form\s*\{[^}]*border:\s*1px solid var\(--ink\)/s);
+  assert.match(styles, /\.command-form\s*\{[^}]*border:\s*1px solid var\(--ink\)/);
   assert.match(styles, /border-radius:\s*0\s*!important/);
   assert.match(styles, /Preserve circles only when they encode a graph/);
 });
