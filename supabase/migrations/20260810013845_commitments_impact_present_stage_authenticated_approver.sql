@@ -259,4 +259,3 @@ comment on table public.impact_model_versions is
   'Versioned impact methodologies. No model may become active without an authenticated allowlisted approver event for the exact methodology hash and a current passing health record.';
 
 commit;
-
