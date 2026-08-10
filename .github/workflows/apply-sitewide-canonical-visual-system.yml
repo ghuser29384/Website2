@@ -17,7 +17,8 @@ concurrency:
 env:
   BASE_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
   PAYLOAD_SHA256: 28b5646f07f63e0dff80c90bf308a9f14ef6085f62b5fc8ccb03eaafba157194
-  TARGET_BRANCH: fix/sitewide-canonical-visual-system-20260810
+  SOURCE_BRANCH: fix/sitewide-canonical-visual-system-20260810
+  TARGET_BRANCH: fix/sitewide-canonical-visual-system-final-20260810
 
 jobs:
   apply:
@@ -29,14 +30,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Guard current main and staged payload
+      - name: Guard current main, clean target, and staged payload
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
-          test "$GITHUB_REF_NAME" = "$TARGET_BRANCH"
+          test "$GITHUB_REF_NAME" = "$SOURCE_BRANCH"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
+          test "$(git ls-remote origin "refs/heads/${TARGET_BRANCH}" | awk '{print $1}')" = "$BASE_SHA"
           test -f .github/workflows/apply-sitewide-canonical-visual-system.yml
           for part in .sitewide-payload/part-00.txt .sitewide-payload/part-01.txt .sitewide-payload/part-02.txt .sitewide-payload/part-03.txt .sitewide-payload/part-04.txt .sitewide-payload/part-05.txt; do
             test -s "$part"
@@ -54,8 +56,9 @@ jobs:
           tar -xzf /tmp/sitewide-payload.tar.gz
           python .apply-sitewide.py
           rm -f .apply-sitewide.py
+          rm -f .github/workflows/sitewide-canonical-visual-system.yml
 
-      - name: Verify exact final file scope
+      - name: Verify exact non-workflow candidate scope
         shell: bash
         run: |
           set -euo pipefail
@@ -63,7 +66,6 @@ jobs:
           git diff --cached --check "$BASE_SHA"
           git diff --cached --name-only "$BASE_SHA" | sort > /tmp/actual-files.txt
           cat > /tmp/expected-files.txt <<'FILES'
-          .github/workflows/sitewide-canonical-visual-system.yml
           public/complete-verification.html
           public/moral-trade-canonical-static.css
           public/moral-trade-create/index.html
@@ -98,15 +100,14 @@ jobs:
           node --check public/moral-trade-discover-navigation.js
           node --check public/moral-trade-live-navigation.js
 
-      - name: Commit and atomically replace the staging branch
+      - name: Commit and fast-forward the clean candidate branch
         shell: bash
         run: |
           set -euo pipefail
           test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
+          test "$(git ls-remote origin "refs/heads/${TARGET_BRANCH}" | awk '{print $1}')" = "$BASE_SHA"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           test -n "$(git status --porcelain)"
           git commit -m 'Align every page with the canonical Home and Walkthrough visual system'
-          git push \
-            --force-with-lease="refs/heads/${TARGET_BRANCH}:${GITHUB_SHA}" \
-            origin "HEAD:refs/heads/${TARGET_BRANCH}"
+          git push origin "HEAD:refs/heads/${TARGET_BRANCH}"
