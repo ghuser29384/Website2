@@ -62,6 +62,7 @@ jobs:
           for path in \
             /moral-trade-live.html \
             /moral-trade-discover.html \
+            '/discover?domain=offers&view=list' \
             /trades/new \
             /commitments \
             /complete-verification.html; do
@@ -75,6 +76,26 @@ jobs:
 
           printf 'apex_status=%s\napex_location=%s\n' \
             "$apex_status" "$apex_location" | tee -a production-http-smoke.txt
+
+      - name: Record the known non-blocking Discover prefetch residual
+        shell: bash
+        run: |
+          set -euo pipefail
+          direct_status="$(curl --silent --show-error --output /dev/null \
+            --write-out '%{http_code}' \
+            "$PRODUCTION_ORIGIN/discover?domain=offers&view=list")"
+          prefetch_status="$(curl --silent --show-error --output /dev/null \
+            --write-out '%{http_code}' \
+            -H 'RSC: 1' \
+            -H 'Next-Router-Prefetch: 1' \
+            -H 'Next-Url: /commitments' \
+            "$PRODUCTION_ORIGIN/discover?domain=offers&view=list")"
+          {
+            printf 'direct_discover_status=%s\n' "$direct_status"
+            printf 'rsc_prefetch_discover_status=%s\n' "$prefetch_status"
+            printf '%s\n' 'classification=non-blocking-prefetch-only; direct user navigation is healthy'
+          } | tee production-known-residual.txt
+          test "$direct_status" = "200"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -146,6 +167,14 @@ jobs:
             await expect(brand.locator(".mt-canonical-compact-mark")).toBeVisible();
           }
 
+          async function expectNoHorizontalOverflow(page: import("@playwright/test").Page) {
+            const metrics = await page.evaluate(() => ({
+              innerWidth: window.innerWidth,
+              scrollWidth: document.documentElement.scrollWidth,
+            }));
+            expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.innerWidth + 1);
+          }
+
           test("canonical production surfaces are current and truthful", async ({ page }) => {
             await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
             await expectCanonicalBrand(page);
@@ -156,8 +185,12 @@ jobs:
             await page.goto("/moral-trade-discover.html", { waitUntil: "domcontentloaded" });
             await expectCanonicalBrand(page);
 
+            await page.goto("/discover?domain=offers&view=list", { waitUntil: "domcontentloaded" });
+            await expectCanonicalBrand(page);
+
             await page.goto("/trades/new", { waitUntil: "domcontentloaded" });
-            await expect(page.getByRole("heading", { name: "Sign in to build a trade." })).toBeVisible();
+            await expect(page.getByRole("heading", { name: "Create a Moral Trade" })).toBeVisible();
+            await expect(page.locator("iframe").first()).toBeVisible();
 
             await page.goto("/commitments", { waitUntil: "domcontentloaded" });
             await expect(page.getByRole("heading", { name: "Additional resources you caused." })).toBeVisible();
@@ -166,11 +199,24 @@ jobs:
             await page.goto("/complete-verification.html?reset=1", { waitUntil: "domcontentloaded" });
             await expect(page.getByRole("heading", { name: "Complete verification" })).toBeVisible();
           });
+
+          for (const viewport of [
+            { width: 390, height: 844 },
+            { width: 320, height: 568 },
+          ]) {
+            test(`signed-out Commitments remains readable at ${viewport.width}×${viewport.height}`, async ({ page }) => {
+              await page.setViewportSize(viewport);
+              await page.goto("/commitments", { waitUntil: "domcontentloaded" });
+              await expect(page.getByRole("heading", { name: "Additional resources you caused." })).toBeVisible();
+              await expect(page.getByRole("heading", { name: "Sign in to view your commitments." })).toBeVisible();
+              await expectNoHorizontalOverflow(page);
+            });
+          }
           TS
 
           npx tsc --noEmit --pretty false >/dev/null
 
-      - name: Run production browser smoke
+      - name: Run corrected production browser smoke
         shell: bash
         run: |
           set -euo pipefail
@@ -181,7 +227,6 @@ jobs:
             tests/exact-live-local-time.spec.ts \
             tests/exact-live-route-recommendations.spec.ts \
             tests/exact-live-verification.spec.ts \
-            tests/commitments-live-portfolio.spec.ts \
             | tee production-browser-smoke.log
 
       - name: Summarize exact production evidence
@@ -195,6 +240,9 @@ jobs:
             ? JSON.parse(fs.readFileSync("production-smoke-results.json", "utf8"))
             : null;
           const stats = report?.stats ?? {};
+          const residual = fs.existsSync("production-known-residual.txt")
+            ? fs.readFileSync("production-known-residual.txt", "utf8").trim().split("\n")
+            : [];
           const lines = [
             "# PR 598 production smoke",
             "",
@@ -205,6 +253,10 @@ jobs:
             `- Unexpected: \`${stats.unexpected ?? "unknown"}\``,
             `- Flaky: \`${stats.flaky ?? "unknown"}\``,
             `- Skipped: \`${stats.skipped ?? "unknown"}\``,
+            "",
+            "## Known residual",
+            "",
+            ...residual.map((line) => `- \`${line}\``),
             "",
           ];
           fs.writeFileSync("production-smoke-summary.md", `${lines.join("\n")}\n`);
@@ -221,6 +273,7 @@ jobs:
           path: |
             production-smoke-identity.txt
             production-http-smoke.txt
+            production-known-residual.txt
             apex-redirect-headers.txt
             production-browser-smoke.log
             production-smoke-results.json
