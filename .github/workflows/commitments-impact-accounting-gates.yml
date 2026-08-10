@@ -1,118 +1,94 @@
-name: Apply Commitments methodology remediation bundle
+name: Commitments Phase 1 impact accounting gates
 
 on:
-  push:
-    branches:
-      - feature/commitments-phase1-impact-accounting-20260806
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
     paths:
+      - "src/lib/impact-accounting*.ts"
+      - "src/lib/impact-model-governance*.ts"
+      - "scripts/validate-commitments-impact-methodologies.mjs"
+      - "docs/commitments/impact-methodologies-v1-review.md"
+      - "docs/commitments/impact-methodologies-v1/*.json"
+      - "supabase/migrations/202608061*.sql"
+      - "supabase/migrations/20260808174259_mpgf_public_goods_public_read_rls.sql"
+      - "supabase/migrations/20260810013845_commitments_impact_present_stage_authenticated_approver.sql"
+      - "supabase/migrations/20260810150350_commitments_impact_methodology_review_remediation.sql"
+      - "supabase/migrations/20260810151733_commitments_impact_methodology_remediation_privileges.sql"
+      - "supabase/migrations/20260810152035_commitments_impact_snapshot_overlap_alias_fix.sql"
+      - "supabase/tests/commitments_impact_accounting_phase1*.sql"
+      - "supabase/tests/commitments_public_goods_rls.sql"
       - ".github/workflows/commitments-impact-accounting-gates.yml"
+  push:
+    branches: [feature/commitments-phase1-impact-accounting-20260806]
 
 permissions:
-  contents: write
-  issues: read
+  contents: read
 
 concurrency:
-  group: commitments-methodology-remediation-applier
-  cancel-in-progress: false
+  group: commitments-impact-accounting-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  apply:
-    name: Verify and apply exact remediation bundle
+  code-gates:
+    name: Test, validate methodology, lint, typecheck, build, and exact diff
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/commitments-phase1-impact-accounting-20260806
           fetch-depth: 0
-          persist-credentials: true
-
-      - name: Reconstruct and verify exact bundle
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Run focused Phase 1 tests
+        shell: bash
+        run: |
+          set -o pipefail
+          node --import tsx --test \
+            src/lib/impact-accounting.test.ts \
+            src/lib/impact-model-governance.test.ts \
+            2>&1 | tee focused-impact-accounting.log
+      - name: Validate exact under-review methodology manifest and hashes
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/validate-commitments-impact-methodologies.mjs \
+            2>&1 | tee methodology-manifest-validation.log
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee repository-tests.log
+      - name: Run complete ESLint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint -- --quiet 2>&1 | tee repository-lint.log
+      - name: Run production build and TypeScript
+        shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-          COMMENT_IDS: "5242369506 5242397897 5242419144 5242434746 5242449466 5242464393 5242479169 5242492973 5242498874"
-          EXPECTED_SHA256: a0fb530b23b1efcace5da963f2dffcd244fe52c00a25d674af21e2a84d716346
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee production-build.log
+      - name: Check exact current-main diff
+        shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          import base64
-          import hashlib
-          import json
-          import os
-          from pathlib import Path, PurePosixPath
-          import re
-          import tarfile
-          import urllib.request
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
+          git diff --check "$base" "$GITHUB_SHA" | tee diff-check.log
+          git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
 
-          repo = os.environ["GITHUB_REPOSITORY"]
-          token = os.environ["GH_TOKEN"]
-          ids = [int(value) for value in os.environ["COMMENT_IDS"].split()]
-          expected_hash = os.environ["EXPECTED_SHA256"]
-          expected_names = ["docs/commitments/impact-methodologies-v1-review.md", "docs/commitments/impact-methodologies-v1/co_fund.json", "docs/commitments/impact-methodologies-v1/donation_redirect.json", "docs/commitments/impact-methodologies-v1/donation_upgrade.json", "docs/commitments/impact-methodologies-v1/manifest.json", "docs/commitments/impact-methodologies-v1/threshold_funding.json", "docs/commitments/impact-methodologies-v1/threshold_sign_on.json", "docs/commitments/impact-methodologies-v1/trade.json", "scripts/validate-commitments-impact-methodologies.mjs", "src/lib/impact-accounting.test.ts", "src/lib/impact-accounting.ts", "src/lib/impact-model-governance.test.ts", "src/lib/impact-model-governance.ts", "supabase/migrations/20260810150350_commitments_impact_methodology_review_remediation.sql", "supabase/migrations/20260810151733_commitments_impact_methodology_remediation_privileges.sql", "supabase/migrations/20260810152035_commitments_impact_snapshot_overlap_alias_fix.sql", "supabase/tests/commitments_impact_accounting_phase1.sql"]
-
-          chunks = {}
-          for comment_id in ids:
-              request = urllib.request.Request(
-                  f"https://api.github.com/repos/{repo}/issues/comments/{comment_id}",
-                  headers={
-                      "Accept": "application/vnd.github+json",
-                      "Authorization": f"Bearer {token}",
-                      "X-GitHub-Api-Version": "2022-11-28",
-                      "User-Agent": "commitments-methodology-remediation-applier",
-                  },
-              )
-              with urllib.request.urlopen(request, timeout=30) as response:
-                  payload = json.load(response)
-              body = payload.get("body", "")
-              match = re.fullmatch(
-                  r"<!-- temporary-commitments-remediation-bundle:(\d+)/9 -->\n"
-                  r"([A-Za-z0-9+/=]+)\n"
-                  r"<!-- /temporary-commitments-remediation-bundle -->",
-                  body,
-              )
-              if not match:
-                  raise SystemExit(f"Comment {comment_id} did not match the exact bundle marker.")
-              index = int(match.group(1))
-              if index in chunks:
-                  raise SystemExit(f"Duplicate bundle chunk index: {index}")
-              chunks[index] = match.group(2)
-
-          if sorted(chunks) != list(range(1, 10)):
-              raise SystemExit(f"Incomplete bundle chunk indexes: {sorted(chunks)}")
-
-          encoded = "".join(chunks[index] for index in range(1, 10))
-          archive = base64.b64decode(encoded, validate=True)
-          actual_hash = hashlib.sha256(archive).hexdigest()
-          if actual_hash != expected_hash:
-              raise SystemExit(f"Bundle SHA-256 mismatch: {actual_hash}")
-
-          archive_path = Path("/tmp/commitments-review-remediation.tgz")
-          archive_path.write_bytes(archive)
-          with tarfile.open(archive_path, "r:gz") as bundle:
-              members = bundle.getmembers()
-              actual_names = [member.name for member in members]
-              if actual_names != expected_names:
-                  raise SystemExit(
-                      "Bundle file inventory mismatch.\n"
-                      f"Expected: {expected_names}\nActual: {actual_names}"
-                  )
-              for member in members:
-                  parsed = PurePosixPath(member.name)
-                  if parsed.is_absolute() or ".." in parsed.parts or not member.isfile():
-                      raise SystemExit(f"Unsafe archive member: {member.name}")
-              bundle.extractall(".", filter="data")
-
-          print(f"bundle_sha256={actual_hash}")
-          print(f"bundle_files={len(expected_names)}")
-          PY
-
-      - name: Validate and stage exact remediation sources
-        run: |
-          set -euo pipefail
-          node scripts/validate-commitments-impact-methodologies.mjs
-          git diff --check
-
-          cat > /tmp/expected-files.txt <<'FILES'
+          cat > required-files.txt <<'FILES'
+          .github/workflows/commitments-impact-accounting-gates.yml
           docs/commitments/impact-methodologies-v1-review.md
           docs/commitments/impact-methodologies-v1/co_fund.json
           docs/commitments/impact-methodologies-v1/donation_redirect.json
@@ -124,29 +100,204 @@ jobs:
           scripts/validate-commitments-impact-methodologies.mjs
           src/lib/impact-accounting.test.ts
           src/lib/impact-accounting.ts
+          src/lib/impact-model-governance-server.ts
           src/lib/impact-model-governance.test.ts
           src/lib/impact-model-governance.ts
+          supabase/migrations/20260808174259_mpgf_public_goods_public_read_rls.sql
+          supabase/migrations/20260810013845_commitments_impact_present_stage_authenticated_approver.sql
           supabase/migrations/20260810150350_commitments_impact_methodology_review_remediation.sql
           supabase/migrations/20260810151733_commitments_impact_methodology_remediation_privileges.sql
           supabase/migrations/20260810152035_commitments_impact_snapshot_overlap_alias_fix.sql
           supabase/tests/commitments_impact_accounting_phase1.sql
+          supabase/tests/commitments_impact_accounting_phase1_prelude.sql
+          supabase/tests/commitments_public_goods_rls.sql
           FILES
-          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
-          mapfile -t files < /tmp/expected-files.txt
-          git add -- "${files[@]}"
-          git diff --cached --name-only | sort > /tmp/actual-files.txt
-          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+          sort -o required-files.txt required-files.txt
+          missing="$(comm -23 required-files.txt actual-files.txt)"
+          test -z "$missing" || {
+            printf 'Missing required files:\n%s\n' "$missing" >&2
+            exit 1
+          }
 
-      - name: Commit exact remediation sources
-        env:
-          BRANCH: feature/commitments-phase1-impact-accounting-20260806
+          unexpected=0
+          while IFS= read -r file; do
+            case "$file" in
+              .github/workflows/commitments-impact-accounting-gates.yml|\
+              docs/commitments/impact-methodologies-v1-review.md|\
+              docs/commitments/impact-methodologies-v1/*.json|\
+              scripts/validate-commitments-impact-methodologies.mjs|\
+              src/lib/impact-accounting.test.ts|\
+              src/lib/impact-accounting.ts|\
+              src/lib/impact-model-governance-server.ts|\
+              src/lib/impact-model-governance.test.ts|\
+              src/lib/impact-model-governance.ts|\
+              supabase/tests/commitments_impact_accounting_phase1.sql|\
+              supabase/tests/commitments_impact_accounting_phase1_prelude.sql|\
+              supabase/tests/commitments_public_goods_rls.sql|\
+              supabase/migrations/202608061*.sql|\
+              supabase/migrations/20260808174259_mpgf_public_goods_public_read_rls.sql|\
+              supabase/migrations/20260810013845_commitments_impact_present_stage_authenticated_approver.sql|\
+              supabase/migrations/20260810150350_commitments_impact_methodology_review_remediation.sql|\
+              supabase/migrations/20260810151733_commitments_impact_methodology_remediation_privileges.sql|\
+              supabase/migrations/20260810152035_commitments_impact_snapshot_overlap_alias_fix.sql) ;;
+              *)
+                echo "Unexpected file in Phase 1 diff: $file" >&2
+                unexpected=1
+                ;;
+            esac
+          done < actual-files.txt
+          test "$unexpected" = "0"
+      - name: Upload code evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-impact-accounting-code-${{ github.run_id }}
+          path: |
+            focused-impact-accounting.log
+            methodology-manifest-validation.log
+            repository-tests.log
+            repository-lint.log
+            production-build.log
+            diff-check.log
+            required-files.txt
+            actual-files.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  qa-sql-regression:
+    name: Exact-source and transactional MoralTrade QA regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate exact MoralTrade QA target
+        shell: bash
         run: |
           set -euo pipefail
-          git fetch origin "$BRANCH"
-          test "$(git rev-parse "origin/$BRANCH")" = "$GITHUB_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlparse
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          if os.environ["EXPECTED_QA_REF"] not in (parsed.username or ""):
+              raise SystemExit("Refusing a database URL outside exact MoralTrade QA.")
+          if (
+              parsed.hostname != "aws-0-us-west-1.pooler.supabase.com"
+              or parsed.port != 5432
+              or parsed.path != "/postgres"
+          ):
+              raise SystemExit("Refusing unexpected database connection parameters.")
+          PY
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+      - name: Verify registered migration names and exact normalized sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p registered-migrations
+          {
+            find supabase/migrations -maxdepth 1 -type f -name '202608061*.sql' -print
+            printf '%s\n' supabase/migrations/20260808174259_mpgf_public_goods_public_read_rls.sql
+            printf '%s\n' supabase/migrations/20260810013845_commitments_impact_present_stage_authenticated_approver.sql
+            printf '%s\n' supabase/migrations/20260810150350_commitments_impact_methodology_review_remediation.sql
+            printf '%s\n' supabase/migrations/20260810151733_commitments_impact_methodology_remediation_privileges.sql
+            printf '%s\n' supabase/migrations/20260810152035_commitments_impact_snapshot_overlap_alias_fix.sql
+          } | sort -u > migration-files.txt
+          test -s migration-files.txt
+          : > migration-inventory.txt
+          while IFS= read -r source_file; do
+            filename="$(basename "$source_file")"
+            version="${filename%%_*}"
+            expected_name="${filename#*_}"
+            expected_name="${expected_name%.sql}"
+            printf '%s|%s|%s\n' \
+              "$version" "$expected_name" "$source_file" \
+              >> migration-inventory.txt
+            actual_name="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+              "select name from supabase_migrations.schema_migrations where version = '$version';")"
+            test "$actual_name" = "$expected_name" || {
+              echo "Migration $version name mismatch" >&2
+              exit 1
+            }
+            registered_file="registered-migrations/${version}.sql"
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
+              "select statements[1] from supabase_migrations.schema_migrations where version = '$version';" \
+              > "$registered_file"
+            python3 - "$source_file" "$registered_file" <<'PY'
+          from pathlib import Path
+          import hashlib
+          import sys
 
-          git commit -m "Remediate Commitments methodology review"
-          git push origin "HEAD:$BRANCH"
+          source = Path(sys.argv[1]).read_text(encoding="utf-8").rstrip("\n")
+          registered = Path(sys.argv[2]).read_text(encoding="utf-8").rstrip("\n")
+          if source != registered:
+              print(
+                  f"source_sha256={hashlib.sha256(source.encode()).hexdigest()}",
+                  file=sys.stderr,
+              )
+              print(
+                  f"registered_sha256={hashlib.sha256(registered.encode()).hexdigest()}",
+                  file=sys.stderr,
+              )
+              raise SystemExit(1)
+          print(
+              f"{sys.argv[1]}: sha256="
+              f"{hashlib.sha256(source.encode()).hexdigest()}"
+          )
+          PY
+          done < migration-files.txt | tee migration-source-verification.log
+      - name: Prove QA public-goods least-privilege RLS state
+        shell: bash
+        run: |
+          set -o pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc \
+            --file supabase/tests/commitments_public_goods_rls.sql \
+            2>&1 | tee qa-public-goods-rls.log
+      - name: Run transactional Phase 1 SQL regression
+        shell: bash
+        run: |
+          set -o pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/commitments_impact_accounting_phase1_prelude.sql \
+            --file supabase/tests/commitments_impact_accounting_phase1.sql \
+            2>&1 | tee qa-impact-accounting.log
+      - name: Prove transactional fixture residue is zero
+        shell: bash
+        run: |
+          set -euo pipefail
+          residue="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
+            select
+              (select count(*) from auth.users where id in (
+                '7a100000-0000-4000-8000-000000000001'::uuid,
+                '7a100000-0000-4000-8000-000000000002'::uuid,
+                '7a100000-0000-4000-8000-000000000003'::uuid))
+              + (select count(*) from public.impact_model_versions where id in (
+                '7a100000-0000-4000-8000-000000000010'::uuid,
+                '7a100000-0000-4000-8000-000000000011'::uuid))
+              + (select count(*) from public.impact_estimate_snapshots
+                 where subject_ref like 'qa:%phase1%')
+              + (select count(*) from public.impact_refresh_queue
+                 where subject_ref = 'qa:threshold-pool:phase1');")"
+          printf 'synthetic_residue=%s\n' "$residue" | tee qa-residue.log
+          test "$residue" = "0"
+      - name: Upload QA database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-impact-accounting-qa-${{ github.run_id }}
+          path: |
+            migration-files.txt
+            migration-inventory.txt
+            migration-source-verification.log
+            registered-migrations/
+            qa-public-goods-rls.log
+            qa-impact-accounting.log
+            qa-residue.log
+          if-no-files-found: warn
+          retention-days: 30
