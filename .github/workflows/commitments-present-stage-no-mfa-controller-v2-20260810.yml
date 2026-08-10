@@ -1,0 +1,209 @@
+name: Apply present-stage authenticated Commitments governance v2
+
+on:
+  push:
+    branches:
+      - ops/commitments-present-stage-no-mfa-20260810
+
+permissions:
+  actions: read
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: commitments-present-stage-no-mfa-controller-v2
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: feature/commitments-phase1-impact-accounting-20260806
+  EXPECTED_TARGET_SHA: ecf0337d8effcb585469356050bb3741a2ec1989
+  EXPECTED_MAIN_SHA: f0f5f36be4ef4ac6cb09cdc81802b27cd268878a
+  EXPECTED_CONTROLLER_PARENT: 0e2d701c619ca98dc2345995130637c92af7b840
+  MIGRATION_VERSION: '20260810013845'
+  MIGRATION_NAME: commitments_impact_present_stage_authenticated_approver
+  MIGRATION_PATH: supabase/migrations/20260810013845_commitments_impact_present_stage_authenticated_approver.sql
+  EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+  EVIDENCE_DIR: commitments-present-stage-no-mfa-v2-evidence
+
+jobs:
+  apply-and-verify:
+    name: Apply policy decision, prove exact sources, test, and push PR 534
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GH_TOKEN: ${{ github.token }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+    steps:
+      - name: Check out one-use controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: controller
+
+      - name: Guard exact controller, main, and feature heads
+        working-directory: controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CONTROLLER_PARENT"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin "refs/heads/${TARGET_BRANCH}" | awk '{print $1}')" = "$EXPECTED_TARGET_SHA"
+          git diff --check "$EXPECTED_MAIN_SHA" "$GITHUB_SHA"
+          git diff --name-only "$EXPECTED_MAIN_SHA" "$GITHUB_SHA" | sort > controller-files.txt
+          cat > expected-controller-files.txt <<'FILES'
+          .github/scripts/commitments-present-stage-no-mfa-controller.py
+          .github/workflows/commitments-present-stage-no-mfa-controller-20260810.yml
+          .github/workflows/commitments-present-stage-no-mfa-controller-v2-20260810.yml
+          FILES
+          diff -u expected-controller-files.txt controller-files.txt
+          sed -i 's/inspected = \[review_path, validator_path, manifest_path\]/inspected = [review_path, manifest_path]/' .github/scripts/commitments-present-stage-no-mfa-controller.py
+          grep -Fq 'inspected = [review_path, manifest_path]' .github/scripts/commitments-present-stage-no-mfa-controller.py
+          python3 -m py_compile .github/scripts/commitments-present-stage-no-mfa-controller.py
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Check out exact PR 534 branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          path: workspace
+
+      - name: Guard exact checked-out feature and main heads
+        working-directory: workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_SHA"
+          git fetch origin main "$TARGET_BRANCH"
+          test "$(git rev-parse origin/main)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse "origin/$TARGET_BRANCH")" = "$EXPECTED_TARGET_SHA"
+          mkdir -p "$EVIDENCE_DIR"
+          cp ../controller/controller-files.txt "$EVIDENCE_DIR/controller-files.txt"
+
+      - name: Materialize exact registered QA migration source
+        working-directory: workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 -c 'import os; from urllib.parse import urlparse; p=urlparse(os.environ["QA_SUPABASE_DB_URL"]); assert os.environ["EXPECTED_QA_REF"] in (p.username or ""); assert p.hostname == "aws-0-us-west-1.pooler.supabase.com" and p.port == 5432 and p.path == "/postgres"'
+          actual_name="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "select name from supabase_migrations.schema_migrations where version = '${MIGRATION_VERSION}';")"
+          test "$actual_name" = "$MIGRATION_NAME"
+          mkdir -p "$(dirname "$MIGRATION_PATH")"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "select statements[1] from supabase_migrations.schema_migrations where version = '${MIGRATION_VERSION}';" > "$MIGRATION_PATH"
+          test -s "$MIGRATION_PATH"
+          grep -Fq 'public.is_impact_model_approver(false)' "$MIGRATION_PATH"
+          grep -Fq 'Present-stage MFA is not required' "$MIGRATION_PATH"
+          ! grep -Fq 'public.is_impact_model_approver(true)' "$MIGRATION_PATH"
+          sha256sum "$MIGRATION_PATH" | tee "$EVIDENCE_DIR/migration-file-sha256.txt"
+
+      - name: Update methodology blockers, review packet, tests, validator, and gates
+        working-directory: workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 ../controller/.github/scripts/commitments-present-stage-no-mfa-controller.py edit-repo .
+          git diff --check
+          git diff --stat | tee "$EVIDENCE_DIR/changed-files-stat.txt"
+          git diff --name-only | sort | tee "$EVIDENCE_DIR/changed-files.txt"
+
+      - name: Verify exact registered migration source
+        working-directory: workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          registered="$RUNNER_TEMP/registered-${MIGRATION_VERSION}.sql"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "select statements[1] from supabase_migrations.schema_migrations where version = '${MIGRATION_VERSION}';" > "$registered"
+          cmp -s "$MIGRATION_PATH" "$registered"
+          printf 'migration_version=%s\nsource_matches_registered=true\n' "$MIGRATION_VERSION" | tee "$EVIDENCE_DIR/migration-source-verification.log"
+          sha256sum "$registered" | tee -a "$EVIDENCE_DIR/migration-source-verification.log"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: workspace/package-lock.json
+
+      - name: Install exact dependencies
+        working-directory: workspace
+        run: npm ci
+
+      - name: Validate methodologies and run focused tests
+        working-directory: workspace
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/validate-commitments-impact-methodologies.mjs 2>&1 | tee "$EVIDENCE_DIR/methodology-validation.log"
+          node --import tsx --test src/lib/impact-accounting.test.ts src/lib/impact-model-governance.test.ts 2>&1 | tee "$EVIDENCE_DIR/focused-tests.log"
+
+      - name: Run complete repository tests, lint, TypeScript, and build
+        working-directory: workspace
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: preview
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee "$EVIDENCE_DIR/repository-tests.log"
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/repository-lint.log"
+          npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/production-build.log"
+
+      - name: Run exact QA RLS and transactional governance regression
+        working-directory: workspace
+        shell: bash
+        run: |
+          set -o pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --file supabase/tests/commitments_public_goods_rls.sql 2>&1 | tee "$EVIDENCE_DIR/qa-public-goods-rls.log"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file supabase/tests/commitments_impact_accounting_phase1_prelude.sql --file supabase/tests/commitments_impact_accounting_phase1.sql 2>&1 | tee "$EVIDENCE_DIR/qa-impact-accounting.log"
+          residue="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "select (select count(*) from auth.users where id in ('7a100000-0000-4000-8000-000000000001'::uuid,'7a100000-0000-4000-8000-000000000002'::uuid,'7a100000-0000-4000-8000-000000000003'::uuid)) + (select count(*) from public.impact_model_versions where id in ('7a100000-0000-4000-8000-000000000010'::uuid,'7a100000-0000-4000-8000-000000000011'::uuid)) + (select count(*) from public.impact_estimate_snapshots where subject_ref like 'qa:%phase1%') + (select count(*) from public.impact_refresh_queue where subject_ref = 'qa:threshold-pool:phase1');")"
+          printf 'synthetic_residue=%s\n' "$residue" | tee "$EVIDENCE_DIR/qa-residue.log"
+          test "$residue" = '0'
+
+      - name: Commit and push only if remote heads remain exact
+        id: push
+        working-directory: workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin "refs/heads/${TARGET_BRANCH}" | awk '{print $1}')" = "$EXPECTED_TARGET_SHA"
+          git diff --check
+          git config user.name 'ghuser29384'
+          git config user.email '262476329+ghuser29384@users.noreply.github.com'
+          git add .github/workflows/commitments-impact-accounting-gates.yml docs/commitments/impact-methodologies-v1-review.md docs/commitments/impact-methodologies-v1 scripts/validate-commitments-impact-methodologies.mjs supabase/tests/commitments_impact_accounting_phase1.sql "$MIGRATION_PATH"
+          git commit -m 'Use authenticated approver governance before high-leverage stage'
+          new_sha="$(git rev-parse HEAD)"
+          git push origin "HEAD:refs/heads/${TARGET_BRANCH}"
+          printf 'new_sha=%s\n' "$new_sha" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$new_sha" | tee "$EVIDENCE_DIR/new-head.txt"
+
+      - name: Update PR 534 status and policy documentation
+        working-directory: workspace
+        env:
+          NEW_SHA: ${{ steps.push.outputs.new_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/534" > "$RUNNER_TEMP/pr534.json"
+          python3 ../controller/.github/scripts/commitments-present-stage-no-mfa-controller.py edit-pr-body "$RUNNER_TEMP/pr534.json" "$RUNNER_TEMP/pr534-body.md" "$NEW_SHA"
+          jq -n --rawfile body "$RUNNER_TEMP/pr534-body.md" '{body:$body}' | gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/534" --input - > "$EVIDENCE_DIR/pr534-updated.json"
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/issues/534/comments" -f body="Applied the founder's present-stage security decision at exact head ${NEW_SHA}: MFA/AAL2 is no longer required for Commitments model governance before Moral Trade is high-leverage. QA migration ${MIGRATION_VERSION}_${MIGRATION_NAME} is registered; authenticated active allowlisting, exact-hash approval, append-only audit history, and current passing model health remain mandatory. The branch's dedicated post-push gates must pass before this draft can advance." > "$EVIDENCE_DIR/pr534-comment.json"
+
+      - name: Upload complete continuation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-present-stage-no-mfa-v2-${{ github.run_id }}
+          path: workspace/commitments-present-stage-no-mfa-v2-evidence/
+          if-no-files-found: warn
+          retention-days: 30
