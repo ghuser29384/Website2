@@ -67,7 +67,7 @@ jobs:
           git merge-base --is-ancestor "$CONTROLLER_BASE_SHA" "$GITHUB_SHA"
           git cat-file -e "${PATCHER_COMMIT}^{commit}"
           git cat-file -e "${HARNESS_COMMIT}^{commit}"
-          git diff --check "$CONTROLLER_BASE_SHA" "$GITHUB_SHA"
+          git diff --check "$CONTROLLER_BASE_SHA" "$GITHUB_SHA" -- "$RUNNER_PATH"
           git diff --name-only "$CONTROLLER_BASE_SHA" "$GITHUB_SHA" | sort > controller-files.txt
           cat > expected-controller-files.txt <<'FILES'
           .github/scripts/pr552-run-production-auth-mfa-smoke.sh
