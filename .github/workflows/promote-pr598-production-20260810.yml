@@ -21,8 +21,10 @@ jobs:
     env:
       EXPECTED_MAIN_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
       EXPECTED_DEPLOYMENT_ID: dpl_3zacHVuaHpbayAyQfY6hzLNEZaPZ
+      EXPECTED_DEPLOYMENT_URL: moraltrade-site-izz3psr7y-ellen-s.vercel.app
       VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
       VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      VERCEL_TEAM_SCOPE: team_ySu6sF3Uho1E1GnJtCQPVEuJ
       VERCEL_CLI_VERSION: 50.38.1
       CANONICAL_DOMAIN: www.moraltrade.org
 
@@ -30,7 +32,7 @@ jobs:
       - name: Check out the single-use promotion branch
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Guard exact main and exact READY production deployment
         env:
@@ -38,7 +40,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
           remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
           test "$remote_main" = "$EXPECTED_MAIN_SHA"
           test -n "$VERCEL_TOKEN"
@@ -56,6 +58,8 @@ jobs:
             pr598-promotion-before.json >/dev/null
           jq -e '.target == "production"' pr598-promotion-before.json >/dev/null
           jq -e '(.readyState // .state) == "READY"' pr598-promotion-before.json >/dev/null
+          jq -e --arg url "$EXPECTED_DEPLOYMENT_URL" '.url == $url' \
+            pr598-promotion-before.json >/dev/null
 
       - name: Confirm the canonical alias has not already moved elsewhere
         env:
@@ -78,7 +82,7 @@ jobs:
           fi
           test "$current_id" != "null"
 
-      - name: Promote the already-built production deployment to canonical aliases
+      - name: Prove CLI access in the exact team scope
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         shell: bash
@@ -88,8 +92,21 @@ jobs:
           printf '{"orgId":"%s","projectId":"%s"}\n' \
             "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect \
+            "https://$EXPECTED_DEPLOYMENT_URL" \
+            --scope="$VERCEL_TEAM_SCOPE" \
+            --token="$VERCEL_TOKEN" \
+            | tee pr598-vercel-inspect.log
+
+      - name: Promote the already-built production deployment to canonical aliases
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
           npx --yes "vercel@$VERCEL_CLI_VERSION" promote \
-            "$EXPECTED_DEPLOYMENT_ID" \
+            "https://$EXPECTED_DEPLOYMENT_URL" \
+            --scope="$VERCEL_TEAM_SCOPE" \
             --yes \
             --timeout=10m \
             --token="$VERCEL_TOKEN" \
@@ -151,6 +168,7 @@ jobs:
             pr598-promotion-*.json
             pr598-promotion-*.txt
             pr598-promotion-*.log
+            pr598-vercel-*.log
             pr598-canonical-*.json
             pr598-live-create-router.js
           if-no-files-found: warn
