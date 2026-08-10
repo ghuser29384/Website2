@@ -1,6 +1,6 @@
 # Commitments impact-accounting methodology review remediation
 
-**Status:** substantive founder review remediated in QA; exact current `main` synchronized; all six v2 candidates remain `under_review`; no candidate is approved or active; production is unchanged
+**Status:** substantive founder review remediated in QA; exact current `main` synchronized; exact-head CI is enforced as release evidence rather than a methodology blocker; all six v2 candidates remain `under_review`; no candidate is approved or active; production is unchanged
 
 ## Decision and scope
 
@@ -93,7 +93,7 @@ MFA remains deferred until Moral Trade is high-leverage. Present-stage governanc
 
 ## Remaining blockers
 
-- The exact remediation head must pass focused tests, six-hash validation, the full repository suite, ESLint, TypeScript, production build, exact-diff checks, exact QA migration-source verification, transactional SQL regression, and zero-residue verification.
+- Every changed pull-request head must pass focused tests, six-hash validation, the full repository suite, ESLint, TypeScript, production build, exact-diff checks, exact QA migration-source verification, transactional SQL regression, and zero-residue verification before merge. This is release evidence enforced by CI, not a substantive methodology approval blocker.
 - A real founder approver account has not been configured in an authorized environment.
 - The six new exact hashes have not received a substantive approval decision.
 - No causal-identification design is validated.

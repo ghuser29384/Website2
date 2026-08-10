@@ -10,7 +10,6 @@
   "approvalBlockers": [
     "founder_exact_hash_approval_not_recorded",
     "founder_approver_account_not_yet_configured",
-    "exact_current_main_remediation_gates_must_pass",
     "causal_identification_design_not_validated",
     "empirical_calibration_evidence_not_registered",
     "provisional_confidence_thresholds_not_validated",

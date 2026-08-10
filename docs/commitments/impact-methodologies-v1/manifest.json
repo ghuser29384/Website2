@@ -1,7 +1,7 @@
 {
   "bundleSchemaVersion": "moral-trade-impact-methodology-bundle-v2",
-  "generatedAtUtc": "2026-08-10T14:55:00Z",
-  "status": "founder_review_remediated_current_main_synced_not_approved_not_active",
+  "generatedAtUtc": "2026-08-10T16:00:00Z",
+  "status": "founder_review_remediated_current_main_synced_ci_enforced_not_approved_not_active",
   "sourceRepository": "ghuser29384/Website2",
   "sourcePullRequest": 534,
   "sourcePullRequestHeadBeforeRemediation": "e06333b26170a34c56d3d5101ad61acb464f37a3",
@@ -11,10 +11,9 @@
     "reviewId": 4897881155,
     "decision": "changes_required",
     "priorHashesApproved": false,
-    "remediationStatus": "implemented_pending_exact_head_gates"
+    "remediationStatus": "implemented_exact_head_ci_required"
   },
   "globalApprovalBlockers": [
-    "the exact current-main remediation gates must pass at the final committed head",
     "a selected founder account must be configured as an authenticated active impact-model approver",
     "the founder must substantively review and approve each new exact methodology hash",
     "causal-identification designs and empirical calibration evidence must be validated",
@@ -48,7 +47,6 @@
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
         "founder_approver_account_not_yet_configured",
-        "exact_current_main_remediation_gates_must_pass",
         "causal_identification_design_not_validated",
         "empirical_calibration_evidence_not_registered",
         "provisional_confidence_thresholds_not_validated",
@@ -66,7 +64,6 @@
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
         "founder_approver_account_not_yet_configured",
-        "exact_current_main_remediation_gates_must_pass",
         "causal_identification_design_not_validated",
         "empirical_calibration_evidence_not_registered",
         "provisional_confidence_thresholds_not_validated",
@@ -84,7 +81,6 @@
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
         "founder_approver_account_not_yet_configured",
-        "exact_current_main_remediation_gates_must_pass",
         "causal_identification_design_not_validated",
         "empirical_calibration_evidence_not_registered",
         "provisional_confidence_thresholds_not_validated",
@@ -102,7 +98,6 @@
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
         "founder_approver_account_not_yet_configured",
-        "exact_current_main_remediation_gates_must_pass",
         "causal_identification_design_not_validated",
         "empirical_calibration_evidence_not_registered",
         "provisional_confidence_thresholds_not_validated",
@@ -120,7 +115,6 @@
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
         "founder_approver_account_not_yet_configured",
-        "exact_current_main_remediation_gates_must_pass",
         "causal_identification_design_not_validated",
         "empirical_calibration_evidence_not_registered",
         "provisional_confidence_thresholds_not_validated",
@@ -138,7 +132,6 @@
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
         "founder_approver_account_not_yet_configured",
-        "exact_current_main_remediation_gates_must_pass",
         "causal_identification_design_not_validated",
         "empirical_calibration_evidence_not_registered",
         "provisional_confidence_thresholds_not_validated",
@@ -173,5 +166,11 @@
     "normalizedSourceSha256": "8e228fef725277da803d29b491b1f7de2cbc87b6fb59805a58e43942d6a92e5c",
     "status": "applied_and_verified",
     "productionApplied": false
+  },
+  "qualityGatePolicy": {
+    "requiredBeforeMerge": true,
+    "statusSource": "GitHub Actions on the exact pull-request head",
+    "methodologyApprovalBlocker": false,
+    "reason": "Exact-head CI is release evidence enforced outside the methodology payload; it is not a substantive methodology approval blocker."
   }
 }

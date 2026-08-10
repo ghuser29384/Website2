@@ -63,7 +63,6 @@ const expected = new Map([
 const requiredBlockers = [
   "founder_exact_hash_approval_not_recorded",
   "founder_approver_account_not_yet_configured",
-  "exact_current_main_remediation_gates_must_pass",
   "causal_identification_design_not_validated",
   "empirical_calibration_evidence_not_registered",
   "provisional_confidence_thresholds_not_validated",
@@ -132,6 +131,14 @@ assert(
     manifest.currentStageApprovalSecurity?.approverRequirement ===
       "authenticated_active_allowlisted_account",
   "Present-stage approval security is not bound.",
+);
+assert(
+  manifest.qualityGatePolicy?.requiredBeforeMerge === true &&
+    manifest.qualityGatePolicy?.statusSource ===
+      "GitHub Actions on the exact pull-request head" &&
+    manifest.qualityGatePolicy?.methodologyApprovalBlocker === false &&
+    nonEmptyString(manifest.qualityGatePolicy?.reason),
+  "Exact-head CI must remain release evidence rather than a methodology blocker.",
 );
 assert(
   manifest.methodologyReviewRemediation?.projectRef ===
