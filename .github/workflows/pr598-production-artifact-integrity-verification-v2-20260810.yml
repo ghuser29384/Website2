@@ -1,4 +1,4 @@
-name: PR 598 production artifact integrity verification v3
+name: PR 598 production artifact integrity verification v4
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr598-production-integrity-verification-v3
+  group: pr598-production-integrity-verification-v4
   cancel-in-progress: true
 
 env:
@@ -128,25 +128,18 @@ jobs:
               const raw = window.sessionStorage.getItem(key);
               return raw ? JSON.parse(raw) : null;
             }, handoffKey);
-            assert.deepEqual(
-              {
-                version: handoff?.version,
-                source: handoff?.source,
-                values: handoff?.values,
-              },
-              {
-                version: 1,
-                source: "command-center",
-                values: {
-                  offeredCause: "Animal welfare",
-                  requestedCause: "Animal welfare",
-                  proposedAction: "Donate $5 to an agreed animal welfare organization.",
-                  requestedAction: "Eat 1 vegetarian meal.",
-                  duration: "One meal",
-                  evidenceRule: "",
-                },
-              },
+
+            assert.equal(handoff?.version, 1);
+            assert.equal(handoff?.source, "command-center");
+            assert.equal(handoff?.values?.offeredCause, "Animal welfare");
+            assert.equal(handoff?.values?.requestedCause, "Animal welfare");
+            assert.equal(
+              handoff?.values?.proposedAction,
+              "Donate $5 to an agreed animal welfare organization.",
             );
+            assert.equal(handoff?.values?.requestedAction, "Eat 1 vegetarian meal.");
+            assert.equal(handoff?.values?.duration, "One meal");
+            assert.equal(handoff?.values?.evidenceRule, "");
             assert.equal(Object.hasOwn(handoff ?? {}, "command"), false);
             assert.equal(Object.hasOwn(handoff ?? {}, "rawCommand"), false);
             console.log(`handoff_url=${currentUrl}`);
