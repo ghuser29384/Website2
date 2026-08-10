@@ -1,4 +1,4 @@
-name: PR 598 production artifact integrity verification v2
+name: PR 598 production artifact integrity verification v3
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: pr598-production-integrity-verification-v2
+  group: pr598-production-integrity-verification-v3
   cancel-in-progress: true
 
 env:
@@ -78,7 +78,7 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Prove the canonical Command Center handoff and destination
+      - name: Prove the complete canonical Command Center handoff
         shell: bash
         run: |
           set -euo pipefail
@@ -86,6 +86,8 @@ jobs:
           import assert from "node:assert/strict";
           import { chromium } from "@playwright/test";
 
+          const proposedCommand = "$5 donation to animal welfare if you eat 1 vegetarian meal";
+          const handoffKey = "moral-trade.command-center.handoff.v1";
           const browser = await chromium.launch();
           try {
             const context = await browser.newContext();
@@ -104,16 +106,59 @@ jobs:
             await page.goto("https://www.moraltrade.org/moral-trade-live.html", {
               waitUntil: "domcontentloaded",
             });
-            const command = page.locator('[data-action="from-command"]');
-            await command.waitFor({ state: "visible", timeout: 30_000 });
-            await command.click();
+
+            const commandButton = page.getByRole("button", { name: /Command$/ });
+            await commandButton.waitFor({ state: "visible", timeout: 30_000 });
+            await commandButton.click();
+
+            const input = page.getByLabel("Describe the proposed exchange");
+            await input.waitFor({ state: "visible", timeout: 30_000 });
+            await input.fill(proposedCommand);
+            await page.getByRole("button", { name: "Build this offer" }).click();
+
             await page.waitForURL(/\/trades\/new\?handoff=command-center(?:$|&)/, {
               timeout: 30_000,
             });
             const currentUrl = page.url();
             assert.match(currentUrl, /\/trades\/new\?handoff=command-center(?:$|&)/);
-            await page.locator("body").waitFor({ state: "visible" });
+
+            const signInHeading = page.getByRole("heading", { name: "Sign in to build a trade." });
+            await signInHeading.waitFor({ state: "visible", timeout: 30_000 });
+            const handoff = await page.evaluate((key) => {
+              const raw = window.sessionStorage.getItem(key);
+              return raw ? JSON.parse(raw) : null;
+            }, handoffKey);
+            assert.deepEqual(
+              {
+                version: handoff?.version,
+                source: handoff?.source,
+                values: handoff?.values,
+              },
+              {
+                version: 1,
+                source: "command-center",
+                values: {
+                  offeredCause: "Animal welfare",
+                  requestedCause: "Animal welfare",
+                  proposedAction: "Donate $5 to an agreed animal welfare organization.",
+                  requestedAction: "Eat 1 vegetarian meal.",
+                  duration: "One meal",
+                  evidenceRule: "",
+                },
+              },
+            );
+            assert.equal(Object.hasOwn(handoff ?? {}, "command"), false);
+            assert.equal(Object.hasOwn(handoff ?? {}, "rawCommand"), false);
             console.log(`handoff_url=${currentUrl}`);
+            console.log(`handoff=${JSON.stringify(handoff)}`);
+          } catch (error) {
+            const pages = browser.contexts().flatMap((context) => context.pages());
+            const activePage = pages.at(-1);
+            if (activePage) {
+              await activePage.screenshot({ path: "pr598-command-center-failure.png", fullPage: true });
+              console.error(`failure_url=${activePage.url()}`);
+            }
+            throw error;
           } finally {
             await browser.close();
           }
@@ -129,6 +174,7 @@ jobs:
             pr598-*.sha256
             pr598-*.headers
             pr598-*.js
+            pr598-*.png
           if-no-files-found: warn
           retention-days: 30
 
@@ -143,6 +189,6 @@ jobs:
             echo "- Recovery deployment ID: \`$RECOVERY_DEPLOYMENT_ID\`"
             echo "- Recovery deployment URL: \`$RECOVERY_DEPLOYMENT_URL\`"
             echo "- Canonical origin: \`$CANONICAL_ORIGIN\`"
-            echo '- Verified: canonical Create-router bytes equal checked-in source'
-            echo '- Verified: Command Center reaches `/trades/new?handoff=command-center`'
+            echo '- Required proof: canonical Create-router bytes equal checked-in source'
+            echo '- Required proof: full Command Center flow reaches `/trades/new?handoff=command-center` with the structured session handoff intact'
           } >> "$GITHUB_STEP_SUMMARY"
