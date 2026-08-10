@@ -55,20 +55,21 @@ jobs:
               raise SystemExit(f'Expected 21 durable files, found {len(files)}: {files}')
           PY
 
-      - name: Materialize durable files and remove temporary controller
+      - name: Materialize non-workflow durable files and remove temporary controller
         shell: bash
         run: |
           set -euo pipefail
           tar -xzf /tmp/evidence-shadow.tar.gz -C "${GITHUB_WORKSPACE}"
           rm -rf .github/materialize-evidence-shadow
           rm -f .github/workflows/materialize-evidence-credibility-shadow-v2.yml
-          test -f .github/workflows/evidence-credibility-shadow-qa.yml
+          rm -f .github/workflows/evidence-credibility-shadow-qa.yml
+          test ! -e .github/workflows/evidence-credibility-shadow-qa.yml
           test -f docs/moral-trade/evidence-credibility-shadow-v2.md
           test -f src/lib/evidence-credibility-shadow-schema-contract.test.ts
           test "$(find supabase/migrations -maxdepth 1 -type f -name '202608101600*_evidence_credibility_shadow_*.sql' | wc -l)" -eq 12
           test "$(find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_shadow_*.sql' | wc -l)" -eq 6
 
-      - name: Commit exact materialized tree
+      - name: Commit exact non-workflow durable tree
         shell: bash
         run: |
           set -euo pipefail
@@ -76,7 +77,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git diff --cached --check
-          test "$(git diff --cached --name-status | awk '$1=="A"{n++} END{print n+0}')" -eq 21
+          test "$(git diff --cached --name-status | awk '$1=="A"{n++} END{print n+0}')" -eq 20
           test "$(git diff --cached --name-status | awk '$1=="D"{n++} END{print n+0}')" -eq 6
           git commit -m "Implement evidence credibility shadow integration"
           git push origin HEAD:feature/evidence-credibility-shadow-v2-20260810
