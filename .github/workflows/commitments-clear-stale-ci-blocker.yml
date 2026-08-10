@@ -1,0 +1,204 @@
+name: Clear stale Commitments CI methodology blocker
+
+on:
+  push:
+    branches:
+      - feature/commitments-phase1-impact-accounting-20260806
+    paths:
+      - ".github/workflows/commitments-clear-stale-ci-blocker.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: commitments-clear-stale-ci-blocker
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Separate exact-head CI evidence from methodology blockers
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/commitments-phase1-impact-accounting-20260806
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact parent and apply deterministic cleanup
+        env:
+          EXPECTED_PARENT: 95d19c73a5d9a3a0da7b70d0d597341fcf113587
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          stale = "exact_current_main_remediation_gates_must_pass"
+          manifest_path = Path("docs/commitments/impact-methodologies-v1/manifest.json")
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          manifest["generatedAtUtc"] = "2026-08-10T16:00:00Z"
+          manifest["status"] = (
+              "founder_review_remediated_current_main_synced_"
+              "ci_enforced_not_approved_not_active"
+          )
+          manifest["founderReview"]["remediationStatus"] = (
+              "implemented_exact_head_ci_required"
+          )
+          manifest["globalApprovalBlockers"] = [
+              item
+              for item in manifest["globalApprovalBlockers"]
+              if "exact current-main remediation gates" not in item
+          ]
+          manifest["qualityGatePolicy"] = {
+              "requiredBeforeMerge": True,
+              "statusSource": "GitHub Actions on the exact pull-request head",
+              "methodologyApprovalBlocker": False,
+              "reason": (
+                  "Exact-head CI is release evidence enforced outside the methodology "
+                  "payload; it is not a substantive methodology approval blocker."
+              ),
+          }
+          for entry in manifest["methodologies"]:
+              entry["approvalBlockers"] = [
+                  blocker
+                  for blocker in entry["approvalBlockers"]
+                  if blocker != stale
+              ]
+          manifest_path.write_text(
+              json.dumps(manifest, indent=2, ensure_ascii=False) + "\n",
+              encoding="utf-8",
+          )
+
+          methodology_dir = Path("docs/commitments/impact-methodologies-v1")
+          for path in sorted(methodology_dir.glob("*.json")):
+              if path.name == "manifest.json":
+                  continue
+              wrapper = json.loads(path.read_text(encoding="utf-8"))
+              wrapper["approvalBlockers"] = [
+                  blocker
+                  for blocker in wrapper["approvalBlockers"]
+                  if blocker != stale
+              ]
+              path.write_text(
+                  json.dumps(wrapper, indent=2, ensure_ascii=False) + "\n",
+                  encoding="utf-8",
+              )
+
+          validator_path = Path(
+              "scripts/validate-commitments-impact-methodologies.mjs"
+          )
+          validator = validator_path.read_text(encoding="utf-8")
+          validator = validator.replace(
+              '  "exact_current_main_remediation_gates_must_pass",\n',
+              "",
+          )
+          anchor = '''assert(
+            manifest.currentStageApprovalSecurity?.mfaRequired === false &&
+              manifest.currentStageApprovalSecurity?.mfaDeferredUntil ===
+                "site_high_leverage" &&
+              manifest.currentStageApprovalSecurity?.approverRequirement ===
+                "authenticated_active_allowlisted_account",
+            "Present-stage approval security is not bound.",
+          );
+          '''
+          addition = anchor + '''assert(
+            manifest.qualityGatePolicy?.requiredBeforeMerge === true &&
+              manifest.qualityGatePolicy?.statusSource ===
+                "GitHub Actions on the exact pull-request head" &&
+              manifest.qualityGatePolicy?.methodologyApprovalBlocker === false &&
+              nonEmptyString(manifest.qualityGatePolicy?.reason),
+            "Exact-head CI must remain release evidence rather than a methodology blocker.",
+          );
+          '''
+          if anchor not in validator:
+              raise SystemExit("Validator insertion anchor is missing.")
+          validator = validator.replace(anchor, addition, 1)
+          validator_path.write_text(validator, encoding="utf-8")
+
+          review_path = Path(
+              "docs/commitments/impact-methodologies-v1-review.md"
+          )
+          review = review_path.read_text(encoding="utf-8")
+          old_status = (
+              "**Status:** substantive founder review remediated in QA; exact current "
+              "`main` synchronized; all six v2 candidates remain `under_review`; no "
+              "candidate is approved or active; production is unchanged"
+          )
+          new_status = (
+              "**Status:** substantive founder review remediated in QA; exact current "
+              "`main` synchronized; exact-head CI is enforced as release evidence "
+              "rather than a methodology blocker; all six v2 candidates remain "
+              "`under_review`; no candidate is approved or active; production is unchanged"
+          )
+          old_gate = (
+              "- The exact remediation head must pass focused tests, six-hash validation, "
+              "the full repository suite, ESLint, TypeScript, production build, exact-diff "
+              "checks, exact QA migration-source verification, transactional SQL regression, "
+              "and zero-residue verification.\n"
+          )
+          new_gate = (
+              "- Every changed pull-request head must pass focused tests, six-hash validation, "
+              "the full repository suite, ESLint, TypeScript, production build, exact-diff "
+              "checks, exact QA migration-source verification, transactional SQL regression, "
+              "and zero-residue verification before merge. This is release evidence enforced "
+              "by CI, not a substantive methodology approval blocker.\n"
+          )
+          if old_status not in review or old_gate not in review:
+              raise SystemExit("Review-document replacement anchor is missing.")
+          review = review.replace(old_status, new_status, 1)
+          review = review.replace(old_gate, new_gate, 1)
+          review_path.write_text(review, encoding="utf-8")
+          PY
+
+          ! grep -RIn \
+            "exact_current_main_remediation_gates_must_pass\|the exact current-main remediation gates must pass" \
+            docs/commitments scripts
+          node scripts/validate-commitments-impact-methodologies.mjs
+          git diff --check
+
+      - name: Commit the exact cleanup and remove this one-time workflow
+        env:
+          BRANCH: feature/commitments-phase1-impact-accounting-20260806
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$BRANCH"
+          test "$(git rev-parse "origin/$BRANCH")" = "$GITHUB_SHA"
+
+          git rm .github/workflows/commitments-clear-stale-ci-blocker.yml
+          git add \
+            docs/commitments/impact-methodologies-v1-review.md \
+            docs/commitments/impact-methodologies-v1/manifest.json \
+            docs/commitments/impact-methodologies-v1/trade.json \
+            docs/commitments/impact-methodologies-v1/co_fund.json \
+            docs/commitments/impact-methodologies-v1/threshold_funding.json \
+            docs/commitments/impact-methodologies-v1/donation_upgrade.json \
+            docs/commitments/impact-methodologies-v1/threshold_sign_on.json \
+            docs/commitments/impact-methodologies-v1/donation_redirect.json \
+            scripts/validate-commitments-impact-methodologies.mjs
+
+          git diff --cached --name-only | sort > /tmp/actual-files.txt
+          cat > /tmp/expected-files.txt <<'FILES'
+          .github/workflows/commitments-clear-stale-ci-blocker.yml
+          docs/commitments/impact-methodologies-v1-review.md
+          docs/commitments/impact-methodologies-v1/co_fund.json
+          docs/commitments/impact-methodologies-v1/donation_redirect.json
+          docs/commitments/impact-methodologies-v1/donation_upgrade.json
+          docs/commitments/impact-methodologies-v1/manifest.json
+          docs/commitments/impact-methodologies-v1/threshold_funding.json
+          docs/commitments/impact-methodologies-v1/threshold_sign_on.json
+          docs/commitments/impact-methodologies-v1/trade.json
+          scripts/validate-commitments-impact-methodologies.mjs
+          FILES
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Separate exact-head CI from methodology blockers"
+          git push origin "HEAD:$BRANCH"
