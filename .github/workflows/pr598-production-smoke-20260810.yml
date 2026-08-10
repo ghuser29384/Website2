@@ -1,0 +1,232 @@
+name: PR 598 production smoke
+
+on:
+  push:
+    branches:
+      - ops/smoke-pr598-production-20260810
+    paths:
+      - ".github/workflows/pr598-production-smoke-20260810.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr598-production-smoke-20260810
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
+      PRODUCTION_ORIGIN: https://www.moraltrade.org
+      PRODUCTION_DEPLOYMENT_ID: dpl_GtvNUE6qSEH6buqBHj1iURZZMbpv
+
+    steps:
+      - name: Check out the exact released commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify immutable release source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          {
+            printf 'commit=%s\n' "$EXPECTED_SHA"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'origin=%s\n' "$PRODUCTION_ORIGIN"
+            printf 'deployment=%s\n' "$PRODUCTION_DEPLOYMENT_ID"
+            date -u +"smoke_started_at=%Y-%m-%dT%H:%M:%SZ"
+          } | tee production-smoke-identity.txt
+
+      - name: Verify canonical host and critical HTTP surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          apex_status="$(curl --silent --show-error --output /dev/null \
+            --dump-header apex-redirect-headers.txt \
+            --max-redirs 0 \
+            --write-out '%{http_code}' \
+            https://moraltrade.org/moral-trade-live.html)"
+          [[ "$apex_status" == "301" || "$apex_status" == "308" ]]
+          apex_location="$(awk 'BEGIN{IGNORECASE=1} /^location:/{sub(/\r$/, ""); sub(/^[^:]+:[[:space:]]*/, ""); print; exit}' apex-redirect-headers.txt)"
+          test "$apex_location" = "https://www.moraltrade.org/moral-trade-live.html"
+
+          : > production-http-smoke.txt
+          for path in \
+            /moral-trade-live.html \
+            /moral-trade-discover.html \
+            /trades/new \
+            /commitments \
+            /complete-verification.html; do
+            status="$(curl --silent --show-error --location \
+              --output /tmp/production-smoke-body \
+              --write-out '%{http_code}' \
+              "$PRODUCTION_ORIGIN$path")"
+            printf '%s %s\n' "$status" "$path" | tee -a production-http-smoke.txt
+            test "$status" = "200"
+          done
+
+          printf 'apex_status=%s\napex_location=%s\n' \
+            "$apex_status" "$apex_location" | tee -a production-http-smoke.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Create remote-only Playwright smoke contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > playwright.production-smoke.config.ts <<'TS'
+          import { defineConfig, devices } from "@playwright/test";
+
+          export default defineConfig({
+            testDir: "./tests",
+            timeout: 60_000,
+            expect: { timeout: 15_000 },
+            fullyParallel: false,
+            workers: 1,
+            retries: 0,
+            reporter: [
+              ["line"],
+              ["json", { outputFile: "production-smoke-results.json" }],
+            ],
+            use: {
+              baseURL: "https://www.moraltrade.org",
+              storageState: {
+                cookies: [
+                  {
+                    domain: "www.moraltrade.org",
+                    expires: -1,
+                    httpOnly: true,
+                    name: "mt_walkthrough_seen",
+                    path: "/",
+                    sameSite: "Lax",
+                    secure: true,
+                    value: "1",
+                  },
+                ],
+                origins: [],
+              },
+              trace: "retain-on-failure",
+              screenshot: "only-on-failure",
+              video: "retain-on-failure",
+            },
+            projects: [
+              {
+                name: "chromium",
+                use: { ...devices["Desktop Chrome"] },
+              },
+            ],
+          });
+          TS
+
+          cat > tests/production-pr598-smoke.spec.ts <<'TS'
+          import { expect, test } from "@playwright/test";
+
+          async function expectCanonicalBrand(page: import("@playwright/test").Page) {
+            const brand = page.locator('[data-mt-brand-canonical="true"]').first();
+            await expect(brand).toBeVisible();
+            await expect(brand.locator(".mt-canonical-wordmark-label")).toHaveText("Moral Trade");
+            await expect(brand.locator(".mt-canonical-compact-mark")).toBeVisible();
+          }
+
+          test("canonical production surfaces are current and truthful", async ({ page }) => {
+            await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
+            await expectCanonicalBrand(page);
+            await expect(page.locator(".topbar nav button[data-page='now']")).toBeVisible();
+            await expect(page.locator(".topbar nav button[data-page='activity']")).toBeVisible();
+            await expect(page.locator(".head .date")).toHaveAttribute("data-mt-local-date-time", /\d{4}-\d{2}-\d{2}/);
+
+            await page.goto("/moral-trade-discover.html", { waitUntil: "domcontentloaded" });
+            await expectCanonicalBrand(page);
+
+            await page.goto("/trades/new", { waitUntil: "domcontentloaded" });
+            await expect(page.getByRole("heading", { name: "Sign in to build a trade." })).toBeVisible();
+
+            await page.goto("/commitments", { waitUntil: "domcontentloaded" });
+            await expect(page.getByRole("heading", { name: "Additional resources you caused." })).toBeVisible();
+            await expect(page.getByRole("heading", { name: "Sign in to view your commitments." })).toBeVisible();
+
+            await page.goto("/complete-verification.html?reset=1", { waitUntil: "domcontentloaded" });
+            await expect(page.getByRole("heading", { name: "Complete verification" })).toBeVisible();
+          });
+          TS
+
+          npx tsc --noEmit --pretty false >/dev/null
+
+      - name: Run production browser smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            --config=playwright.production-smoke.config.ts \
+            tests/production-pr598-smoke.spec.ts \
+            tests/exact-live-command-center.spec.ts \
+            tests/exact-live-local-time.spec.ts \
+            tests/exact-live-route-recommendations.spec.ts \
+            tests/exact-live-verification.spec.ts \
+            tests/commitments-live-portfolio.spec.ts \
+            | tee production-browser-smoke.log
+
+      - name: Summarize exact production evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("fs");
+          const report = fs.existsSync("production-smoke-results.json")
+            ? JSON.parse(fs.readFileSync("production-smoke-results.json", "utf8"))
+            : null;
+          const stats = report?.stats ?? {};
+          const lines = [
+            "# PR 598 production smoke",
+            "",
+            `- Commit: \`${process.env.EXPECTED_SHA}\``,
+            `- Deployment: \`${process.env.PRODUCTION_DEPLOYMENT_ID}\``,
+            `- Canonical origin: ${process.env.PRODUCTION_ORIGIN}`,
+            `- Expected: \`${stats.expected ?? "unknown"}\``,
+            `- Unexpected: \`${stats.unexpected ?? "unknown"}\``,
+            `- Flaky: \`${stats.flaky ?? "unknown"}\``,
+            `- Skipped: \`${stats.skipped ?? "unknown"}\``,
+            "",
+          ];
+          fs.writeFileSync("production-smoke-summary.md", `${lines.join("\n")}\n`);
+          NODE
+          cat production-smoke-summary.md >> "$GITHUB_STEP_SUMMARY"
+          date -u +"smoke_completed_at=%Y-%m-%dT%H:%M:%SZ" \
+            | tee production-smoke-completed.txt
+
+      - name: Upload permanent production smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr598-production-smoke-${{ github.run_id }}
+          path: |
+            production-smoke-identity.txt
+            production-http-smoke.txt
+            apex-redirect-headers.txt
+            production-browser-smoke.log
+            production-smoke-results.json
+            production-smoke-summary.md
+            production-smoke-completed.txt
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 30
