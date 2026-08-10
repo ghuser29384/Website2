@@ -19,9 +19,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     env:
-      EXPECTED_MAIN_SHA: bb3b0e4608b7282aecc9d1fe11b5cb310c409347
       CLEAN_BRANCH: fix/release-browser-gate-contract-20260809
-      REPAIR_REVISION: "6"
+      REPAIR_REVISION: "7"
 
     steps:
       - name: Check out the exact repair branch
@@ -29,29 +28,45 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Guard current-main ancestry and repair inputs
+      - name: Stage repair inputs and select current main
+        id: base
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse --abbrev-ref HEAD)" = 'ops/release-browser-gate-contract-20260809'
-          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
           node --check scripts/apply-release-browser-gate-repair.mjs
           node --check scripts/apply-release-browser-gate-followup.mjs
           node --check scripts/apply-release-browser-gate-focused-fixes.mjs
+
+          repair_dir="$RUNNER_TEMP/release-browser-gate-repair"
+          mkdir -p "$repair_dir"
+          cp scripts/apply-release-browser-gate-repair.mjs "$repair_dir/"
+          cp scripts/apply-release-browser-gate-followup.mjs "$repair_dir/"
+          cp scripts/apply-release-browser-gate-focused-fixes.mjs "$repair_dir/"
+
+          git fetch --no-tags origin main
+          base_sha="$(git rev-parse refs/remotes/origin/main)"
+          echo "sha=$base_sha" >> "$GITHUB_OUTPUT"
+          printf 'base=%s\nrepair_revision=%s\n' "$base_sha" "$REPAIR_REVISION" \
+            | tee release-gate-base.txt
+          git switch --detach "$base_sha"
 
       - name: Apply the deterministic repair
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/apply-release-browser-gate-repair.mjs
-          node scripts/apply-release-browser-gate-followup.mjs
-          node scripts/apply-release-browser-gate-focused-fixes.mjs
+          repair_dir="$RUNNER_TEMP/release-browser-gate-repair"
+          node "$repair_dir/apply-release-browser-gate-repair.mjs"
+          node "$repair_dir/apply-release-browser-gate-followup.mjs"
+          node "$repair_dir/apply-release-browser-gate-focused-fixes.mjs"
           git diff --check
           git status --short
 
       - name: Commit the exact local candidate
         id: candidate
         shell: bash
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
@@ -77,7 +92,7 @@ jobs:
           printf 'candidate=%s\ntree=%s\nbase=%s\n' \
             "$candidate_sha" \
             "$(git rev-parse HEAD^{tree})" \
-            "$EXPECTED_MAIN_SHA" \
+            "$BASE_SHA" \
             | tee release-gate-candidate.txt
 
       - name: Set up Node.js
@@ -159,6 +174,7 @@ jobs:
           const status = fs.existsSync('release-gate-browser.exit-code')
             ? fs.readFileSync('release-gate-browser.exit-code', 'utf8').trim()
             : 'not-run';
+          lines.push(`- Base: \`${process.env.BASE_SHA || 'unknown'}\``);
           lines.push(`- Candidate: \`${process.env.CANDIDATE_SHA || 'unknown'}\``);
           lines.push(`- Browser exit code: \`${status}\``);
           if (fs.existsSync('release-playwright-results.json')) {
@@ -172,7 +188,38 @@ jobs:
           NODE
           cat release-gate-summary.md >> "$GITHUB_STEP_SUMMARY"
         env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
           CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+
+      - name: Publish source-only candidate branch after every gate passes
+        if: ${{ steps.browser.outputs.status == '0' }}
+        shell: bash
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          CANDIDATE_SHA: ${{ steps.candidate.outputs.sha }}
+        run: |
+          set -euo pipefail
+          git reset --hard "$CANDIDATE_SHA"
+          git switch --detach "$BASE_SHA"
+          git cherry-pick "$CANDIDATE_SHA"
+          git restore --source="$BASE_SHA" -- .github/workflows/vercel-release.yml
+          git add .github/workflows/vercel-release.yml
+          git commit --amend --no-edit
+
+          source_sha="$(git rev-parse HEAD)"
+          if git diff --name-only "$BASE_SHA...$source_sha" \
+            | grep -q '^\.github/workflows/'; then
+            echo 'Source-only candidate unexpectedly changes a workflow file.' >&2
+            exit 1
+          fi
+
+          git push origin "HEAD:refs/heads/$CLEAN_BRANCH"
+          printf 'clean_branch=%s\nclean_sha=%s\nbase=%s\nvalidated_candidate=%s\n' \
+            "$CLEAN_BRANCH" \
+            "$source_sha" \
+            "$BASE_SHA" \
+            "$CANDIDATE_SHA" \
+            | tee release-gate-clean-branch.txt
 
       - name: Upload complete repair evidence
         if: always()
@@ -180,7 +227,9 @@ jobs:
         with:
           name: release-browser-gate-repair-${{ github.run_id }}
           path: |
+            release-gate-base.txt
             release-gate-candidate.txt
+            release-gate-clean-branch.txt
             release-gate-summary.md
             release-gate-*.log
             release-gate-browser.exit-code
@@ -189,20 +238,6 @@ jobs:
             playwright-report
           if-no-files-found: warn
           retention-days: 30
-
-      - name: Publish a clean candidate branch after every gate passes
-        if: ${{ steps.browser.outputs.status == '0' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          candidate_sha="${{ steps.candidate.outputs.sha }}"
-          git switch --detach "$EXPECTED_MAIN_SHA"
-          git cherry-pick "$candidate_sha"
-          git push origin "HEAD:refs/heads/$CLEAN_BRANCH"
-          printf 'clean_branch=%s\nclean_sha=%s\n' \
-            "$CLEAN_BRANCH" \
-            "$(git rev-parse HEAD)" \
-            | tee release-gate-clean-branch.txt
 
       - name: Preserve complete browser-gate status
         if: always()
