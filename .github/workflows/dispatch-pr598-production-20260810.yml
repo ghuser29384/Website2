@@ -1,0 +1,87 @@
+name: Dispatch PR 598 production release
+
+on:
+  push:
+    branches:
+      - ops/dispatch-pr598-production-20260810
+    paths:
+      - ".github/workflows/dispatch-pr598-production-20260810.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: dispatch-pr598-production-20260810
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_MAIN_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
+      RELEASE_WORKFLOW_ID: "325045339"
+
+    steps:
+      - name: Check out the single-use dispatch branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Guard exact main and serialized release boundary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$EXPECTED_MAIN_SHA"
+
+          active="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW_ID/runs?status=in_progress&per_page=20" --jq '.total_count')"
+          queued="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW_ID/runs?status=queued&per_page=20" --jq '.total_count')"
+          test "$active" = "0"
+          test "$queued" = "0"
+
+      - name: Dispatch the immutable production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW_ID/dispatches" \
+            --input - <<JSON
+          {
+            "ref": "main",
+            "inputs": {
+              "target": "production",
+              "ref": "main",
+              "expected_sha": "$EXPECTED_MAIN_SHA"
+            }
+          }
+          JSON
+
+      - name: Confirm the dispatched run exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW_ID/runs?event=workflow_dispatch&branch=main&per_page=20")"
+            run_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" '.workflow_runs[] | select(.head_sha == $sha) | .id' <<<"$run_json" | head -n 1)"
+            if [[ -n "$run_id" && "$run_id" != "null" ]]; then
+              printf 'release_run_id=%s\nrelease_commit=%s\n' "$run_id" "$EXPECTED_MAIN_SHA" \
+                | tee production-release-dispatch.txt
+              echo "### PR #598 production release dispatched" >> "$GITHUB_STEP_SUMMARY"
+              echo "- Commit: \`$EXPECTED_MAIN_SHA\`" >> "$GITHUB_STEP_SUMMARY"
+              echo "- Run: \`$run_id\`" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The dispatch endpoint succeeded, but the exact run was not observable within 60 seconds." >&2
+          exit 1
