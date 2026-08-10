@@ -242,7 +242,7 @@ jobs:
                   raise SystemExit(f"Stale protected-Preview token remains: {forbidden}")
           required = {
               "function isOptionalOffersList404": 1,
-              "expectedOptionalOffersList404s": 5,
+              "expectedOptionalOffersList404s": 3,
               "expectedOptionalOffersList404ConsoleErrors": 2,
               "optional offers-list 404 count exceeded bound": 1,
               "optional offers-list 404 console/response mismatch": 1,
