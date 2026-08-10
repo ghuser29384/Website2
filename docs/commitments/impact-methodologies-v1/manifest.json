@@ -1,19 +1,19 @@
 {
   "bundleSchemaVersion": "moral-trade-impact-methodology-bundle-v1",
-  "generatedAtUtc": "2026-08-08T17:46:16Z",
-  "status": "review_ready_current_main_synced_qa_rls_verified_not_approved_not_active",
+  "generatedAtUtc": "2026-08-10T01:38:45Z",
+  "status": "review_ready_current_main_synced_qa_authenticated_approver_migration_verified_not_approved_not_active",
   "sourceRepository": "ghuser29384/Website2",
   "sourcePullRequest": 534,
-  "sourcePullRequestHead": "d34398baeae99ea99d87c97576ef3280dd5b9b57",
-  "currentMainAtPreparation": "bb3b0e4608b7282aecc9d1fe11b5cb310c409347",
+  "sourcePullRequestHead": "ecf0337d8effcb585469356050bb3741a2ec1989",
+  "currentMainAtPreparation": "f0f5f36be4ef4ac6cb09cdc81802b27cd268878a",
   "globalApprovalBlockers": [
     "the exact current-main continuation gates must pass at the final committed head",
-    "the selected founder approver must enroll authenticator MFA and establish a real AAL2 session",
+    "the selected founder account must be configured as an active impact-model approver and use an authenticated session",
     "the founder must review and approve each exact methodology hash",
     "modeled estimates must remain withheld until the exact active model has a current passing health snapshot",
     "production migrations and approver configuration require a separately authorized controlled release"
   ],
-  "currentMainMergeCommit": "d34398baeae99ea99d87c97576ef3280dd5b9b57",
+  "currentMainMergeCommit": "ecf0337d8effcb585469356050bb3741a2ec1989",
   "priorExactHeadQaRun": "31115065783",
   "qaRlsHardening": {
     "projectRef": "hvmxfjjbdcgjjudmthdz",
@@ -33,7 +33,7 @@
       "methodologyHash": "sha256:bff759b15853ebb0d8870a24cba0665870d2e2ba285f1eb7f8551573559bfa3f",
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
-        "founder_aal2_session_not_yet_verified",
+        "founder_approver_account_not_yet_configured",
         "exact_current_main_continuation_gates_must_pass",
         "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
       ],
@@ -47,7 +47,7 @@
       "methodologyHash": "sha256:c1f759e224712a07b30bc28a3be6fd714a0a21c32ee8c0a822779f9f706946ef",
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
-        "founder_aal2_session_not_yet_verified",
+        "founder_approver_account_not_yet_configured",
         "exact_current_main_continuation_gates_must_pass",
         "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
       ],
@@ -61,7 +61,7 @@
       "methodologyHash": "sha256:8c915821978c45138467e13e05c96f58d1a695b1206d8a2f95849972899df15c",
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
-        "founder_aal2_session_not_yet_verified",
+        "founder_approver_account_not_yet_configured",
         "exact_current_main_continuation_gates_must_pass",
         "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
       ],
@@ -75,7 +75,7 @@
       "methodologyHash": "sha256:e917387ce26a21e98af936388fd88436782f0c199b986e0a408f46dace600463",
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
-        "founder_aal2_session_not_yet_verified",
+        "founder_approver_account_not_yet_configured",
         "exact_current_main_continuation_gates_must_pass",
         "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
       ],
@@ -89,7 +89,7 @@
       "methodologyHash": "sha256:f292553856e5d6f21aa2673b21158a91f7dc4cbf6464d0e35a3dfeafaebb9eff",
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
-        "founder_aal2_session_not_yet_verified",
+        "founder_approver_account_not_yet_configured",
         "exact_current_main_continuation_gates_must_pass",
         "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
       ],
@@ -103,11 +103,21 @@
       "methodologyHash": "sha256:2e3ee0e9de06e8a254a87cddf33834d557cdb9e5e6f674f639774dca0f8cfe5a",
       "approvalBlockers": [
         "founder_exact_hash_approval_not_recorded",
-        "founder_aal2_session_not_yet_verified",
+        "founder_approver_account_not_yet_configured",
         "exact_current_main_continuation_gates_must_pass",
         "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
       ],
       "methodologyFile": "donation_redirect.json"
     }
-  ]
+  ],
+  "currentStageApprovalSecurity": {
+    "mfaRequired": false,
+    "mfaDeferredUntil": "site_high_leverage",
+    "approverRequirement": "authenticated_active_allowlisted_account",
+    "qaProjectRef": "hvmxfjjbdcgjjudmthdz",
+    "qaMigrationVersion": "20260810013845",
+    "qaMigrationName": "commitments_impact_present_stage_authenticated_approver",
+    "status": "applied_and_verified",
+    "productionApplied": false
+  }
 }

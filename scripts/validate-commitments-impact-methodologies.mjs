@@ -13,6 +13,9 @@ const expected = new Map([
   ["donation_redirect", ["commitments-donation-redirect-v1", "donation_redirect.json", "sha256:2e3ee0e9de06e8a254a87cddf33834d557cdb9e5e6f674f639774dca0f8cfe5a"]],
 ]);
 
+const CURRENT_STAGE_APPROVER_BLOCKER = "founder_approver_account_not_yet_configured";
+const RETIRED_PRESENT_STAGE_BLOCKER = "founder_aal2_session_not_yet_verified";
+
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === "object") {
@@ -48,6 +51,11 @@ assert(
 );
 assert(manifest.qaRlsHardening?.environment === "qa_only", "RLS hardening must remain QA-only.");
 assert(manifest.qaRlsHardening?.productionApplied === false, "Manifest must not claim production migration.");
+assert(manifest.currentStageApprovalSecurity?.mfaRequired === false, "Present-stage manifest must not require MFA.");
+assert(manifest.currentStageApprovalSecurity?.mfaDeferredUntil === "site_high_leverage", "MFA deferral stage is missing.");
+assert(manifest.currentStageApprovalSecurity?.approverRequirement === "authenticated_active_allowlisted_account", "Present-stage approver requirement is invalid.");
+assert(manifest.currentStageApprovalSecurity?.qaMigrationVersion === "20260810013845", "Present-stage QA governance migration is not bound.");
+assert(!JSON.stringify(manifest.globalApprovalBlockers).match(/aal2|authenticator|mfa/i), "Present-stage global blockers must not retain MFA/AAL2.");
 
 const manifestDir = path.dirname(manifestPath);
 const seen = new Set();
@@ -68,6 +76,8 @@ for (const entry of manifest.methodologies) {
     `${mechanism} manifest blockers must remain present.`,
   );
   assert(entry.methodologyHash === expectedHash, `${mechanism} manifest hash mismatch.`);
+  assert(entry.approvalBlockers.includes(CURRENT_STAGE_APPROVER_BLOCKER), `${mechanism} present-stage approver blocker is missing.`);
+  assert(!entry.approvalBlockers.includes(RETIRED_PRESENT_STAGE_BLOCKER), `${mechanism} retains the retired AAL2 blocker.`);
 
   const wrapper = JSON.parse(fs.readFileSync(path.join(manifestDir, expectedFile), "utf8"));
   assert(wrapper.mechanismFamily === mechanism, `${mechanism} file/wrapper family mismatch.`);
@@ -84,6 +94,8 @@ for (const entry of manifest.methodologies) {
     JSON.stringify(wrapper.approvalBlockers) === JSON.stringify(entry.approvalBlockers),
     `${mechanism} manifest/file blockers differ.`,
   );
+  assert(wrapper.approvalBlockers.includes(CURRENT_STAGE_APPROVER_BLOCKER), `${mechanism} wrapper present-stage approver blocker is missing.`);
+  assert(!wrapper.approvalBlockers.includes(RETIRED_PRESENT_STAGE_BLOCKER), `${mechanism} wrapper retains the retired AAL2 blocker.`);
   assert(wrapper.methodology?.mechanismFamily === mechanism, `${mechanism} methodology family mismatch.`);
   assert(wrapper.methodology?.modelKey === expectedModelKey, `${mechanism} methodology model key mismatch.`);
 

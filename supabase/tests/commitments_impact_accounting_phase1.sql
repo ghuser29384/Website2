@@ -26,7 +26,8 @@ begin
       ('20260806115641', 'commitments_impact_methodology_guard_and_governance_audit'),
       ('20260806120552', 'commitments_impact_approver_audit_identity_hardening'),
       ('20260806134107', 'commitments_impact_initial_approver'),
-      ('20260806135201', 'commitments_impact_approver_event_comment_fix')
+      ('20260806135201', 'commitments_impact_approver_event_comment_fix'),
+      ('20260810013845', 'commitments_impact_present_stage_authenticated_approver')
   ) as expected(version, name)
   where not exists (
     select 1
@@ -349,25 +350,63 @@ select set_config(
 );
 set local role authenticated;
 
-do $aal1_guard$
+do $present_stage_auth_guard$
 begin
   if not public.is_impact_model_approver(false) then
-    raise exception 'The configured account was not recognized as an approver.';
+    raise exception 'The configured account was not recognized as a present-stage authenticated approver.';
   end if;
   if public.is_impact_model_approver(true) then
-    raise exception 'AAL1 unexpectedly satisfied the AAL2 approval gate.';
+    raise exception 'AAL1 unexpectedly satisfied the optional future AAL2 check.';
   end if;
+end;
+$present_stage_auth_guard$;
 
+reset role;
+
+
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '7a100000-0000-4000-8000-000000000003',
+    'role', 'authenticated',
+    'aal', 'aal1'
+  )::text,
+  true
+);
+set local role authenticated;
+
+do $unconfigured_approver_guard$
+begin
   begin
     perform public.submit_impact_model_version_for_review(
       '7a100000-0000-4000-8000-000000000010'
     );
-    raise exception 'AAL1 unexpectedly submitted an impact model for review.';
+    raise exception 'An unconfigured authenticated user unexpectedly submitted an impact model.';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  begin
+    perform public.review_impact_model_version(
+      '7a100000-0000-4000-8000-000000000010',
+      'approve',
+      'This must not be recorded.'
+    );
+    raise exception 'An unconfigured authenticated user unexpectedly reviewed an impact model.';
+  exception
+    when insufficient_privilege then null;
+  end;
+
+  begin
+    perform public.activate_impact_model_version(
+      '7a100000-0000-4000-8000-000000000010'
+    );
+    raise exception 'An unconfigured authenticated user unexpectedly activated an impact model.';
   exception
     when insufficient_privilege then null;
   end;
 end;
-$aal1_guard$;
+$unconfigured_approver_guard$;
 
 reset role;
 
@@ -376,7 +415,7 @@ select set_config(
   jsonb_build_object(
     'sub', '7a100000-0000-4000-8000-000000000001',
     'role', 'authenticated',
-    'aal', 'aal2'
+    'aal', 'aal1'
   )::text,
   true
 );
@@ -462,7 +501,7 @@ select set_config(
   jsonb_build_object(
     'sub', '7a100000-0000-4000-8000-000000000001',
     'role', 'authenticated',
-    'aal', 'aal2'
+    'aal', 'aal1'
   )::text,
   true
 );

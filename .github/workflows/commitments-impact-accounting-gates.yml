@@ -12,6 +12,7 @@ on:
       - "docs/commitments/impact-methodologies-v1/*.json"
       - "supabase/migrations/202608061*.sql"
       - "supabase/migrations/20260808174259_mpgf_public_goods_public_read_rls.sql"
+      - "supabase/migrations/20260810013845_commitments_impact_present_stage_authenticated_approver.sql"
       - "supabase/tests/commitments_impact_accounting_phase1*.sql"
       - "supabase/tests/commitments_public_goods_rls.sql"
       - ".github/workflows/commitments-impact-accounting-gates.yml"
@@ -99,6 +100,7 @@ jobs:
           src/lib/impact-model-governance.test.ts
           src/lib/impact-model-governance.ts
           supabase/migrations/20260808174259_mpgf_public_goods_public_read_rls.sql
+          supabase/migrations/20260810013845_commitments_impact_present_stage_authenticated_approver.sql
           supabase/tests/commitments_impact_accounting_phase1.sql
           supabase/tests/commitments_impact_accounting_phase1_prelude.sql
           supabase/tests/commitments_public_goods_rls.sql
@@ -123,7 +125,8 @@ jobs:
               supabase/tests/commitments_impact_accounting_phase1_prelude.sql|\
               supabase/tests/commitments_public_goods_rls.sql|\
               supabase/migrations/202608061*.sql|\
-              supabase/migrations/20260808174259_mpgf_public_goods_public_read_rls.sql) ;;
+              supabase/migrations/20260808174259_mpgf_public_goods_public_read_rls.sql|\
+              supabase/migrations/20260810013845_commitments_impact_present_stage_authenticated_approver.sql) ;;
               *) echo "Unexpected file in Phase 1 diff: $file" >&2; unexpected=1 ;;
             esac
           done < actual-files.txt
@@ -180,6 +183,7 @@ jobs:
           {
             find supabase/migrations -maxdepth 1 -type f -name '202608061*.sql' -print
             printf '%s\n' supabase/migrations/20260808174259_mpgf_public_goods_public_read_rls.sql
+            printf '%s\n' supabase/migrations/20260810013845_commitments_impact_present_stage_authenticated_approver.sql
           } | sort -u > migration-files.txt
           test -s migration-files.txt
           : > migration-inventory.txt

@@ -6,7 +6,7 @@
   "methodologyHash": "sha256:e917387ce26a21e98af936388fd88436782f0c199b986e0a408f46dace600463",
   "approvalBlockers": [
     "founder_exact_hash_approval_not_recorded",
-    "founder_aal2_session_not_yet_verified",
+    "founder_approver_account_not_yet_configured",
     "exact_current_main_continuation_gates_must_pass",
     "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
   ],

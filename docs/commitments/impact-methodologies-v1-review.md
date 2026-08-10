@@ -1,6 +1,6 @@
 # Commitments impact-accounting continuation packet
 
-**Status:** current-main synchronized; QA RLS hardening applied and verified; not approved; not active; not deployed to production
+**Status:** current-main synchronized; QA RLS hardening and present-stage authenticated-approver governance applied and verified; MFA deferred until the site is high-leverage; not approved; not active; not deployed to production
 
 This packet advances the methodology-design and least-privilege work in PR #534. It contains a review manifest, one separate v1 methodology candidate file for each supported mechanism, canonical methodology hashes using the repository's recursive key-sorting algorithm, a structural validation contract, and the exact QA-applied RLS migration. None of the six methodology versions is approved or active, and no modeled estimate is authorized for production display.
 
@@ -10,12 +10,15 @@ This packet advances the methodology-design and least-privilege work in PR #534.
 - Continuation PR: `#534`
 - Original tested PR head: `4e56ba774274b58104d75faf40be8269d8422054`
 - Prior exact successful QA run: `31115065783`
-- Current `main` merged into the feature branch: `bb3b0e4608b7282aecc9d1fe11b5cb310c409347`
-- Current-main synchronization merge commit: `d34398baeae99ea99d87c97576ef3280dd5b9b57`
+- Current `main` merged into the feature branch: `f0f5f36be4ef4ac6cb09cdc81802b27cd268878a`
+- Current-main synchronization merge commit: `ecf0337d8effcb585469356050bb3741a2ec1989`
 - Final continuation head: to be set by the commit that adds this packet and the updated gate workflow
 - MoralTrade QA project: `hvmxfjjbdcgjjudmthdz`
 - QA-only RLS migration: `20260808174259_mpgf_public_goods_public_read_rls.sql`
 - Exact normalized migration SHA-256: `33bc1fefed0298a1643bd37956b9c8850ccffd8805d66403439e4c1ab60e5bf4`
+- QA present-stage approver migration: `20260810013845_commitments_impact_present_stage_authenticated_approver.sql`
+- Current approval requirement: authenticated active allowlisted founder account; MFA is not required at the present stage
+- MFA reconsideration point: when Moral Trade becomes high-leverage, including meaningful users, funds, irreversible commitments, or concentrated production control
 - Production database and production deployment: unchanged by this continuation
 
 The prior exact-head pass remains useful historical evidence. It is not a substitute for the final exact-current-main gate run on the commit containing this packet.
@@ -85,14 +88,18 @@ Migration `20260808174259_mpgf_public_goods_public_read_rls.sql` was applied to 
 
 Post-migration verification established, for all four tables, that RLS is enabled, anonymous and authenticated reads remain available, direct client writes are absent, and the expected `USING (true)` read policy exists. The Supabase security advisor no longer reports `rls_disabled_in_public` for these four tables. This does not claim that unrelated pre-existing advisor findings elsewhere in the database have been resolved.
 
+## Present-stage approval security
+
+The selected founder account must be explicitly configured in the audited `impact_model_approvers` allowlist and must use an authenticated session. MFA/AAL2 is deliberately not a present-stage requirement. The optional AAL2 check remains available in the database so a later migration can require it once Moral Trade is high-leverage without changing the approver roster, exact-hash audit trail, or model-health gates. Exact methodology hashes, append-only approval events, active-approver status, and current passing model health remain mandatory.
+
 ## Approval and activation sequence
 
 1. Run the updated exact-current-main code, bundle-hash, migration-source, transactional SQL, RLS, lint, TypeScript, and build gates on the final continuation commit.
 2. Keep all six candidates at `under_review`; do not activate them.
-3. Enroll authenticator MFA for the selected founder approver and verify a real AAL2 session on `/dashboard#account-security`.
+3. Configure the selected founder account as an active impact-model approver and use an authenticated session. MFA is explicitly deferred until the site is high-leverage.
 4. Insert each candidate with its exact methodology hash only after the final exact-head gates pass.
 5. Review the six exact hashes. Any textual or parameter change creates a new hash and requires a new review.
-6. Record explicit AAL2 founder approval for each exact hash.
+6. Record explicit authenticated founder approval for each exact hash.
 7. Keep model health `blocked` until eligible resolved observations and calibration evidence satisfy the methodology.
 8. Activate one model per mechanism only after a current passing health snapshot exists.
 9. Obtain separate production-release authorization before applying the RLS migration or any methodology migration to production, configuring the approver, merging the product change, or deploying it.
@@ -100,7 +107,7 @@ Post-migration verification established, for all four tables, that RLS is enable
 ## Current blockers
 
 - The final exact-current-main continuation gates have not yet completed on the commit containing this packet.
-- Founder authenticator MFA / AAL2 has not been verified.
+- The selected founder account has not yet been configured as an active impact-model approver.
 - No methodology hash is approved.
 - No empirical production calibration registry is populated.
 - No model has a passing health record.
