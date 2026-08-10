@@ -1,0 +1,258 @@
+name: PR 598 production artifact integrity recovery
+
+on:
+  push:
+    branches:
+      - ops/release-pr598-production-20260810
+    paths:
+      - ".github/workflows/pr598-production-artifact-integrity-recovery-20260810.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gated-vercel-production
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  CANONICAL_ORIGIN: https://www.moraltrade.org
+  PRIOR_DEPLOYMENT_URL: https://moraltrade-site-izz3psr7y-ellen-s.vercel.app
+
+jobs:
+  recover:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out the exact released commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 1
+
+      - name: Guard immutable source identity and intended handoff contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$EXPECTED_MAIN_SHA"
+
+          source_asset='public/moral-trade-live-create-router.js'
+          command_center='public/moral-trade-live-command-center.js'
+          test -f "$source_asset"
+          test -f "$command_center"
+
+          if grep -Fq '[data-action="from-command"]' "$source_asset"; then
+            echo 'The exact source still lets the generic Create router intercept the Command Center handoff.' >&2
+            exit 1
+          fi
+          grep -Fq 'handoff=command-center' "$command_center"
+          grep -Fq 'moral-trade.command-center.handoff.v1' "$command_center"
+
+          sha256sum "$source_asset" | tee pr598-source-asset.sha256
+          cp "$source_asset" /tmp/expected-create-router.js
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Link only the canonical Vercel project
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes \
+            --environment=production \
+            --token="$VERCEL_TOKEN"
+
+      - name: Build a clean exact production artifact
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf .next .vercel/output
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+            --prod \
+            --token="$VERCEL_TOKEN" \
+            | tee pr598-vercel-build.log
+
+      - name: Prove the prebuilt static asset exactly matches source
+        id: artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t matches < <(find .vercel/output -type f -name 'moral-trade-live-create-router.js' -print | sort)
+          printf '%s\n' "${matches[@]}" | tee pr598-prebuilt-asset-paths.txt
+          test "${#matches[@]}" -eq 1
+          built_asset="${matches[0]}"
+          cmp --silent /tmp/expected-create-router.js "$built_asset"
+          if grep -Fq '[data-action="from-command"]' "$built_asset"; then
+            echo 'The clean prebuilt artifact contains the retired generic Command Center interception.' >&2
+            exit 1
+          fi
+          sha256sum "$built_asset" | tee pr598-prebuilt-asset.sha256
+          echo "path=$built_asset" >> "$GITHUB_OUTPUT"
+
+      - name: Capture the previously released asset for comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          nonce="before-$EXPECTED_MAIN_SHA-$GITHUB_RUN_ID"
+          curl --fail --silent --show-error \
+            -H 'Cache-Control: no-cache' \
+            "$PRIOR_DEPLOYMENT_URL/moral-trade-live-create-router.js?integrity=$nonce" \
+            -o pr598-prior-deployment-create-router.js
+          curl --fail --silent --show-error \
+            -H 'Cache-Control: no-cache' \
+            "$CANONICAL_ORIGIN/moral-trade-live-create-router.js?integrity=$nonce" \
+            -o pr598-prior-canonical-create-router.js
+          sha256sum \
+            pr598-prior-deployment-create-router.js \
+            pr598-prior-canonical-create-router.js \
+            | tee pr598-prior-assets.sha256
+          {
+            echo "prior_deployment_matches_source=$(cmp -s /tmp/expected-create-router.js pr598-prior-deployment-create-router.js && echo yes || echo no)"
+            echo "prior_canonical_matches_source=$(cmp -s /tmp/expected-create-router.js pr598-prior-canonical-create-router.js && echo yes || echo no)"
+          } | tee pr598-prior-asset-comparison.txt
+
+      - name: Upload the verified prebuilt artifact exactly once to production
+        id: deploy
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+            --prebuilt \
+            --prod \
+            --token="$VERCEL_TOKEN")"
+          test -n "$deployment_url"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$deployment_url" | tee pr598-recovery-deployment-url.txt
+
+      - name: Prove immutable and canonical assets now match the exact source
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOYMENT_URL"
+
+          fetch_until_exact() {
+            local origin="$1"
+            local output="$2"
+            local label="$3"
+            for attempt in $(seq 1 60); do
+              nonce="$EXPECTED_MAIN_SHA-$GITHUB_RUN_ID-$attempt"
+              if curl --fail --silent --show-error \
+                -H 'Cache-Control: no-cache' \
+                "$origin/moral-trade-live-create-router.js?integrity=$nonce" \
+                -o "$output"; then
+                if cmp --silent /tmp/expected-create-router.js "$output"; then
+                  printf '%s exact on attempt %s\n' "$label" "$attempt"
+                  return 0
+                fi
+              fi
+              sleep 5
+            done
+            echo "$label did not converge to the exact released source asset." >&2
+            sha256sum /tmp/expected-create-router.js "$output" || true
+            return 1
+          }
+
+          fetch_until_exact "$DEPLOYMENT_URL" pr598-recovered-immutable-create-router.js immutable
+          fetch_until_exact "$CANONICAL_ORIGIN" pr598-recovered-canonical-create-router.js canonical
+          sha256sum \
+            /tmp/expected-create-router.js \
+            pr598-recovered-immutable-create-router.js \
+            pr598-recovered-canonical-create-router.js \
+            | tee pr598-recovered-assets.sha256
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify the canonical Command Center opens the real handoff URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' | tee pr598-command-center-production-proof.log
+          import assert from "node:assert/strict";
+          import { chromium } from "@playwright/test";
+
+          const browser = await chromium.launch();
+          try {
+            const context = await browser.newContext();
+            await context.addCookies([
+              {
+                name: "mt_walkthrough_seen",
+                value: "1",
+                domain: "www.moraltrade.org",
+                path: "/",
+                secure: true,
+                httpOnly: true,
+                sameSite: "Lax",
+              },
+            ]);
+            const page = await context.newPage();
+            await page.goto("https://www.moraltrade.org/moral-trade-live.html", {
+              waitUntil: "domcontentloaded",
+            });
+            const command = page.locator('[data-action="from-command"]');
+            await command.waitFor({ state: "visible", timeout: 30_000 });
+            await command.click();
+            await page.waitForURL(/\/trades\/new\?handoff=command-center(?:$|&)/, {
+              timeout: 30_000,
+            });
+            const currentUrl = page.url();
+            assert.match(currentUrl, /\/trades\/new\?handoff=command-center(?:$|&)/);
+            console.log(`handoff_url=${currentUrl}`);
+          } finally {
+            await browser.close();
+          }
+          NODE
+
+      - name: Upload immutable recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr598-production-artifact-integrity-${{ github.run_id }}
+          path: |
+            pr598-*.log
+            pr598-*.txt
+            pr598-*.sha256
+            pr598-*.js
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record exact recovery evidence
+        if: always()
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+        run: |
+          {
+            echo '### PR #598 production artifact-integrity recovery'
+            echo
+            echo "- Source commit: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Canonical project: \`$VERCEL_PROJECT_ID\`"
+            echo "- Recovery deployment: \`$DEPLOYMENT_URL\`"
+            echo '- Required invariant: checked-in, prebuilt, immutable-deployment, and canonical Create-router assets are byte-identical'
+            echo '- Product proof: Command Center reaches `/trades/new?handoff=command-center`'
+          } >> "$GITHUB_STEP_SUMMARY"
