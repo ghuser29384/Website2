@@ -1,0 +1,64 @@
+name: PR 598 production release controller
+
+on:
+  push:
+    branches:
+      - ops/release-pr598-production-20260810
+    paths:
+      - ".github/workflows/pr598-production-release-controller-20260810.yml"
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: pr598-production-release-controller-20260810
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_MAIN_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
+      RELEASE_WORKFLOW: vercel-release.yml
+
+    steps:
+      - name: Verify immutable production candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_sha="$(git ls-remote "https://github.com/$GITHUB_REPOSITORY.git" refs/heads/main | awk '{print $1}')"
+          test "$remote_sha" = "$EXPECTED_MAIN_SHA"
+          active_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?status=in_progress&per_page=20" --jq '.total_count')"
+          queued_runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?status=queued&per_page=20" --jq '.total_count')"
+          test "$active_runs" = "0"
+          test "$queued_runs" = "0"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Dispatch exact gated production release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/dispatches" \
+            -f ref=main \
+            -f 'inputs[target]=production' \
+            -f 'inputs[ref]=main' \
+            -f "inputs[expected_sha]=$EXPECTED_MAIN_SHA"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Record dispatch evidence
+        shell: bash
+        run: |
+          {
+            echo '### PR #598 production release dispatched'
+            echo
+            echo "- Ref: \`main\`"
+            echo "- Commit: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Workflow: \`$RELEASE_WORKFLOW\`"
+            echo '- Target: `production`'
+          } >> "$GITHUB_STEP_SUMMARY"
