@@ -1,0 +1,297 @@
+name: Verify PR 598 production release v6
+
+on:
+  push:
+    branches:
+      - ops/verify-pr598-production-v6-20260810
+    paths:
+      - ".github/workflows/verify-pr598-production-v6-20260810.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: verify-pr598-production-v6-20260810
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_MAIN_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
+      RELEASE_RUN_ID: "31405775199"
+      PROMOTION_RUN_ID: "31408123871"
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      CANONICAL_ORIGIN: https://www.moraltrade.org
+
+    steps:
+      - name: Check out the exact released source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Guard immutable release and current exact-commit canonical deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+
+          for run_id in "$RELEASE_RUN_ID" "$PROMOTION_RUN_ID"; do
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            test "$(jq -r '.status' <<<"$run_json")" = "completed"
+            test "$(jq -r '.conclusion' <<<"$run_json")" = "success"
+          done
+
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/www.moraltrade.org?teamId=$VERCEL_ORG_ID" \
+            > pr598-production-deployment.json
+          jq -e --arg project "$VERCEL_PROJECT_ID" '.project.id == $project' \
+            pr598-production-deployment.json >/dev/null
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '.meta.githubCommitSha == $sha' \
+            pr598-production-deployment.json >/dev/null
+          jq -e '.target == "production"' pr598-production-deployment.json >/dev/null
+          jq -e '(.readyState // .state) == "READY"' \
+            pr598-production-deployment.json >/dev/null
+
+          curl --fail --silent --show-error \
+            "$CANONICAL_ORIGIN/moral-trade-live-create-router.js" \
+            --output pr598-live-create-router.js
+          cmp --silent public/moral-trade-live-create-router.js pr598-live-create-router.js
+          sha256sum \
+            public/moral-trade-live-create-router.js \
+            pr598-live-create-router.js \
+            | tee pr598-production-asset-sha256.txt
+
+          printf 'release_run=%s\npromotion_run=%s\ncanonical_deployment_id=%s\ncanonical_deployment_url=https://%s\ncommit=%s\n' \
+            "$RELEASE_RUN_ID" \
+            "$PROMOTION_RUN_ID" \
+            "$(jq -r '.id // .uid' pr598-production-deployment.json)" \
+            "$(jq -r '.url' pr598-production-deployment.json)" \
+            "$EXPECTED_MAIN_SHA" \
+            | tee pr598-production-release.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Verify the production Command Center handoff
+        shell: bash
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          cat > playwright.production-smoke.config.ts <<'TS'
+          import { defineConfig } from "@playwright/test";
+
+          export default defineConfig({
+            testDir: "./tests",
+            timeout: 60_000,
+            expect: { timeout: 12_000 },
+            fullyParallel: false,
+            workers: 1,
+            use: {
+              baseURL: "https://www.moraltrade.org",
+              storageState: {
+                cookies: [
+                  {
+                    domain: "www.moraltrade.org",
+                    expires: -1,
+                    httpOnly: true,
+                    name: "mt_walkthrough_seen",
+                    path: "/",
+                    sameSite: "Lax",
+                    secure: true,
+                    value: "1",
+                  },
+                ],
+                origins: [],
+              },
+              trace: "retain-on-failure",
+            },
+          });
+          TS
+
+          npx playwright test \
+            tests/exact-live-command-center.spec.ts \
+            --config=playwright.production-smoke.config.ts \
+            --reporter=line \
+            | tee pr598-production-command-center-smoke.log
+
+      - name: Verify canonical Commitments across desktop and mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/pr598-commitments-smoke.mjs <<'JS'
+          import assert from "node:assert/strict";
+          import { chromium } from "playwright";
+          import { mkdir, writeFile } from "node:fs/promises";
+
+          const origin = "https://www.moraltrade.org";
+          const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext({
+            storageState: {
+              cookies: [{
+                domain: "www.moraltrade.org",
+                expires: -1,
+                httpOnly: true,
+                name: "mt_walkthrough_seen",
+                path: "/",
+                sameSite: "Lax",
+                secure: true,
+                value: "1",
+              }],
+              origins: [],
+            },
+          });
+          const page = await context.newPage();
+          const responses = [];
+          const requests = [];
+          const pageErrors = [];
+          const consoleErrors = [];
+
+          page.on("response", (response) => {
+            if (response.status() >= 400) responses.push({ status: response.status(), url: response.url() });
+          });
+          page.on("requestfailed", (request) => requests.push({
+            method: request.method(),
+            url: request.url(),
+            errorText: request.failure()?.errorText ?? "failed",
+          }));
+          page.on("pageerror", (error) => pageErrors.push(error.message));
+          page.on("console", (message) => {
+            if (message.type() === "error") consoleErrors.push(message.text());
+          });
+
+          for (const viewport of [
+            { width: 1440, height: 900 },
+            { width: 390, height: 844 },
+            { width: 320, height: 568 },
+          ]) {
+            await page.setViewportSize(viewport);
+            await page.goto(`${origin}/commitments`, { waitUntil: "domcontentloaded" });
+            await page.getByRole("heading", { name: "Additional resources you caused." }).waitFor();
+            await page.getByRole("navigation", { name: "Commitments sections" }).waitFor();
+            await page.getByRole("heading", { name: "Sign in to view your commitments." }).waitFor();
+            assert.equal(
+              await page.getByRole("link", { name: "Sign in to continue" }).getAttribute("href"),
+              "/login?returnTo=/commitments",
+            );
+            const dimensions = await page.evaluate(() => ({
+              bodyWidth: document.body.scrollWidth,
+              documentWidth: document.documentElement.scrollWidth,
+              viewportWidth: window.innerWidth,
+            }));
+            assert.ok(dimensions.bodyWidth <= dimensions.viewportWidth + 1, JSON.stringify(dimensions));
+            assert.ok(dimensions.documentWidth <= dimensions.viewportWidth + 1, JSON.stringify(dimensions));
+          }
+
+          const body = await page.locator("body").innerText();
+          for (const synthetic of [
+            "$540",
+            "$18,760",
+            "Counteroffer received",
+            "Salary-gap pool at 81%",
+            "Factory-farming redirect",
+          ]) assert.equal(body.includes(synthetic), false, synthetic);
+
+          const expectedResponse = (failure) => {
+            const url = new URL(failure.url);
+            return failure.status === 404 && url.origin === origin && url.pathname === "/discover" &&
+              url.searchParams.get("domain") === "offers" && url.searchParams.get("view") === "list";
+          };
+          const expectedAbort = (failure) => {
+            if (failure.errorText !== "net::ERR_ABORTED") return false;
+            const url = new URL(failure.url);
+            return url.origin === origin && (
+              (failure.method === "GET" && url.searchParams.has("_rsc")) ||
+              (failure.method === "POST" && url.pathname === "/api/funnel-events")
+            );
+          };
+          const expectedResponses = responses.filter(expectedResponse);
+          const unexpectedResponses = responses.filter((failure) => !expectedResponse(failure));
+          const expectedAborts = requests.filter(expectedAbort);
+          const unexpectedRequests = requests.filter((failure) => !expectedAbort(failure));
+          const unexpectedConsoleErrors = consoleErrors.filter((message) => !(
+            expectedResponses.length > 0 && message.includes("Failed to load resource") && message.includes("404")
+          ));
+
+          await mkdir("test-results", { recursive: true });
+          await writeFile("test-results/pr598-production-commitments-network.json", `${JSON.stringify({
+            responses,
+            requests,
+            pageErrors,
+            consoleErrors,
+            expectedDiscoverPrefetch404Count: expectedResponses.length,
+            expectedNavigationCancellationCount: expectedAborts.length,
+            unexpectedResponses,
+            unexpectedRequests,
+          }, null, 2)}\n`);
+          await page.screenshot({ path: "test-results/pr598-production-commitments-320x568.png", fullPage: true });
+
+          assert.deepEqual(unexpectedResponses, []);
+          assert.deepEqual(unexpectedRequests, []);
+          assert.deepEqual(unexpectedConsoleErrors, []);
+          assert.deepEqual(pageErrors, []);
+          await browser.close();
+          JS
+
+          node /tmp/pr598-commitments-smoke.mjs \
+            | tee pr598-production-commitments-smoke.log
+
+      - name: Record valid canonical HTTP status inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in \
+            /moral-trade-live.html \
+            /trades/new \
+            /commitments \
+            /discover \
+            /complete-verification.html; do
+            code="$(curl --silent --show-error --location \
+              --output /dev/null --write-out '%{http_code}' \
+              "$CANONICAL_ORIGIN$path")"
+            printf '%s %s\n' "$code" "$path"
+            [[ "$code" =~ ^(200|302|303|307|308)$ ]]
+          done | tee pr598-production-http-smoke.txt
+
+          curl --silent --show-error --max-redirs 0 \
+            --dump-header pr598-apex-headers.txt \
+            --output /dev/null \
+            https://moraltrade.org/moral-trade-live.html || true
+          grep -Eq '^HTTP/[0-9.]+ 30(1|2|7|8)' pr598-apex-headers.txt
+          grep -Eiq '^location: https://www\.moraltrade\.org/moral-trade-live\.html' \
+            pr598-apex-headers.txt
+
+      - name: Upload immutable canonical production-smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr598-production-smoke-v6-${{ github.run_id }}
+          path: |
+            pr598-production-*.txt
+            pr598-production-*.json
+            pr598-production-*.log
+            pr598-live-create-router.js
+            pr598-apex-headers.txt
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 30
