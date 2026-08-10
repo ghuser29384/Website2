@@ -1,11 +1,13 @@
 import type { NextRequest } from "next/server";
 import { NextResponse, userAgent } from "next/server";
 
+import { isPostgresUuid } from "@/lib/uuid";
 import { WALKTHROUGH_SEEN_COOKIE_NAME } from "@/lib/walkthrough-state";
 
 export const WALKTHROUGH_SEEN_COOKIE = WALKTHROUGH_SEEN_COOKIE_NAME;
 
 const WALKTHROUGH_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+const STATIC_OFFER_SEGMENTS = new Set(["examples", "new", "plane"]);
 
 function isPrefetch(request: NextRequest) {
   const purpose = [
@@ -52,6 +54,39 @@ function rewriteToUnifiedCreate(request: NextRequest) {
   return NextResponse.rewrite(createUrl);
 }
 
+function getOfferRecordSegment(pathname: string) {
+  if (!pathname.startsWith("/offers/")) {
+    return null;
+  }
+
+  const [segment = ""] = pathname.slice("/offers/".length).split("/");
+
+  if (!segment || STATIC_OFFER_SEGMENTS.has(segment)) {
+    return null;
+  }
+
+  return segment;
+}
+
+function isInvalidOfferRecordPath(pathname: string) {
+  const offerRecordSegment = getOfferRecordSegment(pathname);
+  return offerRecordSegment !== null && !isPostgresUuid(offerRecordSegment);
+}
+
+function rewriteToInvalidOfferRecord(request: NextRequest) {
+  const invalidOfferUrl = request.nextUrl.clone();
+  invalidOfferUrl.pathname = "/invalid-offer-record";
+  invalidOfferUrl.search = "";
+
+  return NextResponse.rewrite(invalidOfferUrl, {
+    status: 404,
+    headers: {
+      "Cache-Control": "private, no-store",
+      "X-Robots-Tag": "noindex, nofollow",
+    },
+  });
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const shouldRecordVisit =
@@ -79,6 +114,10 @@ export function proxy(request: NextRequest) {
     }
 
     return rewriteToUnifiedCreate(request);
+  }
+
+  if (isInvalidOfferRecordPath(pathname)) {
+    return rewriteToInvalidOfferRecord(request);
   }
 
   if (pathname !== "/offers") {
@@ -116,5 +155,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/walkthrough", "/create", "/offers"],
+  matcher: ["/", "/walkthrough", "/create", "/offers", "/offers/:path*"],
 };
