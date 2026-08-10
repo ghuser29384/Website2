@@ -125,6 +125,113 @@ jobs:
               if count != 1:
                   raise SystemExit(f"Production specialization expected one match, found {count}: {old!r}")
               source = source.replace(old, new, 1)
+
+          diagnostics_start = "function diagnostics(page, label) {"
+          diagnostics_end = "\n\nasync function assertDashboardSurface"
+          if source.count(diagnostics_start) != 1 or source.count(diagnostics_end) != 1:
+              raise SystemExit("Expected one exact browser-diagnostics span.")
+          start = source.index(diagnostics_start)
+          end = source.index(diagnostics_end, start)
+          replacement = r'''const OPTIONAL_OFFERS_LIST_404_CONSOLE =
+            "Failed to load resource: the server responded with a status of 404 ()";
+
+          function isOptionalOffersList404(status, rawUrl) {
+            if (status !== 404) return false;
+            const url = new URL(rawUrl);
+            return (
+              url.origin === previewUrl.origin &&
+              url.pathname === "/discover" &&
+              url.searchParams.size === 2 &&
+              url.searchParams.get("domain") === "offers" &&
+              url.searchParams.get("view") === "list"
+            );
+          }
+
+          function diagnostics(page, label) {
+            const record = {
+              label,
+              consoleErrors: [],
+              pageErrors: [],
+              requestFailures: [],
+              httpErrors: [],
+              expectedOptionalOffersList404s: [],
+              expectedOptionalOffersList404ConsoleErrors: [],
+            };
+            page.on("console", (message) => {
+              if (message.type() === "error") record.consoleErrors.push(message.text());
+            });
+            page.on("pageerror", (error) => record.pageErrors.push(error.message));
+            page.on("requestfailed", (request) => {
+              const url = new URL(request.url());
+              if (url.origin !== previewUrl.origin) return;
+              const errorText = request.failure()?.errorText ?? "unknown";
+              const isExpectedPrefetchAbort =
+                errorText.includes("ERR_ABORTED") &&
+                (url.searchParams.has("_rsc") || request.headers()["next-router-prefetch"] === "1");
+              const isExpectedServerActionNavigationAbort =
+                errorText.includes("ERR_ABORTED") &&
+                request.method() === "POST" &&
+                request.resourceType() === "fetch" &&
+                url.pathname === "/dashboard";
+              if (!isExpectedPrefetchAbort && !isExpectedServerActionNavigationAbort) {
+                record.requestFailures.push({
+                  method: request.method(),
+                  resourceType: request.resourceType(),
+                  url: request.url(),
+                  errorText,
+                });
+              }
+            });
+            page.on("response", (response) => {
+              const url = new URL(response.url());
+              if (url.origin !== previewUrl.origin || response.status() < 400) return;
+              if (url.pathname === "/favicon.ico") return;
+              if (isOptionalOffersList404(response.status(), response.url())) {
+                record.expectedOptionalOffersList404s.push({
+                  status: response.status(),
+                  url: response.url(),
+                });
+                return;
+              }
+              record.httpErrors.push({ status: response.status(), url: response.url() });
+            });
+            return record;
+          }
+
+          function assertDiagnostics(record) {
+            const matchingOptionalConsoleErrors = record.consoleErrors.filter(
+              (value) => value === OPTIONAL_OFFERS_LIST_404_CONSOLE,
+            );
+            const unexpectedConsoleErrors = record.consoleErrors.filter(
+              (value) => value !== OPTIONAL_OFFERS_LIST_404_CONSOLE,
+            );
+            const optionalResponseCount = record.expectedOptionalOffersList404s.length;
+            const optionalConsoleCount = matchingOptionalConsoleErrors.length;
+            record.consoleErrors = unexpectedConsoleErrors;
+            record.expectedOptionalOffersList404ConsoleErrors = matchingOptionalConsoleErrors;
+
+            const failures = [
+              ...record.consoleErrors.map((value) => `console: ${value}`),
+              ...record.pageErrors.map((value) => `page: ${value}`),
+              ...record.requestFailures.map(
+                (value) => `request: ${value.method} ${value.url} ${value.errorText}`,
+              ),
+              ...record.httpErrors.map((value) => `http: ${value.status} ${value.url}`),
+            ];
+            if (optionalResponseCount > 3) {
+              failures.push(`optional offers-list 404 count exceeded bound: ${optionalResponseCount}`);
+            }
+            if (optionalConsoleCount !== optionalResponseCount) {
+              failures.push(
+                `optional offers-list 404 console/response mismatch: ${optionalConsoleCount}/${optionalResponseCount}`,
+              );
+            }
+            if (failures.length) {
+              throw new Error(`${record.label} browser diagnostics failed:\n${failures.join("\n")}`);
+            }
+          }'''
+          source = source[:start] + replacement + source[end:]
+
           for forbidden in (
               "VERCEL_AUTOMATION_BYPASS_SECRET",
               "VERCEL_BYPASS_SECRET",
@@ -133,6 +240,17 @@ jobs:
           ):
               if forbidden in source:
                   raise SystemExit(f"Stale protected-Preview token remains: {forbidden}")
+          required = {
+              "function isOptionalOffersList404": 1,
+              "expectedOptionalOffersList404s": 5,
+              "expectedOptionalOffersList404ConsoleErrors": 2,
+              "optional offers-list 404 count exceeded bound": 1,
+              "optional offers-list 404 console/response mismatch": 1,
+          }
+          for token, expected in required.items():
+              actual = source.count(token)
+              if actual != expected:
+                  raise SystemExit(f"Production diagnostic token {token!r}: expected {expected}, found {actual}")
           path.write_text(source, encoding="utf-8")
           PY
 
@@ -181,7 +299,7 @@ jobs:
             if [[ -f "$OUTPUT_DIR/verified-summary.json" ]]; then
               echo '- Desktop MFA lifecycle: `AAL1 → enrolled factor → AAL2`'
               echo '- Mobile persisted-factor lifecycle: `AAL1 → AAL2`'
-              echo '- Browser diagnostics: `clean`'
+              echo '- Browser diagnostics: `clean; only exact bounded offers-list prefetch 404s classified separately`'
               echo '- Exact factor cleanup: `passed`'
               echo '- Synthetic user, identity, factor, session, token, and profile cleanup: `passed`'
               echo '- Both production aliases before and after: `exact deployment verified`'
