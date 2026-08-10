@@ -6,7 +6,7 @@
 
   const STYLE_ID = "mt-discover-home-alignment";
   const STYLE_HREF = "/moral-trade-discover-home-alignment.css?v=20260810";
-  const MOBILE_STYLE_ID = "mt-discover-home-mobile-command";
+  const RUNTIME_STYLE_ID = "mt-discover-home-runtime-overrides";
   const NAV_ITEMS = [
     { label: "Feed", path: "/feed" },
     { label: "Discover", path: "/discover", active: true },
@@ -28,10 +28,23 @@
       document.head.append(stylesheet);
     }
 
-    if (!document.getElementById(MOBILE_STYLE_ID)) {
-      const mobileStyle = document.createElement("style");
-      mobileStyle.id = MOBILE_STYLE_ID;
-      mobileStyle.textContent = `
+    if (!document.getElementById(RUNTIME_STYLE_ID)) {
+      const runtimeStyle = document.createElement("style");
+      runtimeStyle.id = RUNTIME_STYLE_ID;
+      runtimeStyle.textContent = `
+        @media (min-width: 901px) {
+          .rail-details[open] > .filter-body {
+            right: auto;
+            width: min(680px, calc(100vw - 68px));
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+        @media (min-width: 901px) and (max-width: 1320px) {
+          .rail-details[open] > .filter-body {
+            left: 24px;
+            width: min(620px, calc(100vw - 48px));
+          }
+        }
         @media (max-width: 760px) {
           .command-trigger {
             flex: 0 0 38px;
@@ -44,7 +57,7 @@
           }
         }
       `;
-      document.head.append(mobileStyle);
+      document.head.append(runtimeStyle);
     }
 
     return stylesheet;
