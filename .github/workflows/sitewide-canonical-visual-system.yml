@@ -1,0 +1,111 @@
+name: Sitewide canonical visual system
+
+on:
+  pull_request:
+    paths:
+      - "src/app/canonical-visual-system.css"
+      - "src/app/layout.tsx"
+      - "src/components/home/home-page.tsx"
+      - "src/components/auth/auth-card.tsx"
+      - "src/app/connectors/page.tsx"
+      - "src/app/pledge-swaps/page.tsx"
+      - "src/app/complete-profile/page.tsx"
+      - "src/app/redirects/[receiptId]/page.tsx"
+      - "src/app/labs/moral-public-goods/[poolSlug]/page.tsx"
+      - "public/moral-trade-canonical-static.css"
+      - "public/moral-trade-create/index.html"
+      - "public/complete-verification.html"
+      - "src/sitewide-canonical-visual-system.test.ts"
+      - "tests/sitewide-canonical-visual-system.spec.ts"
+      - ".github/workflows/sitewide-canonical-visual-system.yml"
+  push:
+    branches:
+      - main
+      - fix/sitewide-canonical-visual-system-final-20260810
+    paths:
+      - "src/app/canonical-visual-system.css"
+      - "src/app/layout.tsx"
+      - "src/components/home/home-page.tsx"
+      - "src/components/auth/auth-card.tsx"
+      - "src/app/connectors/page.tsx"
+      - "src/app/pledge-swaps/page.tsx"
+      - "src/app/complete-profile/page.tsx"
+      - "src/app/redirects/[receiptId]/page.tsx"
+      - "src/app/labs/moral-public-goods/[poolSlug]/page.tsx"
+      - "public/moral-trade-canonical-static.css"
+      - "public/moral-trade-create/index.html"
+      - "public/complete-verification.html"
+      - "src/sitewide-canonical-visual-system.test.ts"
+      - "tests/sitewide-canonical-visual-system.spec.ts"
+      - ".github/workflows/sitewide-canonical-visual-system.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sitewide-canonical-visual-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Check complete candidate diff and source contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          base_sha="$(git merge-base HEAD origin/main)"
+          git diff --check "$base_sha" HEAD
+          node --import tsx --test src/sitewide-canonical-visual-system.test.ts
+
+      - name: Run repository quality gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Render and audit representative sitewide routes
+        shell: bash
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright test tests/sitewide-canonical-visual-system.spec.ts --reporter=line
+
+      - name: Upload sitewide visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sitewide-canonical-visual-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            test-results/sitewide-canonical-visual-system-*/**/*.png
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 14
