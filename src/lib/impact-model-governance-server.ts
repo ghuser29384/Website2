@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
-// Canonical hashing is revalidated on every changed exact pull-request head.
+// Canonical hashing is revalidated as exact-head release evidence on every changed pull request.
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === "object") {
