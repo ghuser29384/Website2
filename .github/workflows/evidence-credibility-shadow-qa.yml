@@ -1,0 +1,135 @@
+name: Evidence credibility shadow QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/evidence-credibility-shadow-qa.yml
+      - docs/moral-trade/evidence-credibility-shadow-v2.md
+      - src/lib/evidence-credibility-shadow-schema-contract.test.ts
+      - supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+      - supabase/migrations/20260810160001_evidence_credibility_shadow_schema_events.sql
+      - supabase/migrations/20260810160002_evidence_credibility_shadow_event_plan_refresh.sql
+      - supabase/migrations/20260810160003_evidence_credibility_shadow_evidence_materialize.sql
+      - supabase/migrations/20260810160004_evidence_credibility_shadow_evidence_rpc.sql
+      - supabase/migrations/20260810160005_evidence_credibility_shadow_settlement_materialize.sql
+      - supabase/migrations/20260810160006_evidence_credibility_shadow_settlement_rpc.sql
+      - supabase/migrations/20260810160007_evidence_credibility_shadow_differential_active.sql
+      - supabase/migrations/20260810160008_evidence_credibility_shadow_rls_grants.sql
+      - supabase/migrations/20260810160009_evidence_credibility_shadow_evidence_hardening.sql
+      - supabase/migrations/20260810160010_evidence_credibility_shadow_settlement_hardening.sql
+      - supabase/migrations/20260810160011_evidence_credibility_shadow_advisor_indexes.sql
+      - supabase/tests/evidence_credibility_shadow_core.sql
+      - supabase/tests/evidence_credibility_shadow_finality.sql
+      - supabase/tests/evidence_credibility_shadow_supersession.sql
+      - supabase/tests/evidence_credibility_shadow_settlement.sql
+      - supabase/tests/evidence_credibility_shadow_authorization.sql
+      - supabase/tests/evidence_credibility_shadow_active_compatibility.sql
+  push:
+    branches:
+      - feature/evidence-credibility-shadow-v2-20260810
+    paths:
+      - .github/workflows/evidence-credibility-shadow-qa.yml
+      - docs/moral-trade/evidence-credibility-shadow-v2.md
+      - src/lib/evidence-credibility-shadow-schema-contract.test.ts
+      - supabase/migrations/202608101600*_evidence_credibility_shadow_*.sql
+      - supabase/tests/evidence_credibility_shadow_*.sql
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-credibility-shadow-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  source-and-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Guard exact durable scope and shadow boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find supabase/migrations -maxdepth 1 -type f -name '202608101600*_evidence_credibility_shadow_*.sql' | wc -l)" -eq 12
+          test "$(find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_shadow_*.sql' | wc -l)" -eq 6
+          test -f docs/moral-trade/evidence-credibility-shadow-v2.md
+          test -f src/lib/evidence-credibility-shadow-schema-contract.test.ts
+          test ! -e .github/staged-evidence-credibility-shadow-qa.yml.txt
+          test ! -e .github/materialize-evidence-shadow
+          test ! -e .github/workflows/materialize-evidence-credibility-shadow-v2.yml
+          test ! -e .github/workflows/stage-evidence-credibility-shadow-qa-workflow.yml
+          ! grep -R "jnpoxvalyjtdghnperyu" \
+            .github/workflows/evidence-credibility-shadow-qa.yml \
+            docs/moral-trade/evidence-credibility-shadow-v2.md \
+            src/lib/evidence-credibility-shadow-schema-contract.test.ts \
+            supabase/migrations/202608101600*_evidence_credibility_shadow_*.sql \
+            supabase/tests/evidence_credibility_shadow_*.sql
+          grep -q "mode.*shadow" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+          grep -q "milestone_cutover_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+          grep -q "public_effects_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+          grep -q "ranking_effects_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+          grep -q "eligibility_effects_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
+          for file in supabase/tests/evidence_credibility_shadow_*.sql; do
+            grep -qi '^begin;' "$file"
+            grep -qi '^rollback;' "$file"
+          done
+          git diff --check
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run evidence-shadow source contract
+        run: node --import tsx --test src/lib/evidence-credibility-shadow-schema-contract.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run repository-wide ESLint
+        run: npm run lint -- --quiet
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Preserve exact-head evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/head-sha.txt
+          git status --short > evidence/status.txt
+          find supabase/migrations -maxdepth 1 -type f -name '202608101600*_evidence_credibility_shadow_*.sql' -print | sort > evidence/migrations.txt
+          find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_shadow_*.sql' -print | sort > evidence/sql-tests.txt
+          sha256sum \
+            .github/workflows/evidence-credibility-shadow-qa.yml \
+            docs/moral-trade/evidence-credibility-shadow-v2.md \
+            src/lib/evidence-credibility-shadow-schema-contract.test.ts \
+            supabase/migrations/202608101600*_evidence_credibility_shadow_*.sql \
+            supabase/tests/evidence_credibility_shadow_*.sql \
+            > evidence/file-sha256.txt
+
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-shadow-${{ github.run_id }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 30
