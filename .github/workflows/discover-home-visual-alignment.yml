@@ -1,0 +1,95 @@
+name: Discover home visual alignment
+
+on:
+  pull_request:
+    paths:
+      - "public/moral-trade-discover-home-alignment.css"
+      - "public/moral-trade-discover-navigation.js"
+      - "src/discover-home-visual-contract.test.ts"
+      - "tests/discover-home-visual-alignment.spec.ts"
+      - ".github/workflows/discover-home-visual-alignment.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "public/moral-trade-discover-home-alignment.css"
+      - "public/moral-trade-discover-navigation.js"
+      - "src/discover-home-visual-contract.test.ts"
+      - "tests/discover-home-visual-alignment.spec.ts"
+      - ".github/workflows/discover-home-visual-alignment.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: discover-home-visual-alignment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Check exact scope and JavaScript syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check "${{ github.event.pull_request.base.sha || github.event.before }}" HEAD
+          node --check public/moral-trade-discover-navigation.js
+
+      - name: Run focused visual contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/discover-home-visual-contract.test.ts
+          npm run verify:discover
+
+      - name: Run repository quality gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify desktop and mobile rendering
+        shell: bash
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright test tests/discover-home-visual-alignment.spec.ts --reporter=line
+
+      - name: Upload rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discover-home-visual-alignment-${{ github.run_id }}-${{ github.sha }}
+          path: |
+            test-results/discover-home-visual-alignment-*/discover-home-alignment-*.png
+            playwright-report
+            test-results
+          if-no-files-found: warn
+          retention-days: 14
