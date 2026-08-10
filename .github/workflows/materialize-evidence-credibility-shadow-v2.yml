@@ -6,6 +6,12 @@ on:
       - feature/evidence-credibility-shadow-v2-20260810
     paths:
       - .github/workflows/materialize-evidence-credibility-shadow-v2.yml
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+    paths:
+      - .github/workflows/materialize-evidence-credibility-shadow-v2.yml
 
 permissions:
   contents: write
@@ -29,7 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REF_NAME}" = "feature/evidence-credibility-shadow-v2-20260810"
+          test "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}" = "feature/evidence-credibility-shadow-v2-20260810"
           git merge-base --is-ancestor 0778577c98c7a86417057caeb939c01f77e22c89 HEAD
           test "$(find .github/materialize-evidence-shadow -maxdepth 1 -type f -name 'chunk-*.b64' | wc -l)" -eq 5
 
