@@ -104,7 +104,7 @@ jobs:
         run: |
           set -euo pipefail
           npx playwright install --with-deps chromium
-          npm run test:e2e -- --reporter=line
+          npm run test:e2e:release -- --reporter=line
 
       - name: Link only the canonical Vercel project
         shell: bash
