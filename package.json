@@ -23,7 +23,9 @@
     "discover:pack": "node scripts/pack-discover-payload.mjs",
     "verify:discover": "node scripts/pack-discover-payload.mjs --check && node --test scripts/discover-two-sided-contract.test.mjs scripts/discover-cofund-contract.test.mjs scripts/discover-loader-self-heal.test.mjs scripts/discover-live-search-loader-contract.test.mjs && node --import tsx --test src/lib/discover-search.test.ts && node --check public/moral-trade-smart-query.js && node --check public/moral-trade-discover-search-preflight.js && node --check public/moral-trade-discover-search.js",
     "test:discover-cofund": "node --test scripts/discover-cofund-contract.test.mjs",
-    "test:discover-live-search": "node --test scripts/discover-live-search-loader-contract.test.mjs && node --import tsx --test src/lib/discover-search.test.ts"
+    "test:discover-live-search": "node --test scripts/discover-live-search-loader-contract.test.mjs && node --import tsx --test src/lib/discover-search.test.ts",
+    "test:e2e:release": "playwright test --config=playwright.release.config.ts",
+    "test:e2e:authenticated": "playwright test tests/feed-create-phase1-authenticated.spec.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

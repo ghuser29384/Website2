@@ -26,8 +26,19 @@ function isExpectedBrowserAbort(request: Request) {
     url.searchParams.get("view") === "list";
   const isBestEffortFunnelEvent =
     request.method() === "POST" && url.pathname === "/api/funnel-events";
+  const isSupersededInputAssistLoad =
+    request.method() === "GET" &&
+    [
+      "/moral-trade-input-assist.js",
+      "/moral-trade-input-standards.json",
+    ].includes(url.pathname);
 
-  return isNextRoutePrefetch || isDiscoverLinkPrefetch || isBestEffortFunnelEvent;
+  return (
+    isNextRoutePrefetch ||
+    isDiscoverLinkPrefetch ||
+    isBestEffortFunnelEvent ||
+    isSupersededInputAssistLoad
+  );
 }
 
 function monitorBrowserFailures(page: Page) {
