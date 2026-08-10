@@ -46,7 +46,14 @@ jobs:
           cat .github/materialize-evidence-shadow/chunk-*.b64 > /tmp/evidence-shadow.tar.gz.b64
           base64 --decode /tmp/evidence-shadow.tar.gz.b64 > /tmp/evidence-shadow.tar.gz
           echo "82f833fdb93707eef6af66e13eaab951ad5153ac48fd5d95564092389982099e  /tmp/evidence-shadow.tar.gz" | sha256sum --check --strict
-          test "$(tar -tzf /tmp/evidence-shadow.tar.gz | grep -Ev '/$' | wc -l)" -eq 21
+          python - <<'PY'
+          import tarfile
+
+          with tarfile.open('/tmp/evidence-shadow.tar.gz', 'r:gz') as archive:
+              files = [member.name for member in archive.getmembers() if member.isfile()]
+          if len(files) != 21:
+              raise SystemExit(f'Expected 21 durable files, found {len(files)}: {files}')
+          PY
 
       - name: Materialize durable files and remove temporary controller
         shell: bash
