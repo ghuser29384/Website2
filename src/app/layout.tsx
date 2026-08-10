@@ -14,6 +14,7 @@ import "./activation-critical.css";
 import "./home-process-polish.css";
 import "./home-mode-hover-colors.css";
 import "./search-bar-polish.css";
+import "./canonical-visual-system.css";
 
 const SITE_FAVICON_PATH = `${SITE_IMAGE_PATH}?v=20260730`;
 

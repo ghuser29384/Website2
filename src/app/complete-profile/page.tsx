@@ -100,7 +100,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
     readSearchParam(resolvedSearchParams.panel) === "connections";
 
   return (
-    <div className={styles.pageShell}>
+    <div className={styles.pageShell} data-mt-surface="complete-profile">
       <CompleteProfileConnections
         feedback={formMessage}
         initialOpen={initialConnectionsOpen}
