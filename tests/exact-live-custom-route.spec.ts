@@ -1,116 +1,212 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test.describe("Exact live Custom Route workbench", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      window.localStorage.removeItem("moraltrade.plan-resources.v1");
+type PlannerStatus = "ready" | "signed_out";
+
+function routePlanner(status: PlannerStatus) {
+  return {
+    status,
+    checkedAt: "2026-08-08T08:00:00.000Z",
+    profile:
+      status === "ready"
+        ? {
+            goal: "Reduce preventable animal suffering",
+            causePriorities: ["Animal welfare"],
+            moneyBudgetCents: 4_000,
+            timeBudgetMinutes: 60,
+            actionBudgetCount: 3,
+            horizon: "month",
+            routeFormats: ["direct", "personal"],
+            evidencePreference: "high",
+            uncertaintyPreference: "balanced",
+            interactionPreference: "open",
+            privacyPreference: "private",
+            plannedDonationBaseline: false,
+            plannedDonationCents: 0,
+            otherwiseBaseline: "I would make no additional donation this month.",
+            calibrationCount: 0,
+            interviewCompleted: false,
+          }
+        : {},
+    needsMoreInput: [],
+    routes:
+      status === "ready"
+        ? [
+            {
+              id: "best-fit",
+              label: "Best fit",
+              summary: "Fund a verified animal-welfare review",
+              metrics: { fit: 91, friction: 24, evidence: 88, coordination: 72 },
+              steps: [
+                {
+                  sourceId: "offer-animal",
+                  sourceType: "offer",
+                  title: "Open animal-welfare review offer",
+                  detail: "Review the current verified terms.",
+                  href: "/offers/offer-animal",
+                  costCents: 1_000,
+                  timeMinutes: 10,
+                  evidenceLabel: "Public receipt",
+                  live: true,
+                  why: "Fits the stated goal, limits, and evidence preference.",
+                },
+              ],
+              uncertainties: ["The source may close before you act."],
+            },
+          ]
+        : [],
+    comparison: null,
+    candidateCount: status === "ready" ? 1 : 0,
+  };
+}
+
+async function mockPlannerState(page: Page, status: PlannerStatus) {
+  const authenticated = status === "ready";
+
+  await page.route("**/api/live-account", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated,
+        profile: authenticated
+          ? { displayName: "Route test user", username: "route-test" }
+          : null,
+      }),
     });
-    await page.goto("/moral-trade-live.html#now");
-    await page.locator('[data-now="plan"]').click();
-    await page.getByRole("button", { name: "Custom route", exact: true }).click();
-    await expect(page.locator('[data-mt-custom-route="resource-mix"]')).toBeVisible();
   });
 
-  test("separates planned donation flow from added-resource accounting", async ({ page }) => {
-    const result = page.locator(".mt-cr-ledger-result");
-    const moneyMeter = page.locator('[data-mt-cr-meter="money"] .mt-cr-vessel strong');
+  await page.route("**/api/live-now**", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        authenticated,
+        generatedAt: "2026-08-08T08:00:00.000Z",
+        matchingOpportunityCount: 0,
+        profile: {
+          causes: authenticated ? ["Animal welfare"] : [],
+          weightedCauses: [],
+          openToPayment: authenticated ? true : null,
+          openToPledges: authenticated ? true : null,
+          signalSources: authenticated ? ["profile_priority"] : [],
+          learningEnabled: true,
+        },
+        recentChanges: [],
+        recommendations: [],
+        ownedOpportunities: [],
+        ownedOpportunityCount: 0,
+        status: authenticated ? "no_matches" : "signed_out",
+        routePlanner: routePlanner(status),
+      }),
+    });
+  });
+}
 
-    await expect(result).toContainText("$20 redirected · $20 counted until baseline confirmed");
-    await expect(moneyMeter).toHaveText("$35");
+async function openPlan(page: Page) {
+  await page.goto("/moral-trade-live.html#now", { waitUntil: "domcontentloaded" });
+  await expect(page.locator("main#app")).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("button", { name: "Plan resources" }).click();
+  await expect(page.locator('[data-mt-live-route-planner="true"]')).toBeVisible({
+    timeout: 30_000,
+  });
+}
 
-    await page.locator('[data-mt-cr-action="declaration"][data-status="all"]').click();
-    await expect(result).toContainText("$20 redirected · $0 added money");
-    await expect(moneyMeter).toHaveText("$15");
+async function expectLegacyWorkbenchRetired(page: Page) {
+  await expect(page.getByRole("button", { name: "Custom route", exact: true })).toHaveCount(0);
+  await expect(page.locator("[data-mt-custom-route]")).toHaveCount(0);
+  await expect(page.locator('[data-mt-custom-route="resource-mix"]')).toHaveCount(0);
 
-    await page.locator('[data-mt-cr-action="declaration"][data-status="part"]').click();
-    const partialAmount = page.getByLabel("Amount already planned this month");
-    await partialAmount.fill("8");
-    await partialAmount.press("Tab");
-    await expect(result).toContainText("$20 redirected · $12 added money");
-    await expect(moneyMeter).toHaveText("$27");
+  expect(
+    await page.evaluate(() => Reflect.get(window, "__MT_CUSTOM_ROUTE_WORKBENCH__") ?? null),
+  ).toBeNull();
+}
 
-    await page.locator('[data-mt-cr-action="declaration"][data-status="none"]').click();
-    await expect(result).toContainText("$20 redirected · $20 added money");
-    await expect(moneyMeter).toHaveText("$35");
+test.describe("authoritative live route planner", () => {
+  test("keeps signed-out Plan fail-closed and ignores legacy workbench storage", async ({
+    page,
+  }) => {
+    await mockPlannerState(page, "signed_out");
+    await page.addInitScript(() => {
+      localStorage.setItem(
+        "moraltrade.plan-resources.v1",
+        JSON.stringify({ activePeriod: "month", legacyDiagnostic: true }),
+      );
+    });
+
+    await openPlan(page);
+
+    await expect(page.getByText("Sign in to see your routes.", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("No personalized or demo route is shown while signed out.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.locator("[data-mt-live-route-card]")).toHaveCount(0);
+
+    expect(
+      await page.evaluate(() => {
+        const bootstrap = Reflect.get(window, "__MT_LIVE_NOW_BOOTSTRAP__") as
+          | { routePlanner?: { status?: string } }
+          | undefined;
+        return bootstrap?.routePlanner?.status ?? null;
+      }),
+    ).toBe("signed_out");
+
+    await expectLegacyWorkbenchRetired(page);
   });
 
-  test("keeps top-ups, fees, setup time, and actions inside added resources", async ({ page }) => {
-    const timeCeiling = page.locator('[data-mt-cr-meter="minutes"] input');
-    await expect(timeCeiling).toHaveAttribute("min", "5");
-    await expect(timeCeiling).toHaveValue("120");
-    await page.locator('[data-mt-cr-action="declaration"][data-status="all"]').click();
+  test("renders the ready current planner instead of the retired resource-mix workbench", async ({
+    page,
+  }) => {
+    await mockPlannerState(page, "ready");
+    await openPlan(page);
 
-    const topUp = page.getByLabel("Additional donation top-up");
-    await topUp.fill("5");
-    await topUp.press("Tab");
-    const fee = page.getByLabel("Incremental fee");
-    await fee.fill("0.75");
-    await fee.press("Tab");
+    await expect(page.locator("[data-mt-live-route-composer]")).toBeVisible();
+    await expect(page.locator('[data-mt-live-route-card="best-fit"]')).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Routes for Reduce preventable animal suffering",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Fund a verified animal-welfare review", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("Open animal-welfare review offer", { exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Open source →" })).toHaveAttribute(
+      "href",
+      "/offers/offer-animal",
+    );
 
-    await expect(page.locator(".mt-cr-ledger-result")).toContainText(
-      "$25 redirected · $5.75 added money",
-    );
-    await expect(page.locator('[data-mt-cr-meter="money"] .mt-cr-vessel strong')).toHaveText(
-      "$20.75",
-    );
-    await expect(page.locator('[data-mt-cr-meter="minutes"] .mt-cr-vessel strong')).toHaveText(
-      "12m",
-    );
-    await expect(page.locator('[data-mt-cr-meter="actions"] .mt-cr-vessel strong')).toHaveText(
-      "3",
-    );
+    expect(
+      await page.evaluate(() => {
+        const bootstrap = Reflect.get(window, "__MT_LIVE_NOW_BOOTSTRAP__") as
+          | { routePlanner?: { status?: string } }
+          | undefined;
+        return bootstrap?.routePlanner?.status ?? null;
+      }),
+    ).toBe("ready");
+
+    await expectLegacyWorkbenchRetired(page);
   });
 
-  test("keeps weekly and monthly declarations and limits independent", async ({ page }) => {
-    await page.locator('[data-mt-cr-action="declaration"][data-status="all"]').click();
-    await page.locator('[data-mt-cr-action="period"][data-period="week"]').click();
-
-    await expect(page.locator(".mt-cr-ledger-result")).toContainText(
-      "$20 counted until baseline confirmed",
-    );
-    await expect(page.locator('[data-mt-cr-meter="money"] output')).toHaveText("$30");
-    await page.locator('[data-mt-cr-action="declaration"][data-status="none"]').click();
-
-    await page.locator('[data-mt-cr-action="period"][data-period="month"]').click();
-    await expect(page.locator(".mt-cr-ledger-result")).toContainText(
-      "$20 redirected · $0 added money",
-    );
-    await expect(page.locator('[data-mt-cr-meter="money"] output')).toHaveText("$80");
-  });
-
-  test("itemizes the route before a fail-closed review confirmation", async ({ page }) => {
-    await page.locator('[data-mt-cr-action="declaration"][data-status="all"]').click();
-    await page.getByRole("button", { name: "Review mix" }).click();
-
-    const review = page.getByRole("dialog", { name: "Review what this route would add." });
-    await expect(review).toBeVisible();
-    await expect(review).toContainText("Planned donation used");
-    await expect(review).toContainText("$20 principal · $0 added principal");
-    await expect(review).toContainText(
-      "Confirming here does not charge, pledge, invite, or create a durable commitment.",
-    );
-    const confirm = review.getByRole("button", { name: "Confirm review" });
-    await expect(confirm).toBeDisabled();
-
-    const effects = review.locator('[data-mt-cr-input="effect"]');
-    for (let index = 0; index < await effects.count(); index += 1) {
-      await effects.nth(index).check();
-    }
-    await expect(confirm).toBeEnabled();
-    await confirm.click();
-    await expect(review).toBeHidden();
-  });
-
-  test("returns to Routes and stays free of horizontal overflow on mobile", async ({ page }) => {
+  test("keeps the current route composer and result card within the mobile viewport", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(page.locator('[data-mt-custom-route="resource-mix"]')).toBeVisible();
-    const hasOverflow = await page.evaluate(
-      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
-    );
-    expect(hasOverflow).toBe(false);
+    await mockPlannerState(page, "ready");
+    await openPlan(page);
 
-    await page.getByRole("button", { name: "Back to routes" }).click();
-    await expect(page.locator(".route")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Custom route", exact: true })).toBeVisible();
+    await expect(page.locator("[data-mt-live-route-composer]")).toBeVisible();
+    await expect(page.locator('[data-mt-live-route-card="best-fit"]')).toBeVisible();
+    await expect(page.getByRole("button", { name: "Update routes" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Guided goal interview" })).toBeVisible();
+
+    const widths = await page.evaluate(() => ({
+      innerWidth: window.innerWidth,
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    expect(widths.clientWidth).toBe(widths.innerWidth);
+    expect(widths.scrollWidth).toBeLessThanOrEqual(widths.innerWidth + 1);
+
+    await expectLegacyWorkbenchRetired(page);
   });
 });
