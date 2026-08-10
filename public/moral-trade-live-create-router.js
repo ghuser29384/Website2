@@ -12,7 +12,6 @@
     '[data-action="create"]',
     '[data-action="make-offer"]',
     '[data-action="publish"]',
-    '[data-action="from-command"]',
     '[data-action="repeat"]',
   ].join(",");
   const DEALROOM_TRIGGER_SELECTOR = '[data-action="dealroom"], [data-trade="dealroom"]';

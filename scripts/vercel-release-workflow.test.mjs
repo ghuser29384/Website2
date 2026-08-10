@@ -49,7 +49,7 @@ test("quality gates complete before an immutable prebuilt deployment", async () 
   const lintIndex = source.indexOf("npm run lint -- --quiet");
   const typeIndex = source.indexOf("npx tsc --noEmit");
   const appBuildIndex = source.indexOf("npm run build");
-  const browserIndex = source.indexOf("npm run test:e2e -- --reporter=line");
+  const browserIndex = source.indexOf("npm run test:e2e:release -- --reporter=line");
   const vercelBuildIndex = source.indexOf('"vercel@$VERCEL_CLI_VERSION" build');
   const deployIndex = source.indexOf('"vercel@$VERCEL_CLI_VERSION" deploy');
 
@@ -84,7 +84,7 @@ test("the rendered release gate binds the app to Playwright's local canonical or
   assert.match(browserGate, /NEXT_PUBLIC_SITE_URL: http:\/\/127\.0\.0\.1:3210/);
   assert.match(browserGate, /SITE_URL: http:\/\/127\.0\.0\.1:3210/);
   assert.match(browserGate, /PLAYWRIGHT_HTML_OPEN: never/);
-  assert.match(browserGate, /npm run test:e2e -- --reporter=line/);
+  assert.match(browserGate, /npm run test:e2e:release -- --reporter=line/);
   assert.doesNotMatch(browserGate, /https:\/\/www\.moraltrade\.org/);
 });
 

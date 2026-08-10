@@ -191,12 +191,14 @@ test("the live shell intercepts the false-success path and opens the real editor
   const script = readRepoFile("public/moral-trade-live-command-center.js");
   const shell = readRepoFile("public/moral-trade-live.html");
   const page = readRepoFile("src/app/trades/new/page.tsx");
+  const createRouter = readRepoFile("public/moral-trade-live-create-router.js");
   const workbench = readRepoFile(
     "src/components/core-trade/trade-draft-workbench.tsx",
   );
 
   assert.match(shell, /moral-trade-live-command-center\.js/);
   assert.match(script, /\[data-action="from-command"\]/);
+  assert.doesNotMatch(createRouter, /\[data-action="from-command"\]/);
   assert.match(script, /stopImmediatePropagation/);
   assert.match(script, /window\.sessionStorage\.setItem/);
   assert.match(
