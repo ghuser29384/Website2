@@ -100,7 +100,7 @@ test("the live navigation bridge exposes Feed, Discover, Controls, and the globa
   assert.match(bridge, /label === "commitments" \|\| label === "activity"/);
 });
 
-test("the Discover loader reconnects product navigation and emits safe script tags", () => {
+test("the Discover loader reconnects canonical product navigation and emits safe script tags", () => {
   const loader = readPublicFile("moral-trade-discover.html");
   const navigationBridge = readPublicFile("moral-trade-discover-navigation.js");
   const inlineLoader = extractInlineLoader(loader);
@@ -136,11 +136,26 @@ test("the Discover loader reconnects product navigation and emits safe script ta
   );
   assert.match(generatedTag, /^<script src="[^"]+"><\/script>$/);
   assert.doesNotMatch(generatedTag, /<\\\/script>/);
-  assert.match(navigationBridge, /\["now", "\/"\]/);
-  assert.match(navigationBridge, /\["offer", "\/trades\/new"\]/);
-  assert.match(navigationBridge, /\["activity", "\/commitments"\]/);
-  assert.match(navigationBridge, /\["evidence", "\/evidence"\]/);
-  assert.match(navigationBridge, /control\.textContent = "Evidence"/);
+  assert.match(navigationBridge, /\{ label: "Feed", path: "\/feed" \}/);
+  assert.match(
+    navigationBridge,
+    /\{ label: "Discover", path: "\/discover", active: true \}/,
+  );
+  assert.match(
+    navigationBridge,
+    /\{ label: "Controls", path: "\/trade-controls" \}/,
+  );
+  assert.match(navigationBridge, /\{ label: "Trade", path: "\/trades\/new" \}/);
+  assert.match(
+    navigationBridge,
+    /\{ label: "Commitments", path: "\/commitments" \}/,
+  );
+  assert.match(navigationBridge, /\{ label: "Evidence", path: "\/evidence" \}/);
+  assert.match(
+    navigationBridge,
+    /moral-trade-discover-home-alignment\.css\?v=20260810/,
+  );
+  assert.match(navigationBridge, /Focus Discover command/);
 });
 
 test("value-field copy appears only after a half-second mouse hover", () => {
