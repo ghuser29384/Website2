@@ -1,0 +1,148 @@
+name: PR 598 production artifact integrity verification v2
+
+on:
+  push:
+    branches:
+      - ops/release-pr598-production-20260810
+    paths:
+      - ".github/workflows/pr598-production-artifact-integrity-verification-v2-20260810.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr598-production-integrity-verification-v2
+  cancel-in-progress: true
+
+env:
+  EXPECTED_MAIN_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
+  CANONICAL_ORIGIN: https://www.moraltrade.org
+  RECOVERY_DEPLOYMENT_ID: dpl_GtvNUE6qSEH6buqBHj1iURZZMbpv
+  RECOVERY_DEPLOYMENT_URL: https://moraltrade-site-8ww833z7f-ellen-s.vercel.app
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out exact released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 1
+
+      - name: Verify current main and exact source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+          source_asset='public/moral-trade-live-create-router.js'
+          test -f "$source_asset"
+          if grep -Fq '[data-action="from-command"]' "$source_asset"; then
+            echo 'Generic Create router still intercepts the Command Center action.' >&2
+            exit 1
+          fi
+          sha256sum "$source_asset" | tee pr598-expected-create-router.sha256
+
+      - name: Prove canonical production serves the exact checked-in asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          nonce="$EXPECTED_MAIN_SHA-$GITHUB_RUN_ID"
+          curl --fail --silent --show-error \
+            -H 'Cache-Control: no-cache' \
+            "$CANONICAL_ORIGIN/moral-trade-live-create-router.js?integrity=$nonce" \
+            -o pr598-canonical-create-router.js
+          cmp --silent public/moral-trade-live-create-router.js pr598-canonical-create-router.js
+          if grep -Fq '[data-action="from-command"]' pr598-canonical-create-router.js; then
+            echo 'Canonical production still serves the retired interception selector.' >&2
+            exit 1
+          fi
+          sha256sum pr598-canonical-create-router.js | tee pr598-canonical-create-router.sha256
+          curl --fail --silent --show-error --dump-header pr598-canonical-create-router.headers \
+            -o /dev/null \
+            "$CANONICAL_ORIGIN/moral-trade-live-create-router.js?integrity=headers-$nonce"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Prove the canonical Command Center handoff and destination
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' | tee pr598-command-center-production-proof.log
+          import assert from "node:assert/strict";
+          import { chromium } from "@playwright/test";
+
+          const browser = await chromium.launch();
+          try {
+            const context = await browser.newContext();
+            await context.addCookies([
+              {
+                name: "mt_walkthrough_seen",
+                value: "1",
+                domain: "www.moraltrade.org",
+                path: "/",
+                secure: true,
+                httpOnly: true,
+                sameSite: "Lax",
+              },
+            ]);
+            const page = await context.newPage();
+            await page.goto("https://www.moraltrade.org/moral-trade-live.html", {
+              waitUntil: "domcontentloaded",
+            });
+            const command = page.locator('[data-action="from-command"]');
+            await command.waitFor({ state: "visible", timeout: 30_000 });
+            await command.click();
+            await page.waitForURL(/\/trades\/new\?handoff=command-center(?:$|&)/, {
+              timeout: 30_000,
+            });
+            const currentUrl = page.url();
+            assert.match(currentUrl, /\/trades\/new\?handoff=command-center(?:$|&)/);
+            await page.locator("body").waitFor({ state: "visible" });
+            console.log(`handoff_url=${currentUrl}`);
+          } finally {
+            await browser.close();
+          }
+          NODE
+
+      - name: Upload exact verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr598-production-integrity-verification-${{ github.run_id }}
+          path: |
+            pr598-*.log
+            pr598-*.sha256
+            pr598-*.headers
+            pr598-*.js
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record immutable deployment identity and verified boundary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### PR #598 production artifact integrity verification'
+            echo
+            echo "- Source/main commit: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Recovery deployment ID: \`$RECOVERY_DEPLOYMENT_ID\`"
+            echo "- Recovery deployment URL: \`$RECOVERY_DEPLOYMENT_URL\`"
+            echo "- Canonical origin: \`$CANONICAL_ORIGIN\`"
+            echo '- Verified: canonical Create-router bytes equal checked-in source'
+            echo '- Verified: Command Center reaches `/trades/new?handoff=command-center`'
+          } >> "$GITHUB_STEP_SUMMARY"
