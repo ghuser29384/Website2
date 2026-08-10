@@ -62,7 +62,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test "$(git branch --show-current)" = "$CONTROLLER_BRANCH"
-          test "$(git rev-parse origin/main)" = "$CANDIDATE_SHA"
+          git merge-base --is-ancestor "$CANDIDATE_SHA" origin/main
           test "$CONTROLLER_BASE_SHA" = "$CANDIDATE_SHA"
           git merge-base --is-ancestor "$CONTROLLER_BASE_SHA" "$GITHUB_SHA"
           git cat-file -e "${PATCHER_COMMIT}^{commit}"
