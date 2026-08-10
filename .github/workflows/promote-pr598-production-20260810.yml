@@ -1,0 +1,157 @@
+name: Promote exact PR 598 production deployment
+
+on:
+  push:
+    branches:
+      - ops/promote-pr598-production-20260810
+    paths:
+      - ".github/workflows/promote-pr598-production-20260810.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: promote-pr598-production-20260810
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_MAIN_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
+      EXPECTED_DEPLOYMENT_ID: dpl_3zacHVuaHpbayAyQfY6hzLNEZaPZ
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      VERCEL_CLI_VERSION: 50.38.1
+      CANONICAL_DOMAIN: www.moraltrade.org
+
+    steps:
+      - name: Check out the single-use promotion branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Guard exact main and exact READY production deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_main" = "$EXPECTED_MAIN_SHA"
+          test -n "$VERCEL_TOKEN"
+
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$EXPECTED_DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            > pr598-promotion-before.json
+
+          jq -e --arg id "$EXPECTED_DEPLOYMENT_ID" '(.id // .uid) == $id' \
+            pr598-promotion-before.json >/dev/null
+          jq -e --arg project "$VERCEL_PROJECT_ID" '.project.id == $project' \
+            pr598-promotion-before.json >/dev/null
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '.meta.githubCommitSha == $sha' \
+            pr598-promotion-before.json >/dev/null
+          jq -e '.target == "production"' pr598-promotion-before.json >/dev/null
+          jq -e '(.readyState // .state) == "READY"' pr598-promotion-before.json >/dev/null
+
+      - name: Confirm the canonical alias has not already moved elsewhere
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$CANONICAL_DOMAIN?teamId=$VERCEL_ORG_ID" \
+            > pr598-canonical-before.json
+          current_id="$(jq -r '.id // .uid' pr598-canonical-before.json)"
+          current_sha="$(jq -r '.meta.githubCommitSha // ""' pr598-canonical-before.json)"
+          printf 'canonical_before_id=%s\ncanonical_before_sha=%s\n' \
+            "$current_id" "$current_sha" | tee pr598-promotion-before.txt
+
+          if [[ "$current_id" == "$EXPECTED_DEPLOYMENT_ID" ]]; then
+            echo "The exact deployment is already current; promotion is idempotently unnecessary."
+            exit 0
+          fi
+          test "$current_id" != "null"
+
+      - name: Promote the already-built production deployment to canonical aliases
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+          npx --yes "vercel@$VERCEL_CLI_VERSION" promote \
+            "$EXPECTED_DEPLOYMENT_ID" \
+            --yes \
+            --timeout=10m \
+            --token="$VERCEL_TOKEN" \
+            | tee pr598-vercel-promote.log
+
+      - name: Prove the canonical alias resolves to the exact deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 120); do
+            curl --fail --silent --show-error \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/$CANONICAL_DOMAIN?teamId=$VERCEL_ORG_ID" \
+              > pr598-canonical-after.json
+            current_id="$(jq -r '.id // .uid' pr598-canonical-after.json)"
+            current_sha="$(jq -r '.meta.githubCommitSha // ""' pr598-canonical-after.json)"
+            current_state="$(jq -r '.readyState // .state // ""' pr598-canonical-after.json)"
+            if [[ "$current_id" == "$EXPECTED_DEPLOYMENT_ID" \
+              && "$current_sha" == "$EXPECTED_MAIN_SHA" \
+              && "$current_state" == "READY" ]]; then
+              printf 'canonical_after_id=%s\ncanonical_after_sha=%s\ncanonical_after_state=%s\n' \
+                "$current_id" "$current_sha" "$current_state" \
+                | tee pr598-promotion-after.txt
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Canonical alias did not resolve to the exact deployment within ten minutes." >&2
+          exit 1
+
+      - name: Prove the canonical browser asset is byte-identical to the merged source
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error \
+              "https://$CANONICAL_DOMAIN/moral-trade-live-create-router.js" \
+              --output pr598-live-create-router.js \
+              && cmp --silent public/moral-trade-live-create-router.js pr598-live-create-router.js; then
+              sha256sum \
+                public/moral-trade-live-create-router.js \
+                pr598-live-create-router.js \
+                | tee pr598-promotion-asset-sha256.txt
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Canonical browser asset did not converge to the exact merged source." >&2
+          exit 1
+
+      - name: Upload immutable promotion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr598-production-promotion-${{ github.run_id }}
+          path: |
+            pr598-promotion-*.json
+            pr598-promotion-*.txt
+            pr598-promotion-*.log
+            pr598-canonical-*.json
+            pr598-live-create-router.js
+          if-no-files-found: warn
+          retention-days: 30
