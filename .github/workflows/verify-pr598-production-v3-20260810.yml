@@ -1,0 +1,341 @@
+name: Verify PR 598 production release v3
+
+on:
+  push:
+    branches:
+      - ops/verify-pr598-production-v3-20260810
+    paths:
+      - ".github/workflows/verify-pr598-production-v3-20260810.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: verify-pr598-production-v3-20260810
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      EXPECTED_MAIN_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
+      EXPECTED_DEPLOYMENT_ID: dpl_3zacHVuaHpbayAyQfY6hzLNEZaPZ
+      RELEASE_RUN_ID: "31405775199"
+      PROMOTION_RUN_ID: "31408123871"
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      CANONICAL_ORIGIN: https://www.moraltrade.org
+
+    steps:
+      - name: Check out the exact released source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Guard immutable release and promotion evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
+
+          for run_id in "$RELEASE_RUN_ID" "$PROMOTION_RUN_ID"; do
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            test "$(jq -r '.status' <<<"$run_json")" = "completed"
+            test "$(jq -r '.conclusion' <<<"$run_json")" = "success"
+          done
+
+          release_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID")"
+          test "$(jq -r '.head_sha' <<<"$release_json")" = "$EXPECTED_MAIN_SHA"
+          test "$(jq -r '.event' <<<"$release_json")" = "workflow_dispatch"
+          printf 'release_run=%s\npromotion_run=%s\ncommit=%s\n' \
+            "$RELEASE_RUN_ID" "$PROMOTION_RUN_ID" "$EXPECTED_MAIN_SHA" \
+            | tee pr598-production-runs.txt
+
+      - name: Verify exact canonical deployment and browser asset
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/www.moraltrade.org?teamId=$VERCEL_ORG_ID" \
+            > pr598-production-deployment.json
+
+          jq -e --arg id "$EXPECTED_DEPLOYMENT_ID" '(.id // .uid) == $id' \
+            pr598-production-deployment.json >/dev/null
+          jq -e --arg project "$VERCEL_PROJECT_ID" '.project.id == $project' \
+            pr598-production-deployment.json >/dev/null
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '.meta.githubCommitSha == $sha' \
+            pr598-production-deployment.json >/dev/null
+          jq -e '.target == "production"' pr598-production-deployment.json >/dev/null
+          jq -e '(.readyState // .state) == "READY"' \
+            pr598-production-deployment.json >/dev/null
+
+          curl --fail --silent --show-error \
+            "$CANONICAL_ORIGIN/moral-trade-live-create-router.js" \
+            --output pr598-live-create-router.js
+          cmp --silent public/moral-trade-live-create-router.js pr598-live-create-router.js
+          sha256sum \
+            public/moral-trade-live-create-router.js \
+            pr598-live-create-router.js \
+            | tee pr598-production-asset-sha256.txt
+
+          printf 'deployment_id=%s\ndeployment_url=https://%s\nready_state=%s\ncommit=%s\n' \
+            "$(jq -r '.id // .uid' pr598-production-deployment.json)" \
+            "$(jq -r '.url' pr598-production-deployment.json)" \
+            "$(jq -r '.readyState // .state' pr598-production-deployment.json)" \
+            "$(jq -r '.meta.githubCommitSha' pr598-production-deployment.json)" \
+            | tee pr598-production-deployment.txt
+
+      - name: Verify apex transfer
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --silent --show-error --max-redirs 0 \
+            --dump-header pr598-apex-headers.txt \
+            --output /dev/null \
+            https://moraltrade.org/moral-trade-live.html || true
+          grep -Eq '^HTTP/[0-9.]+ 30(1|2|7|8)' pr598-apex-headers.txt
+          grep -Eiq '^location: https://www\.moraltrade\.org/moral-trade-live\.html' \
+            pr598-apex-headers.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Create canonical production smoke contracts
+        shell: bash
+        run: |
+          cat > playwright.production-smoke.config.ts <<'TS'
+          import { defineConfig } from "@playwright/test";
+
+          export default defineConfig({
+            testDir: "./tests",
+            timeout: 60_000,
+            expect: { timeout: 12_000 },
+            fullyParallel: false,
+            workers: 1,
+            use: {
+              baseURL: "https://www.moraltrade.org",
+              storageState: {
+                cookies: [
+                  {
+                    domain: "www.moraltrade.org",
+                    expires: -1,
+                    httpOnly: true,
+                    name: "mt_walkthrough_seen",
+                    path: "/",
+                    sameSite: "Lax",
+                    secure: true,
+                    value: "1",
+                  },
+                ],
+                origins: [],
+              },
+              trace: "retain-on-failure",
+            },
+          });
+          TS
+
+          cat > tests/pr598-production-commitments.spec.ts <<'TS'
+          import { expect, test, type Page } from "@playwright/test";
+          import { mkdir, writeFile } from "node:fs/promises";
+
+          type ResponseFailure = { status: number; url: string };
+
+          function isExpectedDiscoverPrefetch(failure: ResponseFailure) {
+            const url = new URL(failure.url);
+            return (
+              failure.status === 404 &&
+              url.origin === "https://www.moraltrade.org" &&
+              url.pathname === "/discover" &&
+              url.searchParams.get("domain") === "offers" &&
+              url.searchParams.get("view") === "list"
+            );
+          }
+
+          function isExpectedRequestAbort(urlValue: string) {
+            const url = new URL(urlValue);
+            return (
+              url.origin === "https://www.moraltrade.org" &&
+              url.pathname === "/discover" &&
+              url.searchParams.get("domain") === "offers" &&
+              url.searchParams.get("view") === "list"
+            );
+          }
+
+          async function expectNoHorizontalOverflow(page: Page) {
+            const dimensions = await page.evaluate(() => ({
+              bodyWidth: document.body.scrollWidth,
+              documentWidth: document.documentElement.scrollWidth,
+              viewportWidth: window.innerWidth,
+            }));
+            expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+            expect(dimensions.documentWidth).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
+          }
+
+          test("canonical Commitments is truthful, responsive, and has no unexpected request failure", async ({ page }) => {
+            const responseFailures: ResponseFailure[] = [];
+            const requestFailures: string[] = [];
+            const pageErrors: string[] = [];
+            const consoleErrors: string[] = [];
+
+            page.on("response", (response) => {
+              if (response.status() >= 400) {
+                responseFailures.push({ status: response.status(), url: response.url() });
+              }
+            });
+            page.on("requestfailed", (request) => {
+              if (!isExpectedRequestAbort(request.url())) {
+                requestFailures.push(
+                  `${request.method()} ${request.url()}: ${request.failure()?.errorText ?? "failed"}`,
+                );
+              }
+            });
+            page.on("pageerror", (error) => pageErrors.push(error.message));
+            page.on("console", (message) => {
+              if (message.type() === "error") consoleErrors.push(message.text());
+            });
+
+            for (const viewport of [
+              { width: 1440, height: 900 },
+              { width: 390, height: 844 },
+              { width: 320, height: 568 },
+            ]) {
+              await page.setViewportSize(viewport);
+              await page.goto("/commitments", { waitUntil: "domcontentloaded" });
+              await expect(
+                page.getByRole("heading", { name: "Additional resources you caused." }),
+              ).toBeVisible();
+              await expect(
+                page.getByRole("navigation", { name: "Commitments sections" }),
+              ).toBeVisible();
+              await expect(
+                page.getByRole("heading", { name: "Sign in to view your commitments." }),
+              ).toBeVisible();
+              await expect(page.getByRole("link", { name: "Sign in to continue" })).toHaveAttribute(
+                "href",
+                "/login?returnTo=/commitments",
+              );
+              await expectNoHorizontalOverflow(page);
+            }
+
+            for (const synthetic of [
+              "$540",
+              "$18,760",
+              "Counteroffer received",
+              "Salary-gap pool at 81%",
+              "Factory-farming redirect",
+            ]) {
+              await expect(page.locator("body")).not.toContainText(synthetic);
+            }
+
+            const unexpectedResponses = responseFailures.filter(
+              (failure) => !isExpectedDiscoverPrefetch(failure),
+            );
+            const expectedPrefetches = responseFailures.filter(isExpectedDiscoverPrefetch);
+            const unexpectedConsoleErrors = consoleErrors.filter(
+              (message) =>
+                !(
+                  expectedPrefetches.length > 0 &&
+                  message.includes("Failed to load resource") &&
+                  message.includes("404")
+                ),
+            );
+
+            await mkdir("test-results", { recursive: true });
+            await writeFile(
+              "test-results/pr598-production-commitments-network.json",
+              `${JSON.stringify(
+                {
+                  responseFailures,
+                  requestFailures,
+                  pageErrors,
+                  consoleErrors,
+                  expectedDiscoverPrefetch404Count: expectedPrefetches.length,
+                },
+                null,
+                2,
+              )}\n`,
+            );
+            await page.screenshot({
+              path: "test-results/pr598-production-commitments-320x568.png",
+              fullPage: true,
+            });
+
+            expect(expectedPrefetches.length).toBeGreaterThan(0);
+            expect(unexpectedResponses).toEqual([]);
+            expect(unexpectedConsoleErrors).toEqual([]);
+            expect(requestFailures).toEqual([]);
+            expect(pageErrors).toEqual([]);
+          });
+          TS
+
+      - name: Run canonical production browser smoke
+        shell: bash
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            tests/pr598-production-commitments.spec.ts \
+            tests/exact-live-command-center.spec.ts \
+            tests/exact-live-local-time.spec.ts \
+            tests/exact-live-route-recommendations.spec.ts \
+            tests/exact-live-verification.spec.ts \
+            tests/meta-explanatory-copy.spec.ts \
+            tests/moral-trade-brand.spec.ts \
+            tests/public-routes.spec.ts \
+            --config=playwright.production-smoke.config.ts \
+            --grep-invert='adapts the compact mark and sans wordmark to dark and light headers' \
+            --reporter=line \
+            | tee pr598-production-browser-smoke.log
+
+      - name: Record canonical HTTP status inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in \
+            /moral-trade-live.html \
+            /trades/new \
+            /commitments \
+            /discover \
+            /verification; do
+            code="$(curl --silent --show-error --location \
+              --output /dev/null --write-out '%{http_code}' \
+              "$CANONICAL_ORIGIN$path")"
+            printf '%s %s\n' "$code" "$path"
+            [[ "$code" =~ ^(200|302|303|307|308)$ ]]
+          done | tee pr598-production-http-smoke.txt
+
+      - name: Upload immutable production-smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr598-production-smoke-v3-${{ github.run_id }}
+          path: |
+            pr598-production-*.txt
+            pr598-production-*.json
+            pr598-production-*.log
+            pr598-live-create-router.js
+            pr598-apex-headers.txt
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 30
