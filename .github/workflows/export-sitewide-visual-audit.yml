@@ -1,0 +1,29 @@
+name: Export sitewide visual audit source
+
+on:
+  push:
+    branches:
+      - fix/sitewide-canonical-visual-system-20260810
+    paths:
+      - ".github/workflows/export-sitewide-visual-audit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package source
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --exclude=.git --exclude=node_modules --exclude=.next -czf /tmp/website2-source.tgz .
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: website2-source-${{ github.sha }}
+          path: /tmp/website2-source.tgz
+          retention-days: 1
