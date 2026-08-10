@@ -75,7 +75,10 @@ test.describe("Discover visual alignment with Home", () => {
         "aria-selected",
         "true",
       );
-      await expect(page).toHaveURL(/domain=pools/);
+      await expect(page).toHaveURL(/view=threshold/);
+      await expect(
+        page.getByRole("heading", { name: "Standalone threshold radar", exact: true }),
+      ).toBeVisible();
       await expect(page.locator(".app-header .top-nav a")).toHaveText([
         "Feed",
         "Discover",
@@ -106,6 +109,7 @@ test.describe("Discover visual alignment with Home", () => {
       await expect(offersTab).toHaveCSS("border-bottom-color", "rgb(21, 76, 255)");
 
       const command = page.getByRole("button", { name: "Focus Discover command" });
+      await expect(command).toHaveCSS("font-size", "0px");
       await command.click();
       await expect(page.locator("#command-input")).toBeFocused();
 
