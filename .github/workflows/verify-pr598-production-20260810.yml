@@ -1,0 +1,238 @@
+name: Verify PR 598 production release
+
+on:
+  push:
+    branches:
+      - ops/verify-pr598-production-20260810
+    paths:
+      - ".github/workflows/verify-pr598-production-20260810.yml"
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: verify-pr598-production-20260810
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      EXPECTED_MAIN_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
+      RELEASE_RUN_ID: "31405775199"
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      CANONICAL_ORIGIN: https://www.moraltrade.org
+
+    steps:
+      - name: Check out the single-use verification branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Guard exact released source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
+
+      - name: Wait for the immutable production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 240); do
+            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID")"
+            status="$(jq -r '.status' <<<"$run_json")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
+            head_sha="$(jq -r '.head_sha' <<<"$run_json")"
+            event="$(jq -r '.event' <<<"$run_json")"
+            test "$head_sha" = "$EXPECTED_MAIN_SHA"
+            test "$event" = "workflow_dispatch"
+
+            if [[ "$status" == "completed" ]]; then
+              test "$conclusion" = "success"
+              printf 'release_run=%s\nrelease_commit=%s\nrelease_conclusion=%s\n' \
+                "$RELEASE_RUN_ID" "$head_sha" "$conclusion" \
+                | tee pr598-production-release.txt
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Timed out waiting for release run $RELEASE_RUN_ID." >&2
+          exit 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Resolve the exact READY production deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          api="https://api.vercel.com/v6/deployments?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID&target=production&limit=50"
+
+          for attempt in $(seq 1 120); do
+            curl --fail --silent --show-error \
+              --header "Authorization: Bearer $VERCEL_TOKEN" \
+              "$api" > pr598-production-deployments.json
+
+            deployment_id="$(jq -r --arg sha "$EXPECTED_MAIN_SHA" \
+              '.deployments[] | select(.meta.githubCommitSha == $sha) | .uid' \
+              pr598-production-deployments.json | head -n 1)"
+            if [[ -n "$deployment_id" && "$deployment_id" != "null" ]]; then
+              ready_state="$(jq -r --arg id "$deployment_id" \
+                '.deployments[] | select(.uid == $id) | (.readyState // .state // "")' \
+                pr598-production-deployments.json)"
+              deployment_url="$(jq -r --arg id "$deployment_id" \
+                '.deployments[] | select(.uid == $id) | .url' \
+                pr598-production-deployments.json)"
+              if [[ "$ready_state" == "READY" ]]; then
+                curl --fail --silent --show-error \
+                  --header "Authorization: Bearer $VERCEL_TOKEN" \
+                  "https://api.vercel.com/v13/deployments/$deployment_id?teamId=$VERCEL_ORG_ID" \
+                  > pr598-production-deployment.json
+                jq -e --arg sha "$EXPECTED_MAIN_SHA" '.meta.githubCommitSha == $sha' \
+                  pr598-production-deployment.json >/dev/null
+                jq -e '.target == "production"' pr598-production-deployment.json >/dev/null
+                printf 'deployment_id=%s\ndeployment_url=https://%s\nready_state=%s\ncommit=%s\n' \
+                  "$deployment_id" "$deployment_url" "$ready_state" "$EXPECTED_MAIN_SHA" \
+                  | tee pr598-production-deployment.txt
+                exit 0
+              fi
+            fi
+            sleep 10
+          done
+          echo "Exact production deployment did not reach READY." >&2
+          exit 1
+
+      - name: Verify canonical alias and exact browser asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error \
+              "$CANONICAL_ORIGIN/moral-trade-live-create-router.js" \
+              --output pr598-live-create-router.js; then
+              if cmp --silent \
+                public/moral-trade-live-create-router.js \
+                pr598-live-create-router.js; then
+                break
+              fi
+            fi
+            sleep 5
+          done
+          cmp --silent public/moral-trade-live-create-router.js pr598-live-create-router.js
+          sha256sum \
+            public/moral-trade-live-create-router.js \
+            pr598-live-create-router.js \
+            | tee pr598-production-asset-sha256.txt
+
+          curl --silent --show-error --max-redirs 0 \
+            --dump-header pr598-apex-headers.txt \
+            --output /dev/null \
+            https://moraltrade.org/moral-trade-live.html || true
+          grep -Eq '^HTTP/[0-9.]+ 30(1|2|7|8)' pr598-apex-headers.txt
+          grep -Eiq '^location: https://www\.moraltrade\.org/moral-trade-live\.html' \
+            pr598-apex-headers.txt
+
+      - name: Create the canonical production Playwright configuration
+        shell: bash
+        run: |
+          cat > playwright.production-smoke.config.ts <<'TS'
+          import { defineConfig } from "@playwright/test";
+
+          export default defineConfig({
+            testDir: "./tests",
+            timeout: 60_000,
+            expect: { timeout: 12_000 },
+            fullyParallel: false,
+            workers: 1,
+            use: {
+              baseURL: "https://www.moraltrade.org",
+              storageState: {
+                cookies: [
+                  {
+                    domain: "www.moraltrade.org",
+                    expires: -1,
+                    httpOnly: true,
+                    name: "mt_walkthrough_seen",
+                    path: "/",
+                    sameSite: "Lax",
+                    secure: true,
+                    value: "1",
+                  },
+                ],
+                origins: [],
+              },
+              trace: "retain-on-failure",
+            },
+          });
+          TS
+
+      - name: Run canonical production browser smoke
+        shell: bash
+        env:
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            tests/exact-live-command-center.spec.ts \
+            tests/commitments-live-portfolio.spec.ts \
+            tests/exact-live-local-time.spec.ts \
+            tests/exact-live-route-recommendations.spec.ts \
+            tests/exact-live-verification.spec.ts \
+            tests/meta-explanatory-copy.spec.ts \
+            tests/moral-trade-brand.spec.ts \
+            tests/public-routes.spec.ts \
+            --config=playwright.production-smoke.config.ts \
+            --reporter=line \
+            | tee pr598-production-browser-smoke.log
+
+      - name: Record canonical HTTP status inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in \
+            /moral-trade-live.html \
+            /trades/new \
+            /commitments \
+            /discover \
+            /verification; do
+            code="$(curl --silent --show-error --location \
+              --output /dev/null --write-out '%{http_code}' \
+              "$CANONICAL_ORIGIN$path")"
+            printf '%s %s\n' "$code" "$path"
+            [[ "$code" =~ ^(200|302|303|307|308)$ ]]
+          done | tee pr598-production-http-smoke.txt
+
+      - name: Upload immutable production-smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr598-production-smoke-${{ github.run_id }}
+          path: |
+            pr598-production-*.txt
+            pr598-production-*.json
+            pr598-production-*.log
+            pr598-live-create-router.js
+            pr598-apex-headers.txt
+            test-results
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 30
