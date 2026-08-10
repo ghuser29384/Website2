@@ -15,54 +15,45 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  BASE_SHA: 72729d80bec2e4ffa147d6dc56ae703fb3e79293
-  EXPORT_SHA: ba64462eb298c8a7aab3f808a1addb40e596e008
+  BASE_SHA: 0778577c98c7a86417057caeb939c01f77e22c89
   PAYLOAD_SHA256: 28b5646f07f63e0dff80c90bf308a9f14ef6085f62b5fc8ccb03eaafba157194
+  TARGET_BRANCH: fix/sitewide-canonical-visual-system-20260810
 
 jobs:
   apply:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
-      - name: Check out exact workflow commit
+      - name: Check out exact staging head
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Guard branch ancestry and staging scope
+      - name: Guard current main and staged payload
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
-          test "$GITHUB_REF_NAME" = 'fix/sitewide-canonical-visual-system-20260810'
-          test "$(git rev-parse "$EXPORT_SHA^")" = "$BASE_SHA"
-          git merge-base --is-ancestor "$EXPORT_SHA" HEAD
+          test "$GITHUB_REF_NAME" = "$TARGET_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
-          git diff --name-only "$EXPORT_SHA" HEAD | sort > /tmp/staged-files.txt
-          cat > /tmp/expected-staged-files.txt <<'FILES'
-          .github/workflows/apply-sitewide-canonical-visual-system.yml
-          .sitewide-payload/part-00.txt
-          .sitewide-payload/part-01.txt
-          .sitewide-payload/part-02.txt
-          .sitewide-payload/part-03.txt
-          .sitewide-payload/part-04.txt
-          .sitewide-payload/part-05.txt
-          FILES
-          diff -u /tmp/expected-staged-files.txt /tmp/staged-files.txt
+          test -f .github/workflows/apply-sitewide-canonical-visual-system.yml
+          for part in .sitewide-payload/part-00.txt .sitewide-payload/part-01.txt .sitewide-payload/part-02.txt .sitewide-payload/part-03.txt .sitewide-payload/part-04.txt .sitewide-payload/part-05.txt; do
+            test -s "$part"
+          done
 
-      - name: Apply exact audited payload
+      - name: Rebase payload onto exact current main and apply
         shell: bash
         run: |
           set -euo pipefail
           cat .sitewide-payload/part-*.txt > /tmp/sitewide-payload.b64
           base64 --decode /tmp/sitewide-payload.b64 > /tmp/sitewide-payload.tar.gz
           echo "$PAYLOAD_SHA256  /tmp/sitewide-payload.tar.gz" | sha256sum --check --strict
+          git reset --hard "$BASE_SHA"
+          git clean -fdx
           tar -xzf /tmp/sitewide-payload.tar.gz
           python .apply-sitewide.py
-          rm -rf .sitewide-payload
           rm -f .apply-sitewide.py
-          rm -f .github/workflows/export-sitewide-visual-audit.yml
-          rm -f .github/workflows/apply-sitewide-canonical-visual-system.yml
 
       - name: Verify exact final file scope
         shell: bash
@@ -106,13 +97,16 @@ jobs:
           node --check public/moral-trade-discover-navigation.js
           node --check public/moral-trade-live-navigation.js
 
-      - name: Commit exact final candidate
+      - name: Commit and atomically replace the staging branch
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$BASE_SHA"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           test -n "$(git status --porcelain)"
           git commit -m 'Align every page with the canonical Home and Walkthrough visual system'
-          git push origin HEAD:fix/sitewide-canonical-visual-system-20260810
+          git push \
+            --force-with-lease="refs/heads/${TARGET_BRANCH}:${GITHUB_SHA}" \
+            origin "HEAD:refs/heads/${TARGET_BRANCH}"
