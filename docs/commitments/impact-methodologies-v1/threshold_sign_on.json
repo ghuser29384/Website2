@@ -1,84 +1,131 @@
 {
   "mechanismFamily": "threshold_sign_on",
-  "modelKey": "commitments-threshold-sign-on-v1",
-  "version": 1,
+  "modelKey": "commitments-threshold-sign-on-v2",
+  "version": 2,
   "lifecycleStatus": "under_review",
-  "methodologyHash": "sha256:f292553856e5d6f21aa2673b21158a91f7dc4cbf6464d0e35a3dfeafaebb9eff",
+  "methodologyHash": "sha256:d23f1c812d62ad5c6437c90a8cccb40d3d1516fa7b977d89502df874fbc77555",
+  "materialChangeFromMethodologyHash": "sha256:f292553856e5d6f21aa2673b21158a91f7dc4cbf6464d0e35a3dfeafaebb9eff",
+  "approvedAt": null,
+  "activatedAt": null,
   "approvalBlockers": [
     "founder_exact_hash_approval_not_recorded",
     "founder_approver_account_not_yet_configured",
-    "exact_current_main_continuation_gates_must_pass",
-    "model_health_must_remain_blocked_until_empirical_calibration_evidence_is_registered"
+    "exact_current_main_remediation_gates_must_pass",
+    "causal_identification_design_not_validated",
+    "empirical_calibration_evidence_not_registered",
+    "provisional_confidence_thresholds_not_validated",
+    "model_health_not_passing"
   ],
   "methodology": {
     "schemaVersion": "moral-trade-impact-model-methodology-v1",
     "mechanismFamily": "threshold_sign_on",
-    "modelKey": "commitments-threshold-sign-on-v1",
-    "displayName": "Threshold Sign-On activation and collective-action model v1",
+    "modelKey": "commitments-threshold-sign-on-v2",
+    "displayName": "Threshold Sign-On activation, public-signal, and completed-action methodology v2",
     "estimands": [
       "success_case_additional",
       "expected_additional",
       "direct_causal_attribution",
-      "verified_additional",
+      "verified_outcome",
       "cooperative_allocation"
     ],
     "estimandDefinitions": {
-      "success_case_additional": "Other qualifying participants or action units that become public or are completed if the frozen verified-human threshold is met, excluding the participant’s own signature or action.",
-      "expected_additional": "The modeled increase in exact-threshold activation probability caused by the participant’s qualifying signature multiplied by other qualifying participant or action units activated on success.",
-      "direct_causal_attribution": "Other verified qualifying participant or action units attributable to the participant under the approved signature-arrival and pivotality model, capped at the verified coalition outcome.",
-      "verified_additional": "Other qualifying participants or action units independently verified after atomic activation and any required post-activation completion step.",
-      "cooperative_allocation": "A non-additive Shapley allocation of the verified or expected coalition outcome across qualifying signers under the frozen threshold, eligibility, withdrawal, expiry, and action-completion rules."
+      "success_case_additional": "Other qualifying signatures made effective at activation and, separately, other required public actions completed. These are distinct native-unit outcomes.",
+      "expected_additional": "The validated change in activation or completed-action probability caused by the focal qualifying signature, multiplied by the corresponding other-signature or action quantity.",
+      "direct_causal_attribution": "The focal signer's marginal effect under the validated signature-arrival and completion design. It defaults to non-additive and is not summed with cooperative allocation.",
+      "verified_outcome": "Two separately keyed outcome components: signatures atomically activated or revealed, and public acts actually completed. Signature count is impact only when the frozen objective is the public signal itself.",
+      "cooperative_allocation": "A non-additive Shapley allocation of the relevant frozen coalition outcome across qualifying signers."
     },
-    "baselineDefinition": "Before the first qualifying signature, freeze the proposition, exact verified-human threshold, eligibility rule, deadline, withdrawal and expiry rules, risk acknowledgements, identity-reveal policy, required public act, and what each eligible participant would do without threshold activation. Pre-threshold identities remain private.",
-    "algorithmDescription": "Estimate exact-threshold activation with and without the participant’s qualifying signature from resolved commitments matched on proposition class, threshold, deadline, eligible population, privacy, and risk class. Multiply the probability change by other qualifying participant or action units for expected additionality. After atomic activation, verify the exact signer set and any required action completion. Report direct pivotality and cooperative allocation separately, and withhold rather than model propositions whose risk or legality is outside the approved domain.",
+    "baselineDefinition": "Before the first signature, freeze proposition, objective type, threshold, eligibility, deadline, withdrawal, expiry, risk, reveal policy, required public act, and each eligible participant's no-threshold plan.",
+    "causalIdentificationPolicy": {
+      "estimand": "The causal estimand is the change in threshold activation and separately in completed public actions under the focal signature's presence versus absence at the same pre-exposure signer state.",
+      "designStatus": "specified_not_validated",
+      "admissibleDesigns": [
+        "randomized invitation or reminder with cluster-aware spillover analysis",
+        "pre-specified threshold or eligibility discontinuity with interference-aware estimand"
+      ],
+      "interferencePolicy": "Model how one signature affects later signatures, withdrawals, reveal decisions, and action completion. Pre-specify the exposure mapping and preserve privacy.",
+      "overlapAndPositivityPolicy": "Estimate causal effects only in states with empirical support for both the with-participant and without-participant conditions. Fail closed when overlap or positivity is materially violated.",
+      "sensitivityAnalysisPolicy": "Report pre-specified sensitivity analyses for unmeasured confounding, baseline misclassification, and interference. Withhold causal components when conclusions are not robust to the approved bounds.",
+      "noDefensibleDesignAction": "withhold_causal_components"
+    },
+    "evidenceSemanticsPolicy": {
+      "outcomeEvidenceLabel": "verified_outcome",
+      "additionalityLabel": "assessed_additionality",
+      "receiptAloneEstablishesAdditionality": false,
+      "publicCopyRule": "Evidence may establish that an outcome occurred and its quantity. It must not be described as verified impact or verified additionality; causal additionality remains an assessed model output."
+    },
+    "strategicBehaviorPolicy": {
+      "baselineAntecedenceRule": "A baseline can support additionality only when its material evidence predates the participant-facing offer or commitment and survives post-resolution consistency checks.",
+      "strategicTimingRule": "Freeze the signer state before exposure and detect coordinated timing, duplicate accounts, and near-deadline withdrawals.",
+      "interferenceRule": "Model how one signature affects later signatures, withdrawals, reveal decisions, and action completion. Pre-specify the exposure mapping and preserve privacy.",
+      "perverseIncentiveRule": "Reject propositions that incentivize threats, coercion, or artificial escalation to attract signatures.",
+      "manipulationChecks": [
+        "one-person-one-account check",
+        "atomic manifest check",
+        "signature-versus-action separation",
+        "strategic timing diagnostic"
+      ]
+    },
+    "algorithmDescription": "Predict qualifying signature arrivals, withdrawals, activation, and post-activation completion separately. Estimate causal effects only with a validated interference-aware design. At resolution, record activated signatures separately from completed acts. Do not treat signatures as substantive impact unless the frozen objective is the public signal.",
     "referenceClassPolicy": {
       "strategy": "hierarchical",
       "narrowFields": [
         "proposition class",
+        "objective type",
         "risk class",
-        "threshold-size band",
+        "threshold band",
         "eligible-population band",
-        "time-to-deadline band",
-        "privacy and reveal mode",
-        "required post-activation action"
+        "deadline band",
+        "reveal mode"
       ],
       "broadeningOrder": [
-        "proposition wording and cause area",
+        "proposition class",
         "privacy mode",
         "eligible-population band",
-        "threshold-size band",
+        "threshold band",
         "mechanism family"
       ],
       "minimumSampleSize": 50,
       "noDefensibleClassAction": "withhold",
-      "uncertaintyExpansionRule": "Preserve risk class and required action while broadening. Add between-proposition and between-population variance at every step. Withhold if activation calibration or post-activation completion calibration is unavailable."
+      "uncertaintyExpansionRule": "Reference classes support outcome prediction, not causal identification. Expand the 80% predictive interval at every approved broadening step and withhold when no defensible class remains."
     },
     "uncertaintyPolicy": {
       "intervalLevelBps": 8000,
-      "method": "Use a calibrated hierarchical event-time model for qualifying signature arrivals and withdrawals, a separate completion model for post-activation action, and seeded-permutation cooperative allocation with approximation error included.",
-      "confidencePolicy": "Withhold when model health is blocked or stale. Label low confidence only after health passes and the eligible sample is at least 50; moderate requires at least 100 eligible resolved observations, no more than one approved reference-class broadening step, and no blocking calibration failure; high requires at least 200 observations, the narrowest approved class, empirical 80% coverage between 75% and 85%, calibration slope between 0.8 and 1.2, and no active warnings.",
+      "method": "Use a pre-specified hierarchical predictive model and propagate parameter, outcome, baseline, interference, and measurement uncertainty by posterior or repeated-sampling simulation.",
+      "confidencePolicy": "The initial sample-size and calibration cutoffs are provisional governance floors. Low or moderate confidence may be shown only after a current health pass. High confidence is forbidden until temporal or otherwise independent holdout validation and uncertainty-aware calibration criteria are approved.",
       "drivers": [
-        "eligible-population size",
-        "signature arrival and withdrawal",
-        "credential staleness",
-        "duplicate-human rejection",
-        "deadline",
-        "risk class",
-        "post-activation completion",
-        "coalition-allocation approximation"
+        "causal-design validity",
+        "reference-class fit",
+        "baseline credibility",
+        "interference and strategic response",
+        "outcome measurement",
+        "state freshness"
+      ]
+    },
+    "validationPolicy": {
+      "thresholdStatus": "provisional",
+      "highConfidenceAllowed": false,
+      "requiredBeforeHighConfidence": [
+        "pre-registered temporal or otherwise independent holdout evaluation",
+        "uncertainty intervals for calibration intercept, slope, and interval coverage",
+        "out-of-sample sample-size and reference-class justification",
+        "documented robustness to approved confounding and interference sensitivity analyses"
       ]
     },
     "freshnessPolicy": {
       "maxAgeSeconds": 300,
       "requireStateHash": true,
       "requiredStateFields": [
-        "frozen proposition and risk class",
-        "exact threshold and deadline",
-        "eligibility and credential rules",
-        "qualifying private signer count",
+        "proposition",
+        "objective type",
+        "risk class",
+        "threshold",
+        "deadline",
+        "eligibility",
+        "private signer count",
         "withdrawal state",
         "manifest state",
-        "required action and completion state"
+        "action completion"
       ],
       "invalidateOnLifecycleStates": [
         "activated",
@@ -92,105 +139,88 @@
     "healthPolicy": {
       "requiredCalibrationMetrics": [
         "eligible resolved-observation count",
-        "80% interval empirical coverage",
-        "probability calibration intercept and slope",
-        "Brier score for modeled completion or activation probability",
+        "out-of-sample 80% interval coverage with uncertainty",
+        "out-of-sample probability calibration intercept and slope with uncertainty",
+        "out-of-sample Brier or proper scoring-rule result",
+        "causal-design status and sensitivity-analysis result",
+        "overlap or positivity diagnostics",
         "out-of-domain input rate",
-        "required-state-field missingness rate",
-        "reference-class broadening rate",
-        "activation calibration by threshold and eligible-population band",
-        "withdrawal-rate calibration",
-        "post-activation completion calibration",
-        "duplicate-human rejection rate",
-        "Shapley Monte Carlo relative error"
+        "required-state-field missingness rate"
       ],
       "blockedConditions": [
         "no current exact-hash methodology approval",
         "no current passing model-health snapshot",
-        "eligible resolved-observation count below the methodology minimum",
-        "80% interval empirical coverage outside the approved tolerance",
-        "material probability-calibration failure",
+        "causal identification design is not validated",
+        "empirical calibration evidence is absent or ineligible",
         "required state is missing or does not match the immutable state hash",
         "input is outside the approved domain",
         "unresolved evidence-integrity, duplication, or overlap failure",
-        "credential or one-person-one-account integrity cannot be verified",
-        "proposition falls into a prohibited or unreviewed high-risk class",
-        "private signer manifest cannot be atomically validated"
+        "available modeled component would be published under blocked, warning, or stale health"
       ],
       "warningConditions": [
         "reference class broadened beyond the narrowest approved class",
-        "sample size below the high-confidence threshold",
-        "calibration drift within the warning band",
-        "material share of observations relies on participant attestation rather than independent evidence",
-        "small or highly selected eligible population",
-        "high-risk proposition with sparse resolved history",
-        "substantial withdrawal rate near the deadline"
+        "provisional confidence thresholds remain unvalidated",
+        "material reliance on participant attestation rather than independent outcome evidence",
+        "calibration drift remains within a non-blocking warning band"
       ]
     },
     "sourceDataRequirements": [
-      "immutable proposition, threshold, eligibility, deadline, risk, reveal, withdrawal, and expiry terms",
-      "privacy-preserving qualifying-signer count and stable deduplication keys",
-      "current credential validity and duplicate-human rejection state",
-      "atomic activation or expiry receipt",
-      "post-activation action-completion evidence where applicable",
-      "audited resolved Threshold Sign-On outcomes with privacy-preserving attributes"
+      "immutable proposition, objective, threshold, eligibility, risk, reveal, withdrawal, and expiry terms",
+      "privacy-preserving signer ledger and stable deduplication keys",
+      "credential validity and duplicate-human rejection",
+      "atomic activation or expiry evidence",
+      "separate post-activation action-completion evidence",
+      "audited resolved Threshold Sign-On outcomes"
     ],
-    "calibrationEvidenceRefs": [
-      "github-actions:ghuser29384/Website2:31115065783",
+    "conceptualBasisRefs": [
       "source:toby-ord-moral-trade-2015",
       "source:forethought-convergence-and-compromise-2025",
-      "moraltrade:collective-commitments-security-contract-v1",
-      "moraltrade:threshold-sign-on-outcome-calibration-registry:v1",
-      "registry:moral-trade-production-calibration-evidence-required-before-activation"
+      "source:forethought-moral-public-goods-2026"
     ],
+    "calibrationEvidenceRefs": [],
     "knownFailureModes": [
-      "duplicate humans or stale credentials inflate apparent support",
-      "private signer count leaks identities before threshold",
-      "participants sign but do not complete the required public act",
-      "signers would have acted independently without threshold protection",
-      "high-risk participants face harms not represented in the outcome quantity",
-      "manifest or reveal race creates inconsistent signer sets",
-      "direct and cooperative attribution are summed"
+      "signature count is mistaken for completed action",
+      "duplicate humans or stale credentials inflate support",
+      "signers would have acted without threshold protection",
+      "one signature changes other arrivals or withdrawals",
+      "private manifest leaks identities before threshold",
+      "direct and cooperative effects are added"
     ],
     "outOfDomainConditions": [
-      "illegal, violent, deceptive, harassing, coercive, or otherwise prohibited proposition",
-      "proposition requires professional legal or safety judgment not encoded in an approved risk policy",
-      "eligibility cannot be verified without storing prohibited identity data",
-      "required action is unobservable or cannot be bounded",
-      "identity reveal is not atomic at the exact threshold"
+      "illegal, violent, deceptive, harassing, coercive, or prohibited proposition",
+      "eligibility cannot be verified safely",
+      "required action is unobservable or unbounded",
+      "identity reveal is not atomic",
+      "no interference-aware identification design"
     ],
     "materialChangeTriggers": [
-      "estimand definition changes",
-      "baseline or counterfactual definition changes",
-      "reference-class fields, broadening order, or minimum sample size changes",
-      "probability, uncertainty, or confidence method changes",
-      "new data source or evidence-quality tier",
-      "aggregation, overlap, or double-counting rule changes",
-      "native-unit or value-adjustment conversion changes",
-      "new participant role or lifecycle state",
-      "change to eligibility, verified-human, privacy, reveal, withdrawal, or expiry semantics",
-      "new high-risk proposition class",
-      "change to post-activation action-completion requirements",
-      "change to coalition characteristic function"
+      "objective type changes",
+      "eligibility or reveal semantics change",
+      "post-activation completion requirement changes",
+      "causal-identification design or sensitivity-analysis policy changes",
+      "evidence semantics or public outcome-label changes",
+      "strategic-behavior or interference policy changes",
+      "provisional validation thresholds or high-confidence rule changes"
     ],
     "aggregationPolicy": {
       "directAndCooperativeNeverSummed": true,
       "heterogeneousNativeUnitsRemainSeparate": true,
-      "overlapHandling": "A verified resource, action, signer, or deliverable may appear in multiple explanatory views, but may enter an additive platform aggregate at most once. Direct causal attribution and cooperative allocation are alternative attribution lenses and are never summed. Currency, count, duration, and value-adjusted quantities remain separate unless an independently approved immutable conversion snapshot exists."
+      "directMarginalEffectsDefaultNonAdditive": true,
+      "additiveClaimRequirement": "A causal component may enter an additive caused-total only when every underlying resource or action has a stable unique claim reference and no claim reference appears in another additive component.",
+      "overlapHandling": "Outcome quantities may appear in explanatory views but verified outcomes are not caused totals. Direct marginal effects default to non-additive. Cooperative allocation is an alternative lens. Any additive causal aggregate requires unique claim references and must reject overlap."
     },
     "shapleyPolicy": {
       "enabled": true,
-      "characteristicFunctionDefinition": "For any subset of qualifying signers, coalition value is the number or native-unit quantity of other qualifying participants whose protected public act would be activated and completed by that subset under the frozen threshold, eligibility, deadline, withdrawal, expiry, and completion rules.",
+      "characteristicFunctionDefinition": "For each qualifying signer subset, coalition value is either the protected public signal activated or the completed public actions, according to the frozen objective type, relative to the no-threshold plans.",
       "maximumExactPlayers": 12,
-      "approximationMethod": "Above 12 participants, use 25,000 deterministic seeded random permutations, publish the Monte Carlo standard error, and withhold the allocation if the error exceeds 5% of the coalition value or if coalition-value monotonicity checks fail."
+      "approximationMethod": "Above 12 signers, use deterministic seeded permutations and withhold when Monte Carlo error, privacy, or coalition-monotonicity checks fail."
     },
     "parameters": {
       "minimumEligibleResolvedObservations": 50,
-      "successCaseExcludesParticipantOwnSignatureOrAction": true,
-      "atomicExactThresholdManifestRequired": true,
-      "cooperativeAllocationIsNonAdditive": true,
-      "highRiskInputsFailClosed": true,
-      "publicationRule": "withhold modeled components unless exact-hash model approval and current health pass exist"
+      "minimumSampleStatus": "provisional_governance_floor",
+      "publicationRule": "render deterministic terms and verified outcomes when valid; withhold every modeled causal component unless the exact active model has a current passing health snapshot",
+      "signatureAndCompletedActionAreSeparateOutcomes": true,
+      "highRiskInputsFailClosed": true
     }
   }
 }

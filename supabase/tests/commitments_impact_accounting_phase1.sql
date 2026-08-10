@@ -1,8 +1,6 @@
-begin;
-
+-- The prelude starts the transaction and installs transaction-scoped cleanup.
 create temporary table impact_phase1_test_state (
   snapshot_id uuid,
-  refresh_job_id uuid,
   state_as_of timestamptz,
   expires_at timestamptz
 ) on commit drop;
@@ -11,8 +9,6 @@ grant select, insert, update on impact_phase1_test_state to service_role, authen
 do $schema$
 declare
   missing_migrations text[];
-  missing_tables text[];
-  rls_missing text[];
 begin
   select array_agg(expected.version || ':' || expected.name order by expected.version)
   into missing_migrations
@@ -27,7 +23,10 @@ begin
       ('20260806120552', 'commitments_impact_approver_audit_identity_hardening'),
       ('20260806134107', 'commitments_impact_initial_approver'),
       ('20260806135201', 'commitments_impact_approver_event_comment_fix'),
-      ('20260810013845', 'commitments_impact_present_stage_authenticated_approver')
+      ('20260810013845', 'commitments_impact_present_stage_authenticated_approver'),
+      ('20260810150350', 'commitments_impact_methodology_review_remediation'),
+      ('20260810151733', 'commitments_impact_methodology_remediation_privileges'),
+      ('20260810152035', 'commitments_impact_snapshot_overlap_alias_fix')
   ) as expected(version, name)
   where not exists (
     select 1
@@ -40,72 +39,11 @@ begin
     raise exception 'Missing Phase 1 migrations: %', missing_migrations;
   end if;
 
-  select array_agg(expected.table_name order by expected.table_name)
-  into missing_tables
-  from (
-    values
-      ('impact_model_approvers'),
-      ('impact_model_approver_events'),
-      ('impact_model_versions'),
-      ('impact_model_approval_events'),
-      ('impact_model_lifecycle_events'),
-      ('impact_model_health_snapshots'),
-      ('impact_reference_observations'),
-      ('impact_estimate_snapshots'),
-      ('impact_estimate_audit_events'),
-      ('impact_refresh_queue')
-  ) as expected(table_name)
-  where to_regclass('public.' || expected.table_name) is null;
-
-  if missing_tables is not null then
-    raise exception 'Missing Phase 1 tables: %', missing_tables;
-  end if;
-
-  select array_agg(c.relname order by c.relname)
-  into rls_missing
-  from pg_class c
-  join pg_namespace n on n.oid = c.relnamespace
-  where n.nspname = 'public'
-    and c.relname = any(array[
-      'impact_model_approvers',
-      'impact_model_approver_events',
-      'impact_model_versions',
-      'impact_model_approval_events',
-      'impact_model_lifecycle_events',
-      'impact_model_health_snapshots',
-      'impact_reference_observations',
-      'impact_estimate_snapshots',
-      'impact_estimate_audit_events',
-      'impact_refresh_queue'
-    ])
-    and not c.relrowsecurity;
-
-  if rls_missing is not null then
-    raise exception 'RLS is disabled on Phase 1 tables: %', rls_missing;
-  end if;
-
-  if to_regprocedure('public.publish_impact_estimate_snapshot(uuid,text,text,uuid,text,text,timestamp with time zone,timestamp with time zone,jsonb)') is null
-    or to_regprocedure('public.get_my_impact_accounting_snapshots()') is null
+  if to_regprocedure('public.impact_accounting_assert_methodology_for_approval(jsonb,text,text)') is null
+    or to_regprocedure('public.publish_impact_estimate_snapshot(uuid,text,text,uuid,text,text,timestamp with time zone,timestamp with time zone,jsonb)') is null
     or to_regprocedure('public.set_impact_model_approver(uuid,boolean,text,uuid)') is null
-    or to_regprocedure('public.queue_impact_refresh_job(uuid,text,text,text,timestamp with time zone)') is null
   then
-    raise exception 'A required Phase 1 RPC is missing.';
-  end if;
-
-  if has_function_privilege(
-    'authenticated',
-    'public.publish_impact_estimate_snapshot(uuid,text,text,uuid,text,text,timestamp with time zone,timestamp with time zone,jsonb)',
-    'execute'
-  ) then
-    raise exception 'Authenticated users unexpectedly retain estimate-publication authority.';
-  end if;
-
-  if not has_function_privilege(
-    'service_role',
-    'public.publish_impact_estimate_snapshot(uuid,text,text,uuid,text,text,timestamp with time zone,timestamp with time zone,jsonb)',
-    'execute'
-  ) then
-    raise exception 'Service role lacks estimate-publication authority.';
+    raise exception 'A required remediation RPC is missing.';
   end if;
 end;
 $schema$;
@@ -151,7 +89,7 @@ insert into auth.users (
   ),
   (
     '7a100000-0000-4000-8000-000000000003',
-    'impact-observer-qa@example.invalid',
+    'impact-outsider-qa@example.invalid',
     now(),
     'authenticated',
     'authenticated',
@@ -168,7 +106,7 @@ select set_config(
   jsonb_build_object(
     'sub', '7a100000-0000-4000-8000-000000000001',
     'role', 'service_role',
-    'aal', 'aal2'
+    'aal', 'aal1'
   )::text,
   true
 );
@@ -177,45 +115,9 @@ set local role service_role;
 select (public.set_impact_model_approver(
   '7a100000-0000-4000-8000-000000000001',
   true,
-  'Transactional Phase 1 QA approver.',
+  'Transactional methodology-remediation QA approver.',
   '7a100000-0000-4000-8000-000000000001'
 )).*;
-
-reset role;
-
-do $approver_bootstrap$
-begin
-  if not exists (
-    select 1
-    from public.impact_model_approvers
-    where user_id = '7a100000-0000-4000-8000-000000000001'
-      and active
-  ) then
-    raise exception 'Synthetic Phase 1 approver was not activated.';
-  end if;
-
-  if (
-    select count(*)
-    from public.impact_model_approver_events
-    where approver_user_id = '7a100000-0000-4000-8000-000000000001'
-      and event_type = 'granted'
-      and active
-  ) <> 1 then
-    raise exception 'Approver grant did not create exactly one audit event.';
-  end if;
-end;
-$approver_bootstrap$;
-
-select set_config(
-  'request.jwt.claims',
-  jsonb_build_object(
-    'sub', '7a100000-0000-4000-8000-000000000001',
-    'role', 'service_role',
-    'aal', 'aal2'
-  )::text,
-  true
-);
-set local role service_role;
 
 insert into public.impact_model_versions (
   id,
@@ -230,111 +132,119 @@ insert into public.impact_model_versions (
 ) values (
   '7a100000-0000-4000-8000-000000000010',
   'threshold_funding',
-  'qa-threshold-impact-v1',
-  1,
+  'qa-threshold-impact-v2',
+  2,
   'draft',
-  jsonb_build_object(
-    'schemaVersion', 'moral-trade-impact-model-methodology-v1',
-    'mechanismFamily', 'threshold_funding',
-    'modelKey', 'qa-threshold-impact-v1',
-    'displayName', 'QA threshold-funding impact model',
-    'estimands', jsonb_build_array(
-      'success_case_additional',
-      'expected_additional',
-      'direct_causal_attribution',
-      'cooperative_allocation',
-      'platform_funded_bonus'
-    ),
-    'estimandDefinitions', jsonb_build_object(
-      'success_case_additional', 'Additional eligible funding conditional on the threshold being met.',
-      'expected_additional', 'Probability-weighted additional eligible funding relative to the frozen no-pledge baseline.',
-      'direct_causal_attribution', 'Resources causally attributable to the participant under the approved pivotality model.',
-      'cooperative_allocation', 'A non-additive allocation of coalition-created resources under the approved characteristic function.',
-      'platform_funded_bonus', 'A separately labeled platform-funded failure bonus, excluded from participant-caused totals.'
-    ),
-    'baselineDefinition', 'Freeze the pool terms, eligible pledge ledger, participant set, funded amount, threshold, and deadline immediately before the tested pledge.',
-    'algorithmDescription', 'Estimate success with and without the tested pledge from a hierarchical reference class, multiply the probability change by eligible funding, and report cooperative allocation separately.',
-    'referenceClassPolicy', jsonb_build_object(
-      'strategy', 'hierarchical',
-      'narrowFields', jsonb_build_array('cause area', 'threshold size', 'deadline horizon', 'funding progress'),
-      'broadeningOrder', jsonb_build_array('deadline horizon', 'cause area', 'mechanism family'),
-      'minimumSampleSize', 30,
-      'noDefensibleClassAction', 'withhold',
-      'uncertaintyExpansionRule', 'Expand the interval at every approved broadening step and withhold when calibration coverage is unavailable.'
-    ),
-    'uncertaintyPolicy', jsonb_build_object(
-      'intervalLevelBps', 8000,
-      'method', 'Bootstrap reference-class outcome distributions with calibrated hierarchical shrinkage.',
-      'confidencePolicy', 'Confidence is high only with adequate sample size, stable calibration, in-domain state, and current health evidence.',
-      'drivers', jsonb_build_array('pivotality uncertainty', 'reference-class fit', 'state freshness', 'sample size')
-    ),
-    'freshnessPolicy', jsonb_build_object(
-      'maxAgeSeconds', 3600,
-      'requireStateHash', true,
-      'requiredStateFields', jsonb_build_array('funded amount', 'threshold amount', 'deadline', 'participant set', 'eligible pledge ledger'),
-      'invalidateOnLifecycleStates', jsonb_build_array('succeeded', 'lapsed', 'cancelled')
-    ),
-    'healthPolicy', jsonb_build_object(
-      'requiredCalibrationMetrics', jsonb_build_array('sample size', 'interval coverage error', 'Brier score'),
-      'blockedConditions', jsonb_build_array('no active model', 'expired health record', 'calibration failure', 'out-of-domain input'),
-      'warningConditions', jsonb_build_array('small sample', 'reference class broadened', 'calibration drift')
-    ),
-    'sourceDataRequirements', jsonb_build_array('immutable pool terms', 'current eligible pledge ledger', 'audited historical pool outcomes'),
-    'calibrationEvidenceRefs', jsonb_build_array('qa:calibration:threshold-funding:v1'),
-    'knownFailureModes', jsonb_build_array('strategic pledging', 'unobserved off-platform contributions', 'selection into published pools'),
-    'outOfDomainConditions', jsonb_build_array('non-monetary threshold', 'private unverified pool', 'mutable threshold terms'),
-    'materialChangeTriggers', jsonb_build_array('estimand definition change', 'reference-class policy change', 'uncertainty method change', 'characteristic-function change'),
-    'aggregationPolicy', jsonb_build_object(
-      'directAndCooperativeNeverSummed', true,
-      'heterogeneousNativeUnitsRemainSeparate', true,
-      'overlapHandling', 'Direct causal attribution and cooperative allocation remain separate, and overlapping resource claims are never added.'
-    ),
-    'shapleyPolicy', jsonb_build_object(
-      'enabled', true,
-      'characteristicFunctionDefinition', 'Coalition value equals verified additional eligible funding caused by that coalition relative to the frozen no-participant baseline.',
-      'maximumExactPlayers', 10,
-      'approximationMethod', 'Use deterministic seeded permutation sampling above the exact-player limit.'
-    ),
-    'parameters', jsonb_build_object(
-      'qaOnly', true,
-      'minimumReferenceOutcomes', 30
-    )
-  ),
+  $methodology${"schemaVersion":"moral-trade-impact-model-methodology-v1","mechanismFamily":"threshold_funding","modelKey":"qa-threshold-impact-v2","displayName":"QA threshold-funding methodology-remediation fixture","estimands":["success_case_additional","expected_additional","direct_causal_attribution","verified_outcome","cooperative_allocation","platform_funded_bonus"],"estimandDefinitions":{"success_case_additional":"Other eligible participant funding activated on success, excluding the focal pledge, unconditional baseline funding, refunds, duplicates, and platform-funded bonuses.","expected_additional":"The validated with-pledge versus without-pledge change in threshold-success probability multiplied by other eligible funding. It is withheld without an interference-aware causal design.","direct_causal_attribution":"The focal pledge's marginal effect under the validated pledge-arrival design, capped at other eligible funding and defaulting to non-additive across participants.","verified_outcome":"Eligible funding captured or externally verified after resolution, net of refunds and duplicates. This verifies funding occurrence, not the focal pledge's causal effect.","cooperative_allocation":"A non-additive Shapley allocation of coalition-created eligible funding under the frozen threshold ledger.","platform_funded_bonus":"A failure bonus or subsidy paid by Moral Trade or a sponsor, labeled separately and excluded from participant-caused totals."},"baselineDefinition":"Immediately before pledge exposure, freeze threshold, deadline, eligibility, supporter rule, ledger, funded amount, pledge, payment state, refund rules, failure-bonus design, and off-platform funding.","causalIdentificationPolicy":{"estimand":"The causal estimand is the difference in threshold success and other eligible funding captured under the focal pledge's presence versus absence at the same pre-exposure pool state.","designStatus":"specified_not_validated","admissibleDesigns":["randomized pledge invitation or reminder with noncompliance and spillover analysis","pre-specified discontinuity or randomized bonus-design arm with interference-aware analysis"],"interferencePolicy":"Represent how the focal pledge changes later pledge arrivals, withdrawals, and payment behavior. Use an exposure mapping or cluster design; do not assume independent pledges.","overlapAndPositivityPolicy":"Estimate causal effects only in states with empirical support for both the with-participant and without-participant conditions. Fail closed when overlap or positivity is materially violated.","sensitivityAnalysisPolicy":"Report pre-specified sensitivity analyses for unmeasured confounding, baseline misclassification, and interference. Withhold causal components when conclusions are not robust to the approved bounds.","noDefensibleDesignAction":"withhold_causal_components"},"evidenceSemanticsPolicy":{"outcomeEvidenceLabel":"verified_outcome","additionalityLabel":"assessed_additionality","receiptAloneEstablishesAdditionality":false,"publicCopyRule":"Evidence may establish that an outcome occurred and its quantity. It must not be described as verified impact or verified additionality; causal additionality remains an assessed model output."},"strategicBehaviorPolicy":{"baselineAntecedenceRule":"A baseline can support additionality only when its material evidence predates the participant-facing offer or commitment and survives post-resolution consistency checks.","strategicTimingRule":"Freeze the ledger before exposure and detect pledge splitting, strategic delay, coordinated timing, and post-deadline edits.","interferenceRule":"Represent how the focal pledge changes later pledge arrivals, withdrawals, and payment behavior. Use an exposure mapping or cluster design; do not assume independent pledges.","perverseIncentiveRule":"Reject designs that reward manufactured shortfalls or threats; keep failure bonuses outside participant-caused accounting.","manipulationChecks":["identity and pledge deduplication","off-platform funding reconciliation","bonus-arm balance check","strategic timing diagnostic"]},"algorithmDescription":"Compute deterministic other eligible funding. Predict threshold success and payment capture separately. Estimate with-pledge versus without-pledge effects only through a pre-specified interference-aware pledge-arrival design. Treat failure-bonus design as a treatment feature whose sign and magnitude require identification; never assume a beneficial response. Record captured funding and platform bonuses as separate outcomes.","referenceClassPolicy":{"strategy":"hierarchical","narrowFields":["threshold band","progress band","deadline band","supporter-count band","pledge-size distribution","cause area","bonus-design arm"],"broadeningOrder":["cause area","pledge-size distribution","supporter-count band","threshold band","mechanism family"],"minimumSampleSize":60,"noDefensibleClassAction":"withhold","uncertaintyExpansionRule":"Reference classes support outcome prediction, not causal identification. Expand the 80% predictive interval at every approved broadening step and withhold when no defensible class remains."},"uncertaintyPolicy":{"intervalLevelBps":8000,"method":"Use a pre-specified hierarchical predictive model and propagate parameter, outcome, baseline, interference, and measurement uncertainty by posterior or repeated-sampling simulation.","confidencePolicy":"The initial sample-size and calibration cutoffs are provisional governance floors. Low or moderate confidence may be shown only after a current health pass. High confidence is forbidden until temporal or otherwise independent holdout validation and uncertainty-aware calibration criteria are approved.","drivers":["causal-design validity","reference-class fit","baseline credibility","interference and strategic response","outcome measurement","state freshness"]},"validationPolicy":{"thresholdStatus":"provisional","highConfidenceAllowed":false,"requiredBeforeHighConfidence":["pre-registered temporal or otherwise independent holdout evaluation","uncertainty intervals for calibration intercept, slope, and interval coverage","out-of-sample sample-size and reference-class justification","documented robustness to approved confounding and interference sensitivity analyses"]},"freshnessPolicy":{"maxAgeSeconds":900,"requireStateHash":true,"requiredStateFields":["threshold terms","deadline","eligible pledge ledger","funded amount","supporter count","focal pledge","payment and refund state","bonus design","pool lifecycle"],"invalidateOnLifecycleStates":["succeeded","lapsed","cancelled","settled","refunded","superseded"]},"healthPolicy":{"requiredCalibrationMetrics":["eligible resolved-observation count","out-of-sample 80% interval coverage with uncertainty","out-of-sample probability calibration intercept and slope with uncertainty","out-of-sample Brier or proper scoring-rule result","causal-design status and sensitivity-analysis result","overlap or positivity diagnostics","out-of-domain input rate","required-state-field missingness rate"],"blockedConditions":["no current exact-hash methodology approval","no current passing model-health snapshot","causal identification design is not validated","empirical calibration evidence is absent or ineligible","required state is missing or does not match the immutable state hash","input is outside the approved domain","unresolved evidence-integrity, duplication, or overlap failure","available modeled component would be published under blocked, warning, or stale health"],"warningConditions":["reference class broadened beyond the narrowest approved class","provisional confidence thresholds remain unvalidated","material reliance on participant attestation rather than independent outcome evidence","calibration drift remains within a non-blocking warning band"]},"sourceDataRequirements":["immutable threshold, deadline, eligibility, refund, and bonus rules","participant-scoped pledge and payment ledger with deduplication keys","off-platform and unconditional funding baseline","resolution, capture, refund, and external receipt evidence","separate platform or sponsor subsidy ledger","audited resolved threshold and dominant-assurance outcomes"],"conceptualBasisRefs":["source:toby-ord-moral-trade-2015","source:forethought-convergence-and-compromise-2025","source:forethought-moral-public-goods-2026"],"calibrationEvidenceRefs":[],"knownFailureModes":["predictive pledge-arrival model is treated as causal pivotality","strategic timing or pledge splitting changes other arrivals","duplicate or ineligible supporters inflate the ledger","off-platform funding is omitted","bonus response is assumed positive without identification","platform bonus is mislabeled as participant impact"],"outOfDomainConditions":["mutable threshold, deadline, or eligibility terms","private pool whose ledger cannot be audited","non-monetary threshold without a separate native-unit model","threat, coercion, or perverse-incentive design","no interference-aware pledge-arrival identification design"],"materialChangeTriggers":["threshold or bonus semantics change","pledge-arrival design changes","coalition characteristic function changes","causal-identification design or sensitivity-analysis policy changes","evidence semantics or public outcome-label changes","strategic-behavior or interference policy changes","provisional validation thresholds or high-confidence rule changes"],"aggregationPolicy":{"directAndCooperativeNeverSummed":true,"heterogeneousNativeUnitsRemainSeparate":true,"directMarginalEffectsDefaultNonAdditive":true,"additiveClaimRequirement":"A causal component may enter an additive caused-total only when every underlying resource or action has a stable unique claim reference and no claim reference appears in another additive component.","overlapHandling":"Outcome quantities may appear in explanatory views but verified outcomes are not caused totals. Direct marginal effects default to non-additive. Cooperative allocation is an alternative lens. Any additive causal aggregate requires unique claim references and must reject overlap."},"shapleyPolicy":{"enabled":true,"characteristicFunctionDefinition":"For each eligible participant subset, coalition value is other eligible funding activated under the frozen threshold, deadline, payment, refund, and bonus rules, excluding unconditional funding and platform subsidies.","maximumExactPlayers":10,"approximationMethod":"Above 10 participants, use deterministic seeded permutations and withhold when Monte Carlo error or coalition monotonicity diagnostics fail."},"parameters":{"minimumEligibleResolvedObservations":60,"minimumSampleStatus":"provisional_governance_floor","publicationRule":"render deterministic terms and verified outcomes when valid; withhold every modeled causal component unless the exact active model has a current passing health snapshot","successCaseExcludesParticipantOwnPledge":true,"successCaseExcludesPlatformFundedBonus":true,"bonusEffectSignAssumed":false,"qaOnly":true}}$methodology$::jsonb,
   'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-  '{}'::text[],
+  array[
+    'causal_identification_design_not_validated',
+    'empirical_calibration_evidence_not_registered',
+    'provisional_confidence_thresholds_not_validated'
+  ],
   '7a100000-0000-4000-8000-000000000001'
 );
 
-insert into public.impact_model_versions (
-  id,
-  mechanism_family,
-  model_key,
-  version,
-  lifecycle_status,
-  methodology,
-  methodology_hash,
-  approval_blockers,
-  created_by
-)
-select
-  '7a100000-0000-4000-8000-000000000011',
-  mechanism_family,
-  'qa-threshold-placeholder-v1',
-  1,
-  'draft',
-  jsonb_set(
-    jsonb_set(
-      methodology,
-      '{modelKey}',
-      to_jsonb('qa-threshold-placeholder-v1'::text)
+reset role;
+
+-- An authenticated outsider cannot submit or review.
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '7a100000-0000-4000-8000-000000000003',
+    'role', 'authenticated',
+    'aal', 'aal1'
+  )::text,
+  true
+);
+set local role authenticated;
+
+do $outsider$
+begin
+  begin
+    perform public.submit_impact_model_version_for_review(
+      '7a100000-0000-4000-8000-000000000010'
+    );
+    raise exception 'An outsider unexpectedly submitted a methodology.';
+  exception
+    when insufficient_privilege then null;
+  end;
+end;
+$outsider$;
+
+reset role;
+
+-- Present-stage AAL1 allowlisted approval authority can submit a blocked draft.
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '7a100000-0000-4000-8000-000000000001',
+    'role', 'authenticated',
+    'aal', 'aal1'
+  )::text,
+  true
+);
+set local role authenticated;
+
+select (public.submit_impact_model_version_for_review(
+  '7a100000-0000-4000-8000-000000000010'
+)).*;
+
+do $under_review$
+begin
+  if not exists (
+    select 1
+    from public.impact_model_versions
+    where id = '7a100000-0000-4000-8000-000000000010'
+      and lifecycle_status = 'under_review'
+      and cardinality(approval_blockers) = 3
+  ) then
+    raise exception 'Under-review methodology did not retain explicit blockers.';
+  end if;
+
+  begin
+    perform public.review_impact_model_version(
+      '7a100000-0000-4000-8000-000000000010',
+      'approve',
+      'Must remain blocked.'
+    );
+    raise exception 'A blocked or unvalidated methodology was unexpectedly approved.';
+  exception
+    when check_violation then null;
+  end;
+end;
+$under_review$;
+
+reset role;
+
+-- Simulate later empirical validation without changing the production candidates.
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '7a100000-0000-4000-8000-000000000001',
+    'role', 'service_role',
+    'aal', 'aal1'
+  )::text,
+  true
+);
+set local role service_role;
+
+update public.impact_model_versions
+set methodology = jsonb_set(
+      jsonb_set(
+        jsonb_set(
+          methodology,
+          '{causalIdentificationPolicy,designStatus}',
+          to_jsonb('validated'::text)
+        ),
+        '{validationPolicy,thresholdStatus}',
+        to_jsonb('validated'::text)
+      ),
+      '{calibrationEvidenceRefs}',
+      jsonb_build_array('registry:qa-threshold-holdout:v1')
     ),
-    '{algorithmDescription}',
-    to_jsonb('[REQUIRED: replace this placeholder]'::text)
-  ),
-  'sha256:3333333333333333333333333333333333333333333333333333333333333333',
-  '{}'::text[],
-  '7a100000-0000-4000-8000-000000000001'
-from public.impact_model_versions
+    methodology_hash = 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+    approval_blockers = '{}'::text[]
 where id = '7a100000-0000-4000-8000-000000000010';
 
 reset role;
@@ -350,112 +260,11 @@ select set_config(
 );
 set local role authenticated;
 
-do $present_stage_auth_guard$
-begin
-  if not public.is_impact_model_approver(false) then
-    raise exception 'The configured account was not recognized as a present-stage authenticated approver.';
-  end if;
-  if public.is_impact_model_approver(true) then
-    raise exception 'AAL1 unexpectedly satisfied the optional future AAL2 check.';
-  end if;
-end;
-$present_stage_auth_guard$;
-
-reset role;
-
-
-select set_config(
-  'request.jwt.claims',
-  jsonb_build_object(
-    'sub', '7a100000-0000-4000-8000-000000000003',
-    'role', 'authenticated',
-    'aal', 'aal1'
-  )::text,
-  true
-);
-set local role authenticated;
-
-do $unconfigured_approver_guard$
-begin
-  begin
-    perform public.submit_impact_model_version_for_review(
-      '7a100000-0000-4000-8000-000000000010'
-    );
-    raise exception 'An unconfigured authenticated user unexpectedly submitted an impact model.';
-  exception
-    when insufficient_privilege then null;
-  end;
-
-  begin
-    perform public.review_impact_model_version(
-      '7a100000-0000-4000-8000-000000000010',
-      'approve',
-      'This must not be recorded.'
-    );
-    raise exception 'An unconfigured authenticated user unexpectedly reviewed an impact model.';
-  exception
-    when insufficient_privilege then null;
-  end;
-
-  begin
-    perform public.activate_impact_model_version(
-      '7a100000-0000-4000-8000-000000000010'
-    );
-    raise exception 'An unconfigured authenticated user unexpectedly activated an impact model.';
-  exception
-    when insufficient_privilege then null;
-  end;
-end;
-$unconfigured_approver_guard$;
-
-reset role;
-
-select set_config(
-  'request.jwt.claims',
-  jsonb_build_object(
-    'sub', '7a100000-0000-4000-8000-000000000001',
-    'role', 'authenticated',
-    'aal', 'aal1'
-  )::text,
-  true
-);
-set local role authenticated;
-
-do $methodology_guard$
-begin
-  begin
-    perform public.submit_impact_model_version_for_review(
-      '7a100000-0000-4000-8000-000000000011'
-    );
-    raise exception 'A placeholder methodology unexpectedly entered review.';
-  exception
-    when check_violation then null;
-  end;
-end;
-$methodology_guard$;
-
-select (public.submit_impact_model_version_for_review(
-  '7a100000-0000-4000-8000-000000000010'
-)).*;
-
 select (public.review_impact_model_version(
   '7a100000-0000-4000-8000-000000000010',
   'approve',
-  'Transactional QA approval of the exact synthetic methodology hash.'
+  'QA-only validated exact-hash methodology.'
 )).*;
-
-do $activation_health_guard$
-begin
-  begin
-    perform public.activate_impact_model_version(
-      '7a100000-0000-4000-8000-000000000010'
-    );
-    raise exception 'A model without current passing health unexpectedly activated.';
-  exception
-    when check_violation then null;
-  end;
-end;
-$activation_health_guard$;
 
 reset role;
 
@@ -464,7 +273,7 @@ select set_config(
   jsonb_build_object(
     'sub', '7a100000-0000-4000-8000-000000000001',
     'role', 'service_role',
-    'aal', 'aal2'
+    'aal', 'aal1'
   )::text,
   true
 );
@@ -482,13 +291,13 @@ insert into public.impact_model_health_snapshots (
 ) values (
   '7a100000-0000-4000-8000-000000000010',
   'passed',
-  clock_timestamp() - interval '1 second',
-  clock_timestamp() - interval '1 minute',
+  clock_timestamp(),
+  clock_timestamp(),
   clock_timestamp() + interval '2 hours',
   jsonb_build_object(
-    'sampleSize', 240,
-    'intervalCoverageErrorBps', 120,
-    'brierScore', 0.17
+    'qaOnly', true,
+    'holdout', 'passed',
+    'causalDesign', 'validated'
   ),
   '{}'::text[],
   '{}'::text[]
@@ -513,16 +322,273 @@ select (public.activate_impact_model_version(
 
 reset role;
 
-do $governance_audit$
+-- Deterministic terms and reviewed outcomes remain publishable under blocked health.
+select set_config(
+  'request.jwt.claims',
+  jsonb_build_object(
+    'sub', '7a100000-0000-4000-8000-000000000001',
+    'role', 'service_role',
+    'aal', 'aal1'
+  )::text,
+  true
+);
+set local role service_role;
+
+do $snapshots$
+declare
+  state_time timestamptz := clock_timestamp();
+  expiry_time timestamptz := clock_timestamp() + interval '1 hour';
+  approved_time timestamptz;
+  deterministic_snapshot jsonb;
+  passing_snapshot jsonb;
+  invalid_modeled_snapshot jsonb;
+  invalid_verified_snapshot jsonb;
+  invalid_overlap_snapshot jsonb;
+begin
+  select approved_at
+  into approved_time
+  from public.impact_model_versions
+  where id = '7a100000-0000-4000-8000-000000000010';
+
+  deterministic_snapshot := jsonb_build_object(
+    'schemaVersion', 'moral-trade-impact-accounting-v1',
+    'subjectRef', 'qa:trade:phase1:blocked',
+    'mechanismFamily', 'trade',
+    'inputStateHash', 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'stateAsOf', state_time,
+    'expiresAt', expiry_time,
+    'health', jsonb_build_object(
+      'status', 'blocked',
+      'checkedAt', state_time,
+      'expiresAt', expiry_time,
+      'blockers', jsonb_build_array('causal_identification_not_validated')
+    ),
+    'components', jsonb_build_array(
+      jsonb_build_object(
+        'key', 'terms',
+        'kind', 'success_case_additional',
+        'label', 'Conditional counterparty commitment',
+        'status', 'available',
+        'quantity', jsonb_build_object('kind', 'count', 'value', 1, 'unit', 'commitment'),
+        'interval', jsonb_build_object('levelBps', 8000, 'lower', 1, 'upper', 1),
+        'confidence', 'high',
+        'source', 'deterministic_terms',
+        'model', null,
+        'explanation', 'Frozen terms specify one counterparty commitment.',
+        'evidenceRefs', jsonb_build_array(),
+        'blockers', jsonb_build_array(),
+        'additiveToCausedTotal', false,
+        'resourceClaimRefs', jsonb_build_array()
+      ),
+      jsonb_build_object(
+        'key', 'outcome',
+        'kind', 'verified_outcome',
+        'label', 'Reviewed completed action',
+        'status', 'available',
+        'quantity', jsonb_build_object('kind', 'count', 'value', 1, 'unit', 'completed action'),
+        'interval', jsonb_build_object('levelBps', 8000, 'lower', 1, 'upper', 1),
+        'confidence', 'high',
+        'source', 'verified_evidence',
+        'model', null,
+        'explanation', 'Reviewed evidence establishes occurrence, not additionality.',
+        'evidenceRefs', jsonb_build_array('qa:evidence:action:1'),
+        'blockers', jsonb_build_array(),
+        'additiveToCausedTotal', false,
+        'resourceClaimRefs', jsonb_build_array()
+      ),
+      jsonb_build_object(
+        'key', 'expected',
+        'kind', 'expected_additional',
+        'label', 'Expected assessed additionality',
+        'status', 'withheld',
+        'quantity', null,
+        'interval', null,
+        'confidence', 'unavailable',
+        'source', 'approved_model',
+        'model', null,
+        'explanation', 'No validated trade causal design is active.',
+        'evidenceRefs', jsonb_build_array(),
+        'blockers', jsonb_build_array('causal_identification_not_validated'),
+        'additiveToCausedTotal', false,
+        'resourceClaimRefs', jsonb_build_array()
+      )
+    ),
+    'explanation', 'Deterministic and reviewed records remain visible while modeled impact is withheld.',
+    'blockers', jsonb_build_array('causal_identification_not_validated')
+  );
+
+  perform public.publish_impact_estimate_snapshot(
+    '7a100000-0000-4000-8000-000000000002',
+    'qa:trade:phase1:blocked',
+    'trade',
+    null,
+    null,
+    'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    state_time,
+    expiry_time,
+    deterministic_snapshot
+  );
+
+  passing_snapshot := jsonb_build_object(
+    'schemaVersion', 'moral-trade-impact-accounting-v1',
+    'subjectRef', 'qa:threshold:phase1:passing',
+    'mechanismFamily', 'threshold_funding',
+    'inputStateHash', 'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    'stateAsOf', state_time,
+    'expiresAt', expiry_time,
+    'health', jsonb_build_object(
+      'status', 'passed',
+      'checkedAt', state_time,
+      'expiresAt', expiry_time,
+      'blockers', jsonb_build_array()
+    ),
+    'components', jsonb_build_array(
+      jsonb_build_object(
+        'key', 'expected',
+        'kind', 'expected_additional',
+        'label', 'Expected assessed additionality',
+        'status', 'available',
+        'quantity', jsonb_build_object('kind', 'money', 'value', 25, 'currency', 'USD'),
+        'interval', jsonb_build_object('levelBps', 8000, 'lower', 5, 'upper', 45),
+        'confidence', 'low',
+        'source', 'approved_model',
+        'model', jsonb_build_object(
+          'modelKey', 'qa-threshold-impact-v2',
+          'modelVersion', 2,
+          'methodologyHash', 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+          'approvedAt', approved_time
+        ),
+        'explanation', 'QA-only validated causal estimate.',
+        'evidenceRefs', jsonb_build_array('registry:qa-threshold-holdout:v1'),
+        'blockers', jsonb_build_array(),
+        'additiveToCausedTotal', true,
+        'resourceClaimRefs', jsonb_build_array('qa:funding:claim:1')
+      )
+    ),
+    'explanation', 'QA-only passing modeled snapshot.',
+    'blockers', jsonb_build_array()
+  );
+
+  perform public.publish_impact_estimate_snapshot(
+    '7a100000-0000-4000-8000-000000000002',
+    'qa:threshold:phase1:passing',
+    'threshold_funding',
+    '7a100000-0000-4000-8000-000000000010',
+    'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+    'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    state_time,
+    expiry_time,
+    passing_snapshot
+  );
+
+  invalid_modeled_snapshot := jsonb_set(
+    jsonb_set(
+      passing_snapshot,
+      '{subjectRef}',
+      to_jsonb('qa:threshold:phase1:blocked-modeled'::text)
+    ),
+    '{health}',
+    jsonb_build_object(
+      'status', 'blocked',
+      'checkedAt', state_time,
+      'expiresAt', expiry_time,
+      'blockers', jsonb_build_array('model_health_blocked')
+    )
+  );
+
+  begin
+    perform public.publish_impact_estimate_snapshot(
+      '7a100000-0000-4000-8000-000000000002',
+      'qa:threshold:phase1:blocked-modeled',
+      'threshold_funding',
+      '7a100000-0000-4000-8000-000000000010',
+      'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+      'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      state_time,
+      expiry_time,
+      invalid_modeled_snapshot
+    );
+    raise exception 'A modeled component was published under blocked health.';
+  exception
+    when check_violation then null;
+  end;
+
+  invalid_verified_snapshot := jsonb_set(
+    deterministic_snapshot,
+    '{components,1,additiveToCausedTotal}',
+    'true'::jsonb
+  );
+  begin
+    perform public.publish_impact_estimate_snapshot(
+      '7a100000-0000-4000-8000-000000000002',
+      'qa:trade:phase1:invalid-verified',
+      'trade',
+      null,
+      null,
+      'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      state_time,
+      expiry_time,
+      jsonb_set(
+        invalid_verified_snapshot,
+        '{subjectRef}',
+        to_jsonb('qa:trade:phase1:invalid-verified'::text)
+      )
+    );
+    raise exception 'A verified outcome was incorrectly accepted as additive caused impact.';
+  exception
+    when check_violation then null;
+  end;
+
+  invalid_overlap_snapshot := jsonb_set(
+    passing_snapshot,
+    '{components}',
+    (passing_snapshot -> 'components') || jsonb_build_array(
+      jsonb_set(
+        jsonb_set(
+          passing_snapshot #> '{components,0}',
+          '{key}',
+          to_jsonb('expected-duplicate'::text)
+        ),
+        '{label}',
+        to_jsonb('Duplicate additive claim'::text)
+      )
+    )
+  );
+  begin
+    perform public.publish_impact_estimate_snapshot(
+      '7a100000-0000-4000-8000-000000000002',
+      'qa:threshold:phase1:overlap',
+      'threshold_funding',
+      '7a100000-0000-4000-8000-000000000010',
+      'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+      'sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      state_time,
+      expiry_time,
+      jsonb_set(
+        invalid_overlap_snapshot,
+        '{subjectRef}',
+        to_jsonb('qa:threshold:phase1:overlap'::text)
+      )
+    );
+    raise exception 'Overlapping additive resource claims were unexpectedly accepted.';
+  exception
+    when check_violation then null;
+  end;
+end;
+$snapshots$;
+
+reset role;
+
+do $final_assertions$
 begin
   if not exists (
     select 1
     from public.impact_model_versions
     where id = '7a100000-0000-4000-8000-000000000010'
       and lifecycle_status = 'active'
-      and activated_at is not null
+      and methodology_hash = 'sha256:2222222222222222222222222222222222222222222222222222222222222222'
   ) then
-    raise exception 'Approved healthy impact model did not become active.';
+    raise exception 'Validated QA methodology did not become active.';
   end if;
 
   if (
@@ -530,617 +596,20 @@ begin
     from public.impact_model_approval_events
     where model_version_id = '7a100000-0000-4000-8000-000000000010'
       and decision = 'approve'
-      and methodology_hash = 'sha256:1111111111111111111111111111111111111111111111111111111111111111'
+      and methodology_hash = 'sha256:2222222222222222222222222222222222222222222222222222222222222222'
   ) <> 1 then
-    raise exception 'Exact-hash founder approval event is missing.';
+    raise exception 'Exact-hash approval audit event is missing or duplicated.';
   end if;
 
-  if not exists (
-    select 1
-    from public.impact_model_lifecycle_events
-    where model_version_id = '7a100000-0000-4000-8000-000000000010'
-      and from_status = 'approved'
-      and to_status = 'active'
-  ) then
-    raise exception 'Activation lifecycle transition was not audited.';
-  end if;
-
-  begin
-    update public.impact_model_versions
-    set methodology = jsonb_set(
-      methodology,
-      '{algorithmDescription}',
-      to_jsonb('Mutated after approval.'::text)
-    )
-    where id = '7a100000-0000-4000-8000-000000000010';
-    raise exception 'Approved methodology unexpectedly remained mutable.';
-  exception
-    when sqlstate '55000' then null;
-  end;
-end;
-$governance_audit$;
-
-select set_config(
-  'request.jwt.claims',
-  jsonb_build_object(
-    'sub', '7a100000-0000-4000-8000-000000000001',
-    'role', 'service_role',
-    'aal', 'aal2'
-  )::text,
-  true
-);
-set local role service_role;
-
-do $publish_valid_snapshot$
-declare
-  state_time timestamptz := date_trunc('milliseconds', clock_timestamp());
-  expiry_time timestamptz := date_trunc('milliseconds', clock_timestamp()) + interval '30 minutes';
-  approved_time timestamptz;
-  snapshot_payload jsonb;
-  published_id uuid;
-begin
-  select approved_at
-  into approved_time
-  from public.impact_model_versions
-  where id = '7a100000-0000-4000-8000-000000000010';
-
-  snapshot_payload := jsonb_build_object(
-    'schemaVersion', 'moral-trade-impact-accounting-v1',
-    'subjectRef', 'qa:threshold-pool:phase1',
-    'mechanismFamily', 'threshold_funding',
-    'inputStateHash', 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
-    'stateAsOf', state_time,
-    'expiresAt', expiry_time,
-    'components', jsonb_build_array(
-      jsonb_build_object(
-        'key', 'expected-additional-funding',
-        'label', 'Expected additional funding',
-        'kind', 'expected_additional',
-        'status', 'available',
-        'source', 'approved_model',
-        'confidence', 'moderate',
-        'quantity', jsonb_build_object(
-          'kind', 'money',
-          'value', 125.00,
-          'currency', 'USD'
-        ),
-        'interval', jsonb_build_object(
-          'levelBps', 8000,
-          'lower', 40.00,
-          'upper', 260.00
-        ),
-        'model', jsonb_build_object(
-          'modelKey', 'qa-threshold-impact-v1',
-          'modelVersion', 1,
-          'methodologyHash', 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-          'approvedAt', approved_time
-        ),
-        'evidenceRefs', jsonb_build_array('qa:reference-class:threshold-funding:v1'),
-        'blockers', '[]'::jsonb,
-        'additiveToCausedTotal', true,
-        'explanation', 'Probability-weighted additional funding relative to the frozen no-pledge baseline.'
-      ),
-      jsonb_build_object(
-        'key', 'cooperative-allocation',
-        'label', 'Cooperative allocation',
-        'kind', 'cooperative_allocation',
-        'status', 'available',
-        'source', 'approved_model',
-        'confidence', 'moderate',
-        'quantity', jsonb_build_object(
-          'kind', 'money',
-          'value', 90.00,
-          'currency', 'USD'
-        ),
-        'interval', jsonb_build_object(
-          'levelBps', 8000,
-          'lower', 25.00,
-          'upper', 210.00
-        ),
-        'model', jsonb_build_object(
-          'modelKey', 'qa-threshold-impact-v1',
-          'modelVersion', 1,
-          'methodologyHash', 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-          'approvedAt', approved_time
-        ),
-        'evidenceRefs', jsonb_build_array('qa:coalition:threshold-pool:phase1'),
-        'blockers', '[]'::jsonb,
-        'additiveToCausedTotal', false,
-        'explanation', 'Non-additive cooperative allocation under the approved characteristic function.'
-      ),
-      jsonb_build_object(
-        'key', 'direct-causal-withheld',
-        'label', 'Direct causal attribution',
-        'kind', 'direct_causal_attribution',
-        'status', 'withheld',
-        'source', 'reference_class',
-        'confidence', 'unavailable',
-        'quantity', null,
-        'interval', null,
-        'model', jsonb_build_object(
-          'modelKey', 'qa-threshold-impact-v1',
-          'modelVersion', 1,
-          'methodologyHash', 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-          'approvedAt', approved_time
-        ),
-        'evidenceRefs', '[]'::jsonb,
-        'blockers', jsonb_build_array('insufficient_direct-attribution_evidence'),
-        'additiveToCausedTotal', false,
-        'explanation', 'Withheld because the synthetic fixture does not provide a defensible direct-attribution reference class.'
-      ),
-      jsonb_build_object(
-        'key', 'platform-failure-bonus',
-        'label', 'Platform-funded failure bonus',
-        'kind', 'platform_funded_bonus',
-        'status', 'available',
-        'source', 'platform_subsidy',
-        'confidence', 'high',
-        'quantity', jsonb_build_object(
-          'kind', 'money',
-          'value', 5.00,
-          'currency', 'USD'
-        ),
-        'interval', jsonb_build_object(
-          'levelBps', 8000,
-          'lower', 5.00,
-          'upper', 5.00
-        ),
-        'model', null,
-        'evidenceRefs', jsonb_build_array('qa:platform-bonus-ledger:phase1'),
-        'blockers', '[]'::jsonb,
-        'additiveToCausedTotal', false,
-        'explanation', 'Platform-funded compensation is displayed separately and never counted as participant-caused resources.'
-      )
-    ),
-    'health', jsonb_build_object(
-      'status', 'passed',
-      'checkedAt', state_time - interval '1 minute',
-      'expiresAt', expiry_time,
-      'blockers', '[]'::jsonb
-    ),
-    'blockers', '[]'::jsonb,
-    'explanation', 'QA-only state-bound impact snapshot for the Phase 1 accounting contract.'
-  );
-
-  published_id := public.publish_impact_estimate_snapshot(
-    '7a100000-0000-4000-8000-000000000002',
-    'qa:threshold-pool:phase1',
-    'threshold_funding',
-    '7a100000-0000-4000-8000-000000000010',
-    'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-    'sha256:2222222222222222222222222222222222222222222222222222222222222222',
-    state_time,
-    expiry_time,
-    snapshot_payload
-  );
-
-  insert into impact_phase1_test_state (
-    snapshot_id,
-    state_as_of,
-    expires_at
-  ) values (
-    published_id,
-    state_time,
-    expiry_time
-  );
-end;
-$publish_valid_snapshot$;
-
-do $snapshot_validation_guards$
-declare
-  state_time timestamptz := date_trunc('milliseconds', clock_timestamp());
-  expiry_time timestamptz := date_trunc('milliseconds', clock_timestamp()) + interval '30 minutes';
-  approved_time timestamptz;
-  invalid_payload jsonb;
-begin
-  select approved_at
-  into approved_time
-  from public.impact_model_versions
-  where id = '7a100000-0000-4000-8000-000000000010';
-
-  invalid_payload := jsonb_build_object(
-    'schemaVersion', 'moral-trade-impact-accounting-v1',
-    'subjectRef', 'qa:invalid:cooperative-additive',
-    'mechanismFamily', 'threshold_funding',
-    'inputStateHash', 'sha256:4444444444444444444444444444444444444444444444444444444444444444',
-    'stateAsOf', state_time,
-    'expiresAt', expiry_time,
-    'components', jsonb_build_array(
-      jsonb_build_object(
-        'key', 'invalid-cooperative-allocation',
-        'label', 'Invalid cooperative allocation',
-        'kind', 'cooperative_allocation',
-        'status', 'available',
-        'source', 'approved_model',
-        'confidence', 'moderate',
-        'quantity', jsonb_build_object('kind', 'money', 'value', 10, 'currency', 'USD'),
-        'interval', jsonb_build_object('levelBps', 8000, 'lower', 5, 'upper', 20),
-        'model', jsonb_build_object(
-          'modelKey', 'qa-threshold-impact-v1',
-          'modelVersion', 1,
-          'methodologyHash', 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-          'approvedAt', approved_time
-        ),
-        'evidenceRefs', '[]'::jsonb,
-        'blockers', '[]'::jsonb,
-        'additiveToCausedTotal', true,
-        'explanation', 'This fixture must be rejected because cooperative allocation is non-additive.'
-      )
-    ),
-    'health', jsonb_build_object(
-      'status', 'passed',
-      'checkedAt', state_time - interval '1 minute',
-      'expiresAt', expiry_time,
-      'blockers', '[]'::jsonb
-    ),
-    'blockers', '[]'::jsonb,
-    'explanation', 'Intentionally invalid cooperative-allocation fixture.'
-  );
-
-  begin
-    perform public.publish_impact_estimate_snapshot(
-      '7a100000-0000-4000-8000-000000000002',
-      'qa:invalid:cooperative-additive',
-      'threshold_funding',
-      '7a100000-0000-4000-8000-000000000010',
-      'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-      'sha256:4444444444444444444444444444444444444444444444444444444444444444',
-      state_time,
-      expiry_time,
-      invalid_payload
-    );
-    raise exception 'Additive cooperative allocation unexpectedly published.';
-  exception
-    when check_violation then null;
-  end;
-
-  invalid_payload := jsonb_set(
-    jsonb_set(
-      invalid_payload,
-      '{subjectRef}',
-      to_jsonb('qa:invalid:interval-level'::text)
-    ),
-    '{components,0,additiveToCausedTotal}',
-    'false'::jsonb
-  );
-  invalid_payload := jsonb_set(
-    invalid_payload,
-    '{components,0,interval,levelBps}',
-    '9000'::jsonb
-  );
-  invalid_payload := jsonb_set(
-    invalid_payload,
-    '{inputStateHash}',
-    to_jsonb('sha256:5555555555555555555555555555555555555555555555555555555555555555'::text)
-  );
-
-  begin
-    perform public.publish_impact_estimate_snapshot(
-      '7a100000-0000-4000-8000-000000000002',
-      'qa:invalid:interval-level',
-      'threshold_funding',
-      '7a100000-0000-4000-8000-000000000010',
-      'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-      'sha256:5555555555555555555555555555555555555555555555555555555555555555',
-      state_time,
-      expiry_time,
-      invalid_payload
-    );
-    raise exception 'A non-80-percent impact interval unexpectedly published.';
-  exception
-    when check_violation then null;
-  end;
-end;
-$snapshot_validation_guards$;
-
-do $refresh_queue$
-declare
-  first_job uuid;
-  replay_job uuid;
-begin
-  first_job := public.queue_impact_refresh_job(
-    '7a100000-0000-4000-8000-000000000002',
-    'qa:threshold-pool:phase1',
-    'threshold_funding',
-    'qa_state_changed',
-    now()
-  );
-  replay_job := public.queue_impact_refresh_job(
-    '7a100000-0000-4000-8000-000000000002',
-    'qa:threshold-pool:phase1',
-    'threshold_funding',
-    'qa_state_changed_again',
-    now()
-  );
-
-  if replay_job <> first_job then
-    raise exception 'Open refresh-job replay was not idempotent.';
-  end if;
-
-  perform public.claim_impact_refresh_jobs(100, 900);
-
-  if not exists (
-    select 1
-    from public.impact_refresh_queue
-    where id = first_job
-      and status = 'running'
-      and attempt_count = 1
-      and locked_at is not null
-  ) then
-    raise exception 'Queued impact refresh job was not claimed.';
-  end if;
-
-  perform public.finish_impact_refresh_job(
-    first_job,
-    'completed',
-    null,
-    null
-  );
-
-  if not exists (
-    select 1
-    from public.impact_refresh_queue
-    where id = first_job
-      and status = 'completed'
-      and completed_at is not null
-  ) then
-    raise exception 'Claimed impact refresh job was not completed.';
-  end if;
-
-  update impact_phase1_test_state
-  set refresh_job_id = first_job;
-end;
-$refresh_queue$;
-
-reset role;
-
-do $snapshot_persistence$
-declare
-  target_snapshot uuid := (
-    select snapshot_id
-    from impact_phase1_test_state
-    limit 1
-  );
-begin
-  if target_snapshot is null then
-    raise exception 'Valid impact snapshot id was not recorded.';
-  end if;
-
-  if not exists (
-    select 1
+  if (
+    select count(*)
     from public.impact_estimate_snapshots
-    where id = target_snapshot
-      and participant_user_id = '7a100000-0000-4000-8000-000000000002'
+    where participant_user_id = '7a100000-0000-4000-8000-000000000002'
       and publication_status = 'current'
-      and health_status = 'passed'
-      and methodology_hash = 'sha256:1111111111111111111111111111111111111111111111111111111111111111'
-      and snapshot #>> '{components,1,kind}' = 'cooperative_allocation'
-      and (snapshot #>> '{components,1,additiveToCausedTotal}')::boolean = false
-  ) then
-    raise exception 'Valid state-bound impact snapshot was not persisted correctly.';
-  end if;
-
-  if (
-    select count(*)
-    from public.impact_estimate_audit_events
-    where snapshot_id = target_snapshot
-      and event_type = 'published'
-  ) <> 1 then
-    raise exception 'Impact snapshot publication did not create exactly one audit event.';
-  end if;
-
-  begin
-    update public.impact_estimate_snapshots
-    set snapshot = jsonb_set(
-      snapshot,
-      '{explanation}',
-      to_jsonb('Mutated after publication.'::text)
-    )
-    where id = target_snapshot;
-    raise exception 'Published impact snapshot unexpectedly remained mutable.';
-  exception
-    when sqlstate '55000' then null;
-  end;
-
-  begin
-    delete from public.impact_estimate_audit_events
-    where snapshot_id = target_snapshot;
-    raise exception 'Impact estimate audit history unexpectedly remained deletable.';
-  exception
-    when sqlstate '55000' then null;
-  end;
-end;
-$snapshot_persistence$;
-
-select set_config(
-  'request.jwt.claims',
-  jsonb_build_object(
-    'sub', '7a100000-0000-4000-8000-000000000002',
-    'role', 'authenticated',
-    'aal', 'aal1'
-  )::text,
-  true
-);
-set local role authenticated;
-
-do $participant_scope$
-begin
-  if (
-    select count(*)
-    from public.get_my_impact_accounting_snapshots()
-  ) <> 1 then
-    raise exception 'Participant did not receive exactly one current impact snapshot.';
-  end if;
-
-  if (
-    select count(*)
-    from public.impact_estimate_snapshots
-  ) <> 1 then
-    raise exception 'Participant-scoped RLS did not expose exactly the participant snapshot.';
-  end if;
-
-  begin
-    perform public.publish_impact_estimate_snapshot(
-      '7a100000-0000-4000-8000-000000000002',
-      'qa:forbidden:authenticated-publish',
-      'threshold_funding',
-      '7a100000-0000-4000-8000-000000000010',
-      'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-      'sha256:6666666666666666666666666666666666666666666666666666666666666666',
-      now(),
-      now() + interval '30 minutes',
-      '{}'::jsonb
-    );
-    raise exception 'Authenticated user unexpectedly published an impact snapshot.';
-  exception
-    when insufficient_privilege then null;
-  end;
-
-  begin
-    perform public.queue_impact_refresh_job(
-      '7a100000-0000-4000-8000-000000000002',
-      'qa:forbidden:authenticated-queue',
-      'threshold_funding',
-      'forbidden_request',
-      now()
-    );
-    raise exception 'Authenticated user unexpectedly queued an impact refresh.';
-  exception
-    when insufficient_privilege then null;
-  end;
-end;
-$participant_scope$;
-
-reset role;
-
-select set_config(
-  'request.jwt.claims',
-  jsonb_build_object(
-    'sub', '7a100000-0000-4000-8000-000000000003',
-    'role', 'authenticated',
-    'aal', 'aal1'
-  )::text,
-  true
-);
-set local role authenticated;
-
-do $observer_scope$
-begin
-  if (
-    select count(*)
-    from public.get_my_impact_accounting_snapshots()
-  ) <> 0 then
-    raise exception 'Unrelated authenticated user received another participant snapshot.';
-  end if;
-
-  if (
-    select count(*)
-    from public.impact_estimate_snapshots
-  ) <> 0 then
-    raise exception 'RLS leaked participant impact snapshots to an unrelated user.';
+  ) <> 2 then
+    raise exception 'Expected exactly two valid current QA snapshots.';
   end if;
 end;
-$observer_scope$;
-
-reset role;
-
-select set_config(
-  'request.jwt.claims',
-  jsonb_build_object(
-    'sub', '7a100000-0000-4000-8000-000000000001',
-    'role', 'service_role',
-    'aal', 'aal2'
-  )::text,
-  true
-);
-set local role service_role;
-
-insert into public.impact_model_health_snapshots (
-  model_version_id,
-  health_status,
-  checked_at,
-  data_as_of,
-  expires_at,
-  metrics,
-  blockers,
-  warnings
-) values (
-  '7a100000-0000-4000-8000-000000000010',
-  'blocked',
-  clock_timestamp(),
-  clock_timestamp(),
-  clock_timestamp() + interval '2 hours',
-  jsonb_build_object('reason', 'synthetic calibration failure'),
-  array['synthetic_calibration_failure'],
-  '{}'::text[]
-);
-
-reset role;
-
-select set_config(
-  'request.jwt.claims',
-  jsonb_build_object(
-    'sub', '7a100000-0000-4000-8000-000000000002',
-    'role', 'authenticated',
-    'aal', 'aal1'
-  )::text,
-  true
-);
-set local role authenticated;
-
-do $health_fail_closed$
-begin
-  if (
-    select count(*)
-    from public.get_my_impact_accounting_snapshots()
-  ) <> 0 then
-    raise exception 'Participant snapshot remained visible after the latest model health became blocked.';
-  end if;
-end;
-$health_fail_closed$;
-
-reset role;
-
-select set_config('request.jwt.claims', '{}'::jsonb::text, true);
-
-delete from auth.users
-where id = '7a100000-0000-4000-8000-000000000001';
-
-do $deleted_approver_audit$
-declare
-  expected_fingerprint text := public.impact_accounting_user_fingerprint(
-    '7a100000-0000-4000-8000-000000000001'
-  );
-begin
-  if exists (
-    select 1
-    from public.impact_model_approvers
-    where user_id = '7a100000-0000-4000-8000-000000000001'
-  ) then
-    raise exception 'Deleted auth account remained in the current approver roster.';
-  end if;
-
-  if not exists (
-    select 1
-    from public.impact_model_approval_events
-    where model_version_id = '7a100000-0000-4000-8000-000000000010'
-      and decision = 'approve'
-      and approver_user_id is null
-      and approver_user_fingerprint = expected_fingerprint
-  ) then
-    raise exception 'Approval audit identity was not preserved after auth-account deletion.';
-  end if;
-
-  if not exists (
-    select 1
-    from public.impact_model_approver_events
-    where event_type = 'account_deleted'
-      and approver_user_id is null
-      and approver_user_fingerprint = expected_fingerprint
-  ) then
-    raise exception 'Approver account deletion was not appended to governance history.';
-  end if;
-end;
-$deleted_approver_audit$;
+$final_assertions$;
 
 rollback;

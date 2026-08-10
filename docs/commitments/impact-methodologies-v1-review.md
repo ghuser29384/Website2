@@ -1,116 +1,105 @@
-# Commitments impact-accounting continuation packet
+# Commitments impact-accounting methodology review remediation
 
-**Status:** current-main synchronized; QA RLS hardening and present-stage authenticated-approver governance applied and verified; MFA deferred until the site is high-leverage; not approved; not active; not deployed to production
+**Status:** substantive founder review remediated in QA; exact current `main` synchronized; all six v2 candidates remain `under_review`; no candidate is approved or active; production is unchanged
 
-This packet advances the methodology-design and least-privilege work in PR #534. It contains a review manifest, one separate v1 methodology candidate file for each supported mechanism, canonical methodology hashes using the repository's recursive key-sorting algorithm, a structural validation contract, and the exact QA-applied RLS migration. None of the six methodology versions is approved or active, and no modeled estimate is authorized for production display.
+## Decision and scope
 
-## Exact repository and QA state
+Pull-request review `4897881155` rejected approval of all six v1 methodology hashes and required material corrections before another exact-hash review. This remediation implements those corrections without approving a model, activating estimates, configuring a production approver, merging PR #534, or deploying to production.
 
-- Repository: `ghuser29384/Website2`
-- Continuation PR: `#534`
-- Original tested PR head: `4e56ba774274b58104d75faf40be8269d8422054`
-- Prior exact successful QA run: `31115065783`
-- Current `main` merged into the feature branch: `f0f5f36be4ef4ac6cb09cdc81802b27cd268878a`
-- Current-main synchronization merge commit: `ecf0337d8effcb585469356050bb3741a2ec1989`
-- Final continuation head: to be set by the commit that adds this packet and the updated gate workflow
-- MoralTrade QA project: `hvmxfjjbdcgjjudmthdz`
-- QA-only RLS migration: `20260808174259_mpgf_public_goods_public_read_rls.sql`
-- Exact normalized migration SHA-256: `33bc1fefed0298a1643bd37956b9c8850ccffd8805d66403439e4c1ab60e5bf4`
-- QA present-stage approver migration: `20260810013845_commitments_impact_present_stage_authenticated_approver.sql`
-- Current approval requirement: authenticated active allowlisted founder account; MFA is not required at the present stage
-- MFA reconsideration point: when Moral Trade becomes high-leverage, including meaningful users, funds, irreversible commitments, or concentrated production control
-- Production database and production deployment: unchanged by this continuation
+The branch incorporates current `main` `72729d80bec2e4ffa147d6dc56ae703fb3e79293` through merge commit `e06333b26170a34c56d3d5101ad61acb464f37a3`.
 
-The prior exact-head pass remains useful historical evidence. It is not a substitute for the final exact-current-main gate run on the commit containing this packet.
+## Source framing
 
-The repository review source is intentionally split into `docs/commitments/impact-methodologies-v1/manifest.json` plus one JSON file per mechanism. This makes each exact-hash candidate independently reviewable while the manifest binds the six expected files, lifecycle blockers, and QA-only RLS evidence. The local continuation package also retains a combined bundle for archival convenience.
+The methodology is conceptually grounded in:
 
+- Toby Ord, *Moral Trade* (2015): moral trade depends on the no-trade default and faces distinct factual-trust and counterfactual-trust problems; occurrence evidence does not settle what would have happened without the trade; negative externalities and perverse incentives remain possible.
+- William MacAskill and Fin Moorhouse, *Convergence and Compromise* (2025): trade can create large gains, but threats, bargaining power, concentration of power, and collective-decision procedures can destroy value or seal off valuable outcomes.
+- Tom Davidson, William MacAskill, and Mia Taylor, *Moral public goods are a big deal for whether we get a good future* (2026): moral public goods face severe free-riding problems; assurance contracts can remain unlikely to succeed despite large gains from trade; dominant-assurance bonuses offer only a modest theoretical incentive shift and do not solve the fundamental problem.
 
-## Methodology hashes
+These documents are conceptual inputs, not empirical calibration datasets. They are recorded under `conceptualBasisRefs`. Every v2 candidate has an empty `calibrationEvidenceRefs` array and therefore cannot be approved.
 
-| Mechanism | Model key | Exact methodology hash |
-|---|---|---|
-| `trade` | `commitments-reciprocal-trade-v1` | `sha256:bff759b15853ebb0d8870a24cba0665870d2e2ba285f1eb7f8551573559bfa3f` |
-| `co_fund` | `commitments-co-fund-v1` | `sha256:c1f759e224712a07b30bc28a3be6fd714a0a21c32ee8c0a822779f9f706946ef` |
-| `threshold_funding` | `commitments-threshold-funding-v1` | `sha256:8c915821978c45138467e13e05c96f58d1a695b1206d8a2f95849972899df15c` |
-| `donation_upgrade` | `commitments-donation-upgrade-v1` | `sha256:e917387ce26a21e98af936388fd88436782f0c199b986e0a408f46dace600463` |
-| `threshold_sign_on` | `commitments-threshold-sign-on-v1` | `sha256:f292553856e5d6f21aa2673b21158a91f7dc4cbf6464d0e35a3dfeafaebb9eff` |
-| `donation_redirect` | `commitments-donation-redirect-v1` | `sha256:2e3ee0e9de06e8a254a87cddf33834d557cdb9e5e6f674f639774dca0f8cfe5a` |
+## Cross-cutting remediation
 
-These hashes cover only each `methodology` object, not surrounding bundle metadata. They are produced by recursively sorting object keys, preserving array order, serializing compact JSON, and hashing the UTF-8 bytes, matching `canonicalImpactMethodologyJson` and `hashImpactMethodology`.
+1. **Prediction and causal identification are separated.** Each methodology now specifies its causal estimand, admissible randomized or defensible quasi-experimental designs, interference treatment, overlap and positivity policy, sensitivity analysis, and the fail-closed action `withhold_causal_components`.
+2. **Outcome evidence and additionality are separated.** `verified_additional` is replaced by `verified_outcome`. Receipts and reviewed evidence may establish occurrence and quantity; they do not establish the counterfactual. Public copy must use reviewed outcome evidence or participant-confirmed gain rather than “verified impact.”
+3. **Calibration provenance is corrected.** Conceptual papers and software-test runs cannot appear as empirical calibration evidence. Approval requires actual eligible outcome data, fitted-model evaluation, or an immutable empirical calibration report.
+4. **Marginal effects default to non-additive.** An additive causal component requires stable unique `resourceClaimRefs`; overlap is rejected. Verified outcomes are never additive caused impact. Cooperative allocation remains an alternative lens and is never summed with direct attribution.
+5. **Fail-closed rendering is corrected.** Deterministic terms and reviewed outcome records may remain current under blocked or stale model health when every modeled component is withheld. Available modeled components require passing, nonexpired model health and a matching active model.
+6. **Confidence thresholds are explicitly provisional.** Fixed sample floors and calibration bands are governance candidates rather than empirical findings. `highConfidenceAllowed` remains false until independent holdout or temporal validation and uncertainty around calibration metrics are documented.
+7. **Strategic behavior and interference are first-class.** Every methodology includes baseline-antecedence, strategic-timing, interference, perverse-incentive, and manipulation-check policies.
 
-## Locked accounting semantics
-
-1. **No receipt-only causation.** A receipt establishes occurrence; causal claims require a frozen counterfactual baseline and an approved model.
-2. **Success-case and expected impact remain distinct.** Expected impact is probability-weighted and always carries an 80% interval and confidence label.
-3. **Direct and cooperative attribution are alternative views.** They are never summed.
-4. **Native units remain separate.** Money, counts, duration, and value-adjusted quantities are not combined without an independently approved immutable conversion snapshot.
-5. **Platform-funded bonuses are separate.** DAC failure bonuses or subsidies never enter participant-caused resource totals.
-6. **Redirected baseline is not new money.** Donation Upgrade and Donation Redirect show baseline redirection separately from genuinely new matcher or top-up funds.
-7. **Open offers remain outside lifecycle impact accounting.** Only accepted or frozen terms and later verified lifecycle records enter snapshots.
-
-## Mechanism-specific core estimands
+## Mechanism-specific remediation
 
 ### Reciprocal trade
-The participant's own commitment is excluded from success-case impact. The primary success-case quantity is the counterparty resource or action absent from the counterparty's frozen no-agreement baseline. Expected impact multiplies that quantity by calibrated causal completion probability.
+
+The participant-level causal estimand is the change in the counterparty outcome distribution under agreement versus no agreement. Repeated counterparties and bilateral dependence must be modeled. Reviewed evidence records the counterparty outcome without converting it into additionality.
 
 ### Co-Fund
-The project must be absent from frozen no-pool defaults. Direct inclusion effects and Shapley cooperative allocation are shown separately. Delivery evidence replaces modeled project quantity after completion, while counterfactual uncertainty remains.
 
-### Threshold funding / DAC
-Success-case impact is other eligible funding activated, excluding the participant's own pledge and any platform bonus. Expected impact is the with-pledge versus without-pledge change in success probability times other eligible funding.
+The coalition outcome—whether and what project is delivered—is separated from the participant-level effect—other resources or delivery probability unlocked by inclusion. Participant effects require an interference-aware inclusion design. Shapley allocation remains separate and non-additive.
+
+### Threshold funding / dominant assurance contracts
+
+The focal estimand is the with-pledge versus without-pledge effect on threshold success and other eligible funding. Pledge arrivals, withdrawals, and payment behavior are treated as interference. Failure-bonus response is an unidentified treatment feature until empirical evidence exists; no beneficial sign is assumed. Platform-funded bonuses remain outside participant-caused totals.
 
 ### Donation Upgrade
-Only the genuinely new matcher or top-up donation is additional money. The original donor's planned amount is `baseline_redirected`. The methodology forbids a universal 2× welfare claim and requires exact provider verification for verified credit.
+
+Both the original donor's plan and the matcher's no-offer plan must be frozen before exposure. Only money absent from both baselines can be additional. Provider events establish payment occurrence; an approved offer-versus-no-offer design is required for matcher additionality. No universal two-times value claim is permitted.
 
 ### Threshold Sign-On
-Success-case impact is other qualifying participants or action units activated, excluding the participant's own signature. High-risk and unreviewed proposition classes fail closed. Exact private-manifest and verified-human integrity are required.
+
+Activated or revealed signatures and completed public acts are distinct outcome quantities. A signature is impact only when the frozen objective is the public signal itself. Signature-arrival, withdrawal, reveal, and completion effects require a privacy-preserving interference-aware design.
 
 ### Donation Redirect
-Original planned amounts are `baseline_redirected`, not additional. Only a top-up or match absent from both baselines can be additional. Political or regulated donation exchanges remain out of domain without jurisdiction-specific approval.
 
-## QA least-privilege repair
+Shared-destination payment and cancellation or nonpayment of both original plans must be evidenced before an amount is labeled `baseline_redirected`. Only a top-up absent from both baselines can be additional. The shared-destination receipt alone does not prove cancellation.
 
-Preflight inspection found a materially broader live QA privilege state than the earlier draft memo assumed: `anon` and `authenticated` had direct `INSERT`, `UPDATE`, and `DELETE` privileges on all four public moral-public-goods summary tables, and RLS was disabled. The affected tables were:
+## Exact v2 methodology hashes
 
-- `mpgf_public_goods_match_pools`
-- `mpgf_public_goods_rounds`
-- `mpgf_public_goods_campaigns`
-- `mpgf_public_goods_allocation_results`
+| Mechanism | Model key | Prior rejected hash | New remediation hash |
+|---|---|---|---|
+| Reciprocal trade | `commitments-reciprocal-trade-v2` | `sha256:bff759b15853ebb0d8870a24cba0665870d2e2ba285f1eb7f8551573559bfa3f` | `sha256:f1d496d5d4c03197711fd683837ea4b2958e0ac8af2e7e0b2d97c54233c0cef9` |
+| Co-Fund | `commitments-co-fund-v2` | `sha256:c1f759e224712a07b30bc28a3be6fd714a0a21c32ee8c0a822779f9f706946ef` | `sha256:785eb7a87e2dce2b3009f1fb063d1cf65aa2f47ba39dc690a36ab953b6b75108` |
+| Threshold funding / DAC | `commitments-threshold-funding-v2` | `sha256:8c915821978c45138467e13e05c96f58d1a695b1206d8a2f95849972899df15c` | `sha256:e21419076cc2beca7b1e6cfb31bec2376098da117d5cffea0fb1bd4d71c7c066` |
+| Donation Upgrade | `commitments-donation-upgrade-v2` | `sha256:e917387ce26a21e98af936388fd88436782f0c199b986e0a408f46dace600463` | `sha256:0666a06be19229e86bf776ab1b43ef8083d577acbbbed090804cbeab02067eac` |
+| Threshold Sign-On | `commitments-threshold-sign-on-v2` | `sha256:f292553856e5d6f21aa2673b21158a91f7dc4cbf6464d0e35a3dfeafaebb9eff` | `sha256:d23f1c812d62ad5c6437c90a8cccb40d3d1516fa7b977d89502df874fbc77555` |
+| Donation Redirect | `commitments-donation-redirect-v2` | `sha256:2e3ee0e9de06e8a254a87cddf33834d557cdb9e5e6f674f639774dca0f8cfe5a` | `sha256:af2366a1c6292cb27043cdfe68037be2f8f1e234ac5d8e85bb672be8c0a74c24` |
 
-Migration `20260808174259_mpgf_public_goods_public_read_rls.sql` was applied to QA only. It:
+Each hash covers only the corresponding `methodology` object. The canonicalization algorithm recursively sorts object keys with JavaScript `localeCompare`, preserves array order, serializes compact JSON, and hashes the UTF-8 bytes with SHA-256.
 
-- revokes direct client writes, including `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `REFERENCES`, and `TRIGGER`;
-- preserves the existing anonymous and authenticated `SELECT` surface;
-- enables RLS on all four tables;
-- creates one explicit public-read `SELECT` policy per table; and
-- fails transactionally if the required RLS or privilege invariants are not met.
+## QA database remediation
 
-Post-migration verification established, for all four tables, that RLS is enabled, anonymous and authenticated reads remain available, direct client writes are absent, and the expected `USING (true)` read policy exists. The Supabase security advisor no longer reports `rls_disabled_in_public` for these four tables. This does not claim that unrelated pre-existing advisor findings elsewhere in the database have been resolved.
+Migration `20260810150350_commitments_impact_methodology_review_remediation.sql` is applied only to MoralTrade QA project `hvmxfjjbdcgjjudmthdz`.
+
+- normalized source SHA-256: `1117861781bb1e3a22a619e5c3f17af5bcd4bf3d352227c41bf513f5850cd34b`
+- normalized bytes: `36310`
+
+Follow-up least-privilege migration `20260810151733_commitments_impact_methodology_remediation_privileges.sql` is also applied to QA only:
+
+- normalized source SHA-256: `eb69557921cb0c774417cdf5b7cfd83a1f1d75705965af141691438db0a3d9cb`
+- normalized bytes: `2782`
+
+Alias-safety migration `20260810152035_commitments_impact_snapshot_overlap_alias_fix.sql` is also applied to QA only:
+
+- normalized source SHA-256: `8e228fef725277da803d29b491b1f7de2cbc87b6fb59805a58e43942d6a92e5c`
+- normalized bytes: `9247`
+- production applied: **false**
+
+The migrations add the review/approval distinction, causal-identification and evidence-semantics validators, strategic-behavior and validation policies, conceptual-versus-calibration provenance checks, non-additive resource-claim enforcement, and deterministic-only rendering under non-passing model health.
 
 ## Present-stage approval security
 
-The selected founder account must be explicitly configured in the audited `impact_model_approvers` allowlist and must use an authenticated session. MFA/AAL2 is deliberately not a present-stage requirement. The optional AAL2 check remains available in the database so a later migration can require it once Moral Trade is high-leverage without changing the approver roster, exact-hash audit trail, or model-health gates. Exact methodology hashes, append-only approval events, active-approver status, and current passing model health remain mandatory.
+MFA remains deferred until Moral Trade is high-leverage. Present-stage governance requires an authenticated active allowlisted founder account. Exact-hash audit events and model-health activation gates remain mandatory.
 
-## Approval and activation sequence
+## Remaining blockers
 
-1. Run the updated exact-current-main code, bundle-hash, migration-source, transactional SQL, RLS, lint, TypeScript, and build gates on the final continuation commit.
-2. Keep all six candidates at `under_review`; do not activate them.
-3. Configure the selected founder account as an active impact-model approver and use an authenticated session. MFA is explicitly deferred until the site is high-leverage.
-4. Insert each candidate with its exact methodology hash only after the final exact-head gates pass.
-5. Review the six exact hashes. Any textual or parameter change creates a new hash and requires a new review.
-6. Record explicit authenticated founder approval for each exact hash.
-7. Keep model health `blocked` until eligible resolved observations and calibration evidence satisfy the methodology.
-8. Activate one model per mechanism only after a current passing health snapshot exists.
-9. Obtain separate production-release authorization before applying the RLS migration or any methodology migration to production, configuring the approver, merging the product change, or deploying it.
+- The exact remediation head must pass focused tests, six-hash validation, the full repository suite, ESLint, TypeScript, production build, exact-diff checks, exact QA migration-source verification, transactional SQL regression, and zero-residue verification.
+- A real founder approver account has not been configured in an authorized environment.
+- The six new exact hashes have not received a substantive approval decision.
+- No causal-identification design is validated.
+- No empirical calibration evidence is registered.
+- Confidence thresholds remain provisional and high confidence is disabled.
+- No model has a current passing health snapshot.
+- Production migration, merge, and deployment remain unauthorized.
 
-## Current blockers
-
-- The final exact-current-main continuation gates have not yet completed on the commit containing this packet.
-- The selected founder account has not yet been configured as an active impact-model approver.
-- No methodology hash is approved.
-- No empirical production calibration registry is populated.
-- No model has a passing health record.
-- Production migration and release are not authorized.
-
-Until all applicable blockers clear, the correct user-visible behavior is to show deterministic quantities and verified records where available and withhold modeled expected-impact components with explicit blockers.
+Until all applicable blockers clear, the product may show deterministic terms and reviewed outcome records while withholding causal and expected-impact components with explicit blockers.
