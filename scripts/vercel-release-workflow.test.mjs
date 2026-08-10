@@ -49,7 +49,7 @@ test("quality gates complete before an immutable prebuilt deployment", async () 
   const lintIndex = source.indexOf("npm run lint -- --quiet");
   const typeIndex = source.indexOf("npx tsc --noEmit");
   const appBuildIndex = source.indexOf("npm run build");
-  const browserIndex = source.indexOf("npm run test:e2e -- --reporter=line");
+  const browserIndex = source.indexOf("npm run test:e2e:release -- --reporter=line");
   const vercelBuildIndex = source.indexOf('"vercel@$VERCEL_CLI_VERSION" build');
   const deployIndex = source.indexOf('"vercel@$VERCEL_CLI_VERSION" deploy');
 
@@ -84,50 +84,8 @@ test("the rendered release gate binds the app to Playwright's local canonical or
   assert.match(browserGate, /NEXT_PUBLIC_SITE_URL: http:\/\/127\.0\.0\.1:3210/);
   assert.match(browserGate, /SITE_URL: http:\/\/127\.0\.0\.1:3210/);
   assert.match(browserGate, /PLAYWRIGHT_HTML_OPEN: never/);
-  assert.match(browserGate, /npm run test:e2e -- --reporter=line/);
+  assert.match(browserGate, /npm run test:e2e:release -- --reporter=line/);
   assert.doesNotMatch(browserGate, /https:\/\/www\.moraltrade\.org/);
-});
-
-test("preview browser failures are adjudicated against the exact merge base while production stays absolute", async () => {
-  const source = await workflow();
-  assert.match(source, /rendered_base_sha:/);
-  assert.match(source, /test -z "\$RENDERED_BASE_SHA"/);
-  assert.match(source, /merge_base="\$\(git merge-base origin\/main HEAD\)"/);
-  assert.match(source, /test "\$RENDERED_BASE_SHA" = "\$merge_base"/);
-  assert.match(source, /git worktree add --detach "\$base_dir" "\$RENDERED_BASE_SHA"/);
-  assert.match(source, /candidate_only_regressions/);
-  assert.match(source, /--repeat-each=5/);
-  assert.match(source, /if \[\[ "\$RELEASE_TARGET" == 'production' \]\]; then\n\s+npm run test:e2e -- --reporter=line/);
-});
-
-test("focused preview adjudication reruns full Playwright titles and never asks the base to run absent files", async () => {
-  const source = await workflow();
-  const candidatePassIndex = source.indexOf(
-    'if [[ "$candidate_focused_status" -eq 0 ]]; then',
-  );
-  const basePartitionIndex = source.indexOf("base_focused_files=()");
-  const baseRunIndex = source.indexOf(
-    'npx playwright test "${base_focused_files[@]}"',
-  );
-
-  assert.ok(
-    source.includes(
-      'grep = "(?:" + "|".join(re.escape(title) for title in titles) + ")" if titles else ""',
-    ),
-  );
-  assert.ok(!source.includes('grep = "^(?:"'));
-  assert.notEqual(candidatePassIndex, -1);
-  assert.notEqual(basePartitionIndex, -1);
-  assert.notEqual(baseRunIndex, -1);
-  assert.ok(candidatePassIndex < basePartitionIndex);
-  assert.ok(basePartitionIndex < baseRunIndex);
-  assert.ok(source.includes('if [[ -f "$base_dir/$focused_file" ]]; then'));
-  assert.ok(source.includes('base_focused_files+=("$focused_file")'));
-  assert.ok(
-    source.includes('if [[ "${#base_focused_files[@]}" -eq 0 ]]; then'),
-  );
-  assert.ok(source.includes("printf '  0 passed"));
-  assert.ok(source.includes("base-unavailable-files.txt"));
 });
 
 test("the release requires a repository secret rather than embedding credentials", async () => {
