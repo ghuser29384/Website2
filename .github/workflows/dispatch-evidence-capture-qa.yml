@@ -1,0 +1,51 @@
+name: Dispatch exact-head evidence capture QA
+
+on:
+  push:
+    branches:
+      - feature/evidence-credibility-capture-queue-20260811
+    paths:
+      - .github/workflows/dispatch-evidence-capture-qa.yml
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: dispatch-evidence-capture-qa
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact dispatcher head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Remove dispatcher, push clean head, and dispatch QA
+        shell: bash
+        env:
+          EXPECTED_PARENT_SHA: 3a2271241347984e2199dce9710bf87840713396
+          GH_TOKEN: ${{ github.token }}
+          TARGET_BRANCH: feature/evidence-credibility-capture-queue-20260811
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT_SHA"
+
+          rm .github/workflows/dispatch-evidence-capture-qa.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/dispatch-evidence-capture-qa.yml
+          git commit -m "ops: dispatch exact-head capture QA"
+          git push origin "HEAD:${TARGET_BRANCH}"
+
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/evidence-credibility-capture-qa.yml/dispatches" \
+            -f "ref=${TARGET_BRANCH}"
