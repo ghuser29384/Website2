@@ -1,0 +1,196 @@
+name: PR 600 current-main release-integrity validation
+
+on:
+  push:
+    branches:
+      - fix/vercel-prebuilt-artifact-integrity-20260810
+    paths:
+      - ".github/workflows/pr600-current-main-artifact-integrity-validation-20260811.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr600-current-main-release-integrity-validation
+  cancel-in-progress: false
+
+env:
+  EXPECTED_BASE_SHA: 067ed16110e3031b47935534f8cfba4633b5a04e
+  EXPECTED_CANDIDATE_SHA: 276b345ae349c23a3f16436b43af991d8ae2edca
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out the exact validation controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Guard exact current-main-integrated candidate and narrow diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_BASE_SHA"
+
+          mapfile -t changed < <(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_CANDIDATE_SHA" | sort)
+          expected=(
+            .github/workflows/vercel-release.yml
+            package.json
+            scripts/vercel-release-artifact-integrity.test.mjs
+          )
+          mapfile -t expected_sorted < <(printf '%s\n' "${expected[@]}" | sort)
+          test "${#changed[@]}" -eq "${#expected_sorted[@]}"
+          diff -u \
+            <(printf '%s\n' "${expected_sorted[@]}") \
+            <(printf '%s\n' "${changed[@]}")
+          git diff --check "$EXPECTED_BASE_SHA..$EXPECTED_CANDIDATE_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused and complete repository gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          npm run test:vercel-controls
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+
+      - name: Link only the canonical Vercel project and pull production settings
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes \
+            --environment=production \
+            --token="$VERCEL_TOKEN"
+
+      - name: Verify pinned CLI exposes staged deployment and promotion controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes "vercel@$VERCEL_CLI_VERSION" deploy --help \
+            | tee pr600-vercel-deploy-help.txt
+          grep -F -- '--skip-domain' pr600-vercel-deploy-help.txt
+
+          npx --yes "vercel@$VERCEL_CLI_VERSION" promote --help \
+            | tee pr600-vercel-promote-help.txt
+          grep -F -- '--timeout' pr600-vercel-promote-help.txt
+
+      - name: Build a clean production artifact without deploying
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf .next .vercel/output
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+            --prod \
+            --token="$VERCEL_TOKEN" \
+            | tee pr600-vercel-build.log
+
+      - name: Prove every prebuilt public asset is byte-identical to source
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > pr600-prebuilt-public-assets.sha256
+          count=0
+
+          while IFS= read -r -d '' source; do
+            relative="${source#public/}"
+            built=".vercel/output/static/$relative"
+            test -f "$built"
+            cmp --silent "$source" "$built"
+            sha256sum "$source" | sed "s#  public/#  #" \
+              >> pr600-prebuilt-public-assets.sha256
+            count=$((count + 1))
+          done < <(find public -type f -print0 | sort -z)
+
+          test "$count" -gt 0
+          printf '%s\n' "$count" | tee pr600-prebuilt-public-assets.count
+          sort -o pr600-prebuilt-public-assets.sha256 \
+            pr600-prebuilt-public-assets.sha256
+          sha256sum pr600-prebuilt-public-assets.sha256 \
+            | tee pr600-prebuilt-public-manifest.sha256
+
+      - name: Exercise authenticated immutable-asset retrieval against current production
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          alias_api="https://api.vercel.com/v4/aliases/www.moraltrade.org?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "$alias_api" \
+            > pr600-current-alias.json
+          deployment_id="$(jq -r '.deploymentId // .deployment.id // .deployment.uid // empty' pr600-current-alias.json)"
+          test -n "$deployment_id"
+
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_id?teamId=$VERCEL_ORG_ID" \
+            > pr600-current-deployment.json
+          jq -e --arg project "$VERCEL_PROJECT_ID" '
+            ((.projectId // .project.id // "") == $project)
+            and ((.readyState // .state // "") == "READY")
+            and (.target == "production")
+          ' pr600-current-deployment.json >/dev/null
+          deployment_url="https://$(jq -r '.url // empty' pr600-current-deployment.json)"
+          test "$deployment_url" != 'https://'
+
+          mkdir -p pr600-current-deployed-assets
+          : > pr600-current-deployed-assets.sha256
+          for relative in \
+            moral-trade-live-create-router.js \
+            moral-trade-live-command-center.js; do
+            output="pr600-current-deployed-assets/$relative"
+            npx --yes "vercel@$VERCEL_CLI_VERSION" curl \
+              "/$relative?integrity=$EXPECTED_CANDIDATE_SHA-$GITHUB_RUN_ID" \
+              --deployment="$deployment_url" \
+              --token="$VERCEL_TOKEN" \
+              > "$output"
+            cmp --silent "public/$relative" "$output"
+            sha256sum "$output" >> pr600-current-deployed-assets.sha256
+          done
+
+      - name: Upload immutable validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr600-current-main-release-integrity-${{ github.run_id }}
+          path: |
+            pr600-*.txt
+            pr600-*.json
+            pr600-*.log
+            pr600-*.sha256
+            pr600-*.count
+            pr600-current-deployed-assets
+          if-no-files-found: warn
+          retention-days: 30
