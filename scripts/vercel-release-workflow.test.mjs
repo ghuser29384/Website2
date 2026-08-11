@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import test from "node:test";
+
+import { verifyStaticArtifactIntegrity } from "./vercel-static-artifact-integrity.mjs";
 
 const workflowPath = new URL(
   "../.github/workflows/vercel-release.yml",
@@ -10,6 +14,10 @@ const completeProfileCanaryPath = new URL(
   "../.github/workflows/complete-profile-production-canary.yml",
   import.meta.url,
 );
+const releaseControlsPath = new URL(
+  "../.github/workflows/vercel-release-controls.yml",
+  import.meta.url,
+);
 
 async function workflow() {
   return readFile(workflowPath, "utf8");
@@ -17,6 +25,10 @@ async function workflow() {
 
 async function completeProfileCanary() {
   return readFile(completeProfileCanaryPath, "utf8");
+}
+
+async function releaseControls() {
+  return readFile(releaseControlsPath, "utf8");
 }
 
 test("Vercel releases are manual and never run on ordinary pushes or pull requests", async () => {
@@ -73,6 +85,126 @@ test("quality gates complete before an immutable prebuilt deployment", async () 
   assert.match(source, /--prebuilt/);
 });
 
+test("the prebuilt release starts clean and proves public-asset byte identity before upload", async () => {
+  const source = await workflow();
+  const buildIndex = source.indexOf(
+    "- name: Build a clean Vercel artifact on GitHub Actions compute",
+  );
+  const integrityIndex = source.indexOf(
+    "- name: Prove every prebuilt public asset matches the checked-in source",
+  );
+  const deployIndex = source.indexOf(
+    "- name: Upload the already-built artifact exactly once",
+  );
+
+  for (const index of [buildIndex, integrityIndex, deployIndex]) {
+    assert.notEqual(index, -1);
+  }
+  assert.ok(buildIndex < integrityIndex);
+  assert.ok(integrityIndex < deployIndex);
+
+  const buildStep = source.slice(buildIndex, integrityIndex);
+  const integrityStep = source.slice(integrityIndex, deployIndex);
+  assert.match(buildStep, /rm -rf \.next \.vercel\/output/);
+  assert.match(
+    integrityStep,
+    /node scripts\/vercel-static-artifact-integrity\.mjs/,
+  );
+  assert.match(integrityStep, /STATIC_BUILD_DIR: \.vercel\/output\/static/);
+  assert.match(integrityStep, /static-artifact-integrity\.json/);
+});
+
+test("production upload is explicitly promoted and both canonical alias records are verified", async () => {
+  const source = await workflow();
+  const deployIndex = source.indexOf(
+    "- name: Upload the already-built artifact exactly once",
+  );
+  const guardIndex = source.indexOf("- name: Guard the exact uploaded deployment");
+  const promoteIndex = source.indexOf(
+    "- name: Promote the exact production deployment to every canonical alias",
+  );
+  const canonicalIndex = source.indexOf(
+    "- name: Verify both canonical aliases and the published critical asset",
+  );
+  const evidenceIndex = source.indexOf("- name: Upload immutable release evidence");
+
+  for (const index of [
+    deployIndex,
+    guardIndex,
+    promoteIndex,
+    canonicalIndex,
+    evidenceIndex,
+  ]) {
+    assert.notEqual(index, -1);
+  }
+  assert.ok(deployIndex < guardIndex);
+  assert.ok(guardIndex < promoteIndex);
+  assert.ok(promoteIndex < canonicalIndex);
+  assert.ok(canonicalIndex < evidenceIndex);
+
+  const promoteStep = source.slice(promoteIndex, canonicalIndex);
+  const canonicalStep = source.slice(canonicalIndex, evidenceIndex);
+  assert.match(promoteStep, /if: \$\{\{ inputs\.target == 'production' \}\}/);
+  assert.match(promoteStep, /"vercel@\$VERCEL_CLI_VERSION" promote/);
+  assert.match(promoteStep, /--scope="\$VERCEL_TEAM_SCOPE"/);
+  assert.equal(
+    (source.match(/"vercel@\$VERCEL_CLI_VERSION" promote/g) ?? []).length,
+    1,
+  );
+
+  assert.match(
+    canonicalStep,
+    /for alias_name in "\$CANONICAL_APEX_DOMAIN" "\$CANONICAL_WWW_DOMAIN"; do/,
+  );
+  assert.match(canonicalStep, /api\.vercel\.com\/v4\/aliases\/\$\{alias_name\}/);
+  assert.match(
+    canonicalStep,
+    /deploymentId \/\/ \.deployment\.id \/\/ \.deployment\.uid/,
+  );
+  assert.match(
+    canonicalStep,
+    /api\.vercel\.com\/v13\/deployments\/\$\{EXPECTED_DEPLOYMENT_ID\}/,
+  );
+  assert.match(canonicalStep, /\(\.target == "production"\)/);
+  assert.match(canonicalStep, /\(\(\.aliasError \/\/ null\) == null\)/);
+  assert.match(canonicalStep, /cmp --silent "public\/\$RELEASE_CRITICAL_ASSET"/);
+});
+
+test("release evidence is retained without credentials", async () => {
+  const source = await workflow();
+  assert.match(source, /uses: actions\/upload-artifact@v4/);
+  assert.match(source, /name: gated-vercel-release-\$\{\{ inputs\.target \}\}-\$\{\{ github\.run_id \}\}/);
+  assert.match(source, /path: \$\{\{ env\.RELEASE_EVIDENCE_DIR \}\}/);
+  assert.match(source, /retention-days: 30/);
+  assert.doesNotMatch(source, /\.env\.production\.local/);
+});
+
+test("a dedicated repository gate parses and tests every release-control change", async () => {
+  const source = await releaseControls();
+
+  const pullRequestStart = source.indexOf("  pull_request:");
+  const pushStart = source.indexOf("  push:");
+  const permissionsStart = source.indexOf("permissions:");
+  for (const index of [pullRequestStart, pushStart, permissionsStart]) {
+    assert.notEqual(index, -1);
+  }
+
+  const pullRequestTrigger = source.slice(pullRequestStart, pushStart);
+  const pushTrigger = source.slice(pushStart, permissionsStart);
+  for (const trigger of [pullRequestTrigger, pushTrigger]) {
+    assert.match(trigger, /\.github\/workflows\/vercel-release-controls\.yml/);
+    assert.match(trigger, /\.github\/workflows\/vercel-release\.yml/);
+    assert.match(trigger, /scripts\/vercel-release-workflow\.test\.mjs/);
+    assert.match(trigger, /scripts\/vercel-static-artifact-integrity\.mjs/);
+  }
+  assert.match(pushTrigger, /branches:\n\s+- main/);
+  assert.match(source, /node --check scripts\/vercel-static-artifact-integrity\.mjs/);
+  assert.match(source, /node --test scripts\/vercel-release-workflow\.test\.mjs/);
+  assert.match(source, /ARGV\.each/);
+  assert.match(source, /\.github\/workflows\/vercel-release-controls\.yml/);
+  assert.match(source, /\.github\/workflows\/vercel-release\.yml/);
+});
+
 test("the rendered release gate binds the app to Playwright's local canonical origin", async () => {
   const source = await workflow();
   const start = source.indexOf("- name: Run complete rendered browser gate");
@@ -92,6 +224,75 @@ test("the release requires a repository secret rather than embedding credentials
   const source = await workflow();
   assert.match(source, /secrets\.VERCEL_TOKEN/);
   assert.doesNotMatch(source, /tok_[A-Za-z0-9_-]+/);
+});
+
+test("the static artifact verifier checks the full public tree and records normalized evidence", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vercel-static-integrity-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const sourceRoot = path.join(root, "public");
+  const builtRoot = path.join(root, "output", "static");
+  const evidenceDir = path.join(root, "evidence");
+
+  await Promise.all([
+    mkdir(path.join(sourceRoot, "nested"), { recursive: true }),
+    mkdir(path.join(builtRoot, "nested"), { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(path.join(sourceRoot, "moral-trade-live-create-router.js"), "router\n"),
+    writeFile(path.join(builtRoot, "moral-trade-live-create-router.js"), "router\n"),
+    writeFile(path.join(sourceRoot, "nested", "asset.txt"), "asset\n"),
+    writeFile(path.join(builtRoot, "nested", "asset.txt"), "asset\n"),
+  ]);
+
+  const result = await verifyStaticArtifactIntegrity({
+    sourceRoot,
+    builtRoot,
+    evidenceDir,
+  });
+
+  assert.equal(result.fileCount, 2);
+  assert.equal(result.critical.relativePath, "moral-trade-live-create-router.js");
+  assert.equal(result.critical.sha256.length, 64);
+  assert.deepEqual(
+    result.entries.map((entry) => entry.relativePath),
+    ["moral-trade-live-create-router.js", path.join("nested", "asset.txt")],
+  );
+  assert.equal(
+    await readFile(path.join(evidenceDir, "public-source.sha256"), "utf8"),
+    await readFile(path.join(evidenceDir, "public-prebuilt.sha256"), "utf8"),
+  );
+  const recorded = JSON.parse(
+    await readFile(path.join(evidenceDir, "static-artifact-integrity.json"), "utf8"),
+  );
+  assert.equal(recorded.fileCount, 2);
+});
+
+test("the static artifact verifier fails closed on missing or changed output", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vercel-static-integrity-fail-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const sourceRoot = path.join(root, "public");
+  const builtRoot = path.join(root, "output", "static");
+
+  await Promise.all([
+    mkdir(sourceRoot, { recursive: true }),
+    mkdir(builtRoot, { recursive: true }),
+  ]);
+  await Promise.all([
+    writeFile(path.join(sourceRoot, "moral-trade-live-create-router.js"), "source\n"),
+    writeFile(path.join(builtRoot, "moral-trade-live-create-router.js"), "changed\n"),
+  ]);
+
+  await assert.rejects(
+    verifyStaticArtifactIntegrity({ sourceRoot, builtRoot }),
+    /Prebuilt public asset differs from source/,
+  );
+
+  await writeFile(path.join(builtRoot, "moral-trade-live-create-router.js"), "source\n");
+  await writeFile(path.join(sourceRoot, "missing.txt"), "missing\n");
+  await assert.rejects(
+    verifyStaticArtifactIntegrity({ sourceRoot, builtRoot }),
+    /Prebuilt artifact is missing public asset missing\.txt/,
+  );
 });
 
 test("the Complete Profile canary runs after control changes without treating them as deployments", async () => {

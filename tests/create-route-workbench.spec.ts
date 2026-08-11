@@ -87,14 +87,21 @@ test.describe("Create route workbench", () => {
     await expect(create.locator("#commonGroundFields")).toBeVisible();
     await expect(create.locator("#dacCreateFields")).toBeHidden();
     await expect(
-      create.getByText(/Both gain \$1,000 by their own estimates\./),
+      create.getByRole("heading", { name: "Who should fund one project together?" }),
     ).toBeVisible();
+    await expect(
+      create.getByText("Are you participating in this Co-Fund?", { exact: true }),
+    ).toBeVisible();
+    await expect(create.locator("#commonGroundParticipantList")).toContainText(
+      "Type at least two characters, then explicitly select an account.",
+    );
+    await expect(create.getByRole("button", { name: /Review Co-Fund/ })).toBeDisabled();
     expect(publishRequestCount).toBe(0);
 
     const commonGroundWords = await create.locator("#commonGroundFields").evaluate((element) =>
       (element.textContent || "").trim().split(/\s+/).filter(Boolean).length,
     );
-    expect(commonGroundWords).toBeLessThanOrEqual(95);
+    expect(commonGroundWords).toBeLessThanOrEqual(180);
 
     if (captureVisuals) {
       await captureFrame(create, "implementation-common-ground-desktop.png");

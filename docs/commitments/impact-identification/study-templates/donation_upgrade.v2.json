@@ -1,0 +1,479 @@
+{
+  "artifactSchemaVersion": "moral-trade-impact-identification-artifact-v2",
+  "artifactKind": "mechanism_study_template",
+  "mechanismFamily": "donation_upgrade",
+  "templateKey": "commitments-donation-upgrade-study-template-v2",
+  "version": 2,
+  "status": "under_review",
+  "payloadSha256": "sha256:a0c6ea80a989558070869d87aae41aabe7d34a8e011f41e53427015fc0e95512",
+  "payload": {
+    "mechanismFamily": "donation_upgrade",
+    "templateKey": "commitments-donation-upgrade-study-template-v2",
+    "displayName": "Donation Upgrade offer-policy study template v2",
+    "templateStatus": "under_review",
+    "executionAuthorized": false,
+    "studyVariants": [
+      {
+        "variantKey": "donor_matcher_campaign_graph_offer",
+        "status": "specified_not_validated",
+        "primaryOutcomeRule": "scalar reviewed new money absent from both frozen no-offer baselines"
+      }
+    ],
+    "fixedDesignChoices": {
+      "assignmentUnit": "pre-randomization donor-matcher-campaign graph cluster",
+      "exposureUnit": "frozen eligible donation intent",
+      "outcomeUnit": "eligible donation intent",
+      "analysisUnit": "independent donor-matcher-campaign graph cluster",
+      "primaryEstimatorFamily": "cluster-level Horvitz-Thompson or Hájek with randomization inference",
+      "participantSpecificCreditAuthorized": false
+    },
+    "requiredStudyInstanceBindings": {
+      "studyKey": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "studyVersion": {
+        "status": "study_instance_required",
+        "valueType": "positive_integer"
+      },
+      "mechanismFamily": {
+        "status": "study_instance_required",
+        "valueType": "mechanism_family_enum"
+      },
+      "studyVariant": {
+        "status": "study_instance_required",
+        "valueType": "template_variant_enum"
+      },
+      "eligiblePopulationSnapshotHash": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "eligibilityRules": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_rule_array"
+      },
+      "exclusionRules": {
+        "status": "study_instance_required",
+        "valueType": "rule_array"
+      },
+      "assignmentUnit": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "exposureUnit": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "outcomeUnit": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "analysisUnit": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "interferenceClusterDefinition": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "assignmentDesign": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "assignmentProbabilities": {
+        "status": "study_instance_required",
+        "valueType": "probability_vector",
+        "constraints": [
+          "all probabilities > 0",
+          "sum equals 1 within each randomization stage"
+        ]
+      },
+      "blockingAndStratificationVariables": {
+        "status": "study_instance_required",
+        "valueType": "string_array"
+      },
+      "exposureMapping": {
+        "status": "study_instance_required",
+        "valueType": "deterministic_mapping_specification"
+      },
+      "supportedExposureCells": {
+        "status": "study_instance_required",
+        "valueType": "exposure_cell_array"
+      },
+      "emptyExposureCellAction": {
+        "status": "study_instance_required",
+        "valueType": "enum",
+        "constraints": [
+          "must equal withhold_estimand or no_launch"
+        ]
+      },
+      "primaryEstimand": {
+        "status": "study_instance_required",
+        "valueType": "estimand_object"
+      },
+      "potentialOutcomeContrast": {
+        "status": "study_instance_required",
+        "valueType": "mathematical_expression"
+      },
+      "targetPopulation": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "primaryOutcome": {
+        "status": "study_instance_required",
+        "valueType": "scalar_or_prespecified_global_test"
+      },
+      "outcomeWindow": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "estimator": {
+        "status": "study_instance_required",
+        "valueType": "estimator_object"
+      },
+      "varianceProcedure": {
+        "status": "study_instance_required",
+        "valueType": "design_based_variance_object"
+      },
+      "finiteSampleInference": {
+        "status": "study_instance_required",
+        "valueType": "randomization_or_exact_inference_object"
+      },
+      "unequalClusterSizeHandling": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "covariateAdjustmentPolicy": {
+        "status": "study_instance_required",
+        "valueType": "precision_only_policy"
+      },
+      "missingnessEstimand": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "attritionBounds": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "sensitivityAnalyses": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_analysis_array"
+      },
+      "graphDiagnostics": {
+        "status": "study_instance_required",
+        "valueType": "graph_diagnostics_object"
+      },
+      "precisionSimulation": {
+        "status": "study_instance_required",
+        "valueType": "precision_simulation_object"
+      },
+      "fixedHorizonOrSequentialDesign": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "ethicsDetermination": {
+        "status": "study_instance_required",
+        "valueType": "independent_ethics_determination"
+      },
+      "participantDefinition": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "consentOrWaiver": {
+        "status": "study_instance_required",
+        "valueType": "consent_or_independently_approved_waiver"
+      },
+      "controlConditionJustification": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "vulnerableParticipantProtections": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "debriefingPolicy": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "adverseEventMonitoring": {
+        "status": "study_instance_required",
+        "valueType": "monitoring_plan"
+      },
+      "stopAndSuspensionRules": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_veto_array"
+      },
+      "privacyRetentionAndDeletion": {
+        "status": "study_instance_required",
+        "valueType": "data_governance_object"
+      },
+      "accessControl": {
+        "status": "study_instance_required",
+        "valueType": "role_based_access_policy"
+      },
+      "incidentResponse": {
+        "status": "study_instance_required",
+        "valueType": "incident_response_plan"
+      },
+      "entropySource": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "seedGenerationProcedure": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "seedCommitment": {
+        "status": "study_instance_required",
+        "valueType": "sha256_hash"
+      },
+      "constrainedRandomizationRule": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "assignmentConcealment": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "outcomeAdjudicatorBlinding": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "unblindingLog": {
+        "status": "study_instance_required",
+        "valueType": "append_only_event_log"
+      },
+      "postAssignmentEligibilityChangeLog": {
+        "status": "study_instance_required",
+        "valueType": "append_only_event_log"
+      },
+      "differentialEvidenceResolutionAudit": {
+        "status": "study_instance_required",
+        "valueType": "arm_comparison_report"
+      },
+      "blockingSafetyOutcomes": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_safety_outcome_array"
+      },
+      "contaminationAndSpilloverMonitoring": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "offPlatformSubstitutionAudit": {
+        "status": "study_instance_required",
+        "valueType": "non_empty_string"
+      },
+      "resourceClaimDeduplication": {
+        "status": "study_instance_required",
+        "valueType": "stable_unique_claim_policy"
+      },
+      "analysisCodeHash": {
+        "status": "study_instance_required",
+        "valueType": "sha256_hash"
+      },
+      "protocolPayloadHash": {
+        "status": "study_instance_required",
+        "valueType": "sha256_hash"
+      },
+      "templatePayloadHash": {
+        "status": "study_instance_required",
+        "valueType": "sha256_hash"
+      },
+      "studyInstancePayloadHash": {
+        "status": "study_instance_required",
+        "valueType": "sha256_hash"
+      },
+      "appendOnlyRegistryRecord": {
+        "status": "study_instance_required",
+        "valueType": "immutable_registry_uri"
+      },
+      "protectedTagOrEquivalent": {
+        "status": "study_instance_required",
+        "valueType": "signed_protected_tag_or_external_append_only_record"
+      },
+      "amendmentLog": {
+        "status": "study_instance_required",
+        "valueType": "append_only_amendment_array"
+      },
+      "deviationLog": {
+        "status": "study_instance_required",
+        "valueType": "append_only_deviation_array"
+      }
+    },
+    "ethicsGovernance": {
+      "independentDeterminationRequired": true,
+      "gatekeeperPermissionIsNotParticipantConsent": true,
+      "requiredDeterminations": [
+        "who counts as a research participant",
+        "whether informed consent is required",
+        "whether a waiver or alteration is independently permissible and justified by minimal risk and infeasibility",
+        "whether the control condition withholds an entitlement",
+        "jurisdiction and institution-specific obligations"
+      ],
+      "requiredProtections": [
+        "minors and vulnerable users",
+        "hierarchical, social, economic, or relational pressure",
+        "debriefing where applicable",
+        "adverse-event monitoring",
+        "prespecified stop or suspension rules",
+        "privacy, retention, access, deletion, and incident response"
+      ],
+      "status": "required_not_completed"
+    },
+    "allocationConcealment": {
+      "eligibilityFrozenBeforeSeedGeneration": true,
+      "entropySourceMustBeFrozen": true,
+      "seedShoppingProhibited": true,
+      "undisclosedRerandomizationProhibited": true,
+      "constrainedRandomizationRequiresFrozenAdmissibleSetAndSelectionRule": true,
+      "assignmentConcealedUntilEligibilityIrreversible": true,
+      "outcomeAdjudicatorBlindingRequiredWhereFeasible": true,
+      "allUnblindingAndPostAssignmentEligibilityChangesLogged": true,
+      "differentialEvidenceResolutionAuditedByArm": true
+    },
+    "precisionAndStopping": {
+      "provisionalObservationFloorsAreNotStudySampleSizes": true,
+      "simulationRequiredBeforeLaunch": true,
+      "requiredInputs": [
+        "number of independent randomized clusters",
+        "cluster-size distribution",
+        "assignment and saturation probabilities",
+        "supported exposure-cell probabilities",
+        "intracluster correlation",
+        "spillover strength",
+        "noncompliance",
+        "contamination",
+        "attrition",
+        "cluster-size imbalance"
+      ],
+      "requiredOutputs": [
+        "effective sample size",
+        "expected exposure-cell counts",
+        "interval-width or decision-loss target",
+        "simulation code hash and seed",
+        "sensitivity grid",
+        "no-launch determination"
+      ],
+      "optionalStoppingProhibited": true,
+      "fixedHorizonOrValidSequentialDesignRequired": true,
+      "scientificIntervalLevelBps": 9500,
+      "productPredictiveIntervalLevelBps": 8000
+    },
+    "safetyVetoPolicy": {
+      "safetyOutcomesAreVetoes": true,
+      "noImplicitMoralAggregation": true,
+      "requiredBlockingOutcomes": [
+        "harmful-offer or threat indicator",
+        "baseline manufacture or worsening after eligibility becomes salient",
+        "harm shifted to nonparticipants",
+        "coercion, harassment, identity exposure, or retaliation",
+        "concentration or exclusion effect",
+        "off-platform substitution",
+        "duplicate or overlapping resource claim"
+      ],
+      "prohibitedStudyArms": [
+        "illegal, violent, deceptive, coercive, or harassing offer",
+        "disabled harmful-offer enforcement",
+        "reward for manufacturing a worse baseline",
+        "encouragement to create harm so another party will pay to stop it",
+        "suppression of required safety information",
+        "identity disclosure contrary to frozen mechanism terms"
+      ]
+    },
+    "provenanceAndImmutability": {
+      "canonicalPayloadHashRequired": true,
+      "signedProtectedTagOrEquivalentRequiredBeforeApproval": true,
+      "appendOnlyRegistryRequiredBeforeAssignment": true,
+      "registryMustBind": [
+        "protocol payload hash",
+        "template payload hash",
+        "study-instance payload hash",
+        "founder approval record",
+        "eligible-population snapshot hash",
+        "assignment-code hash",
+        "analysis-code hash",
+        "seed commitment",
+        "ethics determination reference",
+        "amendment log"
+      ],
+      "preAssignmentAmendmentsAndPostAssignmentDeviationsSeparated": true
+    },
+    "evidenceToProductMapping": {
+      "supports": [
+        {
+          "claimId": "assignment_policy_itt",
+          "scope": "mechanism_or_policy_level",
+          "condition": "exact study-instance design, assignment integrity, outcome evidence, prespecified analysis, and sensitivity gates pass"
+        },
+        {
+          "claimId": "reviewed_outcome_quantity",
+          "scope": "occurrence_and_native_unit_quantity_only",
+          "condition": "reviewed evidence passes; this claim does not require causal identification"
+        }
+      ],
+      "conditionallySupports": [
+        {
+          "claimId": "local_complier_or_peer_effect",
+          "scope": "study_population_and_assignment_policy_only",
+          "condition": "instrument, monotonicity, exclusion restrictions, interference mapping, overlap, and sensitivity assumptions receive separate exact approval",
+          "aggregationRule": "non_additive"
+        }
+      ],
+      "doesNotSupport": [
+        {
+          "claimId": "participant_expected_additional",
+          "pr534Component": "expected_additional",
+          "reason": "assignment-policy ITT is not the effect of an actual participant commitment"
+        },
+        {
+          "claimId": "participant_direct_causal_attribution",
+          "pr534Component": "direct_causal_attribution",
+          "reason": "participant action is post-assignment and affected by noncompliance and interference"
+        },
+        {
+          "claimId": "verified_additionality",
+          "pr534Component": "verified_outcome",
+          "reason": "evidence verifies occurrence, not the counterfactual"
+        },
+        {
+          "claimId": "high_confidence_participant_impact",
+          "pr534Component": "confidence",
+          "reason": "requires separate causal, predictive, and transportability validation plus exact approval"
+        }
+      ],
+      "participantCausalComponentsDefault": "withheld",
+      "localEffectsArePopulationSpecific": true,
+      "localEffectsAreNonAdditive": true,
+      "mechanismSpecificNotes": [
+        "The offer-policy ITT may be supported. Acceptance is post-assignment and does not authorize participant-specific direct credit."
+      ]
+    },
+    "mechanismSpecificRequirements": {
+      "interferenceGraph": "donor-matcher-campaign graph covering repeat donors, shared matchers, and shared campaigns",
+      "baselineRule": "freeze both donor planned donation and matcher no-offer plan before offer exposure",
+      "primaryOutcomeComponents": [
+        "new donor top-up absent from donor baseline",
+        "new matcher money absent from matcher baseline"
+      ],
+      "separateDescriptiveComponents": [
+        "baseline-redirected donor amount",
+        "refunds",
+        "reversals",
+        "settlement failures"
+      ],
+      "noLaunchRules": [
+        "randomization clusters only by donor while matcher or campaign crosses arms",
+        "post-assignment acceptance is treated as the primary treatment",
+        "either no-offer baseline is missing or became salient before freezing"
+      ]
+    },
+    "launchBlockers": [
+      "master_protocol_not_approved",
+      "study_instance_not_registered",
+      "independent_ethics_determination_missing",
+      "precision_simulation_not_approved",
+      "assignment_and_analysis_code_hashes_missing",
+      "production_experiment_not_authorized"
+    ]
+  }
+}

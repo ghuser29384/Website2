@@ -26,6 +26,11 @@ export async function persistCreateSubmission(input: {
   origin: string;
 }): Promise<CreatePublishResult> {
   const { validated } = input;
+  const sourcePayload = {
+    ...validated.source,
+    groupContributionTerms:
+      validated.groupContributionReviewRecord?.groupContributionTerms ?? null,
+  };
   const targetFields = {
     existingPoolReference: validated.existingPoolReference,
     existingPoolAmountCents: validated.existingPoolAmountCents,
@@ -36,7 +41,7 @@ export async function persistCreateSubmission(input: {
     p_actor_id: input.actorId,
     p_submission_key: validated.source.submissionKey,
     p_submission_kind: validated.kind,
-    p_source_payload: toJson(validated.source),
+    p_source_payload: toJson(sourcePayload),
     p_payload_hash: validated.payloadHash,
     p_cause_area: validated.cause,
     p_request_kind: validated.source.requestKind,
@@ -55,7 +60,18 @@ export async function persistCreateSubmission(input: {
 
   const isPool = row.target_type === "mpgf_pool_proposal";
   const isCommonGround = Boolean(validated.poolTerms?.commonGround);
-  const kindLabel = validated.kind === "donation_redirect"
+  const groupModes = new Set(
+    validated.groupContributionTerms.options.map((option) => option.terms.mode),
+  );
+  const hasCoAct = groupModes.has("co-act");
+  const hasCoFund = groupModes.has("co-fund");
+  const kindLabel = hasCoAct && hasCoFund
+    ? "Co-Act and Co-Fund proposal"
+    : hasCoAct
+      ? "Co-Act proposal"
+      : hasCoFund
+        ? "Co-Fund proposal"
+        : validated.kind === "donation_redirect"
     ? "Donation redirect proposal"
     : validated.kind === "existing_pool_contribution"
       ? "Existing-pool contribution offer"
@@ -75,11 +91,13 @@ export async function persistCreateSubmission(input: {
     canonicalUrl: new URL(row.canonical_path, input.origin).toString(),
     objectLabel: kindLabel,
     title: "Your submission is in review.",
-    lede: isCommonGround
-      ? "The shared-project split is saved privately. It cannot accept pledges until every named participant confirms and the review gates pass."
-      : isPool
-        ? "The pool proposal is durable but not public and cannot accept pledges until its recipient, underwriting, reserve, formula, and operator-review gates are complete."
-        : "The proposal is durable but not public. It creates no obligation until review is complete and both sides confirm final terms.",
+    lede: hasCoAct || hasCoFund
+      ? "The group terms are saved privately for review. They do not activate a group, enroll anyone, authorize payment, publish identities, or create an obligation."
+      : isCommonGround
+        ? "The shared-project split is saved privately. It cannot accept pledges until every named participant confirms and the review gates pass."
+        : isPool
+          ? "The pool proposal is durable but not public and cannot accept pledges until its recipient, underwriting, reserve, formula, and operator-review gates are complete."
+          : "The proposal is durable but not public. It creates no obligation until review is complete and both sides confirm final terms.",
     visibility: "Private until approved",
     openStatus: "Pending Moral Trade review",
   };

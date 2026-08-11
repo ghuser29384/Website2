@@ -1,4 +1,11 @@
 import type { FormulaAst } from "./formula";
+import type { GroupContributionProposalPayload } from "./group-contribution-payload";
+import type {
+  CreatorParticipation,
+  ParticipantOwnedFundingTerms,
+  ParticipantTarget,
+} from "./participant-target";
+import type { GroupContributionReviewRecordFragment } from "./group-contribution-review-record";
 
 export const CREATE_INTERFACE_VERSION = "moral_trade_create_v1" as const;
 
@@ -38,19 +45,15 @@ export interface CreateTimingBandInput {
 }
 
 export interface CreateCommonGroundParticipantInput {
-  id: string;
-  name: string;
-  defaultProject: string;
-  budgetCents: number;
-  contributionCents: number;
+  target: ParticipantTarget;
+  participantTerms: ParticipantOwnedFundingTerms | null;
 }
 
 export interface CreateCommonGroundInput {
   targetAmountCents: number;
-  calculationPolicy: "balanced_surplus_v1";
+  allocationStatus: "open";
+  creatorParticipation: CreatorParticipation;
   privateValueEstimatesStored: false;
-  participantGainChecked: true;
-  baselineConfirmed: true;
   participants: CreateCommonGroundParticipantInput[];
 }
 
@@ -90,6 +93,7 @@ export interface MoralTradeCreatePayload {
   existingPoolCurrency: string;
   offers: CreateOfferContribution[];
   pool: CreatePoolInput | null;
+  groupContributionTerms: unknown | null;
 }
 
 export interface ValidatedFormulaTerms {
@@ -133,6 +137,8 @@ export interface ValidatedCreatePayload {
   existingPoolAmountCents: number | null;
   existingPoolCurrency: string | null;
   poolTerms: ValidatedCreatePoolTerms | null;
+  groupContributionTerms: GroupContributionProposalPayload;
+  groupContributionReviewRecord: GroupContributionReviewRecordFragment | null;
   payloadHash: string;
 }
 

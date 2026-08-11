@@ -13,6 +13,7 @@ test("the Common Ground integration is deterministic and idempotent", () => {
   assert.equal((integrated.match(/data-common-ground-create-integration-v1/g) ?? []).length, 1);
   assert.equal((integrated.match(/data-fund-mode="commonGround"/g) ?? []).length, 1);
   assert.equal((integrated.match(/common-ground\.css/g) ?? []).length, 1);
+  assert.equal((integrated.match(/participant-picker\.js/g) ?? []).length, 1);
   assert.equal((integrated.match(/common-ground\.js/g) ?? []).length, 1);
 });
 
@@ -34,15 +35,11 @@ test("the integration preserves the static source and adds the compact funding c
   assert.doesNotMatch(integrated, />Conditional donation</);
   assert.doesNotMatch(integrated, /Set up a conditional donation\./);
   assert.match(integrated, /Co-Fund/);
-  assert.match(
-    integrated,
-    /If this Co-Fund does not happen, where would you otherwise use this money\?/,
-  );
-  assert.match(
-    integrated,
-    /These are the projects we would honestly fund if this Co-Fund did not happen\./,
-  );
-  assert.doesNotMatch(integrated, /honest no-pool defaults/);
+  assert.match(integrated, /Are you participating in this Co-Fund\?/);
+  assert.match(integrated, /Search Moral Trade accounts by username or display name\./);
+  assert.match(integrated, /Typed text is not a participant until you explicitly select an account\./);
+  assert.match(integrated, /private claim link/);
+  assert.doesNotMatch(integrated, /These are the projects we would honestly fund/);
   assert.match(integrated, /Threshold pool/);
 });
 
