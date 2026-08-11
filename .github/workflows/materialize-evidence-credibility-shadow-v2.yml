@@ -101,36 +101,34 @@ jobs:
               raise SystemExit(1)
           PY
 
-      - name: Materialize durable files and remove all temporary machinery
+      - name: Materialize only the non-workflow durable files
         shell: bash
         run: |
           set -euo pipefail
           tar -xzf /tmp/evidence-shadow.tar.gz -C "${GITHUB_WORKSPACE}"
-          rm -rf .github/materialize-evidence-shadow
-          rm -f .github/workflows/materialize-evidence-credibility-shadow-v2.yml
-          rm -f .github/workflows/stage-evidence-credibility-shadow-qa-workflow.yml
-          rm -f .github/workflows/cleanup-evidence-credibility-shadow-staging.yml
-          rm -f .github/staged-evidence-credibility-shadow-qa.yml.txt
-          test -f .github/workflows/evidence-credibility-shadow-qa.yml
+          git checkout -- .github/workflows/evidence-credibility-shadow-qa.yml
           test -f docs/moral-trade/evidence-credibility-shadow-v2.md
           test -f src/lib/evidence-credibility-shadow-schema-contract.test.ts
           test "$(find supabase/migrations -maxdepth 1 -type f -name '202608101600*_evidence_credibility_shadow_*.sql' | wc -l)" -eq 12
           test "$(find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_shadow_*.sql' | wc -l)" -eq 6
-          test ! -e .github/materialize-evidence-shadow
-          test ! -e .github/workflows/materialize-evidence-credibility-shadow-v2.yml
-          test ! -e .github/workflows/stage-evidence-credibility-shadow-qa-workflow.yml
-          test ! -e .github/workflows/cleanup-evidence-credibility-shadow-staging.yml
-          test ! -e .github/staged-evidence-credibility-shadow-qa.yml.txt
 
-      - name: Commit exact durable tree
+      - name: Commit exact non-workflow durable tree
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
+          git add -- \
+            docs/moral-trade/evidence-credibility-shadow-v2.md \
+            src/lib/evidence-credibility-shadow-schema-contract.test.ts \
+            supabase/migrations/202608101600*_evidence_credibility_shadow_*.sql \
+            supabase/tests/evidence_credibility_shadow_*.sql
           git diff --cached --check
           test "$(git diff --cached --name-status | awk '$1=="A"{n++} END{print n+0}')" -eq 20
-          test "$(git diff --cached --name-status | awk '$1=="D"{n++} END{print n+0}')" -eq 8
-          git commit -m "Implement evidence credibility shadow integration"
+          test "$(git diff --cached --name-status | awk '$1=="D"{n++} END{print n+0}')" -eq 0
+          if git diff --cached --name-only | grep -q '^\.github/'; then
+            echo "A workflow or temporary controller entered the non-workflow commit." >&2
+            exit 1
+          fi
+          git commit -m "Materialize evidence credibility shadow durable files"
           git push origin HEAD:feature/evidence-credibility-shadow-v2-20260810
