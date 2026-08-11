@@ -6,6 +6,12 @@ on:
     paths:
       - ".github/workflows/materialize-commitments-impact-study-instrumentation-remediation.yml"
       - ".github/remediation/commitments-impact-study-instrumentation-v2.part*"
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+    paths:
+      - ".github/workflows/materialize-commitments-impact-study-instrumentation-remediation.yml"
+      - ".github/remediation/commitments-impact-study-instrumentation-v2.part*"
 
 permissions:
   contents: write
@@ -16,6 +22,7 @@ concurrency:
 
 jobs:
   materialize:
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
