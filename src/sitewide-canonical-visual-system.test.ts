@@ -43,14 +43,21 @@ function isCoveredPage(source: string) {
 test("the canonical Home tokens drive every shared Next.js route", () => {
   const layout = read("src/app/layout.tsx");
   const canonical = read("src/app/canonical-visual-system.css");
+  const remediation = read("src/app/canonical-visual-system-remediation.css");
   const home = read("src/components/home/returning-home.module.css");
   const homePage = read("src/components/home/home-page.tsx");
 
   assert.match(layout, /import "\.\/canonical-visual-system\.css";/);
+  assert.match(layout, /import "\.\/canonical-visual-system-remediation\.css";/);
   assert.ok(
     layout.indexOf('import "./canonical-visual-system.css";') >
       layout.indexOf('import "./search-bar-polish.css";'),
-    "The canonical stylesheet must be imported last.",
+    "The canonical stylesheet must follow all legacy shared styles.",
+  );
+  assert.ok(
+    layout.indexOf('import "./canonical-visual-system-remediation.css";') >
+      layout.indexOf('import "./canonical-visual-system.css";'),
+    "The rendered-audit remediation must be the final shared stylesheet.",
   );
 
   for (const token of [
@@ -75,6 +82,10 @@ test("the canonical Home tokens drive every shared Next.js route", () => {
   assert.equal(canonical.includes('[class*="receipt" i]'), false);
   assert.match(homePage, /data-mt-canonical-home="true"/);
   assert.match(canonical, /body:not\(:has\(\[data-mt-canonical-home="true"\]\)\):not\(:has\(\.mtw-shell\)\)/);
+  assert.match(remediation, /\.mt-v75-side-link\.is-active[\s\S]*background:\s*var\(--mt-black\)/);
+  assert.match(remediation, /\.mt-v75-side-plan[\s\S]*border-radius:\s*0\s*!important/);
+  assert.match(remediation, /\.commitments-center[\s\S]*border-radius:\s*0\s*!important/);
+  assert.match(remediation, /\.dashboard-page[\s\S]*box-shadow:\s*none\s*!important/);
 });
 
 test("every Next.js page declares a shared or explicitly aligned visual shell", () => {
@@ -85,8 +96,6 @@ test("every Next.js page declares a shared or explicitly aligned visual shell", 
 
   assert.deepEqual(uncovered, []);
 });
-
-
 
 test("custom module-driven pages expose stable canonical visual hooks", () => {
   const hooks = [
@@ -105,7 +114,17 @@ test("custom module-driven pages expose stable canonical visual hooks", () => {
   }
 });
 
+test("the rendered gate rejects blank and overlay-only route captures", () => {
+  const rendered = read("tests/sitewide-canonical-visual-system.spec.ts");
 
+  assert.match(rendered, /waitForMeaningfulSurface/);
+  assert.match(rendered, /#account-heading/);
+  assert.match(rendered, /#commitments-heading/);
+  assert.match(rendered, /Application error: a client-side exception has occurred/);
+  assert.equal(rendered.includes('page.locator("nextjs-portal")).toHaveCount(0)'), false);
+  assert.match(rendered, /mt-v75-side-link\[aria-current="page"\]/);
+  assert.match(rendered, /dashboard-overview/);
+});
 
 test("every standalone HTML shell is canonical or explicitly enhanced", () => {
   const publicRoot = join(root, "public");

@@ -1,0 +1,137 @@
+/*
+ * Targeted close-out for defects exposed by the first rendered sitewide audit.
+ *
+ * This layer is intentionally narrow and imported after the canonical system.
+ * It removes the remaining marketplace capsule geometry and makes the
+ * credential-free route audit deterministic without altering information
+ * architecture or product behavior.
+ */
+
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) {
+  background-color: var(--mt-paper) !important;
+  background-image:
+    linear-gradient(rgba(17, 17, 17, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 17, 17, 0.035) 1px, transparent 1px) !important;
+  background-size: 24px 24px !important;
+}
+
+body:has([data-mt-canonical-home="true"]),
+body:has(.mtw-shell) {
+  background-image: none !important;
+}
+
+/* Marketplace route shells must read as ruled editorial workspaces, not SaaS cards. */
+.mt-v75-route-board,
+.mt-v75-side-nav,
+.mt-v75-route-workspace,
+.mt-v75-side-brand,
+.mt-v75-side-link,
+.mt-v75-side-plan,
+.mt-v77-create-offer {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.mt-v75-route-board {
+  border: 1px solid var(--mt-black) !important;
+  background: rgba(255, 253, 248, 0.92) !important;
+}
+
+.mt-v75-side-nav {
+  border-right: 1px solid var(--mt-black) !important;
+  background: var(--mt-paper-strong) !important;
+}
+
+.mt-v75-side-brand {
+  border-bottom: 1px solid var(--mt-line) !important;
+}
+
+.mt-v75-side-link {
+  border: 0 !important;
+  border-left: 4px solid transparent !important;
+  background: transparent !important;
+  color: var(--mt-ink) !important;
+}
+
+.mt-v75-side-link:hover,
+.mt-v75-side-link:focus-visible {
+  border-left-color: var(--mt-line-dark) !important;
+  background: var(--surface-muted) !important;
+  color: var(--mt-ink) !important;
+}
+
+.mt-v75-side-link.is-active,
+.mt-v75-side-link[aria-current="page"] {
+  border-left-color: var(--mt-blue) !important;
+  background: var(--mt-black) !important;
+  color: #ffffff !important;
+}
+
+.mt-v75-side-link.is-active :where(svg, span),
+.mt-v75-side-link[aria-current="page"] :where(svg, span) {
+  color: inherit !important;
+}
+
+.mt-v75-side-plan {
+  border: 1px solid var(--mt-line) !important;
+  background: transparent !important;
+}
+
+.mt-v77-create-offer {
+  border: 1px solid var(--mt-blue) !important;
+  background: var(--mt-blue) !important;
+  color: #ffffff !important;
+}
+
+.mt-v77-create-offer:hover,
+.mt-v77-create-offer:focus-visible {
+  border-color: var(--mt-blue-deep) !important;
+  background: var(--mt-blue-deep) !important;
+}
+
+/* Explicitly preserve hard geometry on the two surfaces flagged by the audit. */
+.commitments-center,
+.dashboard-page .v72-private-surface,
+.dashboard-page .dashboard-overview,
+.dashboard-page .dashboard-task-card,
+.dashboard-page .dashboard-snapshot-card {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.commitments-center {
+  border: 1px solid var(--mt-black) !important;
+  background: rgba(255, 253, 248, 0.9) !important;
+}
+
+.dashboard-page .dashboard-task-card:hover,
+.dashboard-page .dashboard-task-card:focus-visible {
+  transform: none !important;
+}
+
+@media (max-width: 900px) {
+  .mt-v75-route-board {
+    border-right: 0 !important;
+    border-left: 0 !important;
+  }
+
+  .mt-v75-side-nav {
+    border-right: 0 !important;
+    border-bottom: 1px solid var(--mt-black) !important;
+  }
+
+  .mt-v75-side-link {
+    border-left: 0 !important;
+    border-bottom: 3px solid transparent !important;
+  }
+
+  .mt-v75-side-link:hover,
+  .mt-v75-side-link:focus-visible {
+    border-bottom-color: var(--mt-line-dark) !important;
+  }
+
+  .mt-v75-side-link.is-active,
+  .mt-v75-side-link[aria-current="page"] {
+    border-bottom-color: var(--mt-blue) !important;
+  }
+}

@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "src/app/canonical-visual-system.css"
+      - "src/app/canonical-visual-system-remediation.css"
       - "src/app/layout.tsx"
       - "src/components/home/home-page.tsx"
       - "src/components/auth/auth-card.tsx"
@@ -24,6 +25,7 @@ on:
       - fix/sitewide-canonical-visual-system-final-20260810
     paths:
       - "src/app/canonical-visual-system.css"
+      - "src/app/canonical-visual-system-remediation.css"
       - "src/app/layout.tsx"
       - "src/components/home/home-page.tsx"
       - "src/components/auth/auth-card.tsx"
@@ -93,10 +95,13 @@ jobs:
       - name: Render and audit representative sitewide routes
         shell: bash
         env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
           PLAYWRIGHT_HTML_OPEN: never
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
         run: |
           set -euo pipefail
-          npx playwright test tests/sitewide-canonical-visual-system.spec.ts --reporter=line
+          npx playwright test tests/sitewide-canonical-visual-system.spec.ts --reporter=line --workers=1
 
       - name: Upload sitewide visual evidence
         if: always()
