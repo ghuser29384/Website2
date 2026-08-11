@@ -87,6 +87,10 @@ test("the canonical Home tokens drive every shared Next.js route", () => {
   assert.match(remediation, /\.mt-v75-side-plan[\s\S]*border-radius:\s*0\s*!important/);
   assert.match(remediation, /\.commitments-center[\s\S]*border-radius:\s*0\s*!important/);
   assert.match(remediation, /\.dashboard-page[\s\S]*box-shadow:\s*none\s*!important/);
+  assert.match(remediation, /\[data-mt-surface="auth"\][\s\S]*article[\s\S]*border-radius:\s*0\s*!important/);
+  assert.match(remediation, /\.mpgf-shell[\s\S]*\.mpgf-mode-strip span[\s\S]*border-radius:\s*0\s*!important/);
+  assert.match(remediation, /\[data-mt-surface="mpgf-labs"\][\s\S]*unavailableCard[\s\S]*box-shadow:\s*none\s*!important/);
+  assert.match(remediation, /\[class\*="pill" i\][\s\S]*border-radius:\s*0\s*!important/);
 });
 
 test("every Next.js page declares a shared or explicitly aligned visual shell", () => {
@@ -125,8 +129,13 @@ test("the rendered gate rejects blank and overlay-only route captures", () => {
   assert.equal(rendered.includes("#account-heading"), false);
   assert.match(rendered, /mt-v75-side-link\[aria-current="page"\]/);
   assert.match(rendered, /Dashboard guest route redirects to a substantive canonical auth surface/);
+  assert.match(rendered, /Authentication uses hard editorial geometry instead of a glass card/);
+  assert.match(rendered, /Public Goods Fund labels use rules instead of capsules/);
+  assert.match(rendered, /Moral Public Goods Labs gate uses a square evidence panel/);
   assert.match(rendered, /returnTo=%2Fdashboard/);
   assert.match(rendered, /data-mt-surface="auth"/);
+  assert.match(rendered, /mpgf-mode-strip span/);
+  assert.match(rendered, /unavailableCard/);
 });
 
 test("every standalone HTML shell is canonical or explicitly enhanced", () => {
