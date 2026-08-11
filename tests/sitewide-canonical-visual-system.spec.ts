@@ -133,8 +133,11 @@ async function waitForMeaningfulSurface(page: Page, route: string) {
   }
 
   if (pathname === "/dashboard") {
-    await expect(page.locator("#account-heading")).toBeVisible({ timeout: 45_000 });
-    await expect(page.locator("#dashboard-overview")).toBeVisible({ timeout: 45_000 });
+    await expect(page).toHaveURL(/\/login\?returnTo=%2Fdashboard$/, { timeout: 45_000 });
+    await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByRole("heading", { exact: true, name: "Welcome back" })).toBeVisible({
+      timeout: 45_000,
+    });
     await waitForTextLength(page, 160);
     return;
   }
@@ -182,8 +185,9 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
   await expectNoFrameworkOverlay(page, route);
 
   const finalUrl = page.url();
+  const finalPathname = new URL(finalUrl).pathname;
   expect(finalUrl).not.toContain("/_error");
-  expect(new URL(finalUrl).pathname).not.toBe("/_not-found");
+  expect(finalPathname).not.toBe("/_not-found");
   expect((await page.title()).trim().length, `${route} document title`).toBeGreaterThan(0);
 
   if (route.startsWith("/complete-verification")) {
@@ -199,15 +203,15 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
     }
   }
 
-  const expectedSurface = route.startsWith("/login") || route.startsWith("/signup")
+  const expectedSurface = finalPathname === "/login" || finalPathname === "/signup"
     ? "auth"
-    : route.startsWith("/connectors")
+    : finalPathname === "/connectors"
       ? "connectors"
-      : route.startsWith("/pledge-swaps")
+      : finalPathname === "/pledge-swaps"
         ? "pledge-swaps"
-        : route.startsWith("/complete-profile")
+        : finalPathname === "/complete-profile"
           ? "complete-profile"
-          : route.startsWith("/labs/moral-public-goods")
+          : finalPathname.startsWith("/labs/moral-public-goods")
             ? "mpgf-labs"
             : null;
   if (expectedSurface && !finalUrl.includes("/walkthrough")) {
@@ -329,18 +333,15 @@ test("Commitments uses hard editorial navigation and preserves tab interaction",
   await waitForMeaningfulSurface(page, "/commitments");
 });
 
-test("Dashboard cannot pass as an empty graph-paper capture", async ({ page }, testInfo) => {
+test("Dashboard guest route redirects to a substantive canonical auth surface", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expectCanonicalSurface(page, "/dashboard", testInfo);
 
-  await expect(page.locator("#account-heading")).toHaveText("Account");
-  await expect(page.locator("#dashboard-overview")).toBeVisible();
+  await expect(page).toHaveURL(/\/login\?returnTo=%2Fdashboard$/);
+  await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible();
+  await expect(page.getByRole("heading", { exact: true, name: "Welcome back" })).toBeVisible();
   const visibleText = (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
   expect(visibleText.length).toBeGreaterThan(300);
-
-  await page.getByRole("link", { exact: true, name: "Overview" }).click();
-  await expect(page).toHaveURL(/#dashboard-overview$/);
-  await expect(page.locator("#dashboard-overview")).toBeInViewport();
 });
 
 test("keeps representative routes usable on mobile", async ({ page }, testInfo) => {
