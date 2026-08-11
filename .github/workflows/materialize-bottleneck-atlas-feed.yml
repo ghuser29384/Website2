@@ -1,0 +1,65 @@
+name: Materialize Bottleneck Atlas feed integration
+
+on:
+  push:
+    branches:
+      - feature/bottleneck-atlas-feed-20260811
+    paths:
+      - .github/scripts/materialize-bottleneck-atlas-feed.py
+      - .github/workflows/materialize-bottleneck-atlas-feed.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: python .github/scripts/materialize-bottleneck-atlas-feed.py
+      - run: npm ci
+      - name: Focused unit and wiring tests
+        run: >-
+          node --import tsx --test
+          src/lib/bottleneck-atlas.test.ts
+          src/lib/opportunity-synthesis.test.ts
+          src/bottleneck-atlas-feed-wiring.test.ts
+      - name: Focused lint
+        run: >-
+          npx eslint
+          src/lib/bottleneck-atlas.ts
+          src/lib/opportunity-synthesis.ts
+          src/lib/bottleneck-atlas.test.ts
+          src/lib/opportunity-synthesis.test.ts
+          src/bottleneck-atlas-feed-wiring.test.ts
+          src/app/bottleneck-atlas/page.tsx
+          src/app/suggested-opportunities/[templateId]/page.tsx
+          src/app/api/bottleneck-atlas/route.ts
+          src/app/api/live-now/route.ts
+          src/lib/site.ts
+      - name: Typecheck
+        run: npx tsc --noEmit --pretty false
+      - name: Production build
+        run: npm run build
+      - name: Commit materialized integration
+        run: |
+          if git diff --quiet; then
+            echo "No integration changes were materialized." >&2
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/materializers/bottleneck-atlas.payload.*
+          rm -f .github/scripts/materialize-bottleneck-atlas-feed.py
+          rm -f .github/workflows/materialize-bottleneck-atlas-feed.yml
+          git add -A
+          git commit -m "Wire Bottleneck Atlas synthesis into the authenticated feed"
+          git push origin HEAD:${GITHUB_REF_NAME}
