@@ -121,7 +121,7 @@ jobs:
             2>&1 <<'SQL' | tee qa-schema-and-privileges.log
           do $verify$
           declare
-            table_name text;
+            relation_name text;
           begin
             if not exists (
               select 1
@@ -145,7 +145,7 @@ jobs:
               raise exception 'The exact six non-executing template bindings are not present.';
             end if;
 
-            foreach table_name in array array[
+            foreach relation_name in array array[
               'impact_study_protocol_bindings',
               'impact_study_template_bindings',
               'impact_study_instances',
@@ -161,30 +161,30 @@ jobs:
                 from pg_class relation
                 join pg_namespace namespace on namespace.oid = relation.relnamespace
                 where namespace.nspname = 'public'
-                  and relation.relname = table_name
+                  and relation.relname = relation_name
                   and relation.relkind = 'r'
                   and relation.relrowsecurity
               ) then
-                raise exception '% does not have RLS enabled.', table_name;
+                raise exception '% does not have RLS enabled.', relation_name;
               end if;
 
-              if has_table_privilege('anon', format('public.%I', table_name), 'select')
-                or has_table_privilege('authenticated', format('public.%I', table_name), 'select')
-                or has_table_privilege('service_role', format('public.%I', table_name), 'insert')
-                or has_table_privilege('service_role', format('public.%I', table_name), 'update')
-                or has_table_privilege('service_role', format('public.%I', table_name), 'delete')
-                or not has_table_privilege('service_role', format('public.%I', table_name), 'select')
+              if has_table_privilege('anon', format('public.%I', relation_name), 'select')
+                or has_table_privilege('authenticated', format('public.%I', relation_name), 'select')
+                or has_table_privilege('service_role', format('public.%I', relation_name), 'insert')
+                or has_table_privilege('service_role', format('public.%I', relation_name), 'update')
+                or has_table_privilege('service_role', format('public.%I', relation_name), 'delete')
+                or not has_table_privilege('service_role', format('public.%I', relation_name), 'select')
               then
-                raise exception '% violates the least-privilege table contract.', table_name;
+                raise exception '% violates the least-privilege table contract.', relation_name;
               end if;
             end loop;
 
             if exists (
               select 1
-              from information_schema.columns
-              where table_schema = 'public'
-                and table_name like 'impact_study_%'
-                and column_name in (
+              from information_schema.columns columns
+              where columns.table_schema = 'public'
+                and columns.table_name like 'impact_study_%'
+                and columns.column_name in (
                   'user_id','auth_user_id','profile_id','email','phone'
                 )
             ) then
