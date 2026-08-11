@@ -36,11 +36,30 @@ jobs:
         run: |
           set -euo pipefail
 
-          for part in {00..07}; do
+          for part in 00 01 02 03 04 05 06a 06b 06c 06d 07; do
             test -f ".github/remediation/commitments-impact-study-instrumentation-v2.part${part}"
           done
 
-          cat .github/remediation/commitments-impact-study-instrumentation-v2.part{00..07} > /tmp/bundle.b64
+          cat > /tmp/chunk-sha256.txt <<'HASHES'
+          7abda09c7ea72b22e642d884b5e6c1f75477a2c2157ae22cfbabb5520fa50e0b  .github/remediation/commitments-impact-study-instrumentation-v2.part00
+          4bc224dc66f9606892f64ba594f8f1ac1d0b6ba62996ac9424d5aa9df6c3a186  .github/remediation/commitments-impact-study-instrumentation-v2.part01
+          d1f89b6c0f5275fb7b2950edb16edf71aebe7c1607f9e67b0fb6a0754143bec6  .github/remediation/commitments-impact-study-instrumentation-v2.part02
+          d8cc1e4bec66bd1420519c0cee562192ec52ea04e4d3d3caf14b35ea5e3f73d0  .github/remediation/commitments-impact-study-instrumentation-v2.part03
+          715a1d53db479d1ffcbdd3b0dec0ae16cdeeb0e8f08ec5c04e2287200c426b1f  .github/remediation/commitments-impact-study-instrumentation-v2.part04
+          f0b85056ec4137787611c463782781255281303edebbd57ab56736494880b7f2  .github/remediation/commitments-impact-study-instrumentation-v2.part05
+          064b85c740f64b02c5619b0e758afd71ce59833ea0cbfc66eeafe0028d3ce2f8  .github/remediation/commitments-impact-study-instrumentation-v2.part06a
+          93967de3b4f171f76304d8d9fac249c28a28190030db3c075c2919ff6ac9b4ad  .github/remediation/commitments-impact-study-instrumentation-v2.part06b
+          5682c1bb6d0ba15199511be0cb97ff50187c1b29b77d4f05b71b7bee1207c4bc  .github/remediation/commitments-impact-study-instrumentation-v2.part06c
+          7d8b4d70936530bd45805bb81b3155c00f26e4d22644c317a4b6031ba5fb06d9  .github/remediation/commitments-impact-study-instrumentation-v2.part06d
+          8039c5cfdb03df01dc0a1f0cf849f2da7c1fded3fa5f927a5983542a9eb0ab44  .github/remediation/commitments-impact-study-instrumentation-v2.part07
+          HASHES
+          sha256sum --check /tmp/chunk-sha256.txt
+
+          cat \
+            .github/remediation/commitments-impact-study-instrumentation-v2.part{00,01,02,03,04,05} \
+            .github/remediation/commitments-impact-study-instrumentation-v2.part{06a,06b,06c,06d} \
+            .github/remediation/commitments-impact-study-instrumentation-v2.part07 \
+            > /tmp/bundle.b64
           echo "fd91f29d96740b3f31649cebd4f42dbeb83fe55ac0921f22a25def4aa543560b  /tmp/bundle.b64" | sha256sum --check
 
           base64 --decode /tmp/bundle.b64 > /tmp/bundle.tgz
