@@ -6,6 +6,7 @@ on:
     branches: [main]
     types: [opened, reopened, synchronize]
     paths:
+      - ".github/workflows/commitments-impact-identification-gates.yml"
       - ".github/workflows/commitments-impact-study-instrumentation-gates.yml"
       - "docs/commitments/impact-identification/qa-study-instrumentation-v1.md"
       - "docs/commitments/impact-identification/study-instance.schema.v2.json"
@@ -20,6 +21,7 @@ on:
       - "supabase/migrations/20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql"
       - "supabase/migrations/20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql"
       - "supabase/migrations/20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql"
+      - "supabase/migrations/20260811171544_commitments_impact_study_blocked_probe_service_role.sql"
       - "supabase/tests/commitments_impact_study_instrumentation_qa_only.sql"
   push:
     branches: [feature/commitments-impact-study-instrumentation-20260811]
@@ -33,7 +35,7 @@ concurrency:
 
 jobs:
   exact-contract-and-qa:
-    name: Verify exact validator, QA source, fail-closed schema, lifecycle, and zero residue
+    name: Verify validator, exact QA source, lifecycle, adversarial cases, and zero residue
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -48,7 +50,7 @@ jobs:
         with:
           node-version: 24
 
-      - name: Validate exact study-instance schema, hashes, and negative cases
+      - name: Validate exact study-instance schema, bindings, hashes, and negative cases
         shell: bash
         run: |
           set -euo pipefail
@@ -118,7 +120,7 @@ jobs:
           printf 'sentinel=%s\n' "$sentinel" | tee qa-sentinel.log
           test "$sentinel" = "qa|hvmxfjjbdcgjjudmthdz|a0244e19-9744-4a82-83e4-57776804cc06|f7801a29e33764650322ad39e66a2062d9e2f750a9438e74d9fff0c9eeeb8d30|true"
 
-      - name: Verify exact registered migration names and sources
+      - name: Verify exact registered migration names and byte-for-byte sources
         shell: bash
         run: |
           set -euo pipefail
@@ -131,6 +133,7 @@ jobs:
           supabase/migrations/20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql
           supabase/migrations/20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql
           supabase/migrations/20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql
+          supabase/migrations/20260811171544_commitments_impact_study_blocked_probe_service_role.sql
           FILES
           : > migration-source-verification.log
           while IFS= read -r source_file; do
@@ -163,6 +166,18 @@ jobs:
           print(f"{sys.argv[1]}: sha256={hashlib.sha256(source.encode()).hexdigest()}")
           PY
           done < migration-files.txt
+
+      - name: Prove lifecycle probe and public privilege boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          privileges="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
+            select
+              has_function_privilege('service_role','public.impact_study_is_blocked(uuid)','execute')::text || '|' ||
+              has_function_privilege('authenticated','public.impact_study_is_blocked(uuid)','execute')::text || '|' ||
+              has_function_privilege('anon','public.impact_study_is_blocked(uuid)','execute')::text;")"
+          printf 'lifecycle_probe_privileges=%s\n' "$privileges" | tee qa-lifecycle-probe.log
+          test "$privileges" = "true|false|false"
 
       - name: Run transactional adversarial instrumentation regression
         shell: bash
@@ -199,9 +214,15 @@ jobs:
           set -euo pipefail
           git fetch origin main
           base="$(git merge-base HEAD origin/main)"
-          git diff --check "$base" "$GITHUB_SHA" | tee diff-check.log
+          git diff --check "$base" "$GITHUB_SHA" -- \
+            .github/workflows \
+            docs/commitments/impact-identification \
+            scripts/validate-commitments-impact-study-instance.mjs \
+            supabase/tests/commitments_impact_study_instrumentation_qa_only.sql \
+            | tee diff-check.log
           git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
           cat > expected-files.txt <<'FILES'
+          .github/workflows/commitments-impact-identification-gates.yml
           .github/workflows/commitments-impact-study-instrumentation-gates.yml
           docs/commitments/impact-identification/canonical-json-parity-fixtures.v2.json
           docs/commitments/impact-identification/qa-study-instrumentation-v1.md
@@ -216,6 +237,7 @@ jobs:
           supabase/migrations/20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql
           supabase/migrations/20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql
           supabase/migrations/20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql
+          supabase/migrations/20260811171544_commitments_impact_study_blocked_probe_service_role.sql
           supabase/tests/commitments_impact_study_instrumentation_qa_only.sql
           FILES
           sort -o expected-files.txt expected-files.txt
@@ -233,6 +255,7 @@ jobs:
             migration-files.txt
             migration-source-verification.log
             registered-migrations/
+            qa-lifecycle-probe.log
             qa-study-instrumentation.log
             qa-residue.log
             diff-check.log

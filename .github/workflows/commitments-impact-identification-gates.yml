@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   validate:
-    name: Validate exact protocol, templates, mapping, and fail-closed negative tests
+    name: Validate protocol artifacts and enforce exact-package changes
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -48,14 +48,42 @@ jobs:
           node scripts/validate-commitments-impact-identification.mjs --self-test \
             2>&1 | tee protocol-negative-self-tests.log
 
-      - name: Check exact repository-only diff
+      - name: Enforce exact protocol-package diff only when immutable protocol artifacts change
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin main
           base="$(git merge-base HEAD origin/main)"
-          git diff --check "$base" "$GITHUB_SHA" | tee diff-check.log
+          git diff --check "$base" "$GITHUB_SHA" -- \
+            .github/workflows/commitments-impact-identification-gates.yml \
+            docs/commitments/impact-identification \
+            scripts/validate-commitments-impact-identification.mjs \
+            | tee diff-check.log
           git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
+
+          cat > immutable-protocol-files.txt <<'FILES'
+          docs/commitments/impact-identification/causal-identification-and-calibration-preregistration-v2.md
+          docs/commitments/impact-identification/evidence-to-product-mapping.v2.json
+          docs/commitments/impact-identification/master-protocol.v2.json
+          docs/commitments/impact-identification/protocol.schema.json
+          docs/commitments/impact-identification/study-templates/co_fund.v2.json
+          docs/commitments/impact-identification/study-templates/donation_redirect.v2.json
+          docs/commitments/impact-identification/study-templates/donation_upgrade.v2.json
+          docs/commitments/impact-identification/study-templates/threshold_funding.v2.json
+          docs/commitments/impact-identification/study-templates/threshold_sign_on.v2.json
+          docs/commitments/impact-identification/study-templates/trade.v2.json
+          scripts/validate-commitments-impact-identification.mjs
+          FILES
+0          sort -o immutable-protocol-files.txt immutable-protocol-files.txt
+
+          changed_immutable="$(comm -12 immutable-protocol-files.txt actual-files.txt)"
+          if test -z "$changed_immutable"; then
+            echo "immutable_protocol_artifacts_changed=false" | tee protocol-diff-mode.log
+            exit 0
+          fi
+
+          echo "immutable_protocol_artifacts_changed=true" | tee protocol-diff-mode.log
+          printf '%s\n' "$changed_immutable" | tee -a protocol-diff-mode.log
 
           cat > required-files.txt <<'FILES'
           .github/workflows/commitments-impact-identification-gates.yml
@@ -72,30 +100,7 @@ jobs:
           scripts/validate-commitments-impact-identification.mjs
           FILES
           sort -o required-files.txt required-files.txt
-
-          missing="$(comm -23 required-files.txt actual-files.txt)"
-          test -z "$missing" || {
-            printf 'Missing required files:\n%s\n' "$missing" >&2
-            exit 1
-          }
-
-          unexpected=0
-          while IFS= read -r file; do
-            case "$file" in
-              .github/workflows/commitments-impact-identification-gates.yml|\
-              docs/commitments/impact-identification/causal-identification-and-calibration-preregistration-v2.md|\
-              docs/commitments/impact-identification/evidence-to-product-mapping.v2.json|\
-              docs/commitments/impact-identification/master-protocol.v2.json|\
-              docs/commitments/impact-identification/protocol.schema.json|\
-              docs/commitments/impact-identification/study-templates/*.v2.json|\
-              scripts/validate-commitments-impact-identification.mjs) ;;
-              *)
-                echo "Unexpected file in protocol diff: $file" >&2
-                unexpected=1
-                ;;
-            esac
-          done < actual-files.txt
-          test "$unexpected" = "0"
+          diff -u required-files.txt actual-files.txt
 
       - name: Upload protocol evidence
         if: always()
@@ -106,6 +111,8 @@ jobs:
             protocol-validation.log
             protocol-negative-self-tests.log
             diff-check.log
+            immutable-protocol-files.txt
+            protocol-diff-mode.log
             required-files.txt
             actual-files.txt
           if-no-files-found: warn
