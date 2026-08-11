@@ -225,7 +225,23 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
     const explicit = new Set(
       Array.from(
         document.querySelectorAll<HTMLElement>(
-          ".panel,.data-card,.section,.concept-card,.mpgf-panel,.v72-shortcut-tile,.mt-v75-side-link,.mt-v75-side-plan",
+          [
+            ".panel",
+            ".data-card",
+            ".section",
+            ".concept-card",
+            ".mpgf-panel",
+            ".v72-shortcut-tile",
+            ".mt-v75-side-link",
+            ".mt-v75-side-plan",
+            ".mpgf-mode-strip span",
+            ".hub-tabs a",
+            "article",
+            "button",
+            '[class*="pill" i]',
+            '[class*="chip" i]',
+            '[class*="badge" i]',
+          ].join(","),
         ),
       ),
     );
@@ -240,7 +256,7 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
         const rect = element.getBoundingClientRect();
         return rect.width > 120 && rect.height > 40 && getComputedStyle(element).display !== "none";
       })
-      .slice(0, 32);
+      .slice(0, 64);
     return elements.map((element) => {
       const style = getComputedStyle(element);
       return {
@@ -342,6 +358,45 @@ test("Dashboard guest route redirects to a substantive canonical auth surface", 
   await expect(page.getByRole("heading", { exact: true, name: "Welcome back" })).toBeVisible();
   const visibleText = (await page.locator("body").innerText()).replace(/\s+/g, " ").trim();
   expect(visibleText.length).toBeGreaterThan(300);
+});
+
+test("Authentication uses hard editorial geometry instead of a glass card", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expectCanonicalSurface(page, "/login", testInfo);
+
+  const card = page.locator('[data-mt-surface="auth"] article').first();
+  await expect(card).toHaveCSS("border-radius", "0px");
+  await expect(card).toHaveCSS("box-shadow", "none");
+  await expect(page.getByRole("link", { exact: true, name: "Continue with email" })).toHaveCSS(
+    "border-radius",
+    "0px",
+  );
+  await expect(page.locator('[data-mt-surface="auth"] [class*="graphicFrame"]').first()).toHaveCSS(
+    "border-radius",
+    "0px",
+  );
+});
+
+test("Public Goods Fund labels use rules instead of capsules", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expectCanonicalSurface(page, "/mpgf", testInfo);
+
+  const modeLabel = page.locator(".mpgf-mode-strip span").first();
+  const hubTab = page.locator(".hub-tabs a").first();
+  await expect(modeLabel).toBeVisible();
+  await expect(hubTab).toBeVisible();
+  await expect(modeLabel).toHaveCSS("border-radius", "0px");
+  await expect(hubTab).toHaveCSS("border-radius", "0px");
+});
+
+test("Moral Public Goods Labs gate uses a square evidence panel", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expectCanonicalSurface(page, "/labs/moral-public-goods/global-biosecurity-coordination", testInfo);
+
+  const unavailableCard = page.locator('[data-mt-surface="mpgf-labs"] [class*="unavailableCard"]').first();
+  await expect(unavailableCard).toBeVisible();
+  await expect(unavailableCard).toHaveCSS("border-radius", "0px");
+  await expect(unavailableCard).toHaveCSS("box-shadow", "none");
 });
 
 test("keeps representative routes usable on mobile", async ({ page }, testInfo) => {
