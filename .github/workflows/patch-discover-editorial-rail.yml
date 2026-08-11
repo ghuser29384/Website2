@@ -1,0 +1,60 @@
+name: Patch Discover editorial rail
+
+on:
+  push:
+    branches:
+      - fix/sitewide-canonical-visual-system-final-20260810
+    paths:
+      - ".github/workflows/patch-discover-editorial-rail.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-discover-editorial-rail
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out candidate
+        uses: actions/checkout@v4
+        with:
+          ref: fix/sitewide-canonical-visual-system-final-20260810
+          fetch-depth: 0
+
+      - name: Replace the inset accent with a canonical editorial rule
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          css_path = Path("public/moral-trade-discover-home-alignment.css")
+          workflow_path = Path(".github/workflows/patch-discover-editorial-rail.yml")
+          css = css_path.read_text(encoding="utf-8")
+          selector = ".transaction-row.offer-transaction-row"
+          rule = """
+
+          /* The blue transaction accent is a rule, not an elevated-card shadow. */
+          .transaction-row.offer-transaction-row {
+            border-left: 3px solid var(--blue) !important;
+            box-shadow: none !important;
+          }
+          """
+          if selector not in css:
+              css_path.write_text(css.rstrip() + rule + "\n", encoding="utf-8")
+          workflow_path.unlink()
+          PY
+
+      - name: Commit the exact patch and remove this one-use controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public/moral-trade-discover-home-alignment.css .github/workflows/patch-discover-editorial-rail.yml
+          git diff --cached --check
+          git commit -m "Align Discover transaction rails with the canonical visual system"
+          git push origin HEAD:fix/sitewide-canonical-visual-system-final-20260810
