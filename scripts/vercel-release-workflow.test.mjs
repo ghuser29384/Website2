@@ -14,6 +14,10 @@ const completeProfileCanaryPath = new URL(
   "../.github/workflows/complete-profile-production-canary.yml",
   import.meta.url,
 );
+const releaseControlsPath = new URL(
+  "../.github/workflows/vercel-release-controls.yml",
+  import.meta.url,
+);
 
 async function workflow() {
   return readFile(workflowPath, "utf8");
@@ -21,6 +25,10 @@ async function workflow() {
 
 async function completeProfileCanary() {
   return readFile(completeProfileCanaryPath, "utf8");
+}
+
+async function releaseControls() {
+  return readFile(releaseControlsPath, "utf8");
 }
 
 test("Vercel releases are manual and never run on ordinary pushes or pull requests", async () => {
@@ -169,6 +177,32 @@ test("release evidence is retained without credentials", async () => {
   assert.match(source, /path: \$\{\{ env\.RELEASE_EVIDENCE_DIR \}\}/);
   assert.match(source, /retention-days: 30/);
   assert.doesNotMatch(source, /\.env\.production\.local/);
+});
+
+test("a dedicated repository gate parses and tests every release-control change", async () => {
+  const source = await releaseControls();
+
+  const pullRequestStart = source.indexOf("  pull_request:");
+  const pushStart = source.indexOf("  push:");
+  const permissionsStart = source.indexOf("permissions:");
+  for (const index of [pullRequestStart, pushStart, permissionsStart]) {
+    assert.notEqual(index, -1);
+  }
+
+  const pullRequestTrigger = source.slice(pullRequestStart, pushStart);
+  const pushTrigger = source.slice(pushStart, permissionsStart);
+  for (const trigger of [pullRequestTrigger, pushTrigger]) {
+    assert.match(trigger, /\.github\/workflows\/vercel-release-controls\.yml/);
+    assert.match(trigger, /\.github\/workflows\/vercel-release\.yml/);
+    assert.match(trigger, /scripts\/vercel-release-workflow\.test\.mjs/);
+    assert.match(trigger, /scripts\/vercel-static-artifact-integrity\.mjs/);
+  }
+  assert.match(pushTrigger, /branches:\n\s+- main/);
+  assert.match(source, /node --check scripts\/vercel-static-artifact-integrity\.mjs/);
+  assert.match(source, /node --test scripts\/vercel-release-workflow\.test\.mjs/);
+  assert.match(source, /ARGV\.each/);
+  assert.match(source, /\.github\/workflows\/vercel-release-controls\.yml/);
+  assert.match(source, /\.github\/workflows\/vercel-release\.yml/);
 });
 
 test("the rendered release gate binds the app to Playwright's local canonical origin", async () => {
