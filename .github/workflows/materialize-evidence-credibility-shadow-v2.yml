@@ -43,9 +43,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          expected_sha="82f833fdb93707eef6af66e13eaab951ad5153ac48fd5d95564092389982099e"
           cat .github/materialize-evidence-shadow/chunk-*.b64 > /tmp/evidence-shadow.tar.gz.b64
           base64 --decode /tmp/evidence-shadow.tar.gz.b64 > /tmp/evidence-shadow.tar.gz
-          echo "82f833fdb93707eef6af66e13eaab951ad5153ac48fd5d95564092389982099e  /tmp/evidence-shadow.tar.gz" | sha256sum --check --strict
+          actual_sha="$(sha256sum /tmp/evidence-shadow.tar.gz | awk '{print $1}')"
+          member_count="$(tar -tzf /tmp/evidence-shadow.tar.gz | sed '/\/$/d' | wc -l | tr -d ' ')"
+          echo "expected_archive_sha=${expected_sha}"
+          echo "actual_archive_sha=${actual_sha}"
+          echo "archive_file_member_count=${member_count}"
+          if [ "${actual_sha}" != "${expected_sha}" ]; then
+            echo "::error title=Evidence shadow archive checksum mismatch::expected=${expected_sha} actual=${actual_sha} file_members=${member_count}"
+            exit 1
+          fi
           python - <<'PY'
           import tarfile
 
