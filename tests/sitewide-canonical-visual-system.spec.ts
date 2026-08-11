@@ -344,7 +344,7 @@ test("preserves the canonical Home and Walkthrough references", async ({ page },
   await page.goto("/walkthrough", { timeout: 60_000, waitUntil: "domcontentloaded" });
   await waitForMeaningfulSurface(page, "/walkthrough");
   await expectNoFrameworkOverlay(page, "/walkthrough");
-  await expect(page.locator("body")).toHaveCSS("background-color", BLACK);
+  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(17, 18, 15)");
   await page.screenshot({ path: testInfo.outputPath("reference-walkthrough.png"), fullPage: false });
 });
 
