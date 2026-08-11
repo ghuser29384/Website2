@@ -74,7 +74,7 @@ jobs:
           docs/commitments/impact-identification/study-templates/trade.v2.json
           scripts/validate-commitments-impact-identification.mjs
           FILES
-0          sort -o immutable-protocol-files.txt immutable-protocol-files.txt
+          sort -o immutable-protocol-files.txt immutable-protocol-files.txt
 
           changed_immutable="$(comm -12 immutable-protocol-files.txt actual-files.txt)"
           if test -z "$changed_immutable"; then
