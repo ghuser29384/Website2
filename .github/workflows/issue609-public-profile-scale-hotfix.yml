@@ -77,7 +77,10 @@ jobs:
           path.write_text(source.replace(old, new, 1), encoding='utf-8')
           PY
             git diff --check
-            git diff --name-only "$BASE_SHA" | sort > /tmp/issue609-files.txt
+            {
+              git diff --name-only "$BASE_SHA"
+              git ls-files --others --exclude-standard
+            } | sort -u > /tmp/issue609-files.txt
           )
           cat > /tmp/issue609-expected-files.txt <<'FILES'
           src/app/api/credibility/profile/[profileId]/route.ts
