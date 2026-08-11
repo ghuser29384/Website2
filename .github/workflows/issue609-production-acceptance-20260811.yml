@@ -1,0 +1,533 @@
+name: Issue 609 exact production acceptance
+
+on:
+  push:
+    branches:
+      - ops/verify-issue609-production-20260811
+    paths:
+      - ".github/workflows/issue609-production-acceptance-20260811.yml"
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: issue609-exact-production-acceptance
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/verify-issue609-production-20260811
+  MAIN_SHA: 69146f2cf9d5f4d747c0c25abda6de75f410098d
+  RELEASE_RUN_ID: "31514420180"
+  RELEASE_WORKFLOW_ID: "325045339"
+  PRODUCT_PR: "611"
+  ISSUE_NUMBER: "609"
+  PROFILE_ID: 9e51db47-92d1-4d75-80ce-cf10de1121f1
+  EXPECTED_OPEN_OFFERS: "982"
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  CANONICAL_APEX: moraltrade.org
+  CANONICAL_WWW: www.moraltrade.org
+  CANONICAL_PROJECT: moraltrade-site.vercel.app
+  BASE_URL: https://www.moraltrade.org
+  OUTPUT_DIR: issue609-production-acceptance
+  STATUS_CONTEXT: QA / Issue609 production acceptance
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out the one-use controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Guard exact main and wait for the immutable production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$MAIN_SHA"
+          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$MAIN_SHA"
+          git diff --check HEAD^
+          test "$(git diff --name-only HEAD^)" = '.github/workflows/issue609-production-acceptance-20260811.yml'
+          test -n "${VERCEL_TOKEN:-}"
+          echo "::add-mask::$VERCEL_TOKEN"
+
+          mkdir -p "$OUTPUT_DIR/release" "$OUTPUT_DIR/deployment" "$OUTPUT_DIR/aliases" "$OUTPUT_DIR/browser"
+
+          completed=false
+          for attempt in $(seq 1 300); do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID" > "$OUTPUT_DIR/release/run.json"
+            status="$(jq -r '.status' "$OUTPUT_DIR/release/run.json")"
+            if [[ "$status" == 'completed' ]]; then
+              completed=true
+              break
+            fi
+            sleep 15
+          done
+          test "$completed" = 'true'
+
+          jq -e \
+            --argjson workflow_id "$RELEASE_WORKFLOW_ID" \
+            --arg sha "$MAIN_SHA" '
+              (.workflow_id == $workflow_id)
+              and (.name == "Gated Vercel release")
+              and (.event == "workflow_dispatch")
+              and (.head_branch == "main")
+              and (.head_sha == $sha)
+              and (.status == "completed")
+              and (.conclusion == "success")
+            ' "$OUTPUT_DIR/release/run.json" >/dev/null
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/jobs" > "$OUTPUT_DIR/release/jobs.json"
+          jq -e '
+            (.total_count == 1)
+            and (.jobs[0].name == "release")
+            and (.jobs[0].status == "completed")
+            and (.jobs[0].conclusion == "success")
+          ' "$OUTPUT_DIR/release/jobs.json" >/dev/null
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/artifacts" > "$OUTPUT_DIR/release/artifacts.json"
+          jq -e --arg expected "gated-vercel-release-production-$RELEASE_RUN_ID" '
+            any(.artifacts[];
+              (.name == $expected)
+              and (.expired == false)
+              and ((.digest // "") | startswith("sha256:"))
+            )
+          ' "$OUTPUT_DIR/release/artifacts.json" >/dev/null
+
+      - name: Check out the exact released source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.MAIN_SHA }}
+          path: released
+          fetch-depth: 1
+
+      - name: Guard exact canonical deployment and all production aliases
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C released rev-parse HEAD)" = "$MAIN_SHA"
+
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/${CANONICAL_WWW}?teamId=${VERCEL_ORG_ID}" \
+            > "$OUTPUT_DIR/deployment/canonical.json"
+
+          jq -e \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$MAIN_SHA" '
+              ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and (.target == "production")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $sha)
+            ' "$OUTPUT_DIR/deployment/canonical.json" >/dev/null
+
+          deployment_id="$(jq -r '.id // .uid // empty' "$OUTPUT_DIR/deployment/canonical.json")"
+          deployment_host="$(jq -r '.url // empty' "$OUTPUT_DIR/deployment/canonical.json")"
+          test -n "$deployment_id"
+          test -n "$deployment_host"
+          {
+            echo "PRODUCTION_DEPLOYMENT_ID=$deployment_id"
+            echo "PRODUCTION_DEPLOYMENT_HOST=$deployment_host"
+          } >> "$GITHUB_ENV"
+          printf '%s\n' "$deployment_id" > "$OUTPUT_DIR/deployment/id.txt"
+          printf '%s\n' "$deployment_host" > "$OUTPUT_DIR/deployment/host.txt"
+
+          for alias_name in "$CANONICAL_APEX" "$CANONICAL_WWW" "$CANONICAL_PROJECT"; do
+            alias_key="${alias_name//./-}"
+            alias_path="$OUTPUT_DIR/aliases/${alias_key}.json"
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" \
+              > "$alias_path"
+            jq -e \
+              --arg alias "$alias_name" \
+              --arg project "$VERCEL_PROJECT_ID" \
+              --arg deployment "$deployment_id" '
+                (.alias == $alias)
+                and (.projectId == $project)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)
+              ' "$alias_path" >/dev/null
+          done
+
+          curl -fsS \
+            -H 'Cache-Control: no-cache' \
+            "${BASE_URL}/moral-trade-live-create-router.js?issue609=${MAIN_SHA}-${GITHUB_RUN_ID}" \
+            -o "$OUTPUT_DIR/deployment/published-moral-trade-live-create-router.js"
+          cmp --silent \
+            released/public/moral-trade-live-create-router.js \
+            "$OUTPUT_DIR/deployment/published-moral-trade-live-create-router.js"
+          sha256sum \
+            released/public/moral-trade-live-create-router.js \
+            "$OUTPUT_DIR/deployment/published-moral-trade-live-create-router.js" \
+            > "$OUTPUT_DIR/deployment/critical-asset.sha256"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: released/package-lock.json
+
+      - name: Install exact dependencies and Chromium
+        working-directory: released
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Exercise the real high-volume profile on canonical desktop and exact mobile
+        working-directory: released
+        shell: bash
+        env:
+          EVIDENCE_DIR: ../issue609-production-acceptance/browser
+        run: |
+          set -euo pipefail
+          node <<'JS'
+          const assert = require('node:assert/strict');
+          const { chromium } = require('@playwright/test');
+          const { mkdir, writeFile } = require('node:fs/promises');
+          const path = require('node:path');
+
+          const base = process.env.BASE_URL;
+          const profileId = process.env.PROFILE_ID;
+          const expectedOffers = Number(process.env.EXPECTED_OPEN_OFFERS);
+          const evidenceDir = process.env.EVIDENCE_DIR;
+          const canonicalHost = new URL(base).hostname;
+          const profilePath = `/people/${profileId}`;
+          const credibilityPath = `${profilePath}/credibility`;
+          const apiPath = `/api/credibility/profile/${profileId}`;
+          const failurePatterns = [
+            /Application error/i,
+            /server-side exception/i,
+            /An error occurred in the Server Components render/i,
+            /Bad Request/i,
+          ];
+
+          const report = {
+            status: 'running',
+            candidateSha: process.env.MAIN_SHA,
+            deploymentId: process.env.PRODUCTION_DEPLOYMENT_ID,
+            deploymentHost: process.env.PRODUCTION_DEPLOYMENT_HOST,
+            baseUrl: base,
+            profileId,
+            expectedOpenOffers: expectedOffers,
+            startedAt: new Date().toISOString(),
+            scenarios: [],
+          };
+
+          function attachDiagnostics(page, label) {
+            const diagnostics = {
+              label,
+              pageErrors: [],
+              consoleErrors: [],
+              requestFailures: [],
+              httpErrors: [],
+              nonGetRequests: [],
+              dangerousMutations: [],
+              interceptedTelemetry: [],
+            };
+
+            page.on('pageerror', error => diagnostics.pageErrors.push(error.message));
+            page.on('console', message => {
+              if (message.type() === 'error') diagnostics.consoleErrors.push(message.text());
+            });
+            page.on('requestfailed', request => {
+              const url = new URL(request.url());
+              if (url.hostname === canonicalHost) {
+                diagnostics.requestFailures.push({
+                  method: request.method(),
+                  path: `${url.pathname}${url.search}`,
+                  errorText: request.failure()?.errorText ?? 'failed',
+                });
+              }
+            });
+            page.on('response', response => {
+              const url = new URL(response.url());
+              if (url.hostname === canonicalHost && response.status() >= 400) {
+                diagnostics.httpErrors.push({
+                  status: response.status(),
+                  path: `${url.pathname}${url.search}`,
+                  resourceType: response.request().resourceType(),
+                  navigation: response.request().isNavigationRequest(),
+                });
+              }
+            });
+            page.on('request', request => {
+              const url = new URL(request.url());
+              if (url.hostname !== canonicalHost) return;
+              const method = request.method();
+              if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return;
+              const entry = { method, path: `${url.pathname}${url.search}` };
+              diagnostics.nonGetRequests.push(entry);
+              if (/^\/api\/(?:payments|stripe|mpgf|offers|create|evidence|reliability|background)(?:\/|$)/i.test(url.pathname)) {
+                diagnostics.dangerousMutations.push(entry);
+              }
+            });
+            return diagnostics;
+          }
+
+          async function assertNoFailureText(page, label) {
+            const bodyText = await page.locator('body').innerText();
+            for (const pattern of failurePatterns) {
+              assert.equal(pattern.test(bodyText), false, `${label}: failure text matched ${pattern}`);
+            }
+            return bodyText;
+          }
+
+          async function assertNoOverflow(page, label) {
+            const dimensions = await page.evaluate(() => ({
+              bodyWidth: document.body.scrollWidth,
+              documentWidth: document.documentElement.scrollWidth,
+              clientWidth: document.documentElement.clientWidth,
+              innerWidth: window.innerWidth,
+            }));
+            assert.ok(dimensions.bodyWidth <= dimensions.innerWidth + 1, `${label}: ${JSON.stringify(dimensions)}`);
+            assert.ok(dimensions.documentWidth <= dimensions.innerWidth + 1, `${label}: ${JSON.stringify(dimensions)}`);
+            return dimensions;
+          }
+
+          async function openPage(page, route, label, screenshotName) {
+            const response = await page.goto(`${base}${route}`, {
+              waitUntil: 'domcontentloaded',
+              timeout: 60_000,
+            });
+            assert.ok(response, `${label}: no document response`);
+            assert.equal(response.status(), 200, `${label}: HTTP ${response.status()}`);
+            await page.locator('body').waitFor({ state: 'visible', timeout: 20_000 });
+            await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});
+            const bodyText = await assertNoFailureText(page, label);
+            const dimensions = await assertNoOverflow(page, label);
+            await page.screenshot({ path: path.join(evidenceDir, `${screenshotName}.png`), fullPage: true });
+            return {
+              route,
+              finalUrl: page.url(),
+              status: response.status(),
+              bodyLength: bodyText.length,
+              dimensions,
+            };
+          }
+
+          function expectedHttpError(error) {
+            if (error.navigation) return false;
+            if (error.status !== 404) return false;
+            const url = new URL(error.path, base);
+            return (
+              url.pathname === '/walkthrough' ||
+              (url.pathname === '/discover' && url.searchParams.get('domain') === 'offers' && url.searchParams.get('view') === 'list')
+            );
+          }
+
+          function expectedRequestFailure(failure) {
+            return failure.method === 'GET' && /(?:ERR_ABORTED|NS_BINDING_ABORTED)/i.test(failure.errorText);
+          }
+
+          async function runViewport(browser, key, viewport) {
+            const context = await browser.newContext({ viewport });
+            const interceptedTelemetry = [];
+            await context.route('**/api/funnel-events', async route => {
+              const request = route.request();
+              interceptedTelemetry.push({ method: request.method(), url: request.url() });
+              await route.fulfill({ status: 204, contentType: 'text/plain', body: '' });
+            });
+            const page = await context.newPage();
+            const diagnostics = attachDiagnostics(page, key);
+            diagnostics.interceptedTelemetry = interceptedTelemetry;
+
+            const apiResponse = await context.request.get(`${base}${apiPath}`, { timeout: 60_000 });
+            const apiText = await apiResponse.text();
+            assert.equal(apiResponse.status(), 200, `${key}: API ${apiResponse.status()} ${apiText.slice(0, 500)}`);
+            const api = JSON.parse(apiText);
+            assert.equal(api.ok, true, `${key}: API ok`);
+            assert.equal(api.profile?.id, profileId, `${key}: API profile ID`);
+
+            const page1 = await openPage(page, profilePath, `${key} profile page 1`, `${key}-profile-page-1`);
+            await page.getByText(`Showing 1–24 of ${expectedOffers} open offers.`, { exact: true }).waitFor();
+            await page.getByText('Page 1', { exact: true }).waitFor();
+            assert.equal(await page.locator('#open-offers article.data-card').count(), 24, `${key}: page 1 card count`);
+            assert.equal(await page.getByRole('link', { name: 'Previous page', exact: true }).count(), 0, `${key}: page 1 Previous`);
+            assert.equal(await page.getByRole('link', { name: 'Next page', exact: true }).count(), 1, `${key}: page 1 Next`);
+
+            const credibility = await openPage(page, credibilityPath, `${key} credibility`, `${key}-credibility`);
+            await page.getByText(/credibility passport/i).first().waitFor();
+
+            const page2 = await openPage(page, `${profilePath}?offersPage=2#open-offers`, `${key} profile page 2`, `${key}-profile-page-2`);
+            await page.getByText(`Showing 25–48 of ${expectedOffers} open offers.`, { exact: true }).waitFor();
+            await page.getByText('Page 2', { exact: true }).waitFor();
+            assert.equal(await page.locator('#open-offers article.data-card').count(), 24, `${key}: page 2 card count`);
+            assert.equal(await page.getByRole('link', { name: 'Previous page', exact: true }).count(), 1, `${key}: page 2 Previous`);
+            assert.equal(await page.getByRole('link', { name: 'Next page', exact: true }).count(), 1, `${key}: page 2 Next`);
+
+            const clamped = await openPage(page, `${profilePath}?offersPage=9999#open-offers`, `${key} clamped final page`, `${key}-profile-final-clamped`);
+            await page.getByText(`Showing 961–${expectedOffers} of ${expectedOffers} open offers.`, { exact: true }).waitFor();
+            await page.getByText('Page 41', { exact: true }).waitFor();
+            assert.equal(await page.locator('#open-offers article.data-card').count(), 22, `${key}: final page card count`);
+            assert.equal(await page.getByRole('link', { name: 'Previous page', exact: true }).count(), 1, `${key}: final Previous`);
+            assert.equal(await page.getByRole('link', { name: 'Next page', exact: true }).count(), 0, `${key}: final Next`);
+
+            const unexpectedHttpErrors = diagnostics.httpErrors.filter(error => !expectedHttpError(error));
+            const unexpectedRequestFailures = diagnostics.requestFailures.filter(failure => !expectedRequestFailure(failure));
+            const seriousConsoleErrors = diagnostics.consoleErrors.filter(message => !(
+              diagnostics.httpErrors.some(expectedHttpError) && /Failed to load resource.*404/i.test(message)
+            ));
+
+            assert.deepEqual(diagnostics.pageErrors, [], `${key}: page errors`);
+            assert.deepEqual(unexpectedHttpErrors, [], `${key}: unexpected HTTP errors`);
+            assert.deepEqual(unexpectedRequestFailures, [], `${key}: unexpected request failures`);
+            assert.deepEqual(seriousConsoleErrors, [], `${key}: console errors`);
+            assert.deepEqual(diagnostics.dangerousMutations, [], `${key}: dangerous mutations`);
+
+            const result = {
+              key,
+              viewport,
+              status: 'passed',
+              api: {
+                status: apiResponse.status(),
+                profileId: api.profile.id,
+                displayName: api.profile.displayName,
+              },
+              pages: { page1, credibility, page2, clamped },
+              diagnostics: {
+                ...diagnostics,
+                unexpectedHttpErrors,
+                unexpectedRequestFailures,
+                seriousConsoleErrors,
+              },
+            };
+            report.scenarios.push(result);
+            await context.close();
+          }
+
+          (async () => {
+            await mkdir(evidenceDir, { recursive: true });
+            const browser = await chromium.launch({ headless: true });
+            try {
+              await runViewport(browser, 'desktop', { width: 1440, height: 1000 });
+              await runViewport(browser, 'mobile', { width: 390, height: 844 });
+              report.status = 'passed';
+            } catch (error) {
+              report.status = 'failed';
+              report.error = error instanceof Error ? error.stack : String(error);
+              throw error;
+            } finally {
+              report.finishedAt = new Date().toISOString();
+              await writeFile(path.join(evidenceDir, 'report.json'), `${JSON.stringify(report, null, 2)}\n`);
+              await browser.close();
+            }
+          })();
+          JS
+
+          jq -e \
+            --arg sha "$MAIN_SHA" \
+            --arg deployment "$PRODUCTION_DEPLOYMENT_ID" '
+              .status == "passed"
+              and .candidateSha == $sha
+              and .deploymentId == $deployment
+              and (.scenarios | length) == 2
+              and ([.scenarios[] | select(.status == "passed")] | length) == 2
+              and ([.scenarios[] | .api.status] | all(. == 200))
+              and ([.scenarios[] | .diagnostics.pageErrors[]] | length) == 0
+              and ([.scenarios[] | .diagnostics.unexpectedHttpErrors[]] | length) == 0
+              and ([.scenarios[] | .diagnostics.unexpectedRequestFailures[]] | length) == 0
+              and ([.scenarios[] | .diagnostics.seriousConsoleErrors[]] | length) == 0
+              and ([.scenarios[] | .diagnostics.dangerousMutations[]] | length) == 0
+            ' "$EVIDENCE_DIR/report.json" >/dev/null
+
+      - name: Upload immutable production-acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue609-production-acceptance-${{ github.run_id }}
+          path: issue609-production-acceptance
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish success evidence and stable status
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$OUTPUT_DIR/browser/report.json"
+          started="$(jq -r '.startedAt' "$report")"
+          finished="$(jq -r '.finishedAt' "$report")"
+          deployment="$(jq -r '.deploymentId' "$report")"
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$MAIN_SHA" \
+            -f state=success \
+            -f context="$STATUS_CONTEXT" \
+            -f description='Exact canonical desktop/mobile production acceptance passed' \
+            -f target_url="$run_url" >/dev/null
+
+          body=$(cat <<EOF
+          Exact merged-SHA production acceptance passed for Issue #609.
+
+          - Released commit: \`$MAIN_SHA\`
+          - Permanent production release: [$RELEASE_RUN_ID](https://github.com/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID)
+          - Canonical deployment: \`$deployment\`
+          - Acceptance run: [$GITHUB_RUN_ID]($run_url)
+          - Window: \`$started\` through \`$finished\`
+          - Verified on desktop 1440×1000 and exact mobile 390×844: credibility API, public profile page 1, credibility page, offer page 2, final-page clamping, truthful ranges, 24/24/22 rendered offer counts, and no horizontal overflow.
+          - No unexpected page errors, console errors, same-origin HTTP errors, request failures, or sensitive mutation requests were observed. Anonymous funnel telemetry was intercepted locally rather than written.
+          - All three canonical aliases resolve to the exact READY production deployment, and the published critical asset is byte-identical to the released source.
+
+          Exact-window Vercel runtime-log inspection remains the final closeout check before Issue #609 is closed.
+          EOF
+          )
+          gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Publish failure status
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$MAIN_SHA" \
+            -f state=failure \
+            -f context="$STATUS_CONTEXT" \
+            -f description='Issue 609 canonical production acceptance failed' \
+            -f target_url="$run_url" >/dev/null
+
+      - name: Record production acceptance evidence
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '### Issue #609 exact production acceptance'
+            echo
+            echo "- Released commit: \`$MAIN_SHA\`"
+            echo "- Production release run: \`$RELEASE_RUN_ID\`"
+            echo "- Acceptance run: \`$GITHUB_RUN_ID\`"
+            if [[ -f "$OUTPUT_DIR/browser/report.json" ]]; then
+              echo "- Result: \`$(jq -r '.status' "$OUTPUT_DIR/browser/report.json")\`"
+              echo "- Deployment: \`$(jq -r '.deploymentId // "unavailable"' "$OUTPUT_DIR/browser/report.json")\`"
+              echo "- Runtime window: \`$(jq -r '.startedAt // "unavailable"' "$OUTPUT_DIR/browser/report.json")\` to \`$(jq -r '.finishedAt // "unavailable"' "$OUTPUT_DIR/browser/report.json")\`"
+            else
+              echo '- Result: `unavailable`'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
