@@ -223,9 +223,11 @@ jobs:
           test "$(wc -l < database-evidence/qa-migration-sha256.txt)" -eq 12
           grep -v '^evidence_credibility_shadow_evidence_hardening|' \
             database-evidence/local-migration-sha256.txt \
+            | sort \
             > database-evidence/local-recorded-exact-sha256.txt
           grep -v '^evidence_credibility_shadow_evidence_hardening|' \
             database-evidence/qa-migration-sha256.txt \
+            | sort \
             > database-evidence/qa-recorded-exact-sha256.txt
           test "$(wc -l < database-evidence/local-recorded-exact-sha256.txt)" -eq 11
           diff -u \
