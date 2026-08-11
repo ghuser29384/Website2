@@ -319,8 +319,14 @@ for (const route of accountAndStandaloneRoutes) {
 test("preserves the canonical Home and Walkthrough references", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/", { timeout: 60_000, waitUntil: "domcontentloaded" });
-  await expect(page.locator('[data-mt-canonical-home="true"]')).toBeVisible({ timeout: 45_000 });
-  await expect(page.locator("header.topbar")).toHaveCSS("background-color", BLACK, { timeout: 45_000 });
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("banner")).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByRole("banner")).toHaveCSS("background-color", BLACK);
+  await expect(page.getByRole("link", { exact: true, name: "Moral Trade, home" })).toBeVisible();
+  await expect(page.getByRole("heading", { exact: true, level: 1, name: "What needs you now." })).toBeVisible();
+  await expect(page.getByRole("button", { exact: true, name: "Focus" })).toBeVisible();
+  await waitForTextLength(page, 160);
+  await expectNoFrameworkOverlay(page, "/");
   await page.screenshot({ path: testInfo.outputPath("reference-home.png"), fullPage: false });
 
   await page.goto("/walkthrough", { timeout: 60_000, waitUntil: "domcontentloaded" });
