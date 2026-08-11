@@ -83,9 +83,9 @@ jobs:
                   f'Archive inventory mismatch. Missing={sorted(expected_files-files)} '
                   f'Unexpected={sorted(files-expected_files)}'
               )
-          manifest = '\n'.join(sorted(files)).encode()
-          manifest_sha = hashlib.sha256(manifest).hexdigest()
-          expected_manifest_sha = '35874c6175c0d50f6cd91939218b0eb01fc30ed0b5f16404a4824acbb86fedf7'
+          canonical_manifest = ('\n'.join(sorted(files)) + '\n').encode()
+          manifest_sha = hashlib.sha256(canonical_manifest).hexdigest()
+          expected_manifest_sha = 'f85f93ed560308624773b700e02d7f89db649640383963dac3c177cab60a98ff'
           if manifest_sha != expected_manifest_sha:
               raise SystemExit(
                   f'Archive manifest mismatch: expected={expected_manifest_sha} actual={manifest_sha}'
