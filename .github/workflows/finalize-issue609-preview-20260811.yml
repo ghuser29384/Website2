@@ -1,0 +1,324 @@
+name: Finalize issue 609 protected Preview acceptance
+
+on:
+  push:
+    branches:
+      - ops/finalize-issue609-preview-20260811
+    paths:
+      - ".github/workflows/finalize-issue609-preview-20260811.yml"
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: finalize-issue609-protected-preview
+  cancel-in-progress: false
+
+env:
+  MAIN_SHA: f93acc33c135f34bc28f006842d9e08120d5b859
+  CANDIDATE_SHA: 61be8b632bedb350b9659c14d97b23a35216c889
+  PRODUCT_BRANCH: fix/issue609-public-profile-scale-20260811
+  RELEASE_BRANCH: release/vercel-preview
+  PRODUCT_PR: "611"
+  ISSUE_NUMBER: "609"
+  ACCEPTANCE_RUN_ID: "31511001678"
+  PREVIEW_RELEASE_RUN_ID: "31509287030"
+  DEPLOYMENT_ID: dpl_GLCp9ua2f9ptHgwKcLqYQpPvFWai
+  DEPLOYMENT_HOST: moraltrade-site-i1ga0xqg5-ellen-s.vercel.app
+  BASE_URL: https://moraltrade-site-i1ga0xqg5-ellen-s.vercel.app
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_TEAM_SCOPE: ellen-s
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  PROFILE_ID: 9e51db47-92d1-4d75-80ce-cf10de1121f1
+
+jobs:
+  finalize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Guard exact repository, pull request, and release state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/finalize-issue609-preview-20260811'
+
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          test "$current_main" = "$MAIN_SHA"
+
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}" > /tmp/pr611.json
+          jq -e \
+            --arg head "$CANDIDATE_SHA" \
+            --arg base "$MAIN_SHA" \
+            --arg branch "$PRODUCT_BRANCH" '
+              (.state == "open")
+              and (.draft == true)
+              and (.head.ref == $branch)
+              and (.head.sha == $head)
+              and (.base.ref == "main")
+              and (.base.sha == $base)
+            ' /tmp/pr611.json >/dev/null
+
+          gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort -u > /tmp/actual-files.txt
+          cat > /tmp/expected-files.txt <<'FILES'
+          src/app/api/credibility/profile/[profileId]/route.ts
+          src/app/people/[profileId]/credibility/page.tsx
+          src/app/people/[profileId]/page.tsx
+          src/lib/app-data.ts
+          src/lib/public-profile-offers.test.ts
+          src/lib/public-profile-offers.ts
+          src/lib/public-profile-scale-contract.test.ts
+          FILES
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+          release_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${RELEASE_BRANCH}" --jq '.object.sha')"
+          test "$release_sha" = "$CANDIDATE_SHA"
+
+      - name: Prove the permanent Preview release and hosted acceptance succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/acceptance
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PREVIEW_RELEASE_RUN_ID}" \
+            > evidence/preview-release-run.json
+          jq -e \
+            --arg main "$MAIN_SHA" '
+              (.name == "Gated Vercel release")
+              and (.event == "workflow_dispatch")
+              and (.head_sha == $main)
+              and (.status == "completed")
+              and (.conclusion == "success")
+            ' evidence/preview-release-run.json >/dev/null
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ACCEPTANCE_RUN_ID}" \
+            > evidence/acceptance-run.json
+          jq -e '
+              (.name == "Issue 609 integrated protected Preview acceptance")
+              and (.event == "push")
+              and (.status == "completed")
+              and (.conclusion == "success")
+            ' evidence/acceptance-run.json >/dev/null
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${ACCEPTANCE_RUN_ID}/jobs?per_page=100" \
+            > evidence/acceptance-jobs.json
+          jq -e '
+              (.total_count == 1)
+              and (.jobs[0].status == "completed")
+              and (.jobs[0].conclusion == "success")
+              and any(.jobs[0].steps[];
+                .name == "Exercise the real high-volume profile on desktop and exact mobile"
+                and .status == "completed"
+                and .conclusion == "success"
+              )
+              and any(.jobs[0].steps[];
+                .name == "Revoke the single-use Vercel automation bypass"
+                and .status == "completed"
+                and .conclusion == "success"
+              )
+            ' evidence/acceptance-jobs.json >/dev/null
+
+          gh run download "$ACCEPTANCE_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir evidence/acceptance
+
+          report_path="$(find evidence/acceptance -type f -name acceptance-report.json -print -quit)"
+          test -n "$report_path"
+          cp "$report_path" evidence/acceptance-report.json
+
+          jq -e \
+            --arg candidate "$CANDIDATE_SHA" \
+            --arg deployment "$DEPLOYMENT_ID" \
+            --arg profile "$PROFILE_ID" '
+              (.ok == true)
+              and (.candidate == $candidate)
+              and (.deploymentId == $deployment)
+              and (.profileId == $profile)
+              and (.desktop.api.seedStatus == 200)
+              and (.desktop.api.followStatus == 200)
+              and (.mobile.api.seedStatus == 200)
+              and (.mobile.api.followStatus == 200)
+              and (.desktop.first.status == 200)
+              and (.desktop.credibility.status == 200)
+              and (.desktop.second.status == 200)
+              and (.desktop.clamped.status == 200)
+              and (.mobile.first.status == 200)
+              and (.mobile.credibility.status == 200)
+              and (.mobile.second.status == 200)
+              and (.mobile.clamped.status == 200)
+              and ([.diagnostics.desktop.pageErrors[], .diagnostics.desktop.http5xx[], .diagnostics.desktop.dangerousMutations[], .diagnostics.mobile.pageErrors[], .diagnostics.mobile.http5xx[], .diagnostics.mobile.dangerousMutations[]] | length == 0)
+            ' evidence/acceptance-report.json >/dev/null
+
+          screenshot_count="$(find evidence/acceptance -type f -name '*.png' | wc -l | tr -d ' ')"
+          test "$screenshot_count" -ge 8
+          printf '%s\n' "$screenshot_count" > evidence/screenshot-count.txt
+
+      - name: Reconfirm the immutable Preview deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
+            > evidence/deployment-detail.json
+
+          jq -e \
+            --arg deployment_id "$DEPLOYMENT_ID" \
+            --arg deployment_host "$DEPLOYMENT_HOST" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg candidate "$CANDIDATE_SHA" '
+              ((.id // .uid) == $deployment_id)
+              and (.url == $deployment_host)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "preview") != "production")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $candidate)
+            ' evidence/deployment-detail.json >/dev/null
+
+      - name: Inspect the exact Preview runtime error window
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          test -n "$VERCEL_TOKEN"
+          : > evidence/vercel-runtime-errors.ndjson
+          : > evidence/vercel-runtime-logs-command.txt
+          : > evidence/vercel-runtime-logs-stderr.txt
+
+          succeeded=false
+          commands=(
+            "logs --deployment $BASE_URL --level error --since 3h --limit 1000 --json"
+            "logs $BASE_URL --level error --since 3h --limit 1000 --json"
+          )
+
+          for command in "${commands[@]}"; do
+            printf '%s\n' "$command" > evidence/vercel-runtime-logs-command.txt
+            set +e
+            # shellcheck disable=SC2086
+            npx --yes vercel@latest $command \
+              --scope "$VERCEL_TEAM_SCOPE" \
+              --token "$VERCEL_TOKEN" \
+              > evidence/vercel-runtime-errors.ndjson \
+              2> evidence/vercel-runtime-logs-stderr.txt
+            status=$?
+            set -e
+            if [[ "$status" = '0' ]]; then
+              succeeded=true
+              break
+            fi
+          done
+
+          if [[ "$succeeded" != 'true' ]]; then
+            cat evidence/vercel-runtime-logs-stderr.txt >&2
+            exit 1
+          fi
+
+          if grep -Eai \
+            "$PROFILE_ID|/api/credibility/profile|/people/.*/credibility|Bad Request|FUNCTION_INVOCATION_FAILED|Server Components render" \
+            evidence/vercel-runtime-errors.ndjson \
+            > evidence/relevant-preview-errors.txt; then
+            cat evidence/relevant-preview-errors.txt >&2
+            exit 1
+          fi
+
+          : > evidence/relevant-preview-errors.txt
+          printf 'No matching Preview runtime errors were returned for the inspected window.\n' \
+            > evidence/runtime-log-inspection.txt
+
+      - name: Publish exact acceptance status and make PR reviewable
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          status_target="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${ACCEPTANCE_RUN_ID}"
+          gh api \
+            --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/statuses/${CANDIDATE_SHA}" \
+            -f state=success \
+            -f context='issue609-protected-preview-acceptance' \
+            -f description='Real 982-offer profile passed protected Preview desktop/mobile acceptance' \
+            -f target_url="$status_target" \
+            > evidence/commit-status.json
+
+          marker='<!-- issue609-protected-preview-acceptance -->'
+          comment=$(cat <<EOF
+          $marker
+          Protected Preview acceptance passed on exact integrated candidate \`$CANDIDATE_SHA\`.
+
+          - Permanent Preview release run: \`$PREVIEW_RELEASE_RUN_ID\`
+          - Hosted acceptance run: \`$ACCEPTANCE_RUN_ID\`
+          - Immutable deployment: \`$DEPLOYMENT_ID\`
+          - Real production-scale profile exercised: \`$PROFILE_ID\` with 982 open offers
+          - API, public profile, credibility page, page 2, and out-of-range clamping: HTTP 200 on desktop and exact 390×844 mobile
+          - Truthful ranges verified: 1–24, 25–48, and 961–982; final page 41
+          - Horizontal overflow, server-component failure text, 5xx responses, and prohibited mutation requests: none detected
+          - Single-use Vercel bypass: revoked successfully
+          - Exact Preview runtime error window: no matching profile/credibility/Bad Request/server-component errors
+          - Production aliases and production data: unchanged
+
+          The remaining release sequence is expected-head merge, exact merged-SHA production release, canonical desktop/mobile smoke, and production log inspection.
+          EOF
+          )
+
+          existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PRODUCT_PR}/comments?per_page=100" --paginate --jq '.[].body')"
+          if ! grep -Fq "$marker" <<<"$existing"; then
+            gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --body "$comment"
+          fi
+
+          issue_existing="$(gh api "repos/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER}/comments?per_page=100" --paginate --jq '.[].body')"
+          if ! grep -Fq "$marker" <<<"$issue_existing"; then
+            gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$comment"
+          fi
+
+          gh pr ready "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY"
+
+      - name: Upload immutable Preview-finalization evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue609-preview-finalization-${{ github.run_id }}
+          path: |
+            evidence
+            /tmp/pr611.json
+            /tmp/actual-files.txt
+            /tmp/expected-files.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record finalization evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Issue #609 protected Preview finalization'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Acceptance run: \`$ACCEPTANCE_RUN_ID\`"
+            echo "- Deployment: \`$DEPLOYMENT_ID\`"
+            echo "- Pull request: \`#$PRODUCT_PR\`"
+            echo '- Production release: not performed by this workflow'
+          } >> "$GITHUB_STEP_SUMMARY"
