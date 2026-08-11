@@ -83,7 +83,12 @@ export default async function SuggestedOpportunityPage({
         {...getTopbarActions(Boolean(viewer))}
         showLogout={Boolean(viewer)}
       />
-      <main className={`${styles.page} legal-page`} id="main-content" tabIndex={-1}>
+      <main
+        className={`${styles.page} legal-page`}
+        data-suggested-opportunity={template.id}
+        id="main-content"
+        tabIndex={-1}
+      >
         <div className={styles.breadcrumbs}>
           <Link href="/bottleneck-atlas">Bottleneck Atlas</Link>
           <span aria-hidden="true">/</span>

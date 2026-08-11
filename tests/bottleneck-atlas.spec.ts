@@ -1,55 +1,4 @@
-from pathlib import Path
-
-
-def replace_once(path: Path, old: str, new: str) -> None:
-    text = path.read_text()
-    count = text.count(old)
-    if count != 1:
-        raise SystemExit(f"expected one marker in {path}, found {count}: {old[:160]!r}")
-    path.write_text(text.replace(old, new, 1))
-
-
-atlas_page = Path("src/app/bottleneck-atlas/page.tsx")
-replace_once(
-    atlas_page,
-    '''                  <article className={`${styles.fieldCard} panel`} id={field.id} key={field.id}>
-''',
-    '''                  <article
-                    className={`${styles.fieldCard} panel`}
-                    data-atlas-field={field.id}
-                    id={field.id}
-                    key={field.id}
-                  >
-''',
-)
-replace_once(
-    atlas_page,
-    '''              <article className={`${styles.templateCard} panel`} key={template.id}>
-''',
-    '''              <article
-                className={`${styles.templateCard} panel`}
-                data-synthesis-template={template.id}
-                key={template.id}
-              >
-''',
-)
-
-candidate_page = Path("src/app/suggested-opportunities/[templateId]/page.tsx")
-replace_once(
-    candidate_page,
-    '''      <main className={`${styles.page} legal-page`} id="main-content" tabIndex={-1}>
-''',
-    '''      <main
-        className={`${styles.page} legal-page`}
-        data-suggested-opportunity={template.id}
-        id="main-content"
-        tabIndex={-1}
-      >
-''',
-)
-
-test_file = Path("tests/bottleneck-atlas.spec.ts")
-test_file.write_text(r'''import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 async function expectNoHorizontalOverflow(page: Page) {
   await expect
@@ -234,4 +183,3 @@ test.describe("Bottleneck Atlas and generated feed", () => {
     expect(pageErrors).toEqual([]);
   });
 });
-''')

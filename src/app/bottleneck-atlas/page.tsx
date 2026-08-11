@@ -149,7 +149,12 @@ export default async function BottleneckAtlasPage() {
               </div>
               <div className={styles.fieldGrid}>
                 {fields.map((field) => (
-                  <article className={`${styles.fieldCard} panel`} id={field.id} key={field.id}>
+                  <article
+                    className={`${styles.fieldCard} panel`}
+                    data-atlas-field={field.id}
+                    id={field.id}
+                    key={field.id}
+                  >
                     <div className={styles.cardTopline}>
                       <span className={styles.confidence}>
                         {atlasConfidenceLabel(field.confidence)} confidence · {field.confidence}%
@@ -212,7 +217,11 @@ export default async function BottleneckAtlasPage() {
           </div>
           <div className={styles.templateGrid}>
             {OPPORTUNITY_SYNTHESIS_TEMPLATES.map((template) => (
-              <article className={`${styles.templateCard} panel`} key={template.id}>
+              <article
+                className={`${styles.templateCard} panel`}
+                data-synthesis-template={template.id}
+                key={template.id}
+              >
                 <div className={styles.cardTopline}>
                   <span className={styles.classification}>
                     {synthesisClassificationLabel(template.classification)}
