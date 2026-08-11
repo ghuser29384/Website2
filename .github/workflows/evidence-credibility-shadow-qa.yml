@@ -188,7 +188,7 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install --yes postgresql-client > /dev/null
 
-      - name: Bind recorded migrations to the exact repository bodies
+      - name: Bind exact migrations and prove live hardening equivalence
         shell: bash
         run: |
           set -euo pipefail
@@ -221,9 +221,61 @@ jobs:
             > database-evidence/qa-migration-sha256.txt
 
           test "$(wc -l < database-evidence/qa-migration-sha256.txt)" -eq 12
-          diff -u \
+          grep -v '^evidence_credibility_shadow_evidence_hardening|' \
             database-evidence/local-migration-sha256.txt \
-            database-evidence/qa-migration-sha256.txt
+            > database-evidence/local-recorded-exact-sha256.txt
+          grep -v '^evidence_credibility_shadow_evidence_hardening|' \
+            database-evidence/qa-migration-sha256.txt \
+            > database-evidence/qa-recorded-exact-sha256.txt
+          test "$(wc -l < database-evidence/local-recorded-exact-sha256.txt)" -eq 11
+          diff -u \
+            database-evidence/local-recorded-exact-sha256.txt \
+            database-evidence/qa-recorded-exact-sha256.txt
+          grep '^evidence_credibility_shadow_evidence_hardening|' \
+            database-evidence/local-migration-sha256.txt \
+            > database-evidence/local-hardening-record.txt
+          grep '^evidence_credibility_shadow_evidence_hardening|' \
+            database-evidence/qa-migration-sha256.txt \
+            > database-evidence/qa-hardening-record.txt
+          test "$(wc -l < database-evidence/local-hardening-record.txt)" -eq 1
+          test "$(wc -l < database-evidence/qa-hardening-record.txt)" -eq 1
+
+          live_definition_query="select 'constraint|' || encode(digest(pg_get_constraintdef(c.oid, true), 'sha256'), 'hex') from pg_constraint c where c.conname='trade_evidence_decisions_contradiction_integrity_consistency_check' union all select 'function|' || encode(digest(pg_get_functiondef(p.oid), 'sha256'), 'hex') from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname='record_trade_evidence_decision_v1' order by 1"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 \
+            --command "$live_definition_query" \
+            | sed '/^[[:space:]]*$/d' \
+            > database-evidence/live-hardening-definitions.txt
+          test "$(wc -l < database-evidence/live-hardening-definitions.txt)" -eq 2
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --quiet <<'SQL'
+          \pset tuples_only on
+          \pset format unaligned
+          begin;
+          \i supabase/migrations/20260810160009_evidence_credibility_shadow_evidence_hardening.sql
+          \o database-evidence/replayed-hardening-definitions.raw.txt
+          select 'constraint|' || encode(digest(pg_get_constraintdef(c.oid, true), 'sha256'), 'hex')
+          from pg_constraint c
+          where c.conname='trade_evidence_decisions_contradiction_integrity_consistency_check'
+          union all
+          select 'function|' || encode(digest(pg_get_functiondef(p.oid), 'sha256'), 'hex')
+          from pg_proc p
+          join pg_namespace n on n.oid=p.pronamespace
+          where n.nspname='public' and p.proname='record_trade_evidence_decision_v1'
+          order by 1;
+          \o
+          rollback;
+          SQL
+          sed '/^[[:space:]]*$/d' \
+            database-evidence/replayed-hardening-definitions.raw.txt \
+            > database-evidence/replayed-hardening-definitions.txt
+          test "$(wc -l < database-evidence/replayed-hardening-definitions.txt)" -eq 2
+          diff -u \
+            database-evidence/live-hardening-definitions.txt \
+            database-evidence/replayed-hardening-definitions.txt
 
       - name: Record active and shadow baselines
         shell: bash
