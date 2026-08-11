@@ -8,6 +8,7 @@
   --mt-feed-action: #1648ff;
   --mt-feed-redirect: #a84100;
   --mt-feed-public-goods: #526b00;
+  --mt-feed-suggested: #6b3fc4;
 }
 
 [data-mt-live-now="adaptive"] main {
@@ -98,6 +99,10 @@
 
 .mt-feed-legend-item--public-goods {
   --mt-kind: var(--mt-feed-public-goods);
+}
+
+.mt-feed-legend-item--suggested {
+  --mt-kind: var(--mt-feed-suggested);
 }
 
 .mt-feed-settings {
@@ -249,6 +254,12 @@
 .mt-feed-card[data-opportunity-type="donation_pool"],
 .mt-feed-card--public-goods {
   --mt-kind: var(--mt-feed-public-goods);
+}
+
+.mt-feed-card--suggested {
+  --mt-kind: var(--mt-feed-suggested);
+  border-style: dashed;
+  background: color-mix(in srgb, var(--mt-feed-suggested) 2.5%, var(--mt-feed-paper));
 }
 
 .mt-feed-card:hover,

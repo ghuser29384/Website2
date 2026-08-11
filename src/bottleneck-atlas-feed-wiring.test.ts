@@ -16,6 +16,18 @@ test("the authenticated feed merges generated possibilities into existing invent
   assert.match(route, /opportunitySynthesisDiagnostics/);
 });
 
+test("the feed distinguishes generated possibilities from live opportunity inventory", () => {
+  const feed = read("public/moral-trade-live-now.js");
+  const styles = read("public/moral-trade-live-feed.css");
+  assert.match(feed, /metadata\.origin === "platform_generated"/);
+  assert.match(feed, /Potential trade/);
+  assert.match(feed, /Opportunities for you/);
+  assert.match(feed, /model\.feedOpportunityCount/);
+  assert.match(feed, /generated \$\{/);
+  assert.match(feed, /possibilities/);
+  assert.match(styles, /mt-feed-card--suggested/);
+});
+
 test("synthesized interactions resolve locally without querying generated IDs as UUID offers", () => {
   const feedback = read("src/app/api/live-now/feedback/route.ts");
   assert.match(feedback, /parseSynthesizedOpportunityId/);

@@ -84,6 +84,8 @@
       value.metadata && typeof value.metadata === "object" && !Array.isArray(value.metadata)
         ? value.metadata
         : {};
+    const origin =
+      metadata.origin === "platform_generated" ? "platform_generated" : "published";
     const opportunityType = allowedOpportunityTypes.has(value.opportunityType)
       ? value.opportunityType
       : value.mode === "offset"
@@ -96,6 +98,7 @@
 
     return {
       id,
+      origin,
       opportunityType,
       href: safePath(value.href, defaultHref),
       ctaLabel: string(value.ctaLabel, 80) || "Review proposal",
@@ -236,6 +239,11 @@
     status: allowedStates.has(bootstrap.status) ? bootstrap.status : "unavailable",
   };
 
+  model.suggestedOpportunityCount = model.recommendations.filter(
+    (recommendation) => recommendation.origin === "platform_generated",
+  ).length;
+  model.feedOpportunityCount = model.recommendations.length;
+
   if (model.status === "ready" && !model.recommendations.length) {
     model.status = "unavailable";
   }
@@ -271,7 +279,17 @@
     return details.map((detail) => `<li>${escapeHtml(detail)}</li>`).join("");
   }
 
-  function opportunityVisual(type) {
+  function opportunityVisual(type, generated) {
+    if (generated) {
+      return {
+        key: "suggested",
+        label: "Potential trade",
+        symbol: "◇",
+        fromLabel: "You might offer",
+        toLabel: "Could advance",
+        connector: "↔",
+      };
+    }
     if (type === "donation_redirect") {
       return {
         key: "redirect",
@@ -327,7 +345,10 @@
   }
 
   function recommendationCard(recommendation, rank) {
-    const visual = opportunityVisual(recommendation.opportunityType);
+    const visual = opportunityVisual(
+      recommendation.opportunityType,
+      recommendation.origin === "platform_generated",
+    );
     const requestedAction = recommendation.requestAction || recommendation.requestedCause;
     const unlockedOutcome = recommendation.offerAction || recommendation.offeredCause;
     const savedLabel = recommendation.saved ? "Saved" : "Save";
@@ -371,7 +392,9 @@
       recommendation.id,
     )}" data-opportunity-type="${escapeHtml(
       recommendation.opportunityType,
-    )}" data-opportunity-id="${escapeHtml(recommendation.id)}" data-rank="${rank}">
+    )}" data-generated="${
+      recommendation.origin === "platform_generated" ? "true" : "false"
+    }" data-opportunity-id="${escapeHtml(recommendation.id)}" data-rank="${rank}">
       <div class="mt-feed-type-rail" aria-hidden="true"><span>${escapeHtml(
         visual.symbol,
       )}</span></div>
@@ -633,7 +656,7 @@
       ${sidePanel("Profile basis", model.profile.causes, "")}
       ${sidePanel(
         "Feed rule",
-        ["No guessed priorities", "No demo records", "Live opportunities only"],
+        ["No guessed priorities", "No demo records", "No invented counterparties"],
         "",
       )}
     </aside></div>`;
@@ -662,20 +685,25 @@
 
   function opportunityTypeLegend() {
     const counts = new Map([
+      ["suggested", 0],
       ["offer", 0],
       ["donation_redirect", 0],
       ["donation_pool", 0],
     ]);
     model.recommendations.forEach((recommendation) => {
-      counts.set(
-        recommendation.opportunityType,
-        (counts.get(recommendation.opportunityType) || 0) + 1,
-      );
+      const key =
+        recommendation.origin === "platform_generated"
+          ? "suggested"
+          : recommendation.opportunityType;
+      counts.set(key, (counts.get(key) || 0) + 1);
     });
     return [...counts.entries()]
       .filter(([, count]) => count > 0)
       .map(([type, count]) => {
-        const visual = opportunityVisual(type);
+        const visual =
+          type === "suggested"
+            ? opportunityVisual("offer", true)
+            : opportunityVisual(type, false);
         return `<span class="mt-feed-legend-item mt-feed-legend-item--${escapeHtml(
           visual.key,
         )}"><i aria-hidden="true">${escapeHtml(visual.symbol)}</i>${escapeHtml(
@@ -685,6 +713,25 @@
       .join("");
   }
 
+  function feedCompositionLabel() {
+    const parts = [];
+    if (model.matchingOpportunityCount > 0) {
+      parts.push(
+        `${model.matchingOpportunityCount} live ${
+          model.matchingOpportunityCount === 1 ? "opportunity" : "opportunities"
+        }`,
+      );
+    }
+    if (model.suggestedOpportunityCount > 0) {
+      parts.push(
+        `${model.suggestedOpportunityCount} generated ${
+          model.suggestedOpportunityCount === 1 ? "possibility" : "possibilities"
+        }`,
+      );
+    }
+    return parts.join(" · ") || "No opportunity inventory";
+  }
+
   function renderReadyState() {
     const cards = model.recommendations
       .map((recommendation, index) => recommendationCard(recommendation, index + 1))
@@ -692,9 +739,11 @@
 
     return `<div class="focus-layout mt-feed-layout" data-mt-live-now="adaptive" data-mt-live-now-state="ready"><main class="mt-feed-main">
       <section class="mt-feed-toolbar" aria-label="Personalized feed controls">
-        <div class="mt-feed-toolbar-title"><div class="eyebrow blue">For you</div><h2>Live opportunities <span>${escapeHtml(
-          String(model.matchingOpportunityCount),
-        )}</span></h2><p>${escapeHtml(formatRefreshTime(model.generatedAt))}</p></div>
+        <div class="mt-feed-toolbar-title"><div class="eyebrow blue">For you</div><h2>Opportunities for you <span>${escapeHtml(
+          String(model.feedOpportunityCount),
+        )}</span></h2><p>${escapeHtml(formatRefreshTime(model.generatedAt))} · ${escapeHtml(
+          feedCompositionLabel(),
+        )}</p></div>
         <div class="mt-feed-legend" aria-label="Opportunity types in this feed">${opportunityTypeLegend()}</div>
         <details class="mt-feed-settings">
           <summary aria-label="Open feed settings">Tune feed <span aria-hidden="true">⚙</span></summary>
