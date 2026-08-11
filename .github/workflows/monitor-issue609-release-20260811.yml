@@ -1,0 +1,149 @@
+name: Monitor and clean up issue 609 release
+
+on:
+  push:
+    branches:
+      - ops/monitor-issue609-release-20260811
+    paths:
+      - ".github/workflows/monitor-issue609-release-20260811.yml"
+
+permissions:
+  actions: read
+  contents: write
+  issues: write
+  pull-requests: read
+
+concurrency:
+  group: monitor-issue609-release
+  cancel-in-progress: false
+
+env:
+  RELEASE_WORKFLOW: release-issue609-production-20260811.yml
+  RELEASE_BRANCH: ops/release-issue609-production-20260811
+  PRODUCT_PR: "611"
+  ISSUE_NUMBER: "609"
+
+jobs:
+  monitor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Wait for the exact release controller to finish
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/monitor-issue609-release-20260811'
+          mkdir -p evidence
+
+          release_run=''
+          for attempt in $(seq 1 700); do
+            gh api -X GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/${RELEASE_WORKFLOW}/runs" \
+              -f branch="$RELEASE_BRANCH" \
+              -f event=push \
+              -F per_page=20 \
+              > evidence/release-controller-runs.json
+
+            release_run="$(jq -r '
+              [.workflow_runs[]]
+              | sort_by(.created_at)
+              | reverse
+              | .[0].id // empty
+            ' evidence/release-controller-runs.json)"
+
+            if [[ -n "$release_run" ]]; then
+              status="$(jq -r --argjson id "$release_run" '.workflow_runs[] | select(.id == $id) | .status' evidence/release-controller-runs.json)"
+              conclusion="$(jq -r --argjson id "$release_run" '.workflow_runs[] | select(.id == $id) | .conclusion // empty' evidence/release-controller-runs.json)"
+              if [[ "$status" == 'completed' ]]; then
+                echo "run_id=$release_run" >> "$GITHUB_OUTPUT"
+                echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+                gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${release_run}" \
+                  > evidence/release-controller-run.json
+                exit 0
+              fi
+            fi
+            sleep 15
+          done
+
+          echo 'Timed out waiting for the issue #609 release controller.' >&2
+          exit 1
+
+      - name: Verify successful canonical release state
+        if: ${{ steps.release.outputs.conclusion == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}" > evidence/pr611-final.json
+          jq -e '.state == "closed" and .merged == true' evidence/pr611-final.json >/dev/null
+
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${ISSUE_NUMBER}" > evidence/issue609-final.json
+          jq -e '.state == "closed" and .state_reason == "completed"' evidence/issue609-final.json >/dev/null
+
+      - name: Report a failed release controller without mutating production
+        if: ${{ steps.release.outputs.conclusion != 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ steps.release.outputs.run_id }}
+          RELEASE_CONCLUSION: ${{ steps.release.outputs.conclusion }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker='<!-- issue609-release-controller-failure -->'
+          body=$(cat <<EOF
+          $marker
+          The fail-closed issue #609 release controller ended with conclusion \`$RELEASE_CONCLUSION\`.
+
+          Controller run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID
+
+          No further merge, release, issue closure, or cleanup is authorized until the failed step and retained evidence are inspected. Any steps completed before the failure remain recorded on that run.
+          EOF
+          )
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+          exit 1
+
+      - name: Remove one-use controller branches after full success
+        if: ${{ steps.release.outputs.conclusion == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branches=(
+            ops/dispatch-issue609-preview-20260811
+            ops/verify-issue609-integrated-preview-20260811
+            ops/finalize-issue609-preview-20260811
+            ops/release-issue609-production-20260811
+          )
+          for branch in "${branches[@]}"; do
+            encoded="${branch//\//%2F}"
+            if gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${encoded}" >/dev/null 2>&1; then
+              gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded}"
+            fi
+          done
+
+      - name: Upload monitor evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue609-release-monitor-${{ github.run_id }}
+          path: evidence
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Delete this one-use monitor branch after full success
+        if: ${{ steps.release.outputs.conclusion == 'success' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method DELETE \
+            "repos/${GITHUB_REPOSITORY}/git/refs/heads/ops%2Fmonitor-issue609-release-20260811"
