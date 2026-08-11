@@ -12,23 +12,24 @@ def replace_once(path: Path, old: str, new: str) -> None:
 atlas_page = Path("src/app/bottleneck-atlas/page.tsx")
 replace_once(
     atlas_page,
-    '''              <article key={field.id} className={styles.fieldCard}>
+    '''                  <article className={`${styles.fieldCard} panel`} id={field.id} key={field.id}>
 ''',
-    '''              <article
-                key={field.id}
-                className={styles.fieldCard}
-                data-atlas-field={field.id}
-              >
+    '''                  <article
+                    className={`${styles.fieldCard} panel`}
+                    data-atlas-field={field.id}
+                    id={field.id}
+                    key={field.id}
+                  >
 ''',
 )
 replace_once(
     atlas_page,
-    '''              <article key={template.id} className={styles.templateCard}>
+    '''              <article className={`${styles.templateCard} panel`} key={template.id}>
 ''',
     '''              <article
-                key={template.id}
-                className={styles.templateCard}
+                className={`${styles.templateCard} panel`}
                 data-synthesis-template={template.id}
+                key={template.id}
               >
 ''',
 )
@@ -36,14 +37,19 @@ replace_once(
 candidate_page = Path("src/app/suggested-opportunities/[templateId]/page.tsx")
 replace_once(
     candidate_page,
-    '''    <main className={styles.page}>
+    '''      <main className={`${styles.page} legal-page`} id="main-content" tabIndex={-1}>
 ''',
-    '''    <main className={styles.page} data-suggested-opportunity={template.id}>
+    '''      <main
+        className={`${styles.page} legal-page`}
+        data-suggested-opportunity={template.id}
+        id="main-content"
+        tabIndex={-1}
+      >
 ''',
 )
 
 test_file = Path("tests/bottleneck-atlas.spec.ts")
-test_file.write_text('''import { expect, test, type Page } from "@playwright/test";
+test_file.write_text(r'''import { expect, test, type Page } from "@playwright/test";
 
 async function expectNoHorizontalOverflow(page: Page) {
   await expect
@@ -160,7 +166,7 @@ test.describe("Bottleneck Atlas and generated feed", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Bottleneck Atlas" })).toBeVisible();
     await expect(page.locator("[data-atlas-field]")).toHaveCount(18);
     await expect(page.locator("[data-synthesis-template]")).toHaveCount(9);
-    await expect(page.getByText(/field evidence is a search prior/i)).toBeVisible();
+    await expect(page.getByText(/field evidence is a search prior/i).first()).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -182,7 +188,7 @@ test.describe("Bottleneck Atlas and generated feed", () => {
       "ai-governance-advocacy-operations",
     );
     await expect(page.getByText("This is not an offer and not yet a moral trade.")).toBeVisible();
-    await expect(page.getByText("No counterparty confirmed")).toBeVisible();
+    await expect(page.getByText("No counterparty confirmed").first()).toBeVisible();
     const firstParty = page.getByRole("link", { name: "Draft first-party terms" }).first();
     const counterparty = page.getByRole("link", { name: "Draft counterparty terms" }).first();
     await expect(firstParty).toHaveAttribute("href", /role=first_party/);
@@ -191,7 +197,7 @@ test.describe("Bottleneck Atlas and generated feed", () => {
 
     await firstParty.click();
     await expect(page).toHaveURL(/\/trades\/new\?.*source=bottleneck_atlas_synthesis/);
-    await expect(page.getByText("Sign in to build a trade")).toBeVisible();
+    await expect(page.getByText("Sign in to build a trade").first()).toBeVisible();
   });
 
   test("visually and semantically separates generated possibilities from live inventory", async ({
@@ -199,13 +205,13 @@ test.describe("Bottleneck Atlas and generated feed", () => {
   }) => {
     const pageErrors: string[] = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
-    await page.route("**/api/live-account", (route) =>
+    await page.route("**/api/live-account**", (route) =>
       route.fulfill({
         contentType: "application/json",
         body: JSON.stringify({ authenticated: true, account: { displayName: "Feed user" } }),
       }),
     );
-    await page.route("**/api/live-now", (route) =>
+    await page.route("**/api/live-now**", (route) =>
       route.fulfill({ contentType: "application/json", body: JSON.stringify(feedFixture) }),
     );
 
