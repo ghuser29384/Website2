@@ -97,8 +97,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git diff --cached --check -- . \
-            ':(exclude)supabase/migrations/20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql' \
-            ':(exclude)supabase/migrations/20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql'
+          git status --short
           git commit -m "Remediate QA-only impact-study instrumentation review"
           git push origin HEAD:feature/commitments-impact-study-instrumentation-20260811
