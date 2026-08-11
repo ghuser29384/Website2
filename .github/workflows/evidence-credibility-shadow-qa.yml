@@ -327,6 +327,7 @@ jobs:
             --no-psqlrc \
             --tuples-only \
             --no-align \
+            --quiet \
             --set ON_ERROR_STOP=1 <<'SQL' \
             | sed '/^[[:space:]]*$/d' \
             > database-evidence/after-counts.txt
