@@ -19,6 +19,12 @@ body:has(.mtw-shell) {
   background-image: none !important;
 }
 
+/* The shipped static Walkthrough is a deliberately full-black reference surface. */
+body:has([role="tablist"][aria-label="Interactive walkthrough concepts"]) {
+  background-color: var(--mt-black) !important;
+  background-image: none !important;
+}
+
 /*
  * The Home and Walkthrough references use hard editorial geometry. Apply that
  * same geometry to ordinary controls and semantic content panels everywhere
