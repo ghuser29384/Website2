@@ -23,6 +23,8 @@ test("the feed distinguishes generated possibilities from live opportunity inven
   assert.match(feed, /Potential trade/);
   assert.match(feed, /Opportunities for you/);
   assert.match(feed, /model\.feedOpportunityCount/);
+  assert.match(feed, /model\.publishedOpportunityCount/);
+  assert.match(feed, /recommendation\.origin === "published"/);
   assert.match(feed, /generated \$\{/);
   assert.match(feed, /possibilities/);
   assert.match(styles, /mt-feed-card--suggested/);

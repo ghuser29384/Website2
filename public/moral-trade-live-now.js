@@ -242,6 +242,9 @@
   model.suggestedOpportunityCount = model.recommendations.filter(
     (recommendation) => recommendation.origin === "platform_generated",
   ).length;
+  model.publishedOpportunityCount = model.recommendations.filter(
+    (recommendation) => recommendation.origin === "published",
+  ).length;
   model.feedOpportunityCount = model.recommendations.length;
 
   if (model.status === "ready" && !model.recommendations.length) {
@@ -715,10 +718,10 @@
 
   function feedCompositionLabel() {
     const parts = [];
-    if (model.matchingOpportunityCount > 0) {
+    if (model.publishedOpportunityCount > 0) {
       parts.push(
-        `${model.matchingOpportunityCount} live ${
-          model.matchingOpportunityCount === 1 ? "opportunity" : "opportunities"
+        `${model.publishedOpportunityCount} live ${
+          model.publishedOpportunityCount === 1 ? "opportunity" : "opportunities"
         }`,
       );
     }
