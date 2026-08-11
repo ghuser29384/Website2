@@ -199,7 +199,7 @@ function EvidenceCaptureCard({ row }: { row: CaptureRow }) {
       <div className="profile-card-head">
         <div>
           <p className="detail-kicker">
-            Evidence decision · milestone {String(row.position ?? "—")}
+            Evidence decision · milestone {String(row.milestone_position ?? "—")}
           </p>
           <h3>{humanize(row.action_category)}</h3>
           <p className="route-text">{String(row.description ?? "")}</p>
