@@ -1,0 +1,90 @@
+name: Repair evidence capture reserved identifier
+
+on:
+  push:
+    branches:
+      - feature/evidence-credibility-capture-queue-20260811
+    paths:
+      - .github/workflows/repair-evidence-capture-position.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-evidence-capture-position
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact repair controller head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Replace reserved output identifier and remove controller
+        shell: bash
+        env:
+          EXPECTED_PARENT_SHA: bff27e34a6c27a746e0a3f2b870a8882bad39fa5
+          TARGET_BRANCH: feature/evidence-credibility-capture-queue-20260811
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration_path = Path(
+              "supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql"
+          )
+          page_path = Path("src/app/admin/evidence-calibration/page.tsx")
+
+          migration = migration_path.read_text()
+          replacements = [
+              ("  position integer,\n", "  milestone_position integer,\n", 1),
+              (
+                  "      milestone.position,\n",
+                  "      milestone.position as milestone_position,\n",
+                  2,
+              ),
+              (
+                  "    combined.position,\n",
+                  "    combined.milestone_position,\n",
+                  1,
+              ),
+          ]
+          for old, new, expected_count in replacements:
+              actual_count = migration.count(old)
+              if actual_count != expected_count:
+                  raise SystemExit(
+                      f"Unexpected occurrence count for {old!r}: "
+                      f"expected {expected_count}, got {actual_count}."
+                  )
+              migration = migration.replace(old, new)
+          migration_path.write_text(migration)
+
+          page = page_path.read_text()
+          old_page = 'row.position ?? "—"'
+          new_page = 'row.milestone_position ?? "—"'
+          if page.count(old_page) != 1:
+              raise SystemExit("Unexpected milestone-position UI occurrence count.")
+          page_path.write_text(page.replace(old_page, new_page))
+          PY
+
+          rm .github/workflows/repair-evidence-capture-position.yml
+          git diff --check
+          git diff --exit-code --quiet -- \
+            ':!supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql' \
+            ':!src/app/admin/evidence-calibration/page.tsx' \
+            ':!.github/workflows/repair-evidence-capture-position.yml'
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql \
+            src/app/admin/evidence-calibration/page.tsx \
+            .github/workflows/repair-evidence-capture-position.yml
+          git commit -m "fix: avoid reserved capture queue identifier"
+          git push origin "HEAD:${TARGET_BRANCH}"
