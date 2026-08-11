@@ -38,47 +38,82 @@ jobs:
           test "${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}" = "feature/evidence-credibility-shadow-v2-20260810"
           git merge-base --is-ancestor 0778577c98c7a86417057caeb939c01f77e22c89 HEAD
           test "$(find .github/materialize-evidence-shadow -maxdepth 1 -type f -name 'chunk-*.b64' | wc -l)" -eq 5
+          test -f .github/workflows/evidence-credibility-shadow-qa.yml
 
       - name: Reconstruct and verify exact archive
         shell: bash
         run: |
           set -euo pipefail
-          expected_sha="82f833fdb93707eef6af66e13eaab951ad5153ac48fd5d95564092389982099e"
+          expected_sha="dee73a8f24057acf17d2111d7f991c0c31263204fbb07ec695822179f5599ba0"
           cat .github/materialize-evidence-shadow/chunk-*.b64 > /tmp/evidence-shadow.tar.gz.b64
           base64 --decode /tmp/evidence-shadow.tar.gz.b64 > /tmp/evidence-shadow.tar.gz
           actual_sha="$(sha256sum /tmp/evidence-shadow.tar.gz | awk '{print $1}')"
-          member_count="$(tar -tzf /tmp/evidence-shadow.tar.gz | sed '/\/$/d' | wc -l | tr -d ' ')"
-          echo "expected_archive_sha=${expected_sha}"
-          echo "actual_archive_sha=${actual_sha}"
-          echo "archive_file_member_count=${member_count}"
-          if [ "${actual_sha}" != "${expected_sha}" ]; then
-            echo "::error title=Evidence shadow archive checksum mismatch::expected=${expected_sha} actual=${actual_sha} file_members=${member_count}"
-            exit 1
-          fi
+          test "${actual_sha}" = "${expected_sha}"
           python - <<'PY'
+          import hashlib
           import tarfile
 
+          expected_files = {
+              '.github/workflows/evidence-credibility-shadow-qa.yml',
+              'docs/moral-trade/evidence-credibility-shadow-v2.md',
+              'src/lib/evidence-credibility-shadow-schema-contract.test.ts',
+              'supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql',
+              'supabase/migrations/20260810160001_evidence_credibility_shadow_schema_events.sql',
+              'supabase/migrations/20260810160002_evidence_credibility_shadow_event_plan_refresh.sql',
+              'supabase/migrations/20260810160003_evidence_credibility_shadow_evidence_materialize.sql',
+              'supabase/migrations/20260810160004_evidence_credibility_shadow_evidence_rpc.sql',
+              'supabase/migrations/20260810160005_evidence_credibility_shadow_settlement_materialize.sql',
+              'supabase/migrations/20260810160006_evidence_credibility_shadow_settlement_rpc.sql',
+              'supabase/migrations/20260810160007_evidence_credibility_shadow_differential_active.sql',
+              'supabase/migrations/20260810160008_evidence_credibility_shadow_rls_grants.sql',
+              'supabase/migrations/20260810160009_evidence_credibility_shadow_evidence_hardening.sql',
+              'supabase/migrations/20260810160010_evidence_credibility_shadow_settlement_hardening.sql',
+              'supabase/migrations/20260810160011_evidence_credibility_shadow_advisor_indexes.sql',
+              'supabase/tests/evidence_credibility_shadow_core.sql',
+              'supabase/tests/evidence_credibility_shadow_finality.sql',
+              'supabase/tests/evidence_credibility_shadow_supersession.sql',
+              'supabase/tests/evidence_credibility_shadow_settlement.sql',
+              'supabase/tests/evidence_credibility_shadow_authorization.sql',
+              'supabase/tests/evidence_credibility_shadow_active_compatibility.sql',
+          }
           with tarfile.open('/tmp/evidence-shadow.tar.gz', 'r:gz') as archive:
-              files = [member.name for member in archive.getmembers() if member.isfile()]
-          if len(files) != 21:
-              raise SystemExit(f'Expected 21 durable files, found {len(files)}: {files}')
+              files = {member.name for member in archive.getmembers() if member.isfile()}
+          if files != expected_files:
+              raise SystemExit(
+                  f'Archive inventory mismatch. Missing={sorted(expected_files-files)} '
+                  f'Unexpected={sorted(files-expected_files)}'
+              )
+          manifest = '\n'.join(sorted(files)).encode()
+          manifest_sha = hashlib.sha256(manifest).hexdigest()
+          expected_manifest_sha = '35874c6175c0d50f6cd91939218b0eb01fc30ed0b5f16404a4824acbb86fedf7'
+          if manifest_sha != expected_manifest_sha:
+              raise SystemExit(
+                  f'Archive manifest mismatch: expected={expected_manifest_sha} actual={manifest_sha}'
+              )
           PY
 
-      - name: Materialize non-workflow durable files and remove temporary controller
+      - name: Materialize durable files and remove all temporary machinery
         shell: bash
         run: |
           set -euo pipefail
           tar -xzf /tmp/evidence-shadow.tar.gz -C "${GITHUB_WORKSPACE}"
           rm -rf .github/materialize-evidence-shadow
           rm -f .github/workflows/materialize-evidence-credibility-shadow-v2.yml
-          rm -f .github/workflows/evidence-credibility-shadow-qa.yml
-          test ! -e .github/workflows/evidence-credibility-shadow-qa.yml
+          rm -f .github/workflows/stage-evidence-credibility-shadow-qa-workflow.yml
+          rm -f .github/workflows/cleanup-evidence-credibility-shadow-staging.yml
+          rm -f .github/staged-evidence-credibility-shadow-qa.yml.txt
+          test -f .github/workflows/evidence-credibility-shadow-qa.yml
           test -f docs/moral-trade/evidence-credibility-shadow-v2.md
           test -f src/lib/evidence-credibility-shadow-schema-contract.test.ts
           test "$(find supabase/migrations -maxdepth 1 -type f -name '202608101600*_evidence_credibility_shadow_*.sql' | wc -l)" -eq 12
           test "$(find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_shadow_*.sql' | wc -l)" -eq 6
+          test ! -e .github/materialize-evidence-shadow
+          test ! -e .github/workflows/materialize-evidence-credibility-shadow-v2.yml
+          test ! -e .github/workflows/stage-evidence-credibility-shadow-qa-workflow.yml
+          test ! -e .github/workflows/cleanup-evidence-credibility-shadow-staging.yml
+          test ! -e .github/staged-evidence-credibility-shadow-qa.yml.txt
 
-      - name: Commit exact non-workflow durable tree
+      - name: Commit exact durable tree
         shell: bash
         run: |
           set -euo pipefail
@@ -87,6 +122,6 @@ jobs:
           git add -A
           git diff --cached --check
           test "$(git diff --cached --name-status | awk '$1=="A"{n++} END{print n+0}')" -eq 20
-          test "$(git diff --cached --name-status | awk '$1=="D"{n++} END{print n+0}')" -eq 6
+          test "$(git diff --cached --name-status | awk '$1=="D"{n++} END{print n+0}')" -eq 8
           git commit -m "Implement evidence credibility shadow integration"
           git push origin HEAD:feature/evidence-credibility-shadow-v2-20260810
