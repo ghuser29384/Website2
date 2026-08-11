@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildSynthesizedTradeDraftPrefill,
   isOpportunitySynthesisEnabled,
   mergeExistingAndSynthesizedRecommendations,
   parseSynthesizedOpportunityId,
   synthesizeBottleneckAtlasRecommendations,
 } from "./opportunity-synthesis";
+import { getSynthesisTemplate } from "./bottleneck-atlas";
 
 const checkedAt = new Date("2026-08-11T16:00:00.000Z");
 
@@ -87,6 +89,32 @@ test("generated identifiers resolve only to known synthesis templates", () => {
   assert.equal(parseSynthesizedOpportunityId("synth:not-a-template:ai-governance"), null);
   assert.equal(parseSynthesizedOpportunityId("offer:ai-governance"), null);
   assert.equal(parseSynthesizedOpportunityId("synth:ai-governance-advocacy-operations:"), null);
+});
+
+test("atlas candidates prefill a private draft without inventing a counterparty or executable terms", () => {
+  const template = getSynthesisTemplate("ai-governance-advocacy-operations");
+  assert.ok(template);
+
+  const firstParty = buildSynthesizedTradeDraftPrefill({
+    template,
+    matchedCause: "AI governance",
+    role: "first_party",
+  });
+  const counterparty = buildSynthesizedTradeDraftPrefill({
+    template,
+    matchedCause: "animal welfare",
+    role: "counterparty",
+  });
+
+  assert.equal(firstParty.requestedCause, "AI governance");
+  assert.equal(counterparty.requestedCause, "animal welfare");
+  assert.match(firstParty.proposedAction, /Full backfill/);
+  assert.match(counterparty.proposedAction, /Defined transferable capability/);
+  assert.match(firstParty.offeredCause, /^\[Replace:/);
+  assert.match(firstParty.noTradeBaseline, /^\[Replace:/);
+  assert.match(firstParty.notes, /No named counterparty is confirmed/);
+  assert.match(firstParty.notes, /not a live offer or agreement/);
+  assert.equal(firstParty.voluntaryCertification, false);
 });
 
 test("the kill switch is explicit and fail-operational only when not disabled", () => {

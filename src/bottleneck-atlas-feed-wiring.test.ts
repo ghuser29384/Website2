@@ -39,6 +39,17 @@ test("synthesized interactions resolve locally without querying generated IDs as
   assert.match(feedback, /model_version: OPPORTUNITY_SYNTHESIS_VERSION/);
 });
 
+test("atlas suggestions hand off to a private, role-specific, fail-closed draft", () => {
+  const detail = read("src/app/suggested-opportunities/[templateId]/page.tsx");
+  const create = read("src/app/trades/new/page.tsx");
+  assert.match(detail, /role", "first_party"/);
+  assert.match(detail, /role", "counterparty"/);
+  assert.match(detail, /not an offer or introduction/);
+  assert.match(create, /buildSynthesizedTradeDraftPrefill/);
+  assert.match(create, /A Bottleneck Atlas hypothesis cannot be combined/);
+  assert.match(create, /Bottleneck Atlas hypothesis/);
+});
+
 test("the public atlas and candidate detail routes preserve the hypothesis boundary", () => {
   const atlas = read("src/app/bottleneck-atlas/page.tsx");
   const detail = read("src/app/suggested-opportunities/\[templateId\]/page.tsx");

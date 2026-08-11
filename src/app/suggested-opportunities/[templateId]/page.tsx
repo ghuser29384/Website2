@@ -70,6 +70,10 @@ export default async function SuggestedOpportunityPage({
     template: template.id,
   });
   if (matchedCause) createQuery.set("cause", matchedCause);
+  const firstPartyQuery = new URLSearchParams(createQuery);
+  firstPartyQuery.set("role", "first_party");
+  const counterpartyQuery = new URLSearchParams(createQuery);
+  counterpartyQuery.set("role", "counterparty");
 
   return (
     <div className="page-shell">
@@ -102,12 +106,22 @@ export default async function SuggestedOpportunityPage({
                 This explains retrieval, not feasibility or acceptance.
               </p>
             ) : null}
+            <p className={styles.matchNote}>
+              Choose which side you may represent. Either route creates only a private, editable
+              hypothesis with unresolved fields—not an offer or introduction.
+            </p>
             <div className="hero-actions">
               <Link
                 className="button button-primary"
-                href={`/trades/new?${createQuery.toString()}`}
+                href={`/trades/new?${firstPartyQuery.toString()}`}
               >
-                Create a draft from this idea
+                Draft first-party terms
+              </Link>
+              <Link
+                className="button button-secondary"
+                href={`/trades/new?${counterpartyQuery.toString()}`}
+              >
+                Draft counterparty terms
               </Link>
               <Link className="button button-secondary" href="/feed">
                 Return to feed
@@ -266,9 +280,15 @@ export default async function SuggestedOpportunityPage({
             <div className="hero-actions">
               <Link
                 className="button button-primary"
-                href={`/trades/new?${createQuery.toString()}`}
+                href={`/trades/new?${firstPartyQuery.toString()}`}
               >
-                Start private draft
+                Draft first-party terms
+              </Link>
+              <Link
+                className="button button-secondary"
+                href={`/trades/new?${counterpartyQuery.toString()}`}
+              >
+                Draft counterparty terms
               </Link>
               <Link className="button button-secondary" href="/bottleneck-atlas">
                 Back to atlas

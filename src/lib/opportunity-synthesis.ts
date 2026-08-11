@@ -97,6 +97,92 @@ export function parseSynthesizedOpportunityId(
   return matchedCause ? { template, matchedCause } : null;
 }
 
+export type SynthesizedTradeDraftRole = "first_party" | "counterparty";
+
+export interface SynthesizedTradeDraftPrefill {
+  offeredCause: string;
+  requestedCause: string;
+  proposedAction: string;
+  requestedAction: string;
+  noTradeBaseline: string;
+  duration: string;
+  startDate: string;
+  evidenceDueDate: string;
+  evidenceRule: string;
+  maximumBurden: string;
+  privacyScope: string;
+  exitConditions: string;
+  notes: string;
+  voluntaryCertification: false;
+}
+
+export function isSynthesizedTradeDraftRole(value: string): value is SynthesizedTradeDraftRole {
+  return value === "first_party" || value === "counterparty";
+}
+
+function draftPrompt(instruction: string, startingPoint?: string) {
+  const suggestion = startingPoint?.trim()
+    ? ` Suggested starting point: ${startingPoint.trim()}`
+    : "";
+  return `[Replace: ${instruction}.${suggestion}]`;
+}
+
+export function buildSynthesizedTradeDraftPrefill({
+  template,
+  matchedCause,
+  role,
+}: {
+  template: OpportunitySynthesisTemplate;
+  matchedCause: string;
+  role: SynthesizedTradeDraftRole;
+}): SynthesizedTradeDraftPrefill {
+  const priority = matchedCause.trim().replace(/\s+/g, " ").slice(0, 120) || template.offeredCause;
+  const userGives = role === "first_party" ? template.firstPartyGives : template.counterpartyGives;
+  const userReceives = role === "first_party" ? template.firstPartyReceives : template.counterpartyReceives;
+  const roleLabel = role === "first_party" ? "first-party side" : "counterparty side";
+  const classification = synthesisClassificationLabel(template.classification);
+
+  return {
+    offeredCause: draftPrompt(
+      "name the counterparty's moral priority that your proposed contribution would advance",
+    ),
+    requestedCause: priority,
+    proposedAction: draftPrompt("state your concrete, bounded commitment", userGives),
+    requestedAction: draftPrompt(
+      "state the counterparty's concrete, bounded reciprocal commitment",
+      userReceives,
+    ),
+    noTradeBaseline: draftPrompt(
+      "replace this field-level hypothesis with a dated account of what both sides would actually do without the trade",
+      template.noTradeBaseline,
+    ),
+    duration: draftPrompt("state a bounded duration or completion date"),
+    startDate: "",
+    evidenceDueDate: "",
+    evidenceRule: draftPrompt(
+      "specify evidence and an authorized verifier for the binding need, available capacity, additionality, consent, and each completion milestone",
+    ),
+    maximumBurden: draftPrompt(
+      "state a hard cap covering direct cost, management, backfill, recruitment, transition, lost output, legal or administrative cost, and risk",
+    ),
+    privacyScope:
+      "Keep identities, organization-specific bottlenecks, staff availability, internal evidence, and contact details private until every authorized party approves disclosure. Publish only explicitly approved outcome metadata.",
+    exitConditions: draftPrompt(
+      "state withdrawal, amendment, pause, dispute, and termination rules; withdrawal before terms freeze must carry no reputational penalty",
+    ),
+    notes: [
+      `Generated from Bottleneck Atlas ${BOTTLENECK_ATLAS_VERSION}: ${template.title}.`,
+      `Drafting role: ${roleLabel}. Classification hypothesis: ${classification}.`,
+      "No named counterparty is confirmed, no consent or authority is inferred, and this draft is not a live offer or agreement.",
+      "Do not apply the moral-trade label unless differences in moral priorities materially create the deal and both sides attest to that fact.",
+      `Candidate structures: ${template.candidateStructures.join("; ")}.`,
+      `Validation questions: ${template.validationQuestions.join(" ")}`,
+      `Safety checks: ${template.safetyChecks.join(" ")}`,
+    ].join("\n\n"),
+    voluntaryCertification: false,
+  };
+}
+
 function tokens(value: string) {
   return new Set(normalizeRecommendationText(value).split(/\s+/).filter(Boolean));
 }

@@ -13,6 +13,7 @@ import {
   type TradeDraftValues,
 } from "@/components/core-trade/trade-draft-workbench";
 import { getOfferById, getViewer } from "@/lib/app-data";
+import { getSynthesisTemplate, synthesisClassificationLabel } from "@/lib/bottleneck-atlas";
 import {
   feedCreateRequestFromSearchParams,
   isValidFeedCreateRequest,
@@ -20,6 +21,10 @@ import {
   resolveFeedCreateSource,
 } from "@/lib/feed-create/phase1";
 import { getFormMessage } from "@/lib/form-state";
+import {
+  buildSynthesizedTradeDraftPrefill,
+  isSynthesizedTradeDraftRole,
+} from "@/lib/opportunity-synthesis";
 import {
   getPledgeTemplateInitialValues,
   getTradeDraftTemplateLabel,
@@ -161,12 +166,32 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
   const feedCreateRequested = valueOf(resolvedSearchParams.fromFeed) === "1";
   const feedCreateRequest = feedCreateRequestFromSearchParams(resolvedSearchParams);
   const templateId = valueOf(resolvedSearchParams.template);
+  const synthesisSource = valueOf(resolvedSearchParams.source);
+  const synthesizedDraftRequested = synthesisSource === "bottleneck_atlas_synthesis";
+  const synthesisCause = valueOf(resolvedSearchParams.cause).trim().slice(0, 120);
+  const requestedSynthesisRole = valueOf(resolvedSearchParams.role);
+  const synthesisRole = isSynthesizedTradeDraftRole(requestedSynthesisRole)
+    ? requestedSynthesisRole
+    : "first_party";
+  const synthesisTemplate = synthesizedDraftRequested
+    ? getSynthesisTemplate(templateId)
+    : null;
   const structure = valueOf(resolvedSearchParams.structure);
   if (structure === "conditional-donation") {
     return <ConditionalDonationCreate params={resolvedSearchParams} />;
   }
 
   const sourceOfferId = valueOf(resolvedSearchParams.source_offer);
+  if (synthesizedDraftRequested && !synthesisTemplate) {
+    return (
+      <FeedCreateFailure message="The Bottleneck Atlas template is missing or is not recognized." />
+    );
+  }
+  if (synthesizedDraftRequested && (feedCreateRequested || sourceOfferId)) {
+    return (
+      <FeedCreateFailure message="A Bottleneck Atlas hypothesis cannot be combined with a live feed source or existing offer." />
+    );
+  }
   const [viewer, sourceOffer] = await Promise.all([
     getViewer(),
     sourceOfferId ? getOfferById(sourceOfferId) : Promise.resolve(null),
@@ -191,6 +216,11 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
     }
   }
   if (templateId) returnParams.set("template", templateId);
+  if (synthesizedDraftRequested) {
+    returnParams.set("source", "bottleneck_atlas_synthesis");
+    if (synthesisCause) returnParams.set("cause", synthesisCause);
+    returnParams.set("role", synthesisRole);
+  }
   if (structure) returnParams.set("structure", structure);
   if (acceptsCommandHandoff) returnParams.set("handoff", "command-center");
   if (sourceOfferId) returnParams.set("source_offer", sourceOfferId);
@@ -270,7 +300,15 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
     );
   }
 
-  const templateValues = getPledgeTemplateInitialValues(templateId);
+  const synthesizedTemplateValues = synthesisTemplate
+    ? buildSynthesizedTradeDraftPrefill({
+        template: synthesisTemplate,
+        matchedCause: synthesisCause,
+        role: synthesisRole,
+      })
+    : undefined;
+  const templateValues =
+    synthesizedTemplateValues ?? getPledgeTemplateInitialValues(templateId);
   // These current-core columns exist in production and QA, but the legacy
   // generated OfferRow type has not yet been regenerated with them.
   const sourceOfferWithCoreTerms = sourceOffer
@@ -297,9 +335,13 @@ export default async function NewTradePage({ searchParams }: NewTradePageProps) 
       : undefined;
   const templateLabel = sourceOffer
     ? `Counteroffer to ${sourceOffer.ownerProfile?.resolvedName ?? sourceOffer.owner_alias}`
-    : templateValues
-      ? getTradeDraftTemplateLabel(templateId)
-      : null;
+    : synthesisTemplate
+      ? `Bottleneck Atlas hypothesis · ${synthesisClassificationLabel(synthesisTemplate.classification)} · ${
+          synthesisRole === "first_party" ? "first-party side" : "counterparty side"
+        }`
+      : templateValues
+        ? getTradeDraftTemplateLabel(templateId)
+        : null;
 
   return (
     <>
