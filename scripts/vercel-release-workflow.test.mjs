@@ -114,42 +114,42 @@ test("the prebuilt release starts clean and proves public-asset byte identity be
   assert.match(integrityStep, /static-artifact-integrity\.json/);
 });
 
-test("production upload is explicitly promoted and both canonical alias records are verified", async () => {
+test("production upload performs one production transition and verifies both canonical alias records", async () => {
   const source = await workflow();
   const deployIndex = source.indexOf(
     "- name: Upload the already-built artifact exactly once",
   );
   const guardIndex = source.indexOf("- name: Guard the exact uploaded deployment");
-  const promoteIndex = source.indexOf(
-    "- name: Promote the exact production deployment to every canonical alias",
-  );
   const canonicalIndex = source.indexOf(
     "- name: Verify both canonical aliases and the published critical asset",
   );
   const evidenceIndex = source.indexOf("- name: Upload immutable release evidence");
 
-  for (const index of [
-    deployIndex,
-    guardIndex,
-    promoteIndex,
-    canonicalIndex,
-    evidenceIndex,
-  ]) {
+  for (const index of [deployIndex, guardIndex, canonicalIndex, evidenceIndex]) {
     assert.notEqual(index, -1);
   }
   assert.ok(deployIndex < guardIndex);
-  assert.ok(guardIndex < promoteIndex);
-  assert.ok(promoteIndex < canonicalIndex);
+  assert.ok(guardIndex < canonicalIndex);
   assert.ok(canonicalIndex < evidenceIndex);
 
-  const promoteStep = source.slice(promoteIndex, canonicalIndex);
+  const deployStep = source.slice(deployIndex, guardIndex);
   const canonicalStep = source.slice(canonicalIndex, evidenceIndex);
-  assert.match(promoteStep, /if: \$\{\{ inputs\.target == 'production' \}\}/);
-  assert.match(promoteStep, /"vercel@\$VERCEL_CLI_VERSION" promote/);
-  assert.match(promoteStep, /--scope="\$VERCEL_TEAM_SCOPE"/);
+  assert.match(
+    deployStep,
+    /if \[\[ '\$\{\{ inputs\.target \}\}' == 'production' \]\]; then/,
+  );
   assert.equal(
-    (source.match(/"vercel@\$VERCEL_CLI_VERSION" promote/g) ?? []).length,
-    1,
+    (deployStep.match(/"vercel@\$VERCEL_CLI_VERSION" deploy/g) ?? []).length,
+    2,
+  );
+  assert.equal((deployStep.match(/--prebuilt/g) ?? []).length, 2);
+  assert.equal((deployStep.match(/--prod/g) ?? []).length, 1);
+  assert.doesNotMatch(source, /"vercel@\$VERCEL_CLI_VERSION" promote/);
+  assert.doesNotMatch(source, /VERCEL_TEAM_SCOPE:/);
+  assert.doesNotMatch(source, /vercel-promote\.log/);
+  assert.match(
+    source,
+    /Canonical aliases: assigned by the exact production upload and independently verified/,
   );
 
   assert.match(
