@@ -24,7 +24,7 @@ const migrations = migrationNames
   )
   .join("\n");
 
-function section(start, end) {
+function section(start: string, end: string): string {
   const startIndex = migrations.lastIndexOf(start);
   const endIndex = migrations.indexOf(end, startIndex + start.length);
   assert.notEqual(startIndex, -1, `Missing section start: ${start}`);
