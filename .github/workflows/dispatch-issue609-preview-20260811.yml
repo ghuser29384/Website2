@@ -1,0 +1,155 @@
+name: Dispatch issue 609 protected Preview
+
+on:
+  push:
+    branches:
+      - ops/dispatch-issue609-preview-20260811
+    paths:
+      - ".github/workflows/dispatch-issue609-preview-20260811.yml"
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+  statuses: read
+
+concurrency:
+  group: dispatch-issue609-protected-preview
+  cancel-in-progress: false
+
+env:
+  MAIN_SHA: f93acc33c135f34bc28f006842d9e08120d5b859
+  CANDIDATE_SHA: 61be8b632bedb350b9659c14d97b23a35216c889
+  PRODUCT_BRANCH: fix/issue609-public-profile-scale-20260811
+  RELEASE_BRANCH: release/vercel-preview
+  PRODUCT_PR: "611"
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the immutable controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Guard exact repository, pull request, release branch, and classification
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/dispatch-issue609-preview-20260811'
+
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          test "$current_main" = "$MAIN_SHA"
+
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}" > /tmp/pr611.json
+          jq -e \
+            --arg head "$CANDIDATE_SHA" \
+            --arg base "$MAIN_SHA" \
+            --arg branch "$PRODUCT_BRANCH" '
+              (.state == "open")
+              and (.draft == true)
+              and (.head.ref == $branch)
+              and (.head.sha == $head)
+              and (.base.ref == "main")
+              and (.base.sha == $base)
+            ' /tmp/pr611.json >/dev/null
+
+          gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort -u > /tmp/actual-files.txt
+          cat > /tmp/expected-files.txt <<'FILES'
+          src/app/api/credibility/profile/[profileId]/route.ts
+          src/app/people/[profileId]/credibility/page.tsx
+          src/app/people/[profileId]/page.tsx
+          src/lib/app-data.ts
+          src/lib/public-profile-offers.test.ts
+          src/lib/public-profile-offers.ts
+          src/lib/public-profile-scale-contract.test.ts
+          FILES
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+          release_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${RELEASE_BRANCH}" --jq '.object.sha')"
+          test "$release_sha" = "$CANDIDATE_SHA"
+
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${CANDIDATE_SHA}/status" > /tmp/status.json
+          jq -e '
+            any(.statuses[];
+              .context == "release-classification" and .state == "success"
+            )
+          ' /tmp/status.json >/dev/null
+
+      - name: Dispatch the permanent gated Preview workflow
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prior_max="$(gh api -X GET \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/runs" \
+            -f event=workflow_dispatch \
+            -F per_page=100 \
+            --jq '[.workflow_runs[].id] | max // 0')"
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[target]=preview' \
+            -f "inputs[ref]=${RELEASE_BRANCH}" \
+            -f "inputs[expected_sha]=${CANDIDATE_SHA}"
+
+          run_id=''
+          for attempt in $(seq 1 30); do
+            run_id="$(gh api -X GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/runs" \
+              -f event=workflow_dispatch \
+              -F per_page=20 \
+              --jq ".workflow_runs | map(select(.id > ${prior_max} and .head_sha == \"${MAIN_SHA}\" and .created_at >= \"${started_at}\")) | sort_by(.id) | .[0].id // empty")"
+            if [[ -n "$run_id" ]]; then
+              break
+            fi
+            sleep 2
+          done
+          test -n "$run_id"
+          printf '%s\n' "$run_id" | tee /tmp/permanent-preview-run-id.txt
+          {
+            echo "run_id=$run_id"
+            echo "started_at=$started_at"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Record dispatch evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Issue #609 protected Preview dispatch'
+            echo
+            echo "- Permanent workflow run: \`${{ steps.dispatch.outputs.run_id }}\`"
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Current main: \`$MAIN_SHA\`"
+            echo "- Release branch: \`$RELEASE_BRANCH\`"
+            echo '- Production aliases: unchanged'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload controller evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue609-preview-dispatch-${{ github.run_id }}
+          path: |
+            /tmp/pr611.json
+            /tmp/status.json
+            /tmp/expected-files.txt
+            /tmp/actual-files.txt
+            /tmp/permanent-preview-run-id.txt
+          if-no-files-found: warn
+          retention-days: 30
