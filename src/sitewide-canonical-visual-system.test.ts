@@ -3,6 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import test from "node:test";
 
+// Keep this exact-head contract on the latest mainline before the rendered audit runs.
 const root = process.cwd();
 const read = (path: string) => readFileSync(join(root, path), "utf8");
 
