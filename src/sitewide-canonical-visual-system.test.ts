@@ -118,12 +118,14 @@ test("the rendered gate rejects blank and overlay-only route captures", () => {
   const rendered = read("tests/sitewide-canonical-visual-system.spec.ts");
 
   assert.match(rendered, /waitForMeaningfulSurface/);
-  assert.match(rendered, /#account-heading/);
   assert.match(rendered, /#commitments-heading/);
   assert.match(rendered, /Application error: a client-side exception has occurred/);
   assert.equal(rendered.includes('page.locator("nextjs-portal")).toHaveCount(0)'), false);
+  assert.equal(rendered.includes("#account-heading"), false);
   assert.match(rendered, /mt-v75-side-link\[aria-current="page"\]/);
-  assert.match(rendered, /dashboard-overview/);
+  assert.match(rendered, /Dashboard guest route redirects to a substantive canonical auth surface/);
+  assert.match(rendered, /returnTo=%2Fdashboard/);
+  assert.match(rendered, /data-mt-surface="auth"/);
 });
 
 test("every standalone HTML shell is canonical or explicitly enhanced", () => {
