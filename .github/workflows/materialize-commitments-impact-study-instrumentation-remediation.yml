@@ -1,0 +1,76 @@
+name: Materialize Commitments instrumentation remediation
+
+on:
+  push:
+    branches: [feature/commitments-impact-study-instrumentation-20260811]
+    paths:
+      - ".github/workflows/materialize-commitments-impact-study-instrumentation-remediation.yml"
+      - ".github/remediation/commitments-impact-study-instrumentation-v2.part*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: materialize-commitments-impact-study-instrumentation-remediation
+  cancel-in-progress: false
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: feature/commitments-impact-study-instrumentation-20260811
+
+      - name: Verify and extract exact bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          for part in {00..07}; do
+            test -f ".github/remediation/commitments-impact-study-instrumentation-v2.part${part}"
+          done
+
+          cat .github/remediation/commitments-impact-study-instrumentation-v2.part{00..07} > /tmp/bundle.b64
+          echo "fd91f29d96740b3f31649cebd4f42dbeb83fe55ac0921f22a25def4aa543560b  /tmp/bundle.b64" | sha256sum --check
+
+          base64 --decode /tmp/bundle.b64 > /tmp/bundle.tgz
+          echo "de7f509c0d0a3f49e6970965eb705c6ac58ef46c687da6499893dcfdefc3bada  /tmp/bundle.tgz" | sha256sum --check
+
+          tar -tzf /tmp/bundle.tgz | sort > /tmp/actual-files.txt
+          cat > /tmp/expected-files.txt <<'FILES'
+          .github/workflows/commitments-impact-study-instrumentation-gates.yml
+          docs/commitments/impact-identification/canonical-json-parity-fixtures.v2.json
+          docs/commitments/impact-identification/qa-study-instrumentation-v1.md
+          docs/commitments/impact-identification/study-instance-validator-binding.v2.json
+          docs/commitments/impact-identification/study-instance.schema.v2.json
+          docs/commitments/impact-identification/synthetic-study-fixtures/trade-validation-fixture.v2.json
+          scripts/validate-commitments-impact-study-instance.mjs
+          supabase/migrations/20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql
+          supabase/migrations/20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql
+          supabase/migrations/20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql
+          supabase/migrations/20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql
+          supabase/migrations/20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql
+          supabase/tests/commitments_impact_study_instrumentation_qa_only.sql
+          FILES
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+          tar -xzf /tmp/bundle.tgz -C .
+
+          rm -f .github/remediation/commitments-impact-study-instrumentation-v2.part*
+          rmdir .github/remediation 2>/dev/null || true
+          rm -f .github/workflows/materialize-commitments-impact-study-instrumentation-remediation.yml
+
+      - name: Commit exact remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          git commit -m "Remediate QA-only impact-study instrumentation review"
+          git push origin HEAD:feature/commitments-impact-study-instrumentation-20260811
