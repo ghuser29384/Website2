@@ -110,6 +110,16 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) :where(
   background: var(--mt-blue-deep) !important;
 }
 
+/*
+ * Discover uses a blue rail to identify transaction rows. Express the rail as
+ * a real editorial rule rather than an inset shadow, so it remains visible
+ * without reintroducing elevated-card styling.
+ */
+.transaction-row.offer-transaction-row {
+  border-left: 3px solid var(--mt-blue) !important;
+  box-shadow: none !important;
+}
+
 /* Authentication must not fall back to the rounded glass-card treatment. */
 [data-mt-surface="auth"] :where(
   article,
