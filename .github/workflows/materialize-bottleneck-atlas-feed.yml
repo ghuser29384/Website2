@@ -6,6 +6,7 @@ on:
       - feature/bottleneck-atlas-feed-20260811
     paths:
       - .github/scripts/materialize-bottleneck-atlas-feed.py
+      - .github/scripts/fix-bottleneck-atlas-types.py
       - .github/workflows/materialize-bottleneck-atlas-feed.yml
 
 permissions:
@@ -25,6 +26,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: python .github/scripts/materialize-bottleneck-atlas-feed.py
+      - run: python .github/scripts/fix-bottleneck-atlas-types.py
       - run: npm ci
       - name: Focused unit and wiring tests
         run: >-
@@ -59,6 +61,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -f .github/materializers/bottleneck-atlas.payload.*
           rm -f .github/scripts/materialize-bottleneck-atlas-feed.py
+          rm -f .github/scripts/fix-bottleneck-atlas-types.py
           rm -f .github/workflows/materialize-bottleneck-atlas-feed.yml
           git add -A
           git commit -m "Wire Bottleneck Atlas synthesis into the authenticated feed"
