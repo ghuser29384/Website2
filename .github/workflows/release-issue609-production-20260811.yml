@@ -1,0 +1,667 @@
+name: Merge and release issue 609 hotfix
+
+on:
+  push:
+    branches:
+      - ops/release-issue609-production-20260811
+    paths:
+      - ".github/workflows/release-issue609-production-20260811.yml"
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: release-issue609-production
+  cancel-in-progress: false
+
+env:
+  ORIGINAL_MAIN_SHA: f93acc33c135f34bc28f006842d9e08120d5b859
+  CANDIDATE_SHA: 61be8b632bedb350b9659c14d97b23a35216c889
+  PRODUCT_BRANCH: fix/issue609-public-profile-scale-20260811
+  PRODUCT_PR: "611"
+  ISSUE_NUMBER: "609"
+  FINALIZER_WORKFLOW: finalize-issue609-preview-20260811.yml
+  FINALIZER_BRANCH: ops/finalize-issue609-preview-20260811
+  PROFILE_ID: 9e51db47-92d1-4d75-80ce-cf10de1121f1
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_TEAM_SCOPE: ellen-s
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  CANONICAL_APEX: moraltrade.org
+  CANONICAL_WWW: www.moraltrade.org
+  PRODUCTION_BASE_URL: https://www.moraltrade.org
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Wait for exact protected Preview finalization
+        id: preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/release-issue609-production-20260811'
+
+          finalizer_run=''
+          for attempt in $(seq 1 240); do
+            gh api -X GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/${FINALIZER_WORKFLOW}/runs" \
+              -f branch="$FINALIZER_BRANCH" \
+              -f event=push \
+              -F per_page=20 \
+              > /tmp/finalizer-runs.json
+
+            finalizer_run="$(jq -r '
+              [.workflow_runs[]]
+              | sort_by(.created_at)
+              | reverse
+              | .[0].id // empty
+            ' /tmp/finalizer-runs.json)"
+
+            if [[ -n "$finalizer_run" ]]; then
+              status="$(jq -r --argjson id "$finalizer_run" '.workflow_runs[] | select(.id == $id) | .status' /tmp/finalizer-runs.json)"
+              conclusion="$(jq -r --argjson id "$finalizer_run" '.workflow_runs[] | select(.id == $id) | .conclusion // empty' /tmp/finalizer-runs.json)"
+              if [[ "$status" == 'completed' ]]; then
+                test "$conclusion" = 'success'
+                break
+              fi
+            fi
+            sleep 15
+          done
+
+          test -n "$finalizer_run"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${finalizer_run}" > /tmp/finalizer-run.json
+          jq -e '
+            (.name == "Finalize issue 609 protected Preview acceptance")
+            and (.status == "completed")
+            and (.conclusion == "success")
+          ' /tmp/finalizer-run.json >/dev/null
+          echo "run_id=$finalizer_run" >> "$GITHUB_OUTPUT"
+
+      - name: Revalidate exact candidate, statuses, and mergeability
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          test "$current_main" = "$ORIGINAL_MAIN_SHA"
+
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}" > /tmp/pr611-before-merge.json
+          jq -e \
+            --arg head "$CANDIDATE_SHA" \
+            --arg base "$ORIGINAL_MAIN_SHA" \
+            --arg branch "$PRODUCT_BRANCH" '
+              (.state == "open")
+              and (.draft == false)
+              and (.head.ref == $branch)
+              and (.head.sha == $head)
+              and (.base.ref == "main")
+              and (.base.sha == $base)
+            ' /tmp/pr611-before-merge.json >/dev/null
+
+          mergeable=false
+          for attempt in $(seq 1 30); do
+            gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}" > /tmp/pr611-before-merge.json
+            if jq -e '.mergeable == true' /tmp/pr611-before-merge.json >/dev/null; then
+              mergeable=true
+              break
+            fi
+            if jq -e '.mergeable == false' /tmp/pr611-before-merge.json >/dev/null; then
+              echo 'PR #611 is not mergeable.' >&2
+              exit 1
+            fi
+            sleep 2
+          done
+          test "$mergeable" = 'true'
+
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${CANDIDATE_SHA}/status" > /tmp/candidate-status.json
+          jq -e '
+            any(.statuses[];
+              .context == "release-classification" and .state == "success"
+            )
+            and any(.statuses[];
+              .context == "issue609-protected-preview-acceptance" and .state == "success"
+            )
+          ' /tmp/candidate-status.json >/dev/null
+
+          gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort -u > /tmp/actual-files.txt
+          cat > /tmp/expected-files.txt <<'FILES'
+          src/app/api/credibility/profile/[profileId]/route.ts
+          src/app/people/[profileId]/credibility/page.tsx
+          src/app/people/[profileId]/page.tsx
+          src/lib/app-data.ts
+          src/lib/public-profile-offers.test.ts
+          src/lib/public-profile-offers.ts
+          src/lib/public-profile-scale-contract.test.ts
+          FILES
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+      - name: Merge the exact accepted candidate
+        id: merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          gh api \
+            --method PUT \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/merge" \
+            -f sha="$CANDIDATE_SHA" \
+            -f merge_method=merge \
+            -f commit_title='Restore high-volume public profile and credibility routes (#611)' \
+            -f commit_message='Merge the exact current-main-integrated issue #609 repair after permanent protected Preview release, real 982-offer desktop/mobile acceptance, single-use bypass revocation, exact runtime-log inspection, and fail-closed scope verification. This merge changes no stored offer, payment, evidence, reliability, settlement, privacy, or execution semantics. Production release remains explicit and is performed by the gated release workflow.' \
+            > evidence/merge-result.json
+
+          jq -e '.merged == true' evidence/merge-result.json >/dev/null
+          merge_sha="$(jq -r '.sha' evidence/merge-result.json)"
+          test -n "$merge_sha"
+
+          for attempt in $(seq 1 30); do
+            current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+            [[ "$current_main" == "$merge_sha" ]] && break
+            sleep 2
+          done
+          test "$current_main" = "$merge_sha"
+
+          gh api "repos/${GITHUB_REPOSITORY}/compare/${ORIGINAL_MAIN_SHA}...${merge_sha}" \
+            > evidence/merge-compare.json
+          jq -e '.status == "ahead" and .ahead_by >= 1' evidence/merge-compare.json >/dev/null
+          jq -r '.files[].filename' evidence/merge-compare.json | sort -u > /tmp/merged-files.txt
+          diff -u /tmp/expected-files.txt /tmp/merged-files.txt
+
+          {
+            echo "merge_sha=$merge_sha"
+            echo "merged_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$merge_sha" > evidence/merged-sha.txt
+
+      - name: Transfer exact release classifications to the immutable merge
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr_url="https://github.com/${GITHUB_REPOSITORY}/pull/${PRODUCT_PR}"
+          gh api \
+            --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/statuses/${MERGE_SHA}" \
+            -f state=success \
+            -f context=release-classification \
+            -f description='Runtime-affecting issue #609 hotfix; explicit production release required' \
+            -f target_url="$pr_url" \
+            > evidence/merged-release-classification-status.json
+
+          gh api \
+            --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/statuses/${MERGE_SHA}" \
+            -f state=success \
+            -f context=issue609-protected-preview-acceptance \
+            -f description='Exact merged source passed real high-volume protected Preview acceptance' \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${{ steps.preview.outputs.run_id }}" \
+            > evidence/merged-preview-acceptance-status.json
+
+      - name: Dispatch the exact merged SHA through the permanent production workflow
+        id: production
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prior_max="$(gh api -X GET \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/runs" \
+            -f event=workflow_dispatch \
+            -F per_page=100 \
+            --jq '[.workflow_runs[].id] | max // 0')"
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          gh api \
+            --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[target]=production' \
+            -f 'inputs[ref]=main' \
+            -f "inputs[expected_sha]=${MERGE_SHA}"
+
+          production_run=''
+          for attempt in $(seq 1 60); do
+            production_run="$(gh api -X GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/runs" \
+              -f event=workflow_dispatch \
+              -F per_page=30 \
+              --jq ".workflow_runs | map(select(.id > ${prior_max} and .head_sha == \"${MERGE_SHA}\" and .created_at >= \"${started_at}\")) | sort_by(.id) | .[0].id // empty")"
+            [[ -n "$production_run" ]] && break
+            sleep 2
+          done
+          test -n "$production_run"
+          echo "run_id=$production_run" >> "$GITHUB_OUTPUT"
+          echo "started_at=$started_at" >> "$GITHUB_OUTPUT"
+
+          gh run watch "$production_run" \
+            --repo "$GITHUB_REPOSITORY" \
+            --exit-status \
+            --interval 15
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${production_run}" \
+            > evidence/production-release-run.json
+          jq -e \
+            --arg sha "$MERGE_SHA" '
+              (.name == "Gated Vercel release")
+              and (.event == "workflow_dispatch")
+              and (.head_sha == $sha)
+              and (.status == "completed")
+              and (.conclusion == "success")
+            ' evidence/production-release-run.json >/dev/null
+
+      - name: Download and verify immutable production-release evidence
+        id: deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+          PRODUCTION_RUN_ID: ${{ steps.production.outputs.run_id }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p evidence/production-release
+          gh run download "$PRODUCTION_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir evidence/production-release
+
+          detail_path="$(find evidence/production-release -type f -name deployment-detail.json -print -quit)"
+          url_path="$(find evidence/production-release -type f -name deployment-url.txt -print -quit)"
+          test -n "$detail_path"
+          test -n "$url_path"
+          cp "$detail_path" evidence/production-deployment-detail.json
+          cp "$url_path" evidence/production-deployment-url.txt
+
+          deployment_id="$(jq -r '.id // .uid // empty' evidence/production-deployment-detail.json)"
+          deployment_host="$(jq -r '.url // empty' evidence/production-deployment-detail.json)"
+          test -n "$deployment_id"
+          test -n "$deployment_host"
+          jq -e \
+            --arg deployment_id "$deployment_id" \
+            --arg deployment_host "$deployment_host" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg sha "$MERGE_SHA" '
+              ((.id // .uid) == $deployment_id)
+              and (.url == $deployment_host)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and (.target == "production")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitSha == $sha)
+            ' evidence/production-deployment-detail.json >/dev/null
+
+          mkdir -p evidence/aliases
+          for alias_name in "$CANONICAL_APEX" "$CANONICAL_WWW"; do
+            alias_key="${alias_name//./-}"
+            curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" \
+              > "evidence/aliases/${alias_key}.json"
+            jq -e \
+              --arg alias_name "$alias_name" \
+              --arg project_id "$VERCEL_PROJECT_ID" \
+              --arg deployment_id "$deployment_id" '
+                (.alias == $alias_name)
+                and (.projectId == $project_id)
+                and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment_id)
+              ' "evidence/aliases/${alias_key}.json" >/dev/null
+          done
+
+          {
+            echo "deployment_id=$deployment_id"
+            echo "deployment_host=$deployment_host"
+            echo "deployment_url=https://$deployment_host"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check out the exact merged SHA for production smoke
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.merge.outputs.merge_sha }}
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Exercise canonical production on desktop and exact mobile
+        env:
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/production-smoke
+          node <<'JS'
+          const { chromium } = require('@playwright/test');
+          const { writeFile } = require('node:fs/promises');
+
+          const base = process.env.PRODUCTION_BASE_URL;
+          const apex = `https://${process.env.CANONICAL_APEX}`;
+          const profileId = process.env.PROFILE_ID;
+          const mergeSha = process.env.MERGE_SHA;
+          const deploymentId = process.env.DEPLOYMENT_ID;
+          const canonicalHost = new URL(base).hostname;
+          const profilePath = `/people/${profileId}`;
+          const credibilityPath = `${profilePath}/credibility`;
+          const apiPath = `/api/credibility/profile/${profileId}`;
+          const pageSize = 24;
+          const failurePatterns = [
+            /Application error/i,
+            /server-side exception/i,
+            /An error occurred in the Server Components render/i,
+            /Bad Request/i,
+          ];
+          const report = {
+            ok: false,
+            mergeSha,
+            deploymentId,
+            profileId,
+            base,
+            startedAt: new Date().toISOString(),
+            desktop: {},
+            mobile: {},
+            diagnostics: {},
+          };
+
+          function attachDiagnostics(page, key) {
+            const value = { consoleErrors: [], pageErrors: [], failedRequests: [], http5xx: [], dangerousMutations: [] };
+            page.on('console', message => {
+              if (message.type() === 'error') value.consoleErrors.push(message.text());
+            });
+            page.on('pageerror', error => value.pageErrors.push(error.message));
+            page.on('requestfailed', request => {
+              const url = new URL(request.url());
+              if (url.hostname === canonicalHost) {
+                value.failedRequests.push(`${request.method()} ${url.pathname} :: ${request.failure()?.errorText ?? ''}`);
+              }
+            });
+            page.on('response', response => {
+              const url = new URL(response.url());
+              if (url.hostname === canonicalHost && response.status() >= 500) {
+                value.http5xx.push(`${response.status()} ${url.pathname}`);
+              }
+            });
+            page.on('request', request => {
+              const url = new URL(request.url());
+              if (url.hostname !== canonicalHost) return;
+              const method = request.method();
+              if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return;
+              if (/^\/api\/(?:payments|stripe|mpgf|offers|create|background)(?:\/|$)/.test(url.pathname)) {
+                value.dangerousMutations.push(`${method} ${url.pathname}`);
+              }
+            });
+            report.diagnostics[key] = value;
+            return value;
+          }
+
+          async function bodyAndOverflow(page, label) {
+            const body = await page.locator('body').innerText();
+            for (const pattern of failurePatterns) {
+              if (pattern.test(body)) throw new Error(`${label} exposed failure text matching ${pattern}`);
+            }
+            const dimensions = await page.evaluate(() => ({
+              scrollWidth: document.documentElement.scrollWidth,
+              clientWidth: document.documentElement.clientWidth,
+              innerWidth: window.innerWidth,
+            }));
+            if (dimensions.scrollWidth > dimensions.innerWidth + 1) {
+              throw new Error(`${label} has horizontal overflow: ${JSON.stringify(dimensions)}`);
+            }
+            return { body, dimensions };
+          }
+
+          async function open(page, path, label, shot) {
+            const response = await page.goto(`${base}${path}`, { waitUntil: 'domcontentloaded', timeout: 45000 });
+            if (!response || response.status() !== 200) {
+              throw new Error(`${label} returned ${response?.status() ?? 'no response'}`);
+            }
+            await page.locator('body').waitFor({ state: 'visible', timeout: 20000 });
+            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+            const { body, dimensions } = await bodyAndOverflow(page, label);
+            await page.screenshot({ path: `evidence/production-smoke/${shot}.png`, fullPage: true });
+            return { status: response.status(), finalUrl: page.url(), bodyLength: body.length, dimensions };
+          }
+
+          async function exercise(browser, key, viewport) {
+            const context = await browser.newContext({ viewport });
+            const page = await context.newPage();
+            const diag = attachDiagnostics(page, key);
+
+            const api = await context.request.get(`${base}${apiPath}`, { timeout: 45000 });
+            const apiText = await api.text();
+            if (api.status() !== 200) throw new Error(`${key} API returned ${api.status()}: ${apiText.slice(0, 1000)}`);
+            const apiJson = JSON.parse(apiText);
+            if (apiJson.ok !== true || apiJson.profile?.id !== profileId) {
+              throw new Error(`${key} API payload mismatch: ${apiText.slice(0, 1000)}`);
+            }
+
+            const apexApi = await context.request.get(`${apex}${apiPath}`, { timeout: 45000 });
+            if (apexApi.status() !== 200) throw new Error(`${key} apex API returned ${apexApi.status()}`);
+
+            const first = await open(page, profilePath, `${key} profile page 1`, `${key}-profile-page-1`);
+            const rangeText = await page.locator('#open-offers').getByText(/^Showing 1–24 of \d+ open offers\.$/).innerText();
+            const total = Number(rangeText.match(/of (\d+) open offers/)?.[1]);
+            if (!Number.isInteger(total) || total < 982) throw new Error(`${key} invalid open-offer total: ${rangeText}`);
+            await page.getByText('Page 1', { exact: true }).waitFor({ state: 'visible' });
+            await page.getByRole('link', { name: 'Next page', exact: true }).waitFor({ state: 'visible' });
+
+            const credibility = await open(page, credibilityPath, `${key} credibility`, `${key}-credibility`);
+
+            const second = await open(page, `${profilePath}?offersPage=2#open-offers`, `${key} profile page 2`, `${key}-profile-page-2`);
+            await page.getByText(`Showing 25–48 of ${total} open offers.`, { exact: true }).waitFor({ state: 'visible' });
+            await page.getByText('Page 2', { exact: true }).waitFor({ state: 'visible' });
+
+            const finalPage = Math.max(1, Math.ceil(total / pageSize));
+            const finalStart = (finalPage - 1) * pageSize + 1;
+            const clamped = await open(page, `${profilePath}?offersPage=9999#open-offers`, `${key} clamped final page`, `${key}-profile-page-clamped`);
+            await page.getByText(`Showing ${finalStart}–${total} of ${total} open offers.`, { exact: true }).waitFor({ state: 'visible' });
+            await page.getByText(`Page ${finalPage}`, { exact: true }).waitFor({ state: 'visible' });
+            if (await page.getByRole('link', { name: 'Next page', exact: true }).count()) {
+              throw new Error(`${key} clamped final page unexpectedly exposes Next page`);
+            }
+
+            const seriousConsoleErrors = diag.consoleErrors.filter(message =>
+              /Application error|server-side exception|Bad Request|Server Components render|hydration/i.test(message),
+            );
+            if (diag.pageErrors.length || diag.http5xx.length || diag.dangerousMutations.length || seriousConsoleErrors.length) {
+              throw new Error(`${key} diagnostics failed: ${JSON.stringify({ ...diag, seriousConsoleErrors })}`);
+            }
+
+            report[key] = {
+              viewport,
+              totalOpenOffers: total,
+              finalPage,
+              api: { status: api.status(), apexStatus: apexApi.status(), profileId: apiJson.profile.id },
+              first,
+              credibility,
+              second,
+              clamped,
+            };
+            await context.close();
+          }
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            try {
+              await exercise(browser, 'desktop', { width: 1440, height: 1000 });
+              await exercise(browser, 'mobile', { width: 390, height: 844 });
+              report.ok = true;
+              report.finishedAt = new Date().toISOString();
+              await writeFile('evidence/production-smoke/report.json', JSON.stringify(report, null, 2));
+            } catch (error) {
+              report.ok = false;
+              report.finishedAt = new Date().toISOString();
+              report.error = error instanceof Error ? error.stack : String(error);
+              await writeFile('evidence/production-smoke/report.json', JSON.stringify(report, null, 2));
+              throw error;
+            } finally {
+              await browser.close();
+            }
+          })();
+          JS
+
+          jq -e '
+            (.ok == true)
+            and (.desktop.api.status == 200)
+            and (.desktop.api.apexStatus == 200)
+            and (.mobile.api.status == 200)
+            and (.mobile.api.apexStatus == 200)
+            and (.desktop.totalOpenOffers >= 982)
+            and (.mobile.totalOpenOffers == .desktop.totalOpenOffers)
+          ' evidence/production-smoke/report.json >/dev/null
+
+      - name: Inspect exact production runtime error window
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.deployment_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          test -n "$VERCEL_TOKEN"
+          : > evidence/production-runtime-errors.ndjson
+          : > evidence/production-runtime-logs-command.txt
+          : > evidence/production-runtime-logs-stderr.txt
+
+          succeeded=false
+          commands=(
+            "logs --deployment $DEPLOYMENT_URL --level error --since 2h --limit 1000 --json"
+            "logs $DEPLOYMENT_URL --level error --since 2h --limit 1000 --json"
+            "logs --environment production --level error --since 2h --limit 1000 --json"
+          )
+          for command in "${commands[@]}"; do
+            printf '%s\n' "$command" > evidence/production-runtime-logs-command.txt
+            set +e
+            # shellcheck disable=SC2086
+            npx --yes vercel@latest $command \
+              --scope "$VERCEL_TEAM_SCOPE" \
+              --token "$VERCEL_TOKEN" \
+              > evidence/production-runtime-errors.ndjson \
+              2> evidence/production-runtime-logs-stderr.txt
+            status=$?
+            set -e
+            if [[ "$status" = '0' ]]; then
+              succeeded=true
+              break
+            fi
+          done
+          if [[ "$succeeded" != 'true' ]]; then
+            cat evidence/production-runtime-logs-stderr.txt >&2
+            exit 1
+          fi
+
+          if grep -Eai \
+            "$PROFILE_ID|/api/credibility/profile|/people/.*/credibility|Bad Request|FUNCTION_INVOCATION_FAILED|Server Components render" \
+            evidence/production-runtime-errors.ndjson \
+            > evidence/relevant-production-errors.txt; then
+            cat evidence/relevant-production-errors.txt >&2
+            exit 1
+          fi
+          : > evidence/relevant-production-errors.txt
+          printf 'No matching production runtime errors were returned for the inspected window.\n' \
+            > evidence/production-runtime-log-inspection.txt
+
+      - name: Publish production acceptance and close issue 609
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ steps.merge.outputs.merge_sha }}
+          PRODUCTION_RUN_ID: ${{ steps.production.outputs.run_id }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/statuses/${MERGE_SHA}" \
+            -f state=success \
+            -f context=issue609-production-acceptance \
+            -f description='Canonical API/profile/credibility desktop-mobile smoke and logs passed' \
+            -f target_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            > evidence/production-acceptance-status.json
+
+          marker='<!-- issue609-production-acceptance -->'
+          comment=$(cat <<EOF
+          $marker
+          Issue #609 is repaired in canonical production.
+
+          - Exact merged SHA: \`$MERGE_SHA\`
+          - Permanent production release run: \`$PRODUCTION_RUN_ID\`
+          - Exact production deployment: \`$DEPLOYMENT_ID\`
+          - Canonical aliases: \`$CANONICAL_APEX\` and \`$CANONICAL_WWW\`, both verified on the exact deployment
+          - Real high-volume credibility API, public profile, credibility page, page 2, and final-page clamping: HTTP 200
+          - Desktop 1440×1000 and exact mobile 390×844: passed without horizontal overflow or server-component failure text
+          - Truthful pagination: checked against the live open-offer total, including the computed final page
+          - Prohibited offer/payment/evidence/reliability/execution mutations: none observed
+          - Exact production runtime error window: no matching profile/credibility/Bad Request/server-component errors
+          - Release evidence and screenshots: retained on workflow run \`$GITHUB_RUN_ID\`
+          EOF
+          )
+
+          gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --body "$comment"
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$comment"
+          gh issue close "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --reason completed
+
+      - name: Upload immutable merge, release, smoke, and log evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue609-production-release-${{ github.run_id }}
+          path: |
+            evidence
+            /tmp/finalizer-runs.json
+            /tmp/finalizer-run.json
+            /tmp/pr611-before-merge.json
+            /tmp/candidate-status.json
+            /tmp/actual-files.txt
+            /tmp/expected-files.txt
+            /tmp/merged-files.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record release evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Issue #609 merge and production release'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Merged SHA: \`${{ steps.merge.outputs.merge_sha || 'not merged' }}\`"
+            echo "- Production workflow: \`${{ steps.production.outputs.run_id || 'not dispatched' }}\`"
+            echo "- Production deployment: \`${{ steps.deployment.outputs.deployment_id || 'not available' }}\`"
+            echo "- Canonical smoke report: \`$([[ -f evidence/production-smoke/report.json ]] && jq -r '.ok' evidence/production-smoke/report.json || echo unavailable)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
