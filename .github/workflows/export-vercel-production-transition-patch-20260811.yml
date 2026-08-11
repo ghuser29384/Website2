@@ -1,0 +1,275 @@
+name: Export verified Vercel production-transition patch
+
+on:
+  push:
+    branches:
+      - ops/repair-vercel-production-transition-20260811
+    paths:
+      - ".github/workflows/export-vercel-production-transition-patch-20260811.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: export-vercel-production-transition-patch-20260811
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: 69146f2cf9d5f4d747c0c25abda6de75f410098d
+  TARGET_BRANCH: fix/vercel-production-transition-20260811
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - name: Guard exact repository and branch state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/repair-vercel-production-transition-20260811'
+          test "$(gh api "repos/$GITHUB_REPOSITORY/branches/main" --jq '.commit.sha')" = "$BASE_SHA"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$TARGET_BRANCH" --jq '.object.sha')" = "$BASE_SHA"
+
+      - name: Check out the exact repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Materialize the exact verified four-file patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              source = file.read_text(encoding="utf-8")
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f"Expected exactly one match in {path}, found {count}: {old[:120]!r}")
+              file.write_text(source.replace(old, new), encoding="utf-8")
+
+          workflow_path = ".github/workflows/vercel-release.yml"
+          workflow_file = Path(workflow_path)
+          workflow_source = workflow_file.read_text(encoding="utf-8")
+          promote_start = workflow_source.index(
+              "      - name: Promote the exact production deployment to every canonical alias\n"
+          )
+          canonical_start = workflow_source.index(
+              "      - name: Verify both canonical aliases and the published critical asset\n",
+              promote_start,
+          )
+          workflow_source = workflow_source[:promote_start] + workflow_source[canonical_start:]
+          workflow_source = workflow_source.replace(
+              "  VERCEL_TEAM_SCOPE: team_ySu6sF3Uho1E1GnJtCQPVEuJ\n",
+              "",
+              1,
+          )
+          workflow_source = workflow_source.replace(
+              "              echo '- Canonical aliases: explicitly promoted and verified from both Vercel alias records'\n",
+              "              echo '- Canonical aliases: assigned by the exact production upload and independently verified from both Vercel alias records'\n",
+              1,
+          )
+          workflow_source = workflow_source.replace(
+              "              echo '- Canonical aliases: unchanged; preview releases never run promotion'\n",
+              "              echo '- Canonical aliases: unchanged; preview releases never use `--prod`'\n",
+              1,
+          )
+          workflow_file.write_text(workflow_source, encoding="utf-8")
+
+          test_path = "scripts/vercel-release-workflow.test.mjs"
+          test_file = Path(test_path)
+          test_source = test_file.read_text(encoding="utf-8")
+          test_start = test_source.index(
+              'test("production upload is explicitly promoted and both canonical alias records are verified", async () => {'
+          )
+          test_end = test_source.index(
+              '\ntest("release evidence is retained without credentials", async () => {',
+              test_start,
+          )
+          replacement_test = r'''test("production upload performs one production transition and verifies both canonical alias records", async () => {
+            const source = await workflow();
+            const deployIndex = source.indexOf(
+              "- name: Upload the already-built artifact exactly once",
+            );
+            const guardIndex = source.indexOf("- name: Guard the exact uploaded deployment");
+            const canonicalIndex = source.indexOf(
+              "- name: Verify both canonical aliases and the published critical asset",
+            );
+            const evidenceIndex = source.indexOf("- name: Upload immutable release evidence");
+
+            for (const index of [deployIndex, guardIndex, canonicalIndex, evidenceIndex]) {
+              assert.notEqual(index, -1);
+            }
+            assert.ok(deployIndex < guardIndex);
+            assert.ok(guardIndex < canonicalIndex);
+            assert.ok(canonicalIndex < evidenceIndex);
+
+            const deployStep = source.slice(deployIndex, guardIndex);
+            const canonicalStep = source.slice(canonicalIndex, evidenceIndex);
+            assert.match(
+              deployStep,
+              /if \[\[ '\$\{\{ inputs\.target \}\}' == 'production' \]\]; then/,
+            );
+            assert.equal(
+              (deployStep.match(/"vercel@\$VERCEL_CLI_VERSION" deploy/g) ?? []).length,
+              2,
+            );
+            assert.equal((deployStep.match(/--prebuilt/g) ?? []).length, 2);
+            assert.equal((deployStep.match(/--prod/g) ?? []).length, 1);
+            assert.doesNotMatch(source, /"vercel@\$VERCEL_CLI_VERSION" promote/);
+            assert.doesNotMatch(source, /VERCEL_TEAM_SCOPE:/);
+            assert.doesNotMatch(source, /vercel-promote\.log/);
+            assert.match(
+              source,
+              /Canonical aliases: assigned by the exact production upload and independently verified/,
+            );
+
+            assert.match(
+              canonicalStep,
+              /for alias_name in "\$CANONICAL_APEX_DOMAIN" "\$CANONICAL_WWW_DOMAIN"; do/,
+            );
+            assert.match(canonicalStep, /api\.vercel\.com\/v4\/aliases\/\$\{alias_name\}/);
+            assert.match(
+              canonicalStep,
+              /deploymentId \/\/ \.deployment\.id \/\/ \.deployment\.uid/,
+            );
+            assert.match(
+              canonicalStep,
+              /api\.vercel\.com\/v13\/deployments\/\$\{EXPECTED_DEPLOYMENT_ID\}/,
+            );
+            assert.match(canonicalStep, /\(\.target == "production"\)/);
+            assert.match(canonicalStep, /\(\(\.aliasError \/\/ null\) == null\)/);
+            assert.match(canonicalStep, /cmp --silent "public\/\$RELEASE_CRITICAL_ASSET"/);
+          });
+          '''
+          test_file.write_text(
+              test_source[:test_start] + replacement_test + test_source[test_end:],
+              encoding="utf-8",
+          )
+
+          doc_path = "docs/operations/vercel-cost-controls.md"
+          replace_once(
+              doc_path,
+              '''Every release now deletes prior `.next` and `.vercel/output` state before the
+          Vercel build, then compares every checked-in file under `public/` with its
+          corresponding file in `.vercel/output/static/`. A missing or byte-different
+          asset blocks upload. Production releases then explicitly promote the exact
+          uploaded deployment, verify that both `moraltrade.org` and
+          `www.moraltrade.org` resolve to that deployment in Vercel's alias records, and
+          prove that the canonical critical Create-router asset is byte-identical to the
+          checked-in source. The workflow retains the deployment metadata, alias records,
+          hash manifests, and release logs as an immutable Actions artifact.
+          ''',
+              '''Every release now deletes prior `.next` and `.vercel/output` state before the
+          Vercel build, then compares every checked-in file under `public/` with its
+          corresponding file in `.vercel/output/static/`. A missing or byte-different
+          asset blocks upload. For production, the single
+          `vercel deploy --prebuilt --prod` upload is the production transition and assigns
+          the canonical aliases. The workflow must not pass that already-production
+          deployment to `vercel promote`; instead, it independently verifies that both
+          `moraltrade.org` and `www.moraltrade.org` resolve to the exact uploaded deployment
+          in Vercel's alias records and proves that the canonical critical Create-router
+          asset is byte-identical to the checked-in source. The workflow retains the
+          deployment metadata, alias records, hash manifests, and release logs as an
+          immutable Actions artifact.
+          ''',
+          )
+          replace_once(
+              doc_path,
+              "   - explicitly promote that deployment;\n",
+              "   - use the single `vercel deploy --prebuilt --prod` upload as the production transition;\n",
+          )
+          replace_once(
+              doc_path,
+              "   solely from successful upload or alias promotion.\n",
+              "   solely from successful upload or alias assignment.\n",
+          )
+          replace_once(
+              doc_path,
+              "4. Review the single resulting preview. Preview releases never run canonical\n   promotion and must leave both production alias records unchanged.\n",
+              "4. Review the single resulting preview. Preview releases never use `--prod` and\n   must leave both production alias records unchanged.\n",
+          )
+
+          policy_path = "docs/release-policy.md"
+          policy_marker = '''After merge:
+
+          1. Identify the exact merged commit.
+          2. Verify the Vercel deployment for that commit is `READY`, targets production, and owns the intended production aliases.
+          3. Smoke-test the changed production behavior on canonical URLs.
+          4. Inspect relevant runtime logs and error clusters.
+          5. Report unresolved risks and any verification boundary.
+          '''
+          policy_replacement = '''After merge:
+
+          1. Identify the exact merged commit.
+          2. Run exactly one production transition: the permanent workflow uploads the prebuilt artifact with `vercel deploy --prebuilt --prod`. Do not pass that already-production deployment to `vercel promote`.
+          3. Verify the Vercel deployment for that commit is `READY`, targets production, and owns the intended production aliases.
+          4. Smoke-test the changed production behavior on canonical URLs.
+          5. Inspect relevant runtime logs and error clusters.
+          6. Report unresolved risks and any verification boundary.
+          '''
+          replace_once(policy_path, policy_marker, policy_replacement)
+          PY
+
+      - name: Re-run exact release-control verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/vercel-static-artifact-integrity.mjs
+          node --check scripts/vercel-release-workflow.test.mjs
+          node --test scripts/vercel-release-workflow.test.mjs | tee vercel-release-workflow.test.log
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) or abort("invalid YAML: #{path}") }' \
+            .github/workflows/vercel-release-controls.yml \
+            .github/workflows/vercel-release.yml
+          git diff --check
+
+          git diff --name-only "$BASE_SHA" | sort > actual-files.txt
+          cat > expected-files.txt <<'FILES'
+          .github/workflows/vercel-release.yml
+          docs/operations/vercel-cost-controls.md
+          docs/release-policy.md
+          scripts/vercel-release-workflow.test.mjs
+          FILES
+          sort -o expected-files.txt expected-files.txt
+          diff -u expected-files.txt actual-files.txt
+          ! grep -Fq '"vercel@$VERCEL_CLI_VERSION" promote' .github/workflows/vercel-release.yml
+          ! grep -Fq 'VERCEL_TEAM_SCOPE:' .github/workflows/vercel-release.yml
+          grep -Fq 'vercel deploy --prebuilt --prod' docs/operations/vercel-cost-controls.md
+
+      - name: Package the exact verified patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p \
+            export/.github/workflows \
+            export/scripts \
+            export/docs/operations \
+            export/docs
+          cp .github/workflows/vercel-release.yml export/.github/workflows/vercel-release.yml
+          cp scripts/vercel-release-workflow.test.mjs export/scripts/vercel-release-workflow.test.mjs
+          cp docs/operations/vercel-cost-controls.md export/docs/operations/vercel-cost-controls.md
+          cp docs/release-policy.md export/docs/release-policy.md
+          cp actual-files.txt expected-files.txt vercel-release-workflow.test.log export/
+          sha256sum \
+            export/.github/workflows/vercel-release.yml \
+            export/scripts/vercel-release-workflow.test.mjs \
+            export/docs/operations/vercel-cost-controls.md \
+            export/docs/release-policy.md \
+            > export/sha256sum.txt
+
+      - name: Upload the exact verified patch
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-production-transition-patch-${{ github.run_id }}
+          path: export
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 30
