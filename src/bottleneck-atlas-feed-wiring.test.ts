@@ -16,6 +16,15 @@ test("the authenticated feed merges generated possibilities into existing invent
   assert.match(route, /opportunitySynthesisDiagnostics/);
 });
 
+test("synthesized interactions resolve locally without querying generated IDs as UUID offers", () => {
+  const feedback = read("src/app/api/live-now/feedback/route.ts");
+  assert.match(feedback, /parseSynthesizedOpportunityId/);
+  assert.match(feedback, /SYNTHESIZED_OPPORTUNITY_PREFIX/);
+  assert.match(feedback, /SYNTHESIZED_CANDIDATE_EVENT_TYPES/);
+  assert.match(feedback, /UUID_PATTERN\.test\(event\.opportunityId\)/);
+  assert.match(feedback, /model_version: OPPORTUNITY_SYNTHESIS_VERSION/);
+});
+
 test("the public atlas and candidate detail routes preserve the hypothesis boundary", () => {
   const atlas = read("src/app/bottleneck-atlas/page.tsx");
   const detail = read("src/app/suggested-opportunities/\[templateId\]/page.tsx");

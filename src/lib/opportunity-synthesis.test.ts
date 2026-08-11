@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   isOpportunitySynthesisEnabled,
   mergeExistingAndSynthesizedRecommendations,
+  parseSynthesizedOpportunityId,
   synthesizeBottleneckAtlasRecommendations,
 } from "./opportunity-synthesis";
 
@@ -68,6 +69,24 @@ test("synthesis identifiers are stable and cause-specific", () => {
   assert.deepEqual(first.map((item) => item.id), second.map((item) => item.id));
   assert.equal(new Set(first.map((item) => item.id)).size, first.length);
   assert.notDeepEqual(first.map((item) => item.id), other.map((item) => item.id));
+});
+
+test("generated identifiers resolve only to known synthesis templates", () => {
+  const recommendation = synthesizeBottleneckAtlasRecommendations({
+    profile: { causes: ["AI governance"] },
+    now: checkedAt,
+    limit: 8,
+  }).recommendations.find(
+    (item) => item.metadata.templateId === "ai-governance-advocacy-operations",
+  );
+
+  assert.ok(recommendation);
+  const parsed = parseSynthesizedOpportunityId(recommendation.id);
+  assert.equal(parsed?.template.id, "ai-governance-advocacy-operations");
+  assert.equal(parsed?.matchedCause, "ai governance");
+  assert.equal(parseSynthesizedOpportunityId("synth:not-a-template:ai-governance"), null);
+  assert.equal(parseSynthesizedOpportunityId("offer:ai-governance"), null);
+  assert.equal(parseSynthesizedOpportunityId("synth:ai-governance-advocacy-operations:"), null);
 });
 
 test("the kill switch is explicit and fail-operational only when not disabled", () => {

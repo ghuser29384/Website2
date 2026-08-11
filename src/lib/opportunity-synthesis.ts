@@ -4,6 +4,7 @@ import {
   BOTTLENECK_ATLAS_VERSION,
   OPPORTUNITY_SYNTHESIS_TEMPLATES,
   getAtlasField,
+  getSynthesisTemplate,
   synthesisClassificationLabel,
   type OpportunitySynthesisTemplate,
 } from "./bottleneck-atlas";
@@ -16,6 +17,7 @@ import {
 import { normalizeRecommendationText } from "./recommendation-learning";
 
 export const OPPORTUNITY_SYNTHESIS_VERSION = "atlas-synthesis-v1";
+export const SYNTHESIZED_OPPORTUNITY_PREFIX = "synth:";
 
 export interface OpportunitySynthesisDiagnostics {
   version: typeof OPPORTUNITY_SYNTHESIS_VERSION;
@@ -68,6 +70,31 @@ function round(value: number, digits = 2) {
 
 function slug(value: string) {
   return normalizeRecommendationText(value).replace(/\s+/g, "-").slice(0, 64) || "priority";
+}
+
+export interface ParsedSynthesizedOpportunityId {
+  template: OpportunitySynthesisTemplate;
+  matchedCause: string;
+}
+
+export function parseSynthesizedOpportunityId(
+  value: string,
+): ParsedSynthesizedOpportunityId | null {
+  const normalized = value.trim();
+  if (!normalized.startsWith(SYNTHESIZED_OPPORTUNITY_PREFIX)) return null;
+
+  const payload = normalized.slice(SYNTHESIZED_OPPORTUNITY_PREFIX.length);
+  const separator = payload.indexOf(":");
+  if (separator <= 0 || separator === payload.length - 1) return null;
+
+  const templateId = payload.slice(0, separator);
+  const causeSlug = payload.slice(separator + 1);
+  if (!causeSlug || causeSlug.length > 64 || /[\s:]/.test(causeSlug)) return null;
+
+  const template = getSynthesisTemplate(templateId);
+  if (!template) return null;
+  const matchedCause = causeSlug.replace(/-/g, " ").trim();
+  return matchedCause ? { template, matchedCause } : null;
 }
 
 function tokens(value: string) {
