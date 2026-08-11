@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   apply:
-    name: Apply exact review-remediation bundle and remove bootstrap transport
+    name: Apply exact review-remediation documents and validator
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -49,19 +49,7 @@ jobs:
           sort -o /tmp/expected-staging-files.txt /tmp/expected-staging-files.txt
           diff -u /tmp/expected-staging-files.txt /tmp/staging-files.txt
 
-      - name: Merge exact current main
-        id: base
-        shell: bash
-        run: |
-          set -euo pipefail
-          git fetch origin main
-          base_sha="$(git rev-parse origin/main)"
-          printf 'base_sha=%s\n' "$base_sha" >> "$GITHUB_OUTPUT"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git merge --no-ff --no-edit origin/main
-
-      - name: Verify and unpack exact remediation bundle
+      - name: Verify and unpack exact remediation bundle except final gate workflow
         shell: bash
         env:
           EXPECTED_BUNDLE_SHA256: a52ff5ea3306f08ae35a497e4e99ccd87922acd06591e304aa507e79c14ec9a3
@@ -80,16 +68,11 @@ jobs:
           mkdir -p /tmp/commitments-impact-identification-remediation
           tar -xzf /tmp/commitments-impact-identification-remediation.tar.gz \
             -C /tmp/commitments-impact-identification-remediation
-          cp -a /tmp/commitments-impact-identification-remediation/. .
-
-      - name: Remove superseded protocol and bootstrap transport
-        shell: bash
-        run: |
-          set -euo pipefail
           rm -f \
-            docs/commitments/impact-identification/causal-identification-and-calibration-preregistration-v1.md \
-            .github/workflows/commitments-impact-identification-remediation-bootstrap.yml
-          rm -rf .github/remediation
+            /tmp/commitments-impact-identification-remediation/.github/workflows/commitments-impact-identification-gates.yml
+          cp -a /tmp/commitments-impact-identification-remediation/. .
+          rm -f \
+            docs/commitments/impact-identification/causal-identification-and-calibration-preregistration-v1.md
 
       - name: Validate protocol schema, templates, mapping, and fail-closed cases
         shell: bash
@@ -100,18 +83,29 @@ jobs:
           node scripts/validate-commitments-impact-identification.mjs --self-test \
             2>&1 | tee /tmp/protocol-negative-self-tests.log
 
-      - name: Stage and verify exact final repository-only diff
+      - name: Stage and verify exact documentation and validator change
         shell: bash
-        env:
-          BASE_SHA: ${{ steps.base.outputs.base_sha }}
         run: |
           set -euo pipefail
-          git add -A
-          git diff --cached --check "$BASE_SHA"
-          git diff --cached --name-only "$BASE_SHA" | sort > /tmp/actual-final-files.txt
+          git add \
+            docs/commitments/impact-identification/causal-identification-and-calibration-preregistration-v2.md \
+            docs/commitments/impact-identification/evidence-to-product-mapping.v2.json \
+            docs/commitments/impact-identification/master-protocol.v2.json \
+            docs/commitments/impact-identification/protocol.schema.json \
+            docs/commitments/impact-identification/study-templates/co_fund.v2.json \
+            docs/commitments/impact-identification/study-templates/donation_redirect.v2.json \
+            docs/commitments/impact-identification/study-templates/donation_upgrade.v2.json \
+            docs/commitments/impact-identification/study-templates/threshold_funding.v2.json \
+            docs/commitments/impact-identification/study-templates/threshold_sign_on.v2.json \
+            docs/commitments/impact-identification/study-templates/trade.v2.json \
+            scripts/validate-commitments-impact-identification.mjs
+          git rm \
+            docs/commitments/impact-identification/causal-identification-and-calibration-preregistration-v1.md
+          git diff --cached --check
+          git diff --cached --name-only | sort > /tmp/actual-files.txt
 
-          cat > /tmp/expected-final-files.txt <<'FILES'
-          .github/workflows/commitments-impact-identification-gates.yml
+          cat > /tmp/expected-files.txt <<'FILES'
+          docs/commitments/impact-identification/causal-identification-and-calibration-preregistration-v1.md
           docs/commitments/impact-identification/causal-identification-and-calibration-preregistration-v2.md
           docs/commitments/impact-identification/evidence-to-product-mapping.v2.json
           docs/commitments/impact-identification/master-protocol.v2.json
@@ -124,20 +118,20 @@ jobs:
           docs/commitments/impact-identification/study-templates/trade.v2.json
           scripts/validate-commitments-impact-identification.mjs
           FILES
-          sort -o /tmp/expected-final-files.txt /tmp/expected-final-files.txt
-          diff -u /tmp/expected-final-files.txt /tmp/actual-final-files.txt
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
 
       - name: Commit exact remediation and push only to unchanged branch
         shell: bash
         env:
           BRANCH: research/commitments-impact-identification-20260811
-          BASE_SHA: ${{ steps.base.outputs.base_sha }}
         run: |
           set -euo pipefail
-          git diff --cached --check "$BASE_SHA"
-          git diff --cached --name-only "$BASE_SHA" | sort > /tmp/staged-final-files.txt
-          diff -u /tmp/expected-final-files.txt /tmp/staged-final-files.txt
-
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git diff --cached --check
+          git diff --cached --name-only | sort > /tmp/staged-files.txt
+          diff -u /tmp/expected-files.txt /tmp/staged-files.txt
           git commit -m "Remediate Commitments causal-identification protocol review"
 
           git fetch origin "$BRANCH"
