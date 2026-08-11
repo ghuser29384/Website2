@@ -8,8 +8,18 @@ on:
     paths:
       - ".github/workflows/commitments-impact-study-instrumentation-gates.yml"
       - "docs/commitments/impact-identification/qa-study-instrumentation-v1.md"
+      - "docs/commitments/impact-identification/study-instance.schema.v2.json"
+      - "docs/commitments/impact-identification/study-instance-validator-binding.v2.json"
+      - "docs/commitments/impact-identification/canonical-json-parity-fixtures.v2.json"
+      - "docs/commitments/impact-identification/synthetic-study-fixtures/trade-validation-fixture.v2.json"
+      - "scripts/validate-commitments-impact-study-instance.mjs"
       - "supabase/migrations/20260811152545_commitments_impact_study_instrumentation_qa_only.sql"
       - "supabase/migrations/20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql"
+      - "supabase/migrations/20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql"
+      - "supabase/migrations/20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql"
+      - "supabase/migrations/20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql"
+      - "supabase/migrations/20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql"
+      - "supabase/migrations/20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql"
       - "supabase/tests/commitments_impact_study_instrumentation_qa_only.sql"
   push:
     branches: [feature/commitments-impact-study-instrumentation-20260811]
@@ -22,10 +32,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  qa-instrumentation:
-    name: Verify exact QA source, fail-closed schema, transactional flow, and zero residue
+  exact-contract-and-qa:
+    name: Verify exact validator, QA source, fail-closed schema, lifecycle, and zero residue
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
@@ -33,6 +43,44 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate exact study-instance schema, hashes, and negative cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/validate-commitments-impact-study-instance.mjs --self-test \
+            | tee study-instance-validator.log
+          python3 - <<'PY' | tee repository-binding-hashes.log
+          from pathlib import Path
+          import hashlib
+          import json
+
+          root = Path('.')
+          binding_path = root / 'docs/commitments/impact-identification/study-instance-validator-binding.v2.json'
+          schema_path = root / 'docs/commitments/impact-identification/study-instance.schema.v2.json'
+          validator_path = root / 'scripts/validate-commitments-impact-study-instance.mjs'
+          fixture_path = root / 'docs/commitments/impact-identification/synthetic-study-fixtures/trade-validation-fixture.v2.json'
+          binding = json.loads(binding_path.read_text())
+          fixture = json.loads(fixture_path.read_text())
+
+          def digest(path):
+              return 'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest()
+
+          actual = {
+              'schema': digest(schema_path),
+              'validator': digest(validator_path),
+              'binding': digest(binding_path),
+          }
+          assert actual['schema'] == binding['schemaRawSha256']
+          assert actual['validator'] == binding['validatorRawSha256']
+          assert actual['binding'] == 'sha256:2ef406b8db8d4fe43750d2abce23cca627b571b8f2164e448776a1cc853241d8'
+          assert fixture['studyInstancePayloadHash'] == 'sha256:ee908f56d3ad6ccf3a6b6e034bef856e96e2bfb833a6d379b6bcbd30cd730212'
+          print(json.dumps(actual, sort_keys=True))
+          PY
 
       - name: Validate exact MoralTrade QA target
         shell: bash
@@ -43,15 +91,15 @@ jobs:
           import os
           from urllib.parse import urlparse
 
-          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
-          if os.environ["EXPECTED_QA_REF"] not in (parsed.username or ""):
-              raise SystemExit("Refusing a database URL outside exact MoralTrade QA.")
+          parsed = urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          if os.environ['EXPECTED_QA_REF'] not in (parsed.username or ''):
+              raise SystemExit('Refusing a database URL outside exact MoralTrade QA.')
           if (
-              parsed.hostname != "aws-0-us-west-1.pooler.supabase.com"
+              parsed.hostname != 'aws-0-us-west-1.pooler.supabase.com'
               or parsed.port != 5432
-              or parsed.path != "/postgres"
+              or parsed.path != '/postgres'
           ):
-              raise SystemExit("Refusing unexpected database connection parameters.")
+              raise SystemExit('Refusing unexpected database connection parameters.')
           PY
 
       - name: Install PostgreSQL client
@@ -59,7 +107,18 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install --yes postgresql-client > /dev/null
 
-      - name: Verify registered migration names and exact sources
+      - name: Prove independently provisioned QA sentinel
+        shell: bash
+        run: |
+          set -euo pipefail
+          sentinel="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
+            select environment || '|' || project_ref || '|' || sentinel_id::text || '|' || sentinel_sha256 || '|' || provisioned_out_of_band::text
+            from moraltrade_qa.environment_identity
+            where singleton;")"
+          printf 'sentinel=%s\n' "$sentinel" | tee qa-sentinel.log
+          test "$sentinel" = "qa|hvmxfjjbdcgjjudmthdz|a0244e19-9744-4a82-83e4-57776804cc06|f7801a29e33764650322ad39e66a2062d9e2f750a9438e74d9fff0c9eeeb8d30|true"
+
+      - name: Verify exact registered migration names and sources
         shell: bash
         run: |
           set -euo pipefail
@@ -67,153 +126,45 @@ jobs:
           cat > migration-files.txt <<'FILES'
           supabase/migrations/20260811152545_commitments_impact_study_instrumentation_qa_only.sql
           supabase/migrations/20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql
+          supabase/migrations/20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql
+          supabase/migrations/20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql
+          supabase/migrations/20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql
+          supabase/migrations/20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql
+          supabase/migrations/20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql
           FILES
           : > migration-source-verification.log
-
           while IFS= read -r source_file; do
             filename="$(basename "$source_file")"
             version="${filename%%_*}"
             expected_name="${filename#*_}"
             expected_name="${expected_name%.sql}"
-
             actual_name="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
               "select name from supabase_migrations.schema_migrations where version = '$version';")"
             test "$actual_name" = "$expected_name" || {
-              echo "Migration $version name mismatch" >&2
+              echo "Migration $version name mismatch: expected=$expected_name actual=$actual_name" >&2
               exit 1
             }
-
             registered_file="registered-migrations/${version}.sql"
             psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc \
               "select statements[1] from supabase_migrations.schema_migrations where version = '$version';" \
               > "$registered_file"
-
             python3 - "$source_file" "$registered_file" <<'PY' \
               | tee -a migration-source-verification.log
           from pathlib import Path
           import hashlib
           import sys
 
-          source = Path(sys.argv[1]).read_text(encoding="utf-8").rstrip("\n")
-          registered = Path(sys.argv[2]).read_text(encoding="utf-8").rstrip("\n")
+          source = Path(sys.argv[1]).read_text(encoding='utf-8').rstrip('\n')
+          registered = Path(sys.argv[2]).read_text(encoding='utf-8').rstrip('\n')
           if source != registered:
-              print(
-                  f"source_sha256={hashlib.sha256(source.encode()).hexdigest()}",
-                  file=sys.stderr,
-              )
-              print(
-                  f"registered_sha256={hashlib.sha256(registered.encode()).hexdigest()}",
-                  file=sys.stderr,
-              )
+              print('source_sha256=' + hashlib.sha256(source.encode()).hexdigest(), file=sys.stderr)
+              print('registered_sha256=' + hashlib.sha256(registered.encode()).hexdigest(), file=sys.stderr)
               raise SystemExit(1)
-          print(
-              f"{sys.argv[1]}: sha256="
-              f"{hashlib.sha256(source.encode()).hexdigest()}"
-          )
+          print(f"{sys.argv[1]}: sha256={hashlib.sha256(source.encode()).hexdigest()}")
           PY
           done < migration-files.txt
 
-      - name: Prove persistent fail-closed schema and privileges
-        shell: bash
-        run: |
-          set -o pipefail
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
-            2>&1 <<'SQL' | tee qa-schema-and-privileges.log
-          do $verify$
-          declare
-            relation_name text;
-          begin
-            if not exists (
-              select 1
-              from public.impact_study_protocol_bindings
-              where protocol_key = 'commitments-causal-identification-and-calibration-master-v2'
-                and payload_sha256 = 'sha256:cd663ae722ee028ddfe3e1b866acab9ef79b5fcf5b5418d053bd3687eca3881a'
-                and merged_commit_sha = 'f93acc33c135f34bc28f006842d9e08120d5b859'
-                and accepted_review_id = 4905985869
-                and binding_status = 'accepted_internal_design_contract'
-                and execution_authorized = false
-            ) then
-              raise exception 'Accepted master-protocol binding is missing or incorrect.';
-            end if;
-
-            if (
-              select count(*)
-              from public.impact_study_template_bindings
-              where template_status = 'bound_nonexecuting'
-                and execution_authorized = false
-            ) <> 6 then
-              raise exception 'The exact six non-executing template bindings are not present.';
-            end if;
-
-            foreach relation_name in array array[
-              'impact_study_protocol_bindings',
-              'impact_study_template_bindings',
-              'impact_study_instances',
-              'impact_study_registry_events',
-              'impact_study_synthetic_assignments',
-              'impact_study_synthetic_exposures',
-              'impact_study_synthetic_outcomes',
-              'impact_study_safety_events',
-              'impact_study_calibration_manifests'
-            ] loop
-              if not exists (
-                select 1
-                from pg_class relation
-                join pg_namespace namespace on namespace.oid = relation.relnamespace
-                where namespace.nspname = 'public'
-                  and relation.relname = relation_name
-                  and relation.relkind = 'r'
-                  and relation.relrowsecurity
-              ) then
-                raise exception '% does not have RLS enabled.', relation_name;
-              end if;
-
-              if has_table_privilege('anon', format('public.%I', relation_name), 'select')
-                or has_table_privilege('authenticated', format('public.%I', relation_name), 'select')
-                or has_table_privilege('service_role', format('public.%I', relation_name), 'insert')
-                or has_table_privilege('service_role', format('public.%I', relation_name), 'update')
-                or has_table_privilege('service_role', format('public.%I', relation_name), 'delete')
-                or not has_table_privilege('service_role', format('public.%I', relation_name), 'select')
-              then
-                raise exception '% violates the least-privilege table contract.', relation_name;
-              end if;
-            end loop;
-
-            if exists (
-              select 1
-              from information_schema.columns columns
-              where columns.table_schema = 'public'
-                and columns.table_name like 'impact_study_%'
-                and columns.column_name in (
-                  'user_id','auth_user_id','profile_id','email','phone'
-                )
-            ) then
-              raise exception 'A prohibited real-user identifier column exists.';
-            end if;
-
-            if not has_function_privilege(
-                'service_role',
-                'public.register_qa_impact_study_instance(jsonb)',
-                'execute'
-              )
-              or has_function_privilege(
-                'authenticated',
-                'public.register_qa_impact_study_instance(jsonb)',
-                'execute'
-              )
-              or has_function_privilege(
-                'anon',
-                'public.register_qa_impact_study_instance(jsonb)',
-                'execute'
-              )
-            then
-              raise exception 'Study-instance RPC privilege boundary failed.';
-            end if;
-          end;
-          $verify$;
-          SQL
-
-      - name: Run transactional synthetic-only instrumentation regression
+      - name: Run transactional adversarial instrumentation regression
         shell: bash
         run: |
           set -o pipefail
@@ -221,22 +172,24 @@ jobs:
             --file supabase/tests/commitments_impact_study_instrumentation_qa_only.sql \
             2>&1 | tee qa-study-instrumentation.log
 
-      - name: Prove transactional residue is zero
+      - name: Prove persistent synthetic residue is zero
         shell: bash
         run: |
           set -euo pipefail
           residue="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
             select
-              (select count(*) from public.impact_study_instances
-               where study_key like 'qa-synthetic-%')
-              + (select count(*) from public.impact_study_synthetic_assignments
-                 where synthetic_subject_key like 'synthetic:%')
+              (select count(*) from public.impact_study_instances)
+              + (select count(*) from public.impact_study_validator_attestations)
+              + (select count(*) from public.impact_study_allowed_arms)
+              + (select count(*) from public.impact_study_allowed_exposure_cells)
+              + (select count(*) from public.impact_study_allowed_outcomes)
+              + (select count(*) from public.impact_study_allowed_evidence_schemes)
+              + (select count(*) from public.impact_study_registry_events)
+              + (select count(*) from public.impact_study_synthetic_assignments)
               + (select count(*) from public.impact_study_synthetic_exposures)
-              + (select count(*) from public.impact_study_synthetic_outcomes
-                 where synthetic_subject_key like 'synthetic:%')
+              + (select count(*) from public.impact_study_synthetic_outcomes)
               + (select count(*) from public.impact_study_safety_events)
-              + (select count(*) from public.impact_study_calibration_manifests
-                 where source_scope = 'synthetic_qa_only');")"
+              + (select count(*) from public.impact_study_calibration_manifests);")"
           printf 'synthetic_residue=%s\n' "$residue" | tee qa-residue.log
           test "$residue" = "0"
 
@@ -248,12 +201,21 @@ jobs:
           base="$(git merge-base HEAD origin/main)"
           git diff --check "$base" "$GITHUB_SHA" | tee diff-check.log
           git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
-
           cat > expected-files.txt <<'FILES'
           .github/workflows/commitments-impact-study-instrumentation-gates.yml
+          docs/commitments/impact-identification/canonical-json-parity-fixtures.v2.json
           docs/commitments/impact-identification/qa-study-instrumentation-v1.md
+          docs/commitments/impact-identification/study-instance-validator-binding.v2.json
+          docs/commitments/impact-identification/study-instance.schema.v2.json
+          docs/commitments/impact-identification/synthetic-study-fixtures/trade-validation-fixture.v2.json
+          scripts/validate-commitments-impact-study-instance.mjs
           supabase/migrations/20260811152545_commitments_impact_study_instrumentation_qa_only.sql
           supabase/migrations/20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql
+          supabase/migrations/20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql
+          supabase/migrations/20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql
+          supabase/migrations/20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql
+          supabase/migrations/20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql
+          supabase/migrations/20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql
           supabase/tests/commitments_impact_study_instrumentation_qa_only.sql
           FILES
           sort -o expected-files.txt expected-files.txt
@@ -265,10 +227,12 @@ jobs:
         with:
           name: commitments-impact-study-instrumentation-${{ github.run_id }}
           path: |
+            study-instance-validator.log
+            repository-binding-hashes.log
+            qa-sentinel.log
             migration-files.txt
             migration-source-verification.log
             registered-migrations/
-            qa-schema-and-privileges.log
             qa-study-instrumentation.log
             qa-residue.log
             diff-check.log
