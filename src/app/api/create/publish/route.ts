@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
 import { persistCreateSubmission } from "@/lib/create-interface/persistence";
+import { validateAccountParticipantTargets } from "@/lib/create-interface/participant-target-server";
 import { validateCreatePayload } from "@/lib/create-interface/validation";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -47,6 +48,11 @@ export async function POST(request: NextRequest) {
   try {
     const validated = validateCreatePayload(raw);
     const supabase = createServiceClient();
+    await validateAccountParticipantTargets({
+      supabase,
+      actorId: viewer.authUser.id,
+      validated,
+    });
     const submission = await persistCreateSubmission({
       supabase,
       actorId: viewer.authUser.id,
@@ -56,9 +62,11 @@ export async function POST(request: NextRequest) {
     return response({ ok: true, submission }, 201);
   } catch (error) {
     const message = error instanceof Error ? error.message : "The Create submission could not be saved.";
-    const status = /required|invalid|must|unsupported|exceeds|cannot|between|future|formula|threshold/i.test(message)
-      ? 400
-      : 500;
+    const status = /no longer eligible|no longer available|changed after selection|remove and reselect/i.test(message)
+      ? 409
+      : /required|invalid|must|unsupported|exceeds|cannot|between|future|formula|threshold/i.test(message)
+        ? 400
+        : 500;
     console.error("[create-interface] submission failed", {
       message,
       userId: viewer.authUser.id,

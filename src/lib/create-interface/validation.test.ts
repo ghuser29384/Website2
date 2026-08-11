@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  buildGroupContributionTerms,
+  defaultGroupContributionDraft,
+} from "./group-contribution-draft";
 import { CREATE_INTERFACE_VERSION } from "./types";
 import { validateCreatePayload } from "./validation";
 
@@ -30,6 +34,33 @@ function pledgePayload() {
       },
     ],
     pool: null,
+    groupContributionTerms: null,
+  };
+}
+
+
+function pledgePayloadWithCoAct() {
+  const payload = pledgePayload();
+  const draft = defaultGroupContributionDraft(
+    "skill:1",
+    "nonfinancial",
+    "Research wild animal suffering",
+  );
+  draft.mode = "co-act";
+  draft.creatorParticipation = "organizer-only";
+  draft.participants = [];
+  draft.counterpartyParticipation = "explicitly-excluded";
+  draft.duration = "one month";
+  draft.frequency = "one brief";
+  const terms = buildGroupContributionTerms(draft);
+  assert(terms);
+  return {
+    ...payload,
+    groupContributionTerms: {
+      schemaVersion: 1,
+      execution: "proposal-only",
+      options: [{ optionKey: "skill:1", terms }],
+    },
   };
 }
 
@@ -264,4 +295,34 @@ test("rejects reciprocal contribution options on a directly created pool", () =>
   };
 
   assert.throws(() => validateCreatePayload(input), /cannot include reciprocal contribution options/i);
+});
+
+
+test("canonically validates Co-Act terms against authoritative offer options", () => {
+  const result = validateCreatePayload(pledgePayloadWithCoAct());
+  assert.equal(result.groupContributionTerms.options.length, 1);
+  assert.equal(result.groupContributionTerms.options[0]?.optionKey, "skill:1");
+  assert.equal(result.groupContributionTerms.options[0]?.terms.mode, "co-act");
+  assert.equal(result.groupContributionReviewRecord?.groupContributionTerms.visibility, "private-review");
+  assert.equal(result.groupContributionReviewRecord?.groupContributionTerms.execution, "proposal-only");
+  assert.deepEqual(
+    JSON.parse(result.groupContributionReviewRecord?.groupContributionTerms.canonicalJson ?? "null"),
+    result.groupContributionTerms,
+  );
+});
+
+test("rejects forged, unknown, and executable group-contribution terms", () => {
+  const unknownOption = pledgePayloadWithCoAct();
+  unknownOption.groupContributionTerms.options[0].optionKey = "skill:99";
+  assert.throws(
+    () => validateCreatePayload(unknownOption),
+    /unknown-option|not part of this proposal/i,
+  );
+
+  const forged = pledgePayloadWithCoAct();
+  Object.assign(forged.groupContributionTerms.options[0].terms, { activate: true });
+  assert.throws(
+    () => validateCreatePayload(forged),
+    /unsupported payload field|unknown-field|activate/i,
+  );
 });

@@ -1,3 +1,4 @@
+import { validateProfileUsername } from "@/lib/profile-username";
 import type { WalkthroughOfferType } from "@/lib/walkthrough-profile";
 import {
   normalizeProfilePriorityAllocation,
@@ -25,6 +26,8 @@ export type CompleteProfileContactRule = (typeof COMPLETE_PROFILE_CONTACT_RULES)
 
 export interface CompleteProfileSubmission {
   displayName: string;
+  username: string;
+  publicInvitationMentionsEnabled: boolean;
   role: string;
   affiliation: string;
   bio: string;
@@ -52,6 +55,8 @@ function clean(value: unknown, maxLength: number) {
 
 export function normalizeCompleteProfileSubmission(input: {
   displayName?: unknown;
+  username?: unknown;
+  publicInvitationMentionsEnabled?: unknown;
   role?: unknown;
   affiliation?: unknown;
   bio?: unknown;
@@ -65,6 +70,7 @@ export function normalizeCompleteProfileSubmission(input: {
   priorityAllocation?: unknown;
 }): CompleteProfileSubmission | null {
   const displayName = clean(input.displayName, 80);
+  const usernameResult = validateProfileUsername(input.username);
   const role = clean(input.role, 100);
   const affiliation = clean(input.affiliation, COMPLETE_PROFILE_AFFILIATION_MAX_LENGTH);
   const bio = clean(input.bio, 500);
@@ -77,6 +83,7 @@ export function normalizeCompleteProfileSubmission(input: {
 
   if (
     displayName.length < 2 ||
+    !usernameResult.ok ||
     role.length < 2 ||
     !offerTypeSet.has(offerType as WalkthroughOfferType) ||
     !causeArea ||
@@ -87,6 +94,12 @@ export function normalizeCompleteProfileSubmission(input: {
 
   return {
     displayName,
+    username: usernameResult.username,
+    publicInvitationMentionsEnabled:
+      input.publicInvitationMentionsEnabled === true ||
+      input.publicInvitationMentionsEnabled === "true" ||
+      input.publicInvitationMentionsEnabled === "1" ||
+      input.publicInvitationMentionsEnabled === "on",
     role,
     affiliation,
     bio,

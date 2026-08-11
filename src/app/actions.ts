@@ -96,6 +96,7 @@ import {
   type BackgroundPurposeBinding,
 } from "@/lib/background-purpose-registry";
 import { getSafeInternalPath } from "@/lib/paths";
+import { buildUsernameCompletionPath, profileNeedsUsername } from "@/lib/profile-username";
 import {
   getBaselineBondAppealWindowEndsAt,
   getBaselineBondStatusAfterAccepted,
@@ -3282,11 +3283,15 @@ export async function signInAction(formData: FormData) {
     redirectWithMessage(loginPath, "error", error.message);
   }
 
+  let destination = next;
   if (data.user) {
-    await ensureAccountRowsForUser(data.user, supabase);
+    const { profile } = await ensureAccountRowsForUser(data.user, supabase);
+    if (profileNeedsUsername(profile)) {
+      destination = buildUsernameCompletionPath(next);
+    }
   }
 
-  redirect(next);
+  redirect(destination);
 }
 
 export async function oauthSignInAction(formData: FormData) {

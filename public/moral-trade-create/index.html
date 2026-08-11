@@ -4630,6 +4630,29 @@
     const CREATE_INTERFACE_VERSION = "moral_trade_create_v1";
     const CREATE_DRAFT_STORAGE_KEY = "moral_trade_create_resume_v1";
 
+    function createDraftStorage() {
+      try {
+        if (window.top && window.top !== window) {
+          const storage = window.top.sessionStorage;
+          storage.getItem(CREATE_DRAFT_STORAGE_KEY);
+          return storage;
+        }
+      } catch {}
+      try {
+        const storage = window.sessionStorage;
+        storage.getItem(CREATE_DRAFT_STORAGE_KEY);
+        return storage;
+      } catch {
+        return null;
+      }
+    }
+
+    function clearDraftForResume() {
+      const storage = createDraftStorage();
+      if (!storage) return;
+      try { storage.removeItem(CREATE_DRAFT_STORAGE_KEY); } catch {}
+    }
+
     function createSubmissionKey() {
       if (globalThis.crypto?.randomUUID) return `create-${globalThis.crypto.randomUUID()}`;
       return `create-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
@@ -7051,7 +7074,7 @@
 
     function resetFlow() {
       state.submissionKey = createSubmissionKey();
-      try { sessionStorage.removeItem(CREATE_DRAFT_STORAGE_KEY); } catch {}
+      clearDraftForResume();
       state.step = 1;
       state.cause = null;
       state.causeTone = "blue";
@@ -7168,19 +7191,32 @@
     }
 
     function saveDraftForResume() {
+      const storage = createDraftStorage();
+      if (!storage) return false;
       try {
-        sessionStorage.setItem(CREATE_DRAFT_STORAGE_KEY, JSON.stringify({ ...state, published: false }));
-      } catch {}
+        const serialized = JSON.stringify({
+          ...state,
+          step: 4,
+          offerPhase: "details",
+          published: false,
+        });
+        storage.setItem(CREATE_DRAFT_STORAGE_KEY, serialized);
+        return storage.getItem(CREATE_DRAFT_STORAGE_KEY) === serialized;
+      } catch {
+        return false;
+      }
     }
 
     function restoreDraftForResume() {
       const shouldResume = new URLSearchParams(window.location.search).get("resume") === "create";
       if (!shouldResume) return false;
+      const storage = createDraftStorage();
+      if (!storage) return false;
       try {
-        const saved = JSON.parse(sessionStorage.getItem(CREATE_DRAFT_STORAGE_KEY) || "null");
+        const saved = JSON.parse(storage.getItem(CREATE_DRAFT_STORAGE_KEY) || "null");
         if (!saved || typeof saved !== "object") return false;
         Object.assign(state, saved, { published: false, publishedId: "", publishedUrl: "" });
-        sessionStorage.removeItem(CREATE_DRAFT_STORAGE_KEY);
+        // Keep the snapshot through a possible srcDoc remount. A durable receipt or explicit reset clears it.
         return true;
       } catch {
         return false;
@@ -7273,14 +7309,16 @@
         });
         const result = await response.json().catch(() => null);
         if (response.status === 401 && result?.requiresAuth) {
-          saveDraftForResume();
+          if (!saveDraftForResume()) {
+            throw new Error("Sign-in is required, but Create could not preserve this draft. Keep this page open and try again.");
+          }
           window.top.location.assign(result.loginUrl || "/login?returnTo=%2Ftrades%2Fnew%3Fresume%3Dcreate");
           return;
         }
         if (!response.ok || !result?.ok || !result.submission) {
           throw new Error(result?.message || `Submission failed with HTTP ${response.status}.`);
         }
-        try { sessionStorage.removeItem(CREATE_DRAFT_STORAGE_KEY); } catch {}
+        clearDraftForResume();
         renderSubmittedReceipt(result.submission);
       } catch (error) {
         $("#publishError").textContent = error instanceof Error ? error.message : "The submission could not be saved.";
