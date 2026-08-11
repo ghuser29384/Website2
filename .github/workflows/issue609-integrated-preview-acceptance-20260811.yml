@@ -1,0 +1,484 @@
+name: Issue 609 integrated protected Preview acceptance
+
+on:
+  push:
+    branches:
+      - ops/verify-issue609-integrated-preview-20260811
+    paths:
+      - ".github/workflows/issue609-integrated-preview-acceptance-20260811.yml"
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+  statuses: read
+
+concurrency:
+  group: issue609-integrated-protected-preview-acceptance
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/verify-issue609-integrated-preview-20260811
+  MAIN_SHA: f93acc33c135f34bc28f006842d9e08120d5b859
+  CANDIDATE_SHA: 61be8b632bedb350b9659c14d97b23a35216c889
+  PRODUCT_BRANCH: fix/issue609-public-profile-scale-20260811
+  RELEASE_BRANCH: release/vercel-preview
+  PRODUCT_PR: "611"
+  PREVIEW_RUN_ID: "31509287030"
+  PREVIEW_ARTIFACT_ID: "9108784080"
+  PREVIEW_ARTIFACT_DIGEST: sha256:2793c749e76c5b3e6d52dcbbc2d35ba563c0dca392011bbc61e169417ecd2cae
+  DEPLOYMENT_ID: dpl_GLCp9ua2f9ptHgwKcLqYQpPvFWai
+  DEPLOYMENT_HOST: moraltrade-site-i1ga0xqg5-ellen-s.vercel.app
+  BASE_URL: https://moraltrade-site-i1ga0xqg5-ellen-s.vercel.app
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  PROFILE_ID: 9e51db47-92d1-4d75-80ce-cf10de1121f1
+
+jobs:
+  hosted-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Guard exact repository, pull request, release, and deployment state
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test -n "$VERCEL_TOKEN"
+
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          test "$current_main" = "$MAIN_SHA"
+
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}" > /tmp/issue609-pr.json
+          jq -e \
+            --arg head "$CANDIDATE_SHA" \
+            --arg base "$MAIN_SHA" \
+            --arg branch "$PRODUCT_BRANCH" '
+              (.state == "open")
+              and (.draft == true)
+              and (.head.ref == $branch)
+              and (.head.sha == $head)
+              and (.base.ref == "main")
+              and (.base.sha == $base)
+            ' /tmp/issue609-pr.json >/dev/null
+
+          gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}/files?per_page=100" \
+            --jq '.[].filename' | sort -u > /tmp/issue609-actual-files.txt
+          cat > /tmp/issue609-expected-files.txt <<'FILES'
+          src/app/api/credibility/profile/[profileId]/route.ts
+          src/app/people/[profileId]/credibility/page.tsx
+          src/app/people/[profileId]/page.tsx
+          src/lib/app-data.ts
+          src/lib/public-profile-offers.test.ts
+          src/lib/public-profile-offers.ts
+          src/lib/public-profile-scale-contract.test.ts
+          FILES
+          sort -o /tmp/issue609-expected-files.txt /tmp/issue609-expected-files.txt
+          diff -u /tmp/issue609-expected-files.txt /tmp/issue609-actual-files.txt
+
+          release_sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/${RELEASE_BRANCH}" --jq '.object.sha')"
+          test "$release_sha" = "$CANDIDATE_SHA"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PREVIEW_RUN_ID}" > /tmp/issue609-preview-run.json
+          jq -e \
+            --arg main "$MAIN_SHA" '
+              (.name == "Gated Vercel release")
+              and (.event == "workflow_dispatch")
+              and (.head_sha == $main)
+              and (.status == "completed")
+              and (.conclusion == "success")
+            ' /tmp/issue609-preview-run.json >/dev/null
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${PREVIEW_RUN_ID}/artifacts" > /tmp/issue609-preview-artifacts.json
+          jq -e \
+            --argjson artifact_id "$PREVIEW_ARTIFACT_ID" \
+            --arg digest "$PREVIEW_ARTIFACT_DIGEST" '
+              any(.artifacts[];
+                (.id == $artifact_id)
+                and (.name == "gated-vercel-release-preview-31509287030")
+                and (.expired == false)
+                and (.digest == $digest)
+              )
+            ' /tmp/issue609-preview-artifacts.json >/dev/null
+
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
+            > /tmp/issue609-preview-deployment.json
+          jq -e \
+            --arg deployment_id "$DEPLOYMENT_ID" \
+            --arg deployment_host "$DEPLOYMENT_HOST" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg candidate "$CANDIDATE_SHA" '
+              ((.id // .uid) == $deployment_id)
+              and (.url == $deployment_host)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "preview") != "production")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $candidate)
+            ' /tmp/issue609-preview-deployment.json >/dev/null
+
+      - name: Check out the exact integrated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Generate a single-use Vercel automation bypass
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          test -n "$VERCEL_TOKEN"
+          umask 077
+          cat > /tmp/issue609_bypass.py <<'PY'
+          import json
+          import os
+          import secrets
+          import string
+          import sys
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          secret_path = Path('/tmp/issue609-bypass-secret')
+          endpoint = (
+              f"https://api.vercel.com/v1/projects/{urllib.parse.quote(os.environ['VERCEL_PROJECT_ID'])}/protection-bypass"
+              f"?teamId={urllib.parse.quote(os.environ['VERCEL_ORG_ID'])}"
+          )
+
+          def patch(payload):
+              request = urllib.request.Request(
+                  endpoint,
+                  data=json.dumps(payload).encode('utf-8'),
+                  method='PATCH',
+                  headers={
+                      'Authorization': f"Bearer {os.environ['VERCEL_TOKEN']}",
+                      'Content-Type': 'application/json',
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=30) as response:
+                      if response.status != 200:
+                          raise SystemExit(f'Unexpected Vercel status {response.status}')
+                      response.read()
+              except urllib.error.HTTPError as error:
+                  body = error.read().decode('utf-8', errors='replace')
+                  raise SystemExit(f'Vercel bypass API failed: {error.code} {body[:500]}')
+
+          command = sys.argv[1]
+          if command == 'generate':
+              alphabet = string.ascii_letters + string.digits
+              secret = ''.join(secrets.choice(alphabet) for _ in range(32))
+              patch({'generate': {'secret': secret, 'note': f'Issue 609 acceptance run {os.environ["GITHUB_RUN_ID"]}'}})
+              secret_path.write_text(secret, encoding='utf-8')
+              os.chmod(secret_path, 0o600)
+              print(f'::add-mask::{secret}')
+              print('bypass_generated=true')
+          elif command == 'revoke':
+              if not secret_path.exists():
+                  print('bypass_revoke=skipped')
+                  raise SystemExit(0)
+              secret = secret_path.read_text(encoding='utf-8')
+              print(f'::add-mask::{secret}')
+              patch({'revoke': {'secret': secret, 'regenerate': False}})
+              print('bypass_revoked=true')
+          else:
+              raise SystemExit(f'Unsupported command {command!r}')
+          PY
+          chmod 700 /tmp/issue609_bypass.py
+          python3 /tmp/issue609_bypass.py generate
+
+      - name: Exercise the real high-volume profile on desktop and exact mobile
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          mkdir -p test-results/issue609
+          secret="$(cat /tmp/issue609-bypass-secret)"
+          echo "::add-mask::$secret"
+          VERCEL_AUTOMATION_BYPASS_SECRET="$secret" node <<'JS'
+          const { chromium } = require('@playwright/test');
+          const { writeFile } = require('node:fs/promises');
+
+          const base = process.env.BASE_URL;
+          const profileId = process.env.PROFILE_ID;
+          const candidate = process.env.CANDIDATE_SHA;
+          const deploymentId = process.env.DEPLOYMENT_ID;
+          const bypassSecret = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
+          const protectedHost = new URL(base).hostname;
+          const profilePath = `/people/${profileId}`;
+          const credibilityPath = `${profilePath}/credibility`;
+          const apiPath = `/api/credibility/profile/${profileId}`;
+          const errorPatterns = [
+            /Application error/i,
+            /server-side exception/i,
+            /An error occurred in the Server Components render/i,
+            /Bad Request/i,
+          ];
+          const report = {
+            candidate,
+            deploymentId,
+            deploymentUrl: base,
+            profileId,
+            startedAt: new Date().toISOString(),
+            api: {},
+            desktop: {},
+            mobile: {},
+            diagnostics: {},
+          };
+
+          function diagnostics(page, label) {
+            const value = {
+              consoleErrors: [],
+              pageErrors: [],
+              failedRequests: [],
+              http5xx: [],
+              dangerousMutations: [],
+            };
+            page.on('console', message => {
+              if (message.type() === 'error') value.consoleErrors.push(message.text());
+            });
+            page.on('pageerror', error => value.pageErrors.push(error.message));
+            page.on('requestfailed', request => {
+              const url = new URL(request.url());
+              if (url.hostname === protectedHost) {
+                value.failedRequests.push(`${request.method()} ${url.pathname} :: ${request.failure()?.errorText ?? ''}`);
+              }
+            });
+            page.on('response', response => {
+              const url = new URL(response.url());
+              if (url.hostname === protectedHost && response.status() >= 500) {
+                value.http5xx.push(`${response.status()} ${url.pathname}`);
+              }
+            });
+            page.on('request', request => {
+              const url = new URL(request.url());
+              if (url.hostname !== protectedHost) return;
+              const method = request.method();
+              if (['GET', 'HEAD', 'OPTIONS'].includes(method)) return;
+              if (/^\/api\/(?:payments|stripe|mpgf|offers|create|background)(?:\/|$)/.test(url.pathname)) {
+                value.dangerousMutations.push(`${method} ${url.pathname}`);
+              }
+            });
+            report.diagnostics[label] = value;
+            return value;
+          }
+
+          async function assertNoFailureText(page, label) {
+            const body = await page.locator('body').innerText();
+            for (const pattern of errorPatterns) {
+              if (pattern.test(body)) throw new Error(`${label} exposed failure text matching ${pattern}`);
+            }
+            return body;
+          }
+
+          async function assertNoOverflow(page, label) {
+            const dimensions = await page.evaluate(() => ({
+              scrollWidth: document.documentElement.scrollWidth,
+              clientWidth: document.documentElement.clientWidth,
+              innerWidth: window.innerWidth,
+            }));
+            if (dimensions.scrollWidth > dimensions.innerWidth + 1) {
+              throw new Error(`${label} has horizontal overflow: ${JSON.stringify(dimensions)}`);
+            }
+            return dimensions;
+          }
+
+          async function openPage(page, path, label, screenshotName) {
+            const response = await page.goto(`${base}${path}`, {
+              waitUntil: 'domcontentloaded',
+              timeout: 45000,
+            });
+            if (!response || response.status() !== 200) {
+              throw new Error(`${label} returned ${response?.status() ?? 'no response'}`);
+            }
+            await page.locator('body').waitFor({ state: 'visible', timeout: 20000 });
+            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+            const body = await assertNoFailureText(page, label);
+            const dimensions = await assertNoOverflow(page, label);
+            await page.screenshot({
+              path: `test-results/issue609/${screenshotName}.png`,
+              fullPage: true,
+            });
+            return { status: response.status(), bodyLength: body.length, dimensions, finalUrl: page.url() };
+          }
+
+          async function seedBypassAndCheckApi(context, page, label) {
+            const seedUrl = new URL(apiPath, base);
+            seedUrl.searchParams.set('x-vercel-protection-bypass', bypassSecret);
+            seedUrl.searchParams.set('x-vercel-set-bypass-cookie', 'samesitenone');
+            const seedResponse = await page.goto(seedUrl.toString(), {
+              waitUntil: 'domcontentloaded',
+              timeout: 45000,
+            });
+            if (!seedResponse || seedResponse.status() !== 200) {
+              throw new Error(`${label} API bypass seed returned ${seedResponse?.status() ?? 'no response'}`);
+            }
+            const seedText = await page.locator('body').innerText();
+            const seedJson = JSON.parse(seedText);
+            if (seedJson.ok !== true || seedJson.profile?.id !== profileId) {
+              throw new Error(`${label} API seed payload mismatch: ${seedText.slice(0, 1000)}`);
+            }
+            const cookieNames = (await context.cookies()).map(cookie => cookie.name);
+            if (!cookieNames.some(name => /vercel/i.test(name))) {
+              throw new Error(`${label} did not receive a Vercel bypass cookie: ${JSON.stringify(cookieNames)}`);
+            }
+            const follow = await context.request.get(`${base}${apiPath}`, { timeout: 45000 });
+            const followText = await follow.text();
+            if (follow.status() !== 200) {
+              throw new Error(`${label} API follow-up returned ${follow.status()}: ${followText.slice(0, 1000)}`);
+            }
+            const followJson = JSON.parse(followText);
+            if (followJson.ok !== true || followJson.profile?.id !== profileId) {
+              throw new Error(`${label} API follow-up payload mismatch: ${followText.slice(0, 1000)}`);
+            }
+            return {
+              seedStatus: seedResponse.status(),
+              followStatus: follow.status(),
+              profileId: followJson.profile.id,
+              displayName: followJson.profile.displayName,
+              bypassCookieNames: cookieNames.filter(name => /vercel/i.test(name)),
+            };
+          }
+
+          async function exerciseViewport(browser, key, viewport) {
+            const context = await browser.newContext({ viewport });
+            const page = await context.newPage();
+            const diag = diagnostics(page, key);
+            const api = await seedBypassAndCheckApi(context, page, key);
+
+            const first = await openPage(page, profilePath, `${key} profile page 1`, `${key}-profile-page-1`);
+            await page.getByText('Showing 1–24 of 982 open offers.', { exact: true }).waitFor({ state: 'visible' });
+            await page.getByText('Page 1', { exact: true }).waitFor({ state: 'visible' });
+            await page.getByRole('link', { name: 'Next page', exact: true }).waitFor({ state: 'visible' });
+
+            const credibility = await openPage(page, credibilityPath, `${key} credibility`, `${key}-credibility`);
+
+            const second = await openPage(page, `${profilePath}?offersPage=2#open-offers`, `${key} profile page 2`, `${key}-profile-page-2`);
+            await page.getByText('Showing 25–48 of 982 open offers.', { exact: true }).waitFor({ state: 'visible' });
+            await page.getByText('Page 2', { exact: true }).waitFor({ state: 'visible' });
+            await page.getByRole('link', { name: 'Previous page', exact: true }).waitFor({ state: 'visible' });
+            await page.getByRole('link', { name: 'Next page', exact: true }).waitFor({ state: 'visible' });
+
+            const clamped = await openPage(page, `${profilePath}?offersPage=9999#open-offers`, `${key} clamped final page`, `${key}-profile-page-clamped`);
+            await page.getByText('Showing 961–982 of 982 open offers.', { exact: true }).waitFor({ state: 'visible' });
+            await page.getByText('Page 41', { exact: true }).waitFor({ state: 'visible' });
+            await page.getByRole('link', { name: 'Previous page', exact: true }).waitFor({ state: 'visible' });
+            if (await page.getByRole('link', { name: 'Next page', exact: true }).count()) {
+              throw new Error(`${key} clamped final page unexpectedly exposes Next page`);
+            }
+
+            const seriousConsoleErrors = diag.consoleErrors.filter(message =>
+              /Application error|server-side exception|Bad Request|Server Components render|hydration/i.test(message),
+            );
+            if (diag.pageErrors.length || diag.http5xx.length || diag.dangerousMutations.length || seriousConsoleErrors.length) {
+              throw new Error(`${key} diagnostics failed: ${JSON.stringify({ ...diag, seriousConsoleErrors })}`);
+            }
+
+            report[key] = { viewport, api, first, credibility, second, clamped };
+            await context.close();
+          }
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            try {
+              await exerciseViewport(browser, 'desktop', { width: 1440, height: 1000 });
+              report.api.desktop = report.desktop.api;
+              await exerciseViewport(browser, 'mobile', { width: 390, height: 844 });
+              report.api.mobile = report.mobile.api;
+              report.finishedAt = new Date().toISOString();
+              report.ok = true;
+              await writeFile('test-results/issue609/acceptance-report.json', JSON.stringify(report, null, 2));
+            } catch (error) {
+              report.finishedAt = new Date().toISOString();
+              report.ok = false;
+              report.error = error instanceof Error ? error.stack : String(error);
+              await writeFile('test-results/issue609/acceptance-report.json', JSON.stringify(report, null, 2));
+              throw error;
+            } finally {
+              await browser.close();
+            }
+          })();
+          JS
+
+      - name: Revoke the single-use Vercel automation bypass
+        if: always()
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          test -n "$VERCEL_TOKEN"
+          if [[ -x /tmp/issue609_bypass.py ]]; then
+            python3 /tmp/issue609_bypass.py revoke
+          else
+            echo 'bypass_revoke=skipped'
+          fi
+          rm -f /tmp/issue609-bypass-secret /tmp/issue609_bypass.py
+
+      - name: Upload immutable hosted acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue609-integrated-preview-acceptance-${{ github.run_id }}
+          path: |
+            test-results/issue609
+            /tmp/issue609-pr.json
+            /tmp/issue609-actual-files.txt
+            /tmp/issue609-expected-files.txt
+            /tmp/issue609-preview-run.json
+            /tmp/issue609-preview-artifacts.json
+            /tmp/issue609-preview-deployment.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Record acceptance evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### Issue #609 integrated protected Preview acceptance'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Deployment: \`$DEPLOYMENT_ID\`"
+            echo "- Preview: $BASE_URL"
+            echo "- Profile: \`$PROFILE_ID\`"
+            if [[ -f test-results/issue609/acceptance-report.json ]]; then
+              echo "- Acceptance result: \`$(jq -r '.ok' test-results/issue609/acceptance-report.json)\`"
+              echo "- Desktop API: \`$(jq -r '.desktop.api.followStatus // "unavailable"' test-results/issue609/acceptance-report.json)\`"
+              echo "- Mobile API: \`$(jq -r '.mobile.api.followStatus // "unavailable"' test-results/issue609/acceptance-report.json)\`"
+            else
+              echo '- Acceptance result: `unavailable`'
+            fi
+            echo '- Production aliases: unchanged'
+            echo '- Offer, payment, evidence, reliability, and execution mutation: prohibited and monitored'
+          } >> "$GITHUB_STEP_SUMMARY"
