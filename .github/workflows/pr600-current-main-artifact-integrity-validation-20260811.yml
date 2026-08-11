@@ -104,12 +104,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes "vercel@$VERCEL_CLI_VERSION" deploy --help \
-            | tee pr600-vercel-deploy-help.txt
+
+          run_vercel_help() {
+            local output="$1"
+            local status
+            shift
+            set +e
+            "$@" --help >"$output" 2>&1
+            status=$?
+            set -e
+            if [[ "$status" -ne 0 && "$status" -ne 2 ]]; then
+              cat "$output" >&2
+              return "$status"
+            fi
+            cat "$output"
+          }
+
+          run_vercel_help \
+            pr600-vercel-deploy-help.txt \
+            npx --yes "vercel@$VERCEL_CLI_VERSION" deploy
           grep -F -- '--skip-domain' pr600-vercel-deploy-help.txt
 
-          npx --yes "vercel@$VERCEL_CLI_VERSION" promote --help \
-            | tee pr600-vercel-promote-help.txt
+          run_vercel_help \
+            pr600-vercel-promote-help.txt \
+            npx --yes "vercel@$VERCEL_CLI_VERSION" promote
           grep -F -- '--timeout' pr600-vercel-promote-help.txt
 
       - name: Build a clean production artifact without deploying
