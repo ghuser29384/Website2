@@ -63,6 +63,10 @@ function routePath(route: string) {
   return new URL(route, "http://127.0.0.1:3210").pathname;
 }
 
+function isCreateFrameRoute(pathname: string) {
+  return pathname === "/create" || pathname === "/trades/new";
+}
+
 async function noRelevantConsoleErrors(page: Page, run: () => Promise<void>) {
   const errors: string[] = [];
   const handler = (message: ConsoleMessage) => {
@@ -114,7 +118,7 @@ async function waitForMeaningfulSurface(page: Page, route: string) {
     return;
   }
 
-  if (pathname === "/trades/new") {
+  if (isCreateFrameRoute(pathname)) {
     const frame = page.locator("iframe").first();
     await expect(frame).toBeVisible({ timeout: 45_000 });
     const frameBody = frame.contentFrame().locator("body");
@@ -184,7 +188,7 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
 
   if (route.startsWith("/complete-verification")) {
     await expect(page.locator(".mt-verify-appbar")).toHaveCSS("background-color", BLACK);
-  } else if (route === "/trades/new") {
+  } else if (isCreateFrameRoute(routePath(route))) {
     const frame = page.locator("iframe").first();
     await expect(frame.contentFrame().locator(".topbar")).toHaveCSS("background-color", BLACK);
   } else {
