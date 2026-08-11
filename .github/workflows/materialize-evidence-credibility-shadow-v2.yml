@@ -79,17 +79,22 @@ jobs:
           with tarfile.open('/tmp/evidence-shadow.tar.gz', 'r:gz') as archive:
               files = {member.name for member in archive.getmembers() if member.isfile()}
           if files != expected_files:
-              raise SystemExit(
-                  f'Archive inventory mismatch. Missing={sorted(expected_files-files)} '
-                  f'Unexpected={sorted(files-expected_files)}'
+              missing = sorted(expected_files - files)
+              unexpected = sorted(files - expected_files)
+              print(
+                  f'::error title=Evidence shadow archive inventory mismatch::'
+                  f'missing={missing} unexpected={unexpected} actual={sorted(files)}'
               )
+              raise SystemExit(1)
           canonical_manifest = ('\n'.join(sorted(files)) + '\n').encode()
           manifest_sha = hashlib.sha256(canonical_manifest).hexdigest()
           expected_manifest_sha = 'f85f93ed560308624773b700e02d7f89db649640383963dac3c177cab60a98ff'
           if manifest_sha != expected_manifest_sha:
-              raise SystemExit(
-                  f'Archive manifest mismatch: expected={expected_manifest_sha} actual={manifest_sha}'
+              print(
+                  f'::error title=Evidence shadow archive manifest mismatch::'
+                  f'expected={expected_manifest_sha} actual={manifest_sha}'
               )
+              raise SystemExit(1)
           PY
 
       - name: Materialize durable files and remove all temporary machinery
