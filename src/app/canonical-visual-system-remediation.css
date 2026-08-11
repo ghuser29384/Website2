@@ -1,10 +1,9 @@
 /*
- * Targeted close-out for defects exposed by the first rendered sitewide audit.
+ * Targeted close-out for defects exposed by rendered sitewide audits.
  *
  * This layer is intentionally narrow and imported after the canonical system.
- * It removes the remaining marketplace capsule geometry and makes the
- * credential-free route audit deterministic without altering information
- * architecture or product behavior.
+ * It removes remaining capsule/card geometry and makes credential-free route
+ * audits deterministic without altering information architecture or behavior.
  */
 
 body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) {
@@ -18,6 +17,28 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) {
 body:has([data-mt-canonical-home="true"]),
 body:has(.mtw-shell) {
   background-image: none !important;
+}
+
+/*
+ * The Home and Walkthrough references use hard editorial geometry. Apply that
+ * same geometry to ordinary controls and semantic content panels everywhere
+ * else, while preserving circular radios, checkboxes, diagrams, and avatars.
+ */
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) :where(
+  button,
+  input:not([type="radio"]):not([type="checkbox"]),
+  select,
+  textarea,
+  article,
+  dialog,
+  [role="dialog"],
+  [class*="button" i],
+  [class*="pill" i],
+  [class*="chip" i],
+  [class*="badge" i]
+) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
 }
 
 /* Marketplace route shells must read as ruled editorial workspaces, not SaaS cards. */
@@ -89,7 +110,60 @@ body:has(.mtw-shell) {
   background: var(--mt-blue-deep) !important;
 }
 
-/* Explicitly preserve hard geometry on the two surfaces flagged by the audit. */
+/* Authentication must not fall back to the rounded glass-card treatment. */
+[data-mt-surface="auth"] :where(
+  article,
+  [class*="brandMark"],
+  [class*="graphicFrame"],
+  [class*="emailReveal"],
+  [class*="providerButton"],
+  [class*="submitButton"],
+  [class*="statusBanner"]
+) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+}
+
+[data-mt-surface="auth"] article {
+  border-color: var(--mt-black) !important;
+  background: var(--mt-paper-strong) !important;
+}
+
+/* Public Goods Fund navigation and mode labels use rules, not capsules. */
+.mpgf-shell :where(.mpgf-mode-strip span, .hub-tabs a) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* The gated and interactive Labs variants share the same hard geometry. */
+[data-mt-surface="mpgf-labs"] :where(
+  [class*="unavailableCard"],
+  [class*="card"],
+  [class*="sidebarCard"],
+  [class*="mechanismTile"],
+  [class*="inputShell"],
+  [class*="drawer"],
+  [class*="reviewModal"],
+  [class*="recommendationBlock"],
+  [class*="simulationMessage"],
+  [class*="progressSteps"] li,
+  [class*="chipRow"] span,
+  input:not([type="radio"]):not([type="checkbox"]),
+  select,
+  textarea,
+  button
+) {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+[data-mt-surface="mpgf-labs"] [class*="unavailableCard"] {
+  border-color: var(--mt-black) !important;
+  background: var(--mt-paper-strong) !important;
+}
+
+/* Explicitly preserve hard geometry on the two surfaces flagged by the first audit. */
 .commitments-center,
 .dashboard-page .v72-private-surface,
 .dashboard-page .dashboard-overview,
