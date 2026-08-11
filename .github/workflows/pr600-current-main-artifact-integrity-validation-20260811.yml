@@ -30,14 +30,23 @@ jobs:
       - name: Check out the exact validation controller
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Guard exact current-main-integrated candidate and narrow diff
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_CANDIDATE_SHA"
           test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_BASE_SHA"
+          git cat-file -e "${EXPECTED_BASE_SHA}^{commit}"
+          git cat-file -e "${EXPECTED_CANDIDATE_SHA}^{commit}"
+          git merge-base --is-ancestor "$EXPECTED_CANDIDATE_SHA" HEAD
+
+          mapfile -t controller_changed < <(
+            git diff --name-only "$EXPECTED_CANDIDATE_SHA..HEAD" | sort
+          )
+          test "${#controller_changed[@]}" -eq 1
+          test "${controller_changed[0]}" = \
+            '.github/workflows/pr600-current-main-artifact-integrity-validation-20260811.yml'
 
           mapfile -t changed < <(git diff --name-only "$EXPECTED_BASE_SHA..$EXPECTED_CANDIDATE_SHA" | sort)
           expected=(
