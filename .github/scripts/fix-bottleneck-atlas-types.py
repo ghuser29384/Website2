@@ -17,12 +17,8 @@ replace_once(
   environment: Pick<NodeJS.ProcessEnv, "OPPORTUNITY_SYNTHESIS_ENABLED"> = process.env,
 ) {
 ''',
-    '''type OpportunitySynthesisEnvironment = {
-  OPPORTUNITY_SYNTHESIS_ENABLED?: string;
-};
-
-export function isOpportunitySynthesisEnabled(
-  environment: OpportunitySynthesisEnvironment = process.env,
+    '''export function isOpportunitySynthesisEnabled(
+  environment: Record<string, string | undefined> = process.env,
 ) {
 ''',
 )
