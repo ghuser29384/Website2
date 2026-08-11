@@ -150,8 +150,20 @@ async function waitForMeaningfulSurface(page: Page, route: string) {
   }
 
   if (pathname === "/walkthrough") {
-    await expect(page.locator(".mtw-shell")).toBeVisible({ timeout: 45_000 });
-    await expect(page.locator(".mtw-labbar")).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByRole("main")).toBeVisible({ timeout: 45_000 });
+    await expect(
+      page.getByRole("tablist", { exact: true, name: "Interactive walkthrough concepts" }),
+    ).toBeVisible({ timeout: 45_000 });
+    await expect(page.getByRole("tab", { name: /^01\s*Third option$/ })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(page.getByRole("heading", { exact: true, level: 1, name: "What do you value?" })).toBeVisible({
+      timeout: 45_000,
+    });
+    await expect(page.getByRole("button", { exact: true, name: "Restart this concept" })).toBeVisible({
+      timeout: 45_000,
+    });
     await waitForTextLength(page, 100);
     return;
   }
@@ -332,6 +344,7 @@ test("preserves the canonical Home and Walkthrough references", async ({ page },
   await page.goto("/walkthrough", { timeout: 60_000, waitUntil: "domcontentloaded" });
   await waitForMeaningfulSurface(page, "/walkthrough");
   await expectNoFrameworkOverlay(page, "/walkthrough");
+  await expect(page.locator("body")).toHaveCSS("background-color", BLACK);
   await page.screenshot({ path: testInfo.outputPath("reference-walkthrough.png"), fullPage: false });
 });
 
