@@ -32,6 +32,7 @@ env:
   VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
   RELEASE_PREVIEW_BRANCH: release/vercel-preview
   VERCEL_CLI_VERSION: 50.38.1
+  CANONICAL_ORIGIN: https://www.moraltrade.org
 
 jobs:
   release:
@@ -128,12 +129,13 @@ jobs:
             --environment="${{ inputs.target }}" \
             --token="$VERCEL_TOKEN"
 
-      - name: Build the Vercel artifact on GitHub Actions compute
+      - name: Build a clean Vercel artifact on GitHub Actions compute
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
+          rm -rf .next .vercel/output
           if [[ '${{ inputs.target }}' == 'production' ]]; then
             npx --yes "vercel@$VERCEL_CLI_VERSION" build \
               --prod \
@@ -143,7 +145,37 @@ jobs:
               --token="$VERCEL_TOKEN"
           fi
 
-      - name: Upload the already-built artifact exactly once
+      - name: Prove every prebuilt public asset exactly matches source
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest='vercel-prebuilt-public-assets.sha256'
+          count_file='vercel-prebuilt-public-assets.count'
+          : > "$manifest"
+          count=0
+
+          while IFS= read -r -d '' source; do
+            relative="${source#public/}"
+            built=".vercel/output/static/$relative"
+            if [[ ! -f "$built" ]]; then
+              echo "Missing prebuilt public asset: $relative" >&2
+              exit 1
+            fi
+            if ! cmp --silent "$source" "$built"; then
+              echo "Prebuilt public asset differs from source: $relative" >&2
+              sha256sum "$source" "$built" >&2
+              exit 1
+            fi
+            sha256sum "$source" | sed "s#  public/#  #" >> "$manifest"
+            count=$((count + 1))
+          done < <(find public -type f -print0 | sort -z)
+
+          test "$count" -gt 0
+          printf '%s\n' "$count" | tee "$count_file"
+          sort -o "$manifest" "$manifest"
+          sha256sum "$manifest" | tee vercel-prebuilt-public-manifest.sha256
+
+      - name: Upload the verified prebuilt artifact exactly once
         id: deploy
         shell: bash
         env:
@@ -154,15 +186,255 @@ jobs:
             deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
               --prebuilt \
               --prod \
+              --skip-domain \
+              --no-color \
               --token="$VERCEL_TOKEN")"
           else
             deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
               --prebuilt \
+              --no-color \
               --token="$VERCEL_TOKEN")"
           fi
           test -n "$deployment_url"
           echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
-          printf 'Deployment URL: %s\n' "$deployment_url"
+          printf '%s\n' "$deployment_url" | tee vercel-deployment-url.txt
+
+      - name: Guard immutable deployment metadata
+        id: deployment
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOYMENT_URL"
+          deployment_key="${DEPLOYMENT_URL#https://}"
+          deployment_key="${deployment_key%/}"
+
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$deployment_key?teamId=$VERCEL_ORG_ID" \
+            > vercel-deployment.json
+
+          jq -e --arg project "$VERCEL_PROJECT_ID" \
+            '(.projectId // .project.id // "") == $project' \
+            vercel-deployment.json >/dev/null
+          jq -e --arg sha "$EXPECTED_SHA" \
+            '.meta.githubCommitSha == $sha' \
+            vercel-deployment.json >/dev/null
+          jq -e '(.readyState // .state // "") == "READY"' \
+            vercel-deployment.json >/dev/null
+
+          if [[ '${{ inputs.target }}' == 'production' ]]; then
+            jq -e '.target == "production"' vercel-deployment.json >/dev/null
+          else
+            jq -e '(.target // "") != "production"' vercel-deployment.json >/dev/null
+          fi
+
+          deployment_id="$(jq -r '.id // .uid // empty' vercel-deployment.json)"
+          test -n "$deployment_id"
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$deployment_id" | tee vercel-deployment-id.txt
+
+      - name: Prove a production release is staged before verification
+        if: ${{ inputs.target == 'production' }}
+        shell: bash
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOYMENT_ID"
+          : > vercel-prepromotion-alias-ownership.txt
+
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            alias_key="${alias_name//./-}"
+            alias_path="vercel-prepromotion-alias-$alias_key.json"
+            alias_api="https://api.vercel.com/v4/aliases/$alias_name?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID"
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "$alias_api" \
+              > "$alias_path"
+            resolved_deployment="$(jq -r '.deploymentId // .deployment.id // .deployment.uid // empty' "$alias_path")"
+            test -n "$resolved_deployment"
+            if [[ "$resolved_deployment" == "$DEPLOYMENT_ID" ]]; then
+              echo "Canonical alias moved before immutable verification: $alias_name" >&2
+              exit 1
+            fi
+            printf '%s %s\n' "$alias_name" "$resolved_deployment" \
+              >> vercel-prepromotion-alias-ownership.txt
+          done
+
+      - name: Verify critical assets on the immutable deployment
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOYMENT_URL"
+          mkdir -p vercel-deployed-assets
+          : > vercel-deployed-static-assets.sha256
+
+          assets=(
+            moral-trade-live-create-router.js
+            moral-trade-live-command-center.js
+          )
+
+          for relative in "${assets[@]}"; do
+            source="public/$relative"
+            output="vercel-deployed-assets/$relative"
+            npx --yes "vercel@$VERCEL_CLI_VERSION" curl \
+              "/$relative?integrity=$EXPECTED_SHA-$GITHUB_RUN_ID" \
+              --deployment="$DEPLOYMENT_URL" \
+              --token="$VERCEL_TOKEN" \
+              > "$output"
+            if ! cmp --silent "$source" "$output"; then
+              echo "Immutable deployment asset differs from source: $relative" >&2
+              sha256sum "$source" "$output" >&2
+              exit 1
+            fi
+            sha256sum "$output" >> vercel-deployed-static-assets.sha256
+          done
+
+      - name: Promote the verified staged production deployment to canonical aliases
+        if: ${{ inputs.target == 'production' }}
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOYMENT_URL"
+          npx --yes "vercel@$VERCEL_CLI_VERSION" promote \
+            "$DEPLOYMENT_URL" \
+            --yes \
+            --timeout=5m \
+            --no-color \
+            --token="$VERCEL_TOKEN" \
+            | tee vercel-production-promotion.txt
+
+      - name: Verify canonical production alias ownership and critical assets
+        if: ${{ inputs.target == 'production' }}
+        shell: bash
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$DEPLOYMENT_ID"
+          aliases_owned=false
+
+          for attempt in $(seq 1 60); do
+            aliases_owned=true
+            : > vercel-production-alias-ownership.txt
+
+            for alias_name in moraltrade.org www.moraltrade.org; do
+              alias_key="${alias_name//./-}"
+              alias_path="vercel-production-alias-$alias_key.json"
+              alias_api="https://api.vercel.com/v4/aliases/$alias_name?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID"
+
+              if ! curl --fail --silent --show-error \
+                -H "Authorization: Bearer $VERCEL_TOKEN" \
+                "$alias_api" \
+                > "$alias_path"; then
+                aliases_owned=false
+                break
+              fi
+
+              resolved_alias="$(jq -r '.alias // empty' "$alias_path")"
+              resolved_project="$(jq -r '.projectId // empty' "$alias_path")"
+              resolved_deployment="$(jq -r '.deploymentId // .deployment.id // .deployment.uid // empty' "$alias_path")"
+
+              if [[ "$resolved_alias" != "$alias_name" ]] \
+                || [[ "$resolved_project" != "$VERCEL_PROJECT_ID" ]] \
+                || [[ "$resolved_deployment" != "$DEPLOYMENT_ID" ]]; then
+                aliases_owned=false
+                break
+              fi
+
+              printf '%s %s\n' "$alias_name" "$resolved_deployment" \
+                >> vercel-production-alias-ownership.txt
+            done
+
+            if [[ "$aliases_owned" == true ]]; then
+              break
+            fi
+            sleep 5
+          done
+
+          if [[ "$aliases_owned" != true ]]; then
+            echo "Canonical aliases did not converge to deployment $DEPLOYMENT_ID." >&2
+            exit 1
+          fi
+
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID" \
+            > vercel-promoted-deployment.json
+          jq -e \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$EXPECTED_SHA" \
+            --arg deployment "$DEPLOYMENT_ID" '
+              ((.id // .uid // "") == $deployment)
+              and ((.projectId // .project.id // "") == $project)
+              and (.target == "production")
+              and ((.readyState // .state // "") == "READY")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitSha == $sha)
+            ' vercel-promoted-deployment.json >/dev/null
+
+          mkdir -p vercel-canonical-assets
+          : > vercel-canonical-static-assets.sha256
+          assets=(
+            moral-trade-live-create-router.js
+            moral-trade-live-command-center.js
+          )
+
+          for relative in "${assets[@]}"; do
+            source="public/$relative"
+            output="vercel-canonical-assets/$relative"
+            verified=false
+
+            for attempt in $(seq 1 60); do
+              nonce="$EXPECTED_SHA-$GITHUB_RUN_ID-$attempt"
+              if curl --fail --silent --show-error \
+                -H 'Cache-Control: no-cache' \
+                "$CANONICAL_ORIGIN/$relative?integrity=$nonce" \
+                -o "$output"; then
+                if cmp --silent "$source" "$output"; then
+                  verified=true
+                  break
+                fi
+              fi
+              sleep 5
+            done
+
+            if [[ "$verified" != true ]]; then
+              echo "Canonical production asset did not converge to the exact source: $relative" >&2
+              sha256sum "$source" "$output" >&2 || true
+              exit 1
+            fi
+            sha256sum "$output" >> vercel-canonical-static-assets.sha256
+          done
+
+      - name: Upload immutable release-integrity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-vercel-release-integrity-${{ github.run_id }}
+          path: |
+            vercel-*.txt
+            vercel-*.json
+            vercel-*.sha256
+            vercel-deployment-url.txt
+            vercel-deployed-assets
+            vercel-canonical-assets
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Record immutable release evidence
         shell: bash
@@ -176,5 +448,13 @@ jobs:
             echo "- Commit: \`${{ inputs.expected_sha }}\`"
             echo "- Project: \`$VERCEL_PROJECT_ID\`"
             echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
+            echo "- Deployment ID: \`${{ steps.deployment.outputs.deployment_id }}\`"
             echo '- Build location: GitHub Actions (`vercel build` + `vercel deploy --prebuilt`)'
+            echo '- Prebuilt integrity: every `public/` file was byte-identical in `.vercel/output/static/` before upload'
+            echo '- Deployed integrity: critical Command Center assets matched source through authenticated `vercel curl`'
+            if [[ '${{ inputs.target }}' == 'production' ]]; then
+              echo '- Promotion: the verified staged production deployment was explicitly promoted with `vercel promote`'
+              echo '- Alias ownership: both `moraltrade.org` and `www.moraltrade.org` resolved to the exact deployment ID'
+              echo '- Canonical integrity: critical assets on `www.moraltrade.org` matched source after promotion'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
