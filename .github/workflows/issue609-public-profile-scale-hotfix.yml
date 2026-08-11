@@ -1,0 +1,239 @@
+name: Issue 609 public-profile scale hotfix
+
+on:
+  push:
+    branches:
+      - ops/issue609-public-profile-scale-hotfix-20260811
+    paths:
+      - .github/scripts/patch-issue609-public-profile-scale.py
+      - .github/workflows/issue609-public-profile-scale-hotfix.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: issue609-public-profile-scale-hotfix
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/issue609-public-profile-scale-hotfix-20260811
+  BASE_SHA: 4c013d87990a5f5bfed36662b2cbace81843a740
+  PRODUCT_BRANCH: fix/issue609-public-profile-scale-20260811
+  ISSUE_NUMBER: "609"
+
+jobs:
+  patch-test-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out immutable controller
+        uses: actions/checkout@v4
+        with:
+          ref: ops/issue609-public-profile-scale-hotfix-20260811
+          path: controller
+          fetch-depth: 1
+
+      - name: Check out exact current main candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 4c013d87990a5f5bfed36662b2cbace81843a740
+          path: candidate
+          fetch-depth: 0
+
+      - name: Guard repository and exact main base
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
+          test "$(git -C candidate rev-parse HEAD)" = "$BASE_SHA"
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$BASE_SHA"
+          python3 -m py_compile controller/.github/scripts/patch-issue609-public-profile-scale.py
+
+      - name: Apply bounded public-profile repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp controller/.github/scripts/patch-issue609-public-profile-scale.py candidate/.github/scripts/patch-issue609-public-profile-scale.py
+          (
+            cd candidate
+            python3 .github/scripts/patch-issue609-public-profile-scale.py
+            rm .github/scripts/patch-issue609-public-profile-scale.py
+            python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/lib/public-profile-scale-contract.test.ts')
+          source = path.read_text(encoding='utf-8')
+          old = 'assert.match(profilePage, /Showing \\{/);'
+          new = 'assert.match(profilePage, /Showing \\$\\{/);'
+          if source.count(old) != 1:
+              raise SystemExit('Expected one generated Showing contract assertion.')
+          path.write_text(source.replace(old, new, 1), encoding='utf-8')
+          PY
+            git diff --check
+            git diff --name-only "$BASE_SHA" | sort > /tmp/issue609-files.txt
+          )
+          cat > /tmp/issue609-expected-files.txt <<'FILES'
+          src/app/api/credibility/profile/[profileId]/route.ts
+          src/app/people/[profileId]/credibility/page.tsx
+          src/app/people/[profileId]/page.tsx
+          src/lib/app-data.ts
+          src/lib/public-profile-offers.test.ts
+          src/lib/public-profile-offers.ts
+          src/lib/public-profile-scale-contract.test.ts
+          FILES
+          diff -u /tmp/issue609-expected-files.txt /tmp/issue609-files.txt
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Install exact dependencies
+        working-directory: candidate
+        shell: bash
+        run: npm ci
+
+      - name: Run focused scale and source contracts
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/public-profile-offers.test.ts \
+            src/lib/public-profile-scale-contract.test.ts \
+            src/lib/public-profile-trust.test.ts \
+            src/lib/public-route-smoke.test.ts
+
+      - name: Run complete repository tests
+        working-directory: candidate
+        shell: bash
+        run: npm test
+
+      - name: Run ESLint
+        working-directory: candidate
+        shell: bash
+        run: npm run lint -- --quiet
+
+      - name: Run TypeScript
+        working-directory: candidate
+        shell: bash
+        run: npx tsc --noEmit
+
+      - name: Run production build
+        working-directory: candidate
+        shell: bash
+        run: npm run build
+
+      - name: Publish exact tested product branch and draft pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        working-directory: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq .commit.sha)" = "$BASE_SHA"
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$PRODUCT_BRANCH"
+          git add \
+            'src/app/api/credibility/profile/[profileId]/route.ts' \
+            'src/app/people/[profileId]/credibility/page.tsx' \
+            'src/app/people/[profileId]/page.tsx' \
+            src/lib/app-data.ts \
+            src/lib/public-profile-offers.ts \
+            src/lib/public-profile-offers.test.ts \
+            src/lib/public-profile-scale-contract.test.ts
+          git commit -m 'Bound public-profile offer hydration and restore credibility routes'
+          git push --force-with-lease origin "HEAD:refs/heads/${PRODUCT_BRANCH}"
+
+          existing_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$PRODUCT_BRANCH" --state all --json number --jq '.[0].number // empty')"
+          if [[ -z "$existing_pr" ]]; then
+            gh pr create \
+              --repo "$GITHUB_REPOSITORY" \
+              --base main \
+              --head "$PRODUCT_BRANCH" \
+              --draft \
+              --title 'Restore high-volume public profile and credibility routes' \
+              --body-file - <<'BODY'
+          ## Summary
+
+          Fixes #609 by separating lightweight public-profile identity reads from offer-list hydration, paging the public profile's open offers, and bounding every PostgREST `.in(...)` hydration batch.
+
+          ## Production incident
+
+          The canonical production profile `9e51db47-92d1-4d75-80ce-cf10de1121f1` owns 982 open offers. Before this patch, the public profile, credibility page, and credibility API all invoked the complete unbounded offer graph. The API returns HTTP 500 and the pages contain server-component error digests with Supabase `Bad Request` errors.
+
+          ## Changes
+
+          - Adds a lightweight `getPublicProfileSummary` path for metadata and credibility surfaces.
+          - Pages public profile offers at 24 records, clamps out-of-range requests, and exposes Previous/Next navigation with truthful visible ranges.
+          - Chunks offer hydration at 100 records so no caller can create an unbounded PostgREST filter URL.
+          - Replaces full public-comment row loading with an exact head count.
+          - Adds a 1,000-offer chunk regression and source-boundary contracts.
+
+          ## Safety boundary
+
+          This patch does not delete or rewrite offers and does not change payment, settlement, evidence, reliability, privacy, or execution semantics.
+
+          ## Verification completed by the publishing controller
+
+          - Focused public-profile scale, trust, and public-route tests
+          - Complete repository test suite
+          - ESLint
+          - TypeScript
+          - Production build
+
+          ## Release classification
+
+          - [x] Runtime-affecting
+          - [ ] Repository-only
+          - [ ] Mixed or uncertain
+
+          ## Release disposition
+
+          - [ ] Explicit production release and post-release smoke required
+          - [ ] Merge after repository gates; no manual production promotion required
+          - [ ] Ordinary automatic `main` deployment may occur, but it is not necessary to fix production
+          - [x] Do not merge or deploy yet; protected Preview reproduction and acceptance remain
+
+          ## Remaining release work
+
+          1. Rebase/synchronize if `main` advances.
+          2. Run exact-head repository gates.
+          3. Release the exact candidate to protected Preview through the permanent Vercel workflow.
+          4. Verify the affected API and public/credibility pages on desktop and 390×844 mobile, including page 2 of offers and clean logs.
+          5. Merge with an exact-head guard, explicitly release the merged SHA to production, and inspect the exact log window.
+          BODY
+            existing_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$PRODUCT_BRANCH" --state open --json number --jq '.[0].number')"
+          fi
+
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Published the exact tested hotfix as draft PR #${existing_pr} from base \`${BASE_SHA}\`. The controller passed focused scale/trust/public-route tests, the complete repository suite, ESLint, TypeScript, and the production build before pushing. No database record, deployment, alias, or production setting was changed."
+
+      - name: Record failure without mutating product state
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "Issue #609 hotfix controller run \`${GITHUB_RUN_ID}\` failed. No product branch was pushed unless all focused tests, the complete repository suite, ESLint, TypeScript, and the production build had passed. Inspect the workflow log for the exact blocker."
+
+      - name: Upload controller evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue609-public-profile-scale-${{ github.run_id }}
+          path: |
+            /tmp/issue609-files.txt
+            /tmp/issue609-expected-files.txt
+          if-no-files-found: warn
+          retention-days: 30
