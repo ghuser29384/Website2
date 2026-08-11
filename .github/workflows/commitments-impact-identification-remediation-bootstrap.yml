@@ -1,0 +1,148 @@
+name: Apply Commitments impact-identification protocol remediation
+
+on:
+  push:
+    branches:
+      - research/commitments-impact-identification-20260811
+    paths:
+      - ".github/workflows/commitments-impact-identification-remediation-bootstrap.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: commitments-impact-identification-remediation-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Apply exact review-remediation bundle and remove bootstrap transport
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: research/commitments-impact-identification-20260811
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify exact staging scope
+        shell: bash
+        env:
+          ORIGINAL_PROTOCOL_HEAD: e630d6bf0927a456e39e81b7787d3b60fcfb15c3
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$ORIGINAL_PROTOCOL_HEAD" HEAD
+          git diff --name-only "$ORIGINAL_PROTOCOL_HEAD" HEAD | sort > /tmp/staging-files.txt
+
+          cat > /tmp/expected-staging-files.txt <<'FILES'
+          .github/remediation/commitments-impact-identification.bundle.part00
+          .github/remediation/commitments-impact-identification.bundle.part01
+          .github/remediation/commitments-impact-identification.bundle.part02
+          .github/remediation/commitments-impact-identification.bundle.part03
+          .github/remediation/commitments-impact-identification.bundle.part04
+          .github/remediation/commitments-impact-identification.bundle.part05
+          .github/remediation/commitments-impact-identification.bundle.part06
+          .github/remediation/commitments-impact-identification.bundle.part07
+          .github/workflows/commitments-impact-identification-remediation-bootstrap.yml
+          FILES
+          sort -o /tmp/expected-staging-files.txt /tmp/expected-staging-files.txt
+          diff -u /tmp/expected-staging-files.txt /tmp/staging-files.txt
+
+      - name: Merge exact current main
+        id: base
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base_sha="$(git rev-parse origin/main)"
+          printf 'base_sha=%s\n' "$base_sha" >> "$GITHUB_OUTPUT"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-ff --no-edit origin/main
+
+      - name: Verify and unpack exact remediation bundle
+        shell: bash
+        env:
+          EXPECTED_BUNDLE_SHA256: a52ff5ea3306f08ae35a497e4e99ccd87922acd06591e304aa507e79c14ec9a3
+        run: |
+          set -euo pipefail
+          cat .github/remediation/commitments-impact-identification.bundle.part* \
+            > /tmp/commitments-impact-identification-remediation.b64
+          base64 --decode \
+            /tmp/commitments-impact-identification-remediation.b64 \
+            > /tmp/commitments-impact-identification-remediation.tar.gz
+          actual_sha="$(sha256sum /tmp/commitments-impact-identification-remediation.tar.gz | awk '{print $1}')"
+          test "$actual_sha" = "$EXPECTED_BUNDLE_SHA256" || {
+            echo "Remediation bundle SHA-256 mismatch: $actual_sha" >&2
+            exit 1
+          }
+          mkdir -p /tmp/commitments-impact-identification-remediation
+          tar -xzf /tmp/commitments-impact-identification-remediation.tar.gz \
+            -C /tmp/commitments-impact-identification-remediation
+          cp -a /tmp/commitments-impact-identification-remediation/. .
+
+      - name: Remove superseded protocol and bootstrap transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f \
+            docs/commitments/impact-identification/causal-identification-and-calibration-preregistration-v1.md \
+            .github/workflows/commitments-impact-identification-remediation-bootstrap.yml
+          rm -rf .github/remediation
+
+      - name: Validate protocol schema, templates, mapping, and fail-closed cases
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/validate-commitments-impact-identification.mjs \
+            2>&1 | tee /tmp/protocol-validation.log
+          node scripts/validate-commitments-impact-identification.mjs --self-test \
+            2>&1 | tee /tmp/protocol-negative-self-tests.log
+
+      - name: Stage and verify exact final repository-only diff
+        shell: bash
+        env:
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          git add -A
+          git diff --cached --check "$BASE_SHA"
+          git diff --cached --name-only "$BASE_SHA" | sort > /tmp/actual-final-files.txt
+
+          cat > /tmp/expected-final-files.txt <<'FILES'
+          .github/workflows/commitments-impact-identification-gates.yml
+          docs/commitments/impact-identification/causal-identification-and-calibration-preregistration-v2.md
+          docs/commitments/impact-identification/evidence-to-product-mapping.v2.json
+          docs/commitments/impact-identification/master-protocol.v2.json
+          docs/commitments/impact-identification/protocol.schema.json
+          docs/commitments/impact-identification/study-templates/co_fund.v2.json
+          docs/commitments/impact-identification/study-templates/donation_redirect.v2.json
+          docs/commitments/impact-identification/study-templates/donation_upgrade.v2.json
+          docs/commitments/impact-identification/study-templates/threshold_funding.v2.json
+          docs/commitments/impact-identification/study-templates/threshold_sign_on.v2.json
+          docs/commitments/impact-identification/study-templates/trade.v2.json
+          scripts/validate-commitments-impact-identification.mjs
+          FILES
+          sort -o /tmp/expected-final-files.txt /tmp/expected-final-files.txt
+          diff -u /tmp/expected-final-files.txt /tmp/actual-final-files.txt
+
+      - name: Commit exact remediation and push only to unchanged branch
+        shell: bash
+        env:
+          BRANCH: research/commitments-impact-identification-20260811
+          BASE_SHA: ${{ steps.base.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          git diff --cached --check "$BASE_SHA"
+          git diff --cached --name-only "$BASE_SHA" | sort > /tmp/staged-final-files.txt
+          diff -u /tmp/expected-final-files.txt /tmp/staged-final-files.txt
+
+          git commit -m "Remediate Commitments causal-identification protocol review"
+
+          git fetch origin "$BRANCH"
+          test "$(git rev-parse "origin/$BRANCH")" = "$GITHUB_SHA" || {
+            echo "Branch advanced during remediation; refusing to overwrite it." >&2
+            exit 1
+          }
+          git push origin "HEAD:$BRANCH"
