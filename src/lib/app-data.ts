@@ -20,6 +20,10 @@ import {
   type BackgroundRequesterOpportunityBriefCard,
 } from "@/lib/background-opportunity-briefs";
 import { isMissingOptionalLegacyAgreementRelation } from "@/lib/optional-legacy-agreement-relations";
+import {
+  chunkForPostgrestIn,
+  PUBLIC_PROFILE_OFFERS_PAGE_SIZE,
+} from "@/lib/public-profile-offers";
 import type { Database } from "@/lib/supabase/database.types";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
@@ -390,6 +394,7 @@ export interface DashboardDataResult {
 export interface PublicProfilePageData {
   profile: PublicProfileSummary | null;
   offers: OfferRecord[];
+  offersPage: PaginatedResult<OfferRecord>;
   profileRecommendations: OfferRecommendationRecord[];
   authoredCommentCount: number;
 }
@@ -831,7 +836,26 @@ async function getProfileSummaryMap(
   );
 }
 
+export async function getPublicProfileSummary(
+  profileId: string,
+  viewerId?: string | null,
+) {
+  const profileMap = await getProfileSummaryMap(viewerId, [profileId]);
+  return profileMap.get(profileId) ?? null;
+}
+
 async function hydrateOffers(
+  offers: OfferRow[],
+  viewerId?: string | null,
+): Promise<OfferRecord[]> {
+  const hydrated: OfferRecord[] = [];
+  for (const offerChunk of chunkForPostgrestIn(offers)) {
+    hydrated.push(...(await hydrateOffersChunk(offerChunk, viewerId)));
+  }
+  return hydrated;
+}
+
+async function hydrateOffersChunk(
   offers: OfferRow[],
   viewerId?: string | null,
 ): Promise<OfferRecord[]> {
@@ -1982,34 +2006,88 @@ export async function listProfileOffers(profileId: string, viewerId?: string | n
   return hydrateOffers((data ?? []) as OfferRow[], viewerId);
 }
 
-export async function getPublicProfilePageData(profileId: string, viewerId?: string | null) {
+export async function listPublicProfileOffersPage(
+  profileId: string,
+  viewerId?: string | null,
+  page = 1,
+  pageSize = PUBLIC_PROFILE_OFFERS_PAGE_SIZE,
+): Promise<PaginatedResult<OfferRecord>> {
+  const normalizedPage = normalizePage(page);
+  if (!hasSupabaseEnv()) {
+    return buildPaginatedResult([], normalizedPage, pageSize);
+  }
+
+  const offset = (normalizedPage - 1) * pageSize;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("offers")
+    .select("*")
+    .eq("owner_id", profileId)
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: true })
+    .range(offset, offset + pageSize);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const hydrated = await hydrateOffers((data ?? []) as OfferRow[], viewerId);
+  return buildPaginatedResult(hydrated, normalizedPage, pageSize);
+}
+
+export async function getPublicProfilePageData(
+  profileId: string,
+  viewerId?: string | null,
+  requestedOfferPage = 1,
+) {
+  const requestedPage = normalizePage(requestedOfferPage);
   if (!hasSupabaseEnv()) {
     return {
       profile: null,
       offers: [],
+      offersPage: buildPaginatedResult([], requestedPage, PUBLIC_PROFILE_OFFERS_PAGE_SIZE),
       profileRecommendations: [],
       authoredCommentCount: 0,
     } satisfies PublicProfilePageData;
   }
 
-  const supabase = await createClient();
-  const [profileMap, offers, recommendations, { data: comments, error: commentsError }] =
-    await Promise.all([
-      getProfileSummaryMap(viewerId, [profileId]),
-      listProfileOffers(profileId, viewerId),
-      listProfileRecommendations(profileId),
-      supabase.from("offer_comments").select("*").eq("author_id", profileId),
-    ]);
+  const profile = await getPublicProfileSummary(profileId, viewerId);
+  if (!profile) {
+    return {
+      profile: null,
+      offers: [],
+      offersPage: buildPaginatedResult([], requestedPage, PUBLIC_PROFILE_OFFERS_PAGE_SIZE),
+      profileRecommendations: [],
+      authoredCommentCount: 0,
+    } satisfies PublicProfilePageData;
+  }
 
-  if (commentsError) {
-    throw new Error(commentsError.message);
+  const maximumPage = Math.max(
+    1,
+    Math.ceil(profile.offerCount / PUBLIC_PROFILE_OFFERS_PAGE_SIZE),
+  );
+  const offerPage = Math.min(requestedPage, maximumPage);
+  const supabase = await createClient();
+  const [offersPage, recommendations, commentsResult] = await Promise.all([
+    listPublicProfileOffersPage(profileId, viewerId, offerPage),
+    listProfileRecommendations(profileId),
+    supabase
+      .from("offer_comments")
+      .select("id", { count: "exact", head: true })
+      .eq("author_id", profileId),
+  ]);
+
+  if (commentsResult.error) {
+    throw new Error(commentsResult.error.message);
   }
 
   return {
-    profile: profileMap.get(profileId) ?? null,
-    offers,
+    profile,
+    offers: offersPage.items,
+    offersPage,
     profileRecommendations: recommendations,
-    authoredCommentCount: (comments ?? []).length,
+    authoredCommentCount: commentsResult.count ?? 0,
   } satisfies PublicProfilePageData;
 }
 
