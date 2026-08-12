@@ -1,5 +1,0 @@
-One-use exact-head QA trigger for PR #618.
-
-Post-repair validation target: 4d15a4925bdee5de5e56a581ef4b9d43ad786a6b.
-
-This file changes no application, database, payment, authorization, deployment, or production behavior. Remove it after the exact-head source, build, and rendered evidence is preserved.
