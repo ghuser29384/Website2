@@ -168,7 +168,7 @@ async function waitForMeaningfulSurface(page: Page, route: string) {
     return;
   }
 
-  await expect(page.locator("h1, h2, [role='heading']").first()).toBeVisible({ timeout: 45_000 });
+  await expect(page.getByRole("heading").first()).toBeVisible({ timeout: 45_000 });
   await waitForTextLength(page, 50);
 }
 
