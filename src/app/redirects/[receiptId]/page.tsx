@@ -169,7 +169,7 @@ export default async function PublicDonationRedirectReceiptPage({
         {...getTopbarActions(false)}
         showSearch={false}
       />
-      <main className={styles.page} id="main-content" tabIndex={-1}>
+      <main className={styles.page} data-mt-surface="public-receipt" id="main-content" tabIndex={-1}>
         <article className={styles.receipt}>
           <header className={styles.hero}>
             <div>
