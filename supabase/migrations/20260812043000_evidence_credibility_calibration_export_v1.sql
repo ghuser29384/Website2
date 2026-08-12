@@ -374,94 +374,102 @@ begin
       row_number() over (
         order by tokenized.decision_finalized_at, tokenized.observation_token
       )::integer as export_row_number,
-      jsonb_build_object(
-        'schemaVersion', 'v1-blind-audit-jsonl',
-        'observationToken', tokenized.observation_token,
-        'agreementGroupToken', tokenized.agreement_group_token,
-        'decisionChainGroupToken', tokenized.decision_chain_group_token,
-        'subjectGroupToken', tokenized.subject_group_token,
-        'counterpartyGroupToken', tokenized.counterparty_group_token,
-        'participantPairGroupToken', tokenized.participant_pair_group_token,
-        'originalReviewerGroupToken', tokenized.original_reviewer_group_token,
-        'auditReviewerGroupToken', tokenized.audit_reviewer_group_token,
-        'samplingRunGroupToken', tokenized.sampling_run_group_token,
-        'targetType', tokenized.target_type,
-        'dimension', tokenized.dimension,
-        'category', tokenized.category,
-        'role', tokenized.role,
-        'modelVersion', tokenized.model_version,
-        'samplingPolicyVersion', tokenized.sampling_policy_version,
-        'samplingSeedCommitment', tokenized.seed_commitment,
-        'samplingStratum', tokenized.sampling_stratum,
-        'samplingKind', case
-          when tokenized.selected_reason = 'random_selected' then 'random'
-          else 'mandatory'
-        end,
-        'inclusionProbability', tokenized.inclusion_probability,
-        'samplingRandomUnit', tokenized.random_unit,
-        'selectedReason', tokenized.selected_reason,
-        'sourcePathway', case
-          when tokenized.original_finality_reason = 'administrative_correction'
-            then 'administrative_correction'
-          when tokenized.original_adjudication_class = 'appeal_review_final'
-            or tokenized.original_finality_reason in ('appeal_affirmed', 'appeal_overturned')
-            then 'appeal'
-          when tokenized.original_provenance_class = 'authenticated_provider'
-            or tokenized.original_adjudication_class = 'provider_established'
-            then 'provider_reconciliation'
-          else 'terminal_review'
-        end,
-        'originalStatus', tokenized.original_status,
-        'originalOutcome', tokenized.original_outcome,
-        'originalConfidenceBand', tokenized.original_confidence_band,
-        'originalProvenanceClass', tokenized.original_provenance_class,
-        'originalAdjudicationClass', tokenized.original_adjudication_class,
-        'originalFinalityReason', tokenized.original_finality_reason,
-        'originalIntegrityFinding', tokenized.original_integrity_finding,
-        'originalResponsivenessFinding', tokenized.original_responsiveness_finding,
-        'originalDisputeConductFinding', tokenized.original_dispute_conduct_finding,
-        'additionalityStatus', 'not_evaluated',
-        'provenanceWeight', round(tokenized.provenance_weight, 8),
-        'decisionConfidenceWeight', round(tokenized.decision_confidence_weight, 8),
-        'contextSimilarity', round(tokenized.context_similarity, 8),
-        'stakeWeight', round(tokenized.stake_weight, 8),
-        'counterpartySequenceAtDecision', tokenized.counterparty_sequence_at_decision,
-        'recencyHalfLifeDays', tokenized.recency_half_life_days,
-        'eventAgeDaysAtDecision', round(tokenized.event_age_days_at_decision, 6),
-        'recencyWeightAtDecision', round(tokenized.recency_weight_at_decision, 8),
-        'provisionalEventWeightAtDecision', case
-          when tokenized.original_status = 'eligible' then round(
-            tokenized.recency_weight_at_decision
-            * tokenized.provenance_weight
-            * tokenized.decision_confidence_weight
-            * (1::numeric / sqrt(tokenized.counterparty_sequence_at_decision::numeric))
-            * tokenized.context_similarity
-            * tokenized.stake_weight,
-            8
-          )
-          else null
-        end,
-        'decisionDateUtc', to_char(
-          tokenized.decision_finalized_at at time zone 'UTC',
-          'YYYY-MM-DD'
-        ),
-        'auditCompletedDateUtc', to_char(
-          tokenized.completed_at at time zone 'UTC',
-          'YYYY-MM-DD'
-        ),
-        'predictionSnapshotHash', tokenized.snapshot_hash,
-        'labelTier', tokenized.label_tier,
-        'blindingMode', tokenized.blinding_mode,
-        'blindingComplete', tokenized.blinding_complete,
-        'finalStatus', tokenized.final_status,
-        'finalOutcome', tokenized.final_outcome,
-        'finalFinalityReason', tokenized.final_finality_reason,
-        'finalIntegrityFinding', tokenized.final_integrity_finding,
-        'finalResponsivenessFinding', tokenized.final_responsiveness_finding,
-        'finalDisputeConductFinding', tokenized.final_dispute_conduct_finding,
-        'materiallyUpheld', tokenized.materially_upheld,
-        'absoluteError', tokenized.absolute_error,
-        'labelHash', tokenized.label_hash
+      (
+        jsonb_build_object(
+          'schemaVersion', 'v1-blind-audit-jsonl',
+          'observationToken', tokenized.observation_token,
+          'agreementGroupToken', tokenized.agreement_group_token,
+          'decisionChainGroupToken', tokenized.decision_chain_group_token,
+          'subjectGroupToken', tokenized.subject_group_token,
+          'counterpartyGroupToken', tokenized.counterparty_group_token,
+          'participantPairGroupToken', tokenized.participant_pair_group_token,
+          'originalReviewerGroupToken', tokenized.original_reviewer_group_token,
+          'auditReviewerGroupToken', tokenized.audit_reviewer_group_token,
+          'samplingRunGroupToken', tokenized.sampling_run_group_token,
+          'targetType', tokenized.target_type,
+          'dimension', tokenized.dimension,
+          'category', tokenized.category,
+          'role', tokenized.role,
+          'modelVersion', tokenized.model_version
+        )
+        || jsonb_build_object(
+          'samplingPolicyVersion', tokenized.sampling_policy_version,
+          'samplingSeedCommitment', tokenized.seed_commitment,
+          'samplingStratum', tokenized.sampling_stratum,
+          'samplingKind', case
+            when tokenized.selected_reason = 'random_selected' then 'random'
+            else 'mandatory'
+          end,
+          'inclusionProbability', tokenized.inclusion_probability,
+          'samplingRandomUnit', tokenized.random_unit,
+          'selectedReason', tokenized.selected_reason,
+          'sourcePathway', case
+            when tokenized.original_finality_reason = 'administrative_correction'
+              then 'administrative_correction'
+            when tokenized.original_adjudication_class = 'appeal_review_final'
+              or tokenized.original_finality_reason in ('appeal_affirmed', 'appeal_overturned')
+              then 'appeal'
+            when tokenized.original_provenance_class = 'authenticated_provider'
+              or tokenized.original_adjudication_class = 'provider_established'
+              then 'provider_reconciliation'
+            else 'terminal_review'
+          end,
+          'originalStatus', tokenized.original_status,
+          'originalOutcome', tokenized.original_outcome,
+          'originalConfidenceBand', tokenized.original_confidence_band,
+          'originalProvenanceClass', tokenized.original_provenance_class,
+          'originalAdjudicationClass', tokenized.original_adjudication_class,
+          'originalFinalityReason', tokenized.original_finality_reason,
+          'originalIntegrityFinding', tokenized.original_integrity_finding,
+          'originalResponsivenessFinding', tokenized.original_responsiveness_finding,
+          'originalDisputeConductFinding', tokenized.original_dispute_conduct_finding,
+          'additionalityStatus', 'not_evaluated'
+        )
+        || jsonb_build_object(
+          'provenanceWeight', round(tokenized.provenance_weight, 8),
+          'decisionConfidenceWeight', round(tokenized.decision_confidence_weight, 8),
+          'contextSimilarity', round(tokenized.context_similarity, 8),
+          'stakeWeight', round(tokenized.stake_weight, 8),
+          'counterpartySequenceAtDecision', tokenized.counterparty_sequence_at_decision,
+          'recencyHalfLifeDays', tokenized.recency_half_life_days,
+          'eventAgeDaysAtDecision', round(tokenized.event_age_days_at_decision, 6),
+          'recencyWeightAtDecision', round(tokenized.recency_weight_at_decision, 8),
+          'provisionalEventWeightAtDecision', case
+            when tokenized.original_status = 'eligible' then round(
+              tokenized.recency_weight_at_decision
+              * tokenized.provenance_weight
+              * tokenized.decision_confidence_weight
+              * (1::numeric / sqrt(tokenized.counterparty_sequence_at_decision::numeric))
+              * tokenized.context_similarity
+              * tokenized.stake_weight,
+              8
+            )
+            else null
+          end,
+          'decisionDateUtc', to_char(
+            tokenized.decision_finalized_at at time zone 'UTC',
+            'YYYY-MM-DD'
+          ),
+          'auditCompletedDateUtc', to_char(
+            tokenized.completed_at at time zone 'UTC',
+            'YYYY-MM-DD'
+          ),
+          'predictionSnapshotHash', tokenized.snapshot_hash
+        )
+        || jsonb_build_object(
+          'labelTier', tokenized.label_tier,
+          'blindingMode', tokenized.blinding_mode,
+          'blindingComplete', tokenized.blinding_complete,
+          'finalStatus', tokenized.final_status,
+          'finalOutcome', tokenized.final_outcome,
+          'finalFinalityReason', tokenized.final_finality_reason,
+          'finalIntegrityFinding', tokenized.final_integrity_finding,
+          'finalResponsivenessFinding', tokenized.final_responsiveness_finding,
+          'finalDisputeConductFinding', tokenized.final_dispute_conduct_finding,
+          'materiallyUpheld', tokenized.materially_upheld,
+          'absoluteError', tokenized.absolute_error,
+          'labelHash', tokenized.label_hash
+        )
       ) as observation
     from tokenized
   ), inserted as (
