@@ -33,8 +33,13 @@
           .join('');
         if (digest !== 'f01a8b072be93e5b9899f52c7a09b3049566bfadd63dc9000ecd4e8894fa0465') throw new Error('verification integrity');
 
+        const source = new TextDecoder().decode(raw);
+        const enhancedSource = source.replace(
+          "</head>",
+          '<link rel="stylesheet" href="/moral-trade-canonical-static.css?v=20260810"></head>',
+        );
         document.open();
-        document.write(new TextDecoder().decode(raw));
+        document.write(enhancedSource);
         document.close();
       } catch (error) {
         document.getElementById('loading').textContent = 'Unable to load the verification workflow. Please refresh.';
