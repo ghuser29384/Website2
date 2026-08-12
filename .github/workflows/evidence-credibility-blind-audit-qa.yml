@@ -13,6 +13,7 @@ on:
       - src/app/review/evidence-calibration/page.tsx
       - src/lib/evidence-credibility-blind-audit-schema-contract.test.ts
       - supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+      - supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
       - supabase/tests/evidence_credibility_blind_audit_authorization.sql
       - supabase/tests/evidence_credibility_blind_audit_core.sql
   push:
@@ -27,6 +28,7 @@ on:
       - src/app/review/evidence-calibration/page.tsx
       - src/lib/evidence-credibility-blind-audit-schema-contract.test.ts
       - supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+      - supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
       - supabase/tests/evidence_credibility_blind_audit_authorization.sql
       - supabase/tests/evidence_credibility_blind_audit_core.sql
   workflow_dispatch:
@@ -75,6 +77,7 @@ jobs:
           src/app/review/evidence-calibration/page.tsx
           src/lib/evidence-credibility-blind-audit-schema-contract.test.ts
           supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
           supabase/tests/evidence_credibility_blind_audit_authorization.sql
           supabase/tests/evidence_credibility_blind_audit_core.sql
           EOF
@@ -83,14 +86,24 @@ jobs:
           sort -o /tmp/expected-files.txt /tmp/expected-files.txt
           diff -u /tmp/expected-files.txt /tmp/actual-files.txt
 
-          test "$(wc -l < /tmp/actual-files.txt)" -eq 10
-          test "$(find supabase/migrations -maxdepth 1 -type f -name '20260812022000_evidence_credibility_blind_audit_v1.sql' | wc -l)" -eq 1
+          test "$(wc -l < /tmp/actual-files.txt)" -eq 11
+          test -f supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          test -f supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
           test "$(find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_blind_audit_*.sql' | wc -l)" -eq 2
-          test ! -e .github/workflows/harden-blind-audit-validation.yml
-          test ! -e .github/workflows/harden-blind-audit-validation-v2.yml
-          test ! -e .github/workflows/harden-blind-audit-validation-v3.yml
-          test ! -e .github/workflows/repair-blind-audit-migration.yml
-          test ! -e .github/workflows/harden-blind-audit-scope-guard.yml
+
+          for controller in \
+            .github/workflows/harden-blind-audit-validation.yml \
+            .github/workflows/harden-blind-audit-validation-v2.yml \
+            .github/workflows/harden-blind-audit-validation-v3.yml \
+            .github/workflows/repair-blind-audit-migration.yml \
+            .github/workflows/harden-blind-audit-scope-guard.yml \
+            .github/workflows/finalize-blind-audit-hardening.yml \
+            .github/workflows/finalize-blind-audit-hardening-v2.yml \
+            .github/workflows/cleanup-blind-audit-hardening-controllers.yml \
+            .github/workflows/cleanup-blind-audit-hardening-controllers-v2.yml \
+            .github/workflows/cleanup-blind-audit-hardening-controllers-v3.yml; do
+            test ! -e "$controller"
+          done
 
           for file in supabase/tests/evidence_credibility_blind_audit_*.sql; do
             grep -qi '^begin;' "$file"
@@ -104,6 +117,7 @@ jobs:
             src/app/evidence-credibility-audit-actions.ts \
             src/app/review/evidence-calibration/page.tsx \
             supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql \
             supabase/tests/evidence_credibility_blind_audit_*.sql; then
             echo "Production project reference found in a runtime or durable policy file."
             exit 1
@@ -111,10 +125,12 @@ jobs:
 
           if grep -Eqi \
             "update[[:space:]]+public\.credibility_shadow_controls|insert[[:space:]]+into[[:space:]]+public\.credibility_events|insert[[:space:]]+into[[:space:]]+public\.credibility_restrictions" \
-            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql; then
-            echo "The blind-audit migration contains an active-effect write."
+            supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql; then
+            echo "A blind-audit migration contains an active-effect write."
             exit 1
           fi
+
           grep -q "control.mode = 'shadow'" \
             supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
           grep -q "not control.milestone_cutover_enabled" \
@@ -125,6 +141,14 @@ jobs:
             supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
           grep -q "not control.eligibility_effects_enabled" \
             supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          grep -q "calibration_draw_is_current_v1" \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          grep -q "calibration_conflicted_reviewer_ids_v1" \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          grep -q "calibration_projected_receipt_id_v1" \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          grep -q "reconcile_evidence_credibility_calibration_assignments_v1" \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
           git diff --check
 
       - name: Install exact dependencies
@@ -166,6 +190,7 @@ jobs:
             src/app/review/evidence-calibration/page.tsx \
             src/lib/evidence-credibility-blind-audit-schema-contract.test.ts \
             supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql \
             supabase/tests/evidence_credibility_blind_audit_authorization.sql \
             supabase/tests/evidence_credibility_blind_audit_core.sql \
             > evidence/file-sha256.txt
@@ -249,6 +274,7 @@ jobs:
           union all select 'sampling_runs_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_sampling_runs')::text, '')
           union all select 'draws_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_draws')::text, '')
           union all select 'assignments_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_audit_assignments')::text, '')
+          union all select 'events_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_assignment_events')::text, '')
           union all select 'labels_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_labels')::text, '')
           order by 1;
           SQL
@@ -257,7 +283,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          migration="supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql"
+          migration_core="supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql"
+          migration_hardening="supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql"
           for suite in \
             evidence_credibility_blind_audit_core \
             evidence_credibility_blind_audit_authorization; do
@@ -291,7 +318,8 @@ jobs:
             cat > "/tmp/${suite}-wrapper.sql" <<SQL
           \set ON_ERROR_STOP on
           begin;
-          \i ${migration}
+          \i ${migration_core}
+          \i ${migration_hardening}
           \i /tmp/${suite}-body.sql
           rollback;
           SQL
@@ -323,6 +351,7 @@ jobs:
           union all select 'sampling_runs_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_sampling_runs')::text, '')
           union all select 'draws_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_draws')::text, '')
           union all select 'assignments_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_audit_assignments')::text, '')
+          union all select 'events_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_assignment_events')::text, '')
           union all select 'labels_relation|' || coalesce(to_regclass('public.evidence_credibility_calibration_labels')::text, '')
           order by 1;
           SQL
@@ -341,6 +370,7 @@ jobs:
           git rev-parse HEAD > database-evidence/head-sha.txt
           sha256sum \
             supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql \
+            supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql \
             supabase/tests/evidence_credibility_blind_audit_authorization.sql \
             supabase/tests/evidence_credibility_blind_audit_core.sql \
             > database-evidence/file-sha256.txt
