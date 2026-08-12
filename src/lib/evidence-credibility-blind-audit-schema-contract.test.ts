@@ -4,6 +4,10 @@ import { join } from "node:path";
 import test from "node:test";
 
 const root = process.cwd();
+const workflow = readFileSync(
+  join(root, ".github/workflows/evidence-credibility-blind-audit-qa.yml"),
+  "utf8",
+);
 const migration = readFileSync(
   join(
     root,
@@ -47,6 +51,22 @@ const reviewerProjection = functionBody(
 const labelFunction = functionBody(
   "public.record_evidence_credibility_calibration_label_v1",
 );
+
+test("the exact-head workflow uses explicit fail-closed negative guards", () => {
+  assert.match(
+    workflow,
+    /if grep -R "jnpoxvalyjtdghnperyu"[\s\S]*Production project reference found in a runtime or durable policy file/i,
+  );
+  assert.match(
+    workflow,
+    /if grep -Eqi[\s\S]*The blind-audit migration contains an active-effect write/i,
+  );
+  assert.doesNotMatch(workflow, /^\s*!\s+grep/gm);
+  assert.match(
+    workflow,
+    /test ! -e \.github\/workflows\/harden-blind-audit-scope-guard\.yml/i,
+  );
+});
 
 test("sampling runs and draws are immutable, reproducible, and probability-complete", () => {
   for (const table of [
