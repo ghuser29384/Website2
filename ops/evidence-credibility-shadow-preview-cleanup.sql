@@ -82,9 +82,6 @@ where capture_record.evidence_decision_id in (select id from qa_ec_decisions)
 
 delete from public.credibility_shadow_restriction_signals restriction_signal
 where restriction_signal.evidence_decision_id in (select id from qa_ec_decisions)
-   or restriction_signal.settlement_decision_id in (
-     select id from qa_ec_settlement_decisions
-   )
    or restriction_signal.profile_id in (
      '71000000-0000-4000-8000-000000000001',
      '71000000-0000-4000-8000-000000000002',
