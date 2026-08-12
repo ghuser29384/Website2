@@ -112,16 +112,49 @@ test.describe("Offers directory density", () => {
     expect(formStyle.borderRadius).toBe("0px");
     expect(formStyle.boxShadow).toBe("none");
 
+    const participantGroups = page.locator("[data-participant-offer-group]");
+    const participantOffers = page.locator("[data-participant-offer]");
+    await expect(participantGroups.first()).toBeVisible();
+    expect(await participantOffers.count()).toBeGreaterThan(0);
+
+    const participantGroupStyle = await participantGroups.first().evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        backgroundColor: style.backgroundColor,
+        borderRadius: style.borderRadius,
+        boxShadow: style.boxShadow,
+      };
+    });
+    expect(participantGroupStyle.backgroundColor).toBe("rgba(0, 0, 0, 0)");
+    expect(participantGroupStyle.borderRadius).toBe("0px");
+    expect(participantGroupStyle.boxShadow).toBe("none");
+    await expect(page.getByText(/These are the owner's exact published terms/)).toHaveCount(
+      await participantGroups.count(),
+    );
+
+    const firstOfferStyle = await participantOffers.first().evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        display: style.display,
+        gridTemplateAreas: style.gridTemplateAreas,
+      };
+    });
+    expect(firstOfferStyle.display).toBe("grid");
+    expect(firstOfferStyle.gridTemplateAreas).toContain("heading");
+    expect(firstOfferStyle.gridTemplateAreas).toContain("exchange");
+    expect(firstOfferStyle.gridTemplateAreas).toContain("actions");
+
     const explorer = page.locator("details").filter({ hasText: "Optional visual explorer" });
     const explorerSummary = explorer.locator(":scope > summary");
     await expect(explorer).toBeVisible();
     await expect(explorerSummary).toHaveCount(1);
     expect(await explorer.evaluate((element) => (element as HTMLDetailsElement).open)).toBe(false);
 
-    await expect.poll(getPlaneRequestCount).toBe(1);
+    await page.waitForTimeout(250);
+    expect(getPlaneRequestCount()).toBe(0);
     await explorerSummary.click();
     await expect(explorer).toHaveJSProperty("open", true);
-    await expect.poll(getPlaneRequestCount).toBe(2);
+    await expect.poll(getPlaneRequestCount).toBe(1);
     await explorerSummary.click();
     await expect(explorer).toHaveJSProperty("open", false);
 
@@ -138,7 +171,7 @@ test.describe("Offers directory density", () => {
 
   test("collapses cleanly on a 390px mobile viewport", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await stubOfferPlane(page);
+    const getPlaneRequestCount = await stubOfferPlane(page);
 
     await page.goto(targetRoute);
 
@@ -151,6 +184,20 @@ test.describe("Offers directory density", () => {
     await expect(page.getByRole("searchbox", { name: "Search proposals" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Apply smart search" })).toBeVisible();
     await expect(page.getByText("Optional visual explorer")).toBeVisible();
+
+    const topbarBox = await page.locator(".mt-site-topbar").boundingBox();
+    expect(topbarBox).not.toBeNull();
+    if (topbarBox) expect(topbarBox.height).toBeLessThan(180);
+
+    const navBox = await page.locator(".mt-site-topbar .topbar-links").boundingBox();
+    expect(navBox).not.toBeNull();
+    if (navBox) expect(navBox.height).toBeLessThan(55);
+
+    const brandMetrics = await page.locator(".mt-site-topbar .brand").evaluate((element) => ({
+      clientWidth: element.clientWidth,
+      scrollWidth: element.scrollWidth,
+    }));
+    expect(brandMetrics.scrollWidth).toBeLessThanOrEqual(brandMetrics.clientWidth + 1);
 
     const viewportWidth = await page.evaluate(() => document.documentElement.clientWidth);
     const controls = page.locator(
@@ -173,11 +220,26 @@ test.describe("Offers directory density", () => {
     expect(heroHeadingSize).toBeGreaterThanOrEqual(44);
     expect(heroHeadingSize).toBeLessThanOrEqual(76);
 
+    const participantOffers = page.locator("[data-participant-offer]");
+    const participantOfferCount = await participantOffers.count();
+    expect(participantOfferCount).toBeGreaterThan(0);
+    const sampledOfferCount = Math.min(participantOfferCount, 5);
+    for (let index = 0; index < sampledOfferCount; index += 1) {
+      const box = await participantOffers.nth(index).boundingBox();
+      expect(box, `proposal row ${index + 1} should have a rendered box`).not.toBeNull();
+      if (box) expect(box.height).toBeLessThan(650);
+    }
+
     const explorer = page.locator("details").filter({ hasText: "Optional visual explorer" });
     const explorerSummary = explorer.locator(":scope > summary");
     await expect(explorerSummary).toHaveCount(1);
+    expect(await explorer.evaluate((element) => (element as HTMLDetailsElement).open)).toBe(false);
+    expect(getPlaneRequestCount()).toBe(0);
     await explorerSummary.click();
     await expect(explorer).toHaveJSProperty("open", true);
+    await expect.poll(getPlaneRequestCount).toBe(1);
+    await explorerSummary.click();
+    await expect(explorer).toHaveJSProperty("open", false);
 
     await expectNoHorizontalOverflow(page);
     await capture(page, "implementation-mobile.png");
