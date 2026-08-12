@@ -98,7 +98,7 @@
   border: 1px solid var(--offers-ink);
   border-radius: 0;
   background: var(--offers-surface);
-  box-shadow: 0.55rem 0.55rem 0 var(--offers-ink);
+  box-shadow: none;
 }
 
 .routeTopbar :global(.topbar-search) {
