@@ -17,9 +17,10 @@ concurrency:
 jobs:
   diagnose:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 60
     env:
       EXPECTED_MAIN_SHA: 69146f2cf9d5f4d747c0c25abda6de75f410098d
+      FAILING_TITLE: permanent Vercel release gates are structurally enforced
 
     steps:
       - name: Check out the exact failed production candidate
@@ -44,28 +45,89 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
-      - name: Run only the failing release-control contract and preserve exact TAP
+      - name: Locate every source declaration of the failing test title
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          rg --line-number --fixed-strings "$FAILING_TITLE" src scripts .github \
+            | tee vercel-release-structural-contract.source-locations.txt
+          test -s vercel-release-structural-contract.source-locations.txt
+          location_count="$(wc -l < vercel-release-structural-contract.source-locations.txt | tr -d ' ')"
+          printf 'location_count=%s\n' "$location_count" | tee -a "$GITHUB_OUTPUT"
+
+      - name: Reproduce the complete npm test gate and preserve exact output
         id: test
         shell: bash
         run: |
           set -uo pipefail
           set +e
-          node --test scripts/vercel-release-workflow.test.mjs \
-            > >(tee vercel-release-structural-contract.tap) \
-            2> >(tee vercel-release-structural-contract.stderr >&2)
+          npm test \
+            > >(tee vercel-release-structural-contract.full-test.stdout.log) \
+            2> >(tee vercel-release-structural-contract.full-test.stderr.log >&2)
           status=$?
           set -e
           printf '%s\n' "$status" > vercel-release-structural-contract.exit-code
           echo "status=$status" >> "$GITHUB_OUTPUT"
 
+          cat \
+            vercel-release-structural-contract.full-test.stdout.log \
+            vercel-release-structural-contract.full-test.stderr.log \
+            > vercel-release-structural-contract.full-test.combined.log
+
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          title = os.environ["FAILING_TITLE"]
+          text = Path("vercel-release-structural-contract.full-test.combined.log").read_text(
+              encoding="utf-8", errors="replace"
+          )
+          lines = text.splitlines()
+          selected: set[int] = set()
+          needles = (
+              title,
+              "not ok",
+              "AssertionError",
+              "ERR_ASSERTION",
+              "location:",
+              "failureType:",
+              "expected:",
+              "actual:",
+              "operator:",
+          )
+          for index, line in enumerate(lines):
+              if any(needle in line for needle in needles):
+                  start = max(0, index - 30)
+                  end = min(len(lines), index + 90)
+                  selected.update(range(start, end))
+          output = []
+          previous = None
+          for index in sorted(selected):
+              if previous is not None and index > previous + 1:
+                  output.append("... omitted ...")
+              output.append(f"{index + 1:06d}: {lines[index]}")
+              previous = index
+          Path("vercel-release-structural-contract.failure-extract.log").write_text(
+              "\n".join(output) + ("\n" if output else ""), encoding="utf-8"
+          )
+          PY
+
           {
-            echo '### Exact release-control contract diagnostic'
+            echo '### Full repository-test reproduction'
             echo
             echo "- Candidate: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Source declarations found: \`${{ steps.locate.outputs.location_count }}\`"
             echo "- Exit code: \`$status\`"
             echo
+            echo '#### Source location'
             echo '```text'
-            sed -n '/not ok/,$p' vercel-release-structural-contract.tap | tail -n 180
+            cat vercel-release-structural-contract.source-locations.txt
+            echo '```'
+            echo
+            echo '#### Failure extract'
+            echo '```text'
+            tail -n 260 vercel-release-structural-contract.failure-extract.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -73,17 +135,20 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vercel-release-structural-contract-${{ github.run_id }}
+          name: vercel-release-structural-contract-full-suite-${{ github.run_id }}
           path: |
-            vercel-release-structural-contract.tap
-            vercel-release-structural-contract.stderr
+            vercel-release-structural-contract.source-locations.txt
+            vercel-release-structural-contract.full-test.stdout.log
+            vercel-release-structural-contract.full-test.stderr.log
+            vercel-release-structural-contract.full-test.combined.log
+            vercel-release-structural-contract.failure-extract.log
             vercel-release-structural-contract.exit-code
             .github/workflows/vercel-release.yml
             scripts/vercel-release-workflow.test.mjs
           if-no-files-found: error
           retention-days: 30
 
-      - name: Preserve the reproduced result
+      - name: Preserve the reproduced full-suite result
         if: always()
         shell: bash
         run: |
