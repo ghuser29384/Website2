@@ -138,7 +138,7 @@ The authenticated download route returns `application/x-ndjson` with private no-
 - The ordered SHA-256 row hashes, joined with `|`, reproduce `rowsDigest`.
 - The route pages through the immutable rows, checks the emitted count against the manifest, and never uses a service-role client.
 
-The canonical strings are intentionally retained alongside parsed JSON because ordinary JSON parsing can discard numeric scale and object serialization details. An offline package can therefore verify every row, the ordered dataset digest, and the manifest byte-for-byte without production credentials. The route performs identity-bound RPC authorization before creating the stream.
+The canonical strings are intentionally retained alongside parsed JSON because ordinary JSON parsing can discard numeric scale and object serialization details. An offline package can therefore verify every row, the ordered dataset digest, and the manifest byte-for-byte without production credentials. Offline consumers must fail closed before analysis if any row, ordered-dataset, manifest, plan-version, or plan-hash check fails. The route performs identity-bound RPC authorization before creating the stream.
 
 ## Isolation boundary
 
