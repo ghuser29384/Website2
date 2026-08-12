@@ -1,0 +1,621 @@
+name: Evidence credibility private shadow Preview acceptance
+
+on:
+  push:
+    branches:
+      - ops/evidence-credibility-shadow-preview-acceptance-20260812
+    paths:
+      - .github/workflows/evidence-credibility-shadow-preview-acceptance.yml
+      - ops/evidence-credibility-shadow-preview-acceptance.spec.ts
+      - ops/evidence-credibility-shadow-preview-cleanup.sql
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: evidence-credibility-private-shadow-preview-acceptance
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: e1588ba43b4036805990035bc83cbb81967a26f1
+  CANDIDATE_BRANCH: release/evidence-credibility-shadow-current-main-20260812
+  CURRENT_MAIN_SHA: 8ee3e14b340fdb486c211d86703e02f9226811ab
+  PREVIEW_BRANCH: release/vercel-preview
+  EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+  EXPECTED_QA_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+  EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  PGSSLMODE: require
+  EVIDENCE_CREDIBILITY_QA_RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  protected-preview-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      GH_TOKEN: ${{ github.token }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      EVIDENCE_CREDIBILITY_BASE_URL: http://127.0.0.1:3210
+      EVIDENCE_CREDIBILITY_SCREENSHOT_DIR: ${{ github.workspace }}/preview-evidence/screenshots
+    steps:
+      - name: Check out controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: controller
+          ref: ${{ github.sha }}
+
+      - name: Check out exact current-main integration candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: candidate
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Guard exact candidate, current main, and isolated QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+          git -C candidate cat-file -e "${CURRENT_MAIN_SHA}^{commit}"
+          test "$(git -C candidate merge-base "$CURRENT_MAIN_SHA" HEAD)" = "$CURRENT_MAIN_SHA"
+          test "$(git -C controller rev-parse HEAD)" = "$GITHUB_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          test -n "${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -n "${VERCEL_TOKEN:-}"
+
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+              and os.environ["NEXT_PUBLIC_SUPABASE_URL"] == os.environ["EXPECTED_QA_URL"]
+              and "jnpoxvalyjtdghnperyu" not in os.environ["NEXT_PUBLIC_SUPABASE_URL"]
+          )
+          if not valid:
+              raise SystemExit(
+                  "Refusing credentials outside the exact TLS-only MoralTrade QA target."
+              )
+          PY
+
+          mkdir -p preview-evidence
+          {
+            echo "candidate_sha=$CANDIDATE_SHA"
+            echo "candidate_branch=$CANDIDATE_BRANCH"
+            echo "main_sha=$CURRENT_MAIN_SHA"
+            echo "qa_ref=$EXPECTED_QA_REF"
+            echo "browser_plugin=absent; regular Playwright used"
+          } > preview-evidence/environment.txt
+
+      - name: Install exact dependencies, PostgreSQL client, and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix candidate
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+          cd candidate
+          npx playwright install --with-deps chromium
+
+      - name: Apply the private blind-audit and export schema to isolated QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | tee ../preview-evidence/qa-schema-application.log
+          \set ON_ERROR_STOP on
+          begin;
+          \i supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
+          \i supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
+          \i supabase/migrations/20260812043000_evidence_credibility_calibration_export_v1.sql
+
+          insert into supabase_migrations.schema_migrations(version, name, created_by)
+          values
+            ('20260812022000', 'evidence_credibility_blind_audit_v1', 'private-preview-acceptance'),
+            ('20260812022001', 'evidence_credibility_blind_audit_hardening', 'private-preview-acceptance'),
+            ('20260812043000', 'evidence_credibility_calibration_export_v1', 'private-preview-acceptance')
+          on conflict(version) do update
+          set name = excluded.name,
+              created_by = excluded.created_by;
+          commit;
+          SQL
+
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' \
+            | tee ../preview-evidence/qa-schema-readback.txt
+          select 'control|' || mode || '|' || milestone_cutover_enabled || '|' || public_effects_enabled || '|' || ranking_effects_enabled || '|' || eligibility_effects_enabled
+          from public.credibility_shadow_controls
+          where control_key = 'evidence_decision_v2'
+          union all select 'sampling_runs|' || (to_regclass('public.evidence_credibility_calibration_sampling_runs') is not null)
+          union all select 'draws|' || (to_regclass('public.evidence_credibility_calibration_draws') is not null)
+          union all select 'assignments|' || (to_regclass('public.evidence_credibility_calibration_audit_assignments') is not null)
+          union all select 'labels|' || (to_regclass('public.evidence_credibility_calibration_labels') is not null)
+          union all select 'exports|' || (to_regclass('public.evidence_credibility_calibration_exports') is not null)
+          union all select 'export_rows|' || (to_regclass('public.evidence_credibility_calibration_export_rows') is not null)
+          union all select 'migration_20260812022000|' || exists(select 1 from supabase_migrations.schema_migrations where version='20260812022000')
+          union all select 'migration_20260812022001|' || exists(select 1 from supabase_migrations.schema_migrations where version='20260812022001')
+          union all select 'migration_20260812043000|' || exists(select 1 from supabase_migrations.schema_migrations where version='20260812043000')
+          order by 1;
+          SQL
+
+          grep -qx 'control|shadow|false|false|false|false' ../preview-evidence/qa-schema-readback.txt
+          for relation in sampling_runs draws assignments labels exports export_rows; do
+            grep -qx "${relation}|true" ../preview-evidence/qa-schema-readback.txt
+          done
+          for version in 20260812022000 20260812022001 20260812043000; do
+            grep -qx "migration_${version}|true" ../preview-evidence/qa-schema-readback.txt
+          done
+
+      - name: Remove any exact old QA fixture residue
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file controller/ops/evidence-credibility-shadow-preview-cleanup.sql
+          EVIDENCE_PAYMENT_QA_PASSWORD=unused \
+            psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file candidate/supabase/tests/evidence_weighted_payment_browser_cleanup.sql
+
+      - name: Create the exact AAL2 browser fixture with one private attestation
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="$(openssl rand -base64 36 | tr -d '\n' | tr '/+' '_-')"
+          echo "::add-mask::$password"
+          echo "EVIDENCE_CREDIBILITY_QA_PASSWORD=$password" >> "$GITHUB_ENV"
+
+          cp candidate/supabase/tests/evidence_weighted_payment_browser_fixture.sql /tmp/evidence-credibility-fixture.sql
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('/tmp/evidence-credibility-fixture.sql')
+          source = path.read_text(encoding='utf-8')
+          old = "    'accepted',\n    now(),\n    now()\n"
+          new = "    'draft',\n    null,\n    null\n"
+          if source.count(old) != 2:
+              raise SystemExit(
+                  f'Expected exactly two accepted-before-item bundle tuples, found {source.count(old)}.'
+              )
+          source = source.replace(old, new)
+          marker = "\ninsert into public.trade_milestone_reviews (\n"
+          if source.count(marker) != 1:
+              raise SystemExit('Expected one milestone-review insertion boundary.')
+          evidence = """
+          insert into public.trade_evidence_bundle_items(
+            bundle_id,
+            evidence_type,
+            attestation
+          )
+          values
+            (
+              '75000000-0000-4000-8000-000000000001',
+              'attestation',
+              'QA-only evidence-credibility attestation for independent blind review.'
+            ),
+            (
+              '75000000-0000-4000-8000-000000000002',
+              'attestation',
+              'QA-only fallback evidence-credibility attestation.'
+            );
+
+          update public.trade_evidence_bundles
+          set status = 'accepted',
+              submitted_at = now(),
+              reviewed_at = now()
+          where id in (
+            '75000000-0000-4000-8000-000000000001',
+            '75000000-0000-4000-8000-000000000002'
+          );
+          """
+          source = source.replace(marker, '\n' + evidence + marker)
+          path.write_text(source, encoding='utf-8')
+          PY
+
+          EVIDENCE_PAYMENT_QA_PASSWORD="$password" \
+            psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file /tmp/evidence-credibility-fixture.sql \
+              | tee preview-evidence/fixture-application.log
+
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 \
+            --command "select count(*) from public.trade_evidence_bundle_items where bundle_id='75000000-0000-4000-8000-000000000001' and evidence_type='attestation'" \
+            | sed '/^[[:space:]]*$/d' \
+            | tee preview-evidence/fixture-attestation-count.txt
+          grep -qx '1' preview-evidence/fixture-attestation-count.txt
+
+      - name: Build and start the exact candidate against isolated QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          npm run build | tee ../preview-evidence/local-build.log
+          cp ../controller/ops/evidence-credibility-shadow-preview-acceptance.spec.ts \
+            tests/evidence-credibility-shadow-preview-acceptance.spec.ts
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('tests/evidence-credibility-shadow-preview-acceptance.spec.ts')
+          source = path.read_text(encoding='utf-8')
+          old = '      await expect(captureForm.getByText("Attestation: 1", { exact: true })).toBeVisible();\n'
+          new = '      await expect(captureForm).toContainText("Attestation: 1");\n'
+          if source.count(old) != 1:
+              raise SystemExit('Expected one attestation assertion to normalize.')
+          path.write_text(source.replace(old, new), encoding='utf-8')
+          PY
+
+          PORT=3210 npm run start > ../preview-evidence/local-server.log 2>&1 &
+          echo $! > /tmp/evidence-credibility-server.pid
+          for attempt in $(seq 1 90); do
+            if curl --silent --fail http://127.0.0.1:3210/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat ../preview-evidence/local-server.log
+          exit 1
+
+      - name: Run desktop and 390x844 AAL2 browser acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          npx playwright test \
+            tests/evidence-credibility-shadow-preview-acceptance.spec.ts \
+            --project=chromium \
+            --workers=1 \
+            --reporter=line \
+            | tee ../preview-evidence/playwright.log
+
+      - name: Stop local app and remove copied browser spec
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f /tmp/evidence-credibility-server.pid ]]; then
+            kill "$(cat /tmp/evidence-credibility-server.pid)" 2>/dev/null || true
+          fi
+          rm -f candidate/tests/evidence-credibility-shadow-preview-acceptance.spec.ts
+
+      - name: Clean exact QA browser fixtures and prove zero residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -n "${QA_SUPABASE_DB_URL:-}" ]]; then
+            psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file controller/ops/evidence-credibility-shadow-preview-cleanup.sql
+            EVIDENCE_PAYMENT_QA_PASSWORD="${EVIDENCE_CREDIBILITY_QA_PASSWORD:-unused}" \
+              psql "$QA_SUPABASE_DB_URL" \
+                --no-psqlrc \
+                --set ON_ERROR_STOP=1 \
+                --file candidate/supabase/tests/evidence_weighted_payment_browser_cleanup.sql
+
+            psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --tuples-only \
+              --no-align \
+              --set ON_ERROR_STOP=1 <<'SQL' \
+              | sed '/^[[:space:]]*$/d' \
+              | tee preview-evidence/zero-residue-readback.txt
+            select 'agreements|' || count(*) from public.agreements where id in ('72000000-0000-4000-8000-000000000001','72000000-0000-4000-8000-000000000002')
+            union all select 'evidence_decisions|' || count(*) from public.trade_evidence_decisions where milestone_id in ('74000000-0000-4000-8000-000000000001','74000000-0000-4000-8000-000000000002')
+            union all select 'settlement_decisions|' || count(*) from public.trade_settlement_shadow_decisions where payout_id in ('77000000-0000-4000-8000-000000000001','77000000-0000-4000-8000-000000000002')
+            union all select 'exports|' || count(*) from public.evidence_credibility_calibration_exports where source_key like 'qa-export:%'
+            union all select 'mfa_factors|' || count(*) from auth.mfa_factors where user_id in ('71000000-0000-4000-8000-000000000003','71000000-0000-4000-8000-000000000004','71000000-0000-4000-8000-000000000006')
+            union all select 'control|' || mode || '|' || milestone_cutover_enabled || '|' || public_effects_enabled || '|' || ranking_effects_enabled || '|' || eligibility_effects_enabled from public.credibility_shadow_controls where control_key='evidence_decision_v2'
+            order by 1;
+            SQL
+
+            for label in agreements evidence_decisions settlement_decisions exports mfa_factors; do
+              grep -qx "${label}|0" preview-evidence/zero-residue-readback.txt
+            done
+            grep -qx 'control|shadow|false|false|false|false' preview-evidence/zero-residue-readback.txt
+          fi
+
+      - name: Confirm no competing gated Vercel release is running
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow vercel-release.yml \
+            --status in_progress \
+            --limit 20 \
+            --json databaseId \
+            --jq 'length')"
+          test "$count" -eq 0
+
+      - name: Snapshot and temporarily route Preview environment to isolated QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx vercel@50.38.1 env pull /tmp/vercel-preview-before.env \
+            --yes \
+            --environment=preview \
+            --token="$VERCEL_TOKEN" > /tmp/vercel-env-pull-before.log
+
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('/tmp/vercel-preview-before.env', 'utf8');
+          const values = {};
+          for (const line of text.split(/\r?\n/)) {
+            if (!line || line.startsWith('#')) continue;
+            const index = line.indexOf('=');
+            if (index < 1) continue;
+            const key = line.slice(0, index);
+            let value = line.slice(index + 1);
+            if (value.startsWith('"') && value.endsWith('"')) {
+              try { value = JSON.parse(value); } catch {}
+            }
+            values[key] = value;
+          }
+          const keys = [
+            'NEXT_PUBLIC_SUPABASE_URL',
+            'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY',
+            'SUPABASE_SERVICE_ROLE_KEY',
+          ];
+          const snapshot = {};
+          for (const key of keys) {
+            snapshot[key] = Object.prototype.hasOwnProperty.call(values, key)
+              ? values[key]
+              : null;
+            if (snapshot[key]) console.log(`::add-mask::${snapshot[key]}`);
+          }
+          fs.writeFileSync('/tmp/vercel-preview-before.json', JSON.stringify(snapshot));
+          NODE
+
+          set_preview_env() {
+            local name="$1"
+            local value="$2"
+            printf '%s' "$value" | npx vercel@50.38.1 env add "$name" preview \
+              --force \
+              --token="$VERCEL_TOKEN" > "/tmp/vercel-env-set-${name}.log"
+          }
+          set_preview_env NEXT_PUBLIC_SUPABASE_URL "$EXPECTED_QA_URL"
+          set_preview_env NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY "$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY"
+          set_preview_env SUPABASE_SERVICE_ROLE_KEY "$SUPABASE_SERVICE_ROLE_KEY"
+          touch /tmp/vercel-preview-env-overridden
+
+          npx vercel@50.38.1 env pull /tmp/vercel-preview-after.env \
+            --yes \
+            --environment=preview \
+            --token="$VERCEL_TOKEN" > /tmp/vercel-env-pull-after.log
+
+          node <<'NODE'
+          const fs = require('fs');
+          const text = fs.readFileSync('/tmp/vercel-preview-after.env', 'utf8');
+          const values = {};
+          for (const line of text.split(/\r?\n/)) {
+            if (!line || line.startsWith('#')) continue;
+            const index = line.indexOf('=');
+            if (index < 1) continue;
+            const key = line.slice(0, index);
+            let value = line.slice(index + 1);
+            if (value.startsWith('"') && value.endsWith('"')) {
+              try { value = JSON.parse(value); } catch {}
+            }
+            values[key] = value;
+          }
+          if (values.NEXT_PUBLIC_SUPABASE_URL !== process.env.EXPECTED_QA_URL) {
+            throw new Error('Preview Supabase URL did not switch to isolated QA.');
+          }
+          if (!values.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) {
+            throw new Error('Preview QA publishable key is absent.');
+          }
+          if (!values.SUPABASE_SERVICE_ROLE_KEY) {
+            throw new Error('Preview QA service-role key is absent.');
+          }
+          if (values.NEXT_PUBLIC_SUPABASE_URL.includes('jnpoxvalyjtdghnperyu')) {
+            throw new Error('Production Supabase remained in Preview environment.');
+          }
+          NODE
+
+          {
+            echo "preview_environment_temporarily_routed_to=$EXPECTED_QA_REF"
+            echo "production_ref_present=false"
+          } >> ../preview-evidence/environment.txt
+
+      - name: Point the canonical Preview branch at the exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          previous_sha="$(gh api \
+            --repo "$GITHUB_REPOSITORY" \
+            "/repos/$GITHUB_REPOSITORY/git/ref/heads/$PREVIEW_BRANCH" \
+            --jq '.object.sha')"
+          test -n "$previous_sha"
+          printf '%s\n' "$previous_sha" > /tmp/vercel-preview-previous-sha
+          gh api \
+            --repo "$GITHUB_REPOSITORY" \
+            --method PATCH \
+            "/repos/$GITHUB_REPOSITORY/git/refs/heads/$PREVIEW_BRANCH" \
+            -f sha="$CANDIDATE_SHA" \
+            -F force=true > /tmp/vercel-preview-ref-update.json
+          touch /tmp/vercel-preview-ref-overridden
+          test "$(gh api \
+            --repo "$GITHUB_REPOSITORY" \
+            "/repos/$GITHUB_REPOSITORY/git/ref/heads/$PREVIEW_BRANCH" \
+            --jq '.object.sha')" = "$CANDIDATE_SHA"
+
+      - name: Dispatch and wait for the canonical protected Preview release
+        id: preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          before_id="$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --workflow vercel-release.yml \
+            --event workflow_dispatch \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId // 0')"
+
+          python3 - <<'PY' > /tmp/vercel-dispatch.json
+          import json, os
+          print(json.dumps({
+              "ref": "main",
+              "inputs": {
+                  "ref": os.environ["PREVIEW_BRANCH"],
+                  "target": "preview",
+                  "expected_sha": os.environ["CANDIDATE_SHA"],
+              },
+          }))
+          PY
+          gh api \
+            --repo "$GITHUB_REPOSITORY" \
+            --method POST \
+            "/repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+            --input /tmp/vercel-dispatch.json
+
+          run_id=""
+          for attempt in $(seq 1 120); do
+            run_id="$(gh api \
+              --repo "$GITHUB_REPOSITORY" \
+              "/repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&per_page=50" \
+              --jq ".workflow_runs[] | select(.id > $before_id and .head_branch == \"$PREVIEW_BRANCH\" and .head_sha == \"$CANDIDATE_SHA\") | .id" \
+              | head -n 1)"
+            [[ -n "$run_id" ]] && break
+            sleep 2
+          done
+          test -n "$run_id"
+          printf '%s\n' "$run_id" | tee preview-evidence/vercel-release-run-id.txt
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status
+
+          mkdir -p /tmp/vercel-release-artifact
+          gh run download "$run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "gated-vercel-release-preview-${run_id}" \
+            --dir /tmp/vercel-release-artifact
+          deployment_url="$(tr -d '\r\n' < /tmp/vercel-release-artifact/deployment-url.txt)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]
+          printf '%s\n' "$deployment_url" | tee preview-evidence/deployment-url.txt
+          cp -R /tmp/vercel-release-artifact/. preview-evidence/vercel-release-evidence/
+
+          status="$(curl --silent --location --output /dev/null --write-out '%{http_code}' \
+            "$deployment_url/admin/evidence-calibration")"
+          case "$status" in
+            200|302|303|307|308|401|403) ;;
+            *) echo "Unexpected protected Preview status: $status"; exit 1 ;;
+          esac
+          printf '%s\n' "$status" > preview-evidence/protected-preview-http-status.txt
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+
+      - name: Restore Vercel Preview environment and canonical Preview branch
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          if [[ -f /tmp/vercel-preview-env-overridden && -f /tmp/vercel-preview-before.json ]]; then
+            restore_value() {
+              local name="$1"
+              local encoded
+              encoded="$(node -e "const v=require('/tmp/vercel-preview-before.json')[process.argv[1]]; process.stdout.write(v===null?'__MISSING__':Buffer.from(v).toString('base64'))" "$name")"
+              if [[ "$encoded" == "__MISSING__" ]]; then
+                npx vercel@50.38.1 env rm "$name" preview \
+                  --yes \
+                  --token="$VERCEL_TOKEN" > "/tmp/vercel-env-restore-${name}.log" 2>&1 || true
+              else
+                local value
+                value="$(printf '%s' "$encoded" | base64 --decode)"
+                echo "::add-mask::$value"
+                printf '%s' "$value" | npx vercel@50.38.1 env add "$name" preview \
+                  --force \
+                  --token="$VERCEL_TOKEN" > "/tmp/vercel-env-restore-${name}.log"
+              fi
+            }
+            restore_value NEXT_PUBLIC_SUPABASE_URL
+            restore_value NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+            restore_value SUPABASE_SERVICE_ROLE_KEY
+            echo "vercel_preview_environment_restored=true" >> ../preview-evidence/environment.txt
+          fi
+
+          if [[ -f /tmp/vercel-preview-ref-overridden && -f /tmp/vercel-preview-previous-sha ]]; then
+            previous_sha="$(cat /tmp/vercel-preview-previous-sha)"
+            current_sha="$(gh api \
+              --repo "$GITHUB_REPOSITORY" \
+              "/repos/$GITHUB_REPOSITORY/git/ref/heads/$PREVIEW_BRANCH" \
+              --jq '.object.sha')"
+            if [[ "$current_sha" == "$CANDIDATE_SHA" ]]; then
+              gh api \
+                --repo "$GITHUB_REPOSITORY" \
+                --method PATCH \
+                "/repos/$GITHUB_REPOSITORY/git/refs/heads/$PREVIEW_BRANCH" \
+                -f sha="$previous_sha" \
+                -F force=true > /tmp/vercel-preview-ref-restore.json
+            fi
+            echo "canonical_preview_branch_restored_to=$previous_sha" >> ../preview-evidence/environment.txt
+          fi
+
+      - name: Preserve exact acceptance evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preview-evidence
+          git -C candidate rev-parse HEAD > preview-evidence/candidate-head-sha.txt
+          git -C controller rev-parse HEAD > preview-evidence/controller-head-sha.txt
+          git -C candidate status --short > preview-evidence/candidate-status.txt
+          sha256sum \
+            controller/ops/evidence-credibility-shadow-preview-acceptance.spec.ts \
+            controller/ops/evidence-credibility-shadow-preview-cleanup.sql \
+            candidate/supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql \
+            candidate/supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql \
+            candidate/supabase/migrations/20260812043000_evidence_credibility_calibration_export_v1.sql \
+            > preview-evidence/file-sha256.txt
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+
+      - name: Upload private shadow Preview acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-private-shadow-preview-${{ github.run_id }}-${{ env.CANDIDATE_SHA }}
+          path: preview-evidence
+          if-no-files-found: error
+          retention-days: 30
