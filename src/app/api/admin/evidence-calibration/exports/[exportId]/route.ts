@@ -68,7 +68,15 @@ export async function GET(_request: Request, context: ExportRouteContext) {
   }
 
   const expectedRows = Number(manifest.row_count ?? 0);
-  if (!Number.isInteger(expectedRows) || expectedRows < 1) {
+  const manifestCanonical =
+    typeof manifest.manifest_payload === "string"
+      ? manifest.manifest_payload
+      : null;
+  if (
+    !Number.isInteger(expectedRows) ||
+    expectedRows < 1 ||
+    !manifestCanonical
+  ) {
     return errorResponse(409, "The immutable calibration export manifest is malformed.");
   }
 
@@ -90,6 +98,7 @@ export async function GET(_request: Request, context: ExportRouteContext) {
               rowCount: manifest.row_count,
               rowsDigest: manifest.rows_digest,
               manifestHash: manifest.manifest_hash,
+              manifestCanonical,
               createdAt: manifest.created_at,
               rawEvidenceIncluded: false,
               rawIdentityIncluded: false,
@@ -118,14 +127,25 @@ export async function GET(_request: Request, context: ExportRouteContext) {
 
           for (const value of rows) {
             const row = asRecord(value);
-            if (!row) throw new Error("The immutable export contains a malformed row.");
+            const observationCanonical =
+              row && typeof row.observation_text === "string"
+                ? row.observation_text
+                : null;
+            if (!row || !observationCanonical) {
+              throw new Error("The immutable export contains a malformed row.");
+            }
+            const observation = asRecord(JSON.parse(observationCanonical));
+            if (!observation) {
+              throw new Error("The immutable export contains a malformed observation.");
+            }
             controller.enqueue(
               encoder.encode(
                 `${JSON.stringify({
                   recordType: "observation",
                   rowNumber: row.row_number,
                   rowHash: row.row_hash,
-                  observation: row.observation,
+                  observation,
+                  observationCanonical,
                 })}\n`,
               ),
             );

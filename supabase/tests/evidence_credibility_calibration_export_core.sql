@@ -713,4 +713,45 @@ begin
 end;
 $test$;
 
+do $test$
+declare
+  projected_manifest record;
+  projected_row record;
+  export_id_value uuid := (
+    select object_id from qa_export_objects where object_name = 'export'
+  );
+begin
+  select * into projected_manifest
+  from public.get_evidence_credibility_calibration_export_manifest_v1(export_id_value);
+  if not found
+     or projected_manifest.manifest_payload is null
+     or encode(
+       extensions.digest(
+         convert_to(projected_manifest.manifest_payload, 'UTF8'),
+         'sha256'
+       ),
+       'hex'
+     ) <> projected_manifest.manifest_hash then
+    raise exception 'The downloaded canonical manifest payload is not self-verifying.';
+  end if;
+
+  select * into projected_row
+  from public.list_evidence_credibility_calibration_export_rows_v1(
+    export_id_value, 1000, 0
+  );
+  if not found
+     or projected_row.observation_text is null
+     or projected_row.observation_text::jsonb is distinct from projected_row.observation
+     or encode(
+       extensions.digest(
+         convert_to(projected_row.observation_text, 'UTF8'),
+         'sha256'
+       ),
+       'hex'
+     ) <> projected_row.row_hash then
+    raise exception 'The downloaded canonical observation payload is not self-verifying.';
+  end if;
+end;
+$test$;
+
 rollback;

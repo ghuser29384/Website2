@@ -226,7 +226,7 @@ test("domain-separated HMAC tokens preserve only private grouping structure", ()
   );
 });
 
-test("row and manifest integrity are cryptographically bound", () => {
+test("row and manifest integrity are cryptographically bound and export-verifiable", () => {
   assert.match(
     createExport,
     /extensions\.digest\([\s\S]*payloads\.observation::text[\s\S]*'sha256'/i,
@@ -240,6 +240,13 @@ test("row and manifest integrity are cryptographically bound", () => {
   assert.match(createExport, /'rawEvidenceIncluded', false/i);
   assert.match(createExport, /'rawIdentityIncluded', false/i);
   assert.match(createExport, /'exactPaymentDataIncluded', false/i);
+  assert.match(manifestProjection, /manifest_payload text/i);
+  assert.match(manifestProjection, /jsonb_build_object\([\s\S]*'shadowOnly', true[\s\S]*\)::text/i);
+  assert.match(rowProjection, /observation_text text/i);
+  assert.match(rowProjection, /export_row\.observation::text/i);
+  assert.match(route, /manifestCanonical/i);
+  assert.match(route, /observationCanonical/i);
+  assert.match(route, /JSON\.parse\(observationCanonical\)/i);
 });
 
 test("download authorization precedes streaming and never escalates to service role", () => {

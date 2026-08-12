@@ -626,6 +626,7 @@ returns table (
   row_count integer,
   rows_digest text,
   manifest_hash text,
+  manifest_payload text,
   created_at timestamptz
 )
 language plpgsql
@@ -647,6 +648,19 @@ begin
     export_record.row_count,
     export_record.rows_digest,
     export_record.manifest_hash,
+    jsonb_build_object(
+      'exportSchemaVersion', export_record.export_schema_version,
+      'analysisPlanVersion', export_record.analysis_plan_version,
+      'analysisPlanHash', export_record.analysis_plan_hash,
+      'sourceCutoffAt', export_record.source_cutoff_at,
+      'pseudonymizationKeyCommitment', export_record.pseudonymization_key_commitment,
+      'rowCount', export_record.row_count,
+      'rowsDigest', export_record.rows_digest,
+      'rawEvidenceIncluded', false,
+      'rawIdentityIncluded', false,
+      'exactPaymentDataIncluded', false,
+      'shadowOnly', true
+    )::text,
     export_record.created_at
   from public.evidence_credibility_calibration_exports export_record
   where export_record.id = p_export_id;
@@ -661,7 +675,8 @@ create or replace function public.list_evidence_credibility_calibration_export_r
 returns table (
   row_number integer,
   row_hash text,
-  observation jsonb
+  observation jsonb,
+  observation_text text
 )
 language plpgsql
 stable
@@ -678,7 +693,8 @@ begin
   select
     export_row.row_number,
     export_row.row_hash,
-    export_row.observation
+    export_row.observation,
+    export_row.observation::text
   from public.evidence_credibility_calibration_export_rows export_row
   where export_row.export_id = p_export_id
   order by export_row.row_number

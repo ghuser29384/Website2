@@ -133,11 +133,12 @@ RLS is enabled. Anonymous and ordinary authenticated roles have no direct table 
 
 The authenticated download route returns `application/x-ndjson` with private no-store headers.
 
-- Line 1 has `recordType = "manifest"`.
-- Each subsequent line has `recordType = "observation"`, its row number, row hash, and stored observation.
+- Line 1 has `recordType = "manifest"` and includes `manifestCanonical`, the exact PostgreSQL JSONB text whose SHA-256 is `manifestHash`.
+- Each subsequent line has `recordType = "observation"`, its row number, row hash, parsed observation, and `observationCanonical`, the exact PostgreSQL JSONB text whose SHA-256 is the row hash.
+- The ordered SHA-256 row hashes, joined with `|`, reproduce `rowsDigest`.
 - The route pages through the immutable rows, checks the emitted count against the manifest, and never uses a service-role client.
 
-The route performs identity-bound RPC authorization before creating the stream.
+The canonical strings are intentionally retained alongside parsed JSON because ordinary JSON parsing can discard numeric scale and object serialization details. An offline package can therefore verify every row, the ordered dataset digest, and the manifest byte-for-byte without production credentials. The route performs identity-bound RPC authorization before creating the stream.
 
 ## Isolation boundary
 
@@ -163,7 +164,7 @@ The exact-head candidate is acceptable only after source and isolated-database g
 5. changed immutable request fields fail;
 6. raw UUIDs and every forbidden evidence, identity, rationale, provider, payment, and stake field are absent from stored observations;
 7. grouping tokens are valid domain-separated HMAC outputs;
-8. row hashes, rows digest, and manifest hash are reproducible;
+8. row hashes, rows digest, and manifest hash are reproducible from the downloaded canonical payload strings;
 9. append-only triggers reject modification and deletion;
 10. download authorization precedes row access and no service role is used;
 11. full repository tests, ESLint, TypeScript, and production build pass;
