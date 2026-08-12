@@ -1,0 +1,189 @@
+from pathlib import Path
+import re
+
+S = 'body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell))'
+A = S + ':not(:has([data-mt-surface="auth"]))'
+
+def read(p): return Path(p).read_text()
+def write(p, s): Path(p).write_text(s)
+def one(s, old, new, label):
+    n = s.count(old)
+    if n != 1: raise SystemExit(f"{label}: expected 1, found {n}")
+    return s.replace(old, new, 1)
+
+def remove_array_route(s, name, route):
+    m = re.search(rf'(const {name} = \[\n)(.*?)(\n\];)', s, re.S)
+    if not m: raise SystemExit(f"{name}: not found")
+    body, line = m.group(2), f'  "{route}",\n'
+    if body.count(line) != 1: raise SystemExit(f"{name}: {route} count {body.count(line)}")
+    body = body.replace(line, "", 1)
+    return s[:m.start(2)] + body + s[m.end(2):]
+
+p = "src/app/canonical-visual-system.css"
+s = read(p)
+if s.count(S) < 10: raise SystemExit("canonical scope count too small")
+s = s.replace(S, A)
+s, n = re.subn(
+    r'\n/\* -{10,} \*/\n/\* Authentication and account entry\s+\*/\n'
+    r'/\* -{10,} \*/\n.*?(?=\n/\* -{10,} \*/\n/\* Explicit custom surfaces)',
+    "", s, count=1, flags=re.S,
+)
+if n != 1: raise SystemExit(f"canonical auth section count {n}")
+s = one(
+    s,
+    '.page-shell h4,\n[class*="auth-card_"] h1,\n[class*="auth-card_"] h2,\n[class*="PageShell"] h1,',
+    '.page-shell h4,\n[class*="PageShell"] h1,',
+    "auth heading selectors",
+)
+focus = "\n".join(("input:focus-visible,", "select:focus-visible,", "textarea:focus-visible,",
+                   "button:focus-visible,", "a:focus-visible,", "summary:focus-visible,",
+                   '[role="button"]:focus-visible {'))
+s = one(s, focus, "\n".join(f"{A} {x}" for x in focus.splitlines()), "focus scope")
+accent = "\n".join(('input[type="checkbox"],', 'input[type="radio"],', 'input[type="range"] {'))
+s = one(s, accent, "\n".join(f"{A} {x}" for x in accent.splitlines()), "accent scope")
+bad = [line for line in s.splitlines()
+       if "auth" in line.lower() and ':not(:has([data-mt-surface="auth"]))' not in line]
+if bad: raise SystemExit("direct canonical auth selectors remain:\n" + "\n".join(bad))
+write(p, s)
+
+p = "src/app/canonical-visual-system-remediation.css"
+s = read(p)
+if s.count(S) < 2: raise SystemExit("remediation scope count too small")
+s = s.replace(S, A)
+s = one(
+    s,
+    'body:has([data-mt-canonical-home="true"]),\nbody:has(.mtw-shell) {\n'
+    '  background-image: none !important;\n}',
+    'body:has([data-mt-canonical-home="true"]),\nbody:has(.mtw-shell),\n'
+    'body:has([data-mt-surface="auth"]) {\n  background-image: none !important;\n}\n\n'
+    'html:has([data-mt-surface="auth"]) {\n  background: #f3f5f8 !important;\n}\n\n'
+    'body:has([data-mt-surface="auth"]) {\n  background-color: #f3f5f8 !important;\n}',
+    "auth background exemption",
+)
+s, n = re.subn(
+    r'\n/\* Authentication must not fall back to the rounded glass-card treatment\. \*/\n'
+    r'.*?(?=\n/\* Public Goods Fund navigation and mode labels use rules, not capsules\. \*/)',
+    "", s, count=1, flags=re.S,
+)
+if n != 1: raise SystemExit(f"remediation auth section count {n}")
+write(p, s)
+
+p = "tests/sitewide-canonical-visual-system.spec.ts"
+s = read(p)
+s = remove_array_route(s, "productRoutes", "/dashboard")
+s = remove_array_route(s, "accountAndStandaloneRoutes", "/login")
+s = remove_array_route(s, "accountAndStandaloneRoutes", "/signup")
+s, n = re.subn(
+    r'\n  if \(pathname === "/dashboard"\) \{.*?\n  \}\n\n  if \(pathname === "/commitments"\)',
+    '\n  if (pathname === "/commitments")', s, count=1, flags=re.S,
+)
+if n != 1: raise SystemExit(f"dashboard helper count {n}")
+s = one(
+    s,
+    '  const expectedSurface = finalPathname === "/login" || finalPathname === "/signup"\n'
+    '    ? "auth"\n    : finalPathname === "/connectors"\n      ? "connectors"',
+    '  const expectedSurface = finalPathname === "/connectors"\n    ? "connectors"',
+    "auth expected surface",
+)
+s = one(
+    s,
+    'test("Dashboard guest route redirects to a substantive canonical auth surface"',
+    'test("Dashboard guest route preserves the existing authentication experience"',
+    "dashboard test title",
+)
+s = one(
+    s,
+    '  await expectCanonicalSurface(page, "/dashboard", testInfo);\n',
+    '  const response = await page.goto("/dashboard", { timeout: 60_000, waitUntil: "domcontentloaded" });\n'
+    '  expect(response?.status() ?? 200).toBeLessThan(400);\n'
+    '  await expectNoFrameworkOverlay(page, "/dashboard");\n'
+    '  await expectNoHorizontalOverflow(page);\n',
+    "dashboard direct smoke",
+)
+s = one(
+    s,
+    'test("Authentication uses hard editorial geometry instead of a glass card"',
+    'test("Authentication remains outside the canonical hard-geometry restyle"',
+    "auth test title",
+)
+s = one(
+    s,
+    '  await expectCanonicalSurface(page, "/login", testInfo);\n',
+    '  const response = await page.goto("/login", { timeout: 60_000, waitUntil: "domcontentloaded" });\n'
+    '  expect(response?.status() ?? 200).toBeLessThan(400);\n'
+    '  await expect(page.locator(\'[data-mt-surface="auth"]\')).toBeVisible({ timeout: 45_000 });\n'
+    '  await expectNoFrameworkOverlay(page, "/login");\n'
+    '  await expectNoHorizontalOverflow(page);\n',
+    "auth direct smoke",
+)
+s = one(s, '  await expect(card).toHaveCSS("border-radius", "0px");',
+        '  await expect(card).toHaveCSS("border-radius", "24px");', "auth card radius")
+s = one(s, '  await expect(card).toHaveCSS("box-shadow", "none");',
+        '  await expect(card).not.toHaveCSS("box-shadow", "none");', "auth card shadow")
+s = one(s, '    "0px",\n  );\n  await expect(page.locator(\'[data-mt-surface="auth"] [class*="graphicFrame"]\')',
+        '    "12px",\n  );\n  await expect(page.locator(\'[data-mt-surface="auth"] [class*="graphicFrame"]\')',
+        "auth email radius")
+s = one(s, '    "0px",\n  );\n});\n\ntest("Public Goods Fund',
+        '    "24px",\n  );\n});\n\ntest("Public Goods Fund', "auth graphic radius")
+m = re.search(
+    r'(test\("keeps representative routes usable on mobile".*?for \(const route of \[\n)'
+    r'(.*?)(\n  \]\) \{)', s, re.S,
+)
+if not m: raise SystemExit("mobile route list not found")
+body = m.group(2)
+for route in ("/dashboard", "/login"):
+    line = f'    "{route}",\n'
+    if body.count(line) != 1: raise SystemExit(f"mobile {route} count {body.count(line)}")
+    body = body.replace(line, "", 1)
+s = s[:m.start(2)] + body + s[m.end(2):]
+write(p, s)
+
+p = "src/sitewide-canonical-visual-system.test.ts"
+s = read(p)
+s = one(
+    s,
+    '  assert.match(canonical, /body:not\\(:has\\(\\[data-mt-canonical-home="true"\\]\\)'
+    '\\):not\\(:has\\(\\.mtw-shell\\)\\)/);',
+    '  const authExclusion = /body:not\\(:has\\(\\[data-mt-canonical-home="true"\\]\\)'
+    '\\):not\\(:has\\(\\.mtw-shell\\)\\):not\\(:has\\(\\[data-mt-surface="auth"\\]\\)\\)/;\n'
+    '  assert.match(canonical, authExclusion);\n  assert.match(remediation, authExclusion);',
+    "source scope assertion",
+)
+s = one(
+    s,
+    '  assert.match(remediation, /\\[data-mt-surface="auth"\\][\\s\\S]*article'
+    '[\\s\\S]*border-radius:\\s*0\\s*!important/);\n',
+    "", "source auth hard geometry",
+)
+s = one(s, '    ["src/components/auth/auth-card.tsx", "auth"],\n', "", "source auth hook list")
+s = s.replace("Dashboard guest route redirects to a substantive canonical auth surface",
+              "Dashboard guest route preserves the existing authentication experience")
+s = s.replace("Authentication uses hard editorial geometry instead of a glass card",
+              "Authentication remains outside the canonical hard-geometry restyle")
+anchor = 'test("every Next.js page declares a shared or explicitly aligned visual shell", () => {'
+guard = r'''test("authentication routes remain outside the canonical visual restyle", () => {
+  const canonical = read("src/app/canonical-visual-system.css");
+  const remediation = read("src/app/canonical-visual-system-remediation.css");
+  const rendered = read("tests/sitewide-canonical-visual-system.spec.ts");
+  const authExclusion = /body:not\(:has\(\[data-mt-canonical-home="true"\]\)\):not\(:has\(\.mtw-shell\)\):not\(:has\(\[data-mt-surface="auth"\]\)\)/;
+  const productRoutes = rendered.match(/const productRoutes = \[([\s\S]*?)\];/)?.[1] ?? "";
+  const accountRoutes =
+    rendered.match(/const accountAndStandaloneRoutes = \[([\s\S]*?)\];/)?.[1] ?? "";
+
+  assert.match(canonical, authExclusion);
+  assert.match(remediation, authExclusion);
+  assert.equal(canonical.includes("Authentication and account entry"), false);
+  assert.equal(canonical.includes('[class*="auth-card_"]'), false);
+  assert.equal(canonical.includes("\ninput:focus-visible,"), false);
+  assert.equal(remediation.includes("Authentication must not fall back"), false);
+  assert.equal(productRoutes.includes('"/dashboard"'), false);
+  assert.equal(accountRoutes.includes('"/login"'), false);
+  assert.equal(accountRoutes.includes('"/signup"'), false);
+  assert.match(rendered, /Authentication remains outside the canonical hard-geometry restyle/);
+  assert.match(rendered, /toHaveCSS\("border-radius", "24px"\)/);
+});
+
+'''
+s = one(s, anchor, guard + anchor, "auth exclusion guard")
+write(p, s)
+print("authentication exclusion applied")
