@@ -1,0 +1,166 @@
+name: Validate MPGF DAC lifecycle on current main
+
+on:
+  push:
+    branches:
+      - ops/validate-mpgf-dac-current-main-20260812
+    paths:
+      - ".github/workflows/validate-mpgf-dac-current-main-20260812.yml"
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: validate-mpgf-dac-current-main-20260812
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: 8ee3e14b340fdb486c211d86703e02f9226811ab
+  EXPECTED_STACK_SHA: ef7894d41f5793dd19c0f478be4cb855171699a3
+  EXPECTED_CANDIDATE_SHA: 65f1cf74a925c5c7015da5d4fc5fb383cf260bb3
+  INTEGRATION_REF: integration/mpgf-dac-lifecycle-current-main-20260812
+  DAC_WORKFLOW_ID: "329247968"
+
+jobs:
+  dispatch-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    steps:
+      - name: Guard exact repository, branches, and merge ancestry
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF_NAME" = 'ops/validate-mpgf-dac-current-main-20260812'
+
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          candidate_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$INTEGRATION_REF" --jq '.object.sha')"
+          test "$main_sha" = "$EXPECTED_MAIN_SHA"
+          test "$candidate_sha" = "$EXPECTED_CANDIDATE_SHA"
+
+          gh api "repos/$GITHUB_REPOSITORY/commits/$EXPECTED_CANDIDATE_SHA" > candidate-commit.json
+          jq -e \
+            --arg main "$EXPECTED_MAIN_SHA" \
+            --arg stack "$EXPECTED_STACK_SHA" '
+              ([.parents[].sha] | length == 2)
+              and ([.parents[].sha] | index($main) != null)
+              and ([.parents[].sha] | index($stack) != null)
+            ' candidate-commit.json >/dev/null
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$DAC_WORKFLOW_ID" > dac-workflow.json
+          jq -e '
+            .state == "active"
+            and .name == "MPGF DAC product lifecycle gates"
+            and .path == ".github/workflows/mpgf-dac-product-lifecycle-gates.yml"
+          ' dac-workflow.json >/dev/null
+
+          {
+            printf 'main=%s\n' "$main_sha"
+            printf 'stack=%s\n' "$EXPECTED_STACK_SHA"
+            printf 'candidate=%s\n' "$candidate_sha"
+            printf 'integration_ref=%s\n' "$INTEGRATION_REF"
+          } | tee integration-identity.txt
+
+      - name: Dispatch the permanent exact-head DAC lifecycle workflow
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prior_max="$(gh api -X GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$DAC_WORKFLOW_ID/runs" \
+            -f event=workflow_dispatch \
+            -F per_page=100 \
+            --jq '[.workflow_runs[].id] | max // 0')"
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$DAC_WORKFLOW_ID/dispatches" \
+            -f ref="$INTEGRATION_REF"
+
+          run_id=''
+          for attempt in $(seq 1 60); do
+            run_id="$(gh api -X GET \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$DAC_WORKFLOW_ID/runs" \
+              -f event=workflow_dispatch \
+              -F per_page=50 \
+              --jq ".workflow_runs | map(select(.id > $prior_max and .head_sha == \"$EXPECTED_CANDIDATE_SHA\" and .head_branch == \"$INTEGRATION_REF\" and .created_at >= \"$started_at\")) | sort_by(.id) | .[0].id // empty")"
+            [[ -n "$run_id" ]] && break
+            sleep 2
+          done
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "$run_id" | tee dac-lifecycle-run-id.txt
+
+      - name: Wait for the permanent workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run watch "$RUN_ID" --repo "$GITHUB_REPOSITORY" --exit-status --interval 15
+
+      - name: Verify exact successful jobs, artifacts, and unchanged integration ref
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.dispatch.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run view "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,name,status,conclusion,headSha,headBranch,event,url,createdAt,updatedAt,jobs \
+            > dac-lifecycle-run.json
+
+          jq -e \
+            --arg sha "$EXPECTED_CANDIDATE_SHA" \
+            --arg branch "$INTEGRATION_REF" '
+              .name == "MPGF DAC product lifecycle gates"
+              and .status == "completed"
+              and .conclusion == "success"
+              and .headSha == $sha
+              and .headBranch == $branch
+              and .event == "workflow_dispatch"
+              and ([.jobs[] | select(.name == "Exact-version product source, tests, lint, types, and build" and .conclusion == "success")] | length == 1)
+              and ([.jobs[] | select(.name == "Creator, reviewer, pledge, success, lapse, privacy, and zero-residue proof" and .conclusion == "success")] | length == 1)
+            ' dac-lifecycle-run.json >/dev/null
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts" > dac-lifecycle-artifacts.json
+          jq -e '
+            .total_count >= 2
+            and any(.artifacts[]; (.name | startswith("mpgf-dac-product-source-")) and .expired == false)
+            and any(.artifacts[]; (.name | startswith("mpgf-dac-product-lifecycle-")) and .expired == false)
+          ' dac-lifecycle-artifacts.json >/dev/null
+
+          candidate_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$INTEGRATION_REF" --jq '.object.sha')"
+          test "$candidate_sha" = "$EXPECTED_CANDIDATE_SHA"
+
+          current_main="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          {
+            printf 'validated_candidate=%s\n' "$candidate_sha"
+            printf 'current_main_after_validation=%s\n' "$current_main"
+            printf 'run_id=%s\n' "$RUN_ID"
+            jq -r '.artifacts[] | "artifact=\(.id) name=\(.name) digest=\(.digest // \"unavailable\")"' dac-lifecycle-artifacts.json
+          } | tee validation-summary.txt
+
+      - name: Upload controller evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-dac-current-main-validation-${{ github.run_id }}
+          path: |
+            integration-identity.txt
+            candidate-commit.json
+            dac-workflow.json
+            dac-lifecycle-run-id.txt
+            dac-lifecycle-run.json
+            dac-lifecycle-artifacts.json
+            validation-summary.txt
+          if-no-files-found: warn
+          retention-days: 30
