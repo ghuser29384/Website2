@@ -14,7 +14,11 @@ import {
   type LiveNowProfileSignals,
   type LiveNowRecommendation,
 } from "./live-now-recommendations";
-import { normalizeRecommendationText } from "./recommendation-learning";
+import {
+  getActionDescriptor,
+  normalizeRecommendationText,
+  opportunityKey,
+} from "./recommendation-learning";
 
 export const OPPORTUNITY_SYNTHESIS_VERSION = "atlas-synthesis-v1";
 export const SYNTHESIZED_OPPORTUNITY_PREFIX = "synth:";
@@ -58,6 +62,15 @@ interface ScoredTemplate {
   relevance: number;
   basis: string;
 }
+
+type OpportunitySynthesisProfile = Pick<
+  LiveNowProfileSignals,
+  | "causes"
+  | "causeSignals"
+  | "actionPreferences"
+  | "hiddenOpportunityKeys"
+  | "savedOpportunityKeys"
+>;
 
 function clamp(value: number, minimum = 0, maximum = 1) {
   return Math.min(maximum, Math.max(minimum, Number.isFinite(value) ? value : minimum));
@@ -136,7 +149,10 @@ export function buildSynthesizedTradeDraftPrefill({
   matchedCause: string;
   role: SynthesizedTradeDraftRole;
 }): SynthesizedTradeDraftPrefill {
-  const priority = matchedCause.trim().replace(/\s+/g, " ").slice(0, 120) || template.offeredCause;
+  const normalizedPriority = matchedCause.trim().replace(/\s+/g, " ").slice(0, 120);
+  const priority = normalizedPriority || draftPrompt(
+    "name the moral priority you want the reciprocal action to advance",
+  );
   const userGives = role === "first_party" ? template.firstPartyGives : template.counterpartyGives;
   const userReceives = role === "first_party" ? template.firstPartyReceives : template.counterpartyReceives;
   const roleLabel = role === "first_party" ? "first-party side" : "counterparty side";
@@ -226,7 +242,7 @@ function templateSearchTerms(template: OpportunitySynthesisTemplate) {
 }
 
 function isGenericTemplate(template: OpportunitySynthesisTemplate) {
-  return template.generic === true;
+  return "generic" in template && template.generic === true;
 }
 
 function scoreTemplate(
@@ -295,15 +311,38 @@ function opportunityTypeForTemplate(template: OpportunitySynthesisTemplate) {
     : "offer" as const;
 }
 
-function buildRecommendation(item: ScoredTemplate, now: Date): SynthesizedFeedRecommendation {
+function buildRecommendation(
+  item: ScoredTemplate,
+  now: Date,
+  profile: OpportunitySynthesisProfile,
+): SynthesizedFeedRecommendation {
   const { template, signal, relevance, basis } = item;
   const offeredCause = personalizedOfferedCause(template, signal.cause);
   const fieldNames = fieldCauses(template);
   const confidence = clamp((template.confidence / 100) * 0.72 + relevance * 0.28);
-  const difficulty = template.sensitivity === "restricted" ? 4.4 : template.sensitivity === "elevated" ? 3.5 : 2.8;
-  const difficultyLabel = difficulty >= 4 ? "Hard" as const : difficulty >= 2.4 ? "Moderate" as const : "Easy" as const;
+  const baselineDifficulty =
+    template.sensitivity === "restricted" ? 4.4 : template.sensitivity === "elevated" ? 3.5 : 2.8;
   const id = `synth:${template.id}:${slug(signal.cause)}`;
-  const query = new URLSearchParams({ cause: signal.cause, source: "feed" });
+  const mode = modeForTemplate(template);
+  const opportunityType = opportunityTypeForTemplate(template);
+  const descriptor = getActionDescriptor({
+    actionText: template.firstPartyGives,
+    actionCause: template.requestedCause,
+    mode,
+    opportunityType,
+  });
+  const learned = profile.actionPreferences?.get(descriptor.key);
+  const difficulty = learned?.difficulty ?? baselineDifficulty;
+  const difficultyLabel =
+    difficulty >= 4 ? "Hard" as const : difficulty >= 2.4 ? "Moderate" as const : "Easy" as const;
+  const willingness = learned?.willingness ?? Math.round(clamp(0.38 + relevance * 0.28) * 100);
+  const actionFitLabel =
+    willingness >= 68 && difficulty <= 3.6
+      ? "Strong fit" as const
+      : willingness >= 38
+        ? "Possible fit" as const
+        : "Stretch" as const;
+  const saved = profile.savedOpportunityKeys?.has(opportunityKey(opportunityType, id)) ?? false;
   const classification = synthesisClassificationLabel(template.classification);
   const safetySummary = template.safetyChecks[0] ?? "Complete the standard safety review.";
 
@@ -311,7 +350,7 @@ function buildRecommendation(item: ScoredTemplate, now: Date): SynthesizedFeedRe
     id,
     ownerId: "platform:opportunity-synthesis",
     ownerAlias: "Potential opportunity — no counterparty has agreed",
-    mode: modeForTemplate(template),
+    mode,
     offeredCause,
     requestedCause: template.requestedCause,
     compromiseCause: classification,
@@ -324,16 +363,16 @@ function buildRecommendation(item: ScoredTemplate, now: Date): SynthesizedFeedRe
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
     sourceRevision: 1,
-    opportunityType: opportunityTypeForTemplate(template),
-    href: `/suggested-opportunities/${encodeURIComponent(template.id)}?${query.toString()}`,
+    opportunityType,
+    href: `/suggested-opportunities/${encodeURIComponent(template.id)}`,
     ctaLabel: "Review potential trade",
     sourceLabel: "Bottleneck Atlas suggestion",
     summary: template.summary,
     benefitCauses: uniqueProfileCauses([signal.cause], [offeredCause], fieldNames),
     actionCauses: uniqueProfileCauses([template.requestedCause], fieldNames),
-    actionKey: `synthesis:${template.id}`,
-    actionLabel: "Review and correct assumptions",
-    defaultDifficulty: difficulty,
+    actionKey: descriptor.key,
+    actionLabel: descriptor.label,
+    defaultDifficulty: baselineDifficulty,
     metadata: {
       origin: "platform_generated",
       synthesisVersion: OPPORTUNITY_SYNTHESIS_VERSION,
@@ -357,22 +396,22 @@ function buildRecommendation(item: ScoredTemplate, now: Date): SynthesizedFeedRe
       `First safety gate: ${safetySummary}`,
       "Use the detail page to review the no-trade baseline, candidate structures, assumptions, and externality checks before creating or sharing anything.",
     ],
-    score: round(confidence * 100),
+    score: round(confidence * 100 + (saved ? 8 : 0)),
     difficulty,
     difficultyLabel,
-    willingness: Math.round(clamp(0.38 + relevance * 0.28) * 100),
-    actionFitLabel: relevance >= 0.72 ? "Strong fit" : relevance >= 0.46 ? "Possible fit" : "Stretch",
-    learnedActionSignalCount: 0,
-    saved: false,
+    willingness,
+    actionFitLabel,
+    learnedActionSignalCount: learned?.observationCount ?? 0,
+    saved,
     scoreBreakdown: {
       benefit: round(relevance * 100),
       actionCause: round(relevance * 40),
-      actionFit: round((relevance - 0.5) * 40),
+      actionFit: round((willingness - 50) * 0.4),
       difficultyPenalty: round((difficulty - 1) * 4),
       recency: 12,
       quality: round(template.confidence / 12.5),
       trust: 0,
-      saved: 0,
+      saved: saved ? 18 : 0,
     },
   };
 }
@@ -388,7 +427,7 @@ export function synthesizeBottleneckAtlasRecommendations({
   now = new Date(),
   limit = 6,
 }: {
-  profile: Pick<LiveNowProfileSignals, "causes" | "causeSignals">;
+  profile: OpportunitySynthesisProfile;
   now?: Date;
   limit?: number;
 }): OpportunitySynthesisResult {
@@ -415,7 +454,14 @@ export function synthesizeBottleneckAtlasRecommendations({
     selected.push(item);
   }
 
-  const recommendations = selected.map((item) => buildRecommendation(item, now));
+  const recommendations = selected
+  .map((item) => buildRecommendation(item, now, profile))
+  .filter(
+    (recommendation) =>
+      !profile.hiddenOpportunityKeys?.has(
+        opportunityKey(recommendation.opportunityType, recommendation.id),
+      ),
+  );
   return {
     recommendations,
     diagnostics: {
@@ -426,7 +472,12 @@ export function synthesizeBottleneckAtlasRecommendations({
       templatesConsidered: OPPORTUNITY_SYNTHESIS_TEMPLATES.length,
       relevantTemplateCount: scored.length,
       generatedCount: recommendations.length,
-      genericFallbackCount: selected.filter((item) => isGenericTemplate(item.template)).length,
+      genericFallbackCount: recommendations.filter((recommendation) => {
+      const templateId = recommendation.metadata.templateId;
+      if (typeof templateId !== "string") return false;
+      const template = getSynthesisTemplate(templateId);
+      return Boolean(template && "generic" in template && template.generic === true);
+    }).length,
       privateTextSentToProvider: false,
       counterpartyClaimsMade: false,
       liveOffersCreated: false,

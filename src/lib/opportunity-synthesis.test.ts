@@ -9,6 +9,7 @@ import {
   synthesizeBottleneckAtlasRecommendations,
 } from "./opportunity-synthesis";
 import { getSynthesisTemplate } from "./bottleneck-atlas";
+import { opportunityKey } from "./recommendation-learning";
 
 const checkedAt = new Date("2026-08-11T16:00:00.000Z");
 
@@ -45,6 +46,7 @@ test("synthesis generates specific and generic possibilities without inventing c
     assert.match(recommendation.reasonDetails.join(" "), /hypothesis, not a live offer/i);
     assert.match(recommendation.verification, /Unconfirmed synthesis/);
     assert.match(recommendation.href, /^\/suggested-opportunities\//);
+    assert.doesNotMatch(recommendation.href, /[?&]cause=/);
   }
 });
 
@@ -115,6 +117,13 @@ test("atlas candidates prefill a private draft without inventing a counterparty 
   assert.match(firstParty.notes, /No named counterparty is confirmed/);
   assert.match(firstParty.notes, /not a live offer or agreement/);
   assert.equal(firstParty.voluntaryCertification, false);
+
+  const privateFallback = buildSynthesizedTradeDraftPrefill({
+    template,
+    matchedCause: "",
+    role: "first_party",
+  });
+  assert.match(privateFallback.requestedCause, /^\[Replace:/);
 });
 
 test("the kill switch is explicit and fail-operational only when not disabled", () => {
@@ -144,4 +153,59 @@ test("when no published inventory exists, the feed can still surface generated p
   const merged = mergeExistingAndSynthesizedRecommendations([], synthesized, 12);
   assert.equal(merged.length, 5);
   assert.ok(merged.every((item) => item.id.startsWith("synthesized-")));
+});
+
+
+test("generated feedback persists across feed refreshes without exposing the private cause in a URL", () => {
+  const profile = {
+    causes: ["AI governance"],
+    causeSignals: [
+      { cause: "AI governance", weight: 100, source: "explicit_priority" as const, rank: 1 },
+    ],
+  };
+  const initial = synthesizeBottleneckAtlasRecommendations({
+    profile,
+    now: checkedAt,
+    limit: 8,
+  }).recommendations.find(
+    (item) => item.metadata.templateId === "ai-governance-advocacy-operations",
+  );
+  assert.ok(initial);
+  assert.doesNotMatch(initial.href, /[?&]cause=/);
+
+  const key = opportunityKey(initial.opportunityType, initial.id);
+  const learned = {
+    actionKey: initial.actionKey,
+    actionLabel: initial.actionLabel,
+    difficulty: 4.2,
+    willingness: 24,
+    observationCount: 3,
+    explicitDifficultyCount: 2,
+  };
+  const refreshed = synthesizeBottleneckAtlasRecommendations({
+    profile: {
+      ...profile,
+      actionPreferences: new Map([[initial.actionKey, learned]]),
+      savedOpportunityKeys: new Set([key]),
+    },
+    now: checkedAt,
+    limit: 8,
+  }).recommendations.find((item) => item.id === initial.id);
+
+  assert.ok(refreshed);
+  assert.equal(refreshed.saved, true);
+  assert.equal(refreshed.actionKey, initial.actionKey);
+  assert.equal(refreshed.difficulty, 4.2);
+  assert.equal(refreshed.willingness, 24);
+  assert.equal(refreshed.learnedActionSignalCount, 3);
+
+  const hidden = synthesizeBottleneckAtlasRecommendations({
+    profile: {
+      ...profile,
+      hiddenOpportunityKeys: new Set([key]),
+    },
+    now: checkedAt,
+    limit: 8,
+  }).recommendations;
+  assert.equal(hidden.some((item) => item.id === initial.id), false);
 });

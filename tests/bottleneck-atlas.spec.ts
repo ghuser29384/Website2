@@ -65,7 +65,7 @@ const feedFixture = {
       id: "synth:ai-governance-advocacy-operations:ai-governance",
       opportunityType: "offer",
       exposureRequestId: "synth-exposure-1",
-      href: "/suggested-opportunities/ai-governance-advocacy-operations?cause=AI%20governance",
+      href: "/suggested-opportunities/ai-governance-advocacy-operations",
       ctaLabel: "Review possibility",
       sourceLabel: "Potential mixed moral trade · Unconfirmed",
       ownerAlias: "No counterparty confirmed",
@@ -128,7 +128,7 @@ test.describe("Bottleneck Atlas and generated feed", () => {
     page,
   }) => {
     await page.goto(
-      "/suggested-opportunities/ai-governance-advocacy-operations?cause=AI%20governance",
+      "/suggested-opportunities/ai-governance-advocacy-operations",
       { waitUntil: "domcontentloaded" },
     );
 
@@ -172,7 +172,9 @@ test.describe("Bottleneck Atlas and generated feed", () => {
     await expect(published).toHaveCount(1);
     await expect(generated).toContainText("Potential trade");
     await expect(generated).toContainText("No counterparty confirmed");
-    await expect(generated.getByRole("link", { name: "Review possibility" })).toBeVisible();
+    const generatedLink = generated.getByRole("link", { name: "Review possibility" });
+    await expect(generatedLink).toBeVisible();
+    await expect(generatedLink).not.toHaveAttribute("href", /[?&]cause=/);
     await expect(page.getByText(/1 live opportunity · 1 generated possibility/)).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
