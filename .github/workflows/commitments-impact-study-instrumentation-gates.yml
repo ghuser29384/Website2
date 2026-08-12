@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   exact-contract-and-qa:
-    name: Verify validator, exact QA source, lifecycle, adversarial cases, and zero residue
+    name: Verify validator, exact QA source, lifecycle, adversarial cases, and owner-UAT baseline
     runs-on: ubuntu-latest
     timeout-minutes: 35
     env:
@@ -187,26 +187,50 @@ jobs:
             --file supabase/tests/commitments_impact_study_instrumentation_qa_only.sql \
             2>&1 | tee qa-study-instrumentation.log
 
-      - name: Prove persistent synthetic residue is zero
+      - name: Prove exact persistent synthetic owner-UAT baseline
         shell: bash
         run: |
           set -euo pipefail
-          residue="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
+          owner_uat="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
+            with target as (
+              select id
+              from public.impact_study_instances
+              where id = 'ce4ed005-45b9-446f-a60b-7eed66df2fbb'::uuid
+                and study_key = 'synthetic:trade-owner-uat-v1'
+                and study_instance_payload_hash = 'sha256:bd6ae33b90951253db32ad1c9366a5f1edb80b99f665af69b90e946f066628de'
+                and evidence_mapping_payload_hash = 'sha256:eb4aadae8491c1a6924fca03acdeb9157b07a1439098e736c88e549db16b59b8'
+                and environment = 'qa'
+                and subject_mode = 'synthetic_only'
+                and not execution_authorized
+                and not real_user_assignment_allowed
+                and registry_status = 'registered_nonexecuting'
+            )
             select
-              (select count(*) from public.impact_study_instances)
-              + (select count(*) from public.impact_study_validator_attestations)
-              + (select count(*) from public.impact_study_allowed_arms)
-              + (select count(*) from public.impact_study_allowed_exposure_cells)
-              + (select count(*) from public.impact_study_allowed_outcomes)
-              + (select count(*) from public.impact_study_allowed_evidence_schemes)
-              + (select count(*) from public.impact_study_registry_events)
-              + (select count(*) from public.impact_study_synthetic_assignments)
-              + (select count(*) from public.impact_study_synthetic_exposures)
-              + (select count(*) from public.impact_study_synthetic_outcomes)
-              + (select count(*) from public.impact_study_safety_events)
-              + (select count(*) from public.impact_study_calibration_manifests);")"
-          printf 'synthetic_residue=%s\n' "$residue" | tee qa-residue.log
-          test "$residue" = "0"
+              (select count(*) from public.impact_study_instances)::text || '|' ||
+              (select count(*) from target)::text || '|' ||
+              (select count(*) from public.impact_study_validator_attestations)::text || '|' ||
+              coalesce((select attestation_payload_sha256 from public.impact_study_validator_attestations where study_instance_id = (select id from target)), '') || '|' ||
+              (select count(*) from public.impact_study_allowed_arms)::text || '|' ||
+              (select count(*) from public.impact_study_allowed_exposure_cells)::text || '|' ||
+              (select count(*) from public.impact_study_allowed_outcomes)::text || '|' ||
+              (select count(*) from public.impact_study_allowed_evidence_schemes)::text || '|' ||
+              (select count(*) from public.impact_study_registry_events)::text || '|' ||
+              (select count(*) from public.impact_study_synthetic_assignments)::text || '|' ||
+              (select count(*) from public.impact_study_synthetic_exposures)::text || '|' ||
+              (select count(*) from public.impact_study_synthetic_outcomes)::text || '|' ||
+              (select count(*) from public.impact_study_safety_events)::text || '|' ||
+              (select count(*) from public.impact_study_calibration_manifests)::text || '|' ||
+              coalesce(public.impact_study_is_blocked((select id from target))::text, '') || '|' ||
+              coalesce((select string_agg(event_type, ',' order by event_sequence) from public.impact_study_registry_events where study_instance_id = (select id from target)), '') || '|' ||
+              coalesce((select safety_outcome_key || ':' || safety_status from public.impact_study_safety_events where study_instance_id = (select id from target)), '') || '|' ||
+              coalesce((select source_scope || ':' || holdout_status from public.impact_study_calibration_manifests where study_instance_id = (select id from target)), '') || '|' ||
+              (select count(*) from public.impact_study_synthetic_assignments where is_real_user)::text || '|' ||
+              (select count(*) from public.impact_study_instances where execution_authorized or real_user_assignment_allowed)::text || '|' ||
+              (select count(*) from public.impact_study_synthetic_outcomes where causal_claim_authorized or additionality_claim_authorized or participant_credit_authorized)::text || '|' ||
+              (select count(*) from public.impact_study_calibration_manifests where eligible_for_empirical_calibration or eligible_for_model_activation)::text;")"
+          printf 'owner_uat_baseline=%s\n' "$owner_uat" | tee qa-owner-uat-baseline.log
+          expected="1|1|1|sha256:9aa8f47483f01e0809e0977e6fd5b857ab412e22ff048726e74a2942104870f6|4|4|2|1|7|1|1|1|1|1|true|study_registered,synthetic_assignment_recorded,synthetic_exposure_recorded,synthetic_outcome_recorded,calibration_manifest_recorded,safety_veto_recorded,study_cancelled|duplicate_or_overlapping_resource_claim:observed|synthetic_qa_only:not_applicable_synthetic|0|0|0|0"
+          test "$owner_uat" = "$expected"
 
       - name: Check exact current-main diff
         shell: bash
@@ -257,7 +281,7 @@ jobs:
             registered-migrations/
             qa-lifecycle-probe.log
             qa-study-instrumentation.log
-            qa-residue.log
+            qa-owner-uat-baseline.log
             diff-check.log
             expected-files.txt
             actual-files.txt
