@@ -1,0 +1,306 @@
+name: Evidence credibility refreshed protected Preview deploy v1
+
+on:
+  push:
+    branches:
+      - ops/evidence-credibility-shadow-preview-acceptance-20260812
+    paths:
+      - .github/workflows/evidence-credibility-shadow-refreshed-protected-preview-deploy-v1.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-credibility-refreshed-protected-preview-deploy
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: 7ef370950861e979dbca14a9688c0f6e7193b8ab
+  CANDIDATE_BRANCH: release/evidence-credibility-shadow-current-main-20260812
+  CURRENT_MAIN_SHA: b637a18e52a560b4bbd992eeca2891ed9af86fa6
+  INTEGRATION_RUN_ID: '31595055473'
+  EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+  EXPECTED_QA_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+  EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  PGSSLMODE: require
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Check out controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: controller
+          ref: ${{ github.sha }}
+
+      - name: Check out exact refreshed candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: candidate
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Guard exact candidate, current main, green integration, and isolated QA credentials
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git -C candidate merge-base "$CURRENT_MAIN_SHA" HEAD)" = "$CURRENT_MAIN_SHA"
+          remote_candidate="$(git -C candidate ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_candidate" = "$CANDIDATE_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          test -n "${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          test -n "${VERCEL_TOKEN:-}"
+
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          valid = (
+              parsed.scheme in {'postgres', 'postgresql'}
+              and parsed.hostname == os.environ['EXPECTED_QA_POOLER_HOST']
+              and parsed.port == 5432
+              and parsed.path == '/postgres'
+              and os.environ['EXPECTED_QA_REF'] in (parsed.username or '')
+              and bool(parsed.password)
+              and parse_qs(parsed.query).get('sslmode', ['require']) == ['require']
+              and os.environ['NEXT_PUBLIC_SUPABASE_URL'] == os.environ['EXPECTED_QA_URL']
+              and 'jnpoxvalyjtdghnperyu' not in os.environ['NEXT_PUBLIC_SUPABASE_URL']
+          )
+          if not valid:
+              raise SystemExit('Refusing credentials outside the exact isolated MoralTrade QA project.')
+
+          request = urllib.request.Request(
+              f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['INTEGRATION_RUN_ID']}",
+              headers={
+                  'Authorization': f"Bearer {os.environ['GITHUB_TOKEN']}",
+                  'Accept': 'application/vnd.github+json',
+                  'X-GitHub-Api-Version': '2022-11-28',
+              },
+          )
+          with urllib.request.urlopen(request) as response:
+              payload = json.load(response)
+          if payload.get('head_sha') != os.environ['CANDIDATE_SHA']:
+              raise SystemExit('Integration run does not bind to the exact refreshed candidate.')
+          if payload.get('status') != 'completed' or payload.get('conclusion') != 'success':
+              raise SystemExit('Exact refreshed integration run is not green.')
+          PY
+
+          mkdir -p preview-deploy-evidence
+          printf 'controller_sha=%s\ncandidate_sha=%s\ncurrent_main_sha=%s\nintegration_run_id=%s\nqa_ref=%s\n' \
+            "$(git -C controller rev-parse HEAD)" "$CANDIDATE_SHA" "$CURRENT_MAIN_SHA" \
+            "$INTEGRATION_RUN_ID" "$EXPECTED_QA_REF" \
+            > preview-deploy-evidence/environment.txt
+
+      - name: Install exact dependencies and pinned Vercel CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix candidate
+          cd candidate
+          npx --yes "vercel@$VERCEL_CLI_VERSION" --version \
+            2>&1 | tee ../preview-deploy-evidence/vercel-cli-version.txt
+
+      - name: Link only the canonical Vercel project and pull Preview configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
+            --yes \
+            --environment=preview \
+            --git-branch="$CANDIDATE_BRANCH" \
+            --token="$VERCEL_TOKEN" \
+            2>&1 | tee ../preview-deploy-evidence/vercel-pull.log
+
+      - name: Override the local prebuild with isolated-QA bindings only
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          node <<'NODE'
+          const fs = require('fs');
+          const path = '.vercel/.env.preview.local';
+          let lines = fs.existsSync(path) ? fs.readFileSync(path, 'utf8').split(/\r?\n/) : [];
+          const overrides = {
+            NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+            NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+            SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
+          };
+          lines = lines.filter((line) => !Object.keys(overrides).some((key) => line.startsWith(`${key}=`)));
+          for (const [key, value] of Object.entries(overrides)) {
+            if (!value) throw new Error(`${key} is absent.`);
+            lines.push(`${key}=${JSON.stringify(value)}`);
+          }
+          fs.writeFileSync(path, `${lines.filter(Boolean).join('\n')}\n`, { mode: 0o600 });
+          NODE
+
+          grep -q '^NEXT_PUBLIC_SUPABASE_URL=' .vercel/.env.preview.local
+          if grep -q 'jnpoxvalyjtdghnperyu' .vercel/.env.preview.local; then
+            echo 'Production Supabase reference remained in the QA-bound local prebuild environment.' >&2
+            exit 1
+          fi
+
+      - name: Build the exact QA-bound prebuilt Preview artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          rm -rf .next .vercel/output
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+            --token="$VERCEL_TOKEN" \
+            2>&1 | tee ../preview-deploy-evidence/vercel-build.log
+
+      - name: Deploy the exact candidate as a protected non-production Preview
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+            --prebuilt \
+            --archive=tgz \
+            --target=preview \
+            --token="$VERCEL_TOKEN" \
+            --env "NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL" \
+            --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY" \
+            --env "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
+            --meta "githubCommitOrg=ghuser29384" \
+            --meta "githubCommitRepo=Website2" \
+            --meta "githubCommitSha=$CANDIDATE_SHA" \
+            --meta "githubCommitRef=$CANDIDATE_BRANCH" \
+            2> ../preview-deploy-evidence/vercel-deploy-stderr.log)"
+          deployment_url="$(printf '%s\n' "$deployment_url" | tr -d '\r' | tail -n 1)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]
+          deployment_host="${deployment_url#https://}"
+          deployment_host="${deployment_host%/}"
+          printf '%s\n' "$deployment_url" \
+            | tee ../preview-deploy-evidence/deployment-url.txt
+          {
+            echo "deployment_url=$deployment_url"
+            echo "deployment_host=$deployment_host"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify deployment identity, readiness, Preview target, metadata, and protection
+        id: verify
+        shell: bash
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          DEPLOYMENT_HOST: ${{ steps.deploy.outputs.deployment_host }}
+        run: |
+          set -euo pipefail
+          cd candidate
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$DEPLOYMENT_URL" \
+            --wait \
+            --timeout=10m \
+            --token="$VERCEL_TOKEN" \
+            2>&1 | tee ../preview-deploy-evidence/vercel-inspect.txt
+
+          detail_path="../preview-deploy-evidence/deployment-detail.json"
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_HOST}?teamId=${VERCEL_ORG_ID}" \
+            > "$detail_path"
+
+          deployment_id="$(jq -r '.id // .uid // empty' "$detail_path")"
+          test -n "$deployment_id"
+          jq -e \
+            --arg deployment_id "$deployment_id" \
+            --arg deployment_host "$DEPLOYMENT_HOST" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg candidate_sha "$CANDIDATE_SHA" \
+            --arg candidate_branch "$CANDIDATE_BRANCH" '
+              ((.id // .uid) == $deployment_id)
+              and (.url == $deployment_host)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "preview") != "production")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $candidate_sha)
+              and (.meta.githubCommitRef == $candidate_branch)
+            ' "$detail_path" >/dev/null
+
+          unauthenticated_status="$(curl --silent --max-redirs 0 \
+            --output /dev/null --write-out '%{http_code}' "$DEPLOYMENT_URL/login" || true)"
+          case "$unauthenticated_status" in
+            302|303|307|308|401|403) ;;
+            *)
+              echo "Protected deployment was unexpectedly accessible: $unauthenticated_status" >&2
+              exit 1
+              ;;
+          esac
+          printf '%s\n' "$unauthenticated_status" \
+            > ../preview-deploy-evidence/unauthenticated-status.txt
+          printf '%s\n' "$deployment_id" \
+            > ../preview-deploy-evidence/deployment-id.txt
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve exact deployment evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p preview-deploy-evidence
+          git -C candidate rev-parse HEAD > preview-deploy-evidence/candidate-head-sha.txt
+          git -C controller rev-parse HEAD > preview-deploy-evidence/controller-head-sha.txt
+          git -C candidate status --short > preview-deploy-evidence/candidate-status.txt
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+          sha256sum \
+            candidate/package-lock.json \
+            candidate/.github/workflows/evidence-credibility-shadow-integration-qa.yml \
+            > preview-deploy-evidence/candidate-sha256.txt
+
+      - name: Upload protected Preview deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-refreshed-protected-preview-deploy-${{ github.run_id }}-${{ env.CANDIDATE_SHA }}
+          path: preview-deploy-evidence
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record protected Preview deployment
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo '### Refreshed evidence-credibility protected Preview'
+            echo
+            echo "- Candidate: \`$CANDIDATE_SHA\`"
+            echo "- Current main base: \`$CURRENT_MAIN_SHA\`"
+            echo "- Integration run: \`$INTEGRATION_RUN_ID\`"
+            echo "- Deployment ID: \`${{ steps.verify.outputs.deployment_id }}\`"
+            echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
+            echo '- Target: protected Vercel Preview; isolated MoralTrade QA; no production alias'
+          } >> "$GITHUB_STEP_SUMMARY"
