@@ -2,9 +2,12 @@ import { createServiceClient } from "@/lib/supabase/server";
 import type {
   DirectDonationUpgradeCandidateRow,
   DirectDonationUpgradeEnvironment,
-  DirectDonationUpgradeObligationRow,
-  DirectDonationUpgradeOfferRow,
 } from "@/lib/direct-donation-upgrade";
+import type {
+  DirectDonationUpgradeProposalRow,
+  PartialDirectDonationUpgradeObligationRow,
+  PartialDirectDonationUpgradeOfferRow,
+} from "@/lib/direct-donation-upgrade-negotiation";
 
 export interface PublicDirectDonationUpgradeRow {
   id: string;
@@ -13,19 +16,23 @@ export interface PublicDirectDonationUpgradeRow {
   selected_branch: "fallback" | "matched" | null;
   privacy_mode: "public" | "private_until_completed";
   creator_amount_cents: number;
+  redirect_basis_points: number;
+  redirected_amount_cents: number;
+  retained_amount_cents: number;
   matcher_amount_cents: number;
   currency: "USD";
   match_deadline_at: string;
   fulfillment_deadline_at: string | null;
   webhook_grace_ends_at: string | null;
-  original_recipient: DirectDonationUpgradeOfferRow["original_recipient"];
-  upgraded_recipient: DirectDonationUpgradeOfferRow["upgraded_recipient"];
+  original_recipient: PartialDirectDonationUpgradeOfferRow["original_recipient"];
+  upgraded_recipient: PartialDirectDonationUpgradeOfferRow["upgraded_recipient"];
   terms_hash: string;
   created_at: string;
   completed_at: string | null;
   creator_display_name: string | null;
   matcher_display_name: string | null;
   matcher_count: number;
+  proposal_count: number;
   verified_obligation_count: number;
   verified_gross_amount_cents: number;
   verified_net_amount_cents: number;
@@ -35,9 +42,10 @@ export interface PublicDirectDonationUpgradeRow {
 
 export interface DirectDonationUpgradeViewerData {
   publicOffers: PublicDirectDonationUpgradeRow[];
-  creatorOffers: DirectDonationUpgradeOfferRow[];
+  creatorOffers: PartialDirectDonationUpgradeOfferRow[];
   viewerCandidates: DirectDonationUpgradeCandidateRow[];
-  viewerObligations: DirectDonationUpgradeObligationRow[];
+  viewerObligations: PartialDirectDonationUpgradeObligationRow[];
+  viewerProposals: DirectDonationUpgradeProposalRow[];
 }
 
 export async function loadPublicDirectDonationUpgrades(input: {
@@ -64,9 +72,15 @@ export async function loadPublicDirectDonationUpgrades(input: {
 export async function loadDirectDonationUpgradeViewerData(input: {
   viewerId: string;
   environment: DirectDonationUpgradeEnvironment;
-}) : Promise<DirectDonationUpgradeViewerData> {
+}): Promise<DirectDonationUpgradeViewerData> {
   const supabase = createServiceClient() as any;
-  const [publicResult, creatorResult, candidateResult, obligationResult] = await Promise.all([
+  const [
+    publicResult,
+    creatorResult,
+    candidateResult,
+    obligationResult,
+    proposalResult,
+  ] = await Promise.all([
     supabase
       .from("direct_donation_upgrade_public_offers")
       .select("*")
@@ -93,21 +107,38 @@ export async function loadDirectDonationUpgradeViewerData(input: {
       .eq("environment", input.environment)
       .eq("participant_profile_id", input.viewerId)
       .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("direct_donation_upgrade_proposals")
+      .select("*")
+      .eq("proposer_profile_id", input.viewerId)
+      .order("created_at", { ascending: false })
       .limit(50),
   ]);
 
-  const firstError = [publicResult, creatorResult, candidateResult, obligationResult]
+  const firstError = [
+    publicResult,
+    creatorResult,
+    candidateResult,
+    obligationResult,
+    proposalResult,
+  ]
     .map((result) => result.error)
     .find(Boolean);
-  if (firstError && firstError.code !== "42P01" && firstError.code !== "42703") {
+  if (
+    firstError &&
+    firstError.code !== "42P01" &&
+    firstError.code !== "42703"
+  ) {
     throw new Error(firstError.message);
   }
 
   return {
     publicOffers: (publicResult.data ?? []) as PublicDirectDonationUpgradeRow[],
-    creatorOffers: (creatorResult.data ?? []) as DirectDonationUpgradeOfferRow[],
+    creatorOffers: (creatorResult.data ?? []) as PartialDirectDonationUpgradeOfferRow[],
     viewerCandidates: (candidateResult.data ?? []) as DirectDonationUpgradeCandidateRow[],
-    viewerObligations: (obligationResult.data ?? []) as DirectDonationUpgradeObligationRow[],
+    viewerObligations: (obligationResult.data ?? []) as PartialDirectDonationUpgradeObligationRow[],
+    viewerProposals: (proposalResult.data ?? []) as DirectDonationUpgradeProposalRow[],
   };
 }
 
@@ -131,12 +162,40 @@ export async function loadDirectDonationUpgradePrivateDetail(input: {
       .maybeSingle(),
   ]);
 
-  if (offerResult.error && offerResult.error.code !== "42P01") {
+  if (
+    offerResult.error &&
+    offerResult.error.code !== "42P01" &&
+    offerResult.error.code !== "42703"
+  ) {
     throw new Error(offerResult.error.message);
   }
-  const offer = (offerResult.data ?? null) as DirectDonationUpgradeOfferRow | null;
+  const offer = (offerResult.data ?? null) as PartialDirectDonationUpgradeOfferRow | null;
+
+  let proposals: DirectDonationUpgradeProposalRow[] = [];
+  if (offer && input.viewerId) {
+    let proposalQuery = supabase
+      .from("direct_donation_upgrade_proposals")
+      .select("*, profile:profiles!proposer_profile_id(id,display_name)")
+      .eq("offer_id", input.offerId)
+      .order("created_at", { ascending: false });
+    if (offer.creator_profile_id !== input.viewerId) {
+      proposalQuery = proposalQuery.eq("proposer_profile_id", input.viewerId);
+    }
+    const proposalResult = await proposalQuery;
+    if (
+      proposalResult.error &&
+      proposalResult.error.code !== "42P01" &&
+      proposalResult.error.code !== "42703"
+    ) {
+      throw new Error(proposalResult.error.message);
+    }
+    proposals = (proposalResult.data ?? []) as DirectDonationUpgradeProposalRow[];
+  }
+
   let isParticipant = Boolean(
-    offer && input.viewerId && offer.creator_profile_id === input.viewerId,
+    offer &&
+      input.viewerId &&
+      (offer.creator_profile_id === input.viewerId || proposals.length > 0),
   );
 
   if (offer && input.viewerId && !isParticipant) {
@@ -147,7 +206,11 @@ export async function loadDirectDonationUpgradePrivateDetail(input: {
       .eq("profile_id", input.viewerId)
       .limit(1)
       .maybeSingle();
-    if (membershipResult.error && membershipResult.error.code !== "42P01") {
+    if (
+      membershipResult.error &&
+      membershipResult.error.code !== "42P01" &&
+      membershipResult.error.code !== "42703"
+    ) {
       throw new Error(membershipResult.error.message);
     }
     isParticipant = Boolean(membershipResult.data);
@@ -160,6 +223,7 @@ export async function loadDirectDonationUpgradePrivateDetail(input: {
       candidates: [],
       obligations: [],
       impactCredits: [],
+      proposals,
       isParticipant: false,
     };
   }
@@ -184,7 +248,11 @@ export async function loadDirectDonationUpgradePrivateDetail(input: {
   const firstError = [candidatesResult, obligationsResult, creditsResult]
     .map((result) => result.error)
     .find(Boolean);
-  if (firstError && firstError.code !== "42P01") {
+  if (
+    firstError &&
+    firstError.code !== "42P01" &&
+    firstError.code !== "42703"
+  ) {
     throw new Error(firstError.message);
   }
 
@@ -194,6 +262,7 @@ export async function loadDirectDonationUpgradePrivateDetail(input: {
     candidates: candidatesResult.data ?? [],
     obligations: obligationsResult.data ?? [],
     impactCredits: creditsResult.data ?? [],
+    proposals,
     isParticipant: true,
   };
 }
