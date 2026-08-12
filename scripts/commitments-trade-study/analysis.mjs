@@ -8,7 +8,7 @@ function assert(condition, message) {
 function studentTCritical95(degreesOfFreedom) {
   const z = 1.959963984540054;
   if (!Number.isFinite(degreesOfFreedom) || degreesOfFreedom <= 0) return Infinity;
-  const df = degreesOfFredom;
+  const df = degreesOfFreedom;
   return (
     z +
     (z ** 3 + z) / (4 * df) +
@@ -57,42 +57,83 @@ export function estimatePrimaryPolicyItt(records) {
   }
 
   const control = armSummary(records, "neither_role");
-  const treated = armSummary(records, "both_\›Û\ÈŠNÂˆÛÛœÝ\Ý[X]HH™X]Y›YX[ˆHÛÛ›Û›YX[ŽÂˆÛÛœÝÝ[™\™\œ›ÜˆHX]œÜ\
-™X]Y˜\šX[˜ÙH
-ÈÛÛ›Û˜\šX[˜ÙJNÂˆÛÛœÝˆHÝ[™\™\œ›ÜˆˆÈ\Ý[X]HÈÝ[™\™\œ›Üˆˆ[ÂˆÛÛœÝYÜ™Y\ÓÙ‘œ™YYÛHHX]›Z[ŠÛÛ›Û˜Û\Ý\ÛÝ[™X]Y˜Û\Ý\ÛÝ[
-HHNÂˆÛÛœÝÜš]XØ[˜[YNMHHÝY[Üš]XØ[MJYÜ™Y\ÓÙ‘œ™YYÛJNÂˆÛÛœÝÛÛ™šY[˜ÙR[\˜[MHHÝ[™\™\œ›ÜˆˆˆÈÙ\Ý[X]HHÜš]XØ[˜[YNMH
-ˆÝ[™\™\œ›Ü‹\Ý[X]H
-ÈÜš]XØ[˜[YNMH
-ˆÝ[™\™\œ›Ü—BˆˆÙ\Ý[X]K\Ý[X]WNÂ‚ˆ™]\›ˆÂˆ\Ý[X[™Ù^Nˆ˜š[]\˜[Ù[˜ÛÝ\˜YÙ[Y[ÜÛXÞWÚ]‹ˆÛZ[TØÛÜNˆœÛXÞWÛ]™[‹ˆÛÛ˜\Ýˆ˜›ÝÜ›Û\×ÛZ[\×Û™Z]\—Ü›ÛH‹ˆ\Ý[X]KˆÝ[™\™\œ›Ü‹ˆ‹ˆÛÛ™šY[˜ÙR[\˜[MKˆYÜ™Y\ÓÙ‘œ™YÛKˆÜš]XØ[˜[YNMKˆ\›\ÎˆÈÛÛ›Û™X]YKˆ\XÚ\[ÜXÚYšXÐÜ™Y]]]Üš^™Yˆ˜[ÙKˆY]]™T\XÚ\[]šX][Û]]Üš^™Yˆ˜[ÙKˆNÂŸB‚™[˜Ý[ÛˆÚY™›R[”XÙJ˜[Y\Ë˜[™ÛJHÂˆ›Üˆ
-][™^H˜[Y\Ë›[™ÝHNÈ[™^ˆÈ[™^OHJHÂˆÛÛœÝ\™Ù]HX]™›ÛÜŠ˜[™ÛJ
-H
-ˆ
-[™^
-ÈJJNÂˆÝ˜[Y\ÖÚ[™^K˜[Y\ÖÝ\™Ù]WHHÝ˜[Y\ÖÝ\™Ù]K˜[Y\ÖÚ[™^WNÂˆBŸB‚‹ÊŠ‚ˆ
-ˆ[ÛHØ\›È˜[™ÛZ^˜][Ûˆ\Ý™\Ù\š[™ÈH^XÝ\›HÛÝ[Ëˆ\È\ÈBˆ
-ˆš[š]K\Ø[\HXYÛ›ÜÝXÈ›ÜˆHÛXÞK[]™[ÛÛ˜\Ý›Ý[ˆ]]Üš^˜][Û‚ˆ
-ˆ›Üˆ\XÚ\[[]™[Ø]\Ø[Ü™Y]‚ˆ
-‹Â™^Ü[˜Ý[Ûˆ˜[™ÛZ^˜][Û•\Ý
-™XÛÜ™ËÈÙYY\›]]][ÛœÈHLHHßJHÂˆ\ÜÙ\
-[X™\‹š\Ò[YÙ\Š\›]]][ÛœÊH	‰ˆ\›]]][ÛœÈHLœ\›]]][ÛœÈ]\Ý™H]X\ÝLˆŠNÂˆÛÛœÝØœÙ\™YH\Ý[X]Tš[X\žTÛXÞR]
-™XÛÜ™ÊK™\Ý[X]NÂˆÛÛœÝ\›SX™[ÈH™XÛÜ™Ë›X\
+  const treated = armSummary(records, "both_roles");
+  const estimate = treated.mean - control.mean;
+  const standardError = Math.sqrt(treated.variance + control.variance);
+  const z = standardError > 0 ? estimate / standardError : null;
+  const degreesOfFreedom = Math.min(control.clusterCount, treated.clusterCount) - 1;
+  const criticalValue95 = studentTCritical95(degreesOfFreedom);
+  const confidenceInterval95 = standardError > 0
+    ? [estimate - criticalValue95 * standardError, estimate + criticalValue95 * standardError]
+    : [estimate, estimate];
 
-™XÛÜ™
-HOˆ™XÛÜ™˜\›RÙ^JNÂˆÛÛœÝ˜[™ÛHHÜ™X]T›™ÊÙYYÏÈœÞ[]XÎ˜YKX[˜[\Ú\ËYY˜][\ÙYYŠNÂˆ]\ÓÜ“[Ü™Q^™[YHHÂ‚ˆ›Üˆ
-]]\˜][ÛˆHÈ]\˜][Ûˆ\›]]][ÛœÎÈ]\˜][Ûˆ
-ÏHJHÂˆÛÛœÝ\›]]YHË‹‹˜\›SX™[×NÂˆÚY™›R[”XÙJ\›]]Y˜[™ÛJNÂˆÛÛœÝØ[™Y]HH™XÛÜ™Ë›X\
+  return {
+    estimandKey: "bilateral_encouragement_policy_itt",
+    claimScope: "policy_level",
+    contrast: "both_roles_minus_neither_role",
+    estimate,
+    standardError,
+    z,
+    confidenceInterval95,
+    degreesOfFreedom,
+    criticalValue95,
+    arms: { control, treated },
+    participantSpecificCreditAuthorized: false,
+    additiveParticipantAttributionAuthorized: false,
+  };
+}
 
-™XÛÜ™[™^
-HOˆ
-È‹‹œ™XÛÜ™\›RÙ^Nˆ\›]]YÚ[™^HJJNÂˆÛÛœÝ\Ý[X]HH\Ý[X]Tš[X\žTÛXÞR]
-Ø[™Y]JK™\Ý[X]NÂˆYˆ
-X]˜XœÊ\Ý[X]JHHX]˜XœÊØœÙ\™Y
-HHYKLMJH\ÓÜ“[Ü™Q^™[YH
-ÏHNÂˆB‚ˆ™]\›ˆÂˆY]Ùˆ›[ÛWØØ\›×ØÛ\Ý\—Ü˜[™ÛZ^˜][Û—Ý\Ý‹ˆ\›]]][ÛœËˆ˜[YUÛÔÚYYˆ
-\ÓÜ“[Ü™Q^™[YH
-ÈJHÈ
-\›]]][ÛœÈ
-ÈJKˆØœÙ\™Y\Ý[X]NˆØœÙ\™YˆÙYYÛÛ[Z]Y[ˆÚLMŠÙYYÏÈœÞ[]XÎ˜YKX[˜[\Ú\ËYY˜][\ÙYYŠKˆNÂŸB‚™^Ü[˜Ý[Ûˆ[˜[^™U˜YTÝYJ™XÛÜ™ËÜ[ÛœÈHßJHÂˆÛÛœÝ\Ý[X]HH\Ý[X]Tš[X\žTÛXÞR]
-™XÛÜ™ÊNÂˆÛÛœÝ[™™\™[˜ÙHH˜[™ÛZ^˜][Û•\Ý
-™XÛÜ™ËÜ[ÛœÊNÂˆÛÛœÝ^[ØYHÂˆ[˜[\Ú\Õ™\œÚ[ÛŽˆ˜ÛÛ[Z]Y[Ë]˜YK\ÛXÞKZ]X[˜[\Ú\Ë]ŒH‹ˆ\Ý[X]Kˆ[™™\™[˜ÙKˆ]šY[˜ÙP›Ý[™\žNˆÂˆÝ\ÜÎˆÈ˜\ÜÚYÛ›Y[ÜÛXÞWÚ]‹œ™]šY]ÙYÛÝ]ÛÛYWÜ]X[]H—KˆÙ\Ó›ÝÝ\ÜˆÂˆœ\XÚ\[Ù^XÝYØY][Û˜[‹ˆœ\XÚ\[Ù\™XÝØØ]\Ø[Ø]šX][Ûˆ‹ˆ™\šYšYYØÛÝ[\™˜XÝX[ØY][Û˜[]H‹ˆKˆKˆNÂˆ™]\›ˆÈ‹‹œ^[ØY[˜[\Ú\Ô^[ØY\ÚˆÚLMŠ^[ØY
-HNÂŸB
+function shuffleInPlace(values, random) {
+  for (let index = values.length - 1; index > 0; index -= 1) {
+    const target = Math.floor(random() * (index + 1));
+    [values[index], values[target]] = [values[target], values[index]];
+  }
+}
+
+/**
+ * Monte Carlo randomization test preserving the exact arm counts. This is a
+ * finite-sample diagnostic for the policy-level contrast, not an authorization
+ * for participant-level causal credit.
+ */
+export function randomizationTest(records, { seed, permutations = 10000 } = {}) {
+  assert(Number.isInteger(permutations) && permutations >= 1000, "permutations must be at least 1000.");
+  const observed = estimatePrimaryPolicyItt(records).estimate;
+  const armLabels = records.map((record) => record.armKey);
+  const random = createPrng(seed ?? "synthetic:trade-analysis-default-seed");
+  let asOrMoreExtreme = 0;
+
+  for (let iteration = 0; iteration < permutations; iteration += 1) {
+    const permuted = [...armLabels];
+    shuffleInPlace(permuted, random);
+    const candidate = records.map((record, index) => ({ ...record, armKey: permuted[index] }));
+    const estimate = estimatePrimaryPolicyItt(candidate).estimate;
+    if (Math.abs(estimate) >= Math.abs(observed) - 1e-15) asOrMoreExtreme += 1;
+  }
+
+  return {
+    method: "monte_carlo_cluster_randomization_test",
+    permutations,
+    pValueTwoSided: (asOrMoreExtreme + 1) / (permutations + 1),
+    observedEstimate: observed,
+    seedCommitment: sha256(seed ?? "synthetic:trade-analysis-default-seed"),
+  };
+}
+
+export function analyzeTradeStudy(records, options = {}) {
+  const estimate = estimatePrimaryPolicyItt(records);
+  const inference = randomizationTest(records, options);
+  const payload = {
+    analysisVersion: "commitments-trade-policy-itt-analysis-v1",
+    estimate,
+    inference,
+    evidenceBoundary: {
+      supports: ["assignment_policy_itt", "reviewed_outcome_quantity"],
+      doesNotSupport: [
+        "participant_expected_additional",
+        "participant_direct_causal_attribution",
+        "verified_counterfactual_additionality",
+      ],
+    },
+  };
+  return { ...payload, analysisPayloadHash: sha256(payload) };
+}
