@@ -88,7 +88,7 @@ test.describe("Offers directory density", () => {
       if (message.type() === "error") consoleErrors.push(message.text());
     });
 
-    await page.goto(targetRoute);
+    await page.goto(targetRoute, { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(/\/offers\?mode=pledge&view=live/);
     await expect(
@@ -213,7 +213,7 @@ test.describe("Offers directory density", () => {
     await page.setViewportSize(viewport);
     const getPlaneRequestCount = await stubOfferPlane(page);
 
-    await page.goto(targetRoute);
+    await page.goto(targetRoute, { waitUntil: "domcontentloaded" });
 
     await expect(
       page.getByRole("heading", {
