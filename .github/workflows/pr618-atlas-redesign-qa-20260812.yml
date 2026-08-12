@@ -1,0 +1,189 @@
+name: PR 618 Bottleneck Atlas redesign QA
+
+on:
+  push:
+    branches:
+      - feature/bottleneck-atlas-feed-20260811
+    paths:
+      - .github/workflows/pr618-atlas-redesign-qa-20260812.yml
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr618-atlas-redesign-qa-20260812
+  cancel-in-progress: false
+
+env:
+  EXPECTED_CANDIDATE_SHA: 130dc6cbe63e98623af32cc09484a27b68997b36
+  MORAL_TRADE_DISABLE_SUPABASE: "true"
+  OPPORTUNITY_SYNTHESIS_ENABLED: "true"
+  NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
+  SITE_URL: http://127.0.0.1:3211
+  QA_OUTPUT: pr618-atlas-redesign-evidence
+
+jobs:
+  qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Guard exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run source, type, build, and focused browser gates
+        shell: bash
+        env:
+          PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
+        run: |
+          set -euo pipefail
+          mkdir -p "$QA_OUTPUT"
+          npm run lint -- --quiet | tee "$QA_OUTPUT/lint.log"
+          npx tsc --noEmit --pretty false | tee "$QA_OUTPUT/typescript.log"
+          npm run build | tee "$QA_OUTPUT/build.log"
+          npx playwright test tests/bottleneck-atlas.spec.ts --workers=1 --reporter=line \
+            | tee "$QA_OUTPUT/playwright.log"
+
+      - name: Capture desktop, expanded, and mobile render evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3211 > "$QA_OUTPUT/server.log" 2>&1 &
+          echo "$!" > "$QA_OUTPUT/server.pid"
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:3211/bottleneck-atlas > /dev/null; then
+              break
+            fi
+            if [[ "$attempt" = 90 ]]; then
+              tail -n 200 "$QA_OUTPUT/server.log"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { writeFile } from 'node:fs/promises';
+          import { chromium } from '@playwright/test';
+
+          const output = process.env.QA_OUTPUT;
+          const baseURL = 'http://127.0.0.1:3211';
+          const browser = await chromium.launch();
+          const evidence = { desktop: {}, mobile: {}, consoleErrors: [] };
+
+          async function contextFor(viewport) {
+            const context = await browser.newContext({ viewport });
+            await context.addCookies([{
+              name: 'mt_walkthrough_seen',
+              value: '1',
+              url: baseURL,
+              httpOnly: true,
+              secure: false,
+              sameSite: 'Lax',
+            }]);
+            return context;
+          }
+
+          async function inspect(label, viewport) {
+            const context = await contextFor(viewport);
+            const page = await context.newPage();
+            page.on('pageerror', (error) => evidence.consoleErrors.push(`${label}: ${error.message}`));
+            page.on('console', (message) => {
+              if (message.type() === 'error') evidence.consoleErrors.push(`${label}: ${message.text()}`);
+            });
+            await page.goto(`${baseURL}/bottleneck-atlas`, { waitUntil: 'networkidle' });
+            await page.getByRole('heading', { level: 1, name: 'Bottleneck Atlas' }).waitFor();
+
+            const metrics = await page.evaluate(() => ({
+              title: document.title,
+              width: window.innerWidth,
+              scrollWidth: Math.max(document.documentElement.scrollWidth, document.body?.scrollWidth ?? 0),
+              templateCount: document.querySelectorAll('[data-synthesis-template]').length,
+              openTemplateCount: document.querySelectorAll('details[data-synthesis-template][open]').length,
+              clusterCount: document.querySelectorAll('[data-atlas-cluster]').length,
+              openClusterCount: document.querySelectorAll('details[data-atlas-cluster][open]').length,
+              fieldCount: document.querySelectorAll('[data-atlas-field]').length,
+              openFieldCount: document.querySelectorAll('details[data-atlas-field][open]').length,
+            }));
+
+            assert.equal(metrics.templateCount, 9);
+            assert.equal(metrics.openTemplateCount, 1);
+            assert.equal(metrics.clusterCount, 4);
+            assert.equal(metrics.openClusterCount, 1);
+            assert.equal(metrics.fieldCount, 18);
+            assert.equal(metrics.openFieldCount, 0);
+            assert.ok(metrics.scrollWidth <= metrics.width + 1, `${label} overflow: ${JSON.stringify(metrics)}`);
+
+            await page.screenshot({ path: `${output}/${label}-viewport.png`, fullPage: false });
+            await page.screenshot({ path: `${output}/${label}-full.png`, fullPage: true });
+
+            const firstField = page.locator('details[data-atlas-field]').first();
+            await firstField.locator(':scope > summary').click();
+            assert.equal(await firstField.evaluate((node) => node.open), true);
+            await firstField.scrollIntoViewIfNeeded();
+            await page.screenshot({ path: `${output}/${label}-field-expanded.png`, fullPage: false });
+
+            await context.close();
+            return metrics;
+          }
+
+          evidence.desktop = await inspect('desktop', { width: 1440, height: 1000 });
+          evidence.mobile = await inspect('mobile', { width: 390, height: 844 });
+          assert.deepEqual(evidence.consoleErrors, []);
+          await writeFile(`${output}/render-evidence.json`, `${JSON.stringify(evidence, null, 2)}\n`);
+          await browser.close();
+          NODE
+
+          kill "$(cat "$QA_OUTPUT/server.pid")" 2>/dev/null || true
+
+      - name: Upload redesign evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr618-atlas-redesign-qa-${{ github.run_id }}-${{ env.EXPECTED_CANDIDATE_SHA }}
+          path: ${{ env.QA_OUTPUT }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Record QA result on PR 618
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$JOB_STATUS" = success ]]; then
+            body="## Bottleneck Atlas density redesign passed exact-head QA\n\n- Candidate: \`$EXPECTED_CANDIDATE_SHA\`\n- Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\n- Progressive disclosure: 1 of 9 trade patterns open; 1 of 4 field groups open; 0 of 18 field details open initially\n- Desktop and mobile: no horizontal overflow\n- Focused Playwright, lint, TypeScript, and production build: passed\n- Production changed: no\n\nRendered screenshots are retained in the workflow artifact for design review."
+          else
+            body="## Bottleneck Atlas density redesign failed closed\n\n- Candidate: \`$EXPECTED_CANDIDATE_SHA\`\n- Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\n- Production changed: no\n\nPR #618 remains blocked pending diagnosis."
+          fi
+          gh pr comment 618 --repo "$GITHUB_REPOSITORY" --body "$body"
+
+# One-use visual QA workflow. Delete before merge.
