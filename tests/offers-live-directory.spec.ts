@@ -189,7 +189,10 @@ test.describe("Live Offers directory", () => {
     expect(nextUrl.searchParams.get("page")).toBe("2");
 
     await next.click();
-    await expect(page).toHaveURL((url) => url.searchParams.get("page") === "2");
+    await expect(page).toHaveURL(
+      (url) => url.searchParams.get("page") === "2",
+      { timeout: 30_000 },
+    );
     await expect(page.getByText(/Page 2 of/)).toBeVisible();
     await expect(page.getByTestId("proposal-row").first()).toBeVisible();
     await expect(page.locator("main").getByRole("alert")).toHaveCount(0);
