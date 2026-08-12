@@ -71,6 +71,7 @@ test("the offers topbar stays compact after removing duplicate global search", (
   assert.match(offersLayout, /topbarStyles\.scope/);
   assert.match(topbarStyles, /grid-template-areas:\s*"brand nav actions";/);
   assert.match(topbarStyles, /"brand actions"\s*"nav nav";/);
+  assert.match(topbarStyles, /justify-content:\s*flex-start;/);
   assert.match(topbarStyles, /overflow-x:\s*auto;/);
   assert.match(
     topbarStyles,
