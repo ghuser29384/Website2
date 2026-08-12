@@ -272,7 +272,7 @@ begin
       case
         when source_rows.event_counterparty_id is null then 1
         else (
-          select count(*)::integer
+          select greatest(1, count(*)::integer)
           from public.credibility_shadow_events prior_event
           where prior_event.profile_id = source_rows.event_profile_id
             and prior_event.counterparty_id = source_rows.event_counterparty_id
@@ -429,15 +429,18 @@ begin
         'recencyHalfLifeDays', tokenized.recency_half_life_days,
         'eventAgeDaysAtDecision', round(tokenized.event_age_days_at_decision, 6),
         'recencyWeightAtDecision', round(tokenized.recency_weight_at_decision, 8),
-        'provisionalEventWeightAtDecision', round(
-          tokenized.recency_weight_at_decision
-          * tokenized.provenance_weight
-          * tokenized.decision_confidence_weight
-          * (1::numeric / sqrt(tokenized.counterparty_sequence_at_decision::numeric))
-          * tokenized.context_similarity
-          * tokenized.stake_weight,
-          8
-        ),
+        'provisionalEventWeightAtDecision', case
+          when tokenized.original_status = 'eligible' then round(
+            tokenized.recency_weight_at_decision
+            * tokenized.provenance_weight
+            * tokenized.decision_confidence_weight
+            * (1::numeric / sqrt(tokenized.counterparty_sequence_at_decision::numeric))
+            * tokenized.context_similarity
+            * tokenized.stake_weight,
+            8
+          )
+          else null
+        end,
         'decisionDateUtc', to_char(
           tokenized.decision_finalized_at at time zone 'UTC',
           'YYYY-MM-DD'
