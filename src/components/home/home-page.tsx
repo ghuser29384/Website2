@@ -97,7 +97,7 @@ export function HomePage({ displayName }: HomePageProps) {
   };
 
   return (
-    <div className={styles.shell}>
+    <div className={styles.shell} data-mt-canonical-home="true">
       <header className={styles.topbar}>
         <Link aria-label="Moral Trade home" className={styles.brand} href="/">
           <MutualStepMark className={styles.brandMark} />

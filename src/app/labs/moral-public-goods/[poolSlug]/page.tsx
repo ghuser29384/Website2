@@ -98,7 +98,7 @@ function SimpleLabsFooter() {
 
 function LabsUnavailablePage({ reasons }: { reasons: readonly string[] }) {
   return (
-    <div className={styles.pageShell}>
+    <div className={styles.pageShell} data-mt-surface="mpgf-labs">
       <SiteTopbar brandHref="/" links={[...labsTopbarLinks]} showSearch={false} />
       <main className={styles.unavailable} id="main-content" tabIndex={-1}>
         <a className={styles.backLink} href="/mpgf">
@@ -248,7 +248,7 @@ export default async function MoralPublicGoodsLabsPage({ params }: PageProps) {
   }
 
   return (
-    <div className={styles.pageShell}>
+    <div className={styles.pageShell} data-mt-surface="mpgf-labs">
       <SiteTopbar brandHref="/" links={[...labsTopbarLinks]} showSearch={false} />
       <MoralPublicGoodsLabsClient
         actorRole={actorRole}
