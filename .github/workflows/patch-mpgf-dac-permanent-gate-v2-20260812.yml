@@ -1,0 +1,66 @@
+name: Patch permanent MPGF DAC lifecycle gate v2
+
+on:
+  push:
+    branches:
+      - ops/patch-mpgf-dac-permanent-gate-20260812
+    paths:
+      - ".github/workflows/patch-mpgf-dac-permanent-gate-v2-20260812.yml"
+      - "scripts/patch-mpgf-dac-permanent-gate-20260812.py"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: patch-mpgf-dac-permanent-gate-v2-20260812
+  cancel-in-progress: false
+
+env:
+  EXPECTED_CANDIDATE_SHA: 29dec3ebee50e885d44b9e282c6a755deb42f57a
+
+jobs:
+  patch-and-export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out controller inputs
+        uses: actions/checkout@v4
+        with:
+          ref: ops/patch-mpgf-dac-permanent-gate-20260812
+          fetch-depth: 1
+
+      - name: Preserve the deterministic patcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp scripts/patch-mpgf-dac-permanent-gate-20260812.py /tmp/patch-mpgf-dac-permanent-gate.py
+          python3 -m py_compile /tmp/patch-mpgf-dac-permanent-gate.py
+
+      - name: Check out the exact consolidated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          fetch-depth: 1
+          clean: true
+
+      - name: Patch and validate the permanent gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          python3 /tmp/patch-mpgf-dac-permanent-gate.py
+          git diff --check
+          ruby -e "require 'yaml'; YAML.load_file('.github/workflows/mpgf-dac-product-lifecycle-gates.yml')"
+          sha256sum .github/workflows/mpgf-dac-product-lifecycle-gates.yml \
+            | tee patched-workflow.sha256
+
+      - name: Upload the exact corrected permanent workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: corrected-mpgf-dac-permanent-gate-v2
+          path: |
+            .github/workflows/mpgf-dac-product-lifecycle-gates.yml
+            patched-workflow.sha256
+          if-no-files-found: error
+          retention-days: 1
