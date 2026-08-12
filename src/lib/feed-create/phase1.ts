@@ -1,7 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+import { isPostgresUuid } from "@/lib/uuid";
 
 export const FEED_CREATE_IMPORTED_FIELDS = [
   "counterparty",
@@ -103,8 +101,8 @@ export function feedCreateRequestFromSearchParams(
   const sourceRevision = integer(first(searchParams.sourceRevision));
   if (
     opportunityType !== "offer" ||
-    !UUID_PATTERN.test(opportunityId) ||
-    !UUID_PATTERN.test(exposureRequestId) ||
+    !isPostgresUuid(opportunityId) ||
+    !isPostgresUuid(exposureRequestId) ||
     sourceRevision === null ||
     sourceRevision < 1
   ) {
@@ -127,8 +125,8 @@ export function feedCreateRequestFromSearchParams(
 export function isValidFeedCreateRequest(request: FeedCreateRequest) {
   return (
     request.opportunityType === "offer" &&
-    UUID_PATTERN.test(request.opportunityId) &&
-    UUID_PATTERN.test(request.exposureRequestId) &&
+    isPostgresUuid(request.opportunityId) &&
+    isPostgresUuid(request.exposureRequestId) &&
     Number.isSafeInteger(request.sourceRevision) &&
     request.sourceRevision > 0
   );

@@ -4,6 +4,9 @@
   if (window.__MT_FEED_CREATE_PHASE1_ACTIVE__) return;
   window.__MT_FEED_CREATE_PHASE1_ACTIVE__ = true;
 
+  const POSTGRES_UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   const bootstrap =
     window.__MT_LIVE_NOW_BOOTSTRAP__ &&
     typeof window.__MT_LIVE_NOW_BOOTSTRAP__ === "object"
@@ -44,8 +47,8 @@
     if (
       value.opportunityType !== "offer" ||
       value.mode !== "pledge" ||
-      !id ||
-      !exposureRequestId ||
+      !POSTGRES_UUID_PATTERN.test(id) ||
+      !POSTGRES_UUID_PATTERN.test(exposureRequestId) ||
       !sourceRevision ||
       !text(value.ownerAlias, 100) ||
       !text(value.offeredCause, 180) ||
