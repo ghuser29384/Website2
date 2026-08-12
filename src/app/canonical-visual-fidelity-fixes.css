@@ -84,9 +84,14 @@ body:has(.growth-start-section) .growth-progress-card .hero-followup {
 }
 
 @media (max-width: 420px) {
+  [data-mt-surface="complete-profile"] [class*="profileHeader"] {
+    height: 118px !important;
+    padding-bottom: 50px !important;
+  }
+
   [data-mt-surface="complete-profile"] > button[aria-haspopup="dialog"] {
-    top: auto !important;
+    top: 74px !important;
     right: 14px !important;
-    bottom: 14px !important;
+    bottom: auto !important;
   }
 }
