@@ -136,9 +136,8 @@ jobs:
         run: |
           set -euo pipefail
           cd candidate
-          npx --yes "vercel@$VERCEL_CLI_VERSION" curl /login \
+          npx --yes "vercel@$VERCEL_CLI_VERSION" --token "$VERCEL_TOKEN" curl /login \
             --deployment "$DEPLOYMENT_URL" \
-            --token="$VERCEL_TOKEN" \
             -- \
             --header 'x-vercel-set-bypass-cookie: true' \
             --dump-header /tmp/vercel-bypass-headers.txt \
