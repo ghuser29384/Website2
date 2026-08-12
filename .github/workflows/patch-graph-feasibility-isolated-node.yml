@@ -1,0 +1,38 @@
+name: Patch graph-feasibility isolated-node boundary
+
+on:
+  push:
+    branches:
+      - research/commitments-trade-graph-feasibility-20260812
+    paths:
+      - ".github/workflows/patch-graph-feasibility-isolated-node.yml"
+      - "scripts/ops/patch-graph-feasibility-isolated-node.py"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-graph-feasibility-isolated-node
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          ref: research/commitments-trade-graph-feasibility-20260812
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Apply, validate, commit, and remove one-use patcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ops/patch-graph-feasibility-isolated-node.py
