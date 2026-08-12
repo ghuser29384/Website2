@@ -148,7 +148,7 @@ test("the reviewer projection omits every forbidden prior-judgment field", () =>
     reviewerPage,
     /Explain the evidence-to-conclusion path without referring to any hidden original decision/i,
   );
-  assert.match(reviewerProjection, /'AUD-' \| upper/i);
+  assert.match(reviewerProjection, /'AUD-' \|\| upper/i);
   assert.match(reviewerProjection, /milestone\.evidence_rule/i);
   assert.match(reviewerProjection, /version\.no_trade_baseline/i);
   assert.match(reviewerProjection, /evidence_items jsonb/i);
