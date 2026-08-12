@@ -20,6 +20,7 @@ on:
       - "public/complete-verification.html"
       - "src/sitewide-canonical-visual-system.test.ts"
       - "tests/sitewide-canonical-visual-system.spec.ts"
+      - "tests/commitments-sidebar-layout.spec.ts"
       - ".github/workflows/sitewide-canonical-visual-system.yml"
   push:
     branches:
@@ -42,6 +43,7 @@ on:
       - "public/complete-verification.html"
       - "src/sitewide-canonical-visual-system.test.ts"
       - "tests/sitewide-canonical-visual-system.spec.ts"
+      - "tests/commitments-sidebar-layout.spec.ts"
       - ".github/workflows/sitewide-canonical-visual-system.yml"
 
 permissions:
@@ -104,7 +106,7 @@ jobs:
           PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
         run: |
           set -euo pipefail
-          npx playwright test tests/sitewide-canonical-visual-system.spec.ts --reporter=line --workers=1
+          npx playwright test tests/sitewide-canonical-visual-system.spec.ts tests/commitments-sidebar-layout.spec.ts --reporter=line --workers=1
 
       - name: Upload sitewide visual evidence
         if: always()
@@ -113,6 +115,7 @@ jobs:
           name: sitewide-canonical-visual-${{ github.run_id }}-${{ github.sha }}
           path: |
             test-results/sitewide-canonical-visual-system-*/**/*.png
+            test-results/commitments-sidebar-layout-*/**/*.png
             playwright-report
             test-results
           if-no-files-found: warn

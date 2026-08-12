@@ -117,6 +117,18 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) :where(
 }
 
 /*
+ * The compact route-board shell previously allocated only 132px to the full
+ * Moral Trade wordmark. Its no-wrap brand overflowed into Commitments' hero.
+ * Reuse the product's established desktop navigation width so every route-board
+ * surface contains its brand before the workspace begins.
+ */
+@media (min-width: 980px) {
+  .marketplace-app-shell .mt-v75-route-board {
+    grid-template-columns: clamp(218px, 14.3vw, 240px) minmax(0, 1fr) !important;
+  }
+}
+
+/*
  * Discover uses a blue rail to identify transaction rows. Express the rail as
  * a real editorial rule rather than an inset shadow, so it remains visible
  * without reintroducing elevated-card styling.
