@@ -1,0 +1,245 @@
+name: Evidence credibility private shadow local acceptance v3
+
+on:
+  push:
+    branches:
+      - ops/evidence-credibility-shadow-preview-acceptance-20260812
+    paths:
+      - .github/workflows/evidence-credibility-shadow-preview-local-acceptance-v3.yml
+      - ops/evidence-credibility-shadow-preview-acceptance.spec.ts
+      - ops/evidence-credibility-shadow-preview-cleanup-v3.sql
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-credibility-private-shadow-local-acceptance-v3
+  cancel-in-progress: false
+
+env:
+  CANDIDATE_SHA: e1588ba43b4036805990035bc83cbb81967a26f1
+  CURRENT_MAIN_SHA: 8ee3e14b340fdb486c211d86703e02f9226811ab
+  EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+  EXPECTED_QA_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+  EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+  PGSSLMODE: require
+  EVIDENCE_CREDIBILITY_QA_RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}
+
+jobs:
+  browser-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    env:
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      EVIDENCE_CREDIBILITY_BASE_URL: http://127.0.0.1:3210
+      EVIDENCE_CREDIBILITY_SCREENSHOT_DIR: ${{ github.workspace }}/acceptance-evidence/screenshots
+    steps:
+      - name: Check out controller
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: controller
+          ref: ${{ github.sha }}
+
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: candidate
+          ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: candidate/package-lock.json
+
+      - name: Guard exact candidate and isolated QA credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git -C candidate merge-base "$CURRENT_MAIN_SHA" HEAD)" = "$CURRENT_MAIN_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          test -n "${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}"
+          test -n "${SUPABASE_SERVICE_ROLE_KEY:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+          parsed=urlparse(os.environ['QA_SUPABASE_DB_URL'])
+          valid=(parsed.hostname==os.environ['EXPECTED_QA_POOLER_HOST']
+                 and parsed.port==5432
+                 and parsed.path=='/postgres'
+                 and os.environ['EXPECTED_QA_REF'] in (parsed.username or '')
+                 and parse_qs(parsed.query).get('sslmode',['require'])==['require']
+                 and os.environ['NEXT_PUBLIC_SUPABASE_URL']==os.environ['EXPECTED_QA_URL']
+                 and 'jnpoxvalyjtdghnperyu' not in os.environ['NEXT_PUBLIC_SUPABASE_URL'])
+          if not valid: raise SystemExit('Refusing non-QA credentials.')
+          PY
+          mkdir -p acceptance-evidence
+          printf 'controller_sha=%s\ncandidate_sha=%s\nqa_ref=%s\n' \
+            "$(git -C controller rev-parse HEAD)" "$CANDIDATE_SHA" "$EXPECTED_QA_REF" \
+            > acceptance-evidence/environment.txt
+
+      - name: Install dependencies, PostgreSQL client, and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix candidate
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+          cd candidate
+          npx playwright install --with-deps chromium
+
+      - name: Verify private schema and fail-closed controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' | tee acceptance-evidence/schema-readback.txt
+          select 'control|' || mode || '|' || milestone_cutover_enabled || '|' || public_effects_enabled || '|' || ranking_effects_enabled || '|' || eligibility_effects_enabled
+          from public.credibility_shadow_controls where control_key='evidence_decision_v2'
+          union all select 'draws|' || (to_regclass('public.evidence_credibility_calibration_draws') is not null)
+          union all select 'exports|' || (to_regclass('public.evidence_credibility_calibration_exports') is not null)
+          order by 1;
+          SQL
+          grep -qx 'control|shadow|false|false|false|false' acceptance-evidence/schema-readback.txt
+          grep -qx 'draws|true' acceptance-evidence/schema-readback.txt
+          grep -qx 'exports|true' acceptance-evidence/schema-readback.txt
+
+      - name: Remove exact old fixture residue
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file controller/ops/evidence-credibility-shadow-preview-cleanup-v3.sql \
+            2>&1 | tee acceptance-evidence/pre-cleanup.log
+
+      - name: Create exact AAL2 browser fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="$(openssl rand -base64 36 | tr -d '\n' | tr '/+' '_-')"
+          echo "::add-mask::$password"
+          echo "EVIDENCE_CREDIBILITY_QA_PASSWORD=$password" >> "$GITHUB_ENV"
+          cp candidate/supabase/tests/evidence_weighted_payment_browser_fixture.sql /tmp/fixture.sql
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('/tmp/fixture.sql'); s=p.read_text()
+          old="    'accepted',\n    now(),\n    now()\n"; new="    'draft',\n    null,\n    null\n"
+          if s.count(old)!=2: raise SystemExit(f'Unexpected bundle fixture count: {s.count(old)}')
+          s=s.replace(old,new)
+          marker='\ninsert into public.trade_milestone_reviews (\n'
+          evidence="""
+          insert into public.trade_evidence_bundle_items(bundle_id,evidence_type,attestation)
+          values
+            ('75000000-0000-4000-8000-000000000001','attestation','QA-only evidence-credibility attestation for independent blind review.'),
+            ('75000000-0000-4000-8000-000000000002','attestation','QA-only fallback evidence-credibility attestation.');
+          update public.trade_evidence_bundles
+          set status='accepted',submitted_at=now(),reviewed_at=now()
+          where id in ('75000000-0000-4000-8000-000000000001','75000000-0000-4000-8000-000000000002');
+          """
+          if s.count(marker)!=1: raise SystemExit('Milestone review boundary absent.')
+          p.write_text(s.replace(marker,'\n'+evidence+marker))
+          PY
+          EVIDENCE_PAYMENT_QA_PASSWORD="$password" \
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+              --file /tmp/fixture.sql 2>&1 | tee acceptance-evidence/fixture.log
+
+      - name: Build and start exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          npm run build 2>&1 | tee ../acceptance-evidence/build.log
+          cp ../controller/ops/evidence-credibility-shadow-preview-acceptance.spec.ts \
+            tests/evidence-credibility-shadow-preview-acceptance.spec.ts
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tests/evidence-credibility-shadow-preview-acceptance.spec.ts'); s=p.read_text()
+          old='      await expect(captureForm.getByText("Attestation: 1", { exact: true })).toBeVisible();\n'
+          if s.count(old)!=1: raise SystemExit('Attestation assertion not found exactly once.')
+          p.write_text(s.replace(old,'      await expect(captureForm).toContainText("Attestation: 1");\n'))
+          PY
+          PORT=3210 npm run start > ../acceptance-evidence/server.log 2>&1 &
+          echo $! > /tmp/server.pid
+          for attempt in $(seq 1 90); do
+            curl --silent --fail http://127.0.0.1:3210/login > /dev/null && exit 0
+            sleep 1
+          done
+          cat ../acceptance-evidence/server.log
+          exit 1
+
+      - name: Discover exact Playwright test
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          npx playwright test tests/evidence-credibility-shadow-preview-acceptance.spec.ts --list \
+            2>&1 | tee ../acceptance-evidence/playwright-list.log
+          grep -q 'proves AAL2 capture, independent blinding, immutable export, and zero active effects' \
+            ../acceptance-evidence/playwright-list.log
+
+      - name: Run desktop and mobile AAL2 acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd candidate
+          npx playwright test tests/evidence-credibility-shadow-preview-acceptance.spec.ts \
+            --workers=1 --reporter=line 2>&1 | tee ../acceptance-evidence/playwright.log
+
+      - name: Stop server
+        if: always()
+        shell: bash
+        run: |
+          [[ -f /tmp/server.pid ]] && kill "$(cat /tmp/server.pid)" 2>/dev/null || true
+          rm -f candidate/tests/evidence-credibility-shadow-preview-acceptance.spec.ts
+
+      - name: Clean fixtures and prove zero residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file controller/ops/evidence-credibility-shadow-preview-cleanup-v3.sql \
+            2>&1 | tee acceptance-evidence/post-cleanup.log
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' | tee acceptance-evidence/zero-residue.txt
+          select 'agreements|' || count(*) from public.agreements where id in ('72000000-0000-4000-8000-000000000001','72000000-0000-4000-8000-000000000002')
+          union all select 'versions|' || count(*) from public.trade_agreement_versions where id in ('73000000-0000-4000-8000-000000000001','73000000-0000-4000-8000-000000000002')
+          union all select 'milestones|' || count(*) from public.trade_agreement_milestones where id in ('74000000-0000-4000-8000-000000000001','74000000-0000-4000-8000-000000000002')
+          union all select 'exports|' || count(*) from public.evidence_credibility_calibration_exports where source_key like 'qa-export:%'
+          union all select 'mfa_factors|' || count(*) from auth.mfa_factors where user_id in ('71000000-0000-4000-8000-000000000003','71000000-0000-4000-8000-000000000004','71000000-0000-4000-8000-000000000006')
+          union all select 'control|' || mode || '|' || milestone_cutover_enabled || '|' || public_effects_enabled || '|' || ranking_effects_enabled || '|' || eligibility_effects_enabled from public.credibility_shadow_controls where control_key='evidence_decision_v2'
+          order by 1;
+          SQL
+          for k in agreements versions milestones exports mfa_factors; do grep -qx "$k|0" acceptance-evidence/zero-residue.txt; done
+          grep -qx 'control|shadow|false|false|false|false' acceptance-evidence/zero-residue.txt
+
+      - name: Preserve exact acceptance evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p acceptance-evidence
+          git -C candidate rev-parse HEAD > acceptance-evidence/candidate-head-sha.txt
+          git -C controller rev-parse HEAD > acceptance-evidence/controller-head-sha.txt
+          git -C candidate status --short > acceptance-evidence/candidate-status.txt
+          [[ -d candidate/test-results ]] && cp -R candidate/test-results acceptance-evidence/test-results || true
+          sha256sum controller/ops/evidence-credibility-shadow-preview-acceptance.spec.ts \
+            controller/ops/evidence-credibility-shadow-preview-cleanup-v3.sql \
+            > acceptance-evidence/controller-sha256.txt
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-private-shadow-local-v3-${{ github.run_id }}-${{ env.CANDIDATE_SHA }}
+          path: acceptance-evidence
+          if-no-files-found: error
+          retention-days: 30
