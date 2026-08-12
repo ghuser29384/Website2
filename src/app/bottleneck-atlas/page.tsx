@@ -308,7 +308,7 @@ export default async function BottleneckAtlasPage() {
 
         <aside className={styles.finalBoundary}>
           <div>
-            <h2>Public atlas, private matches.</h2>
+            <h2>No public organization-specific weakness profiles.</h2>
             <p>
               Organization-specific needs, staff availability, suggested counterparties, and
               sensitive capacities require permissioned confirmation before they affect a live
