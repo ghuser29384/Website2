@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -192,7 +192,6 @@ test("MPGF public copy leads with reviewed external evidence instead of raw gate
     "src/app/mpgf/contribute/page.tsx",
     "src/components/mpgf/mpgf-page-frame.tsx",
     "src/components/mpgf/mpgf-console.tsx",
-    "src/app/loading.tsx",
   ].map(readRepoFile).join("\n");
 
   assert.match(publicMpgfSources, /direct-to-charity Every\.org route/i);
@@ -390,6 +389,8 @@ test("live offers stay separated from examples while the wish registry uses broa
   assert.match(offersPage, /if \(view === "templates" \|\| legacyTab === "templates"\) return <TradeTemplateLibrary \/>/);
   assert.match(offersPage, /Live participant records only/);
   assert.match(offersPage, /Search never substitutes examples for live demand/);
+  assert.match(offersPage, /livePage\.error \? \(/);
+  assert.match(offersPage, /Results unavailable/);
   assert.match(offersPage, /No live proposals are open/);
   assert.equal(offersPage.includes("CANONICAL_WORKED_CASE_OFFERS"), false);
   assert.equal(offersPage.includes("No public offers have been published yet"), false);
@@ -697,17 +698,12 @@ test("background source connector permissions stay field-limited and raw-ingesti
   assert.match(privacyPage, /Purpose, processors, and retention/);
 });
 
-test("global loading stays silent while error states expose route-specific recovery", () => {
-  const loadingPage = readRepoFile("src/app/loading.tsx");
+test("root avoids a blank streaming boundary while error states expose route-specific recovery", () => {
   const errorPage = readRepoFile("src/app/error.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
   const performanceProfile = readRepoFile("config/moral-trade/performance-profile.json");
 
-  assert.match(loadingPage, /return null/);
-  assert.equal(loadingPage.includes("Preparing route"), false);
-  assert.equal(loadingPage.includes("Preparing the requested view"), false);
-  assert.equal(loadingPage.includes("<h1"), false);
-  assert.equal(loadingPage.includes("Loading Moral Trade."), false);
+  assert.equal(existsSync(join(process.cwd(), "src/app/loading.tsx")), false);
   assert.match(errorPage, /Recoverable route error/);
   assert.match(errorPage, /This page did not finish rendering/);
   assert.match(errorPage, /No proposal status, match disclosure, or evidence decision is/);

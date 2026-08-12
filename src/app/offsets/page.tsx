@@ -113,7 +113,7 @@ export default async function OffsetsPage() {
               >
                 Start an offset draft
               </Link>
-              <Link className="button button-secondary" href="/offers?view=examples&search=offset">
+              <Link className="button button-secondary" href="/worked-examples">
                 Inspect examples
               </Link>
             </div>
