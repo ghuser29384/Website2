@@ -1,0 +1,583 @@
+name: Issue 609 exact production release and smoke
+
+on:
+  push:
+    branches:
+      - ops/issue609-production-release-controller-final-v3-20260812
+    paths:
+      - ".github/workflows/issue609-production-release-controller-20260812.yml"
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: issue609-exact-production-release-20260812
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: 69146f2cf9d5f4d747c0c25abda6de75f410098d
+  PRODUCT_PR: "611"
+  ISSUE_NUMBER: "609"
+  PROFILE_ID: 9e51db47-92d1-4d75-80ce-cf10de1121f1
+  CANONICAL_BASE_URL: https://www.moraltrade.org
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+
+jobs:
+  release-and-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+
+    steps:
+      - name: Check out the exact merged product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 1
+
+      - name: Guard exact main, merged PR, diagnostics, and serialized release state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+
+          current_main="$(gh api "repos/${GITHUB_REPOSITORY}/branches/main" --jq '.commit.sha')"
+          test "$current_main" = "$EXPECTED_MAIN_SHA"
+
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PRODUCT_PR}" > /tmp/pr611.json
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '
+            .state == "closed"
+            and .merged == true
+            and .merge_commit_sha == $sha
+          ' /tmp/pr611.json >/dev/null
+
+          for run_id in 31556463425 31556608683; do
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" > "/tmp/diagnostic-${run_id}.json"
+            jq -e --arg sha "$EXPECTED_MAIN_SHA" '
+              .status == "completed"
+              and .conclusion == "success"
+              and .head_sha != ""
+            ' "/tmp/diagnostic-${run_id}.json" >/dev/null
+          done
+
+          active_count="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/runs?per_page=100" \
+            --jq '[.workflow_runs[] | select(.status != "completed")] | length')"
+          test "$active_count" = '0'
+
+      - name: Find an existing successful exact production release
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=''
+          while read -r candidate; do
+            [[ -n "$candidate" ]] || continue
+            names="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${candidate}/artifacts" --jq '.artifacts[]?.name')"
+            if grep -Eq '^gated-vercel-release-production-' <<<"$names"; then
+              found="$candidate"
+              break
+            fi
+          done < <(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&status=success&per_page=100" \
+            --jq ".workflow_runs[] | select(.head_sha == \"${EXPECTED_MAIN_SHA}\") | .id")
+
+          if [[ -n "$found" ]]; then
+            echo "run_id=$found" >> "$GITHUB_OUTPUT"
+            echo 'existing=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'existing=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Dispatch the permanent gated production release
+        if: steps.existing.outputs.existing != 'true'
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prior_max="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/runs?per_page=100" \
+            --jq '[.workflow_runs[].id] | max // 0')"
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[target]=production' \
+            -f 'inputs[ref]=main' \
+            -f "inputs[expected_sha]=${EXPECTED_MAIN_SHA}"
+
+          run_id=''
+          for attempt in $(seq 1 45); do
+            run_id="$(gh api \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/vercel-release.yml/runs?event=workflow_dispatch&per_page=30" \
+              --jq ".workflow_runs | map(select(.id > ${prior_max} and .head_sha == \"${EXPECTED_MAIN_SHA}\" and .created_at >= \"${started_at}\")) | sort_by(.id) | .[0].id // empty")"
+            [[ -n "$run_id" ]] && break
+            sleep 2
+          done
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "started_at=$started_at" >> "$GITHUB_OUTPUT"
+
+      - name: Select the exact production release run
+        id: selected
+        shell: bash
+        env:
+          EXISTING_RUN: ${{ steps.existing.outputs.run_id }}
+          DISPATCHED_RUN: ${{ steps.dispatch.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          run_id="${DISPATCHED_RUN:-${EXISTING_RUN:-}}"
+          test -n "$run_id"
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          printf 'Selected release run: %s\n' "$run_id"
+
+      - name: Wait for the permanent release workflow
+        if: steps.existing.outputs.existing != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.selected.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run watch "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --exit-status \
+            --interval 15
+
+      - name: Verify immutable release result and retained artifact
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.selected.outputs.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/release-artifacts
+          gh run view "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json databaseId,name,status,conclusion,headSha,headBranch,event,url,createdAt,updatedAt,jobs \
+            > evidence/release-run.json
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '
+            .name == "Gated Vercel release"
+            and .status == "completed"
+            and .conclusion == "success"
+            and .headSha == $sha
+            and .headBranch == "main"
+            and .event == "workflow_dispatch"
+          ' evidence/release-run.json >/dev/null
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/artifacts" \
+            > evidence/release-artifacts.json
+          jq -e '
+            any(.artifacts[];
+              (.expired == false)
+              and (.name | startswith("gated-vercel-release-production-"))
+            )
+          ' evidence/release-artifacts.json >/dev/null
+
+          gh run download "$RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir evidence/release-artifacts
+
+          echo "run_url=$(jq -r '.url' evidence/release-run.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve and verify the exact Vercel production deployment
+        id: deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p evidence/vercel
+
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}&target=production&limit=100" \
+            > evidence/vercel/deployments.json
+
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          data = json.loads(Path('evidence/vercel/deployments.json').read_text())
+          matches = []
+          for deployment in data.get('deployments', []):
+              meta = deployment.get('meta') or {}
+              state = deployment.get('readyState') or deployment.get('state')
+              if (
+                  meta.get('githubCommitSha') == os.environ['EXPECTED_MAIN_SHA']
+                  and deployment.get('target') == 'production'
+                  and state == 'READY'
+              ):
+                  matches.append(deployment)
+          if not matches:
+              raise SystemExit('No READY production deployment matches the exact main commit.')
+          matches.sort(key=lambda item: item.get('createdAt') or 0, reverse=True)
+          chosen = matches[0]
+          Path('evidence/vercel/selected-deployment-list-record.json').write_text(
+              json.dumps(chosen, indent=2, sort_keys=True) + '\n'
+          )
+          Path('/tmp/deployment-id').write_text(chosen.get('uid') or chosen.get('id') or '')
+          Path('/tmp/deployment-host').write_text(chosen.get('url') or '')
+          PY
+
+          deployment_id="$(cat /tmp/deployment-id)"
+          deployment_host="$(cat /tmp/deployment-host)"
+          test -n "$deployment_id"
+          test -n "$deployment_host"
+
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/${deployment_id}?teamId=${VERCEL_ORG_ID}" \
+            > evidence/vercel/deployment.json
+
+          jq -e \
+            --arg id "$deployment_id" \
+            --arg host "$deployment_host" \
+            --arg project "$VERCEL_PROJECT_ID" \
+            --arg sha "$EXPECTED_MAIN_SHA" '
+              ((.id // .uid) == $id)
+              and (.url == $host)
+              and ((.projectId // .project.id // "") == $project)
+              and ((.readyState // .state // "") == "READY")
+              and (.target == "production")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitSha == $sha)
+              and ((.alias // .aliases // []) | index("moraltrade.org") != null)
+              and ((.alias // .aliases // []) | index("www.moraltrade.org") != null)
+            ' evidence/vercel/deployment.json >/dev/null
+
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+          echo "deployment_host=$deployment_host" >> "$GITHUB_OUTPUT"
+          echo "deployment_url=https://$deployment_host" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies and Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run canonical desktop and mobile production acceptance
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.deployment_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p test-results/issue609-production
+          node <<'JS'
+          const { chromium } = require('@playwright/test');
+          const { writeFile } = require('node:fs/promises');
+
+          const base = process.env.CANONICAL_BASE_URL;
+          const profileId = process.env.PROFILE_ID;
+          const expectedSha = process.env.EXPECTED_MAIN_SHA;
+          const deploymentId = process.env.DEPLOYMENT_ID;
+          const profilePath = `/people/${profileId}`;
+          const credibilityPath = `${profilePath}/credibility`;
+          const apiPath = `/api/credibility/profile/${profileId}`;
+          const report = {
+            ok: false,
+            candidate: expectedSha,
+            deploymentId,
+            canonicalBaseUrl: base,
+            profileId,
+            startedAt: new Date().toISOString(),
+            desktop: {},
+            mobile: {},
+            diagnostics: {},
+          };
+          const failureText = /Application error|server-side exception|Server Components render|Bad Request/i;
+
+          function attachDiagnostics(page, key) {
+            const diagnostic = {
+              pageErrors: [],
+              consoleErrors: [],
+              failedRequests: [],
+              http5xx: [],
+              dangerousMutations: [],
+            };
+            page.on('pageerror', error => diagnostic.pageErrors.push(error.message));
+            page.on('console', message => {
+              if (message.type() === 'error') diagnostic.consoleErrors.push(message.text());
+            });
+            page.on('requestfailed', request => {
+              const url = new URL(request.url());
+              if (url.hostname.endsWith('moraltrade.org')) {
+                diagnostic.failedRequests.push(`${request.method()} ${url.pathname} :: ${request.failure()?.errorText ?? ''}`);
+              }
+            });
+            page.on('response', response => {
+              const url = new URL(response.url());
+              if (url.hostname.endsWith('moraltrade.org') && response.status() >= 500) {
+                diagnostic.http5xx.push(`${response.status()} ${url.pathname}`);
+              }
+            });
+            page.on('request', request => {
+              const url = new URL(request.url());
+              if (!url.hostname.endsWith('moraltrade.org')) return;
+              if (['GET', 'HEAD', 'OPTIONS'].includes(request.method())) return;
+              if (/^\/api\/(payments|stripe|mpgf|offers|create|background)(\/|$)/.test(url.pathname)) {
+                diagnostic.dangerousMutations.push(`${request.method()} ${url.pathname}`);
+              }
+            });
+            report.diagnostics[key] = diagnostic;
+            return diagnostic;
+          }
+
+          async function load(page, path, label, screenshot) {
+            const response = await page.goto(`${base}${path}`, {
+              waitUntil: 'domcontentloaded',
+              timeout: 45000,
+            });
+            if (!response || response.status() !== 200) {
+              throw new Error(`${label} returned ${response?.status() ?? 'no response'}`);
+            }
+            await page.locator('body').waitFor({ state: 'visible', timeout: 20000 });
+            await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {});
+            const body = await page.locator('body').innerText();
+            if (failureText.test(body)) throw new Error(`${label} exposed failure text.`);
+            const dimensions = await page.evaluate(() => ({
+              scrollWidth: document.documentElement.scrollWidth,
+              clientWidth: document.documentElement.clientWidth,
+              innerWidth: window.innerWidth,
+            }));
+            if (dimensions.scrollWidth > dimensions.innerWidth + 1) {
+              throw new Error(`${label} horizontally overflows: ${JSON.stringify(dimensions)}`);
+            }
+            await page.screenshot({
+              path: `test-results/issue609-production/${screenshot}.png`,
+              fullPage: true,
+            });
+            return { status: response.status(), body, finalUrl: page.url(), dimensions };
+          }
+
+          function parseCount(body, start, end) {
+            const expression = new RegExp(`Showing ${start}[–-]${end} of ([0-9,]+) open offers\\.`);
+            const match = body.match(expression);
+            if (!match) throw new Error(`Missing truthful range ${start}–${end}.`);
+            return Number(match[1].replaceAll(',', ''));
+          }
+
+          async function exercise(browser, key, viewport) {
+            const context = await browser.newContext({ viewport });
+            const page = await context.newPage();
+            const diagnostic = attachDiagnostics(page, key);
+
+            const api = await context.request.get(`${base}${apiPath}`, { timeout: 45000 });
+            const apiText = await api.text();
+            if (api.status() !== 200) throw new Error(`${key} API returned ${api.status()}: ${apiText.slice(0, 500)}`);
+            const apiJson = JSON.parse(apiText);
+            if (apiJson.ok !== true || apiJson.profile?.id !== profileId) {
+              throw new Error(`${key} API profile mismatch.`);
+            }
+
+            const first = await load(page, profilePath, `${key} profile page 1`, `${key}-profile-page-1`);
+            const count = parseCount(first.body, 1, 24);
+            if (count < 49) throw new Error(`Expected a high-volume profile, received ${count} offers.`);
+            if (!/Page 1\b/.test(first.body)) throw new Error(`${key} page 1 label missing.`);
+
+            const credibility = await load(page, credibilityPath, `${key} credibility`, `${key}-credibility`);
+
+            const second = await load(page, `${profilePath}?offersPage=2#open-offers`, `${key} profile page 2`, `${key}-profile-page-2`);
+            const secondCount = parseCount(second.body, 25, 48);
+            if (secondCount !== count) throw new Error(`${key} count changed between page 1 and page 2.`);
+            if (!/Page 2\b/.test(second.body)) throw new Error(`${key} page 2 label missing.`);
+
+            const finalPage = Math.ceil(count / 24);
+            const finalStart = (finalPage - 1) * 24 + 1;
+            const clamped = await load(page, `${profilePath}?offersPage=9999#open-offers`, `${key} clamped page`, `${key}-profile-page-clamped`);
+            const finalExpression = new RegExp(`Showing ${finalStart}[–-]${count} of ${count.toLocaleString('en-US')} open offers\\.`);
+            if (!finalExpression.test(clamped.body)) {
+              throw new Error(`${key} clamped final range is not truthful.`);
+            }
+            if (!new RegExp(`Page ${finalPage}\\b`).test(clamped.body)) {
+              throw new Error(`${key} final page label is missing.`);
+            }
+
+            const seriousConsole = diagnostic.consoleErrors.filter(message => failureText.test(message));
+            if (
+              diagnostic.pageErrors.length
+              || diagnostic.http5xx.length
+              || diagnostic.dangerousMutations.length
+              || seriousConsole.length
+            ) {
+              throw new Error(`${key} diagnostics failed: ${JSON.stringify({ ...diagnostic, seriousConsole })}`);
+            }
+
+            report[key] = {
+              viewport,
+              api: { status: api.status(), profileId: apiJson.profile.id },
+              offerCount: count,
+              first: { status: first.status, finalUrl: first.finalUrl, dimensions: first.dimensions },
+              credibility: { status: credibility.status, finalUrl: credibility.finalUrl, dimensions: credibility.dimensions },
+              second: { status: second.status, finalUrl: second.finalUrl, dimensions: second.dimensions },
+              clamped: { status: clamped.status, finalUrl: clamped.finalUrl, dimensions: clamped.dimensions, finalPage },
+            };
+            await context.close();
+          }
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            try {
+              await exercise(browser, 'desktop', { width: 1440, height: 1000 });
+              await exercise(browser, 'mobile', { width: 390, height: 844 });
+              report.ok = true;
+              report.finishedAt = new Date().toISOString();
+              await writeFile('test-results/issue609-production/acceptance-report.json', JSON.stringify(report, null, 2));
+            } catch (error) {
+              report.ok = false;
+              report.finishedAt = new Date().toISOString();
+              report.error = error instanceof Error ? error.stack : String(error);
+              await writeFile('test-results/issue609-production/acceptance-report.json', JSON.stringify(report, null, 2));
+              throw error;
+            } finally {
+              await browser.close();
+            }
+          })();
+          JS
+
+          curl -fsSI https://www.moraltrade.org/ > evidence/www-headers.txt
+          curl -fsSI https://moraltrade.org/ > evidence/apex-headers.txt
+
+      - name: Collect deployment-scoped Vercel error logs
+        if: always()
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.deployment_url }}
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p evidence/vercel
+          set +e
+          timeout 60s npx --yes "vercel@${VERCEL_CLI_VERSION}" logs "$DEPLOYMENT_URL" \
+            --since 30m \
+            --level error \
+            --json \
+            --token="$VERCEL_TOKEN" \
+            > evidence/vercel/runtime-error-logs.jsonl \
+            2> evidence/vercel/runtime-error-logs.stderr
+          status=$?
+          set -e
+          printf '%s\n' "$status" > evidence/vercel/runtime-error-logs.exit-code
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          path = Path('evidence/vercel/runtime-error-logs.jsonl')
+          relevant = []
+          for raw in path.read_text(encoding='utf-8', errors='replace').splitlines() if path.exists() else []:
+              try:
+                  item = json.loads(raw)
+              except json.JSONDecodeError:
+                  continue
+              text = json.dumps(item, sort_keys=True)
+              if any(fragment in text for fragment in (
+                  '/people/9e51db47-92d1-4d75-80ce-cf10de1121f1',
+                  '/api/credibility/profile/9e51db47-92d1-4d75-80ce-cf10de1121f1',
+              )):
+                  relevant.append(item)
+          Path('evidence/vercel/relevant-runtime-errors.json').write_text(
+              json.dumps(relevant, indent=2, sort_keys=True) + '\n'
+          )
+          if relevant:
+              raise SystemExit(f'Found {len(relevant)} deployment-scoped runtime error log entries.')
+          PY
+
+      - name: Upload permanent production release and smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue609-production-release-and-smoke-${{ github.run_id }}
+          path: |
+            evidence
+            test-results/issue609-production
+            /tmp/pr611.json
+            /tmp/diagnostic-31556463425.json
+            /tmp/diagnostic-31556608683.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish exact completion evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.selected.outputs.run_id }}
+          RUN_URL: ${{ steps.release.outputs.run_url }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.deployment.outputs.deployment_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          offer_count="$(jq -r '.desktop.offerCount' test-results/issue609-production/acceptance-report.json)"
+          body=$(cat <<EOF
+          Exact issue #609 production release and canonical smoke completed successfully.
+
+          - Main commit: \`${EXPECTED_MAIN_SHA}\`
+          - Permanent gated release run: [${RUN_ID}](${RUN_URL})
+          - Vercel production deployment: \`${DEPLOYMENT_ID}\` (${DEPLOYMENT_URL})
+          - Canonical high-volume profile: desktop and 390×844 mobile passed page 1, page 2, clamped-final-page, credibility, API, no-overflow, no-5xx, and no-dangerous-mutation checks
+          - Open offers observed during smoke: \`${offer_count}\`
+          - Production aliases verified on the exact deployment: \`moraltrade.org\`, \`www.moraltrade.org\`
+          - Payment, offer, evidence, reliability, and execution mutation: none
+          - Controller evidence artifact: \`issue609-production-release-and-smoke-${GITHUB_RUN_ID}\`
+          EOF
+          )
+          gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --body "$body"
+          gh issue comment "$ISSUE_NUMBER" --repo "$GITHUB_REPOSITORY" --body "$body"
+
+      - name: Close temporary controller PRs and remove one-use branches
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for branch in \
+            ops/retry-issue609-production-release-20260812 \
+            ops/retry-issue609-production-release-20260812-v2 \
+            ops/issue609-production-release-controller-20260812 \
+            ops/issue609-production-release-controller-v2-20260812 \
+            ops/issue609-production-release-final-20260812 \
+            ops/issue609-production-release-final-v2-20260812 \
+            ops/issue609-production-release-final-v3-20260812 \
+            ops/issue609-production-release-controller-final-20260812 \
+            ops/issue609-production-release-controller-final-v2-20260812 \
+            ops/issue609-production-release-controller-final-v3-20260812 \
+            ops/diagnose-vercel-release-structural-contract-20260812; do
+            while read -r pr_number; do
+              [[ -n "$pr_number" ]] || continue
+              gh pr close "$pr_number" \
+                --repo "$GITHUB_REPOSITORY" \
+                --comment 'One-use operational branch completed or was superseded; not merged.' || true
+            done < <(gh pr list \
+              --repo "$GITHUB_REPOSITORY" \
+              --state open \
+              --head "$branch" \
+              --json number \
+              --jq '.[].number')
+
+            encoded="${branch//\//%2F}"
+            gh api --method DELETE "/repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded}" || true
+          done
