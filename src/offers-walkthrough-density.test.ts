@@ -47,7 +47,9 @@ test("the advanced challenge-return plane is optional and lazy-loaded", () => {
   assert.match(planeMount, /if \(!queryState\.shouldShow \|\| !explorerOpen\) return;/);
   assert.match(planeMount, /<details/);
   assert.match(planeMount, /Optional visual explorer/);
-  assert.match(planeMount, /onToggle=\{\(event\) => setExplorerOpen\(event\.currentTarget\.open\)\}/);
+  assert.match(planeMount, /onToggle=\{\(event\) => \{/);
+  assert.match(planeMount, /const isOpen = event\.currentTarget\.open;/);
+  assert.match(planeMount, /setExplorerOpen\(isOpen\);/);
   assert.match(disclosureStyles, /\.disclosure\[open\] \.summaryIcon/);
 });
 
