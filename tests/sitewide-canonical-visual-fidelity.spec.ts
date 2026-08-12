@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 interface Rect {
   bottom: number;
@@ -22,7 +22,7 @@ async function rect(locator: Locator): Promise<Rect> {
   };
 }
 
-async function expectNoHorizontalOverflow(page: Parameters<typeof test>[0] extends never ? never : any) {
+async function expectNoHorizontalOverflow(page: Page) {
   const dimensions = await page.evaluate(() => ({
     clientWidth: document.documentElement.clientWidth,
     innerWidth: window.innerWidth,
