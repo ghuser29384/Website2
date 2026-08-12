@@ -56,7 +56,7 @@ export function ParticipantOfferGroup({
         </span>
       </header>
 
-      <p className={styles.groupNote}>
+      <p className={styles.groupNote} data-participant-exact-terms-note>
         These are the owner&apos;s exact published terms. Counteroffer opens a new proposal;
         it does not imply that this participant has already accepted a different combination.
       </p>
