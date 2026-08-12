@@ -1,0 +1,281 @@
+/* Canonical Home / Walkthrough styling for standalone product shells. */
+:root {
+  --paper: #f5f2e9 !important;
+  --paper-2: #fffdf8 !important;
+  --surface: #fffdf8 !important;
+  --surface-solid: #fffdf8 !important;
+  --ink: #111111 !important;
+  --muted: #66645f !important;
+  --line: #c7c5bd !important;
+  --line-dark: #8d8b84 !important;
+  --line-strong: #8d8b84 !important;
+  --blue: #2450ff !important;
+  --blue-dark: #153ee9 !important;
+  --blue-pale: #e4eaff !important;
+  --orange: #e66c17 !important;
+  --shadow: none !important;
+}
+
+html,
+body {
+  background-color: #f5f2e9 !important;
+  background-image:
+    linear-gradient(rgba(17, 17, 17, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 17, 17, 0.035) 1px, transparent 1px) !important;
+  background-size: 24px 24px !important;
+  color: #111111 !important;
+}
+
+button,
+input,
+select,
+textarea,
+.btn,
+[class*="btn"],
+[class*="card"],
+[class*="panel"],
+[class*="choice"],
+[class*="option"],
+[class*="stage"],
+[class*="badge"],
+[class*="callout"],
+[class*="dropzone"],
+[class*="modal"],
+[class*="sheet"] {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgba(36, 80, 255, 0.34) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+
+/* Create shell */
+.topbar {
+  min-height: 72px !important;
+  border-bottom: 1px solid #050505 !important;
+  background: #050505 !important;
+  color: #f9f6ef !important;
+  backdrop-filter: none !important;
+}
+
+.topbar .brand-mark {
+  position: relative !important;
+  width: 28px !important;
+  height: 28px !important;
+  background: transparent !important;
+}
+
+.topbar .brand-mark::before,
+.topbar .brand-mark::after {
+  position: absolute;
+  content: "";
+}
+
+.topbar .brand-mark::before {
+  inset: 4px;
+  background: #f9f6ef;
+  clip-path: polygon(0 76%, 76% 0, 100% 24%, 24% 100%);
+}
+
+.topbar .brand-mark::after {
+  top: 0;
+  right: 0;
+  width: 7px;
+  height: 7px;
+  background: #2450ff;
+}
+
+.topbar .brand-title {
+  color: #ffffff !important;
+}
+
+.topbar .brand-subtitle,
+.topbar .back-link {
+  color: #aaa8a2 !important;
+}
+
+.topbar .progress span {
+  background: #5d5b57 !important;
+}
+
+.topbar .progress span.done {
+  background: #2450ff !important;
+}
+
+.topbar .progress span.active {
+  background: #ffffff !important;
+}
+
+.app {
+  width: min(1400px, calc(100% - 48px)) !important;
+}
+
+.screen.active .stage,
+.summary-stage {
+  border: 1px solid #111111 !important;
+  background: rgba(255, 253, 248, 0.94) !important;
+}
+
+.intro {
+  border-right-color: #111111 !important;
+  background: #050505 !important;
+  color: #ffffff !important;
+}
+
+.intro .step-label,
+.summary-head .step-label,
+.fund-mode-kicker {
+  color: #e66c17 !important;
+}
+
+.intro h1,
+.summary-head h1 {
+  color: #ffffff !important;
+  font-family: Georgia, "Times New Roman", serif !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.045em !important;
+  line-height: 0.96 !important;
+}
+
+.intro-copy,
+.intro p {
+  color: #c9c5bd !important;
+}
+
+.cause-panel,
+.request-panel,
+.offer-panel,
+.summary-panel,
+.dac-terms-panel,
+.timing-detail,
+.context-card-row,
+.seed-side,
+.pool-subpanel,
+.money-destination,
+.visibility-policy-section {
+  border-color: #8d8b84 !important;
+  background: #fffdf8 !important;
+}
+
+.btn.primary,
+button.primary,
+.other-cause-submit,
+.request-primary {
+  border-color: #2450ff !important;
+  background: #2450ff !important;
+  color: #ffffff !important;
+}
+
+.btn.primary:hover,
+button.primary:hover,
+.other-cause-submit:hover,
+.request-primary:hover {
+  background: #153ee9 !important;
+}
+
+/* Verification shell */
+.mt-verify-appbar {
+  min-height: 72px !important;
+  padding-block: 0 !important;
+  border-bottom: 1px solid #050505 !important;
+  background: #050505 !important;
+  color: #f9f6ef !important;
+  backdrop-filter: none !important;
+}
+
+.mt-verify-appbar :where(a, button, .mt-verify-record-status) {
+  color: #d0cdc6 !important;
+}
+
+.mt-verify-brand {
+  color: #ffffff !important;
+  font-weight: 650 !important;
+}
+
+.mt-verify-shell {
+  width: min(1400px, 100%) !important;
+}
+
+.mt-verify-hero {
+  align-items: stretch !important;
+  gap: 0 !important;
+  border: 1px solid #111111 !important;
+  background: #fffdf8 !important;
+}
+
+.mt-verify-hero > div:first-child {
+  display: grid !important;
+  align-content: end !important;
+  min-height: 390px !important;
+  padding: clamp(34px, 5vw, 72px) !important;
+  background: #050505 !important;
+  color: #ffffff !important;
+}
+
+.mt-verify-hero h1 {
+  color: #ffffff !important;
+}
+
+.mt-verify-hero-copy {
+  color: #c9c5bd !important;
+}
+
+.mt-verify-summary-card {
+  border: 0 !important;
+  border-left: 1px solid #111111 !important;
+  background: #fffdf8 !important;
+}
+
+.mt-verify-panel,
+.mt-verify-source-card,
+.mt-verify-lock-card,
+.mt-verify-result-panel,
+.mt-verify-stage,
+.mt-verify-callout,
+.mt-verify-dropzone {
+  border-color: #c7c5bd !important;
+  background: #fffdf8 !important;
+}
+
+.mt-verify-btn--primary {
+  border-color: #2450ff !important;
+  background: #2450ff !important;
+  color: #ffffff !important;
+}
+
+.mt-verify-tab.is-active,
+.mt-verify-stage.is-active {
+  border-color: #2450ff !important;
+  box-shadow: inset 4px 0 0 #2450ff !important;
+}
+
+@media (max-width: 820px) {
+  .app {
+    width: min(100% - 20px, 1400px) !important;
+  }
+
+  .screen.active .stage,
+  .summary-stage,
+  .mt-verify-hero {
+    grid-template-columns: 1fr !important;
+  }
+
+  .intro {
+    min-height: 310px !important;
+    border-right: 0 !important;
+    border-bottom: 1px solid #111111 !important;
+  }
+
+  .mt-verify-summary-card {
+    border-top: 1px solid #111111 !important;
+    border-left: 0 !important;
+  }
+}

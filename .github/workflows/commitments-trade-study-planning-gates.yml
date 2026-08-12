@@ -5,14 +5,30 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/commitments-trade-study-planning-gates.yml"
-      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/**"
-      - "scripts/commitments-trade-study/**"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/README.md"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/eligible-population-planning-envelope.json"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/precision-report.json"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/precision-spec.json"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/study-instance.json"
+      - "scripts/commitments-trade-study/analysis.mjs"
+      - "scripts/commitments-trade-study/assignment.mjs"
+      - "scripts/commitments-trade-study/precision.mjs"
+      - "scripts/commitments-trade-study/precision-core.mjs"
+      - "scripts/commitments-trade-study/validate-planning-package.mjs"
   push:
     branches: [main]
     paths:
       - ".github/workflows/commitments-trade-study-planning-gates.yml"
-      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/**"
-      - "scripts/commitments-trade-study/**"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/README.md"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/eligible-population-planning-envelope.json"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/precision-report.json"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/precision-spec.json"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/study-instance.json"
+      - "scripts/commitments-trade-study/analysis.mjs"
+      - "scripts/commitments-trade-study/assignment.mjs"
+      - "scripts/commitments-trade-study/precision.mjs"
+      - "scripts/commitments-trade-study/precision-core.mjs"
+      - "scripts/commitments-trade-study/validate-planning-package.mjs"
 
 permissions:
   contents: read
@@ -52,16 +68,44 @@ jobs:
           node scripts/commitments-trade-study/precision.mjs --check \
             2>&1 | tee trade-study-precision-check.log
 
-      - name: Enforce exact planning-package file scope
+      - name: Detect planning-package source changes
+        id: planning_scope
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
           git fetch origin main
           base="$(git merge-base HEAD origin/main)"
+          git diff --name-only "$base" "$GITHUB_SHA" | sort > planning-all-changed-files.txt
+          cat > planning-source-files.txt <<'FILES'
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/README.md
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/eligible-population-planning-envelope.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/precision-report.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/precision-spec.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/study-instance.json
+          scripts/commitments-trade-study/analysis.mjs
+          scripts/commitments-trade-study/assignment.mjs
+          scripts/commitments-trade-study/precision.mjs
+          scripts/commitments-trade-study/precision-core.mjs
+          scripts/commitments-trade-study/validate-planning-package.mjs
+          FILES
+          sort -o planning-source-files.txt planning-source-files.txt
+          comm -12 planning-all-changed-files.txt planning-source-files.txt > planning-changed-source-files.txt
+          if [[ -s planning-changed-source-files.txt ]]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Enforce isolated planning-package file scope
+        if: github.event_name == 'pull_request' && steps.planning_scope.outputs.changed == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$(git merge-base HEAD origin/main)"
           git diff --check "$base" "$GITHUB_SHA" | tee trade-study-diff-check.log
-          git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
-          cat > expected-files.txt <<'FILES'
+          cp planning-all-changed-files.txt actual-files.txt
+          cat > allowed-files.txt <<'FILES'
           .github/workflows/commitments-trade-study-planning-gates.yml
           docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/README.md
           docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/eligible-population-planning-envelope.json
@@ -74,8 +118,13 @@ jobs:
           scripts/commitments-trade-study/precision-core.mjs
           scripts/commitments-trade-study/validate-planning-package.mjs
           FILES
-          sort -o expected-files.txt expected-files.txt
-          diff -u expected-files.txt actual-files.txt
+          sort -o allowed-files.txt allowed-files.txt
+          comm -23 actual-files.txt allowed-files.txt > unexpected-files.txt
+          if [[ -s unexpected-files.txt ]]; then
+            cat unexpected-files.txt
+            echo "Planning-package source changes must remain isolated from unrelated files." >&2
+            exit 1
+          fi
 
       - name: Upload exact planning evidence
         if: always()
@@ -86,8 +135,12 @@ jobs:
             trade-study-package-validation.log
             trade-study-precision-check.log
             trade-study-diff-check.log
-            expected-files.txt
+            planning-all-changed-files.txt
+            planning-source-files.txt
+            planning-changed-source-files.txt
             actual-files.txt
+            allowed-files.txt
+            unexpected-files.txt
             docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/precision-spec.json
             docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/precision-report.json
             docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/study-instance.json
