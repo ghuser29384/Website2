@@ -1,0 +1,133 @@
+name: Repair MPGF DAC terminal lifecycle event constraint
+
+on:
+  push:
+    branches:
+      - ops/repair-mpgf-dac-terminal-events-20260812
+    paths:
+      - ".github/workflows/repair-mpgf-dac-terminal-events-20260812.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-mpgf-dac-terminal-events-20260812
+  cancel-in-progress: false
+
+env:
+  TARGET_BRANCH: integration/mpgf-dac-lifecycle-current-main-20260812
+  EXPECTED_HEAD_SHA: 65f1cf74a925c5c7015da5d4fc5fb383cf260bb3
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out the exact integrated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Reconcile the latest migration with terminal lifecycle event values
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration_path = Path("supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql")
+          migration = migration_path.read_text()
+          anchor = "create extension if not exists pgcrypto with schema extensions;\n\n"
+          block = """create extension if not exists pgcrypto with schema extensions;
+
+-- Reconcile the terminal lifecycle-event contract in case an older review-only
+-- migration was replayed after the success/lapse migration on a shared QA target.
+-- This is idempotent and preserves the exact event vocabulary used by
+-- mpgf_finalize_dac_campaign.
+alter table public.mpgf_pool_lifecycle_events
+  drop constraint if exists mpgf_pool_lifecycle_events_event_type_check;
+alter table public.mpgf_pool_lifecycle_events
+  add constraint mpgf_pool_lifecycle_events_event_type_check
+  check (
+    event_type in (
+      'review_started',
+      'changes_requested',
+      'revision_submitted',
+      'proposal_rejected',
+      'terms_approved_and_frozen',
+      'pool_published',
+      'pool_succeeded',
+      'pool_lapsed'
+    )
+  );
+
+"""
+          if migration.count(anchor) != 1:
+              raise SystemExit("Expected exactly one public-terms migration extension anchor.")
+          if "Reconcile the terminal lifecycle-event contract" in migration:
+              raise SystemExit("Terminal lifecycle-event reconciliation already exists.")
+          migration = migration.replace(anchor, block, 1)
+          migration_path.write_text(migration)
+
+          test_path = Path("src/lib/mpgf/dac-public-terms-migration.test.ts")
+          source = test_path.read_text()
+          contract = r'''
+
+test("latest public-terms migration preserves terminal DAC lifecycle event values", async () => {
+  const migration = await read(migrationPath);
+
+  assert.match(
+    migration,
+    /drop constraint if exists mpgf_pool_lifecycle_events_event_type_check/,
+  );
+  assert.match(
+    migration,
+    /add constraint mpgf_pool_lifecycle_events_event_type_check[\s\S]*'pool_succeeded'[\s\S]*'pool_lapsed'/,
+  );
+  assert.match(migration, /mpgf_finalize_dac_campaign/);
+});
+'''
+          if "latest public-terms migration preserves terminal DAC lifecycle event values" in source:
+              raise SystemExit("Terminal lifecycle-event migration contract already exists.")
+          test_path.write_text(source.rstrip() + contract)
+          PY
+
+          git diff --check
+          git diff -- \
+            supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql \
+            src/lib/mpgf/dac-public-terms-migration.test.ts
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused migration and lifecycle contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/dac-public-terms-migration.test.ts \
+            src/lib/mpgf/dac-success-lapse-migration.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Commit the exact repair to the integrated candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql \
+            src/lib/mpgf/dac-public-terms-migration.test.ts
+          git commit -m "fix(mpgf): reconcile terminal lifecycle event constraint"
+          git push origin "HEAD:${TARGET_BRANCH}"
