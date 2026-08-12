@@ -1,0 +1,89 @@
+name: Repair Bottleneck Atlas feed interaction rebinding
+
+on:
+  push:
+    branches:
+      - feature/bottleneck-atlas-feed-20260811
+    paths:
+      - .github/workflows/repair-bottleneck-feed-rebind.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/bottleneck-atlas-feed-20260811
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Repair interaction rebinding after root rerenders
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("public/moral-trade-live-now.js")
+          source = path.read_text()
+          old = '''  if (typeof setTimeout === "function") {
+            setTimeout(bindFeedInteractions, 0);
+          } else {
+            bindFeedInteractions();
+          }
+
+          document.documentElement.setAttribute("data-mt-live-now-ready", model.status);
+          '''
+          new = '''  if (typeof setTimeout === "function") {
+            setTimeout(bindFeedInteractions, 0);
+          } else {
+            bindFeedInteractions();
+          }
+
+          // The adaptive shell may replace the rendered feed root after this script first binds.
+          // Rebind to each new root exactly once so feedback controls remain functional after
+          // tab, route, or shell rerenders.
+          if (typeof MutationObserver === "function" && document.body) {
+            const bindingObserver = new MutationObserver(() => bindFeedInteractions());
+            bindingObserver.observe(document.body, { childList: true, subtree: true });
+          }
+
+          document.documentElement.setAttribute("data-mt-live-now-ready", model.status);
+          '''
+          if source.count(old) != 1:
+              raise SystemExit(f"Expected one binding tail, found {source.count(old)}")
+          path.write_text(source.replace(old, new))
+          PY
+          node --check public/moral-trade-live-now.js
+
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Reproduce and clear the exact browser regression
+        run: >-
+          npx playwright test tests/exact-live-now-recommendations.spec.ts
+          --grep "keeps the compact ready-state cards usable on a phone|records direct action-difficulty feedback and removes unwanted cards locally"
+          --workers=1
+          --repeat-each=2
+          --reporter=line
+
+      - name: Commit the repaired runtime and remove this controller
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/repair-bottleneck-feed-rebind.yml
+          git add public/moral-trade-live-now.js
+          git diff --cached --check
+          git commit -m "Keep feed interactions bound after rerenders"
+          git push origin HEAD:feature/bottleneck-atlas-feed-20260811
