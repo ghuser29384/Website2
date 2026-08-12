@@ -34,21 +34,8 @@ jobs:
 
           path = Path("public/moral-trade-live-now.js")
           source = path.read_text()
-          old = '''  if (typeof setTimeout === "function") {
-            setTimeout(bindFeedInteractions, 0);
-          } else {
-            bindFeedInteractions();
-          }
-
-          document.documentElement.setAttribute("data-mt-live-now-ready", model.status);
-          '''
-          new = '''  if (typeof setTimeout === "function") {
-            setTimeout(bindFeedInteractions, 0);
-          } else {
-            bindFeedInteractions();
-          }
-
-          // The adaptive shell may replace the rendered feed root after this script first binds.
+          marker = '  document.documentElement.setAttribute("data-mt-live-now-ready", model.status);'
+          insertion = '''  // The adaptive shell may replace the rendered feed root after this script first binds.
           // Rebind to each new root exactly once so feedback controls remain functional after
           // tab, route, or shell rerenders.
           if (typeof MutationObserver === "function" && document.body) {
@@ -56,11 +43,12 @@ jobs:
             bindingObserver.observe(document.body, { childList: true, subtree: true });
           }
 
-          document.documentElement.setAttribute("data-mt-live-now-ready", model.status);
           '''
-          if source.count(old) != 1:
-              raise SystemExit(f"Expected one binding tail, found {source.count(old)}")
-          path.write_text(source.replace(old, new))
+          if source.count(marker) != 1:
+              raise SystemExit(f"Expected one ready-state marker, found {source.count(marker)}")
+          if "const bindingObserver = new MutationObserver" in source:
+              raise SystemExit("Interaction rebinding repair is already present")
+          path.write_text(source.replace(marker, insertion + marker))
           PY
           node --check public/moral-trade-live-now.js
 
