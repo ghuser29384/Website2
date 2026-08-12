@@ -1024,6 +1024,14 @@
     bindFeedInteractions();
   }
 
+  // The adaptive shell may replace the rendered feed root after this script first binds.
+// Rebind to each new root exactly once so feedback controls remain functional after
+// tab, route, or shell rerenders.
+if (typeof MutationObserver === "function" && document.body) {
+  const bindingObserver = new MutationObserver(() => bindFeedInteractions());
+  bindingObserver.observe(document.body, { childList: true, subtree: true });
+}
+
   document.documentElement.setAttribute("data-mt-live-now-ready", model.status);
   window.dispatchEvent(
     new CustomEvent("mt:live-now-ready", { detail: { status: model.status } }),
