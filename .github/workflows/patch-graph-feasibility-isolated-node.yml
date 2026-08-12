@@ -31,8 +31,34 @@ jobs:
         with:
           node-version: 24
 
-      - name: Apply, validate, commit, and remove one-use patcher
+      - name: Apply, validate, commit, and attempt one-use cleanup push
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
           python3 scripts/ops/patch-graph-feasibility-isolated-node.py
+
+      - name: Capture exact patched working tree
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rev-parse HEAD > isolated-node-patch-commit.txt
+          git show --format=fuller --stat --oneline HEAD > isolated-node-patch-stat.txt
+          git diff HEAD^ HEAD > isolated-node-patch.diff
+
+      - name: Upload exact isolated-node patch evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: graph-feasibility-isolated-node-patch-${{ github.run_id }}
+          path: |
+            isolated-node-patch-commit.txt
+            isolated-node-patch-stat.txt
+            isolated-node-patch.diff
+            .github/workflows/commitments-trade-graph-feasibility-gates.yml
+            docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/README.md
+            docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/graph-feasibility-contract.json
+            docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/synthetic-graph-report.json
+            scripts/commitments-trade-study/graph-feasibility-core.mjs
+          if-no-files-found: error
