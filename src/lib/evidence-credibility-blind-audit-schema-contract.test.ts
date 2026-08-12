@@ -44,6 +44,9 @@ function functionBody(name: string) {
 const reviewerProjection = functionBody(
   "public.list_my_evidence_credibility_calibration_audits_v1",
 );
+const labelFunction = functionBody(
+  "public.record_evidence_credibility_calibration_label_v1",
+);
 
 test("sampling runs and draws are immutable, reproducible, and probability-complete", () => {
   for (const table of [
@@ -118,7 +121,7 @@ test("assignment excludes the original reviewer and both parties", () => {
 });
 
 test("the reviewer projection omits every forbidden prior-judgment field", () => {
-  const forbidden = [
+  const forbiddenEverywhere = [
     "original_outcome",
     "original_confidence_band",
     "original_provenance_class",
@@ -127,7 +130,6 @@ test("the reviewer projection omits every forbidden prior-judgment field", () =>
     "subject_profile_id",
     "counterparty_profile_id",
     "original_reviewer_id",
-    "private_rationale",
     "weighted_success",
     "weighted_failure",
     "selected_reason",
@@ -135,11 +137,17 @@ test("the reviewer projection omits every forbidden prior-judgment field", () =>
     "sampling_stratum",
   ];
 
-  for (const field of forbidden) {
+  for (const field of forbiddenEverywhere) {
     assert.doesNotMatch(reviewerProjection, new RegExp(field, "i"));
     assert.doesNotMatch(reviewerPage, new RegExp(field, "i"));
   }
 
+  assert.doesNotMatch(reviewerProjection, /private_rationale/i);
+  assert.match(reviewerPage, /name="private_rationale"/i);
+  assert.match(
+    reviewerPage,
+    /Explain the evidence-to-conclusion path without referring to any hidden original decision/i,
+  );
   assert.match(reviewerProjection, /'AUD-' \| upper/i);
   assert.match(reviewerProjection, /milestone\.evidence_rule/i);
   assert.match(reviewerProjection, /version\.no_trade_baseline/i);
@@ -167,7 +175,7 @@ test("private file delivery authorizes first and never reveals a storage path", 
   );
 });
 
-test("independent labels preserve continuous error and the preregistered tolerance", () => {
+test("independent labels preserve continuous error and validate target-specific vocabularies", () => {
   assert.match(
     migration,
     /absolute_error_value := case[\s\S]*abs\(draw_row\.original_outcome - p_final_outcome\)/i,
@@ -178,6 +186,26 @@ test("independent labels preserve continuous error and the preregistered toleran
   );
   assert.match(migration, /materially_upheld boolean not null/i);
   assert.match(migration, /label_hash ~ '\^\[0-9a-f\]\{64\}\$'/i);
+  assert.match(
+    migration,
+    /evidence_credibility_calibration_labels_finality_check/i,
+  );
+  assert.match(
+    migration,
+    /evidence_credibility_calibration_labels_integrity_check/i,
+  );
+  assert.match(
+    labelFunction,
+    /Choose a permitted independent evidence finality\./i,
+  );
+  assert.match(
+    labelFunction,
+    /Choose a permitted independent settlement finality\./i,
+  );
+  assert.match(
+    labelFunction,
+    /Settlement labels must leave evidence-conduct findings not applicable\./i,
+  );
   assert.match(actions, /record_evidence_credibility_calibration_label_v1/i);
   assert.match(reviewerPage, /name="final_outcome"/i);
   assert.match(reviewerPage, /name="private_rationale"/i);
@@ -211,8 +239,14 @@ test("Tranche B does not silently implement export, fitting, activation, or addi
   assert.doesNotMatch(migration, /calibration_export/i);
   assert.doesNotMatch(migration, /fit_(?:model|weights)|isotonic|beta_regression/i);
   assert.doesNotMatch(migration, /additionality_status\s*=\s*'(?:verified|additional|causal)'/i);
-  assert.match(document, /Tranche C de-identified export remains a separate future implementation/i);
-  assert.match(document, /No public credibility changes/i);
+  assert.match(
+    document,
+    /Tranche C de-identified export remains a separate future implementation/i,
+  );
+  assert.match(
+    document,
+    /does not authorize or perform:[\s\S]*public credibility changes/i,
+  );
   assert.match(document, /production migration or deployment/i);
   assert.doesNotMatch(
     `${migration}\n${actions}\n${adminPage}\n${reviewerPage}\n${fileRoute}`,
