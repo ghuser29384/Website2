@@ -24,6 +24,6 @@ test("fidelity repairs remain narrowly scoped to the two audited defects", () =>
   assert.match(styles, /grid-template-columns:\s*minmax\(0, 1fr\)/);
   assert.match(styles, /\.growth-progress-stat[\s\S]*grid-template-columns:\s*2\.25rem minmax\(0, 1fr\) auto/);
   assert.match(styles, /\[data-mt-surface="complete-profile"\] > button\[aria-haspopup="dialog"\]/);
-  assert.match(styles, /right:\s*204px\s*!important/);
+  assert.match(styles, /right:\s*232px\s*!important/);
   assert.equal(styles.includes('data-mt-surface="auth"'), false);
 });
