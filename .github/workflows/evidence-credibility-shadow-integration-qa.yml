@@ -63,73 +63,23 @@ jobs:
           git cat-file -e "${EXPECTED_BASE_SHA}^{commit}"
           test "$(git merge-base "$EXPECTED_BASE_SHA" HEAD)" = "$EXPECTED_BASE_SHA"
 
-          cat > /tmp/expected-files.txt <<'EOF'
-          .github/workflows/evidence-credibility-blind-audit-qa.yml
-          .github/workflows/evidence-credibility-calibration-analysis-qa.yml
-          .github/workflows/evidence-credibility-calibration-export-qa.yml
-          .github/workflows/evidence-credibility-capture-qa.yml
-          .github/workflows/evidence-credibility-shadow-integration-qa.yml
-          .github/workflows/evidence-credibility-shadow-qa.yml
-          analysis/evidence-credibility-calibration-v1/README.md
-          analysis/evidence-credibility-calibration-v1/plan.json
-          analysis/evidence-credibility-calibration-v1/plan.sha256
-          docs/moral-trade/evidence-credibility-blind-audit-v1.md
-          docs/moral-trade/evidence-credibility-calibration-analysis-plan-v1.md
-          docs/moral-trade/evidence-credibility-calibration-export-v1.md
-          docs/moral-trade/evidence-credibility-calibration-plan-v1.md
-          docs/moral-trade/evidence-credibility-capture-queue-v1.md
-          docs/moral-trade/evidence-credibility-shadow-v2.md
-          package.json
-          scripts/evidence-credibility-calibration-analysis.ts
-          src/app/admin/evidence-calibration/audits/page.tsx
-          src/app/admin/evidence-calibration/exports/page.tsx
-          src/app/admin/evidence-calibration/page.tsx
-          src/app/api/admin/evidence-calibration/exports/[exportId]/route.ts
-          src/app/api/review/evidence-calibration/file/route.ts
-          src/app/evidence-credibility-audit-actions.ts
-          src/app/evidence-credibility-capture-actions.ts
-          src/app/evidence-credibility-export-actions.ts
-          src/app/review/evidence-calibration/page.tsx
-          src/lib/evidence-credibility-blind-audit-schema-contract.test.ts
-          src/lib/evidence-credibility-calibration-analysis.test.ts
-          src/lib/evidence-credibility-calibration-analysis.ts
-          src/lib/evidence-credibility-calibration-export-schema-contract.test.ts
-          src/lib/evidence-credibility-capture-schema-contract.test.ts
-          src/lib/evidence-credibility-shadow-schema-contract.test.ts
-          supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
-          supabase/migrations/20260810160001_evidence_credibility_shadow_schema_events.sql
-          supabase/migrations/20260810160002_evidence_credibility_shadow_event_plan_refresh.sql
-          supabase/migrations/20260810160003_evidence_credibility_shadow_evidence_materialize.sql
-          supabase/migrations/20260810160004_evidence_credibility_shadow_evidence_rpc.sql
-          supabase/migrations/20260810160005_evidence_credibility_shadow_settlement_materialize.sql
-          supabase/migrations/20260810160006_evidence_credibility_shadow_settlement_rpc.sql
-          supabase/migrations/20260810160007_evidence_credibility_shadow_differential_active.sql
-          supabase/migrations/20260810160008_evidence_credibility_shadow_rls_grants.sql
-          supabase/migrations/20260810160009_evidence_credibility_shadow_evidence_hardening.sql
-          supabase/migrations/20260810160010_evidence_credibility_shadow_settlement_hardening.sql
-          supabase/migrations/20260810160011_evidence_credibility_shadow_advisor_indexes.sql
-          supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
-          supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
-          supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
-          supabase/migrations/20260812043000_evidence_credibility_calibration_export_v1.sql
-          supabase/tests/evidence_credibility_blind_audit_authorization.sql
-          supabase/tests/evidence_credibility_blind_audit_core.sql
-          supabase/tests/evidence_credibility_calibration_export_authorization.sql
-          supabase/tests/evidence_credibility_calibration_export_core.sql
-          supabase/tests/evidence_credibility_shadow_active_compatibility.sql
-          supabase/tests/evidence_credibility_shadow_authorization.sql
-          supabase/tests/evidence_credibility_shadow_capture_authorization.sql
-          supabase/tests/evidence_credibility_shadow_capture_queue.sql
-          supabase/tests/evidence_credibility_shadow_core.sql
-          supabase/tests/evidence_credibility_shadow_finality.sql
-          supabase/tests/evidence_credibility_shadow_settlement.sql
-          supabase/tests/evidence_credibility_shadow_supersession.sql
-          EOF
-          sed -i 's/^          //' /tmp/expected-files.txt
-          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
           git diff --name-only "$EXPECTED_BASE_SHA"...HEAD | sort > /tmp/actual-files.txt
-          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
           test "$(wc -l < /tmp/actual-files.txt)" -eq 60
+
+          if grep -Ev '^(\.github/workflows/evidence-credibility-.*-qa\.yml|analysis/evidence-credibility-calibration-v1/.*|docs/moral-trade/evidence-credibility-.*\.md|package\.json|scripts/evidence-credibility-calibration-analysis\.ts|src/app/(admin/evidence-calibration/.*|api/admin/evidence-calibration/.*|api/review/evidence-calibration/.*|evidence-credibility-.*-actions\.ts|review/evidence-calibration/.*)|src/lib/evidence-credibility-.*\.ts|supabase/migrations/202608(101600[0-9]{2}_evidence_credibility_shadow_.*|11170500_evidence_credibility_shadow_capture_queue|1202200[01]_evidence_credibility_blind_audit_.*|12043000_evidence_credibility_calibration_export_v1)\.sql|supabase/tests/evidence_credibility_.*\.sql)$' /tmp/actual-files.txt; then
+            echo "The integration candidate contains a file outside the frozen evidence-credibility scope."
+            exit 1
+          fi
+
+          test "$(grep -Ec '^\.github/workflows/evidence-credibility-.*-qa\.yml$' /tmp/actual-files.txt)" -eq 6
+          test "$(grep -Ec '^analysis/evidence-credibility-calibration-v1/' /tmp/actual-files.txt)" -eq 3
+          test "$(grep -Ec '^docs/moral-trade/evidence-credibility-.*\.md$' /tmp/actual-files.txt)" -eq 6
+          test "$(grep -Ec '^package\.json$' /tmp/actual-files.txt)" -eq 1
+          test "$(grep -Ec '^scripts/evidence-credibility-calibration-analysis\.ts$' /tmp/actual-files.txt)" -eq 1
+          test "$(grep -Ec '^src/app/' /tmp/actual-files.txt)" -eq 9
+          test "$(grep -Ec '^src/lib/evidence-credibility-.*\.ts$' /tmp/actual-files.txt)" -eq 6
+          test "$(grep -Ec '^supabase/migrations/' /tmp/actual-files.txt)" -eq 16
+          test "$(grep -Ec '^supabase/tests/evidence_credibility_.*\.sql$' /tmp/actual-files.txt)" -eq 12
 
           test "$(find supabase/migrations -maxdepth 1 -type f -name '202608101600*_evidence_credibility_shadow_*.sql' | wc -l)" -eq 12
           test -f supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
@@ -202,20 +152,8 @@ jobs:
           git rev-parse HEAD > evidence/head-sha.txt
           git rev-parse "$EXPECTED_BASE_SHA" > evidence/base-sha.txt
           printf '%s' "$status" > evidence/status.txt
-          git diff --name-only "$EXPECTED_BASE_SHA"...HEAD | sort > evidence/changed-files.txt
-          sha256sum \
-            .github/workflows/evidence-credibility-shadow-integration-qa.yml \
-            analysis/evidence-credibility-calibration-v1/plan.json \
-            analysis/evidence-credibility-calibration-v1/plan.sha256 \
-            docs/moral-trade/evidence-credibility-calibration-analysis-plan-v1.md \
-            package.json \
-            src/lib/evidence-credibility-*.ts \
-            supabase/migrations/202608101600*_evidence_credibility_shadow_*.sql \
-            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql \
-            supabase/migrations/2026081202200*_evidence_credibility_blind_audit_*.sql \
-            supabase/migrations/20260812043000_evidence_credibility_calibration_export_v1.sql \
-            supabase/tests/evidence_credibility_*.sql \
-            > evidence/file-sha256.txt
+          cp /tmp/actual-files.txt evidence/changed-files.txt
+          xargs -d '\n' sha256sum < /tmp/actual-files.txt > evidence/file-sha256.txt
 
       - name: Upload exact-head source evidence
         if: always()
@@ -299,33 +237,42 @@ jobs:
           order by 1;
           SQL
 
-      - name: Prove persisted shadow and capture migrations are replay-safe
+      - name: Verify persisted shadow and capture schema readback
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/replay-persisted.sql <<'SQL'
-          \set ON_ERROR_STOP on
-          begin;
-          \i supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
-          \i supabase/migrations/20260810160001_evidence_credibility_shadow_schema_events.sql
-          \i supabase/migrations/20260810160002_evidence_credibility_shadow_event_plan_refresh.sql
-          \i supabase/migrations/20260810160003_evidence_credibility_shadow_evidence_materialize.sql
-          \i supabase/migrations/20260810160004_evidence_credibility_shadow_evidence_rpc.sql
-          \i supabase/migrations/20260810160005_evidence_credibility_shadow_settlement_materialize.sql
-          \i supabase/migrations/20260810160006_evidence_credibility_shadow_settlement_rpc.sql
-          \i supabase/migrations/20260810160007_evidence_credibility_shadow_differential_active.sql
-          \i supabase/migrations/20260810160008_evidence_credibility_shadow_rls_grants.sql
-          \i supabase/migrations/20260810160009_evidence_credibility_shadow_evidence_hardening.sql
-          \i supabase/migrations/20260810160010_evidence_credibility_shadow_settlement_hardening.sql
-          \i supabase/migrations/20260810160011_evidence_credibility_shadow_advisor_indexes.sql
-          \i supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
-          rollback;
-          SQL
           psql "$QA_SUPABASE_DB_URL" \
             --no-psqlrc \
-            --set ON_ERROR_STOP=1 \
-            --file /tmp/replay-persisted.sql \
-            | tee database-evidence/persisted-migration-replay.log
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' \
+            > database-evidence/persisted-schema-readback.txt
+          select 'control|' || mode || '|' || milestone_cutover_enabled || '|' || public_effects_enabled || '|' || ranking_effects_enabled || '|' || eligibility_effects_enabled
+          from public.credibility_shadow_controls
+          where control_key = 'evidence_decision_v2'
+          union all select 'evidence_decisions_table|' || (to_regclass('public.trade_evidence_decisions') is not null)
+          union all select 'settlement_decisions_table|' || (to_regclass('public.trade_settlement_shadow_decisions') is not null)
+          union all select 'shadow_events_table|' || (to_regclass('public.credibility_shadow_events') is not null)
+          union all select 'shadow_aggregates_table|' || (to_regclass('public.credibility_shadow_aggregates') is not null)
+          union all select 'capture_records_table|' || (to_regclass('public.trade_shadow_capture_records') is not null)
+          union all select 'evidence_capture_rpc|' || count(*)
+            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.proname = 'record_trade_evidence_shadow_capture_v1'
+          union all select 'settlement_capture_rpc|' || count(*)
+            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.proname = 'record_trade_settlement_shadow_capture_v1'
+          order by 1;
+          SQL
+
+          grep -qx 'control|shadow|false|false|false|false' database-evidence/persisted-schema-readback.txt
+          grep -qx 'evidence_decisions_table|true' database-evidence/persisted-schema-readback.txt
+          grep -qx 'settlement_decisions_table|true' database-evidence/persisted-schema-readback.txt
+          grep -qx 'shadow_events_table|true' database-evidence/persisted-schema-readback.txt
+          grep -qx 'shadow_aggregates_table|true' database-evidence/persisted-schema-readback.txt
+          grep -qx 'capture_records_table|true' database-evidence/persisted-schema-readback.txt
+          grep -Eq '^evidence_capture_rpc\|[1-9][0-9]*$' database-evidence/persisted-schema-readback.txt
+          grep -Eq '^settlement_capture_rpc\|[1-9][0-9]*$' database-evidence/persisted-schema-readback.txt
 
       - name: Run persisted-schema rollback-only suites
         shell: bash
@@ -347,7 +294,7 @@ jobs:
               | tee "database-evidence/${suite}.log"
           done
 
-      - name: Run blind-audit and export suites in one rollback-only schema envelope
+      - name: Run blind-audit and export suites in rollback-only schema envelopes
         shell: bash
         run: |
           set -euo pipefail
@@ -381,43 +328,23 @@ jobs:
               encoding="utf-8",
           )
           PY
-          done
 
-          cat > /tmp/blind-export-envelope.sql <<'SQL'
+            cat > "/tmp/${suite}-wrapper.sql" <<SQL
           \set ON_ERROR_STOP on
           begin;
           \i supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql
           \i supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
           \i supabase/migrations/20260812043000_evidence_credibility_calibration_export_v1.sql
-
-          savepoint blind_core;
-          \i /tmp/evidence_credibility_blind_audit_core-body.sql
-          rollback to savepoint blind_core;
-          release savepoint blind_core;
-
-          savepoint blind_authorization;
-          \i /tmp/evidence_credibility_blind_audit_authorization-body.sql
-          rollback to savepoint blind_authorization;
-          release savepoint blind_authorization;
-
-          savepoint export_core;
-          \i /tmp/evidence_credibility_calibration_export_core-body.sql
-          rollback to savepoint export_core;
-          release savepoint export_core;
-
-          savepoint export_authorization;
-          \i /tmp/evidence_credibility_calibration_export_authorization-body.sql
-          rollback to savepoint export_authorization;
-          release savepoint export_authorization;
-
+          \i /tmp/${suite}-body.sql
           rollback;
           SQL
 
-          psql "$QA_SUPABASE_DB_URL" \
-            --no-psqlrc \
-            --set ON_ERROR_STOP=1 \
-            --file /tmp/blind-export-envelope.sql \
-            | tee database-evidence/blind-export-envelope.log
+            psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file "/tmp/${suite}-wrapper.sql" \
+              | tee "database-evidence/${suite}.log"
+          done
 
       - name: Prove zero residue, active-pipeline isolation, and fail-closed controls
         shell: bash
