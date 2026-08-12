@@ -170,9 +170,9 @@ with made as (
     performer.profile_id,
     'initial',
     1,
-    'accepted',
-    now(),
-    now()
+    'draft',
+    null,
+    null
   from qa_capture_objects milestone
   cross join qa_capture_actors performer
   where milestone.object_name = 'milestone'
@@ -188,6 +188,14 @@ insert into public.trade_evidence_bundle_items(
 select bundle.object_id, 'attestation', 'QA-only private evidence'
 from qa_capture_objects bundle
 where bundle.object_name = 'bundle';
+
+update public.trade_evidence_bundles
+set status = 'accepted',
+    submitted_at = now(),
+    reviewed_at = now()
+where id = (
+  select object_id from qa_capture_objects where object_name = 'bundle'
+);
 
 with payout_math as (
   select *
