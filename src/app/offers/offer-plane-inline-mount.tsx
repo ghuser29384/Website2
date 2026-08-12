@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 
 import type { OfferPlaneItem } from "@/lib/offer-plane";
 
+import disclosureStyles from "./offer-plane-disclosure.module.css";
 import { OfferPlaneInlineClient } from "./offer-plane-inline-client";
 import styles from "./offer-plane-inline.module.css";
 
@@ -63,9 +64,7 @@ export function OfferPlaneInlineMount() {
   }, [pathname, searchParams]);
 
   useEffect(() => {
-    if (!queryState.shouldShow) {
-      return;
-    }
+    if (!queryState.shouldShow) return;
 
     document.getElementById(HOST_ID)?.remove();
     const portalHost = document.createElement("div");
@@ -74,8 +73,18 @@ export function OfferPlaneInlineMount() {
     portalHost.dataset.offerPlaneInline = "true";
 
     function placeHost() {
-      const toolbar = document.querySelector<HTMLElement>(".mt-directory-toolbar");
       const directorySection = document.querySelector<HTMLElement>(".mt-product-section.is-white");
+      const searchForm = directorySection?.querySelector<HTMLFormElement>(
+        'form[data-smart-query-surface="offers"]',
+      );
+      const toolbar = directorySection?.querySelector<HTMLElement>(".mt-directory-toolbar");
+
+      if (searchForm?.parentElement) {
+        if (searchForm.nextSibling !== portalHost) {
+          searchForm.parentElement.insertBefore(portalHost, searchForm.nextSibling);
+        }
+        return;
+      }
 
       if (toolbar?.parentElement) {
         if (toolbar.nextSibling !== portalHost) {
@@ -115,9 +124,7 @@ export function OfferPlaneInlineMount() {
       signal: controller.signal,
     })
       .then(async (result) => {
-        if (!result.ok) {
-          throw new Error(`Offer search returned ${result.status}.`);
-        }
+        if (!result.ok) throw new Error(`Offer search returned ${result.status}.`);
 
         const payload: unknown = await result.json();
         if (!isOfferPlaneResponse(payload)) {
@@ -136,36 +143,47 @@ export function OfferPlaneInlineMount() {
 
   if (!queryState.shouldShow || !host) return null;
 
+  const content = response ? (
+    <OfferPlaneInlineClient
+      initialCause={queryState.initialCause}
+      initialMode={queryState.initialMode}
+      initialQuery={queryState.initialQuery}
+      items={response.items}
+      key={queryState.key}
+      liveOffersAvailable={response.liveOffersAvailable}
+    />
+  ) : error ? (
+    <div className={styles.loadError} role="alert">
+      <strong>The challenge-return plane could not be loaded.</strong>
+      <p>{error}</p>
+      <button
+        type="button"
+        onClick={() => {
+          setError(null);
+          setAttempt((value) => value + 1);
+        }}
+      >
+        Try again
+      </button>
+    </div>
+  ) : (
+    <div className={styles.loading} role="status" aria-live="polite">
+      <strong>Loading the challenge-return offer plane…</strong>
+      <span>Preparing ordinary offers and pledge swaps for visual search.</span>
+    </div>
+  );
+
   return createPortal(
-    response ? (
-      <OfferPlaneInlineClient
-        initialCause={queryState.initialCause}
-        initialMode={queryState.initialMode}
-        initialQuery={queryState.initialQuery}
-        items={response.items}
-        key={queryState.key}
-        liveOffersAvailable={response.liveOffersAvailable}
-      />
-    ) : error ? (
-      <div className={styles.loadError} role="alert">
-        <strong>The challenge-return plane could not be loaded.</strong>
-        <p>{error}</p>
-        <button
-          type="button"
-          onClick={() => {
-            setError(null);
-            setAttempt((value) => value + 1);
-          }}
-        >
-          Try again
-        </button>
-      </div>
-    ) : (
-      <div className={styles.loading} role="status" aria-live="polite">
-        <strong>Loading the challenge-return offer plane…</strong>
-        <span>Preparing ordinary offers and pledge swaps for visual search.</span>
-      </div>
-    ),
+    <details className={disclosureStyles.disclosure}>
+      <summary>
+        <span className={disclosureStyles.label}>Visual search</span>
+        <strong className={disclosureStyles.title}>Explore by challenge and return</strong>
+        <span className={disclosureStyles.optional}>
+          <span>Optional</span>
+        </span>
+      </summary>
+      <div className={disclosureStyles.body}>{content}</div>
+    </details>,
     host,
   );
 }
