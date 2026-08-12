@@ -1,0 +1,62 @@
+name: Repair evidence credibility Preview controller
+
+on:
+  push:
+    branches:
+      - ops/evidence-credibility-shadow-preview-acceptance-20260812
+    paths:
+      - .github/workflows/repair-evidence-credibility-preview-controller.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-evidence-credibility-preview-controller
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Remove unsupported gh api --repo flags
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('.github/workflows/evidence-credibility-shadow-preview-acceptance.yml')
+          source = path.read_text(encoding='utf-8')
+          repaired, count = re.subn(
+              r'(\bgh api \\\n)\s+--repo "\$GITHUB_REPOSITORY" \\\n',
+              r'\1',
+              source,
+          )
+          if count < 6:
+              raise SystemExit(f'Expected at least six unsupported gh api flags, found {count}.')
+          path.write_text(repaired, encoding='utf-8')
+          PY
+          git diff --check
+          if grep -A1 -n 'gh api \\' .github/workflows/evidence-credibility-shadow-preview-acceptance.yml \
+            | grep -q -- '--repo'; then
+            echo 'Unsupported gh api --repo flag remains.'
+            exit 1
+          fi
+
+      - name: Commit durable repair and remove controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/evidence-credibility-shadow-preview-acceptance.yml
+          git rm .github/workflows/repair-evidence-credibility-preview-controller.yml
+          git commit -m "fix: use full GitHub API paths in Preview controller"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
