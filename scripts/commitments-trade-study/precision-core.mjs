@@ -195,4 +195,3 @@ export function simulateScenario(spec, scenario, random) {
     medianObservedDyadsInPrimaryContrast: quantile(observedDyads, 0.5),
   };
 }
-
