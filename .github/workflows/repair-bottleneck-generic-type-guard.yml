@@ -1,6 +1,8 @@
-# One-use controller. It patches the exact PR candidate, retriggers the existing
-# privacy/feedback repair workflow, and removes itself before pushing.
-name: Stage Bottleneck Atlas generic-template type guard
+# One-use exact-head repair controller. It executes the already-reviewed repair
+# program stored in the companion workflow, adds the missing heterogeneous-union
+# type guard, runs the full repository and rendered gates, and commits only product
+# and test files. This controller is removed through the GitHub API after success.
+name: Repair and verify Bottleneck Atlas generated feed
 
 on:
   push:
@@ -13,12 +15,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: repair-bottleneck-generic-type-guard
+  group: repair-bottleneck-atlas-generated-feed
   cancel-in-progress: false
 
 jobs:
-  patch-and-retrigger:
+  repair-and-verify:
     runs-on: ubuntu-24.04
+    timeout-minutes: 90
     steps:
       - name: Check out exact feature branch
         uses: actions/checkout@v4
@@ -26,7 +29,13 @@ jobs:
           ref: feature/bottleneck-atlas-feed-20260811
           fetch-depth: 0
 
-      - name: Guard and patch the generic-template predicate
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Guard exact head and apply reviewed repairs
         shell: bash
         run: |
           set -euo pipefail
@@ -35,37 +44,89 @@ jobs:
 
           python - <<'PY'
           from pathlib import Path
+          from textwrap import dedent
 
-          path = Path("src/lib/opportunity-synthesis.ts")
-          source = path.read_text()
+          synthesis_path = Path("src/lib/opportunity-synthesis.ts")
+          synthesis = synthesis_path.read_text()
           old = '''function isGenericTemplate(template: OpportunitySynthesisTemplate) {
             return template.generic === true;
           }'''
           new = '''function isGenericTemplate(template: OpportunitySynthesisTemplate) {
             return "generic" in template && template.generic === true;
           }'''
-          if source.count(old) != 1:
-              raise SystemExit(f"Expected one unsafe generic-template predicate, found {source.count(old)}")
-          path.write_text(source.replace(old, new))
+          if synthesis.count(old) != 1:
+              raise SystemExit(
+                  f"Expected one unsafe generic-template predicate, found {synthesis.count(old)}"
+              )
+          synthesis_path.write_text(synthesis.replace(old, new))
 
-          controller = Path(".github/workflows/repair-bottleneck-feedback-privacy.yml")
-          workflow = controller.read_text()
-          marker = "# retriggered after generic-template type guard\n"
-          if marker not in workflow:
-              workflow = marker + workflow
-          controller.write_text(workflow)
+          reviewed_controller = Path(
+              ".github/workflows/repair-bottleneck-feedback-privacy.yml"
+          ).read_text()
+          opening = "          python - <<'PY'\n"
+          closing = "\n          PY"
+          start = reviewed_controller.index(opening) + len(opening)
+          end = reviewed_controller.index(closing, start)
+          reviewed_repair = dedent(reviewed_controller[start:end])
+          exec(compile(reviewed_repair, "reviewed-bottleneck-repair.py", "exec"), {})
           PY
 
           git diff --check
-          git diff -- src/lib/opportunity-synthesis.ts .github/workflows/repair-bottleneck-feedback-privacy.yml
+          expected="$(printf '%s\n' \
+            'src/lib/opportunity-synthesis.test.ts' \
+            'src/lib/opportunity-synthesis.ts' \
+            'tests/bottleneck-atlas.spec.ts')"
+          actual="$(git diff --name-only | sort)"
+          test "$actual" = "$expected"
+          git diff --stat
 
-      - name: Commit the type guard and remove this controller
+      - name: Install dependencies and Chromium
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/repair-bottleneck-generic-type-guard.yml
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run focused synthesis and wiring tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/opportunity-synthesis.test.ts \
+            src/bottleneck-atlas-feed-wiring.test.ts
+
+      - name: Run focused Bottleneck Atlas browser acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test tests/bottleneck-atlas.spec.ts --workers=1 --reporter=line
+
+      - name: Run complete repository gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+
+      - name: Commit the exact verified repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_SHA" = "$(git ls-remote origin refs/heads/feature/bottleneck-atlas-feed-20260811 | awk '{print $1}')"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/lib/opportunity-synthesis.ts .github/workflows/repair-bottleneck-feedback-privacy.yml
-          git commit -m "Guard heterogeneous Bottleneck Atlas templates"
+          git add \
+            src/lib/opportunity-synthesis.ts \
+            src/lib/opportunity-synthesis.test.ts \
+            tests/bottleneck-atlas.spec.ts
+          git diff --cached --check
+          expected="$(printf '%s\n' \
+            'src/lib/opportunity-synthesis.test.ts' \
+            'src/lib/opportunity-synthesis.ts' \
+            'tests/bottleneck-atlas.spec.ts')"
+          actual="$(git diff --cached --name-only | sort)"
+          test "$actual" = "$expected"
+          git commit -m "Persist generated-feed feedback and protect priority URLs"
           git push origin HEAD:feature/bottleneck-atlas-feed-20260811
