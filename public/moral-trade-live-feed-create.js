@@ -32,6 +32,12 @@
 
   function completeRecommendation(value) {
     if (!value || typeof value !== "object") return null;
+    const metadata =
+      value.metadata && typeof value.metadata === "object" && !Array.isArray(value.metadata)
+        ? value.metadata
+        : {};
+    if (metadata.origin === "platform_generated") return null;
+
     const id = text(value.id, 160);
     const exposureRequestId = text(value.exposureRequestId, 160);
     const sourceRevision = positiveInteger(value.sourceRevision);
