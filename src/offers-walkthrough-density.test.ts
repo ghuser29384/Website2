@@ -9,6 +9,11 @@ const offersLayout = readFileSync("src/app/offers/layout.tsx", "utf8");
 const topbarStyles = readFileSync("src/app/offers/offers-topbar.module.css", "utf8");
 const participantComponent = readFileSync("src/components/marketplace/participant-offer-group.tsx", "utf8");
 const participantStyles = readFileSync("src/components/marketplace/participant-offer-group.module.css", "utf8");
+const qaCapture = readFileSync("scripts/capture-rendered-qa-offers.mjs", "utf8");
+const qaConfig = readFileSync("playwright.smart-query.config.ts", "utf8");
+const qaSupabase = readFileSync("scripts/rendered-qa-supabase.mjs", "utf8");
+const renderedQa = readFileSync("tests/offers-density.spec.ts", "utf8");
+const smartQueryQa = readFileSync(".github/workflows/smart-query-qa.yml", "utf8");
 
 test("offers defaults to an open editorial directory instead of stacked dense panels", () => {
   for (const required of [
@@ -91,4 +96,27 @@ test("the offers topbar stays compact after removing duplicate global search", (
     topbarStyles,
     /@media \(max-width: 360px\)[\s\S]*?grid-template-areas:\s*"brand"\s*"actions"\s*"nav";/,
   );
+});
+
+test("rendered offers QA isolates non-visual analytics and waits for used font faces", () => {
+  assert.match(renderedQa, /page\.route\("\*\*\/api\/funnel-events"/);
+  assert.match(renderedQa, /waitUntil:\s*"commit"/);
+  assert.match(renderedQa, /form\[data-smart-query-surface=/);
+  assert.match(renderedQa, /\[data-participant-offer\]/);
+  assert.match(renderedQa, /document\.fonts\.load/);
+  assert.match(renderedQa, /document\.fonts\.ready/);
+  assert.doesNotMatch(renderedQa, /PW_TEST_SCREENSHOT_NO_FONTS_READY/);
+  assert.doesNotMatch(renderedQa, /faces\.map\(\(face\) => face\.load\(\)\)/);
+  assert.match(qaCapture, /items\.length === 0/);
+  assert.match(qaCapture, /AbortSignal\.timeout\(15_000\)/);
+  assert.match(qaConfig, /NEXT_PUBLIC_SUPABASE_URL:\s*mockURL/);
+  assert.match(qaConfig, /rendered-qa-public-read/);
+  assert.match(qaSupabase, /request\.method === "GET"/);
+  assert.match(qaSupabase, /rendered-qa-ready/);
+  assert.match(qaSupabase, /fixture\.items\.length === 0/);
+  assert.match(qaSupabase, /response\.writeHead\(404/);
+  assert.doesNotMatch(qaSupabase, /request\.method === "POST"/);
+  assert.match(smartQueryQa, /capture-rendered-qa-offers\.mjs/);
+  assert.match(smartQueryQa, /--config=playwright\.smart-query\.config\.ts/);
+  assert.match(smartQueryQa, /--workers=1/);
 });

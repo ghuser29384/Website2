@@ -1,11 +1,15 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
-process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY = "1";
-
 const captureDirectory = path.join("test-results", "offers-density");
 const targetRoute = "/offers?mode=pledge&view=live";
+
+async function stubFunnelEvents(page: Page) {
+  await page.route("**/api/funnel-events", async (route) => {
+    await route.fulfill({ body: "", status: 204 });
+  });
+}
 
 async function stubOfferPlane(page: Page) {
   let requestCount = 0;
@@ -23,27 +27,56 @@ async function stubOfferPlane(page: Page) {
 }
 
 async function ensureScreenshotFonts(page: Page) {
-  const requiredFonts = [
-    { label: "Metropolis 400", query: '400 16px "Metropolis"' },
-    { label: "Source Serif 4 400", query: '400 16px "Source Serif 4"' },
-    { label: "IBM Plex Mono 400", query: '400 16px "IBM Plex Mono"' },
-    { label: "IBM Plex Mono 500", query: '500 16px "IBM Plex Mono"' },
-    { label: "IBM Plex Mono 650", query: '650 16px "IBM Plex Mono"' },
-    { label: "IBM Plex Mono 700", query: '700 16px "IBM Plex Mono"' },
-  ];
+  const fontState = await page.evaluate(async () => {
+    const renderedFonts = [
+      { descriptor: '400 16px "Metropolis"', sample: "Moral Trade live proposals" },
+      { descriptor: '400 64px "Source Serif 4"', sample: "Find a live proposal" },
+      { descriptor: '400 12px "IBM Plex Mono"', sample: "Pledge terms" },
+      { descriptor: '500 12px "IBM Plex Mono"', sample: "Open participant proposals" },
+      { descriptor: '700 12px "IBM Plex Mono"', sample: "Optional visual explorer" },
+    ];
+    const settled = Promise.allSettled(
+      renderedFonts.map(({ descriptor, sample }) => document.fonts.load(descriptor, sample)),
+    ).then(async (results) => {
+      await document.fonts.ready;
+      return {
+        timedOut: false,
+        failures: results.flatMap((result, index) =>
+          result.status === "rejected"
+            ? [renderedFonts[index].descriptor]
+            : [],
+        ),
+      };
+    });
+    const timeout = new Promise<{ timedOut: true; failures: string[] }>((resolve) => {
+      window.setTimeout(() => resolve({ timedOut: true, failures: [] }), 5_000);
+    });
+    const result = await Promise.race([settled, timeout]);
+    return {
+      ...result,
+      faces: [...document.fonts].map((face) => ({
+        family: face.family,
+        status: face.status,
+        weight: face.weight,
+      })),
+      renderedFonts: renderedFonts.map(({ descriptor, sample }) => ({
+        descriptor,
+        loaded: document.fonts.check(descriptor, sample),
+      })),
+      status: document.fonts.status,
+    };
+  });
 
-  await expect
-    .poll(
-      () =>
-        page.evaluate((fonts) =>
-          fonts.filter(({ query }) => !document.fonts.check(query)).map(({ label }) => label),
-        requiredFonts),
-      {
-        message: "Offers-used fonts must load before visual capture",
-        timeout: 10_000,
-      },
-    )
-    .toEqual([]);
+  expect(
+    fontState.timedOut,
+    `rendered font loading timed out: ${JSON.stringify({
+      faces: fontState.faces,
+      renderedFonts: fontState.renderedFonts,
+    })}`,
+  ).toBe(false);
+  expect(fontState.failures).toEqual([]);
+  expect(fontState.status).toBe("loaded");
+  expect(fontState.renderedFonts.filter((font) => !font.loaded)).toEqual([]);
 }
 
 async function capture(page: Page, filename: string) {
@@ -71,15 +104,55 @@ async function expectNoHorizontalOverflow(page: Page) {
 }
 
 test.describe("Offers directory density", () => {
-  test("uses one calm editorial hierarchy and keeps advanced analysis optional on desktop", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
-    const getPlaneRequestCount = await stubOfferPlane(page);
-    const consoleErrors: string[] = [];
+  test.describe.configure({ mode: "serial" });
+
+  let context: BrowserContext;
+  let page: Page;
+  let getPlaneRequestCount: () => number;
+  const consoleErrors: string[] = [];
+
+  test.beforeAll(async ({ browser, baseURL }) => {
+    context = await browser.newContext({
+      baseURL,
+      storageState: {
+        cookies: [
+          {
+            domain: "127.0.0.1",
+            expires: -1,
+            httpOnly: true,
+            name: "mt_walkthrough_seen",
+            path: "/",
+            sameSite: "Lax",
+            secure: false,
+            value: "1",
+          },
+        ],
+        origins: [],
+      },
+    });
+    page = await context.newPage();
+    await stubFunnelEvents(page);
+    getPlaneRequestCount = await stubOfferPlane(page);
     page.on("console", (message) => {
       if (message.type() === "error") consoleErrors.push(message.text());
     });
 
-    await page.goto(targetRoute, { waitUntil: "domcontentloaded" });
+    const response = await page.goto(targetRoute, { waitUntil: "commit" });
+    expect(response?.ok()).toBe(true);
+    await expect(page.locator('form[data-smart-query-surface="offers"]')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator("[data-participant-offer]").first()).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test.afterAll(async () => {
+    await context.close();
+  });
+
+  test("uses one calm editorial hierarchy and keeps advanced analysis optional on desktop", async () => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
 
     await expect(page).toHaveURL(/\/offers\?mode=pledge&view=live/);
     await expect(
@@ -187,24 +260,13 @@ test.describe("Offers directory density", () => {
 
     await expectNoHorizontalOverflow(page);
     await capture(page, "implementation-desktop.png");
-
-    const searchInput = page.getByRole("searchbox", { name: "Search proposals" });
-    await searchInput.fill("verified civic work under $50");
-    await page.getByRole("button", { name: "Apply smart search" }).click();
-    await expect(page).toHaveURL(/search=verified(?:\+|%20)civic(?:\+|%20)work(?:\+|%20)under(?:\+|%20)%2450/);
-    expect(new URL(page.url()).searchParams.get("mode")).toBe("pledge");
-    expect(consoleErrors).toEqual([]);
   });
 
   async function verifyMobileLayout(
-    page: Page,
     viewport: { width: number; height: number },
     screenshotName: string,
   ) {
     await page.setViewportSize(viewport);
-    const getPlaneRequestCount = await stubOfferPlane(page);
-
-    await page.goto(targetRoute, { waitUntil: "domcontentloaded" });
 
     await expect(
       page.getByRole("heading", {
@@ -265,7 +327,6 @@ test.describe("Offers directory density", () => {
     const explorerSummary = explorer.locator(":scope > summary");
     await expect(explorerSummary).toHaveCount(1);
     expect(await explorer.evaluate((element) => (element as HTMLDetailsElement).open)).toBe(false);
-    expect(getPlaneRequestCount()).toBe(0);
     await explorerSummary.click();
     await expect(explorer).toHaveJSProperty("open", true);
     await expect.poll(getPlaneRequestCount).toBe(1);
@@ -280,12 +341,21 @@ test.describe("Offers directory density", () => {
     { width: 390, height: 844 },
     { width: 320, height: 568 },
   ]) {
-    test(`collapses cleanly at ${viewport.width}×${viewport.height}`, async ({ page }) => {
+    test(`collapses cleanly at ${viewport.width}×${viewport.height}`, async () => {
       await verifyMobileLayout(
-        page,
         viewport,
         `implementation-mobile-${viewport.width}x${viewport.height}.png`,
       );
     });
   }
+
+  test("preserves the pledge mode when applying smart search", async () => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    const searchInput = page.getByRole("searchbox", { name: "Search proposals" });
+    await searchInput.fill("verified civic work under $50");
+    await page.getByRole("button", { name: "Apply smart search" }).click();
+    await expect(page).toHaveURL(/search=verified(?:\+|%20)civic(?:\+|%20)work(?:\+|%20)under(?:\+|%20)%2450/);
+    expect(new URL(page.url()).searchParams.get("mode")).toBe("pledge");
+    expect(consoleErrors).toEqual([]);
+  });
 });

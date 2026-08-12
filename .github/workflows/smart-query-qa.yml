@@ -40,7 +40,10 @@ on:
       - "tests/discover-payload-cache.spec.ts"
       - "tests/discover-cofund.spec.ts"
       - "tests/offers-density.spec.ts"
+      - "playwright.smart-query.config.ts"
       - "package.json"
+      - "scripts/capture-rendered-qa-offers.mjs"
+      - "scripts/rendered-qa-supabase.mjs"
       - ".github/workflows/smart-query-qa.yml"
   push:
     branches:
@@ -173,6 +176,9 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
+      - name: Capture one immutable public Offers page for rendered QA
+        run: node scripts/capture-rendered-qa-offers.mjs qa-results/rendered-qa-offers.json
+
       - name: Run rendered Discover and offers desktop/mobile QA
         run: |
           set -o pipefail
@@ -183,6 +189,8 @@ jobs:
             tests/discover-payload-cache.spec.ts \
             tests/discover-cofund.spec.ts \
             tests/offers-density.spec.ts \
+            --config=playwright.smart-query.config.ts \
+            --workers=1 \
             --reporter=line 2>&1 | tee qa-results/smart-query-e2e.txt
 
       - name: Upload Discover and offers QA evidence
