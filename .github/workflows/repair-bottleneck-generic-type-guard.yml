@@ -1,0 +1,71 @@
+# One-use controller. It patches the exact PR candidate, retriggers the existing
+# privacy/feedback repair workflow, and removes itself before pushing.
+name: Stage Bottleneck Atlas generic-template type guard
+
+on:
+  push:
+    branches:
+      - feature/bottleneck-atlas-feed-20260811
+    paths:
+      - .github/workflows/repair-bottleneck-generic-type-guard.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-bottleneck-generic-type-guard
+  cancel-in-progress: false
+
+jobs:
+  patch-and-retrigger:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/bottleneck-atlas-feed-20260811
+          fetch-depth: 0
+
+      - name: Guard and patch the generic-template predicate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_SHA" = "$(git ls-remote origin refs/heads/feature/bottleneck-atlas-feed-20260811 | awk '{print $1}')"
+
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/lib/opportunity-synthesis.ts")
+          source = path.read_text()
+          old = '''function isGenericTemplate(template: OpportunitySynthesisTemplate) {
+            return template.generic === true;
+          }'''
+          new = '''function isGenericTemplate(template: OpportunitySynthesisTemplate) {
+            return "generic" in template && template.generic === true;
+          }'''
+          if source.count(old) != 1:
+              raise SystemExit(f"Expected one unsafe generic-template predicate, found {source.count(old)}")
+          path.write_text(source.replace(old, new))
+
+          controller = Path(".github/workflows/repair-bottleneck-feedback-privacy.yml")
+          workflow = controller.read_text()
+          marker = "# retriggered after generic-template type guard\n"
+          if marker not in workflow:
+              workflow = marker + workflow
+          controller.write_text(workflow)
+          PY
+
+          git diff --check
+          git diff -- src/lib/opportunity-synthesis.ts .github/workflows/repair-bottleneck-feedback-privacy.yml
+
+      - name: Commit the type guard and remove this controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/repair-bottleneck-generic-type-guard.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/opportunity-synthesis.ts .github/workflows/repair-bottleneck-feedback-privacy.yml
+          git commit -m "Guard heterogeneous Bottleneck Atlas templates"
+          git push origin HEAD:feature/bottleneck-atlas-feed-20260811
