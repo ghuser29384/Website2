@@ -45,6 +45,18 @@ jobs:
               raise SystemExit(f"Expected one recommendation-learning import, found {source.count(old_import)}")
           source = source.replace(old_import, new_import)
 
+          old_generic_predicate = '''function isGenericTemplate(template: OpportunitySynthesisTemplate) {
+            return template.generic === true;
+          }'''
+          new_generic_predicate = '''function isGenericTemplate(template: OpportunitySynthesisTemplate) {
+            return "generic" in template && template.generic === true;
+          }'''
+          if source.count(old_generic_predicate) != 1:
+              raise SystemExit(
+                  f"Expected one unsafe generic-template predicate, found {source.count(old_generic_predicate)}"
+              )
+          source = source.replace(old_generic_predicate, new_generic_predicate)
+
           scored_marker = '''interface ScoredTemplate {
             template: OpportunitySynthesisTemplate;
             signal: LiveNowCauseSignal;
@@ -352,12 +364,11 @@ jobs:
           npx tsc --noEmit
           npm run build
 
-      - name: Commit repairs and remove this controller
+      - name: Commit verified source repairs
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/repair-bottleneck-feedback-privacy.yml
           git add src/lib/opportunity-synthesis.ts src/lib/opportunity-synthesis.test.ts tests/bottleneck-atlas.spec.ts
           git diff --cached --check
           git commit -m "Persist generated-feed feedback and protect priority URLs"
