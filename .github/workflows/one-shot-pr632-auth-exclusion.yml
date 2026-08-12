@@ -25,7 +25,7 @@ jobs:
           ref: fix/sitewide-canonical-visual-system-final-20260810
           fetch-depth: 0
 
-      - name: Exclude authentication routes from the canonical restyle
+      - name: Apply authentication exclusion
         shell: bash
         run: |
           set -euo pipefail
@@ -33,208 +33,202 @@ jobs:
           from pathlib import Path
           import re
 
-          scope = 'body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell))'
-          excluded_scope = scope + ':not(:has([data-mt-surface="auth"]))'
+          S = 'body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell))'
+          A = S + ':not(:has([data-mt-surface="auth"]))'
 
-          def read(path: str) -> str:
-              return Path(path).read_text(encoding='utf-8')
+          def read(p): return Path(p).read_text()
+          def write(p, s): Path(p).write_text(s)
+          def one(s, old, new, label):
+              n = s.count(old)
+              if n != 1: raise SystemExit(f"{label}: expected 1, found {n}")
+              return s.replace(old, new, 1)
 
-          def write(path: str, text: str) -> None:
-              Path(path).write_text(text, encoding='utf-8')
+          def remove_array_route(s, name, route):
+              m = re.search(rf'(const {name} = \[\n)(.*?)(\n\];)', s, re.S)
+              if not m: raise SystemExit(f"{name}: not found")
+              body, line = m.group(2), f'  "{route}",\n'
+              if body.count(line) != 1: raise SystemExit(f"{name}: {route} count {body.count(line)}")
+              body = body.replace(line, "", 1)
+              return s[:m.start(2)] + body + s[m.end(2):]
 
-          def replace_once(text: str, old: str, new: str, label: str) -> str:
-              count = text.count(old)
-              if count != 1:
-                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
-              return text.replace(old, new, 1)
-
-          canonical_path = 'src/app/canonical-visual-system.css'
-          canonical = read(canonical_path)
-          canonical_scope_count = canonical.count(scope)
-          if canonical_scope_count < 10:
-              raise SystemExit(
-                  f'canonical scope: expected at least 10 matches, found {canonical_scope_count}'
-              )
-          canonical = canonical.replace(scope, excluded_scope)
-          auth_section = re.compile(
-              r'\n/\* -{10,} \*/\n'
-              r'/\* Authentication and account entry\s+\*/\n'
-              r'/\* -{10,} \*/\n'
-              r'.*?'
-              r'(?=\n/\* -{10,} \*/\n/\* Explicit custom surfaces)',
-              re.S,
+          p = "src/app/canonical-visual-system.css"
+          s = read(p)
+          if s.count(S) < 10: raise SystemExit("canonical scope count too small")
+          s = s.replace(S, A)
+          s, n = re.subn(
+              r'\n/\* -{10,} \*/\n/\* Authentication and account entry\s+\*/\n'
+              r'/\* -{10,} \*/\n.*?(?=\n/\* -{10,} \*/\n/\* Explicit custom surfaces)',
+              "", s, count=1, flags=re.S,
           )
-          canonical, removed = auth_section.subn('', canonical, count=1)
-          if removed != 1:
-              raise SystemExit(f'canonical auth section: expected one removal, found {removed}')
-          if re.search(r'^\[data-mt-surface="auth"\]', canonical, re.M):
-              raise SystemExit('canonical auth section still contains a direct auth selector')
-          write(canonical_path, canonical)
-
-          remediation_path = 'src/app/canonical-visual-system-remediation.css'
-          remediation = read(remediation_path)
-          remediation_scope_count = remediation.count(scope)
-          if remediation_scope_count < 2:
-              raise SystemExit(
-                  f'remediation scope: expected at least 2 matches, found {remediation_scope_count}'
-              )
-          remediation = remediation.replace(scope, excluded_scope)
-          remediation = replace_once(
-              remediation,
-              'body:has([data-mt-canonical-home="true"]),\nbody:has(.mtw-shell) {',
-              'body:has([data-mt-canonical-home="true"]),\nbody:has(.mtw-shell),\nbody:has([data-mt-surface="auth"]) {',
-              'auth body background exemption',
+          if n != 1: raise SystemExit(f"canonical auth section count {n}")
+          s = one(
+              s,
+              '.page-shell h4,\n[class*="auth-card_"] h1,\n[class*="auth-card_"] h2,\n[class*="PageShell"] h1,',
+              '.page-shell h4,\n[class*="PageShell"] h1,',
+              "auth heading selectors",
           )
-          remediation_auth = re.compile(
+          focus = "\n".join(("input:focus-visible,", "select:focus-visible,", "textarea:focus-visible,",
+                             "button:focus-visible,", "a:focus-visible,", "summary:focus-visible,",
+                             '[role="button"]:focus-visible {'))
+          s = one(s, focus, "\n".join(f"{A} {x}" for x in focus.splitlines()), "focus scope")
+          accent = "\n".join(('input[type="checkbox"],', 'input[type="radio"],', 'input[type="range"] {'))
+          s = one(s, accent, "\n".join(f"{A} {x}" for x in accent.splitlines()), "accent scope")
+          bad = [line for line in s.splitlines()
+                 if "auth" in line.lower() and ':not(:has([data-mt-surface="auth"]))' not in line]
+          if bad: raise SystemExit("direct canonical auth selectors remain:\n" + "\n".join(bad))
+          write(p, s)
+
+          p = "src/app/canonical-visual-system-remediation.css"
+          s = read(p)
+          if s.count(S) < 2: raise SystemExit("remediation scope count too small")
+          s = s.replace(S, A)
+          s = one(
+              s,
+              'body:has([data-mt-canonical-home="true"]),\nbody:has(.mtw-shell) {\n'
+              '  background-image: none !important;\n}',
+              'body:has([data-mt-canonical-home="true"]),\nbody:has(.mtw-shell),\n'
+              'body:has([data-mt-surface="auth"]) {\n  background-image: none !important;\n}\n\n'
+              'html:has([data-mt-surface="auth"]) {\n  background: #f3f5f8 !important;\n}\n\n'
+              'body:has([data-mt-surface="auth"]) {\n  background-color: #f3f5f8 !important;\n}',
+              "auth background exemption",
+          )
+          s, n = re.subn(
               r'\n/\* Authentication must not fall back to the rounded glass-card treatment\. \*/\n'
-              r'.*?'
-              r'(?=\n/\* Public Goods Fund navigation and mode labels use rules, not capsules\. \*/)',
-              re.S,
+              r'.*?(?=\n/\* Public Goods Fund navigation and mode labels use rules, not capsules\. \*/)',
+              "", s, count=1, flags=re.S,
           )
-          remediation, removed = remediation_auth.subn('', remediation, count=1)
-          if removed != 1:
-              raise SystemExit(f'remediation auth section: expected one removal, found {removed}')
-          if re.search(r'^\[data-mt-surface="auth"\]\s+:where', remediation, re.M):
-              raise SystemExit('remediation still contains a direct auth-restyle selector')
-          write(remediation_path, remediation)
+          if n != 1: raise SystemExit(f"remediation auth section count {n}")
+          write(p, s)
 
-          rendered_path = 'tests/sitewide-canonical-visual-system.spec.ts'
-          rendered = read(rendered_path)
-          rendered = replace_once(rendered, '  "/dashboard",\n', '', 'dashboard route list entry')
-          rendered = replace_once(
-              rendered,
-              '  "/login",\n  "/signup",\n',
-              '',
-              'auth account route entries',
-          )
-          rendered, removed = re.subn(
+          p = "tests/sitewide-canonical-visual-system.spec.ts"
+          s = read(p)
+          s = remove_array_route(s, "productRoutes", "/dashboard")
+          s = remove_array_route(s, "accountAndStandaloneRoutes", "/login")
+          s = remove_array_route(s, "accountAndStandaloneRoutes", "/signup")
+          s, n = re.subn(
               r'\n  if \(pathname === "/dashboard"\) \{.*?\n  \}\n\n  if \(pathname === "/commitments"\)',
-              '\n  if (pathname === "/commitments")',
-              rendered,
-              count=1,
-              flags=re.S,
+              '\n  if (pathname === "/commitments")', s, count=1, flags=re.S,
           )
-          if removed != 1:
-              raise SystemExit(f'dashboard wait branch: expected one removal, found {removed}')
-          rendered = replace_once(
-              rendered,
+          if n != 1: raise SystemExit(f"dashboard helper count {n}")
+          s = one(
+              s,
               '  const expectedSurface = finalPathname === "/login" || finalPathname === "/signup"\n'
-              '    ? "auth"\n'
-              '    : finalPathname === "/connectors"\n'
-              '      ? "connectors"',
-              '  const expectedSurface = finalPathname === "/connectors"\n'
-              '    ? "connectors"',
-              'auth expected-surface ternary',
+              '    ? "auth"\n    : finalPathname === "/connectors"\n      ? "connectors"',
+              '  const expectedSurface = finalPathname === "/connectors"\n    ? "connectors"',
+              "auth expected surface",
           )
-          for title in (
-              'Dashboard guest route redirects to a substantive canonical auth surface',
-              'Authentication uses hard editorial geometry instead of a glass card',
-          ):
-              pattern = re.compile(
-                  rf'\ntest\("{re.escape(title)}".*?\n\}}\);\n',
-                  re.S,
-              )
-              rendered, removed = pattern.subn('', rendered, count=1)
-              if removed != 1:
-                  raise SystemExit(f'{title}: expected one test removal, found {removed}')
-          rendered = replace_once(
-              rendered,
-              '    "/dashboard",\n',
-              '',
-              'mobile dashboard route',
+          s = one(
+              s,
+              'test("Dashboard guest route redirects to a substantive canonical auth surface"',
+              'test("Dashboard guest route preserves the existing authentication experience"',
+              "dashboard test title",
           )
-          rendered = replace_once(
-              rendered,
-              '    "/login",\n',
-              '',
-              'mobile login route',
+          s = one(
+              s,
+              '  await expectCanonicalSurface(page, "/dashboard", testInfo);\n',
+              '  const response = await page.goto("/dashboard", { timeout: 60_000, waitUntil: "domcontentloaded" });\n'
+              '  expect(response?.status() ?? 200).toBeLessThan(400);\n'
+              '  await expectNoFrameworkOverlay(page, "/dashboard");\n'
+              '  await expectNoHorizontalOverflow(page);\n',
+              "dashboard direct smoke",
           )
-          if '"/login"' in rendered or '"/signup"' in rendered:
-              raise SystemExit('rendered canonical gate still includes an authentication route')
-          if 'canonical auth surface' in rendered or 'hard editorial geometry instead of a glass card' in rendered:
-              raise SystemExit('rendered canonical gate still contains auth visual assertions')
-          write(rendered_path, rendered)
+          s = one(
+              s,
+              'test("Authentication uses hard editorial geometry instead of a glass card"',
+              'test("Authentication remains outside the canonical hard-geometry restyle"',
+              "auth test title",
+          )
+          s = one(
+              s,
+              '  await expectCanonicalSurface(page, "/login", testInfo);\n',
+              '  const response = await page.goto("/login", { timeout: 60_000, waitUntil: "domcontentloaded" });\n'
+              '  expect(response?.status() ?? 200).toBeLessThan(400);\n'
+              '  await expect(page.locator(\'[data-mt-surface="auth"]\')).toBeVisible({ timeout: 45_000 });\n'
+              '  await expectNoFrameworkOverlay(page, "/login");\n'
+              '  await expectNoHorizontalOverflow(page);\n',
+              "auth direct smoke",
+          )
+          s = one(s, '  await expect(card).toHaveCSS("border-radius", "0px");',
+                  '  await expect(card).toHaveCSS("border-radius", "24px");', "auth card radius")
+          s = one(s, '  await expect(card).toHaveCSS("box-shadow", "none");',
+                  '  await expect(card).not.toHaveCSS("box-shadow", "none");', "auth card shadow")
+          s = one(s, '    "0px",\n  );\n  await expect(page.locator(\'[data-mt-surface="auth"] [class*="graphicFrame"]\')',
+                  '    "12px",\n  );\n  await expect(page.locator(\'[data-mt-surface="auth"] [class*="graphicFrame"]\')',
+                  "auth email radius")
+          s = one(s, '    "0px",\n  );\n});\n\ntest("Public Goods Fund',
+                  '    "24px",\n  );\n});\n\ntest("Public Goods Fund', "auth graphic radius")
+          m = re.search(
+              r'(test\("keeps representative routes usable on mobile".*?for \(const route of \[\n)'
+              r'(.*?)(\n  \]\) \{)', s, re.S,
+          )
+          if not m: raise SystemExit("mobile route list not found")
+          body = m.group(2)
+          for route in ("/dashboard", "/login"):
+              line = f'    "{route}",\n'
+              if body.count(line) != 1: raise SystemExit(f"mobile {route} count {body.count(line)}")
+              body = body.replace(line, "", 1)
+          s = s[:m.start(2)] + body + s[m.end(2):]
+          write(p, s)
 
-          source_path = 'src/sitewide-canonical-visual-system.test.ts'
-          source = read(source_path)
-          source = replace_once(
-              source,
-              '  assert.match(canonical, /body:not\\(:has\\(\\[data-mt-canonical-home="true"\\]\\)\\):not\\(:has\\(\\.mtw-shell\\)\\)/);',
-              '  const authExclusion = /body:not\\(:has\\(\\[data-mt-canonical-home="true"\\]\\)\\):not\\(:has\\(\\.mtw-shell\\)\\):not\\(:has\\(\\[data-mt-surface="auth"\\]\\)\\)/;\n'
-              '  assert.match(canonical, authExclusion);\n'
-              '  assert.match(remediation, authExclusion);',
-              'canonical auth-exclusion assertion',
+          p = "src/sitewide-canonical-visual-system.test.ts"
+          s = read(p)
+          s = one(
+              s,
+              '  assert.match(canonical, /body:not\\(:has\\(\\[data-mt-canonical-home="true"\\]\\)'
+              '\\):not\\(:has\\(\\.mtw-shell\\)\\)/);',
+              '  const authExclusion = /body:not\\(:has\\(\\[data-mt-canonical-home="true"\\]\\)'
+              '\\):not\\(:has\\(\\.mtw-shell\\)\\):not\\(:has\\(\\[data-mt-surface="auth"\\]\\)\\)/;\n'
+              '  assert.match(canonical, authExclusion);\n  assert.match(remediation, authExclusion);',
+              "source scope assertion",
           )
-          source = replace_once(
-              source,
-              '  assert.match(remediation, /\\[data-mt-surface="auth"\\][\\s\\S]*article[\\s\\S]*border-radius:\\s*0\\s*!important/);\n',
-              '',
-              'auth hard-geometry source assertion',
+          s = one(
+              s,
+              '  assert.match(remediation, /\\[data-mt-surface="auth"\\][\\s\\S]*article'
+              '[\\s\\S]*border-radius:\\s*0\\s*!important/);\n',
+              "", "source auth hard geometry",
           )
-          source = replace_once(
-              source,
-              '    ["src/components/auth/auth-card.tsx", "auth"],\n',
-              '',
-              'auth canonical hook entry',
-          )
-          for line in (
-              '  assert.match(rendered, /Dashboard guest route redirects to a substantive canonical auth surface/);\n',
-              '  assert.match(rendered, /Authentication uses hard editorial geometry instead of a glass card/);\n',
-              '  assert.match(rendered, /returnTo=%2Fdashboard/);\n',
-              '  assert.match(rendered, /data-mt-surface="auth"/);\n',
-          ):
-              source = replace_once(source, line, '', f'remove source assertion {line.strip()}')
+          s = one(s, '    ["src/components/auth/auth-card.tsx", "auth"],\n', "", "source auth hook list")
+          s = s.replace("Dashboard guest route redirects to a substantive canonical auth surface",
+                        "Dashboard guest route preserves the existing authentication experience")
+          s = s.replace("Authentication uses hard editorial geometry instead of a glass card",
+                        "Authentication remains outside the canonical hard-geometry restyle")
+          anchor = 'test("every Next.js page declares a shared or explicitly aligned visual shell", () => {'
+          guard = r'''test("authentication routes remain outside the canonical visual restyle", () => {
+  const canonical = read("src/app/canonical-visual-system.css");
+  const remediation = read("src/app/canonical-visual-system-remediation.css");
+  const rendered = read("tests/sitewide-canonical-visual-system.spec.ts");
+  const authExclusion = /body:not\(:has\(\[data-mt-canonical-home="true"\]\)\):not\(:has\(\.mtw-shell\)\):not\(:has\(\[data-mt-surface="auth"\]\)\)/;
+  const productRoutes = rendered.match(/const productRoutes = \[([\s\S]*?)\];/)?.[1] ?? "";
+  const accountRoutes =
+    rendered.match(/const accountAndStandaloneRoutes = \[([\s\S]*?)\];/)?.[1] ?? "";
 
-          insertion_anchor = 'test("every Next.js page declares a shared or explicitly aligned visual shell", () => {'
-          exclusion_test = '''test("authentication routes remain outside the canonical visual restyle", () => {
-            const canonical = read("src/app/canonical-visual-system.css");
-            const remediation = read("src/app/canonical-visual-system-remediation.css");
-            const auth = read("src/components/auth/auth-card.tsx");
-            const rendered = read("tests/sitewide-canonical-visual-system.spec.ts");
-            const authExclusion = /body:not\\(:has\\(\\[data-mt-canonical-home="true"\\]\\)\\):not\\(:has\\(\\.mtw-shell\\)\\):not\\(:has\\(\\[data-mt-surface="auth"\\]\\)\\)/;
+  assert.match(canonical, authExclusion);
+  assert.match(remediation, authExclusion);
+  assert.equal(canonical.includes("Authentication and account entry"), false);
+  assert.equal(canonical.includes('[class*="auth-card_"]'), false);
+  assert.equal(canonical.includes("\ninput:focus-visible,"), false);
+  assert.equal(remediation.includes("Authentication must not fall back"), false);
+  assert.equal(productRoutes.includes('"/dashboard"'), false);
+  assert.equal(accountRoutes.includes('"/login"'), false);
+  assert.equal(accountRoutes.includes('"/signup"'), false);
+  assert.match(rendered, /Authentication remains outside the canonical hard-geometry restyle/);
+  assert.match(rendered, /toHaveCSS\("border-radius", "24px"\)/);
+});
 
-            assert.match(auth, /data-mt-surface="auth"/);
-            assert.match(canonical, authExclusion);
-            assert.match(remediation, authExclusion);
-            assert.equal(canonical.includes("Authentication and account entry"), false);
-            assert.equal(remediation.includes("Authentication must not fall back"), false);
-            assert.equal(rendered.includes('"/login"'), false);
-            assert.equal(rendered.includes('"/signup"'), false);
-          });
-
-          '''
-          source = replace_once(
-              source,
-              insertion_anchor,
-              exclusion_test + insertion_anchor,
-              'auth exclusion contract insertion',
-          )
-          write(source_path, source)
-
-          print(
-              'Updated auth exclusion contract:',
-              canonical_scope_count,
-              'canonical selectors and',
-              remediation_scope_count,
-              'remediation selectors.',
-          )
+'''
+          s = one(s, anchor, guard + anchor, "auth exclusion guard")
+          write(p, s)
+          print("authentication exclusion applied")
           PY
 
-      - name: Verify the exact diff and commit the repair
+      - name: Verify and commit
         shell: bash
         run: |
           set -euo pipefail
           git diff --check
-          git diff -- src/app/canonical-visual-system.css \
-            src/app/canonical-visual-system-remediation.css \
-            src/sitewide-canonical-visual-system.test.ts \
-            tests/sitewide-canonical-visual-system.spec.ts
+          node --import tsx --test src/sitewide-canonical-visual-system.test.ts
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            src/app/canonical-visual-system.css \
-            src/app/canonical-visual-system-remediation.css \
-            src/sitewide-canonical-visual-system.test.ts \
-            tests/sitewide-canonical-visual-system.spec.ts
+          git add src/app/canonical-visual-system.css src/app/canonical-visual-system-remediation.css src/sitewide-canonical-visual-system.test.ts tests/sitewide-canonical-visual-system.spec.ts
           git commit -m "Exclude authentication routes from sitewide visual alignment"
           git push origin HEAD:fix/sitewide-canonical-visual-system-final-20260810
