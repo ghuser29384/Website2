@@ -1,0 +1,13 @@
+.scope :global(.mt-site-topbar.topbar-with-search) {
+  grid-template-areas: "brand nav actions";
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+@media (max-width: 760px) {
+  .scope :global(.mt-site-topbar.topbar-with-search) {
+    grid-template-areas:
+      "brand actions"
+      "nav nav";
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
