@@ -42,7 +42,6 @@
 }
 
 .scope :global(.mt-site-topbar) {
-  width: min(calc(100% - 2rem), 1320px);
   min-height: 82px;
   border-bottom: 0;
 }
@@ -467,7 +466,6 @@
 }
 
 @media (max-width: 720px) {
-  .scope :global(.mt-site-topbar),
   .scope :global(.mt-product-main) {
     width: min(calc(100% - 1rem), 1320px);
   }

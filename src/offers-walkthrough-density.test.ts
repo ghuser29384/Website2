@@ -72,6 +72,11 @@ test("the advanced challenge-return plane is optional, lazy-loaded, and request-
 
 test("the offers topbar stays compact after removing duplicate global search", () => {
   assert.match(offersLayout, /topbarStyles\.scope/);
+  assert.doesNotMatch(
+    densityStyles,
+    /\.scope :global\(\.mt-site-topbar\)\s*\{[^}]*\bwidth:/,
+    "the Offers route must retain the canonical full-bleed masthead width",
+  );
   assert.match(topbarStyles, /grid-template-areas:\s*"brand nav actions";/);
   assert.match(topbarStyles, /"brand actions"\s*"nav nav";/);
   assert.match(topbarStyles, /grid-template-rows:\s*auto auto;/);
