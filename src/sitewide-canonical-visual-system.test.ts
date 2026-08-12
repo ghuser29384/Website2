@@ -82,15 +82,38 @@ test("the canonical Home tokens drive every shared Next.js route", () => {
   assert.equal(canonical.includes('[class*="card" i]'), false);
   assert.equal(canonical.includes('[class*="receipt" i]'), false);
   assert.match(homePage, /data-mt-canonical-home="true"/);
-  assert.match(canonical, /body:not\(:has\(\[data-mt-canonical-home="true"\]\)\):not\(:has\(\.mtw-shell\)\)/);
+  const authExclusion = /body:not\(:has\(\[data-mt-canonical-home="true"\]\)\):not\(:has\(\.mtw-shell\)\):not\(:has\(\[data-mt-surface="auth"\]\)\)/;
+  assert.match(canonical, authExclusion);
+  assert.match(remediation, authExclusion);
   assert.match(remediation, /\.mt-v75-side-link\.is-active[\s\S]*background:\s*var\(--mt-black\)/);
   assert.match(remediation, /\.mt-v75-side-plan[\s\S]*border-radius:\s*0\s*!important/);
   assert.match(remediation, /\.commitments-center[\s\S]*border-radius:\s*0\s*!important/);
   assert.match(remediation, /\.dashboard-page[\s\S]*box-shadow:\s*none\s*!important/);
-  assert.match(remediation, /\[data-mt-surface="auth"\][\s\S]*article[\s\S]*border-radius:\s*0\s*!important/);
   assert.match(remediation, /\.mpgf-shell[\s\S]*\.mpgf-mode-strip span[\s\S]*border-radius:\s*0\s*!important/);
   assert.match(remediation, /\[data-mt-surface="mpgf-labs"\][\s\S]*unavailableCard[\s\S]*box-shadow:\s*none\s*!important/);
   assert.match(remediation, /\[class\*="pill" i\][\s\S]*border-radius:\s*0\s*!important/);
+});
+
+test("authentication routes remain outside the canonical visual restyle", () => {
+  const canonical = read("src/app/canonical-visual-system.css");
+  const remediation = read("src/app/canonical-visual-system-remediation.css");
+  const rendered = read("tests/sitewide-canonical-visual-system.spec.ts");
+  const authExclusion = /body:not\(:has\(\[data-mt-canonical-home="true"\]\)\):not\(:has\(\.mtw-shell\)\):not\(:has\(\[data-mt-surface="auth"\]\)\)/;
+  const productRoutes = rendered.match(/const productRoutes = \[([\s\S]*?)\];/)?.[1] ?? "";
+  const accountRoutes =
+    rendered.match(/const accountAndStandaloneRoutes = \[([\s\S]*?)\];/)?.[1] ?? "";
+
+  assert.match(canonical, authExclusion);
+  assert.match(remediation, authExclusion);
+  assert.equal(canonical.includes("Authentication and account entry"), false);
+  assert.equal(canonical.includes('[class*="auth-card_"]'), false);
+  assert.equal(canonical.includes("\ninput:focus-visible,"), false);
+  assert.equal(remediation.includes("Authentication must not fall back"), false);
+  assert.equal(productRoutes.includes('"/dashboard"'), false);
+  assert.equal(accountRoutes.includes('"/login"'), false);
+  assert.equal(accountRoutes.includes('"/signup"'), false);
+  assert.match(rendered, /Authentication remains outside the canonical hard-geometry restyle/);
+  assert.match(rendered, /toHaveCSS\("border-radius", "24px"\)/);
 });
 
 test("every Next.js page declares a shared or explicitly aligned visual shell", () => {
@@ -104,7 +127,6 @@ test("every Next.js page declares a shared or explicitly aligned visual shell", 
 
 test("custom module-driven pages expose stable canonical visual hooks", () => {
   const hooks = [
-    ["src/components/auth/auth-card.tsx", "auth"],
     ["src/app/connectors/page.tsx", "connectors"],
     ["src/app/pledge-swaps/page.tsx", "pledge-swaps"],
     ["src/app/complete-profile/page.tsx", "complete-profile"],
@@ -128,8 +150,8 @@ test("the rendered gate rejects blank and overlay-only route captures", () => {
   assert.equal(rendered.includes('page.locator("nextjs-portal")).toHaveCount(0)'), false);
   assert.equal(rendered.includes("#account-heading"), false);
   assert.match(rendered, /mt-v75-side-link\[aria-current="page"\]/);
-  assert.match(rendered, /Dashboard guest route redirects to a substantive canonical auth surface/);
-  assert.match(rendered, /Authentication uses hard editorial geometry instead of a glass card/);
+  assert.match(rendered, /Dashboard guest route preserves the existing authentication experience/);
+  assert.match(rendered, /Authentication remains outside the canonical hard-geometry restyle/);
   assert.match(rendered, /Public Goods Fund labels use rules instead of capsules/);
   assert.match(rendered, /Moral Public Goods Labs gate uses a square evidence panel/);
   assert.match(rendered, /returnTo=%2Fdashboard/);

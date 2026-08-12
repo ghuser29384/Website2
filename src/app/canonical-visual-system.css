@@ -427,8 +427,6 @@ body:has([class*="returningHome_shell"]) {
 .page-shell h2,
 .page-shell h3,
 .page-shell h4,
-[class*="auth-card_"] h1,
-[class*="auth-card_"] h2,
 [class*="PageShell"] h1,
 [class*="pageShell"] h1 {
   font-family: var(--font-heading);
@@ -476,11 +474,11 @@ body:has([class*="returningHome_shell"]) {
 /* -------------------------------------------------------------------------- */
 
 .button,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) button,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [role="button"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) input,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) select,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) textarea {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) button,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [role="button"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) input,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) select,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) textarea {
   border-radius: 0 !important;
   box-shadow: none !important;
 }
@@ -504,9 +502,9 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) textarea {
 
 .button-primary,
 .button-nav:not(.button-secondary),
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) button[class*="primary" i],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="primaryButton"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="PrimaryButton"] {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) button[class*="primary" i],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="primaryButton"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="PrimaryButton"] {
   border-color: var(--mt-blue) !important;
   background: var(--mt-blue) !important;
   color: #ffffff !important;
@@ -522,9 +520,9 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="P
 
 .button-secondary,
 .button-nav.button-secondary,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) button[class*="secondary" i],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="secondaryButton"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="SecondaryButton"] {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) button[class*="secondary" i],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="secondaryButton"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="SecondaryButton"] {
   border-color: var(--mt-ink) !important;
   background: var(--mt-paper-strong) !important;
   color: var(--mt-ink) !important;
@@ -538,15 +536,15 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="S
 
 .text-button,
 .inline-link,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="backLink"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="BackLink"] {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="backLink"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="BackLink"] {
   color: var(--mt-blue-deep) !important;
   text-underline-offset: 4px;
 }
 
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) input,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) select,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) textarea,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) input,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) select,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) textarea,
 .field input,
 .field select,
 .field textarea,
@@ -558,21 +556,21 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) textarea,
   color: var(--mt-ink) !important;
 }
 
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible,
-button:focus-visible,
-a:focus-visible,
-summary:focus-visible,
-[role="button"]:focus-visible {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) input:focus-visible,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) select:focus-visible,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) textarea:focus-visible,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) button:focus-visible,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) a:focus-visible,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) summary:focus-visible,
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [role="button"]:focus-visible {
   outline: 3px solid rgba(36, 80, 255, 0.34) !important;
   outline-offset: 2px !important;
   box-shadow: none !important;
 }
 
-input[type="checkbox"],
-input[type="radio"],
-input[type="range"] {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) input[type="checkbox"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) input[type="radio"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) input[type="range"] {
   accent-color: var(--mt-blue);
 }
 
@@ -633,38 +631,38 @@ fieldset > legend {
 .sort-tab,
 .trust-chip,
 .commitment-row,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Card "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Card"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Panel "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Panel"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Tile "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Tile"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Drawer "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Drawer"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Modal "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Modal"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Sheet "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Sheet"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Banner "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Banner"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Receipt "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Receipt"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__card "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__card"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__panel "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__panel"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__tile "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__tile"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__drawer "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__drawer"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__modal "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__modal"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__sheet "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__sheet"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__banner "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__banner"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__receipt "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__receipt"] {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Card "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Card"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Panel "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Panel"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Tile "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Tile"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Drawer "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Drawer"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Modal "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Modal"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Sheet "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Sheet"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Banner "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Banner"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Receipt "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Receipt"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__card "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__card"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__panel "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__panel"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__tile "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__tile"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__drawer "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__drawer"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__modal "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__modal"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__sheet "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__sheet"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__banner "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__banner"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__receipt "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__receipt"] {
   border-radius: 0 !important;
   box-shadow: none !important;
 }
@@ -693,14 +691,14 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="_
 .v72-shortcut-tile,
 .v72-create-row,
 .faq-item,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Card "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Card"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Panel "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Panel"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__card "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__card"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__panel "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__panel"] {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Card "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Card"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Panel "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Panel"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__card "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__card"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__panel "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__panel"] {
   border-color: var(--mt-line) !important;
   background-color: var(--mt-paper-strong) !important;
 }
@@ -746,22 +744,22 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="_
 .v72-marketplace-tabs a,
 .v72-trust-strip span,
 .v72-receipt-fragment,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Pill "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Pill"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Badge "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Badge"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Chip "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Chip"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Status "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Status"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__pill "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__pill"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__badge "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__badge"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__chip "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__chip"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__status "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__status"] {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Pill "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Pill"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Badge "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Badge"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Chip "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Chip"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Status "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Status"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__pill "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__pill"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__badge "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__badge"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__chip "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__chip"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__status "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__status"] {
   border-radius: 0 !important;
   box-shadow: none !important;
 }
@@ -770,8 +768,8 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="_
 .impact-pill,
 .score-pill,
 .v72-marketplace-tabs a.is-active,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Badge"][class*="active" i],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__badge"][class*="active" i] {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Badge"][class*="active" i],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__badge"][class*="active" i] {
   border-color: var(--mt-blue) !important;
   background: var(--accent-soft) !important;
   color: var(--mt-blue-deep) !important;
@@ -820,10 +818,10 @@ table,
 .data-grid,
 .mpgf-table,
 .protocol-check-table,
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="Table "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="Table"],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class*="__table "],
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) [class$="__table"] {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="Table "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="Table"],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class*="__table "],
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) [class$="__table"] {
   border-radius: 0 !important;
   box-shadow: none !important;
 }
@@ -1033,70 +1031,6 @@ th,
   border-color: var(--mt-blue) !important;
   background: #edf0ff !important;
   box-shadow: inset 4px 0 0 var(--mt-blue) !important;
-}
-
-/* -------------------------------------------------------------------------- */
-/* Authentication and account entry                                          */
-/* -------------------------------------------------------------------------- */
-
-[data-mt-surface="auth"] {
-  --auth-bg: var(--mt-paper) !important;
-  --auth-surface: var(--mt-paper-strong) !important;
-  --auth-ink: var(--mt-ink) !important;
-  --auth-muted: var(--mt-muted) !important;
-  --auth-line: var(--mt-line) !important;
-  --auth-line-strong: var(--mt-line-dark) !important;
-  --auth-accent: var(--mt-blue) !important;
-  --auth-accent-deep: var(--mt-blue-deep) !important;
-  --auth-panel: var(--mt-black) !important;
-  background-color: var(--mt-paper) !important;
-  background-image:
-    linear-gradient(rgba(17, 17, 17, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(17, 17, 17, 0.035) 1px, transparent 1px) !important;
-  background-size: 24px 24px !important;
-}
-
-[data-mt-surface="auth"] [class*="storyPanel"] {
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
-    var(--mt-black) !important;
-  background-size: 28px 28px !important;
-}
-
-[data-mt-surface="auth"] [class*="storyPanel"]::after,
-[data-mt-surface="auth"] [class*="graphicFrame"]::after {
-  display: none !important;
-}
-
-[data-mt-surface="auth"] :where(
-  [class*="brandMark"],
-  [class*="graphicFrame"],
-  [class*="__card"],
-  [class*="providerButton"],
-  [class*="submitButton"],
-  input
-) {
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-}
-
-[data-mt-surface="auth"] [class*="__card"] {
-  border-color: var(--mt-black) !important;
-  background: var(--mt-paper-strong) !important;
-}
-
-[data-mt-surface="auth"] [class*="graphicFrame"] {
-  border-color: #414141 !important;
-  background: #0c0c0c !important;
-}
-
-[data-mt-surface="auth"] [class*="storyCopy"] h2 {
-  max-width: 12ch !important;
-  color: #ffffff !important;
-  font-family: var(--font-heading) !important;
-  font-weight: 400 !important;
 }
 
 /* -------------------------------------------------------------------------- */

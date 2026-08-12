@@ -6,7 +6,7 @@
  * audits deterministic without altering information architecture or behavior.
  */
 
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) {
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) {
   background-color: var(--mt-paper) !important;
   background-image:
     linear-gradient(rgba(17, 17, 17, 0.035) 1px, transparent 1px),
@@ -15,8 +15,17 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) {
 }
 
 body:has([data-mt-canonical-home="true"]),
-body:has(.mtw-shell) {
+body:has(.mtw-shell),
+body:has([data-mt-surface="auth"]) {
   background-image: none !important;
+}
+
+html:has([data-mt-surface="auth"]) {
+  background: #f3f5f8 !important;
+}
+
+body:has([data-mt-surface="auth"]) {
+  background-color: #f3f5f8 !important;
 }
 
 /* The shipped static Walkthrough is a deliberately full-black reference surface. */
@@ -30,7 +39,7 @@ body:has([role="tablist"][aria-label="Interactive walkthrough concepts"]) {
  * same geometry to ordinary controls and semantic content panels everywhere
  * else, while preserving circular radios, checkboxes, diagrams, and avatars.
  */
-body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) :where(
+body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)):not(:has([data-mt-surface="auth"])) :where(
   button,
   input:not([type="radio"]):not([type="checkbox"]),
   select,
@@ -136,26 +145,6 @@ body:not(:has([data-mt-canonical-home="true"])):not(:has(.mtw-shell)) :where(
 .transaction-row.offer-transaction-row {
   border-left: 3px solid var(--mt-blue) !important;
   box-shadow: none !important;
-}
-
-/* Authentication must not fall back to the rounded glass-card treatment. */
-[data-mt-surface="auth"] :where(
-  article,
-  [class*="brandMark"],
-  [class*="graphicFrame"],
-  [class*="emailReveal"],
-  [class*="providerButton"],
-  [class*="submitButton"],
-  [class*="statusBanner"]
-) {
-  border-radius: 0 !important;
-  box-shadow: none !important;
-  backdrop-filter: none !important;
-}
-
-[data-mt-surface="auth"] article {
-  border-color: var(--mt-black) !important;
-  background: var(--mt-paper-strong) !important;
 }
 
 /* Public Goods Fund navigation and mode labels use rules, not capsules. */

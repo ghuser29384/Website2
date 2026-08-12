@@ -32,7 +32,6 @@ const productRoutes = [
   "/pools",
   "/commitments",
   "/evidence",
-  "/dashboard",
   "/mpgf",
   "/reasoning-center",
   "/trade-controls",
@@ -45,8 +44,6 @@ const productRoutes = [
 const credentialGatedRoutes = ["/offsets"];
 
 const accountAndStandaloneRoutes = [
-  "/login",
-  "/signup",
   "/complete-profile",
   "/trades/new",
   "/complete-verification.html?record=wild-animal-research&from=calendar",
@@ -132,16 +129,6 @@ async function waitForMeaningfulSurface(page: Page, route: string) {
     return;
   }
 
-  if (pathname === "/dashboard") {
-    await expect(page).toHaveURL(/\/login\?returnTo=%2Fdashboard$/, { timeout: 45_000 });
-    await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible({ timeout: 45_000 });
-    await expect(page.getByRole("heading", { exact: true, name: "Welcome back" })).toBeVisible({
-      timeout: 45_000,
-    });
-    await waitForTextLength(page, 160);
-    return;
-  }
-
   if (pathname === "/commitments") {
     await expect(page.locator("#commitments-heading")).toBeVisible({ timeout: 45_000 });
     await expect(page.locator('nav[aria-label="Commitments sections"]')).toBeVisible({ timeout: 45_000 });
@@ -215,10 +202,8 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
     }
   }
 
-  const expectedSurface = finalPathname === "/login" || finalPathname === "/signup"
-    ? "auth"
-    : finalPathname === "/connectors"
-      ? "connectors"
+  const expectedSurface = finalPathname === "/connectors"
+    ? "connectors"
       : finalPathname === "/pledge-swaps"
         ? "pledge-swaps"
         : finalPathname === "/complete-profile"
@@ -368,9 +353,12 @@ test("Commitments uses hard editorial navigation and preserves tab interaction",
   await waitForMeaningfulSurface(page, "/commitments");
 });
 
-test("Dashboard guest route redirects to a substantive canonical auth surface", async ({ page }, testInfo) => {
+test("Dashboard guest route preserves the existing authentication experience", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await expectCanonicalSurface(page, "/dashboard", testInfo);
+  const response = await page.goto("/dashboard", { timeout: 60_000, waitUntil: "domcontentloaded" });
+  expect(response?.status() ?? 200).toBeLessThan(400);
+  await expectNoFrameworkOverlay(page, "/dashboard");
+  await expectNoHorizontalOverflow(page);
 
   await expect(page).toHaveURL(/\/login\?returnTo=%2Fdashboard$/);
   await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible();
@@ -379,20 +367,24 @@ test("Dashboard guest route redirects to a substantive canonical auth surface", 
   expect(visibleText.length).toBeGreaterThan(300);
 });
 
-test("Authentication uses hard editorial geometry instead of a glass card", async ({ page }, testInfo) => {
+test("Authentication remains outside the canonical hard-geometry restyle", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await expectCanonicalSurface(page, "/login", testInfo);
+  const response = await page.goto("/login", { timeout: 60_000, waitUntil: "domcontentloaded" });
+  expect(response?.status() ?? 200).toBeLessThan(400);
+  await expect(page.locator('[data-mt-surface="auth"]')).toBeVisible({ timeout: 45_000 });
+  await expectNoFrameworkOverlay(page, "/login");
+  await expectNoHorizontalOverflow(page);
 
   const card = page.locator('[data-mt-surface="auth"] article').first();
-  await expect(card).toHaveCSS("border-radius", "0px");
-  await expect(card).toHaveCSS("box-shadow", "none");
+  await expect(card).toHaveCSS("border-radius", "24px");
+  await expect(card).not.toHaveCSS("box-shadow", "none");
   await expect(page.getByRole("link", { exact: true, name: "Continue with email" })).toHaveCSS(
     "border-radius",
-    "0px",
+    "12px",
   );
   await expect(page.locator('[data-mt-surface="auth"] [class*="graphicFrame"]').first()).toHaveCSS(
     "border-radius",
-    "0px",
+    "24px",
   );
 });
 
@@ -424,10 +416,8 @@ test("keeps representative routes usable on mobile", async ({ page }, testInfo) 
     "/about",
     "/offers?view=live",
     "/commitments",
-    "/dashboard",
     "/connectors",
     "/pledge-swaps",
-    "/login",
     "/trades/new",
   ]) {
     await expectCanonicalSurface(page, route, testInfo);
