@@ -1,0 +1,31 @@
+{
+  "schemaVersion": "commitments-trade-eligible-population-planning-envelope-v1",
+  "status": "synthetic_assumptions_only",
+  "mechanismFamily": "trade",
+  "studyVariant": "graph_cluster_role_2x2_encouragement",
+  "containsRealUsers": false,
+  "containsActualEligibleOpportunities": false,
+  "assumptions": {
+    "meanEligibleDyadsPerCluster": 8,
+    "clusterSizeCoefficientOfVariation": 0.75,
+    "maximumEligibleDyadsPerCluster": 40,
+    "intraclusterCorrelationGrid": [
+      0.01,
+      0.05,
+      0.15
+    ],
+    "attritionRate": 0.1,
+    "complianceRate": 0.75,
+    "contaminationRate": 0.05
+  },
+  "requiredBeforeExecutionReview": [
+    "freeze an actual eligible-population snapshot without exposing identities",
+    "measure connected-component and partitioned-cluster size distributions",
+    "verify enough independent randomized graph clusters",
+    "verify positive assignment and exposure probabilities",
+    "quantify cut-edge and multi-hop contamination",
+    "rerun the exact precision simulation against the frozen graph diagnostics"
+  ],
+  "executionAuthorized": false,
+  "realUserAssignmentAllowed": false
+}
