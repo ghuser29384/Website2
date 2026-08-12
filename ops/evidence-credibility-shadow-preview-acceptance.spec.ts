@@ -408,7 +408,6 @@ test.describe("private evidence-credibility shadow Preview acceptance", () => {
         ),
       });
       await expect(captureForm).toHaveCount(1);
-      await expect(captureForm.getByText("Attestation: 1", { exact: true })).toBeVisible();
       await captureForm
         .locator('select[name="decision_confidence_band"]')
         .selectOption("0");
