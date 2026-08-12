@@ -67,6 +67,11 @@
     overflow: hidden;
   }
 
+  .scope :global(.mt-site-topbar .brand .mt-wordmark) {
+    max-width: 100%;
+    font-size: clamp(1.05rem, 5.2vw, 1.3rem);
+  }
+
   .scope :global(.mt-site-topbar .topbar-actions) {
     justify-content: flex-end;
   }
