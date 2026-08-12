@@ -2,6 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
+process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY = "1";
+
 const captureDirectory = path.join("test-results", "offers-density");
 const targetRoute = "/offers?mode=pledge&view=live";
 
@@ -21,38 +23,27 @@ async function stubOfferPlane(page: Page) {
 }
 
 async function ensureScreenshotFonts(page: Page) {
-  const fontState = await page.evaluate(async () => {
-    const faces = [...document.fonts];
-    const settled = Promise.allSettled(faces.map((face) => face.load())).then(async (results) => {
-      await document.fonts.ready;
-      return {
-        timedOut: false,
-        failures: results.flatMap((result, index) =>
-          result.status === "rejected"
-            ? [`${faces[index].family} ${faces[index].weight}`]
-            : [],
-        ),
-      };
-    });
-    const timeout = new Promise<{ timedOut: true; failures: string[] }>((resolve) => {
-      window.setTimeout(() => resolve({ timedOut: true, failures: [] }), 5_000);
-    });
-    const result = await Promise.race([settled, timeout]);
-    return {
-      ...result,
-      faces: faces.map((face) => ({
-        family: face.family,
-        status: face.status,
-        weight: face.weight,
-      })),
-      status: document.fonts.status,
-    };
-  });
+  const requiredFonts = [
+    { label: "Metropolis 400", query: '400 16px "Metropolis"' },
+    { label: "Source Serif 4 400", query: '400 16px "Source Serif 4"' },
+    { label: "IBM Plex Mono 400", query: '400 16px "IBM Plex Mono"' },
+    { label: "IBM Plex Mono 500", query: '500 16px "IBM Plex Mono"' },
+    { label: "IBM Plex Mono 650", query: '650 16px "IBM Plex Mono"' },
+    { label: "IBM Plex Mono 700", query: '700 16px "IBM Plex Mono"' },
+  ];
 
-  expect(fontState.timedOut, `font loading timed out: ${JSON.stringify(fontState.faces)}`).toBe(false);
-  expect(fontState.failures).toEqual([]);
-  expect(fontState.status).toBe("loaded");
-  expect(fontState.faces.filter((face) => face.status !== "loaded")).toEqual([]);
+  await expect
+    .poll(
+      () =>
+        page.evaluate((fonts) =>
+          fonts.filter(({ query }) => !document.fonts.check(query)).map(({ label }) => label),
+        requiredFonts),
+      {
+        message: "Offers-used fonts must load before visual capture",
+        timeout: 10_000,
+      },
+    )
+    .toEqual([]);
 }
 
 async function capture(page: Page, filename: string) {
