@@ -1,0 +1,598 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moraltrade.org/schemas/commitments-impact-study-instance-v2.json",
+  "title": "Moral Trade QA-only non-executing impact study instance v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "studyKey",
+    "studyVersion",
+    "mechanismFamily",
+    "studyVariant",
+    "protocolKey",
+    "protocolPayloadHash",
+    "templateKey",
+    "templatePayloadHash",
+    "evidenceToProductMappingHash",
+    "studyInstanceSchemaHash",
+    "eligiblePopulationSnapshotHash",
+    "eligibilityRules",
+    "exclusionRules",
+    "assignmentUnit",
+    "exposureUnit",
+    "outcomeUnit",
+    "analysisUnit",
+    "interferenceClusterDefinition",
+    "assignmentDesign",
+    "assignmentProbabilities",
+    "blockingAndStratificationVariables",
+    "exposureMapping",
+    "supportedExposureCells",
+    "emptyExposureCellAction",
+    "primaryEstimand",
+    "potentialOutcomeContrast",
+    "targetPopulation",
+    "primaryOutcome",
+    "outcomeRegistry",
+    "outcomeWindow",
+    "estimator",
+    "varianceProcedure",
+    "finiteSampleInference",
+    "unequalClusterSizeHandling",
+    "covariateAdjustmentPolicy",
+    "missingnessEstimand",
+    "attritionBounds",
+    "sensitivityAnalyses",
+    "graphDiagnostics",
+    "precisionSimulation",
+    "fixedHorizonOrSequentialDesign",
+    "ethicsDetermination",
+    "participantDefinition",
+    "consentOrWaiver",
+    "controlConditionJustification",
+    "vulnerableParticipantProtections",
+    "debriefingPolicy",
+    "adverseEventMonitoring",
+    "stopAndSuspensionRules",
+    "privacyRetentionAndDeletion",
+    "accessControl",
+    "incidentResponse",
+    "entropySource",
+    "seedGenerationProcedure",
+    "seedCommitment",
+    "constrainedRandomizationRule",
+    "assignmentConcealment",
+    "outcomeAdjudicatorBlinding",
+    "unblindingLog",
+    "postAssignmentEligibilityChangeLog",
+    "differentialEvidenceResolutionAudit",
+    "blockingSafetyOutcomes",
+    "contaminationAndSpilloverMonitoring",
+    "offPlatformSubstitutionAudit",
+    "resourceClaimDeduplication",
+    "evidenceReferenceSchemes",
+    "assignmentCodeHash",
+    "analysisCodeHash",
+    "studyInstancePayloadHash",
+    "appendOnlyRegistryRecord",
+    "protectedTagOrEquivalent",
+    "amendmentLog",
+    "deviationLog",
+    "instrumentationEnvironment",
+    "subjectMode",
+    "executionAuthorized",
+    "realUserAssignmentAllowed"
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "key": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9._:-]{0,127}$"
+    },
+    "syntheticKey": {
+      "type": "string",
+      "pattern": "^synthetic:[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "nonEmpty": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringArray": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    },
+    "probabilityString": {
+      "type": "string",
+      "pattern": "^(?:0\\.[0-9]{1,10}|1(?:\\.0{1,10})?)$"
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcomeKey",
+        "outcomeKind",
+        "nativeUnit",
+        "role"
+      ],
+      "properties": {
+        "outcomeKey": {
+          "$ref": "#/$defs/key"
+        },
+        "outcomeKind": {
+          "enum": [
+            "scalar_native_unit",
+            "prespecified_global_test"
+          ]
+        },
+        "nativeUnit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "role": {
+          "enum": [
+            "primary",
+            "secondary",
+            "safety_cost"
+          ]
+        }
+      }
+    }
+  },
+  "properties": {
+    "studyKey": {
+      "$ref": "#/$defs/syntheticKey"
+    },
+    "studyVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000
+    },
+    "mechanismFamily": {
+      "enum": [
+        "trade",
+        "co_fund",
+        "threshold_funding",
+        "donation_upgrade",
+        "threshold_sign_on",
+        "donation_redirect"
+      ]
+    },
+    "studyVariant": {
+      "$ref": "#/$defs/key"
+    },
+    "protocolKey": {
+      "const": "commitments-causal-identification-and-calibration-master-v2"
+    },
+    "protocolPayloadHash": {
+      "const": "sha256:cd663ae722ee028ddfe3e1b866acab9ef79b5fcf5b5418d053bd3687eca3881a"
+    },
+    "templateKey": {
+      "$ref": "#/$defs/key"
+    },
+    "templatePayloadHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "evidenceToProductMappingHash": {
+      "const": "sha256:eb4aadae8491c1a6924fca03acdeb9157b07a1439098e736c88e549db16b59b8"
+    },
+    "studyInstanceSchemaHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "eligiblePopulationSnapshotHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "eligibilityRules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "exclusionRules": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "assignmentUnit": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "exposureUnit": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "outcomeUnit": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "analysisUnit": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "interferenceClusterDefinition": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "assignmentDesign": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "assignmentProbabilities": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "armKey",
+          "probability"
+        ],
+        "properties": {
+          "armKey": {
+            "$ref": "#/$defs/key"
+          },
+          "probability": {
+            "$ref": "#/$defs/probabilityString"
+          }
+        }
+      }
+    },
+    "blockingAndStratificationVariables": {
+      "$ref": "#/$defs/stringArray"
+    },
+    "exposureMapping": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "supportedExposureCells": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/key"
+      },
+      "uniqueItems": true
+    },
+    "emptyExposureCellAction": {
+      "enum": [
+        "withhold_estimand",
+        "no_launch"
+      ]
+    },
+    "primaryEstimand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "estimandKey",
+        "estimandType",
+        "claimScope"
+      ],
+      "properties": {
+        "estimandKey": {
+          "$ref": "#/$defs/key"
+        },
+        "estimandType": {
+          "const": "assignment_policy_itt"
+        },
+        "claimScope": {
+          "const": "policy_level"
+        }
+      }
+    },
+    "potentialOutcomeContrast": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "targetPopulation": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "primaryOutcome": {
+      "$ref": "#/$defs/outcome"
+    },
+    "outcomeRegistry": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/outcome"
+      }
+    },
+    "outcomeWindow": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "estimator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "estimatorKey",
+        "family",
+        "designBased"
+      ],
+      "properties": {
+        "estimatorKey": {
+          "$ref": "#/$defs/key"
+        },
+        "family": {
+          "$ref": "#/$defs/nonEmpty"
+        },
+        "designBased": {
+          "const": true
+        }
+      }
+    },
+    "varianceProcedure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "procedureKey",
+        "designBased"
+      ],
+      "properties": {
+        "procedureKey": {
+          "$ref": "#/$defs/key"
+        },
+        "designBased": {
+          "const": true
+        }
+      }
+    },
+    "finiteSampleInference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "methodKey",
+        "randomizationBased"
+      ],
+      "properties": {
+        "methodKey": {
+          "$ref": "#/$defs/key"
+        },
+        "randomizationBased": {
+          "const": true
+        }
+      }
+    },
+    "unequalClusterSizeHandling": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "covariateAdjustmentPolicy": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "missingnessEstimand": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "attritionBounds": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "sensitivityAnalyses": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "graphDiagnostics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "noLaunchIfInadequate"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "required_not_completed",
+            "passed"
+          ]
+        },
+        "noLaunchIfInadequate": {
+          "const": true
+        }
+      }
+    },
+    "precisionSimulation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "noLaunchDetermination"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "required_not_completed",
+            "passed"
+          ]
+        },
+        "noLaunchDetermination": {
+          "enum": [
+            "not_assessed",
+            "no_launch",
+            "eligible_for_separate_execution_review"
+          ]
+        }
+      }
+    },
+    "fixedHorizonOrSequentialDesign": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "ethicsDetermination": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "independentRequired",
+        "gatekeeperPermissionIsConsent"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "required_not_completed",
+            "approved_for_separate_execution_review"
+          ]
+        },
+        "independentRequired": {
+          "const": true
+        },
+        "gatekeeperPermissionIsConsent": {
+          "const": false
+        }
+      }
+    },
+    "participantDefinition": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "consentOrWaiver": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "independentlyApproved"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "not_determined",
+            "consent_required",
+            "waiver_or_alteration_approved"
+          ]
+        },
+        "independentlyApproved": {
+          "type": "boolean"
+        }
+      }
+    },
+    "controlConditionJustification": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "vulnerableParticipantProtections": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "debriefingPolicy": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "adverseEventMonitoring": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "stopAndSuspensionRules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "privacyRetentionAndDeletion": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "accessControl": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "incidentResponse": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "entropySource": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "seedGenerationProcedure": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "seedCommitment": {
+      "$ref": "#/$defs/sha256"
+    },
+    "constrainedRandomizationRule": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "assignmentConcealment": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "outcomeAdjudicatorBlinding": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "unblindingLog": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "postAssignmentEligibilityChangeLog": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "differentialEvidenceResolutionAudit": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "blockingSafetyOutcomes": {
+      "type": "array",
+      "minItems": 7,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "harmful_offer_or_threat",
+          "baseline_manufacture_or_worsening",
+          "harm_shifted_to_nonparticipants",
+          "coercion_harassment_identity_exposure_or_retaliation",
+          "concentration_or_exclusion_effect",
+          "off_platform_substitution",
+          "duplicate_or_overlapping_resource_claim"
+        ]
+      }
+    },
+    "contaminationAndSpilloverMonitoring": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "offPlatformSubstitutionAudit": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "resourceClaimDeduplication": {
+      "$ref": "#/$defs/nonEmpty"
+    },
+    "evidenceReferenceSchemes": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "const": "qa-evidence://synthetic/"
+      }
+    },
+    "assignmentCodeHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "analysisCodeHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "studyInstancePayloadHash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "appendOnlyRegistryRecord": {
+      "type": "string",
+      "pattern": "^qa-registry://synthetic/[A-Za-z0-9._:/-]+$"
+    },
+    "protectedTagOrEquivalent": {
+      "type": "string",
+      "pattern": "^github://ghuser29384/Website2/(?:commit|tag)/[0-9a-f]{40}$"
+    },
+    "amendmentLog": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "deviationLog": {
+      "type": "array",
+      "maxItems": 0
+    },
+    "instrumentationEnvironment": {
+      "const": "qa"
+    },
+    "subjectMode": {
+      "const": "synthetic_only"
+    },
+    "executionAuthorized": {
+      "const": false
+    },
+    "realUserAssignmentAllowed": {
+      "const": false
+    }
+  }
+}
