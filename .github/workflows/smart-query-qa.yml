@@ -22,6 +22,7 @@ on:
       - "src/app/mpgf/pools/**"
       - "src/components/layout/site-topbar.tsx"
       - "src/components/search/**"
+      - "src/offers-walkthrough-density.test.ts"
       - "public/discover/payload/**"
       - "public/moral-trade-smart-query.js"
       - "public/moral-trade-discover-search-preflight.js"
@@ -37,6 +38,7 @@ on:
       - "tests/discover-preflight-filter.spec.ts"
       - "tests/discover-payload-cache.spec.ts"
       - "tests/discover-cofund.spec.ts"
+      - "tests/offers-density.spec.ts"
       - "package.json"
       - ".github/workflows/smart-query-qa.yml"
   push:
@@ -119,6 +121,9 @@ jobs:
             src/app/api/query/interpret/route.ts \
             src/app/api/discover/search/route.ts \
             src/app/layout.tsx \
+            src/app/offers/layout.tsx \
+            src/app/offers/offer-plane-inline-mount.tsx \
+            src/app/offers/offer-visual-directory-mount.tsx \
             src/app/offers/page.tsx \
             src/app/people/page.tsx \
             src/app/pools/page.tsx \
@@ -128,11 +133,13 @@ jobs:
             src/components/layout/site-topbar.tsx \
             src/components/search/smart-query-auto-enhancer.tsx \
             src/components/search/smart-query-form.tsx \
+            src/offers-walkthrough-density.test.ts \
             tests/discover-query-audit.spec.ts \
             tests/discover-live-search.spec.ts \
             tests/discover-preflight-filter.spec.ts \
             tests/discover-payload-cache.spec.ts \
-            tests/discover-cofund.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
+            tests/discover-cofund.spec.ts \
+            tests/offers-density.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
 
       - name: Test deterministic query interpretation and Discover loader semantics
         run: |
@@ -144,6 +151,12 @@ jobs:
             src/lib/smart-query-llm-generation.test.ts \
             src/lib/smart-evidence-ranking.test.ts \
             src/lib/live-discover-navigation.test.ts 2>&1 | tee qa-results/smart-query-test.txt
+
+      - name: Test offers density and progressive-disclosure contracts
+        run: |
+          set -o pipefail
+          node --import tsx --test \
+            src/offers-walkthrough-density.test.ts 2>&1 | tee qa-results/offers-density-contract.txt
 
       - name: Verify canonical Discover payload, Co-Fund, live-search, and two-sided contracts
         run: |
@@ -158,7 +171,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run rendered Discover desktop, mobile, live-search, filter, cache-version, and Co-Fund QA
+      - name: Run rendered Discover and offers desktop/mobile QA
         run: |
           set -o pipefail
           npx playwright test \
@@ -167,18 +180,21 @@ jobs:
             tests/discover-preflight-filter.spec.ts \
             tests/discover-payload-cache.spec.ts \
             tests/discover-cofund.spec.ts \
+            tests/offers-density.spec.ts \
             --reporter=line 2>&1 | tee qa-results/smart-query-e2e.txt
 
-      - name: Upload Discover QA evidence
+      - name: Upload Discover and offers QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: discover-live-search-cofund-qa
+          name: discover-live-search-cofund-offers-qa
           path: |
             test-results/discover-*
+            test-results/offers-density
             qa-results/query-surface-audit.txt
             qa-results/smart-query-lint.txt
             qa-results/smart-query-test.txt
+            qa-results/offers-density-contract.txt
             qa-results/discover-contracts.txt
             qa-results/smart-query-build.txt
             qa-results/smart-query-e2e.txt
