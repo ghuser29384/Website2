@@ -21,6 +21,7 @@ on:
       - "src/app/pools/**"
       - "src/app/mpgf/pools/**"
       - "src/components/layout/site-topbar.tsx"
+      - "src/components/marketplace/participant-offer-group*"
       - "src/components/search/**"
       - "src/offers-walkthrough-density.test.ts"
       - "public/discover/payload/**"
@@ -131,6 +132,7 @@ jobs:
             src/app/wish-registry/page.tsx \
             'src/app/evidence/[[...recordId]]/page.tsx' \
             src/components/layout/site-topbar.tsx \
+            src/components/marketplace/participant-offer-group.tsx \
             src/components/search/smart-query-auto-enhancer.tsx \
             src/components/search/smart-query-form.tsx \
             src/offers-walkthrough-density.test.ts \
