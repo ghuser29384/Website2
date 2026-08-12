@@ -25,7 +25,7 @@ async function openLiveOffers(page: Page) {
   ).toBeVisible();
   await expect(page.locator('form[data-smart-query-surface="offers"]')).toBeVisible();
   await expect
-    .poll(() => page.locator("#ordinary-offer-plane-host details").count())
+    .poll(() => page.locator("#ordinary-offer-plane-host > details").count())
     .toBe(1);
 }
 
@@ -47,14 +47,15 @@ test("live Offers uses the calm Walkthrough-style hierarchy on desktop", async (
 
   const hero = page.locator(".mt-explore-hero");
   const directory = page.locator(".mt-product-section.is-white");
-  const visualSearch = page.locator("#ordinary-offer-plane-host details");
+  const visualSearch = page.locator("#ordinary-offer-plane-host > details");
+  const visualSearchSummary = visualSearch.locator(":scope > summary");
   const searchForm = page.locator('form[data-smart-query-surface="offers"]');
 
   await expect(hero).toBeVisible();
   await expect(directory).toBeVisible();
   await expect(visualSearch).not.toHaveAttribute("open", "");
-  await expect(visualSearch.locator("summary")).toContainText("Explore by challenge and return");
-  await expect(visualSearch.locator("summary")).toContainText("Optional");
+  await expect(visualSearchSummary).toContainText("Explore by challenge and return");
+  await expect(visualSearchSummary).toContainText("Optional");
   await expect(searchForm.locator("input, select")).toHaveCount(3);
 
   const desktopStyles = await page.evaluate(() => {
@@ -99,9 +100,10 @@ test("live Offers stays single-column and uncluttered on mobile", async ({ page 
   const failures = monitorBrowserFailures(page);
   await openLiveOffers(page);
 
-  const visualSearch = page.locator("#ordinary-offer-plane-host details");
+  const visualSearch = page.locator("#ordinary-offer-plane-host > details");
+  const visualSearchSummary = visualSearch.locator(":scope > summary");
   await expect(visualSearch).not.toHaveAttribute("open", "");
-  await expect(visualSearch.locator("summary")).toBeVisible();
+  await expect(visualSearchSummary).toBeVisible();
 
   const mobileStyles = await page.evaluate(() => {
     const heroElement = document.querySelector<HTMLElement>(".mt-explore-hero");
