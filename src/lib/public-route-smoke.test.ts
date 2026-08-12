@@ -389,6 +389,8 @@ test("live offers stay separated from examples while the wish registry uses broa
   assert.match(offersPage, /if \(view === "templates" \|\| legacyTab === "templates"\) return <TradeTemplateLibrary \/>/);
   assert.match(offersPage, /Live participant records only/);
   assert.match(offersPage, /Search never substitutes examples for live demand/);
+  assert.match(offersPage, /livePage\.error \? \(/);
+  assert.match(offersPage, /Results unavailable/);
   assert.match(offersPage, /No live proposals are open/);
   assert.equal(offersPage.includes("CANONICAL_WORKED_CASE_OFFERS"), false);
   assert.equal(offersPage.includes("No public offers have been published yet"), false);

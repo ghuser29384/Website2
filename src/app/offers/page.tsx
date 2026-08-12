@@ -651,9 +651,15 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
                   <h2>Open participant proposals</h2>
                 </div>
                 <p aria-live="polite" className={densityStyles.resultCount}>
-                  <strong>{livePage.total.toLocaleString()}</strong> matching proposal{livePage.total === 1 ? "" : "s"}
-                  <span aria-hidden="true"> · </span>
-                  {livePage.items.length.toLocaleString()} on this page from {participantGroups.length.toLocaleString()} participant{participantGroups.length === 1 ? "" : "s"}
+                  {livePage.error ? (
+                    <strong>Results unavailable</strong>
+                  ) : (
+                    <>
+                      <strong>{livePage.total.toLocaleString()}</strong> matching proposal{livePage.total === 1 ? "" : "s"}
+                      <span aria-hidden="true"> · </span>
+                      {livePage.items.length.toLocaleString()} on this page from {participantGroups.length.toLocaleString()} participant{participantGroups.length === 1 ? "" : "s"}
+                    </>
+                  )}
                 </p>
               </div>
 
