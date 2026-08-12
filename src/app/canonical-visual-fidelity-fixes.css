@@ -64,7 +64,7 @@ body:has(.growth-start-section) .growth-progress-card .hero-followup {
 
 /* Complete Profile: reserve an explicit gap between Sources and Save profile. */
 [data-mt-surface="complete-profile"] > button[aria-haspopup="dialog"] {
-  right: 204px !important;
+  right: 232px !important;
 }
 
 @media (max-width: 680px) {
