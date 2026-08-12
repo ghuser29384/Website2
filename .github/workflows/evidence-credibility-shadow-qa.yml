@@ -70,7 +70,7 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
           test "$(find supabase/migrations -maxdepth 1 -type f -name '202608101600*_evidence_credibility_shadow_*.sql' | wc -l)" -eq 12
-          test "$(find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_shadow_*.sql' | wc -l)" -eq 6
+          test "$(find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_shadow_*.sql' | wc -l)" -eq 8
           test -f docs/moral-trade/evidence-credibility-shadow-v2.md
           test -f src/lib/evidence-credibility-shadow-schema-contract.test.ts
           test ! -e .github/staged-evidence-credibility-shadow-qa.yml.txt
