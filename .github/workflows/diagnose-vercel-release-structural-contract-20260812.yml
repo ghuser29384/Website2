@@ -45,16 +45,29 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
-      - name: Locate every source declaration of the failing test title
+      - name: Locate source declarations resembling the failing test title
         id: locate
         shell: bash
         run: |
           set -euo pipefail
-          rg --line-number --fixed-strings "$FAILING_TITLE" src scripts .github \
-            | tee vercel-release-structural-contract.source-locations.txt
-          test -s vercel-release-structural-contract.source-locations.txt
+          : > vercel-release-structural-contract.source-locations.txt
+          rg --hidden --line-number --fixed-strings "$FAILING_TITLE" \
+            --glob '!node_modules/**' --glob '!.git/**' . \
+            >> vercel-release-structural-contract.source-locations.txt || true
+          if [[ ! -s vercel-release-structural-contract.source-locations.txt ]]; then
+            rg --hidden --line-number \
+              'permanent.*Vercel.*release.*structur|Vercel.*release.*gates' \
+              --glob '!node_modules/**' --glob '!.git/**' . \
+              >> vercel-release-structural-contract.source-locations.txt || true
+          fi
           location_count="$(wc -l < vercel-release-structural-contract.source-locations.txt | tr -d ' ')"
           printf 'location_count=%s\n' "$location_count" | tee -a "$GITHUB_OUTPUT"
+          if [[ "$location_count" = '0' ]]; then
+            echo 'No literal source declaration found; the full TAP stack will identify the source file.' \
+              | tee vercel-release-structural-contract.source-search-note.txt
+          else
+            cat vercel-release-structural-contract.source-locations.txt
+          fi
 
       - name: Reproduce the complete npm test gate and preserve exact output
         id: test
@@ -95,12 +108,11 @@ jobs:
               "expected:",
               "actual:",
               "operator:",
+              ".test.ts:",
           )
           for index, line in enumerate(lines):
               if any(needle in line for needle in needles):
-                  start = max(0, index - 30)
-                  end = min(len(lines), index + 90)
-                  selected.update(range(start, end))
+                  selected.update(range(max(0, index - 35), min(len(lines), index + 110)))
           output = []
           previous = None
           for index in sorted(selected):
@@ -120,14 +132,17 @@ jobs:
             echo "- Source declarations found: \`${{ steps.locate.outputs.location_count }}\`"
             echo "- Exit code: \`$status\`"
             echo
-            echo '#### Source location'
+            echo '#### Source search'
             echo '```text'
             cat vercel-release-structural-contract.source-locations.txt
+            if [[ -f vercel-release-structural-contract.source-search-note.txt ]]; then
+              cat vercel-release-structural-contract.source-search-note.txt
+            fi
             echo '```'
             echo
             echo '#### Failure extract'
             echo '```text'
-            tail -n 260 vercel-release-structural-contract.failure-extract.log
+            tail -n 300 vercel-release-structural-contract.failure-extract.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -138,6 +153,7 @@ jobs:
           name: vercel-release-structural-contract-full-suite-${{ github.run_id }}
           path: |
             vercel-release-structural-contract.source-locations.txt
+            vercel-release-structural-contract.source-search-note.txt
             vercel-release-structural-contract.full-test.stdout.log
             vercel-release-structural-contract.full-test.stderr.log
             vercel-release-structural-contract.full-test.combined.log
@@ -145,7 +161,7 @@ jobs:
             vercel-release-structural-contract.exit-code
             .github/workflows/vercel-release.yml
             scripts/vercel-release-workflow.test.mjs
-          if-no-files-found: error
+          if-no-files-found: warn
           retention-days: 30
 
       - name: Preserve the reproduced full-suite result
