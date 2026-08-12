@@ -1,0 +1,78 @@
+{
+  "schemaVersion": "commitments-trade-graph-feasibility-report-v1",
+  "fixtureKey": "synthetic:trade-graph-feasibility-fixture-v1",
+  "boundStudyKey": "synthetic:trade-bilateral-encouragement-planning-v1",
+  "boundStudyInstancePayloadHash": "sha256:1e31b1db59899fbf07fbf8b6219c8699f0c6b0ddbeb6e8717f989487660aaba2",
+  "boundPrecisionReportPayloadHash": "sha256:3ff2613f93d166e5e06a5bf8cfcaf029cd49d4e56690e345f676a51f982f6b4f",
+  "contractPayloadHash": "sha256:59a287312ee58c594e0dca4ba117ddd6081531ebaad6dd817e585e9da3ecc0fc",
+  "specPayloadHash": "sha256:b75aebdcf7272baa07ba8616693170ec07e05594aced78771c9cb2b40d0d54a8",
+  "snapshotSchemaHash": "sha256:14371c9be667ad4a9b570e45c3f02fd95e93eb69af07428e258163de4a46deb4",
+  "diagnosticCodeHash": "sha256:b33fbc6976ea3b70527678bc406cb8a51d7e6f4da948175f6589b839b6701db8",
+  "runnerCodeHash": "sha256:9c89256de78d497ac3ae21b6bbebe2a46a61b9915a9d9dc8af9e326c49834c5f",
+  "snapshotPayloadHash": "sha256:7fcd3df31e568d84ca7c6537f6efaf9dd23b7570f62022a5a9d60421edd7df38",
+  "subjectMode": "synthetic_only",
+  "instrumentationEnvironment": "qa",
+  "eligibilityFrozen": false,
+  "containsRealUserData": false,
+  "graphSummary": {
+    "nodeCount": 28800,
+    "eligibleDirectedDyadCount": 25600,
+    "weaklyConnectedComponentCount": 3200,
+    "meanEligibleDyadsPerCluster": 8,
+    "clusterSizeCoefficientOfVariation": 0.395284707521,
+    "maximumEligibleDyadsPerCluster": 12,
+    "largestClusterShareOfDyads": 0.00046875,
+    "componentCountByStratum": [
+      {
+        "stratumKey": "size:large_11_40|risk:high|type:mixed_resources",
+        "componentCount": 800
+      },
+      {
+        "stratumKey": "size:medium_5_10|risk:low|type:funding_for_action",
+        "componentCount": 800
+      },
+      {
+        "stratumKey": "size:medium_5_10|risk:medium|type:funding_for_funding",
+        "componentCount": 800
+      },
+      {
+        "stratumKey": "size:small_1_4|risk:low|type:action_for_action",
+        "componentCount": 800
+      }
+    ]
+  },
+  "privacyChecks": {
+    "subjectModeSyntheticOnly": true,
+    "instrumentationEnvironmentQa": true,
+    "containsRealUserDataFalse": true,
+    "reversibleMappingAbsent": true,
+    "rawIdentifierFieldsAbsent": true,
+    "allIdentifiersSyntheticPrefixed": true
+  },
+  "designSupportChecks": {
+    "minimumIndependentClustersMet": true,
+    "frozenMeanEligibleDyadsPerClusterMatched": true,
+    "clusterSizeCoefficientOfVariationWithinFrozenMaximum": true,
+    "maximumEligibleDyadsPerClusterWithinFrozenMaximum": true,
+    "allStrataDivisibleByRequiredArmCount": true,
+    "weakComponentsContainEveryDyad": true,
+    "noCrossClusterDyadsByConstruction": true
+  },
+  "structuralDetermination": "compatible_with_frozen_precision_envelope",
+  "realGraphDiagnosticsStatus": "required_not_completed",
+  "assignmentGenerated": false,
+  "assignmentSeedGenerated": false,
+  "executionAuthorized": false,
+  "realUserAssignmentAllowed": false,
+  "executionDecision": {
+    "determination": "no_launch",
+    "blockers": [
+      "only a deterministic synthetic graph fixture has been analyzed",
+      "no privacy-reviewed real eligible-population snapshot exists",
+      "real graph partition and exposure-probability diagnostics remain incomplete",
+      "independent ethics determination and consent or waiver decision remain incomplete",
+      "no assignment entropy, assignment manifest, or real-user execution authorization exists"
+    ]
+  },
+  "reportPayloadHash": "sha256:edf93361dd35ccff39be361fa295bc991f51f7ff7cd79d6bf0e88236e0c7be7c"
+}
