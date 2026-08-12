@@ -118,7 +118,6 @@ export function OfferPlaneInlineMount() {
     if (!queryState.shouldShow || !explorerOpen) return;
 
     const controller = new AbortController();
-    setError(null);
 
     fetch("/api/offers/plane", {
       cache: "no-store",
@@ -150,7 +149,11 @@ export function OfferPlaneInlineMount() {
   return createPortal(
     <details
       className={disclosureStyles.disclosure}
-      onToggle={(event) => setExplorerOpen(event.currentTarget.open)}
+      onToggle={(event) => {
+        const isOpen = event.currentTarget.open;
+        if (isOpen) setError(null);
+        setExplorerOpen(isOpen);
+      }}
     >
       <summary className={disclosureStyles.summary}>
         <span className={disclosureStyles.summaryCopy}>
