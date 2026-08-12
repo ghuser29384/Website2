@@ -1,0 +1,92 @@
+name: Diagnose Vercel release structural contract
+
+on:
+  push:
+    branches:
+      - ops/diagnose-vercel-release-structural-contract-20260812
+    paths:
+      - ".github/workflows/diagnose-vercel-release-structural-contract-20260812.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: diagnose-vercel-release-structural-contract-20260812
+  cancel-in-progress: false
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_MAIN_SHA: 69146f2cf9d5f4d747c0c25abda6de75f410098d
+
+    steps:
+      - name: Check out the exact failed production candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 1
+
+      - name: Guard exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run only the failing release-control contract and preserve exact TAP
+        id: test
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          node --test scripts/vercel-release-workflow.test.mjs \
+            > >(tee vercel-release-structural-contract.tap) \
+            2> >(tee vercel-release-structural-contract.stderr >&2)
+          status=$?
+          set -e
+          printf '%s\n' "$status" > vercel-release-structural-contract.exit-code
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+          {
+            echo '### Exact release-control contract diagnostic'
+            echo
+            echo "- Candidate: \`$EXPECTED_MAIN_SHA\`"
+            echo "- Exit code: \`$status\`"
+            echo
+            echo '```text'
+            sed -n '/not ok/,$p' vercel-release-structural-contract.tap | tail -n 180
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload exact diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vercel-release-structural-contract-${{ github.run_id }}
+          path: |
+            vercel-release-structural-contract.tap
+            vercel-release-structural-contract.stderr
+            vercel-release-structural-contract.exit-code
+            .github/workflows/vercel-release.yml
+            scripts/vercel-release-workflow.test.mjs
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve the reproduced result
+        if: always()
+        shell: bash
+        run: |
+          status='${{ steps.test.outputs.status }}'
+          test -n "$status"
+          exit "$status"
