@@ -73,11 +73,17 @@ test("export storage is append-only, private, and AAL2-admin mediated", () => {
     );
     assert.match(
       migration,
-      new RegExp(`revoke all on table public\\.${table}[\\s\\S]*anon, authenticated`, "i"),
+      new RegExp(
+        `revoke all on table public\\.${table}[\\s\\S]*anon, authenticated`,
+        "i",
+      ),
     );
     assert.match(
       migration,
-      new RegExp(`${table}_append_only[\\s\\S]*reject_credibility_shadow_history_mutation`, "i"),
+      new RegExp(
+        `${table}_append_only[\\s\\S]*reject_credibility_shadow_history_mutation`,
+        "i",
+      ),
     );
   }
   assert.match(createExport, /require_calibration_audit_administrator\(\)/i);
@@ -89,20 +95,40 @@ test("export storage is append-only, private, and AAL2-admin mediated", () => {
 
 test("creation is preregistered, cutoff-bound, and immutable by request key", () => {
   assert.match(createExport, /analysis-plan version is required before export/i);
-  assert.match(createExport, /p_analysis_plan_hash !~ '\^\[0-9a-f\]\{64\}\$'/i);
+  assert.match(
+    createExport,
+    /p_analysis_plan_hash !~ '\^\[0-9a-f\]\{64\}\$'/i,
+  );
   assert.match(createExport, /p_source_cutoff_at > now\(\)/i);
-  assert.match(createExport, /where export_record\.source_key = btrim\(p_source_key\)/i);
+  assert.match(
+    createExport,
+    /where export_record\.source_key = btrim\(p_source_key\)/i,
+  );
   assert.match(
     createExport,
     /immutable calibration-export request differs from this request/i,
   );
   assert.match(actions, /preregistered_acknowledgement/i);
   assert.match(actions, /randomBytes\(32\)\.toString\("hex"\)/i);
-  assert.match(actions, /admin-export:\$\{planHash\}:\$\{cutoff\.toISOString\(\)\}/i);
+  assert.match(
+    actions,
+    /admin-export:\$\{planHash\}:\$\{cutoff\.toISOString\(\)\}/i,
+  );
   assert.match(page, /Commit the analysis plan before freezing the data/i);
 });
 
-test("the observation payload contains frozen features and independent labels", () => {
+test("the PostgreSQL-safe observation payload remains complete", () => {
+  assert.equal(
+    (observationPayload.match(/jsonb_build_object\(/g) ?? []).length,
+    4,
+    "The observation must stay split across four JSONB builders, below PostgreSQL's 100-argument function limit.",
+  );
+  assert.equal(
+    (observationPayload.match(/\)\s*\|\|\s*jsonb_build_object\(/g) ?? [])
+      .length,
+    3,
+  );
+
   for (const key of [
     "modelVersion",
     "originalStatus",
@@ -163,7 +189,10 @@ test("raw identity, evidence, rationale, provider, payment, and stake fields are
     assert.doesNotMatch(observationPayload, new RegExp(`'${key}'`, "i"));
   }
   assert.doesNotMatch(createExport, /private_rationale/i);
-  assert.doesNotMatch(createExport, /receipt_storage_path|storage_path|evidence_url|attestation/i);
+  assert.doesNotMatch(
+    createExport,
+    /receipt_storage_path|storage_path|evidence_url|attestation/i,
+  );
   assert.match(observationPayload, /'additionalityStatus', 'not_evaluated'/i);
   assert.match(document, /pseudonymization, not public anonymization/i);
 });
@@ -187,7 +216,10 @@ test("domain-separated HMAC tokens preserve only private grouping structure", ()
     assert.match(createExport, new RegExp(`'${domain}'`, "i"));
   }
   assert.match(migration, /pseudonymization_key_commitment/i);
-  assert.doesNotMatch(migration, /pseudonymization_secret\s+text\s+not null/i);
+  assert.doesNotMatch(
+    migration,
+    /pseudonymization_secret\s+text\s+not null/i,
+  );
 });
 
 test("row and manifest integrity are cryptographically bound", () => {
@@ -225,14 +257,26 @@ test("download authorization precedes streaming and never escalates to service r
 test("the tranche remains shadow-only and exact-head QA is fail-closed", () => {
   assert.doesNotMatch(migration, /update public\.credibility_shadow_controls/i);
   assert.doesNotMatch(migration, /insert into public\.credibility_events/i);
-  assert.doesNotMatch(migration, /insert into public\.credibility_restrictions/i);
-  assert.doesNotMatch(migration, /fit_(?:model|weights)|isotonic|beta_regression/i);
+  assert.doesNotMatch(
+    migration,
+    /insert into public\.credibility_restrictions/i,
+  );
+  assert.doesNotMatch(
+    migration,
+    /fit_(?:model|weights)|isotonic|beta_regression/i,
+  );
   assert.doesNotMatch(
     `${migration}\n${actions}\n${page}\n${route}`,
     /jnpoxvalyjtdghnperyu/i,
   );
-  assert.match(document, /does not authorize or perform:[\s\S]*production migration or deployment/i);
-  assert.match(workflow, /STACK_BASE_SHA: 8389a7e362d455b392b0710dca4bc8102661ce1b/i);
+  assert.match(
+    document,
+    /does not authorize or perform:[\s\S]*production migration or deployment/i,
+  );
+  assert.match(
+    workflow,
+    /STACK_BASE_SHA: 8389a7e362d455b392b0710dca4bc8102661ce1b/i,
+  );
   assert.match(workflow, /exact durable scope and shadow boundary/i);
   assert.match(workflow, /Run calibration-export source contract/i);
   assert.match(workflow, /Prove zero residue and active-pipeline isolation/i);
