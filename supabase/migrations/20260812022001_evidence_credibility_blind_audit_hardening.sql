@@ -281,8 +281,7 @@ begin
   where assignment.request_key = p_request_key;
   if found then
     if existing_assignment.draw_id is distinct from p_draw_id
-       or existing_assignment.reviewer_id is distinct from p_reviewer_id
-       or existing_assignment.expires_at is distinct from p_expires_at then
+       or existing_assignment.reviewer_id is distinct from p_reviewer_id then
       raise exception 'The immutable audit-assignment request differs from this request.';
     end if;
     return jsonb_build_object(
