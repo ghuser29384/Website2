@@ -55,7 +55,7 @@ All outputs remain private pseudonymized research data. They contain no raw evid
 
 ## Boundary
 
-This package compares pre-registered predictive candidates and evaluates readiness gates. It never:
+This package compares preregistered predictive candidates and evaluates readiness gates. This package never authorizes activation. It also never:
 
 - interprets synthetic fixtures as empirical evidence;
 - estimates causal additionality;
