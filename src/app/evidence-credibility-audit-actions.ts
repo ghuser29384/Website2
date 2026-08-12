@@ -149,6 +149,39 @@ export async function materializeEvidenceCredibilityAuditDrawsAction() {
   );
 }
 
+export async function reconcileEvidenceCredibilityAuditAssignmentsAction() {
+  await requireViewer(ADMIN_ROUTE);
+  const supabase = await createClient();
+
+  try {
+    const result = (await rpcOrThrow(
+      supabase,
+      "reconcile_evidence_credibility_calibration_assignments_v1",
+      {},
+    )) as Record<string, unknown> | null;
+    const expiredCount = Number(result?.expiredCount ?? 0);
+    const excludedCount = Number(result?.excludedCount ?? 0);
+
+    revalidatePath(ADMIN_ROUTE);
+    revalidatePath(REVIEW_ROUTE);
+    redirect(
+      withMessage(
+        ADMIN_ROUTE,
+        "message",
+        `Assignment reconciliation recorded ${expiredCount} expired and ${excludedCount} superseded cases.`,
+      ),
+    );
+  } catch (error) {
+    redirect(
+      withMessage(
+        ADMIN_ROUTE,
+        "error",
+        errorMessage(error, "Calibration assignments could not be reconciled."),
+      ),
+    );
+  }
+}
+
 export async function assignEvidenceCredibilityAuditAction(formData: FormData) {
   await requireViewer(ADMIN_ROUTE);
   const supabase = await createClient();
