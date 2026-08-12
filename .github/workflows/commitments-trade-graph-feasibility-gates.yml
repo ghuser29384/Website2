@@ -49,6 +49,38 @@ jobs:
           node scripts/commitments-trade-study/validate-graph-feasibility-package.mjs \
             2>&1 | tee trade-graph-feasibility-validation.log
 
+      - name: Reject isolated nodes as false independent clusters
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' \
+            2>&1 | tee trade-graph-isolated-node-negative.log
+          import fs from "node:fs";
+          import {
+            diagnoseSyntheticGraph,
+            generateSyntheticSnapshot,
+          } from "./scripts/commitments-trade-study/graph-feasibility-core.mjs";
+
+          const spec = JSON.parse(fs.readFileSync(
+            "docs/commitments/impact-identification/study-candidates/" +
+              "trade-bilateral-encouragement-planning-v1/graph-feasibility/" +
+              "synthetic-graph-spec.json",
+            "utf8",
+          ));
+          const snapshot = generateSyntheticSnapshot(spec);
+          snapshot.nodes.push({ nodeKey: "synthetic:isolated:negative-control" });
+          let rejected = false;
+          try {
+            diagnoseSyntheticGraph(snapshot, spec.planningEnvelope);
+          } catch {
+            rejected = true;
+          }
+          if (!rejected) {
+            throw new Error("An isolated node was incorrectly counted as an eligible cluster.");
+          }
+          process.stdout.write(`${JSON.stringify({ ok: true, isolatedNodeRejected: true })}\n`);
+          NODE
+
       - name: Reproduce deterministic synthetic graph report
         shell: bash
         run: |
@@ -87,6 +119,7 @@ jobs:
           name: commitments-trade-graph-feasibility-${{ github.run_id }}
           path: |
             trade-graph-feasibility-validation.log
+            trade-graph-isolated-node-negative.log
             trade-graph-feasibility-report-check.log
             trade-graph-feasibility-diff-check.log
             expected-files.txt
