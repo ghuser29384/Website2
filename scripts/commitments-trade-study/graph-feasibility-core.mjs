@@ -246,6 +246,7 @@ function validateSnapshot(snapshot) {
 
   const dyadKeys = new Set();
   const directedPairs = new Set();
+  const incidentNodeKeys = new Set();
   for (const dyad of snapshot.dyads) {
     assertExactKeys(
       dyad,
@@ -267,10 +268,16 @@ function validateSnapshot(snapshot) {
     assert(ALLOWED_OPPORTUNITY_TYPES.includes(dyad.opportunityTypeBand), "Invalid dyad opportunity type.");
     assert(!dyadKeys.has(dyad.dyadKey), "dyadKey values must be unique.");
     dyadKeys.add(dyad.dyadKey);
+    incidentNodeKeys.add(dyad.sourceNodeKey);
+    incidentNodeKeys.add(dyad.targetNodeKey);
     const pairKey = `${dyad.sourceNodeKey}\u0000${dyad.targetNodeKey}`;
     assert(!directedPairs.has(pairKey), "Duplicate directed dyads are prohibited.");
     directedPairs.add(pairKey);
   }
+  assert(
+    incidentNodeKeys.size === nodeKeys.size,
+    "Every node must be incident to at least one eligible directed dyad.",
+  );
 }
 
 class UnionFind {

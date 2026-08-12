@@ -12,23 +12,25 @@ The committed report analyzes a generated synthetic fixture. It does **not** com
 - Precision report: `sha256:3ff2613f93d166e5e06a5bf8cfcaf029cd49d4e56690e345f676a51f982f6b4f`
 - Master protocol: `sha256:cd663ae722ee028ddfe3e1b866acab9ef79b5fcf5b5418d053bd3687eca3881a`
 - Reciprocal Trade template: `sha256:cf0a7a96294b431dcd79879fa01b7d1031ea50a842cebca6986e13351bcbb1e1`
-- Graph-feasibility contract: `sha256:59a287312ee58c594e0dca4ba117ddd6081531ebaad6dd817e585e9da3ecc0fc`
+- Graph-feasibility contract: `sha256:6c6879a80062a6e923714bdf3e7e79105de8049a3347088a6f4b77507b8e6c95`
 - Synthetic graph spec: `sha256:b75aebdcf7272baa07ba8616693170ec07e05594aced78771c9cb2b40d0d54a8`
-- Synthetic graph report: `sha256:edf93361dd35ccff39be361fa295bc991f51f7ff7cd79d6bf0e88236e0c7be7c`
+- Synthetic graph report: `sha256:7d45b5c47da2a001ceaabf4944c0eb10b4f3b65f4e7f585ee80c153c65e966f5`
 - Synthetic snapshot: `sha256:7fcd3df31e568d84ca7c6537f6efaf9dd23b7570f62022a5a9d60421edd7df38`
 - Snapshot schema: `sha256:14371c9be667ad4a9b570e45c3f02fd95e93eb69af07428e258163de4a46deb4`
-- Diagnostic core: `sha256:b33fbc6976ea3b70527678bc406cb8a51d7e6f4da948175f6589b839b6701db8`
+- Diagnostic core: `sha256:3e4586df466327de17ee0a058fb302a5ff3f0a3f8ad97b53f1628782def3b506`
 - Deterministic runner: `sha256:9c89256de78d497ac3ae21b6bbebe2a46a61b9915a9d9dc8af9e326c49834c5f`
 
 ## Privacy boundary
 
-The committed schema and implementation accept only `synthetic_only` QA snapshots with `synthetic:`-prefixed identifiers. They reject real-user markers, reversible mappings, raw identifier fields, extra fields such as email or account identifiers, non-synthetic keys, missing endpoints, self-loops, and duplicate directed dyads.
+The committed schema and implementation accept only `synthetic_only` QA snapshots with `synthetic:`-prefixed identifiers. They reject real-user markers, reversible mappings, raw identifier fields, extra fields such as email or account identifiers, non-synthetic keys, missing endpoints, isolated nodes, self-loops, and duplicate directed dyads.
 
 A future real graph requires a separate protected-data authorization. Before diagnostics, internal identifiers would need to be replaced with keyed one-way pseudonyms; the secret and any reversible mapping must remain outside the repository; only the minimum topology and frozen study covariates may be exported; and only aggregate diagnostics may leave the protected environment. This package does not implement or authorize that export.
 
 ## Cluster definition
 
 The diagnostic treats every weakly connected component of the eligible directed-dyad graph as one interference cluster. Direction is ignored for connectivity because an invitation, repeated counterparty, or multi-hop path can create interference in either direction.
+
+Every exported node must be incident to at least one eligible dyad. This prevents isolated records from being counted as independent clusters and inflating the apparent effective sample size.
 
 The implementation deliberately does not split connected components. Splitting a giant component without a separately reviewed exposure mapping would create cross-cluster interference and unsupported assignment probabilities. An oversized component therefore produces `requires_new_precision_or_partition_review`, not an automatic partition.
 
@@ -71,13 +73,14 @@ The execution decision remains `no_launch` because no privacy-reviewed real grap
 
 ## Adversarial checks
 
-The package validator proves that the implementation rejects or fails closed for:
+The package gate proves that the implementation rejects or fails closed for:
 
 - non-synthetic subject mode;
 - a real-user-data marker;
 - a raw email field;
 - a non-synthetic node identifier;
 - a reversible identifier mapping;
+- an isolated node that is not incident to an eligible dyad;
 - a self-loop;
 - a duplicate directed dyad;
 - too few independent clusters;
