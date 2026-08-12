@@ -52,8 +52,11 @@ test("offers defaults to an open editorial directory instead of stacked dense pa
   assert.ok(noteIndex >= 0 && noteIndex < offersMapIndex, "the repeated truth note must appear once at group level");
 });
 
-test("the advanced challenge-return plane is optional and genuinely lazy-loaded", () => {
-  assert.match(planeMount, /if \(!queryState\.shouldShow \|\| !explorerOpen\) return;/);
+test("the advanced challenge-return plane is optional, lazy-loaded, and request-deduplicated", () => {
+  assert.match(planeMount, /if \(!queryState\.shouldShow \|\| !explorerOpen \|\| response\) return;/);
+  assert.match(planeMount, /const requestRef = useRef/);
+  assert.match(planeMount, /request\.attempt !== attempt/);
+  assert.match(planeMount, /promise: loadOfferPlane\(\)/);
   assert.match(planeMount, /<details/);
   assert.match(planeMount, /Optional visual explorer/);
   assert.match(planeMount, /onToggle=\{\(event\) => \{/);
