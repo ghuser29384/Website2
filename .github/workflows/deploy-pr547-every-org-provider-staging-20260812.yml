@@ -35,7 +35,7 @@ jobs:
       EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
       VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
     steps:
-      - name: Check whether provider credentials are ready
+      - name: Check whether bootstrap credentials are ready
         id: readiness
         shell: bash
         run: |
@@ -46,7 +46,6 @@ jobs:
             QA_SUPABASE_PUBLISHABLE_KEY \
             QA_SUPABASE_SERVICE_ROLE_KEY \
             EVERY_ORG_STAGING_PUBLIC_API_KEY \
-            EVERY_ORG_STAGING_WEBHOOK_TOKEN \
             EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET \
             EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
             VERCEL_AUTOMATION_BYPASS_SECRET; do
@@ -54,9 +53,10 @@ jobs:
           done
 
           if ((${#missing[@]})); then
-            printf 'Provider staging is waiting for repository secrets:\n'
+            printf 'Every.org provider bootstrap is waiting for repository secrets:\n'
             printf '  - %s\n' "${missing[@]}"
             echo 'ready=false' >> "$GITHUB_OUTPUT"
+            echo 'webhook_token_ready=false' >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
@@ -64,6 +64,11 @@ jobs:
           test "${#EVERY_ORG_STAGING_PARTNER_METADATA_SECRET}" -ge 32
           test "$EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET" != "$EVERY_ORG_STAGING_PARTNER_METADATA_SECRET"
           echo 'ready=true' >> "$GITHUB_OUTPUT"
+          if [[ -n "${EVERY_ORG_STAGING_WEBHOOK_TOKEN:-}" ]]; then
+            echo 'webhook_token_ready=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'webhook_token_ready=false' >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Check out exact current-main candidate
         if: steps.readiness.outputs.ready == 'true'
@@ -93,12 +98,14 @@ jobs:
             EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET \
             EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
             VERCEL_AUTOMATION_BYPASS_SECRET; do
-            echo "::add-mask::${!name}"
+            if [[ -n "${!name:-}" ]]; then echo "::add-mask::${!name}"; fi
           done
 
-      - name: Deploy real Every.org staging candidate
+      - name: Deploy Every.org staging bootstrap or full provider candidate
         if: steps.readiness.outputs.ready == 'true'
         shell: bash
+        env:
+          WEBHOOK_TOKEN_READY: ${{ steps.readiness.outputs.webhook_token_ready }}
         run: |
           set -euo pipefail
           mkdir -p .vercel evidence
@@ -109,11 +116,23 @@ jobs:
           echo "::add-mask::$cron_secret"
           site_url="https://$STAGING_ALIAS"
 
+          if [[ "$WEBHOOK_TOKEN_READY" == true ]]; then
+            effective_webhook_token="$EVERY_ORG_STAGING_WEBHOOK_TOKEN"
+            purpose=every-org-provider-staging
+            mode=full-provider-staging
+          else
+            effective_webhook_token=pending-every-org-staging-token
+            purpose=every-org-webhook-bootstrap
+            mode=webhook-bootstrap
+          fi
+          echo "::add-mask::$effective_webhook_token"
+          printf '%s\n' "$mode" > evidence/provider-mode.txt
+
           flags=(
             --yes
             --token "$VERCEL_TOKEN"
             --meta "moralTradeCandidateSha=$EXPECTED_SHA"
-            --meta "moralTradePurpose=every-org-provider-staging"
+            --meta "moralTradePurpose=$purpose"
             --env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL"
             --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY"
             --env "SUPABASE_SERVICE_ROLE_KEY=$QA_SUPABASE_SERVICE_ROLE_KEY"
@@ -124,7 +143,7 @@ jobs:
             --env "DIRECT_DONATION_UPGRADE_MODE=staging"
             --env "DIRECT_DONATION_UPGRADE_QA_FIXTURES=false"
             --env "EVERY_ORG_PUBLIC_API_KEY=$EVERY_ORG_STAGING_PUBLIC_API_KEY"
-            --env "EVERY_ORG_WEBHOOK_TOKEN=$EVERY_ORG_STAGING_WEBHOOK_TOKEN"
+            --env "EVERY_ORG_WEBHOOK_TOKEN=$effective_webhook_token"
             --env "EVERY_ORG_WEBHOOK_PATH_SECRET=$EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET"
             --env "EVERY_ORG_PARTNER_METADATA_SECRET=$EVERY_ORG_STAGING_PARTNER_METADATA_SECRET"
             --env "CONDITIONAL_PAYMENTS_MODE=disabled"
@@ -141,7 +160,7 @@ jobs:
             --build-env "DIRECT_DONATION_UPGRADE_MODE=staging"
             --build-env "DIRECT_DONATION_UPGRADE_QA_FIXTURES=false"
             --build-env "EVERY_ORG_PUBLIC_API_KEY=$EVERY_ORG_STAGING_PUBLIC_API_KEY"
-            --build-env "EVERY_ORG_WEBHOOK_TOKEN=$EVERY_ORG_STAGING_WEBHOOK_TOKEN"
+            --build-env "EVERY_ORG_WEBHOOK_TOKEN=$effective_webhook_token"
             --build-env "EVERY_ORG_WEBHOOK_PATH_SECRET=$EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET"
             --build-env "EVERY_ORG_PARTNER_METADATA_SECRET=$EVERY_ORG_STAGING_PARTNER_METADATA_SECRET"
             --build-env "CONDITIONAL_PAYMENTS_MODE=disabled"
@@ -224,6 +243,19 @@ jobs:
           grep -Fq 'missing_partner_donation_id' evidence/external-webhook.body
           printf 'external-connectors %s\nexternal-webhook %s\n' \
             "$page_code" "$webhook_code" > evidence/external-status.txt
+
+      - name: Record next provider action
+        if: steps.readiness.outputs.ready == 'true'
+        shell: bash
+        env:
+          WEBHOOK_TOKEN_READY: ${{ steps.readiness.outputs.webhook_token_ready }}
+        run: |
+          set -euo pipefail
+          if [[ "$WEBHOOK_TOKEN_READY" == true ]]; then
+            printf '%s\n' 'Provider credentials complete. Run the controlled Every.org staging checkout and webhook/replay exercise.' > evidence/next-action.txt
+          else
+            printf '%s\n' 'Bootstrap ready. Register the exact webhook URL in Every.org staging, save the returned token as EVERY_ORG_STAGING_WEBHOOK_TOKEN, then retrigger this workflow.' > evidence/next-action.txt
+          fi
 
       - name: Upload sanitized provider-staging evidence
         if: steps.readiness.outputs.ready == 'true' && always()
