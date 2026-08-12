@@ -2,20 +2,24 @@ import { mkdir } from "node:fs/promises";
 
 import { expect, test, type Page } from "@playwright/test";
 
-async function openDiscoverList(page: Page) {
-  await page.goto("/discover?domain=offers&view=list", { waitUntil: "networkidle" });
+async function waitForDiscoverReady(page: Page) {
   await expect(page.locator("body")).not.toContainText("Loading Discover…");
-  await expect(page.locator(".offer-transaction-row").first()).toBeVisible();
   await expect
     .poll(() =>
       page.evaluate(() =>
         Boolean(
-          (window as Window & { __moralTradeSmartQueryLoaded?: boolean })
-            .__moralTradeSmartQueryLoaded,
+          (window as Window & { __moralTradeDiscoverSearchLoaded?: boolean })
+            .__moralTradeDiscoverSearchLoaded,
         ),
       ),
     )
     .toBe(true);
+}
+
+async function openDiscoverList(page: Page) {
+  await page.goto("/discover?domain=offers&view=list", { waitUntil: "domcontentloaded" });
+  await waitForDiscoverReady(page);
+  await expect(page.locator(".offer-transaction-row").first()).toBeVisible();
 }
 
 function monitorBrowserFailures(page: Page) {
@@ -35,7 +39,7 @@ function monitorBrowserFailures(page: Page) {
 }
 
 test("Discover shows the complete two-sided exchange at a glance on desktop", async ({ page }) => {
-  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   const failures = monitorBrowserFailures(page);
   await openDiscoverList(page);
 
@@ -146,7 +150,7 @@ for (const viewport of [
 }
 
 test("Discover filters and indexes the two exchange sides separately", async ({ page }) => {
-  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await openDiscoverList(page);
 
   const filters = page.locator('[data-details="filters"]');
@@ -174,8 +178,9 @@ test("Discover filters and indexes the two exchange sides separately", async ({ 
 
   await page.goto(
     "/discover?domain=offers&view=list&recipient=You&evidence=audit",
-    { waitUntil: "networkidle" },
+    { waitUntil: "domcontentloaded" },
   );
+  await waitForDiscoverReady(page);
   rows = page.locator(".offer-transaction-row");
   await expect(rows).toHaveCount(2);
   const resultIds = await rows.evaluateAll((elements) =>
@@ -185,8 +190,9 @@ test("Discover filters and indexes the two exchange sides separately", async ({ 
 
   await page.goto(
     "/discover?domain=offers&view=list&offerType=skill&returnType=credit&minReturn=50",
-    { waitUntil: "networkidle" },
+    { waitUntil: "domcontentloaded" },
   );
+  await waitForDiscoverReady(page);
   rows = page.locator(".offer-transaction-row");
   await expect(rows).toHaveCount(2);
   for (const side of await rows.locator('[data-exchange-side="offer"]').allTextContents()) {
@@ -226,18 +232,8 @@ test("Discover sends natural-language queries through the shared interpreter", a
     });
   });
 
-  await page.goto("/discover", { waitUntil: "networkidle" });
-  await expect(page.locator("body")).not.toContainText("Loading Discover…");
-  await expect
-    .poll(() =>
-      page.evaluate(() =>
-        Boolean(
-          (window as Window & { __moralTradeSmartQueryLoaded?: boolean })
-            .__moralTradeSmartQueryLoaded,
-        ),
-      ),
-    )
-    .toBe(true);
+  await page.goto("/discover", { waitUntil: "domcontentloaded" });
+  await waitForDiscoverReady(page);
 
   const form = page.locator("#command-form");
   await expect(form).toBeVisible();
@@ -246,7 +242,7 @@ test("Discover sends natural-language queries through the shared interpreter", a
   await queryInput.fill("Verified animal welfare work for $50");
   await form.locator('button[type="submit"]').click();
 
-  const clarification = page.getByTestId("discover-smart-query-clarification");
+  const clarification = page.getByTestId("discover-live-search-state");
   await expect(clarification).toContainText("One detail changes the results.");
   await expect(clarification).toContainText("Should $50 be a maximum, a minimum, or an exact amount?");
   await expect(clarification.getByRole("button", { name: "Maximum" })).toBeVisible();

@@ -20,6 +20,41 @@ async function stubOfferPlane(page: Page) {
   return () => requestCount;
 }
 
+async function ensureScreenshotFonts(page: Page) {
+  const fontState = await page.evaluate(async () => {
+    const faces = [...document.fonts];
+    const settled = Promise.allSettled(faces.map((face) => face.load())).then(async (results) => {
+      await document.fonts.ready;
+      return {
+        timedOut: false,
+        failures: results.flatMap((result, index) =>
+          result.status === "rejected"
+            ? [`${faces[index].family} ${faces[index].weight}`]
+            : [],
+        ),
+      };
+    });
+    const timeout = new Promise<{ timedOut: true; failures: string[] }>((resolve) => {
+      window.setTimeout(() => resolve({ timedOut: true, failures: [] }), 5_000);
+    });
+    const result = await Promise.race([settled, timeout]);
+    return {
+      ...result,
+      faces: faces.map((face) => ({
+        family: face.family,
+        status: face.status,
+        weight: face.weight,
+      })),
+      status: document.fonts.status,
+    };
+  });
+
+  expect(fontState.timedOut, `font loading timed out: ${JSON.stringify(fontState.faces)}`).toBe(false);
+  expect(fontState.failures).toEqual([]);
+  expect(fontState.status).toBe("loaded");
+  expect(fontState.faces.filter((face) => face.status !== "loaded")).toEqual([]);
+}
+
 async function capture(page: Page, filename: string) {
   await mkdir(captureDirectory, { recursive: true });
   await page.evaluate(() => {
@@ -29,6 +64,7 @@ async function capture(page: Page, filename: string) {
   await page.addStyleTag({
     content: ".skip-link, nextjs-portal { display: none !important; }",
   });
+  await ensureScreenshotFonts(page);
   await page.screenshot({
     fullPage: true,
     path: path.join(captureDirectory, filename),
@@ -169,8 +205,12 @@ test.describe("Offers directory density", () => {
     expect(consoleErrors).toEqual([]);
   });
 
-  test("collapses cleanly on a 390px mobile viewport", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+  async function verifyMobileLayout(
+    page: Page,
+    viewport: { width: number; height: number },
+    screenshotName: string,
+  ) {
+    await page.setViewportSize(viewport);
     const getPlaneRequestCount = await stubOfferPlane(page);
 
     await page.goto(targetRoute);
@@ -242,6 +282,19 @@ test.describe("Offers directory density", () => {
     await expect(explorer).toHaveJSProperty("open", false);
 
     await expectNoHorizontalOverflow(page);
-    await capture(page, "implementation-mobile.png");
-  });
+    await capture(page, screenshotName);
+  }
+
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 320, height: 568 },
+  ]) {
+    test(`collapses cleanly at ${viewport.width}×${viewport.height}`, async ({ page }) => {
+      await verifyMobileLayout(
+        page,
+        viewport,
+        `implementation-mobile-${viewport.width}x${viewport.height}.png`,
+      );
+    });
+  }
 });
