@@ -3,11 +3,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const densityStyles = readFileSync("src/app/offers/offers-density.module.css", "utf8");
-const visualCardStyles = readFileSync("src/app/offers/offer-visual-card.module.css", "utf8");
 const disclosureStyles = readFileSync("src/app/offers/offer-plane-disclosure.module.css", "utf8");
 const planeMount = readFileSync("src/app/offers/offer-plane-inline-mount.tsx", "utf8");
 const offersLayout = readFileSync("src/app/offers/layout.tsx", "utf8");
 const topbarStyles = readFileSync("src/app/offers/offers-topbar.module.css", "utf8");
+const participantComponent = readFileSync("src/components/marketplace/participant-offer-group.tsx", "utf8");
+const participantStyles = readFileSync("src/components/marketplace/participant-offer-group.module.css", "utf8");
 
 test("offers defaults to an open editorial directory instead of stacked dense panels", () => {
   for (const required of [
@@ -24,7 +25,7 @@ test("offers defaults to an open editorial directory instead of stacked dense pa
   assert.match(
     densityStyles,
     /\.mt-market-grid\) \{[\s\S]*?grid-template-columns:\s*1fr;/,
-    "the server-rendered proposal directory must remain a one-column register",
+    "the participant directory must remain a one-column register",
   );
   assert.match(
     densityStyles,
@@ -32,18 +33,25 @@ test("offers defaults to an open editorial directory instead of stacked dense pa
     "the ranking formula must not dominate the default scan view",
   );
   assert.match(
-    visualCardStyles,
-    /\.grid \{[\s\S]*?grid-template-columns:\s*1fr;/,
-    "enhanced offer cards must remain a one-column editorial register",
+    participantStyles,
+    /\.group \{[\s\S]*?border-radius:\s*0;[\s\S]*?background:\s*transparent;/,
+    "participant groups must use open ruled layout rather than rounded nested cards",
   );
-  assert.equal(
-    visualCardStyles.includes("grid-template-columns: repeat(3, minmax(0, 1fr));"),
-    false,
-    "the enhanced directory must not regress to a three-column card wall",
+  assert.match(
+    participantStyles,
+    /\.offer \{[\s\S]*?grid-template-areas:/,
+    "each exact proposal must use the compact editorial row layout",
   );
+  assert.match(participantStyles, /\.actions :global\(\.button\)/);
+  assert.match(participantComponent, /data-participant-offer-group/);
+  assert.match(participantComponent, /data-participant-offer/);
+
+  const noteIndex = participantComponent.indexOf("These are the owner&apos;s exact published terms");
+  const offersMapIndex = participantComponent.indexOf("offers.map");
+  assert.ok(noteIndex >= 0 && noteIndex < offersMapIndex, "the repeated truth note must appear once at group level");
 });
 
-test("the advanced challenge-return plane is optional and lazy-loaded", () => {
+test("the advanced challenge-return plane is optional and genuinely lazy-loaded", () => {
   assert.match(planeMount, /if \(!queryState\.shouldShow \|\| !explorerOpen\) return;/);
   assert.match(planeMount, /<details/);
   assert.match(planeMount, /Optional visual explorer/);
@@ -51,10 +59,20 @@ test("the advanced challenge-return plane is optional and lazy-loaded", () => {
   assert.match(planeMount, /const isOpen = event\.currentTarget\.open;/);
   assert.match(planeMount, /setExplorerOpen\(isOpen\);/);
   assert.match(disclosureStyles, /\.disclosure\[open\] \.summaryIcon/);
+  assert.equal(
+    offersLayout.includes("OfferVisualDirectoryMount"),
+    false,
+    "the obsolete eager offer-plane enhancer must not fetch before the disclosure opens",
+  );
 });
 
-test("removing duplicate global search does not leave an empty topbar column", () => {
+test("the offers topbar stays compact after removing duplicate global search", () => {
   assert.match(offersLayout, /topbarStyles\.scope/);
   assert.match(topbarStyles, /grid-template-areas:\s*"brand nav actions";/);
   assert.match(topbarStyles, /"brand actions"\s*"nav nav";/);
+  assert.match(topbarStyles, /overflow-x:\s*auto;/);
+  assert.match(
+    topbarStyles,
+    /@media \(max-width: 760px\)[\s\S]*?\.mt-site-topbar\.topbar-with-search\)[\s\S]*?display:\s*grid;/,
+  );
 });
