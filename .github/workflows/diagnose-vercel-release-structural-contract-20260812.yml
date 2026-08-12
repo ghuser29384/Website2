@@ -21,6 +21,10 @@ jobs:
     env:
       EXPECTED_MAIN_SHA: 69146f2cf9d5f4d747c0c25abda6de75f410098d
       FAILING_TITLE: permanent Vercel release gates are structurally enforced
+      NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+      SITE_URL: https://www.moraltrade.org
+      VERCEL: "1"
+      VERCEL_ENV: production
 
     steps:
       - name: Check out the exact failed production candidate
@@ -29,11 +33,15 @@ jobs:
           ref: ${{ env.EXPECTED_MAIN_SHA }}
           fetch-depth: 1
 
-      - name: Guard exact source
+      - name: Guard exact source and production-gate environment
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$NEXT_PUBLIC_SITE_URL" = 'https://www.moraltrade.org'
+          test "$SITE_URL" = 'https://www.moraltrade.org'
+          test "$VERCEL" = '1'
+          test "$VERCEL_ENV" = 'production'
           git diff --check
 
       - name: Set up Node.js
@@ -51,25 +59,28 @@ jobs:
         run: |
           set -euo pipefail
           : > vercel-release-structural-contract.source-locations.txt
-          rg --hidden --line-number --fixed-strings "$FAILING_TITLE" \
-            --glob '!node_modules/**' --glob '!.git/**' . \
+          grep -R -n -F \
+            --exclude-dir=node_modules \
+            --exclude-dir=.git \
+            "$FAILING_TITLE" . \
             >> vercel-release-structural-contract.source-locations.txt || true
           if [[ ! -s vercel-release-structural-contract.source-locations.txt ]]; then
-            rg --hidden --line-number \
-              'permanent.*Vercel.*release.*structur|Vercel.*release.*gates' \
-              --glob '!node_modules/**' --glob '!.git/**' . \
+            grep -R -n -E \
+              --exclude-dir=node_modules \
+              --exclude-dir=.git \
+              'permanent.*Vercel.*release.*structur|Vercel.*release.*gates' . \
               >> vercel-release-structural-contract.source-locations.txt || true
           fi
           location_count="$(wc -l < vercel-release-structural-contract.source-locations.txt | tr -d ' ')"
-          printf 'location_count=%s\n' "$location_count" | tee -a "$GITHUB_OUTPUT"
+          echo "location_count=$location_count" >> "$GITHUB_OUTPUT"
           if [[ "$location_count" = '0' ]]; then
-            echo 'No literal source declaration found; the full TAP stack will identify the source file.' \
-              | tee vercel-release-structural-contract.source-search-note.txt
+            echo 'No literal declaration found; the production-environment TAP stack is authoritative.' \
+              > vercel-release-structural-contract.source-search-note.txt
           else
             cat vercel-release-structural-contract.source-locations.txt
           fi
 
-      - name: Reproduce the complete npm test gate and preserve exact output
+      - name: Reproduce the exact production npm test gate
         id: test
         shell: bash
         run: |
@@ -112,7 +123,7 @@ jobs:
           )
           for index, line in enumerate(lines):
               if any(needle in line for needle in needles):
-                  selected.update(range(max(0, index - 35), min(len(lines), index + 110)))
+                  selected.update(range(max(0, index - 40), min(len(lines), index + 130)))
           output = []
           previous = None
           for index in sorted(selected):
@@ -126,11 +137,12 @@ jobs:
           PY
 
           {
-            echo '### Full repository-test reproduction'
+            echo '### Exact production-environment repository-test reproduction'
             echo
             echo "- Candidate: \`$EXPECTED_MAIN_SHA\`"
             echo "- Source declarations found: \`${{ steps.locate.outputs.location_count }}\`"
             echo "- Exit code: \`$status\`"
+            echo "- Environment: \`VERCEL=1\`, \`VERCEL_ENV=production\`"
             echo
             echo '#### Source search'
             echo '```text'
@@ -142,7 +154,7 @@ jobs:
             echo
             echo '#### Failure extract'
             echo '```text'
-            tail -n 300 vercel-release-structural-contract.failure-extract.log
+            tail -n 360 vercel-release-structural-contract.failure-extract.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -150,7 +162,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vercel-release-structural-contract-full-suite-${{ github.run_id }}
+          name: vercel-release-structural-contract-production-env-${{ github.run_id }}
           path: |
             vercel-release-structural-contract.source-locations.txt
             vercel-release-structural-contract.source-search-note.txt
@@ -164,7 +176,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: Preserve the reproduced full-suite result
+      - name: Preserve the reproduced production-gate result
         if: always()
         shell: bash
         run: |
