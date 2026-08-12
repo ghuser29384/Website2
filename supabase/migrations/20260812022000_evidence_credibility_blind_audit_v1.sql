@@ -223,22 +223,32 @@ create table if not exists public.evidence_credibility_calibration_labels (
 create index if not exists evidence_credibility_calibration_labels_completed_by_idx
   on public.evidence_credibility_calibration_labels(completed_by, completed_at desc);
 
+drop trigger if exists evidence_credibility_calibration_sampling_runs_append_only
+  on public.evidence_credibility_calibration_sampling_runs;
 create trigger evidence_credibility_calibration_sampling_runs_append_only
 before update or delete on public.evidence_credibility_calibration_sampling_runs
 for each row execute function moral_trade_private.reject_credibility_shadow_history_mutation();
 
+drop trigger if exists evidence_credibility_calibration_draws_append_only
+  on public.evidence_credibility_calibration_draws;
 create trigger evidence_credibility_calibration_draws_append_only
 before update or delete on public.evidence_credibility_calibration_draws
 for each row execute function moral_trade_private.reject_credibility_shadow_history_mutation();
 
+drop trigger if exists evidence_credibility_calibration_assignments_append_only
+  on public.evidence_credibility_calibration_audit_assignments;
 create trigger evidence_credibility_calibration_assignments_append_only
 before update or delete on public.evidence_credibility_calibration_audit_assignments
 for each row execute function moral_trade_private.reject_credibility_shadow_history_mutation();
 
+drop trigger if exists evidence_credibility_calibration_assignment_events_append_only
+  on public.evidence_credibility_calibration_assignment_events;
 create trigger evidence_credibility_calibration_assignment_events_append_only
 before update or delete on public.evidence_credibility_calibration_assignment_events
 for each row execute function moral_trade_private.reject_credibility_shadow_history_mutation();
 
+drop trigger if exists evidence_credibility_calibration_labels_append_only
+  on public.evidence_credibility_calibration_labels;
 create trigger evidence_credibility_calibration_labels_append_only
 before update or delete on public.evidence_credibility_calibration_labels
 for each row execute function moral_trade_private.reject_credibility_shadow_history_mutation();
