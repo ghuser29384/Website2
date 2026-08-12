@@ -82,7 +82,7 @@ test("the exact-head workflow uses explicit fail-closed negative guards", () => 
   );
   assert.match(
     workflow,
-    /test ! -e \.github\/workflows\/harden-blind-audit-scope-guard\.yml/i,
+    /for controller in[\s\S]*\.github\/workflows\/harden-blind-audit-scope-guard\.yml[\s\S]*test ! -e "\$controller"/i,
   );
 });
 
