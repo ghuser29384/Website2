@@ -128,7 +128,7 @@ test.describe("Offers directory density", () => {
     expect(participantGroupStyle.backgroundColor).toBe("rgba(0, 0, 0, 0)");
     expect(participantGroupStyle.borderRadius).toBe("0px");
     expect(participantGroupStyle.boxShadow).toBe("none");
-    await expect(page.getByText(/These are the owner's exact published terms/)).toHaveCount(
+    await expect(page.locator("[data-participant-exact-terms-note]")).toHaveCount(
       await participantGroups.count(),
     );
 
