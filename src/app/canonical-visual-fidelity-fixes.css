@@ -1,0 +1,92 @@
+/*
+ * Exact rendered-fidelity repairs for canonical routes.
+ *
+ * These selectors are deliberately route-scoped. They repair layout defects
+ * found by manual inspection of the exact-head browser evidence without
+ * changing information architecture, behavior, or the authentication boundary.
+ */
+
+/* Start: present the service snapshot as a readable vertical register. */
+body:has(.growth-start-section) .growth-progress-card {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  padding: 0;
+  overflow: hidden;
+}
+
+body:has(.growth-start-section) .growth-progress-card > .eyebrow {
+  margin: 0;
+  padding: clamp(26px, 3vw, 40px) clamp(24px, 3vw, 40px) 12px;
+}
+
+body:has(.growth-start-section) .growth-progress-stat {
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 1rem clamp(24px, 3vw, 40px);
+  border-right: 0;
+  border-bottom: 1px solid var(--mt-line);
+  text-align: left;
+}
+
+body:has(.growth-start-section) .growth-progress-stat .icon-mark {
+  grid-row: auto;
+}
+
+body:has(.growth-start-section) .growth-progress-stat span {
+  min-width: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+body:has(.growth-start-section) .growth-progress-stat strong {
+  max-width: 11ch;
+  overflow-wrap: anywhere;
+  font-size: clamp(1.8rem, 2.6vw, 2.7rem);
+  line-height: 1;
+  text-align: right;
+}
+
+body:has(.growth-start-section) .growth-progress-card .hero-followup {
+  max-width: none;
+  margin: 0;
+  padding: 20px clamp(24px, 3vw, 40px) clamp(26px, 3vw, 40px);
+  color: var(--mt-muted);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* Complete Profile: reserve an explicit gap between Sources and Save profile. */
+[data-mt-surface="complete-profile"] > button[aria-haspopup="dialog"] {
+  right: 204px !important;
+}
+
+@media (max-width: 680px) {
+  [data-mt-surface="complete-profile"] > button[aria-haspopup="dialog"] {
+    right: 130px !important;
+  }
+
+  body:has(.growth-start-section) .growth-progress-stat {
+    grid-template-columns: 2rem minmax(0, 1fr) auto;
+    padding-inline: 20px;
+  }
+
+  body:has(.growth-start-section) .growth-progress-card > .eyebrow,
+  body:has(.growth-start-section) .growth-progress-card .hero-followup {
+    padding-inline: 20px;
+  }
+}
+
+@media (max-width: 420px) {
+  [data-mt-surface="complete-profile"] > button[aria-haspopup="dialog"] {
+    top: auto !important;
+    right: 14px !important;
+    bottom: 14px !important;
+  }
+}
