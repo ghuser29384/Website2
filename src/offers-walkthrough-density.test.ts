@@ -82,7 +82,7 @@ test("the offers topbar stays compact after removing duplicate global search", (
   assert.match(topbarStyles, /grid-template-rows:\s*auto auto;/);
   assert.match(topbarStyles, /justify-content:\s*flex-start;/);
   assert.match(topbarStyles, /overflow-x:\s*auto;/);
-  assert.match(topbarStyles, /\.brand \.mt-wordmark\)[\s\S]*?font-size:\s*clamp\(1\.05rem, 5\.2vw, 1\.3rem\);/);
+  assert.match(topbarStyles, /\.brand \.mt-wordmark\)[\s\S]*?font-size:\s*clamp\(1rem, 4\.8vw, 1\.2rem\);/);
   assert.match(
     topbarStyles,
     /@media \(max-width: 760px\)[\s\S]*?\.mt-site-topbar\.topbar-with-search\)[\s\S]*?display:\s*grid;/,

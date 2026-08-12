@@ -70,7 +70,7 @@
 
   .scope :global(.mt-site-topbar .brand .mt-wordmark) {
     max-width: 100%;
-    font-size: clamp(1.05rem, 5.2vw, 1.3rem);
+    font-size: clamp(1rem, 4.8vw, 1.2rem);
   }
 
   .scope :global(.mt-site-topbar .topbar-actions) {
