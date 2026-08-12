@@ -1,0 +1,235 @@
+name: Deploy PR 547 Every.org provider staging
+
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-provider-staging-20260812
+    paths:
+      - .github/workflows/deploy-pr547-every-org-provider-staging-20260812.yml
+      - tmp/pr547-every-org-provider-staging-trigger.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-pr547-every-org-provider-staging-20260812
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      EXPECTED_SHA: f41a6134bfb72cb711693dd67bedb06258461528
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      VERCEL_CLI_VERSION: 50.38.1
+      STAGING_ALIAS: moraltrade-pr547-every-org-provider-staging.vercel.app
+      QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+      EVERY_ORG_STAGING_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_WEBHOOK_TOKEN }}
+      EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET: ${{ secrets.EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET }}
+      EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - name: Check whether provider credentials are ready
+        id: readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in \
+            VERCEL_TOKEN \
+            QA_SUPABASE_PUBLISHABLE_KEY \
+            QA_SUPABASE_SERVICE_ROLE_KEY \
+            EVERY_ORG_STAGING_PUBLIC_API_KEY \
+            EVERY_ORG_STAGING_WEBHOOK_TOKEN \
+            EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET \
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
+            VERCEL_AUTOMATION_BYPASS_SECRET; do
+            if [[ -z "${!name:-}" ]]; then missing+=("$name"); fi
+          done
+
+          if ((${#missing[@]})); then
+            printf 'Provider staging is waiting for repository secrets:\n'
+            printf '  - %s\n' "${missing[@]}"
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          test "${#EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET}" -ge 32
+          test "${#EVERY_ORG_STAGING_PARTNER_METADATA_SECRET}" -ge 32
+          test "$EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET" != "$EVERY_ORG_STAGING_PARTNER_METADATA_SECRET"
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact current-main candidate
+        if: steps.readiness.outputs.ready == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        if: steps.readiness.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate immutable target and mask credentials
+        if: steps.readiness.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          for name in \
+            VERCEL_TOKEN \
+            QA_SUPABASE_PUBLISHABLE_KEY \
+            QA_SUPABASE_SERVICE_ROLE_KEY \
+            EVERY_ORG_STAGING_PUBLIC_API_KEY \
+            EVERY_ORG_STAGING_WEBHOOK_TOKEN \
+            EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET \
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
+            VERCEL_AUTOMATION_BYPASS_SECRET; do
+            echo "::add-mask::${!name}"
+          done
+
+      - name: Deploy real Every.org staging candidate
+        if: steps.readiness.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel evidence
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+          cron_secret="$(printf '%s' "$VERCEL_TOKEN:$EXPECTED_SHA:every-org-provider-staging-cron" | sha256sum | awk '{print $1}')"
+          echo "::add-mask::$cron_secret"
+          site_url="https://$STAGING_ALIAS"
+
+          flags=(
+            --yes
+            --token "$VERCEL_TOKEN"
+            --meta "moralTradeCandidateSha=$EXPECTED_SHA"
+            --meta "moralTradePurpose=every-org-provider-staging"
+            --env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL"
+            --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY"
+            --env "SUPABASE_SERVICE_ROLE_KEY=$QA_SUPABASE_SERVICE_ROLE_KEY"
+            --env "NEXT_PUBLIC_SITE_URL=$site_url"
+            --env "SITE_URL=$site_url"
+            --env "EVERY_ORG_ENVIRONMENT=staging"
+            --env "DIRECT_DONATION_UPGRADES_ENABLED=true"
+            --env "DIRECT_DONATION_UPGRADE_MODE=staging"
+            --env "DIRECT_DONATION_UPGRADE_QA_FIXTURES=false"
+            --env "EVERY_ORG_PUBLIC_API_KEY=$EVERY_ORG_STAGING_PUBLIC_API_KEY"
+            --env "EVERY_ORG_WEBHOOK_TOKEN=$EVERY_ORG_STAGING_WEBHOOK_TOKEN"
+            --env "EVERY_ORG_WEBHOOK_PATH_SECRET=$EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET"
+            --env "EVERY_ORG_PARTNER_METADATA_SECRET=$EVERY_ORG_STAGING_PARTNER_METADATA_SECRET"
+            --env "CONDITIONAL_PAYMENTS_MODE=disabled"
+            --env "TRADE_DONATION_POOL_ENABLED=false"
+            --env "TRADE_DONATION_POOL_MODE=disabled"
+            --env "CRON_SECRET=$cron_secret"
+            --build-env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL"
+            --build-env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY"
+            --build-env "SUPABASE_SERVICE_ROLE_KEY=$QA_SUPABASE_SERVICE_ROLE_KEY"
+            --build-env "NEXT_PUBLIC_SITE_URL=$site_url"
+            --build-env "SITE_URL=$site_url"
+            --build-env "EVERY_ORG_ENVIRONMENT=staging"
+            --build-env "DIRECT_DONATION_UPGRADES_ENABLED=true"
+            --build-env "DIRECT_DONATION_UPGRADE_MODE=staging"
+            --build-env "DIRECT_DONATION_UPGRADE_QA_FIXTURES=false"
+            --build-env "EVERY_ORG_PUBLIC_API_KEY=$EVERY_ORG_STAGING_PUBLIC_API_KEY"
+            --build-env "EVERY_ORG_WEBHOOK_TOKEN=$EVERY_ORG_STAGING_WEBHOOK_TOKEN"
+            --build-env "EVERY_ORG_WEBHOOK_PATH_SECRET=$EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET"
+            --build-env "EVERY_ORG_PARTNER_METADATA_SECRET=$EVERY_ORG_STAGING_PARTNER_METADATA_SECRET"
+            --build-env "CONDITIONAL_PAYMENTS_MODE=disabled"
+            --build-env "TRADE_DONATION_POOL_ENABLED=false"
+            --build-env "TRADE_DONATION_POOL_MODE=disabled"
+            --build-env "CRON_SECRET=$cron_secret"
+          )
+
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy "${flags[@]}" | tail -n 1)"
+          test -n "$deployment_url"
+          printf '%s\n' "$deployment_url" > evidence/deployment-url.txt
+
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$deployment_url" \
+            --wait --timeout 20m --token "$VERCEL_TOKEN" > evidence/inspect.txt
+
+          npx --yes "vercel@$VERCEL_CLI_VERSION" alias set "$deployment_url" "$STAGING_ALIAS" \
+            --token "$VERCEL_TOKEN" > evidence/alias.txt
+
+          printf 'https://%s\n' "$STAGING_ALIAS" > evidence/staging-alias-url.txt
+          cat > evidence/webhook-url-template.txt <<'EOF'
+          https://moraltrade-pr547-every-org-provider-staging.vercel.app/api/connectors/every-org/<EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET>?x-vercel-protection-bypass=<VERCEL_AUTOMATION_BYPASS_SECRET>
+          EOF
+
+      - name: Smoke application and live Every.org nonprofit search
+        if: steps.readiness.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://$STAGING_ALIAS"
+          fetch() {
+            local name="$1" path="$2"
+            local code
+            code="$(npx --yes "vercel@$VERCEL_CLI_VERSION" curl "$path" \
+              --deployment "$base" --token "$VERCEL_TOKEN" -- \
+              --silent --show-error --location \
+              --output "evidence/$name.body" \
+              --dump-header "evidence/$name.headers" \
+              --write-out '%{http_code}')"
+            printf '%s %s\n' "$name" "$code" | tee -a evidence/route-status.txt
+          }
+
+          fetch donation-upgrades /donation-upgrades
+          fetch create '/create?structure=conditional-donation'
+          fetch connectors /connectors
+          fetch nonprofit-search '/api/donation-upgrades/nonprofits/search?q=givewell'
+
+          test "$(awk '$1=="donation-upgrades" {print $2}' evidence/route-status.txt)" = 200
+          test "$(awk '$1=="create" {print $2}' evidence/route-status.txt)" = 200
+          test "$(awk '$1=="connectors" {print $2}' evidence/route-status.txt)" = 200
+          test "$(awk '$1=="nonprofit-search" {print $2}' evidence/route-status.txt)" = 200
+
+          grep -Eqi 'Donation Upgrade|donation upgrade' evidence/donation-upgrades.body
+          grep -Eqi 'Every\.org|connector' evidence/connectors.body
+          grep -Fq '"results"' evidence/nonprofit-search.body
+          ! grep -Eqi 'Internal Server Error|Application error|Missing SUPABASE_SERVICE_ROLE_KEY' evidence/*.body
+
+      - name: Prove external provider access through Vercel bypass
+        if: steps.readiness.outputs.ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://$STAGING_ALIAS"
+
+          page_code="$(curl --silent --show-error --location \
+            --output evidence/external-connectors.body \
+            --dump-header evidence/external-connectors.headers \
+            --write-out '%{http_code}' \
+            "$base/connectors?x-vercel-protection-bypass=$VERCEL_AUTOMATION_BYPASS_SECRET")"
+          test "$page_code" = 200
+
+          webhook_code="$(curl --silent --show-error --location \
+            --request POST \
+            --header 'content-type: application/json' \
+            --data '{}' \
+            --output evidence/external-webhook.body \
+            --dump-header evidence/external-webhook.headers \
+            --write-out '%{http_code}' \
+            "$base/api/connectors/every-org/$EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET?x-vercel-protection-bypass=$VERCEL_AUTOMATION_BYPASS_SECRET")"
+          test "$webhook_code" = 400
+          grep -Fq 'missing_partner_donation_id' evidence/external-webhook.body
+          printf 'external-connectors %s\nexternal-webhook %s\n' \
+            "$page_code" "$webhook_code" > evidence/external-status.txt
+
+      - name: Upload sanitized provider-staging evidence
+        if: steps.readiness.outputs.ready == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr547-every-org-provider-staging-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
