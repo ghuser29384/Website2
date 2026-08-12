@@ -19,6 +19,10 @@ import {
   serializeOpportunityBriefCard,
   type BackgroundRequesterOpportunityBriefCard,
 } from "@/lib/background-opportunity-briefs";
+import {
+  AUTH_RESOLUTION_TIMEOUT_MS,
+  resolveAuthUserWithDeadline,
+} from "@/lib/auth-resolution";
 import { isMissingOptionalLegacyAgreementRelation } from "@/lib/optional-legacy-agreement-relations";
 import {
   chunkForPostgrestIn,
@@ -123,7 +127,6 @@ export type PublicLocationGranularity = "hidden" | "country" | "region" | "city"
 export const OFFERS_PAGE_SIZE = 24;
 export const PEOPLE_PAGE_SIZE = 24;
 export const DASHBOARD_PAGE_SIZE = 50;
-const AUTH_RESOLUTION_TIMEOUT_MS = 1_500;
 
 interface LoggedErrorLike {
   code?: string | null;
@@ -1031,27 +1034,7 @@ export async function getViewer() {
   }
 
   const supabase = await createClient();
-  const authResult = await Promise.race([
-    supabase.auth.getUser().then((result) => ({
-      ...result,
-      timedOut: false,
-    })),
-    new Promise<{
-      data: { user: null };
-      error: { message: string };
-      timedOut: true;
-    }>((resolve) => {
-      setTimeout(
-        () =>
-          resolve({
-            data: { user: null },
-            error: { message: "Timed out resolving authenticated user." },
-            timedOut: true,
-          }),
-        AUTH_RESOLUTION_TIMEOUT_MS,
-      );
-    }),
-  ]);
+  const authResult = await resolveAuthUserWithDeadline(supabase.auth.getUser());
   const {
     data: { user },
     error: authError,
