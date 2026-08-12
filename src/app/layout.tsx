@@ -15,6 +15,7 @@ import "./home-process-polish.css";
 import "./home-mode-hover-colors.css";
 import "./search-bar-polish.css";
 import "./canonical-visual-system.css";
+import "./canonical-visual-fidelity-fixes.css";
 import "./canonical-visual-system-remediation.css";
 
 const SITE_FAVICON_PATH = `${SITE_IMAGE_PATH}?v=20260730`;
@@ -87,7 +88,6 @@ export const metadata: Metadata = {
       {
         url: SITE_FAVICON_PATH,
         sizes: "512x512",
-        type: "image/png",
       },
     ],
   },
