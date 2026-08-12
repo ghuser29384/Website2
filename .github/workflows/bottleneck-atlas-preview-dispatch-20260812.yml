@@ -22,12 +22,12 @@ env:
   RELEASE_REF: release/vercel-preview
   RELEASE_TARGET: preview
   EXPECTED_RELEASE_SHA: 6067bae2df1691d2a8153755f4087ca7e8819cfb
-  EXPECTED_TRIGGER_PARENT: 0000000000000000000000000000000000000000
+  EXPECTED_TRIGGER_PARENT: 79bea245a3017f898c5f2519c2bf141baa57ad58
   PREVIOUS_RELEASE_RUN_ID: '31557770256'
 
 jobs:
   dispatch:
-    if: ${{ false }}
+    if: ${{ true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -110,4 +110,4 @@ jobs:
           set -euo pipefail
           gh pr comment 618 --repo "$GITHUB_REPOSITORY" --body "Re-dispatched the permanent gated Preview for exact candidate \`$EXPECTED_RELEASE_SHA\` after aligning the stale signed-out feed assertion. Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID. Production was not targeted."
 
-# Registered inertly. A second exact one-file pull request arms this controller.
+# Armed by an exact one-file pull request. Do not edit or rerun for another candidate.
