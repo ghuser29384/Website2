@@ -47,6 +47,7 @@ export async function createEvidenceCredibilityCalibrationExportAction(
   const analysisPlanVersion = read(formData, "analysis_plan_version");
   const analysisPlanHash = read(formData, "analysis_plan_hash").toLowerCase();
   const cutoffInput = read(formData, "source_cutoff_at");
+  let successMessage = "Created immutable calibration export.";
 
   try {
     if (!analysisPlanVersion || analysisPlanVersion.length > 200) {
@@ -57,6 +58,12 @@ export async function createEvidenceCredibilityCalibrationExportAction(
         "Analysis-plan hash must be exactly 64 lowercase hexadecimal characters.",
       );
     }
+    if (read(formData, "preregistered_acknowledgement") !== "on") {
+      throw new Error(
+        "Confirm that the analysis plan was frozen before inspecting the export.",
+      );
+    }
+
     const cutoff = parseUtcCutoff(cutoffInput);
     const supabase = await createClient();
     const { data, error } = await (supabase as any).rpc(
@@ -74,14 +81,7 @@ export async function createEvidenceCredibilityCalibrationExportAction(
     const result = (data ?? {}) as Record<string, unknown>;
     const rowCount = Number(result.rowCount ?? 0);
     const status = String(result.status ?? "created");
-    revalidatePath(EXPORT_ROUTE);
-    redirect(
-      withMessage(
-        EXPORT_ROUTE,
-        "message",
-        `${status === "replayed" ? "Reused" : "Created"} immutable calibration export with ${rowCount} observation${rowCount === 1 ? "" : "s"}.`,
-      ),
-    );
+    successMessage = `${status === "replayed" ? "Reused" : "Created"} immutable calibration export with ${rowCount} observation${rowCount === 1 ? "" : "s"}.`;
   } catch (error) {
     redirect(
       withMessage(
@@ -91,4 +91,7 @@ export async function createEvidenceCredibilityCalibrationExportAction(
       ),
     );
   }
+
+  revalidatePath(EXPORT_ROUTE);
+  redirect(withMessage(EXPORT_ROUTE, "message", successMessage));
 }
