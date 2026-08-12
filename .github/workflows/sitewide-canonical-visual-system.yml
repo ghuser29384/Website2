@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - "src/app/canonical-visual-system.css"
+      - "src/app/canonical-visual-fidelity-fixes.css"
       - "src/app/canonical-visual-system-remediation.css"
       - "src/app/layout.tsx"
       - "src/components/home/home-page.tsx"
@@ -21,7 +22,9 @@ on:
       - "public/moral-trade-create/index.html"
       - "public/complete-verification.html"
       - "src/sitewide-canonical-visual-system.test.ts"
+      - "src/sitewide-canonical-visual-fidelity.test.ts"
       - "tests/sitewide-canonical-visual-system.spec.ts"
+      - "tests/sitewide-canonical-visual-fidelity.spec.ts"
       - "tests/commitments-sidebar-layout.spec.ts"
       - ".github/workflows/sitewide-canonical-visual-system.yml"
   push:
@@ -30,6 +33,7 @@ on:
       - fix/sitewide-canonical-visual-system-final-20260810
     paths:
       - "src/app/canonical-visual-system.css"
+      - "src/app/canonical-visual-fidelity-fixes.css"
       - "src/app/canonical-visual-system-remediation.css"
       - "src/app/layout.tsx"
       - "src/components/home/home-page.tsx"
@@ -46,7 +50,9 @@ on:
       - "public/moral-trade-create/index.html"
       - "public/complete-verification.html"
       - "src/sitewide-canonical-visual-system.test.ts"
+      - "src/sitewide-canonical-visual-fidelity.test.ts"
       - "tests/sitewide-canonical-visual-system.spec.ts"
+      - "tests/sitewide-canonical-visual-fidelity.spec.ts"
       - "tests/commitments-sidebar-layout.spec.ts"
       - ".github/workflows/sitewide-canonical-visual-system.yml"
 
@@ -77,14 +83,16 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
-      - name: Check complete candidate diff, source contracts, and auth isolation
+      - name: Check complete candidate diff, source contracts, auth isolation, and targeted fidelity repairs
         shell: bash
         run: |
           set -euo pipefail
           git fetch --no-tags origin main
           base_sha="$(git merge-base HEAD origin/main)"
           git diff --check "$base_sha" HEAD
-          node --import tsx --test src/sitewide-canonical-visual-system.test.ts
+          node --import tsx --test \
+            src/sitewide-canonical-visual-system.test.ts \
+            src/sitewide-canonical-visual-fidelity.test.ts
 
       - name: Run repository quality gates
         shell: bash
@@ -101,7 +109,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Render included routes and verify the authentication exclusion boundary
+      - name: Render included routes, verify auth isolation, and prove audited overlap repairs
         shell: bash
         env:
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
@@ -112,7 +120,12 @@ jobs:
           set -euo pipefail
           # /login, /signup, and /auth/callback keep the pre-existing auth design.
           # The browser suite checks auth isolation and functionality without applying canonical geometry.
-          npx playwright test tests/sitewide-canonical-visual-system.spec.ts tests/commitments-sidebar-layout.spec.ts --reporter=line --workers=1
+          npx playwright test \
+            tests/sitewide-canonical-visual-system.spec.ts \
+            tests/sitewide-canonical-visual-fidelity.spec.ts \
+            tests/commitments-sidebar-layout.spec.ts \
+            --reporter=line \
+            --workers=1
 
       - name: Upload sitewide visual evidence
         if: always()
@@ -121,6 +134,7 @@ jobs:
           name: sitewide-canonical-visual-${{ github.run_id }}-${{ github.sha }}
           path: |
             test-results/sitewide-canonical-visual-system-*/**/*.png
+            test-results/sitewide-canonical-visual-fidelity-*/**/*.png
             test-results/commitments-sidebar-layout-*/**/*.png
             playwright-report
             test-results
