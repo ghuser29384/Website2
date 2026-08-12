@@ -40,6 +40,33 @@ function sensitivityLabel(value: "standard" | "elevated" | "restricted") {
   return "Standard review";
 }
 
+function clusterAnchor(cluster: string) {
+  return cluster.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+}
+
+const PIPELINE_STEPS = [
+  {
+    title: "Start with evidence",
+    body: "Use field bottlenecks, transferable capabilities, source dates, and uncertainty as search priors.",
+  },
+  {
+    title: "Confirm a real need",
+    body: "A person or organization must confirm the marginal project, available capacity, authority, and no-trade baseline.",
+  },
+  {
+    title: "Generate a candidate",
+    body: "Moral Trade proposes a possible structure without inventing a counterparty, consent, or agreement.",
+  },
+  {
+    title: "Review safety and fit",
+    body: "The parties check opportunity cost, additionality, externalities, privacy, and restricted-domain risks.",
+  },
+  {
+    title: "Only then create terms",
+    body: "A generated possibility reaches a private draft before it can become a live offer or moral trade.",
+  },
+] as const;
+
 export default async function BottleneckAtlasPage() {
   const viewer = await getViewer();
 
@@ -53,227 +80,250 @@ export default async function BottleneckAtlasPage() {
       />
       <main className={`${styles.page} legal-page`} id="main-content" tabIndex={-1}>
         <section className={styles.hero} aria-labelledby="atlas-title">
-          <div>
-            <p className="eyebrow">Research infrastructure · {BOTTLENECK_ATLAS_VERSION}</p>
-            <h1 id="atlas-title">Bottleneck Atlas</h1>
-            <p className={styles.lede}>
-              A dated, evidence-linked map of what appears to constrain high-impact fields, what
-              those fields can transfer, and which new exchanges Moral Trade should investigate.
-              It supplies hypotheses to the feed; it does not claim that a named person or
-              organization has agreed to trade.
-            </p>
-            <div className="hero-actions">
-              <Link className="button button-primary" href="/feed">
-                Open your feed
-              </Link>
-              <Link className="button button-secondary" href="#opportunity-templates">
-                Review trade templates
-              </Link>
-            </div>
+          <h1 id="atlas-title">Bottleneck Atlas</h1>
+          <p className={styles.lede}>
+            See where high-impact fields appear constrained, then review possible exchanges that
+            could help one field unblock another.
+          </p>
+          <div className={styles.heroActions}>
+            <a className="button button-primary" href="#opportunity-templates">
+              Find a trade pattern
+            </a>
+            <a className="button button-secondary" href="#field-map">
+              Browse field bottlenecks
+            </a>
           </div>
-          <dl className={styles.stats} aria-label="Atlas scope">
+          <dl className={styles.heroMeta} aria-label="Atlas scope">
             <div>
-              <dt>Fields mapped</dt>
+              <dt>Fields</dt>
               <dd>{BOTTLENECK_ATLAS_FIELDS.length}</dd>
             </div>
             <div>
-              <dt>Synthesis templates</dt>
+              <dt>Trade patterns</dt>
               <dd>{OPPORTUNITY_SYNTHESIS_TEMPLATES.length}</dd>
             </div>
             <div>
-              <dt>Last reviewed</dt>
+              <dt>Reviewed</dt>
               <dd>{BOTTLENECK_ATLAS_REVIEWED_AT}</dd>
+            </div>
+            <div>
+              <dt>Version</dt>
+              <dd>{BOTTLENECK_ATLAS_VERSION}</dd>
             </div>
           </dl>
         </section>
 
-        <section className={`${styles.notice} panel`} aria-labelledby="interpretation-title">
-          <div>
-            <p className="detail-kicker">How to interpret this</p>
-            <h2 id="interpretation-title">Field evidence is a search prior, not a live claim.</h2>
+        <aside className={styles.boundaryNote} aria-labelledby="interpretation-title">
+          <strong id="interpretation-title">Field evidence is a search prior, not a live claim.</strong>
+          <span>
+            A public source can suggest where to investigate. It cannot establish a current
+            organization-specific bottleneck, spare capacity, consent, or willingness to trade.
+          </span>
+        </aside>
+
+        <section
+          className={styles.primarySection}
+          id="opportunity-templates"
+          aria-labelledby="templates-title"
+        >
+          <div className={styles.sectionIntro}>
+            <div>
+              <p className={styles.sectionNumber}>01</p>
+              <h2 id="templates-title">Start with a potential trade pattern</h2>
+            </div>
+            <div>
+              <p>
+                Each pattern is a generated hypothesis. Open one to see what the two sides might
+                exchange, the no-trade baseline, and the safeguards that must be confirmed before
+                any live offer exists.
+              </p>
+              <Link className="text-button" href="/feed">
+                Open your personalized feed
+              </Link>
+            </div>
           </div>
-          <p>
-            A field may be constrained by funding in aggregate while a particular organization is
-            at capacity. A live suggestion therefore needs a current marginal project, confirmed
-            capacity, full opportunity cost, authority, consent, a no-trade baseline, and an
-            externality review. Public evidence can generate a private draft hypothesis, but it
-            cannot establish a counterparty&apos;s willingness.
-          </p>
-        </section>
 
-        <section className={styles.pipeline} aria-labelledby="pipeline-title">
-          <div className={styles.sectionHeading}>
-            <p className="eyebrow">From evidence to feed</p>
-            <h2 id="pipeline-title">One synthesis pipeline, several actor types</h2>
-          </div>
-          <ol>
-            <li>
-              <strong>Atlas evidence</strong>
-              <span>Field bottlenecks, assets, uncertainty, source dates, and sensitivity.</span>
-            </li>
-            <li>
-              <strong>Needs and capacities</strong>
-              <span>Individuals, researchers, teams, organizations, funders, and coalitions.</span>
-            </li>
-            <li>
-              <strong>Candidate synthesis</strong>
-              <span>New potential structures, generated locally from declared priorities.</span>
-            </li>
-            <li>
-              <strong>Safety and confirmation</strong>
-              <span>No threats, no invented consent, no live moral-trade label without attestation.</span>
-            </li>
-            <li>
-              <strong>Unified feed</strong>
-              <span>Existing opportunities and clearly marked generated possibilities.</span>
-            </li>
-          </ol>
-        </section>
-
-        <nav className={styles.clusterNav} aria-label="Atlas field groups">
-          {BOTTLENECK_ATLAS_CLUSTERS.map((cluster) => (
-            <a key={cluster} href={`#${cluster.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}>
-              {cluster}
-            </a>
-          ))}
-        </nav>
-
-        {BOTTLENECK_ATLAS_CLUSTERS.map((cluster) => {
-          const fields = BOTTLENECK_ATLAS_FIELDS.filter((field) => field.cluster === cluster);
-          const anchor = cluster.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-          return (
-            <section className={styles.cluster} id={anchor} key={cluster} aria-labelledby={`${anchor}-title`}>
-              <div className={styles.sectionHeading}>
-                <p className="eyebrow">{fields.length} mapped fields</p>
-                <h2 id={`${anchor}-title`}>{cluster}</h2>
-              </div>
-              <div className={styles.fieldGrid}>
-                {fields.map((field) => (
-                  <article
-                    className={`${styles.fieldCard} panel`}
-                    data-atlas-field={field.id}
-                    id={field.id}
-                    key={field.id}
-                  >
-                    <div className={styles.cardTopline}>
-                      <span className={styles.confidence}>
-                        {atlasConfidenceLabel(field.confidence)} confidence · {field.confidence}%
-                      </span>
-                      <span className={styles.sensitivity}>{sensitivityLabel(field.sensitivity)}</span>
-                    </div>
-                    <h3>{field.name}</h3>
-                    <p>{field.summary}</p>
-                    <div className={styles.twoColumnLists}>
-                      <div>
-                        <h4>Primary bottlenecks</h4>
-                        <ul>
-                          {field.primaryBottlenecks.map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <h4>Transferable assets</h4>
-                        <ul>
-                          {field.transferableAssets.map((item) => (
-                            <li key={item}>{item}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                    <div className={styles.implication}>
-                      <h4>Trade implication</h4>
-                      <p>{field.tradeImplication}</p>
-                    </div>
-                    <details className={styles.sources}>
-                      <summary>Evidence sources ({field.sources.length})</summary>
-                      <ul>
-                        {field.sources.map((source) => (
-                          <li key={source.url}>
-                            <a href={source.url} rel="noreferrer" target="_blank">
-                              {source.organization}: {source.label}
-                            </a>
-                            <span>{source.evidenceType.replaceAll("_", " ")}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  </article>
-                ))}
-              </div>
-            </section>
-          );
-        })}
-
-        <section className={styles.templates} id="opportunity-templates" aria-labelledby="templates-title">
-          <div className={styles.sectionHeading}>
-            <p className="eyebrow">Candidate-generation layer</p>
-            <h2 id="templates-title">Potential trade structures</h2>
-            <p>
-              These templates are eligible to generate private feed suggestions. They remain
-              hypotheses until the relevant needs, capacities, baselines, authority, consent, and
-              moral-priority differences are confirmed.
-            </p>
-          </div>
-          <div className={styles.templateGrid}>
-            {OPPORTUNITY_SYNTHESIS_TEMPLATES.map((template) => (
-              <article
-                className={`${styles.templateCard} panel`}
+          <div className={styles.disclosureList}>
+            {OPPORTUNITY_SYNTHESIS_TEMPLATES.map((template, index) => (
+              <details
+                className={styles.templateDisclosure}
                 data-synthesis-template={template.id}
                 key={template.id}
+                open={index === 0}
               >
-                <div className={styles.cardTopline}>
-                  <span className={styles.classification}>
-                    {synthesisClassificationLabel(template.classification)}
-                  </span>
-                  <span>{template.confidence}% evidence confidence</span>
+                <summary>
+                  <div className={styles.summaryMain}>
+                    <span className={styles.classification}>
+                      {synthesisClassificationLabel(template.classification)}
+                    </span>
+                    <h3>{template.title}</h3>
+                    <p>{template.summary}</p>
+                  </div>
+                  <span className={styles.summaryMeta}>{template.confidence}% evidence confidence</span>
+                </summary>
+                <div className={styles.templateBody}>
+                  <dl className={styles.templateFacts}>
+                    <div>
+                      <dt>One side gives</dt>
+                      <dd>{template.firstPartyGives}</dd>
+                    </div>
+                    <div>
+                      <dt>One side receives</dt>
+                      <dd>{template.firstPartyReceives}</dd>
+                    </div>
+                    <div>
+                      <dt>No-trade baseline</dt>
+                      <dd>{template.noTradeBaseline}</dd>
+                    </div>
+                  </dl>
+                  <Link
+                    className="button button-secondary"
+                    href={`/suggested-opportunities/${encodeURIComponent(template.id)}`}
+                  >
+                    Inspect assumptions and safeguards
+                  </Link>
                 </div>
-                <h3>{template.title}</h3>
-                <p>{template.summary}</p>
-                <dl>
-                  <div>
-                    <dt>One side gives</dt>
-                    <dd>{template.firstPartyGives}</dd>
-                  </div>
-                  <div>
-                    <dt>One side receives</dt>
-                    <dd>{template.firstPartyReceives}</dd>
-                  </div>
-                  <div>
-                    <dt>No-trade baseline</dt>
-                    <dd>{template.noTradeBaseline}</dd>
-                  </div>
-                </dl>
-                <Link
-                  className="text-button"
-                  href={`/suggested-opportunities/${encodeURIComponent(template.id)}`}
-                >
-                  Inspect assumptions and safeguards
-                </Link>
-              </article>
+              </details>
             ))}
           </div>
         </section>
 
-        <section className={`${styles.finalNotice} panel`}>
-          <div>
-            <p className="detail-kicker">Public-data boundary</p>
-            <h2>No public organization-specific weakness profiles.</h2>
+        <section className={styles.primarySection} id="field-map" aria-labelledby="field-map-title">
+          <div className={styles.sectionIntro}>
+            <div>
+              <p className={styles.sectionNumber}>02</p>
+              <h2 id="field-map-title">Explore evidence by field</h2>
+            </div>
+            <p>
+              Choose a field group, then open only the field you need. Detailed bottlenecks,
+              transferable assets, trade implications, and sources stay collapsed until requested.
+            </p>
           </div>
-          <p>
-            The public atlas contains aggregated field evidence. Organization-specific bottlenecks,
-            sensitive capacities, staff availability, and suggested counterparties belong in a
-            permissioned workflow and require confirmation before they affect a live recommendation.
-          </p>
-          <div className="hero-actions">
-            <Link className="button button-secondary" href="/anti-threat-rules">
+
+          <div className={styles.clusterList}>
+            {BOTTLENECK_ATLAS_CLUSTERS.map((cluster, clusterIndex) => {
+              const fields = BOTTLENECK_ATLAS_FIELDS.filter((field) => field.cluster === cluster);
+              const anchor = clusterAnchor(cluster);
+              return (
+                <details
+                  className={styles.clusterDisclosure}
+                  data-atlas-cluster={anchor}
+                  id={anchor}
+                  key={cluster}
+                  open={clusterIndex === 0}
+                >
+                  <summary>
+                    <span>{cluster}</span>
+                    <small>{fields.length} fields</small>
+                  </summary>
+                  <div className={styles.fieldList}>
+                    {fields.map((field) => (
+                      <details
+                        className={styles.fieldDisclosure}
+                        data-atlas-field={field.id}
+                        id={field.id}
+                        key={field.id}
+                      >
+                        <summary>
+                          <div className={styles.fieldTitleBlock}>
+                            <h3>{field.name}</h3>
+                            <p>{field.primaryBottlenecks.slice(0, 2).join(" · ")}</p>
+                          </div>
+                          <div className={styles.fieldMeta}>
+                            <span className={styles.confidence}>
+                              {atlasConfidenceLabel(field.confidence)} · {field.confidence}%
+                            </span>
+                            <span>{sensitivityLabel(field.sensitivity)}</span>
+                          </div>
+                        </summary>
+                        <div className={styles.fieldBody}>
+                          <p className={styles.fieldSummary}>{field.summary}</p>
+                          <div className={styles.fieldColumns}>
+                            <div>
+                              <h4>Primary bottlenecks</h4>
+                              <ul>
+                                {field.primaryBottlenecks.map((item) => (
+                                  <li key={item}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                            <div>
+                              <h4>Transferable assets</h4>
+                              <ul>
+                                {field.transferableAssets.map((item) => (
+                                  <li key={item}>{item}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          </div>
+                          <div className={styles.implication}>
+                            <h4>Trade implication</h4>
+                            <p>{field.tradeImplication}</p>
+                          </div>
+                          <details className={styles.sources}>
+                            <summary>Evidence sources ({field.sources.length})</summary>
+                            <ul>
+                              {field.sources.map((source) => (
+                                <li key={source.url}>
+                                  <a href={source.url} rel="noreferrer" target="_blank">
+                                    {source.organization}: {source.label}
+                                  </a>
+                                  <span>{source.evidenceType.replaceAll("_", " ")}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        </div>
+                      </details>
+                    ))}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className={styles.methodSection} aria-labelledby="method-title">
+          <details className={styles.methodDisclosure}>
+            <summary>
+              <div>
+                <p className={styles.sectionNumber}>03</p>
+                <h2 id="method-title">How an Atlas hypothesis reaches the feed</h2>
+              </div>
+              <span>View the five-step safety path</span>
+            </summary>
+            <ol>
+              {PIPELINE_STEPS.map((step, index) => (
+                <li key={step.title}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <strong>{step.title}</strong>
+                    <p>{step.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </details>
+        </section>
+
+        <aside className={styles.finalBoundary}>
+          <div>
+            <h2>Public atlas, private matches.</h2>
+            <p>
+              Organization-specific needs, staff availability, suggested counterparties, and
+              sensitive capacities require permissioned confirmation before they affect a live
+              recommendation.
+            </p>
+          </div>
+          <div className={styles.boundaryActions}>
+            <Link className="text-button" href="/anti-threat-rules">
               Anti-threat and baseline rules
             </Link>
-            <Link className="button button-secondary" href="/research">
+            <Link className="text-button" href="/research">
               Research and governance
             </Link>
           </div>
-        </section>
+        </aside>
       </main>
       <SiteFooter />
     </div>
