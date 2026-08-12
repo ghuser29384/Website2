@@ -1,4 +1,4 @@
-name: Release classification merge bootstrap PR 501
+name: Release classification merge bootstrap
 
 on:
   pull_request:
@@ -11,7 +11,7 @@ permissions:
   statuses: write
 
 concurrency:
-  group: release-classification-merge-bootstrap-pr501-${{ github.event.pull_request.number }}
+  group: release-classification-merge-bootstrap-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 env:
@@ -21,9 +21,17 @@ jobs:
   validate:
     name: Bootstrap release classification on merge candidate
     if: >-
-      github.event.pull_request.number == 501 &&
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'ops/pr212-qa-monitor-v11-controller-20260803'
+      (
+        (
+          github.event.pull_request.number == 501 &&
+          github.event.pull_request.head.ref == 'ops/pr212-qa-monitor-v11-controller-20260803'
+        ) ||
+        (
+          github.event.pull_request.number == 632 &&
+          github.event.pull_request.head.ref == 'fix/sitewide-canonical-visual-system-final-20260810'
+        )
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 5
 
