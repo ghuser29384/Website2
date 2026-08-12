@@ -12,51 +12,60 @@ const partCount = 7;
 const checkOnly = process.argv.includes("--check");
 
 const source = await readFile(sourcePath);
-const compressed = gzipSync(source, { level: 9, mtime: 0 });
-const encoded = compressed.toString("base64");
-const partSize = Math.ceil(encoded.length / partCount);
-const parts = Array.from({ length: partCount }, (_, index) =>
-  encoded.slice(index * partSize, (index + 1) * partSize),
-);
-
-if (parts.some((part) => part.length === 0)) {
-  throw new Error(`Discover payload did not produce ${partCount} non-empty parts.`);
-}
-
-const reconstructed = Buffer.from(parts.join(""), "base64");
-const roundTrip = gunzipSync(reconstructed);
-if (!roundTrip.equals(source)) {
-  throw new Error("Packed Discover payload does not round-trip to the canonical source.");
-}
-
 const sourceVersion = createHash("sha1")
   .update(Buffer.from(`blob ${source.length}\0`))
   .update(source)
   .digest("hex");
-const manifest = {
-  version: sourceVersion,
-  encoding: "gzip+base64",
-  parts: parts.map((_, index) => `${index}.txt`),
-  sourceBytes: source.length,
-  gzipBytes: compressed.length,
-  encodedCharacters: encoded.length,
-};
-const manifestText = `${JSON.stringify(manifest, null, 2)}\n`;
+const partNames = Array.from({ length: partCount }, (_, index) => `${index}.txt`);
+
+function createManifest(compressed, encoded) {
+  return {
+    version: sourceVersion,
+    encoding: "gzip+base64",
+    parts: partNames,
+    sourceBytes: source.length,
+    gzipBytes: compressed.length,
+    encodedCharacters: encoded.length,
+  };
+}
+
+function assertCanonicalPayload(compressed, encoded) {
+  if (compressed.toString("base64") !== encoded) {
+    throw new Error("Discover payload is not canonical base64.");
+  }
+
+  const roundTrip = gunzipSync(compressed);
+  if (!roundTrip.equals(source)) {
+    throw new Error("Discover payload does not match the canonical source.");
+  }
+}
 
 await mkdir(payloadDirectory, { recursive: true });
 
 if (checkOnly) {
   const mismatches = [];
-  for (let index = 0; index < partCount; index += 1) {
-    const partPath = path.join(payloadDirectory, `${index}.txt`);
-    let current = null;
+  const parts = [];
+  for (const partName of partNames) {
+    const partPath = path.join(payloadDirectory, partName);
     try {
-      current = await readFile(partPath, "utf8");
+      const part = await readFile(partPath, "utf8");
+      if (part.length === 0) mismatches.push(`${partName} (empty)`);
+      parts.push(part);
     } catch {
-      mismatches.push(`${index}.txt (missing)`);
-      continue;
+      mismatches.push(`${partName} (missing)`);
     }
-    if (current !== parts[index]) mismatches.push(`${index}.txt`);
+  }
+
+  let compressed = null;
+  let encoded = null;
+  if (parts.length === partCount && !mismatches.length) {
+    encoded = parts.join("");
+    compressed = Buffer.from(encoded, "base64");
+    try {
+      assertCanonicalPayload(compressed, encoded);
+    } catch (error) {
+      mismatches.push(`payload (${error.message})`);
+    }
   }
 
   let currentManifest = null;
@@ -65,8 +74,9 @@ if (checkOnly) {
   } catch {
     mismatches.push("manifest.json (missing)");
   }
-  if (currentManifest !== null && currentManifest !== manifestText) {
-    mismatches.push("manifest.json");
+  if (currentManifest !== null && compressed !== null && encoded !== null) {
+    const manifestText = `${JSON.stringify(createManifest(compressed, encoded), null, 2)}\n`;
+    if (currentManifest !== manifestText) mismatches.push("manifest.json");
   }
 
   if (mismatches.length) {
@@ -78,6 +88,19 @@ if (checkOnly) {
     `Discover payload verified: ${source.length} source bytes, ${compressed.length} gzip bytes, ${encoded.length} base64 characters across ${partCount} parts; version ${sourceVersion}.`,
   );
 } else {
+  const compressed = gzipSync(source, { level: 9, mtime: 0 });
+  const encoded = compressed.toString("base64");
+  const partSize = Math.ceil(encoded.length / partCount);
+  const parts = partNames.map((_, index) =>
+    encoded.slice(index * partSize, (index + 1) * partSize),
+  );
+
+  if (parts.some((part) => part.length === 0)) {
+    throw new Error(`Discover payload did not produce ${partCount} non-empty parts.`);
+  }
+
+  assertCanonicalPayload(compressed, encoded);
+  const manifestText = `${JSON.stringify(createManifest(compressed, encoded), null, 2)}\n`;
   await Promise.all([
     ...parts.map((part, index) =>
       writeFile(path.join(payloadDirectory, `${index}.txt`), part, "utf8"),
