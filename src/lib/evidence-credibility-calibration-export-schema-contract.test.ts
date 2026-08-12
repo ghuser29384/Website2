@@ -53,8 +53,12 @@ const manifestProjection = functionBody(
 const rowProjection = functionBody(
   "public.list_evidence_credibility_calibration_export_rows_v1",
 );
-const observationStart = createExport.indexOf("'schemaVersion'");
-const observationEnd = createExport.indexOf(") as observation", observationStart);
+const schemaKeyIndex = createExport.indexOf("'schemaVersion'");
+const observationStart = createExport.lastIndexOf(
+  "jsonb_build_object(",
+  schemaKeyIndex,
+);
+const observationEnd = createExport.indexOf(") as observation", schemaKeyIndex);
 assert.ok(observationStart >= 0 && observationEnd > observationStart);
 const observationPayload = createExport.slice(observationStart, observationEnd);
 
