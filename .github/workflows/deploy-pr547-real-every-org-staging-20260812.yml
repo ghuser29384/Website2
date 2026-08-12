@@ -1,0 +1,215 @@
+name: Deploy PR 547 with real Every.org staging credentials
+
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-real-staging-20260812
+    paths:
+      - .github/every-org-real-staging-ready.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-pr547-real-every-org-staging-20260812
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      EXPECTED_SHA: f41a6134bfb72cb711693dd67bedb06258461528
+      VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+      VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+      VERCEL_CLI_VERSION: 50.38.1
+      STAGING_ALIAS: moraltrade-pr547-every-org-staging.vercel.app
+      QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EVERY_ORG_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+      EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_WEBHOOK_TOKEN }}
+      EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET }}
+      EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+    steps:
+      - name: Check out exact current-main candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate exact target, database, and secret handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          for name in \
+            VERCEL_TOKEN \
+            QA_SUPABASE_PUBLISHABLE_KEY \
+            QA_SUPABASE_SERVICE_ROLE_KEY \
+            QA_SUPABASE_DB_URL \
+            EVERY_ORG_PUBLIC_API_KEY \
+            EVERY_ORG_WEBHOOK_TOKEN \
+            EVERY_ORG_WEBHOOK_PATH_SECRET \
+            EVERY_ORG_PARTNER_METADATA_SECRET \
+            VERCEL_AUTOMATION_BYPASS_SECRET; do
+            test -n "${!name:-}" || { echo "Missing required secret: $name" >&2; exit 1; }
+            echo "::add-mask::${!name}"
+          done
+          test "${#EVERY_ORG_WEBHOOK_PATH_SECRET}" -ge 32
+          test "${#EVERY_ORG_PARTNER_METADATA_SECRET}" -ge 32
+          test "$EVERY_ORG_WEBHOOK_PATH_SECRET" != "$EVERY_ORG_PARTNER_METADATA_SECRET"
+
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and "hvmxfjjbdcgjjudmthdz" in (parsed.username or "")
+              and parsed.hostname == "aws-0-us-west-1.pooler.supabase.com"
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and parse_qs(parsed.query).get("sslmode", ["require"]) == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the TLS-only MoralTrade QA target.")
+          PY
+
+      - name: Verify the persistent QA schema exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+          inventory="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 \
+            --command "select count(*) from (values (to_regclass('public.direct_donation_upgrade_offers')), (to_regclass('public.direct_donation_upgrade_candidates')), (to_regclass('public.direct_donation_upgrade_obligations')), (to_regclass('public.direct_donation_upgrade_impact_credits'))) v(object_name) where object_name is not null;" \
+            | tr -d '[:space:]')"
+          test "$inventory" = "4"
+
+      - name: Deploy real-provider staging preview to the canonical project
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel evidence
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+          cron_secret="$(printf '%s' "$VERCEL_TOKEN:$EXPECTED_SHA:real-every-org-staging-cron" | sha256sum | awk '{print $1}')"
+          echo "::add-mask::$cron_secret"
+          site_url="https://$STAGING_ALIAS"
+
+          common_flags=(
+            --yes
+            --token "$VERCEL_TOKEN"
+            --meta "moralTradeCandidateSha=$EXPECTED_SHA"
+            --meta "moralTradePurpose=real-every-org-staging"
+            --env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL"
+            --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY"
+            --env "SUPABASE_SERVICE_ROLE_KEY=$QA_SUPABASE_SERVICE_ROLE_KEY"
+            --env "NEXT_PUBLIC_SITE_URL=$site_url"
+            --env "SITE_URL=$site_url"
+            --env "DIRECT_DONATION_UPGRADES_ENABLED=true"
+            --env "DIRECT_DONATION_UPGRADE_MODE=staging"
+            --env "DIRECT_DONATION_UPGRADE_QA_FIXTURES=false"
+            --env "EVERY_ORG_PUBLIC_API_KEY=$EVERY_ORG_PUBLIC_API_KEY"
+            --env "EVERY_ORG_WEBHOOK_TOKEN=$EVERY_ORG_WEBHOOK_TOKEN"
+            --env "EVERY_ORG_WEBHOOK_PATH_SECRET=$EVERY_ORG_WEBHOOK_PATH_SECRET"
+            --env "EVERY_ORG_PARTNER_METADATA_SECRET=$EVERY_ORG_PARTNER_METADATA_SECRET"
+            --env "CONDITIONAL_PAYMENTS_MODE=disabled"
+            --env "TRADE_DONATION_POOL_ENABLED=false"
+            --env "TRADE_DONATION_POOL_MODE=disabled"
+            --env "CRON_SECRET=$cron_secret"
+            --build-env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL"
+            --build-env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY"
+            --build-env "SUPABASE_SERVICE_ROLE_KEY=$QA_SUPABASE_SERVICE_ROLE_KEY"
+            --build-env "NEXT_PUBLIC_SITE_URL=$site_url"
+            --build-env "SITE_URL=$site_url"
+            --build-env "DIRECT_DONATION_UPGRADES_ENABLED=true"
+            --build-env "DIRECT_DONATION_UPGRADE_MODE=staging"
+            --build-env "DIRECT_DONATION_UPGRADE_QA_FIXTURES=false"
+            --build-env "EVERY_ORG_PUBLIC_API_KEY=$EVERY_ORG_PUBLIC_API_KEY"
+            --build-env "EVERY_ORG_WEBHOOK_TOKEN=$EVERY_ORG_WEBHOOK_TOKEN"
+            --build-env "EVERY_ORG_WEBHOOK_PATH_SECRET=$EVERY_ORG_WEBHOOK_PATH_SECRET"
+            --build-env "EVERY_ORG_PARTNER_METADATA_SECRET=$EVERY_ORG_PARTNER_METADATA_SECRET"
+            --build-env "CONDITIONAL_PAYMENTS_MODE=disabled"
+            --build-env "TRADE_DONATION_POOL_ENABLED=false"
+            --build-env "TRADE_DONATION_POOL_MODE=disabled"
+            --build-env "CRON_SECRET=$cron_secret"
+          )
+
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy "${common_flags[@]}" | tail -n 1)"
+          test -n "$deployment_url"
+          printf '%s\n' "$deployment_url" > evidence/deployment-url.txt
+
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$deployment_url" \
+            --wait --timeout 20m --token "$VERCEL_TOKEN" > evidence/inspect.txt
+          npx --yes "vercel@$VERCEL_CLI_VERSION" alias set "$deployment_url" "$STAGING_ALIAS" \
+            --token "$VERCEL_TOKEN" > evidence/alias.txt
+          printf 'https://%s\n' "$STAGING_ALIAS" > evidence/staging-alias-url.txt
+
+      - name: Prove Vercel automation bypass and real Every.org nonprofit search
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://$STAGING_ALIAS"
+          bypass="x-vercel-protection-bypass=$VERCEL_AUTOMATION_BYPASS_SECRET"
+
+          fetch() {
+            local name="$1" path="$2"
+            local join='?'
+            [[ "$path" == *'?'* ]] && join='&'
+            local code
+            code="$(curl --silent --show-error --location \
+              --output "evidence/$name.body" \
+              --dump-header "evidence/$name.headers" \
+              --write-out '%{http_code}' \
+              "$base$path$join$bypass")"
+            printf '%s %s %s\n' "$name" "$code" "$path" | tee -a evidence/route-status.txt
+          }
+
+          fetch donation-upgrades /donation-upgrades
+          fetch create '/create?structure=conditional-donation'
+          fetch connectors /connectors
+          fetch nonprofit-search '/api/donation-upgrades/nonprofits/search?q=GiveWell'
+
+          test "$(awk '$1=="donation-upgrades" {print $2}' evidence/route-status.txt)" = 200
+          test "$(awk '$1=="create" {print $2}' evidence/route-status.txt)" = 200
+          test "$(awk '$1=="connectors" {print $2}' evidence/route-status.txt)" = 200
+          test "$(awk '$1=="nonprofit-search" {print $2}' evidence/route-status.txt)" = 200
+          grep -Fq '"results"' evidence/nonprofit-search.body
+          grep -Eqi 'GiveWell|givewell' evidence/nonprofit-search.body
+          ! grep -Eqi 'Login – Vercel|Internal Server Error|Application error|temporarily unavailable' evidence/*.body
+
+          webhook_code="$(curl --silent --show-error --location \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data '' \
+            --output evidence/webhook-empty.body \
+            --dump-header evidence/webhook-empty.headers \
+            --write-out '%{http_code}' \
+            "$base/api/connectors/every-org/$EVERY_ORG_WEBHOOK_PATH_SECRET?$bypass")"
+          printf 'webhook-empty %s POST\n' "$webhook_code" | tee -a evidence/route-status.txt
+          test "$webhook_code" = 400
+          grep -Fq 'invalid_body' evidence/webhook-empty.body
+
+      - name: Upload non-secret real-staging deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr547-real-every-org-staging-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
