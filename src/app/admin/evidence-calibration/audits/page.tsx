@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   assignEvidenceCredibilityAuditAction,
   materializeEvidenceCredibilityAuditDrawsAction,
+  reconcileEvidenceCredibilityAuditAssignmentsAction,
 } from "@/app/evidence-credibility-audit-actions";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { SiteFooter } from "@/components/layout/site-footer";
@@ -175,20 +176,27 @@ export default async function EvidenceCalibrationAuditAdminPage({
               <article className="panel data-card data-card-wide">
                 <div className="profile-card-head">
                   <div>
-                    <p className="detail-kicker">Sampling intake</p>
-                    <h2>Draw every newly eligible terminal decision.</h2>
+                    <p className="detail-kicker">Sampling and assignment maintenance</p>
+                    <h2>Keep the audit population current and explicit.</h2>
                     <p className="route-text">
-                      The action records selected and nonselected cases, exact inclusion
-                      probabilities, a committed random seed, and the frozen pre-audit
-                      prediction snapshot. Re-running does not redraw existing decisions.
+                      Sampling records every selected and nonselected case exactly once.
+                      Reconciliation records expired assignments and assignments whose target
+                      was superseded, without rewriting the original draw or participant decision.
                     </p>
                   </div>
                 </div>
-                <form action={materializeEvidenceCredibilityAuditDrawsAction}>
-                  <PendingSubmitButton pendingLabel="Materializing draws…">
-                    Materialize new calibration draws
-                  </PendingSubmitButton>
-                </form>
+                <div className="form-actions">
+                  <form action={materializeEvidenceCredibilityAuditDrawsAction}>
+                    <PendingSubmitButton pendingLabel="Materializing draws…">
+                      Materialize new calibration draws
+                    </PendingSubmitButton>
+                  </form>
+                  <form action={reconcileEvidenceCredibilityAuditAssignmentsAction}>
+                    <PendingSubmitButton pendingLabel="Reconciling assignments…">
+                      Reconcile expired or superseded assignments
+                    </PendingSubmitButton>
+                  </form>
+                </div>
               </article>
 
               {queueError ? (
@@ -200,11 +208,12 @@ export default async function EvidenceCalibrationAuditAdminPage({
 
               <div className="section-head section-head-compact">
                 <p className="eyebrow">Independent reviewer assignment</p>
-                <h2>Resolve conflicts before assignment.</h2>
+                <h2>Resolve the complete review lineage before assignment.</h2>
                 <p>
-                  The database rejects the original reviewer, performer, payer, and any other
-                  party encoded in the draw. Reviewers receive a blinded case code rather than
-                  participant identifiers or the original calibration features.
+                  The database rejects every reviewer who previously handled the milestone or
+                  payment case, as well as the performer, payer, and other counterparty. Reviewers
+                  receive a blinded case code rather than participant identifiers or the original
+                  calibration features.
                 </p>
               </div>
 
@@ -273,7 +282,7 @@ export default async function EvidenceCalibrationAuditAdminPage({
 
                       {!eligibleReviewers.length ? (
                         <p className="form-hint">
-                          No active reviewer remains after applying the party and original-reviewer
+                          No active reviewer remains after applying the party and complete-review-lineage
                           conflicts.
                         </p>
                       ) : null}
