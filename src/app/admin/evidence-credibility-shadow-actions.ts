@@ -7,7 +7,8 @@ import { requireViewer } from "@/lib/app-data";
 import { createClient } from "@/lib/supabase/server";
 
 const RETURN_TO = "/admin/evidence-credibility-shadow";
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const CONFIDENCE_BANDS = new Set([0, 25, 50, 75, 100]);
 const PROVENANCE_CLASSES = new Set([
@@ -96,7 +97,12 @@ function optionalUuid(formData: FormData, key: string) {
   return value;
 }
 
-function choice(formData: FormData, key: string, allowed: Set<string>, label: string) {
+function choice(
+  formData: FormData,
+  key: string,
+  allowed: Set<string>,
+  label: string,
+) {
   const value = read(formData, key);
   if (!allowed.has(value)) {
     throw new Error(`Choose a supported ${label}.`);
@@ -136,7 +142,10 @@ function validateProviderFields(
   providerAuthenticationRef: string,
 ) {
   if (provenance === "authenticated_provider") {
-    if (providerAuthenticationStatus !== "authenticated" || !providerAuthenticationRef) {
+    if (
+      providerAuthenticationStatus !== "authenticated" ||
+      !providerAuthenticationRef
+    ) {
       throw new Error(
         "Authenticated-provider provenance requires an authenticated status and private provider reference.",
       );
@@ -170,9 +179,12 @@ async function rpcOrThrow(
   return data as Record<string, unknown> | null;
 }
 
-export async function recordEvidenceCredibilityShadowAction(formData: FormData) {
+export async function recordEvidenceCredibilityShadowAction(
+  formData: FormData,
+) {
   await requireViewer(RETURN_TO);
 
+  let data: Record<string, unknown> | null;
   try {
     const confidence = confidenceBand(formData);
     const provenance = choice(
@@ -208,15 +220,21 @@ export async function recordEvidenceCredibilityShadowAction(formData: FormData) 
       1000,
     );
     if (
-      (["permissible_exit", "force_majeure", "mutual_cancellation", "unresolved_dispute"].includes(
-        finalityReason,
-      ) || confidence === 0) &&
+      ([
+        "permissible_exit",
+        "force_majeure",
+        "mutual_cancellation",
+        "unresolved_dispute",
+      ].includes(finalityReason) ||
+        confidence === 0) &&
       !exclusionReason
     ) {
-      throw new Error("Excluded and review-required decisions need a private reason.");
+      throw new Error(
+        "Excluded and review-required decisions need a private reason.",
+      );
     }
 
-    const data = await rpcOrThrow(
+    data = await rpcOrThrow(
       "record_credibility_shadow_evidence_collection_v1",
       {
         p_milestone_id: requiredUuid(formData, "milestone_id", "Milestone"),
@@ -251,7 +269,10 @@ export async function recordEvidenceCredibilityShadowAction(formData: FormData) 
         ),
         p_finality_reason: finalityReason,
         p_exclusion_reason: exclusionReason,
-        p_supersedes_decision_id: optionalUuid(formData, "current_decision_id"),
+        p_supersedes_decision_id: optionalUuid(
+          formData,
+          "current_decision_id",
+        ),
         p_private_rationale: boundedText(
           formData,
           "private_rationale",
@@ -261,16 +282,6 @@ export async function recordEvidenceCredibilityShadowAction(formData: FormData) 
         ),
       },
     );
-
-    revalidatePath(RETURN_TO);
-    redirect(
-      withMessage(
-        "message",
-        data?.status === "replayed"
-          ? "The identical private evidence judgment was already recorded."
-          : "Private evidence judgment recorded in the shadow ledger.",
-      ),
-    );
   } catch (error) {
     redirect(
       withMessage(
@@ -279,11 +290,24 @@ export async function recordEvidenceCredibilityShadowAction(formData: FormData) 
       ),
     );
   }
+
+  revalidatePath(RETURN_TO);
+  redirect(
+    withMessage(
+      "message",
+      data?.status === "replayed"
+        ? "The identical private evidence judgment was already recorded."
+        : "Private evidence judgment recorded in the shadow ledger.",
+    ),
+  );
 }
 
-export async function recordSettlementCredibilityShadowAction(formData: FormData) {
+export async function recordSettlementCredibilityShadowAction(
+  formData: FormData,
+) {
   await requireViewer(RETURN_TO);
 
+  let data: Record<string, unknown> | null;
   try {
     const confidence = confidenceBand(formData);
     const provenance = choice(
@@ -318,11 +342,17 @@ export async function recordSettlementCredibilityShadowAction(formData: FormData
       "Private exclusion reason",
       1000,
     );
-    if ((["not_due", "permissible_cancellation"].includes(finalityReason) || confidence === 0) && !exclusionReason) {
-      throw new Error("Excluded and review-required settlement decisions need a private reason.");
+    if (
+      (["not_due", "permissible_cancellation"].includes(finalityReason) ||
+        confidence === 0) &&
+      !exclusionReason
+    ) {
+      throw new Error(
+        "Excluded and review-required settlement decisions need a private reason.",
+      );
     }
 
-    const data = await rpcOrThrow(
+    data = await rpcOrThrow(
       "record_credibility_shadow_settlement_collection_v1",
       {
         p_payout_id: requiredUuid(formData, "payout_id", "Payout"),
@@ -336,7 +366,10 @@ export async function recordSettlementCredibilityShadowAction(formData: FormData
         p_provider_authentication_ref: providerRef,
         p_finality_reason: finalityReason,
         p_exclusion_reason: exclusionReason,
-        p_supersedes_decision_id: optionalUuid(formData, "current_decision_id"),
+        p_supersedes_decision_id: optionalUuid(
+          formData,
+          "current_decision_id",
+        ),
         p_private_rationale: boundedText(
           formData,
           "private_rationale",
@@ -346,16 +379,6 @@ export async function recordSettlementCredibilityShadowAction(formData: FormData
         ),
       },
     );
-
-    revalidatePath(RETURN_TO);
-    redirect(
-      withMessage(
-        "message",
-        data?.status === "replayed"
-          ? "The identical private settlement judgment was already recorded."
-          : "Private settlement judgment recorded in the shadow ledger.",
-      ),
-    );
   } catch (error) {
     redirect(
       withMessage(
@@ -364,4 +387,14 @@ export async function recordSettlementCredibilityShadowAction(formData: FormData
       ),
     );
   }
+
+  revalidatePath(RETURN_TO);
+  redirect(
+    withMessage(
+      "message",
+      data?.status === "replayed"
+        ? "The identical private settlement judgment was already recorded."
+        : "Private settlement judgment recorded in the shadow ledger.",
+    ),
+  );
 }
