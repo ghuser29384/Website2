@@ -3,7 +3,7 @@ name: MPGF DAC product lifecycle gates
 on:
   push:
     branches:
-      - fix/mpgf-dac-product-lifecycle-20260807
+      - main
     paths:
       - ".github/workflows/mpgf-dac-product-lifecycle-gates.yml"
       - "src/app/api/mpgf/dac/**"
@@ -17,12 +17,14 @@ on:
       - "src/lib/mpgf/persistence.ts"
       - "src/app/globals.css"
       - "supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql"
+      - "supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql"
+      - "supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql"
       - "supabase/tests/mpgf_dac_product_browser_*.sql"
       - "supabase/tests/mpgf_dac_public_terms_api.sql"
       - "tests/mpgf-dac-product-lifecycle.spec.ts"
   pull_request:
     branches:
-      - fix/mpgf-dac-success-lapse-20260807
+      - main
     paths:
       - ".github/workflows/mpgf-dac-product-lifecycle-gates.yml"
       - "src/app/api/mpgf/dac/**"
@@ -36,14 +38,19 @@ on:
       - "src/lib/mpgf/persistence.ts"
       - "src/app/globals.css"
       - "supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql"
+      - "supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql"
+      - "supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql"
       - "supabase/tests/mpgf_dac_product_browser_*.sql"
       - "supabase/tests/mpgf_dac_public_terms_api.sql"
       - "tests/mpgf-dac-product-lifecycle.spec.ts"
   workflow_dispatch:
 
 concurrency:
-  group: mpgf-dac-product-lifecycle-${{ github.event.pull_request.head.ref || github.ref_name }}
-  cancel-in-progress: true
+  # Every isolated-QA execution mutates the same deterministic synthetic IDs.
+  # Serialize all branches and events so another run cannot drift the shared QA
+  # schema or delete fixtures while an exact-head proof is in progress.
+  group: mpgf-dac-product-lifecycle-shared-qa
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -90,6 +97,8 @@ jobs:
             printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
             sha256sum \
               supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql \
+              supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql \
+              supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql \
               supabase/tests/mpgf_dac_public_terms_api.sql \
               supabase/tests/mpgf_dac_product_browser_fixture.sql \
               supabase/tests/mpgf_dac_product_browser_cleanup.sql \
@@ -106,6 +115,8 @@ jobs:
           node --import tsx --test \
             src/lib/mpgf/dac-lifecycle-model.test.ts \
             src/lib/mpgf/dac-public-terms-migration.test.ts \
+            src/lib/mpgf/dac-terminal-event-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-terminal-schema-reconciliation-migration.test.ts \
             src/lib/mpgf/dac-product-lifecycle.test.ts \
             | tee mpgf-dac-product-focused.log
 
@@ -246,6 +257,30 @@ jobs:
           grep -Fxq 'canonical_pledge=true' mpgf-dac-product-parent-foundation.txt
           grep -Fxq 'terminal=true' mpgf-dac-product-parent-foundation.txt
 
+      - name: Compile terminal-schema reconciliation migrations in rollback-only transactions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PYCODE'
+          from pathlib import Path
+
+          migrations = [
+              Path("supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql"),
+              Path("supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql"),
+          ]
+          for migration in migrations:
+              source = migration.read_text()
+              if not source.lstrip().startswith("begin;"):
+                  raise SystemExit(f"{migration} does not begin with begin;")
+              if not source.rstrip().endswith("commit;"):
+                  raise SystemExit(f"{migration} does not end with commit;")
+              target = Path(f"mpgf-dac-{migration.stem}-rollback.sql")
+              target.write_text(source.rstrip()[:-len("commit;")] + "rollback;\n")
+          PYCODE
+          for migration in             mpgf-dac-20260812073000_mpgf_dac_terminal_event_constraint_reconciliation-rollback.sql             mpgf-dac-20260812074500_mpgf_dac_terminal_schema_reconciliation-rollback.sql; do
+            psql "$QA_SUPABASE_DB_URL"               --no-psqlrc               --set ON_ERROR_STOP=1               --file "$migration"
+          done 2>&1 | tee mpgf-dac-terminal-reconciliation-compile.log
+
       - name: Compile the additive public-terms migration in a rollback-only transaction
         shell: bash
         run: |
@@ -300,6 +335,56 @@ jobs:
             --set ON_ERROR_STOP=1 \
             --file supabase/tests/mpgf_dac_product_browser_cleanup.sql \
             2>&1 | tee mpgf-dac-product-pre-cleanup.log
+
+      - name: Reconcile exact terminal DAC schema immediately before fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum             supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql             supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql             | tee mpgf-dac-terminal-reconciliation.sha256
+          psql "$QA_SUPABASE_DB_URL"             --no-psqlrc             --set ON_ERROR_STOP=1             --file supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql             2>&1 | tee mpgf-dac-terminal-event-reconciliation-apply.log
+          psql "$QA_SUPABASE_DB_URL"             --no-psqlrc             --set ON_ERROR_STOP=1             --file supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql             2>&1 | tee mpgf-dac-terminal-schema-reconciliation-apply.log
+
+      - name: Verify exact terminal constraint vocabulary after cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL"             --no-psqlrc             --set ON_ERROR_STOP=1             --tuples-only             --no-align <<'SQL' | tee mpgf-dac-terminal-constraint-proof.txt
+          select 'proposal_status=' || coalesce((
+            select pg_get_constraintdef(oid, true) like '%succeeded%'
+              and pg_get_constraintdef(oid, true) like '%lapsed%'
+            from pg_constraint
+            where conrelid = 'public.mpgf_pool_proposals'::regclass
+              and conname = 'mpgf_pool_proposals_status_check'
+          ), false);
+          select 'proposal_lock=' || coalesce((
+            select pg_get_constraintdef(oid, true) like '%approved_as_candidate%'
+              and pg_get_constraintdef(oid, true) like '%succeeded%'
+              and pg_get_constraintdef(oid, true) like '%lapsed%'
+              and pg_get_constraintdef(oid, true) like '%operative_terms_sha256%'
+            from pg_constraint
+            where conrelid = 'public.mpgf_pool_proposals'::regclass
+              and conname = 'mpgf_pool_proposals_lock_complete'
+          ), false);
+          select 'lifecycle_events=' || coalesce((
+            select pg_get_constraintdef(oid, true) like '%pool_succeeded%'
+              and pg_get_constraintdef(oid, true) like '%pool_lapsed%'
+            from pg_constraint
+            where conrelid = 'public.mpgf_pool_lifecycle_events'::regclass
+              and conname = 'mpgf_pool_lifecycle_events_event_type_check'
+          ), false);
+          select 'pledge_events=' || coalesce((
+            select pg_get_constraintdef(oid, true) like '%pledge_created%'
+              and pg_get_constraintdef(oid, true) like '%eligibility_reviewed%'
+              and pg_get_constraintdef(oid, true) like '%pledge_expired%'
+            from pg_constraint
+            where conrelid = 'public.mpgf_dac_pledge_events'::regclass
+              and conname = 'mpgf_dac_pledge_events_type_valid'
+          ), false);
+          SQL
+          grep -Fxq 'proposal_status=true' mpgf-dac-terminal-constraint-proof.txt
+          grep -Fxq 'proposal_lock=true' mpgf-dac-terminal-constraint-proof.txt
+          grep -Fxq 'lifecycle_events=true' mpgf-dac-terminal-constraint-proof.txt
+          grep -Fxq 'pledge_events=true' mpgf-dac-terminal-constraint-proof.txt
 
       - name: Create deterministic open, succeeded, and lapsed browser fixtures
         shell: bash
