@@ -1,0 +1,361 @@
+name: Repair Bottleneck Atlas feedback persistence and private routing
+
+on:
+  push:
+    branches:
+      - feature/bottleneck-atlas-feed-20260811
+    paths:
+      - .github/workflows/repair-bottleneck-feedback-privacy.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/bottleneck-atlas-feed-20260811
+          fetch-depth: 0
+
+      - name: Use Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply feedback-state and URL-privacy repairs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/lib/opportunity-synthesis.ts")
+          source = path.read_text()
+
+          old_import = 'import { normalizeRecommendationText } from "./recommendation-learning";'
+          new_import = '''import {
+            getActionDescriptor,
+            normalizeRecommendationText,
+            opportunityKey,
+          } from "./recommendation-learning";'''
+          if source.count(old_import) != 1:
+              raise SystemExit(f"Expected one recommendation-learning import, found {source.count(old_import)}")
+          source = source.replace(old_import, new_import)
+
+          scored_marker = '''interface ScoredTemplate {
+            template: OpportunitySynthesisTemplate;
+            signal: LiveNowCauseSignal;
+            relevance: number;
+            basis: string;
+          }
+          '''
+          profile_type = '''interface ScoredTemplate {
+            template: OpportunitySynthesisTemplate;
+            signal: LiveNowCauseSignal;
+            relevance: number;
+            basis: string;
+          }
+
+          type OpportunitySynthesisProfile = Pick<
+            LiveNowProfileSignals,
+            | "causes"
+            | "causeSignals"
+            | "actionPreferences"
+            | "hiddenOpportunityKeys"
+            | "savedOpportunityKeys"
+          >;
+          '''
+          if source.count(scored_marker) != 1:
+              raise SystemExit(f"Expected one scored-template marker, found {source.count(scored_marker)}")
+          source = source.replace(scored_marker, profile_type)
+
+          old_priority = '  const priority = matchedCause.trim().replace(/\\s+/g, " ").slice(0, 120) || template.offeredCause;'
+          new_priority = '''  const normalizedPriority = matchedCause.trim().replace(/\\s+/g, " ").slice(0, 120);
+            const priority = normalizedPriority || draftPrompt(
+              "name the moral priority you want the reciprocal action to advance",
+            );'''
+          if source.count(old_priority) != 1:
+              raise SystemExit(f"Expected one draft-priority line, found {source.count(old_priority)}")
+          source = source.replace(old_priority, new_priority)
+
+          start = source.index("function buildRecommendation(")
+          end = source.index("\nexport function isOpportunitySynthesisEnabled", start)
+          replacement = '''function buildRecommendation(
+            item: ScoredTemplate,
+            now: Date,
+            profile: OpportunitySynthesisProfile,
+          ): SynthesizedFeedRecommendation {
+            const { template, signal, relevance, basis } = item;
+            const offeredCause = personalizedOfferedCause(template, signal.cause);
+            const fieldNames = fieldCauses(template);
+            const confidence = clamp((template.confidence / 100) * 0.72 + relevance * 0.28);
+            const baselineDifficulty =
+              template.sensitivity === "restricted" ? 4.4 : template.sensitivity === "elevated" ? 3.5 : 2.8;
+            const id = `synth:${template.id}:${slug(signal.cause)}`;
+            const mode = modeForTemplate(template);
+            const opportunityType = opportunityTypeForTemplate(template);
+            const descriptor = getActionDescriptor({
+              actionText: template.firstPartyGives,
+              actionCause: template.requestedCause,
+              mode,
+              opportunityType,
+            });
+            const learned = profile.actionPreferences?.get(descriptor.key);
+            const difficulty = learned?.difficulty ?? baselineDifficulty;
+            const difficultyLabel =
+              difficulty >= 4 ? "Hard" as const : difficulty >= 2.4 ? "Moderate" as const : "Easy" as const;
+            const willingness = learned?.willingness ?? Math.round(clamp(0.38 + relevance * 0.28) * 100);
+            const actionFitLabel =
+              willingness >= 68 && difficulty <= 3.6
+                ? "Strong fit" as const
+                : willingness >= 38
+                  ? "Possible fit" as const
+                  : "Stretch" as const;
+            const saved = profile.savedOpportunityKeys?.has(opportunityKey(opportunityType, id)) ?? false;
+            const classification = synthesisClassificationLabel(template.classification);
+            const safetySummary = template.safetyChecks[0] ?? "Complete the standard safety review.";
+
+            return {
+              id,
+              ownerId: "platform:opportunity-synthesis",
+              ownerAlias: "Potential opportunity — no counterparty has agreed",
+              mode,
+              offeredCause,
+              requestedCause: template.requestedCause,
+              compromiseCause: classification,
+              offerAction: template.firstPartyReceives,
+              requestAction: `Review whether you could offer: ${template.firstPartyGives}`,
+              verification:
+                "Unconfirmed synthesis. Verify the need, available capacity, authority, no-trade baseline, full opportunity cost, staff consent, and third-party effects before any introduction.",
+              duration: `Exploration only · atlas reviewed ${BOTTLENECK_ATLAS_REVIEWED_AT}`,
+              trustLevel: 1,
+              createdAt: now.toISOString(),
+              updatedAt: now.toISOString(),
+              sourceRevision: 1,
+              opportunityType,
+              href: `/suggested-opportunities/${encodeURIComponent(template.id)}`,
+              ctaLabel: "Review potential trade",
+              sourceLabel: "Bottleneck Atlas suggestion",
+              summary: template.summary,
+              benefitCauses: uniqueProfileCauses([signal.cause], [offeredCause], fieldNames),
+              actionCauses: uniqueProfileCauses([template.requestedCause], fieldNames),
+              actionKey: descriptor.key,
+              actionLabel: descriptor.label,
+              defaultDifficulty: baselineDifficulty,
+              metadata: {
+                origin: "platform_generated",
+                synthesisVersion: OPPORTUNITY_SYNTHESIS_VERSION,
+                atlasVersion: BOTTLENECK_ATLAS_VERSION,
+                templateId: template.id,
+                classification: template.classification,
+                moralTradeStatus: "unconfirmed",
+                sensitivity: template.sensitivity,
+                verifiedCounterparty: false,
+                liveOffer: false,
+              },
+              matchCause: signal.cause,
+              matchCauseSource: signal.source,
+              actionCauseMatch: template.requestedCause,
+              reason: "Potential opportunity generated from the Bottleneck Atlas",
+              reasonDetails: [
+                "No counterparty has agreed to this. It is a generated hypothesis, not a live offer or verified match.",
+                `Why it appeared: ${basis}.`,
+                `${classification}; the moral-trade label remains unconfirmed until the parties attest that differences in moral priorities materially create the deal.`,
+                `Current evidence confidence: ${template.confidence}/100. ${template.evidenceLabel}`,
+                `First safety gate: ${safetySummary}`,
+                "Use the detail page to review the no-trade baseline, candidate structures, assumptions, and externality checks before creating or sharing anything.",
+              ],
+              score: round(confidence * 100 + (saved ? 8 : 0)),
+              difficulty,
+              difficultyLabel,
+              willingness,
+              actionFitLabel,
+              learnedActionSignalCount: learned?.observationCount ?? 0,
+              saved,
+              scoreBreakdown: {
+                benefit: round(relevance * 100),
+                actionCause: round(relevance * 40),
+                actionFit: round((willingness - 50) * 0.4),
+                difficultyPenalty: round((difficulty - 1) * 4),
+                recency: 12,
+                quality: round(template.confidence / 12.5),
+                trust: 0,
+                saved: saved ? 18 : 0,
+              },
+            };
+          }
+          '''
+          source = source[:start] + replacement + source[end:]
+
+          old_profile = '  profile: Pick<LiveNowProfileSignals, "causes" | "causeSignals">;'
+          if source.count(old_profile) != 1:
+              raise SystemExit(f"Expected one synthesis-profile type, found {source.count(old_profile)}")
+          source = source.replace(old_profile, "  profile: OpportunitySynthesisProfile;")
+
+          old_recommendations = '  const recommendations = selected.map((item) => buildRecommendation(item, now));'
+          new_recommendations = '''  const recommendations = selected
+            .map((item) => buildRecommendation(item, now, profile))
+            .filter(
+              (recommendation) =>
+                !profile.hiddenOpportunityKeys?.has(
+                  opportunityKey(recommendation.opportunityType, recommendation.id),
+                ),
+            );'''
+          if source.count(old_recommendations) != 1:
+              raise SystemExit(f"Expected one recommendation materialization, found {source.count(old_recommendations)}")
+          source = source.replace(old_recommendations, new_recommendations)
+
+          old_generic_count = '      genericFallbackCount: selected.filter((item) => isGenericTemplate(item.template)).length,'
+          new_generic_count = '''      genericFallbackCount: recommendations.filter(
+                (recommendation) => getSynthesisTemplate(recommendation.metadata.templateId)?.generic === true,
+              ).length,'''
+          if source.count(old_generic_count) != 1:
+              raise SystemExit(f"Expected one generic count, found {source.count(old_generic_count)}")
+          source = source.replace(old_generic_count, new_generic_count)
+
+          path.write_text(source)
+
+          test_path = Path("src/lib/opportunity-synthesis.test.ts")
+          tests = test_path.read_text()
+          import_marker = 'import { getSynthesisTemplate } from "./bottleneck-atlas";'
+          import_replacement = '''import { getSynthesisTemplate } from "./bottleneck-atlas";
+          import { opportunityKey } from "./recommendation-learning";'''
+          if tests.count(import_marker) != 1:
+              raise SystemExit(f"Expected one test import marker, found {tests.count(import_marker)}")
+          tests = tests.replace(import_marker, import_replacement)
+          href_assertion_marker = '    assert.match(recommendation.href, /^\\/suggested-opportunities\\//);'
+          href_assertion_replacement = '''    assert.match(recommendation.href, /^\\/suggested-opportunities\\//);
+              assert.doesNotMatch(recommendation.href, /[?&]cause=/);'''
+          if tests.count(href_assertion_marker) != 1:
+              raise SystemExit(f"Expected one href assertion, found {tests.count(href_assertion_marker)}")
+          tests = tests.replace(href_assertion_marker, href_assertion_replacement)
+          draft_marker = '  assert.equal(firstParty.voluntaryCertification, false);\n});'
+          draft_replacement = '''  assert.equal(firstParty.voluntaryCertification, false);
+
+            const privateFallback = buildSynthesizedTradeDraftPrefill({
+              template,
+              matchedCause: "",
+              role: "first_party",
+            });
+            assert.match(privateFallback.requestedCause, /^\\[Replace:/);
+          });'''
+          if tests.count(draft_marker) != 1:
+              raise SystemExit(f"Expected one draft-test marker, found {tests.count(draft_marker)}")
+          tests = tests.replace(draft_marker, draft_replacement)
+          feedback_test = r'''
+
+          test("generated feedback persists across feed refreshes without exposing the private cause in a URL", () => {
+            const profile = {
+              causes: ["AI governance"],
+              causeSignals: [
+                { cause: "AI governance", weight: 100, source: "explicit_priority" as const, rank: 1 },
+              ],
+            };
+            const initial = synthesizeBottleneckAtlasRecommendations({
+              profile,
+              now: checkedAt,
+              limit: 8,
+            }).recommendations.find(
+              (item) => item.metadata.templateId === "ai-governance-advocacy-operations",
+            );
+            assert.ok(initial);
+            assert.doesNotMatch(initial.href, /[?&]cause=/);
+
+            const key = opportunityKey(initial.opportunityType, initial.id);
+            const learned = {
+              actionKey: initial.actionKey,
+              actionLabel: initial.actionLabel,
+              difficulty: 4.2,
+              willingness: 24,
+              observationCount: 3,
+              explicitDifficultyCount: 2,
+            };
+            const refreshed = synthesizeBottleneckAtlasRecommendations({
+              profile: {
+                ...profile,
+                actionPreferences: new Map([[initial.actionKey, learned]]),
+                savedOpportunityKeys: new Set([key]),
+              },
+              now: checkedAt,
+              limit: 8,
+            }).recommendations.find((item) => item.id === initial.id);
+
+            assert.ok(refreshed);
+            assert.equal(refreshed.saved, true);
+            assert.equal(refreshed.actionKey, initial.actionKey);
+            assert.equal(refreshed.difficulty, 4.2);
+            assert.equal(refreshed.willingness, 24);
+            assert.equal(refreshed.learnedActionSignalCount, 3);
+
+            const hidden = synthesizeBottleneckAtlasRecommendations({
+              profile: {
+                ...profile,
+                hiddenOpportunityKeys: new Set([key]),
+              },
+              now: checkedAt,
+              limit: 8,
+            }).recommendations;
+            assert.equal(hidden.some((item) => item.id === initial.id), false);
+          });
+          '''
+          if "generated feedback persists across feed refreshes" in tests:
+              raise SystemExit("Feedback persistence test already present")
+          tests += feedback_test
+          test_path.write_text(tests)
+
+          browser_path = Path("tests/bottleneck-atlas.spec.ts")
+          browser = browser_path.read_text()
+          browser = browser.replace(
+              'href: "/suggested-opportunities/ai-governance-advocacy-operations?cause=AI%20governance",',
+              'href: "/suggested-opportunities/ai-governance-advocacy-operations",',
+          )
+          browser = browser.replace(
+              '"/suggested-opportunities/ai-governance-advocacy-operations?cause=AI%20governance",',
+              '"/suggested-opportunities/ai-governance-advocacy-operations",',
+          )
+          link_marker = '    await expect(generated.getByRole("link", { name: "Review possibility" })).toBeVisible();'
+          link_replacement = '''    const generatedLink = generated.getByRole("link", { name: "Review possibility" });
+              await expect(generatedLink).toBeVisible();
+              await expect(generatedLink).not.toHaveAttribute("href", /[?&]cause=/);'''
+          if browser.count(link_marker) != 1:
+              raise SystemExit(f"Expected one generated link assertion, found {browser.count(link_marker)}")
+          browser = browser.replace(link_marker, link_replacement)
+          browser_path.write_text(browser)
+          PY
+
+          git diff --check
+
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run focused synthesis and wiring tests
+        run: >-
+          node --import tsx --test
+          src/lib/opportunity-synthesis.test.ts
+          src/bottleneck-atlas-feed-wiring.test.ts
+
+      - name: Run focused Bottleneck Atlas browser acceptance
+        run: npx playwright test tests/bottleneck-atlas.spec.ts --workers=1 --reporter=line
+
+      - name: Run complete source, lint, type, and build gates
+        run: |
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+
+      - name: Commit repairs and remove this controller
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/repair-bottleneck-feedback-privacy.yml
+          git add src/lib/opportunity-synthesis.ts src/lib/opportunity-synthesis.test.ts tests/bottleneck-atlas.spec.ts
+          git diff --cached --check
+          git commit -m "Persist generated-feed feedback and protect priority URLs"
+          git push origin HEAD:feature/bottleneck-atlas-feed-20260811
