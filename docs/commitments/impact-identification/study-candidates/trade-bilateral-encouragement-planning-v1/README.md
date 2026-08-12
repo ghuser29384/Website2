@@ -51,7 +51,7 @@ The frozen planning assumptions are:
 
 Under those assumptions, a nominal 3-percentage-point policy effect is diluted to a 2.1375-percentage-point ITT effect. Requiring the lower endpoint of the Monte Carlo 95% interval for power to exceed 80% across ICC values through 0.05 yields a planning envelope of **800 clusters per arm, 3,200 total clusters**. In the worst covered scenario, simulated power is 96.25% with Monte Carlo interval 93.91%–97.71%, and the median 95% confidence-interval half-width is about 1.07 percentage points.
 
-At 400 clusters per arm, worst-case simulated power is 79.25%; its Monte Carlo lower bound is about 75.01%, so that size does not satisfy the proposed planning target.
+At 400 clusters per arm, worst-case simulated power is 78.75%; its Monte Carlo lower bound is about 74.48%, so that size does not satisfy the proposed planning target.
 
 The point-estimate type-I error diagnostic remains below the planning ceiling across the grid. With only 400 replicates, some Monte Carlo upper confidence bounds exceed that ceiling; the report preserves this warning rather than presenting the simulator as fully calibrated.
 
