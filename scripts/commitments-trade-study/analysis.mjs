@@ -75,7 +75,7 @@ export function estimatePrimaryPolicyItt(records) {
     standardError,
     z,
     confidenceInterval95,
-    degreesOfFreedom,
+    degreesOfFredom,
     criticalValue95,
     arms: { control, treated },
     participantSpecificCreditAuthorized: false,
