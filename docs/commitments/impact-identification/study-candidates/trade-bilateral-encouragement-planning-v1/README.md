@@ -9,10 +9,10 @@ This package performs the next safe step after merging the QA-only study-instrum
 - Master protocol: `sha256:cd663ae722ee028ddfe3e1b866acab9ef79b5fcf5b5418d053bd3687eca3881a`
 - Reciprocal Trade template: `sha256:cf0a7a96294b431dcd79879fa01b7d1031ea50a842cebca6986e13351bcbb1e1`
 - Evidence-to-product mapping: `sha256:eb4aadae8491c1a6924fca03acdeb9157b07a1439098e736c88e549db16b59b8`
-- Study-instance payload: `sha256:de38516081217536eeda32699870f7939a2afb10afa8d76496ec74cf5b2bfd1b`
+- Study-instance payload: `sha256:1e31b1db59899fbf07fbf8b6219c8699f0c6b0ddbeb6e8717f989487660aaba2`
 - Precision report payload: `sha256:3ff2613f93d166e5e06a5bf8cfcaf029cd49d4e56690e345f676a51f982f6b4f`
 - Assignment code: `sha256:0f12661ba6f959299cd85da38646477c70899aca0a9b25d23b35c056fd97911e`
-- Analysis code: `sha256:61748579929ce0544ced820b47220e5b6d25ea31b9be085b5866bc9dad6cf76a`
+- Analysis code: `sha256:7106516340686b7f93df9f19dcdd1c82bde8134e693be65690ab0925644bf45f`
 
 The study instance remains `executionAuthorized=false`, `realUserAssignmentAllowed=false`, `subjectMode=synthetic_only`, and `instrumentationEnvironment=qa`.
 
