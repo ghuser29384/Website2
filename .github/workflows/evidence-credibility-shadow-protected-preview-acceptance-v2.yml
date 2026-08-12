@@ -18,10 +18,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CANDIDATE_SHA: e1588ba43b4036805990035bc83cbb81967a26f1
-  CURRENT_MAIN_SHA: 8ee3e14b340fdb486c211d86703e02f9226811ab
-  DEPLOYMENT_URL: https://moraltrade-site-c1g3w8f2w-ellen-s.vercel.app
-  DEPLOYMENT_ID: dpl_2qYwkyABMuc8TEjQfrzWq6SmMicp
+  CANDIDATE_SHA: 7ef370950861e979dbca14a9688c0f6e7193b8ab
+  CURRENT_MAIN_SHA: b637a18e52a560b4bbd992eeca2891ed9af86fa6
+  DEPLOYMENT_URL: https://moraltrade-site-hwysvmhnq-ellen-s.vercel.app
+  DEPLOYMENT_ID: dpl_BfawLx4bn8qesN7x7gomJWWzXsyR
   EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
   EXPECTED_QA_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
   EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
@@ -41,7 +41,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      EVIDENCE_CREDIBILITY_BASE_URL: https://moraltrade-site-c1g3w8f2w-ellen-s.vercel.app
+      EVIDENCE_CREDIBILITY_BASE_URL: https://moraltrade-site-hwysvmhnq-ellen-s.vercel.app
       EVIDENCE_CREDIBILITY_SCREENSHOT_DIR: ${{ github.workspace }}/preview-evidence/screenshots
     steps:
       - name: Check out controller
