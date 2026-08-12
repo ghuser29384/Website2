@@ -27,7 +27,7 @@ env:
 
 jobs:
   dispatch:
-    if: ${{ true }}
+    if: ${{ false }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -110,4 +110,4 @@ jobs:
           set -euo pipefail
           gh pr comment 618 --repo "$GITHUB_REPOSITORY" --body "Re-dispatched the permanent gated Preview for exact candidate \`$EXPECTED_RELEASE_SHA\` after aligning the stale signed-out feed assertion. Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID. Production was not targeted."
 
-# Armed by an exact one-file pull request. Do not edit or rerun for another candidate.
+# Disarmed after the exact Preview became READY. Retained only as an audit record.
