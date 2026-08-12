@@ -1,0 +1,67 @@
+name: Patch and publish permanent MPGF DAC lifecycle gate
+
+on:
+  push:
+    branches:
+      - ops/patch-mpgf-dac-permanent-gate-20260812
+    paths:
+      - ".github/workflows/patch-mpgf-dac-permanent-gate-v3-20260812.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-mpgf-dac-permanent-gate-v3-20260812
+  cancel-in-progress: false
+
+env:
+  EXPECTED_CANDIDATE_SHA: 29dec3ebee50e885d44b9e282c6a755deb42f57a
+  TARGET_BRANCH: integration/mpgf-dac-lifecycle-current-main-20260812
+
+jobs:
+  patch-and-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out controller inputs
+        uses: actions/checkout@v4
+        with:
+          ref: ops/patch-mpgf-dac-permanent-gate-20260812
+          fetch-depth: 1
+
+      - name: Preserve the deterministic patcher
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp scripts/patch-mpgf-dac-permanent-gate-20260812.py /tmp/patch-mpgf-dac-permanent-gate.py
+          python3 -m py_compile /tmp/patch-mpgf-dac-permanent-gate.py
+
+      - name: Check out the exact consolidated candidate branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Patch and validate the permanent gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          python3 /tmp/patch-mpgf-dac-permanent-gate.py
+          git diff --check
+          ruby -e "require 'yaml'; YAML.load_file('.github/workflows/mpgf-dac-product-lifecycle-gates.yml')"
+          sha256sum .github/workflows/mpgf-dac-product-lifecycle-gates.yml \
+            | tee patched-workflow.sha256
+
+      - name: Commit and publish the exact workflow repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/mpgf-dac-product-lifecycle-gates.yml
+          git commit -m "ci(mpgf): self-heal terminal schema before lifecycle proof"
+          git push origin "HEAD:${TARGET_BRANCH}"
