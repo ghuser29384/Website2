@@ -32,14 +32,20 @@
 }
 
 .routeTopbar {
+  position: relative;
+  width: min(calc(100% - 2rem), 1320px);
+  margin: 0 auto;
+}
+
+.routeTopbar :global(.mt-site-topbar) {
   display: grid !important;
-  width: min(calc(100% - 2rem), 1320px) !important;
+  width: 100% !important;
   min-height: 5.1rem !important;
   grid-template-areas: "brand nav context search actions" !important;
   grid-template-columns: auto auto minmax(8.5rem, 1fr) minmax(15rem, 22rem) auto !important;
   align-items: center;
   gap: 0.8rem 1.2rem !important;
-  margin: 0 auto !important;
+  margin: 0 !important;
   padding: 0.7rem 0 !important;
   border: 0 !important;
 }
@@ -50,9 +56,12 @@
   font-size: clamp(1.35rem, 2vw, 1.8rem) !important;
 }
 
-.routeTopbar :global(.topbar-context) {
-  grid-area: context;
-  justify-self: center;
+.routeContext {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  margin: 0;
   color: var(--offers-context);
   font-family: var(--font-mono);
   font-size: 0.62rem;
@@ -61,6 +70,7 @@
   line-height: 1.3;
   text-align: center;
   text-transform: uppercase;
+  transform: translate(-50%, -50%);
   white-space: nowrap;
 }
 
@@ -717,15 +727,17 @@
 }
 
 @media (max-width: 1120px) {
-  .routeTopbar {
+  .routeTopbar :global(.mt-site-topbar) {
     grid-template-areas:
       "brand context context"
       "nav search actions" !important;
     grid-template-columns: auto minmax(0, 1fr) auto !important;
   }
 
-  .routeTopbar :global(.topbar-context) {
-    justify-self: start;
+  .routeContext {
+    top: 1.05rem;
+    left: clamp(12rem, 32vw, 18rem);
+    transform: none;
   }
 
   .directoryForm {
@@ -846,6 +858,9 @@
 
   .routeTopbar {
     width: 100% !important;
+  }
+
+  .routeTopbar :global(.mt-site-topbar) {
     min-height: 0 !important;
     grid-template-areas:
       "brand nav"
@@ -860,7 +875,7 @@
     font-size: 1.25rem !important;
   }
 
-  .routeTopbar :global(.topbar-context) {
+  .routeContext {
     display: none;
   }
 

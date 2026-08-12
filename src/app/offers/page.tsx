@@ -571,21 +571,22 @@ export default async function OffersPage({ searchParams }: OffersPageProps) {
   return (
     <div className={densityStyles.shell}>
       <header className={densityStyles.routeHeader}>
-        <SiteTopbar
-          authLink={topbarActions.authLink}
-          brandHref="/"
-          className={densityStyles.routeTopbar}
-          contextLabel="Offers · Live directory"
-          links={[
-            {
-              items: routeNavigation,
-              label: "Navigate",
-              summary: "Global navigation for the Moral Trade marketplace.",
-            },
-          ]}
-          primaryAction={{ href: createHref, label: "Create a proposal" }}
-          showLogout={isAuthenticated}
-        />
+        <div className={densityStyles.routeTopbar}>
+          <SiteTopbar
+            authLink={topbarActions.authLink}
+            brandHref="/"
+            links={[
+              {
+                items: routeNavigation,
+                label: "Navigate",
+                summary: "Global navigation for the Moral Trade marketplace.",
+              },
+            ]}
+            primaryAction={{ href: createHref, label: "Create a proposal" }}
+            showLogout={isAuthenticated}
+          />
+          <p className={densityStyles.routeContext}>Offers · Live directory</p>
+        </div>
       </header>
 
       <main className={densityStyles.main} id="main-content" tabIndex={-1}>
