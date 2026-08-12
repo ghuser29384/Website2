@@ -1,0 +1,191 @@
+name: Evidence credibility calibration analysis QA
+
+on:
+  pull_request:
+    branches:
+      - feature/evidence-credibility-calibration-export-v1-20260812
+    paths:
+      - .github/workflows/evidence-credibility-calibration-analysis-qa.yml
+      - analysis/evidence-credibility-calibration-v1/README.md
+      - analysis/evidence-credibility-calibration-v1/plan.json
+      - analysis/evidence-credibility-calibration-v1/plan.sha256
+      - docs/moral-trade/evidence-credibility-calibration-analysis-plan-v1.md
+      - package.json
+      - scripts/evidence-credibility-calibration-analysis.ts
+      - src/lib/evidence-credibility-calibration-analysis.ts
+      - src/lib/evidence-credibility-calibration-analysis.test.ts
+  push:
+    branches:
+      - research/evidence-credibility-calibration-analysis-v1-20260812
+    paths:
+      - .github/workflows/evidence-credibility-calibration-analysis-qa.yml
+      - analysis/evidence-credibility-calibration-v1/README.md
+      - analysis/evidence-credibility-calibration-v1/plan.json
+      - analysis/evidence-credibility-calibration-v1/plan.sha256
+      - docs/moral-trade/evidence-credibility-calibration-analysis-plan-v1.md
+      - package.json
+      - scripts/evidence-credibility-calibration-analysis.ts
+      - src/lib/evidence-credibility-calibration-analysis.ts
+      - src/lib/evidence-credibility-calibration-analysis.test.ts
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-credibility-calibration-analysis-qa-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  STACK_BASE_SHA: 18cc522f2a5339c6d76521445210b2ba37bc3520
+
+jobs:
+  offline-analysis-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Guard exact durable scope and research-only boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git cat-file -e "${STACK_BASE_SHA}^{commit}"
+
+          cat > /tmp/expected-files.txt <<'EOF'
+          .github/workflows/evidence-credibility-calibration-analysis-qa.yml
+          analysis/evidence-credibility-calibration-v1/README.md
+          analysis/evidence-credibility-calibration-v1/plan.json
+          analysis/evidence-credibility-calibration-v1/plan.sha256
+          docs/moral-trade/evidence-credibility-calibration-analysis-plan-v1.md
+          package.json
+          scripts/evidence-credibility-calibration-analysis.ts
+          src/lib/evidence-credibility-calibration-analysis.test.ts
+          src/lib/evidence-credibility-calibration-analysis.ts
+          EOF
+          sed -i 's/^          //' /tmp/expected-files.txt
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > /tmp/actual-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+          test "$(wc -l < /tmp/actual-files.txt)" -eq 9
+
+          test ! -e .github/workflows/harden-calibration-export-canonical-integrity.yml
+          if grep -E '\.(jsonl)$|(^|/)(report\.json|report\.md|reliability\.svg|analysis-manifest\.json)$' /tmp/actual-files.txt; then
+            echo "A held-out export or generated report was committed."
+            exit 1
+          fi
+
+          if grep -R -E "jnpoxvalyjtdghnperyu|SUPABASE_(URL|KEY)|STRIPE_(SECRET|WEBHOOK)|VERCEL_TOKEN|createServiceClient|createClient\\(" \
+            analysis/evidence-credibility-calibration-v1 \
+            docs/moral-trade/evidence-credibility-calibration-analysis-plan-v1.md \
+            scripts/evidence-credibility-calibration-analysis.ts \
+            src/lib/evidence-credibility-calibration-analysis.ts \
+            src/lib/evidence-credibility-calibration-analysis.test.ts; then
+            echo "The offline package contains a production reference, credential dependency, or server client."
+            exit 1
+          fi
+
+          grep -q 'activationAuthorized: false' src/lib/evidence-credibility-calibration-analysis.ts
+          grep -q 'never authorizes activation' analysis/evidence-credibility-calibration-v1/README.md
+          grep -q 'Synthetic results are never empirical evidence' docs/moral-trade/evidence-credibility-calibration-analysis-plan-v1.md
+          git diff --check
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Verify frozen analysis plan hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd analysis/evidence-credibility-calibration-v1
+            sha256sum -c plan.sha256
+          )
+          node - <<'NODE'
+          const { createHash } = require("node:crypto");
+          const { readFileSync } = require("node:fs");
+          const plan = JSON.parse(
+            readFileSync(
+              "analysis/evidence-credibility-calibration-v1/plan.json",
+              "utf8",
+            ),
+          );
+          const document = readFileSync(
+            "docs/moral-trade/evidence-credibility-calibration-analysis-plan-v1.md",
+          );
+          const hash = createHash("sha256").update(document).digest("hex");
+          if (hash !== plan.analysisPlanSha256) {
+            throw new Error("The machine-readable plan does not bind the exact protocol document.");
+          }
+          if (
+            plan.analysisPlanVersion !==
+            "evidence-credibility-calibration-analysis-v1.0.0"
+          ) {
+            throw new Error("Unexpected analysis-plan version.");
+          }
+          NODE
+
+      - name: Run focused offline-analysis contract
+        run: >-
+          node --import tsx --test
+          src/lib/evidence-credibility-calibration-analysis.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run repository-wide ESLint
+        run: npm run lint
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Prove credential-free CLI entrypoint
+        run: npm run analyze:evidence-credibility -- --help
+
+      - name: Preserve exact-head source evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(git status --short)"
+          test -z "$status"
+          mkdir -p evidence
+          git rev-parse HEAD > evidence/head-sha.txt
+          git rev-parse "$STACK_BASE_SHA" > evidence/stack-base-sha.txt
+          printf '%s' "$status" > evidence/status.txt
+          git diff --name-only "$STACK_BASE_SHA"...HEAD | sort > evidence/changed-files.txt
+          sha256sum \
+            .github/workflows/evidence-credibility-calibration-analysis-qa.yml \
+            analysis/evidence-credibility-calibration-v1/README.md \
+            analysis/evidence-credibility-calibration-v1/plan.json \
+            analysis/evidence-credibility-calibration-v1/plan.sha256 \
+            docs/moral-trade/evidence-credibility-calibration-analysis-plan-v1.md \
+            package.json \
+            scripts/evidence-credibility-calibration-analysis.ts \
+            src/lib/evidence-credibility-calibration-analysis.ts \
+            src/lib/evidence-credibility-calibration-analysis.test.ts \
+            > evidence/file-sha256.txt
+
+      - name: Upload exact-head source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-calibration-analysis-source-${{ github.run_id }}-${{ env.EXPECTED_HEAD_SHA }}
+          path: evidence
+          if-no-files-found: error
+          retention-days: 30
