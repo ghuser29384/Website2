@@ -18,10 +18,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CANDIDATE_SHA: 7ef370950861e979dbca14a9688c0f6e7193b8ab
-  CURRENT_MAIN_SHA: b637a18e52a560b4bbd992eeca2891ed9af86fa6
-  DEPLOYMENT_URL: https://moraltrade-site-hwysvmhnq-ellen-s.vercel.app
-  DEPLOYMENT_ID: dpl_BfawLx4bn8qesN7x7gomJWWzXsyR
+  CANDIDATE_SHA: e1588ba43b4036805990035bc83cbb81967a26f1
+  CURRENT_MAIN_SHA: 8ee3e14b340fdb486c211d86703e02f9226811ab
+  DEPLOYMENT_URL: https://moraltrade-site-c1g3w8f2w-ellen-s.vercel.app
+  DEPLOYMENT_ID: dpl_2qYwkyABMuc8TEjQfrzWq6SmMicp
   EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
   EXPECTED_QA_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
   EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
@@ -41,7 +41,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
       VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      EVIDENCE_CREDIBILITY_BASE_URL: https://moraltrade-site-hwysvmhnq-ellen-s.vercel.app
+      EVIDENCE_CREDIBILITY_BASE_URL: https://moraltrade-site-c1g3w8f2w-ellen-s.vercel.app
       EVIDENCE_CREDIBILITY_SCREENSHOT_DIR: ${{ github.workspace }}/preview-evidence/screenshots
     steps:
       - name: Check out controller
@@ -57,6 +57,31 @@ jobs:
           fetch-depth: 0
           path: candidate
           ref: ${{ env.CANDIDATE_SHA }}
+
+      - name: Assert protected curl never takes an explicit token
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          path = Path('controller/.github/workflows/evidence-credibility-shadow-protected-preview-acceptance-v2.yml')
+          source = path.read_text(encoding='utf-8')
+          if re.search(r'vc(?:p|a|r)_[A-Za-z0-9]{20,}', source):
+              raise SystemExit('Workflow contains an explicit Vercel token value.')
+
+          logical_source = source.replace('\\\n', ' ')
+          curl_invocations = [
+              line
+              for line in logical_source.splitlines()
+              if re.search(r'\bvercel[^\s]*\s+curl\b', line)
+          ]
+          if not curl_invocations:
+              raise SystemExit('Expected at least one Vercel curl invocation.')
+          if any(re.search(r'--token(?:=|\s)', line) for line in curl_invocations):
+              raise SystemExit('Vercel curl must read VERCEL_TOKEN from the environment.')
+          PY
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -112,37 +137,133 @@ jobs:
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
           npx --yes "vercel@$VERCEL_CLI_VERSION" --version 2>&1 | tee ../preview-evidence/vercel-cli-version.txt
-          npx --yes "vercel@$VERCEL_CLI_VERSION" curl --help 2>&1 \
-            | tee ../preview-evidence/vercel-curl-help.txt || true
+          npx --yes "vercel@$VERCEL_CLI_VERSION" curl --help \
+            > "$RUNNER_TEMP/vercel-curl-help.txt" 2>&1 || true
 
       - name: Verify the existing deployment remains ready, preview-targeted, and protected
         shell: bash
         run: |
           set -euo pipefail
-          cd candidate
-          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$DEPLOYMENT_URL" \
-            --wait --timeout=5m --token="$VERCEL_TOKEN" \
-            2>&1 | tee ../preview-evidence/vercel-inspect.txt
-          grep -Eq 'status[[:space:]]+● Ready|status[[:space:]]+Ready' ../preview-evidence/vercel-inspect.txt
-          grep -Eq 'target[[:space:]]+preview' ../preview-evidence/vercel-inspect.txt
-          grep -q "$DEPLOYMENT_ID" ../preview-evidence/vercel-inspect.txt
+          api_config="$RUNNER_TEMP/vercel-api.curlrc"
+          deployment_json="$RUNNER_TEMP/vercel-deployment.raw.json"
+          project_json="$RUNNER_TEMP/vercel-project.raw.json"
+          cleanup_api_files() {
+            rm -f "$api_config" "$deployment_json" "$project_json"
+          }
+          trap cleanup_api_files EXIT
+          umask 077
+          printf 'header = "Authorization: Bearer %s"\n' "$VERCEL_TOKEN" > "$api_config"
+
+          curl --config "$api_config" --silent --show-error --fail \
+            --output "$deployment_json" \
+            "https://api.vercel.com/v13/deployments/$DEPLOYMENT_ID?teamId=$VERCEL_ORG_ID"
+          curl --config "$api_config" --silent --show-error --fail \
+            --output "$project_json" \
+            "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID"
+
+          DEPLOYMENT_METADATA_PATH="$deployment_json" \
+            PROJECT_METADATA_PATH="$project_json" \
+            DEPLOYMENT_EVIDENCE_PATH="preview-evidence/vercel-inspect.txt" \
+            python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from urllib.parse import urlparse
+
+          deployment = json.loads(Path(os.environ['DEPLOYMENT_METADATA_PATH']).read_text())
+          project = json.loads(Path(os.environ['PROJECT_METADATA_PATH']).read_text())
+          expected_host = urlparse(os.environ['DEPLOYMENT_URL']).hostname
+          aliases = deployment.get('alias') or deployment.get('aliases') or []
+          if not isinstance(aliases, list):
+              raise SystemExit('Deployment aliases were not a list.')
+
+          checks = {
+              'deployment ID': deployment.get('id') == os.environ['DEPLOYMENT_ID'],
+              'deployment URL': deployment.get('url') == expected_host,
+              'READY status': deployment.get('readyState') == 'READY',
+              'Preview target': deployment.get('target') is None,
+              'project ID': deployment.get('projectId') == os.environ['VERCEL_PROJECT_ID'],
+              'team ID': deployment.get('ownerId') == os.environ['VERCEL_ORG_ID'],
+              'project metadata ID': project.get('id') == os.environ['VERCEL_PROJECT_ID'],
+              'project metadata team': project.get('accountId') == os.environ['VERCEL_ORG_ID'],
+              'no production alias': all(
+                  isinstance(alias, str)
+                  and alias.endswith('.vercel.app')
+                  and alias not in {'moraltrade.org', 'www.moraltrade.org'}
+                  for alias in aliases
+              ),
+          }
+          failed = [label for label, passed in checks.items() if not passed]
+          if failed:
+              raise SystemExit(f'Deployment identity check failed: {", ".join(failed)}')
+
+          protection_bypass = project.get('protectionBypass') or {}
+          has_existing_automation_bypass = any(
+              isinstance(entry, dict) and entry.get('scope') == 'automation-bypass'
+              for entry in protection_bypass.values()
+          ) if isinstance(protection_bypass, dict) else False
+          if not has_existing_automation_bypass:
+              raise SystemExit('Refusing to let Vercel CLI create a new protection-bypass setting.')
+
+          evidence = (
+              f"deployment_id={deployment['id']}\n"
+              f"status={deployment['readyState']}\n"
+              "target=preview\n"
+              f"deployment_url=https://{deployment['url']}\n"
+              f"project_id={deployment['projectId']}\n"
+              f"team_id={deployment['ownerId']}\n"
+              f"aliases={','.join(sorted(aliases))}\n"
+              "production_alias=false\n"
+              "automation_bypass=pre-existing\n"
+          )
+          Path(os.environ['DEPLOYMENT_EVIDENCE_PATH']).write_text(evidence, encoding='utf-8')
+          PY
 
           status="$(curl --silent --max-redirs 0 --output /dev/null --write-out '%{http_code}' "$DEPLOYMENT_URL/login" || true)"
           case "$status" in 302|303|307|308|401|403) ;; *) echo "Deployment protection failed closed check: $status"; exit 1;; esac
-          printf '%s\n' "$status" > ../preview-evidence/unauthenticated-status.txt
+          printf '%s\n' "$status" > preview-evidence/unauthenticated-status.txt
 
       - name: Obtain a short-lived bypass cookie using Vercel's authenticated curl wrapper
         shell: bash
         run: |
           set -euo pipefail
           cd candidate
-          npx --yes "vercel@$VERCEL_CLI_VERSION" curl /login \
-            --deployment "$DEPLOYMENT_URL" \
+          raw_stderr="$RUNNER_TEMP/vercel-curl-stderr.raw"
+          trap 'rm -f "$raw_stderr"' EXIT
+          set +e
+          npx --yes "vercel@$VERCEL_CLI_VERSION" curl "$DEPLOYMENT_URL/login" \
             -- \
             --header 'x-vercel-set-bypass-cookie: true' \
             --dump-header /tmp/vercel-bypass-headers.txt \
             --output /tmp/vercel-bypass-body.html \
-            2> ../preview-evidence/vercel-curl-stderr.txt
+            2> "$raw_stderr"
+          curl_exit=$?
+          set -e
+
+          RAW_STDERR_PATH="$raw_stderr" \
+            REDACTED_STDERR_PATH="../preview-evidence/vercel-curl-stderr-redacted.txt" \
+            python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          source = Path(os.environ['RAW_STDERR_PATH']).read_text(encoding='utf-8', errors='replace')
+          patterns = (
+              ('postgresql-uri', re.compile(r'(?i)\bpostgres(?:ql)?://[^/\s:@]+:[^@\s/]+@[^\s/]+')),
+              ('vercel-token', re.compile(r'vc(?:p|a|r)_[A-Za-z0-9]{20,}')),
+              ('github-token', re.compile(r'gh(?:p|o|u|s|r)_[A-Za-z0-9]{20,}')),
+              ('github-fine-grained-token', re.compile(r'github_pat_[A-Za-z0-9_]{20,}')),
+              ('supabase-secret', re.compile(r'sb_secret_[A-Za-z0-9._-]{16,}')),
+              ('bearer-credential', re.compile(r'(?i)\bbearer[ \t]+[A-Za-z0-9._~+/-]{16,}={0,2}')),
+              ('token-argument', re.compile(r"(?i)--token(?:=|[ \t]+)(?:\"[^\"\r\n]{8,}\"|'[^'\r\n]{8,}'|[^\s<>{}\[\]]{8,})")),
+              ('jwt', re.compile(r'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b')),
+          )
+          redacted = source
+          for label, pattern in patterns:
+              redacted = pattern.sub(f'[REDACTED:{label}]', redacted)
+          Path(os.environ['REDACTED_STDERR_PATH']).write_text(redacted, encoding='utf-8')
+          PY
+          test "$curl_exit" -eq 0
 
           node <<'NODE'
           const fs = require('fs');
@@ -222,28 +343,143 @@ jobs:
           PY
           git -C candidate diff --check
 
-      - name: Run hosted desktop and 390x844 AAL2 acceptance
+      - name: Run hosted desktop and 390x844 AAL2 acceptance with live runtime inspection
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           cd candidate
+
+          runtime_logs="$RUNNER_TEMP/vercel-runtime-logs.raw"
+          runtime_stderr="$RUNNER_TEMP/vercel-runtime-logs-stderr.raw"
+          runtime_config="$RUNNER_TEMP/vercel-runtime-logs.curlrc"
+          runtime_pid=''
+          cleanup_runtime_files() {
+            if [[ -n "$runtime_pid" ]] && kill -0 "$runtime_pid" 2>/dev/null; then
+              kill "$runtime_pid" 2>/dev/null || true
+              wait "$runtime_pid" 2>/dev/null || true
+            fi
+            rm -f "$runtime_logs" "$runtime_stderr" "$runtime_config"
+          }
+          trap cleanup_runtime_files EXIT
+          umask 077
+          : > "$runtime_logs"
+          : > "$runtime_stderr"
+          printf 'header = "Authorization: Bearer %s"\n' "$VERCEL_TOKEN" > "$runtime_config"
+
+          curl --config "$runtime_config" --silent --show-error --fail-with-body --no-buffer \
+            --max-time 1200 \
+            "https://api.vercel.com/v1/projects/$VERCEL_PROJECT_ID/deployments/$DEPLOYMENT_ID/runtime-logs?format=lines&teamId=$VERCEL_ORG_ID" \
+            > "$runtime_logs" 2> "$runtime_stderr" &
+          runtime_pid=$!
+          sleep 3
+
+          set +e
           npx playwright test tests/evidence-credibility-shadow-preview-acceptance.spec.ts \
             --workers=1 --reporter=line 2>&1 | tee ../preview-evidence/hosted-playwright.log
+          playwright_status=${PIPESTATUS[0]}
+          set -e
 
-      - name: Inspect hosted runtime error logs
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd candidate
-          npx --yes "vercel@$VERCEL_CLI_VERSION" logs "$DEPLOYMENT_URL" \
-            --level=error --since=30m --token="$VERCEL_TOKEN" \
-            2>&1 | tee ../preview-evidence/vercel-error-logs.txt || true
-          if grep -Eqi '(Unhandled|Internal Server Error|FUNCTION_INVOCATION_FAILED|MIDDLEWARE_INVOCATION_FAILED)' \
-            ../preview-evidence/vercel-error-logs.txt; then
-            echo 'Hosted Preview emitted a blocking runtime error.'
+          # Runtime logs are streamed, so allow Vercel to deliver the final browser requests.
+          sleep 15
+          runtime_alive_through_acceptance=false
+          if kill -0 "$runtime_pid" 2>/dev/null; then
+            runtime_alive_through_acceptance=true
+            kill "$runtime_pid" 2>/dev/null || true
+          fi
+          set +e
+          wait "$runtime_pid"
+          runtime_status=$?
+          set -e
+          runtime_pid=''
+
+          set +e
+          RUNTIME_STREAM_ALIVE="$runtime_alive_through_acceptance" \
+            RUNTIME_LOGS_PATH="$runtime_logs" \
+            RUNTIME_LOG_EVIDENCE_PATH="../preview-evidence/vercel-runtime-log-summary.json" \
+            python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          source = Path(os.environ['RUNTIME_LOGS_PATH'])
+          stream_alive = os.environ['RUNTIME_STREAM_ALIVE'] == 'true'
+          rows = []
+          malformed = 0
+          for line in source.read_text(encoding='utf-8', errors='replace').splitlines():
+              if not line.strip():
+                  continue
+              try:
+                  row = json.loads(line)
+              except json.JSONDecodeError:
+                  malformed += 1
+                  continue
+              if isinstance(row, dict):
+                  rows.append(row)
+              else:
+                  malformed += 1
+
+          blocking_message = re.compile(
+              r'Unhandled|Internal Server Error|FUNCTION_INVOCATION_FAILED|MIDDLEWARE_INVOCATION_FAILED',
+              re.IGNORECASE,
+          )
+          blocking = []
+          mismatched = []
+          levels = set()
+          status_codes = set()
+          for index, row in enumerate(rows):
+              level = str(row.get('level') or '').lower()
+              status = int(row.get('responseStatusCode') or row.get('statusCode') or 0)
+              message = str(row.get('message') or '')
+              if level:
+                  levels.add(level)
+              if status:
+                  status_codes.add(status)
+              if level in {'error', 'fatal'} or status >= 500 or blocking_message.search(message):
+                  blocking.append(index)
+              row_deployment = row.get('deploymentId')
+              row_project = row.get('projectId')
+              if row_deployment and row_deployment != os.environ['DEPLOYMENT_ID']:
+                  mismatched.append(index)
+              if row_project and row_project != os.environ['VERCEL_PROJECT_ID']:
+                  mismatched.append(index)
+
+          summary = {
+              'deployment_id': os.environ['DEPLOYMENT_ID'],
+              'project_id': os.environ['VERCEL_PROJECT_ID'],
+              'parsed_rows': len(rows),
+              'malformed_rows': malformed,
+              'levels': sorted(levels),
+              'status_codes': sorted(status_codes),
+              'blocking_rows': len(set(blocking)),
+              'mismatched_rows': len(set(mismatched)),
+              'stream_alive_through_acceptance': stream_alive,
+              'browser_console_pageerror_and_5xx_assertions': True,
+          }
+          Path(os.environ['RUNTIME_LOG_EVIDENCE_PATH']).write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + '\n',
+              encoding='utf-8',
+          )
+          print(f"Runtime inspection parsed {len(rows)} rows with {len(set(blocking))} blocking rows.")
+          if malformed:
+              raise SystemExit('Runtime log stream contained malformed rows.')
+          if not stream_alive:
+              raise SystemExit('Runtime log stream ended before hosted acceptance completed.')
+          if mismatched:
+              raise SystemExit('Runtime log stream included a different deployment or project.')
+          if blocking:
+              raise SystemExit('Hosted Preview emitted a blocking runtime error.')
+          PY
+          runtime_parse_status=$?
+          set -e
+
+          rm -f "$runtime_logs" "$runtime_stderr" "$runtime_config"
+          if [[ "$runtime_status" -ne 0 && "$runtime_status" -ne 28 && "$runtime_status" -ne 143 ]]; then
+            echo "Runtime log stream failed with exit status $runtime_status."
             exit 1
           fi
+          test "$runtime_parse_status" -eq 0
+          test "$playwright_status" -eq 0
 
       - name: Clean exact QA fixture and prove zero residue
         if: always()
@@ -279,8 +515,71 @@ jobs:
             controller/ops/evidence-credibility-shadow-preview-cleanup-v3.sql \
             > preview-evidence/controller-sha256.txt
 
-      - name: Upload hosted Preview evidence
+      - name: Guard hosted Preview evidence against credential leaks
+        id: evidence_guard
         if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+
+          root = Path('preview-evidence')
+          if not root.is_dir():
+              raise SystemExit('Evidence directory is missing; refusing artifact upload.')
+
+          redacted_stderr = root / 'vercel-curl-stderr-redacted.txt'
+          if not redacted_stderr.is_file():
+              raise SystemExit('Redacted Vercel curl stderr is missing; refusing artifact upload.')
+          forbidden_raw_names = {
+              'vercel-curl-stderr.raw',
+              'vercel-curl-stderr.txt',
+          }
+
+          patterns = (
+              ('postgresql-uri', re.compile(rb'(?i)\bpostgres(?:ql)?://[^/\s:@]+:[^@\s/]+@[^\s/]+')),
+              ('vercel-token', re.compile(rb'vc(?:p|a|r)_[A-Za-z0-9]{20,}')),
+              ('github-token', re.compile(rb'gh(?:p|o|u|s|r)_[A-Za-z0-9]{20,}')),
+              ('github-fine-grained-token', re.compile(rb'github_pat_[A-Za-z0-9_]{20,}')),
+              ('supabase-secret', re.compile(rb'sb_secret_[A-Za-z0-9._-]{16,}')),
+              ('bearer-credential', re.compile(rb'(?i)\bbearer[ \t]+[A-Za-z0-9._~+/-]{16,}={0,2}')),
+              ('token-argument', re.compile(rb'''(?i)--token(?:=|[ \t]+)(?:"[^"\r\n]{8,}"|'[^'\r\n]{8,}'|[^\s<>{}\[\]]{8,})''')),
+              ('jwt', re.compile(rb'\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b')),
+          )
+          findings = []
+          scanned = 0
+          for path in sorted(root.rglob('*')):
+              if path.is_symlink():
+                  findings.append(f'{path.relative_to(root)}:symlink')
+                  continue
+              if not path.is_file():
+                  continue
+              if path.name in forbidden_raw_names:
+                  findings.append(f'{path.relative_to(root)}:raw-vercel-stderr')
+                  continue
+              scanned += 1
+              try:
+                  payload = path.read_bytes()
+              except OSError:
+                  findings.append(f'{path.relative_to(root)}:unreadable')
+                  continue
+              for label, pattern in patterns:
+                  if pattern.search(payload):
+                      findings.append(f'{path.relative_to(root)}:{label}')
+
+          if scanned == 0:
+              raise SystemExit('Evidence directory is empty; refusing artifact upload.')
+          if findings:
+              print('Credential-shaped evidence detected; refusing artifact upload:')
+              for finding in findings:
+                  print(f'- {finding}')
+              raise SystemExit(1)
+          print(f'Evidence guard passed for {scanned} files.')
+          PY
+
+      - name: Upload hosted Preview evidence
+        if: ${{ always() && steps.evidence_guard.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: evidence-credibility-protected-preview-v2-${{ github.run_id }}-${{ env.CANDIDATE_SHA }}
