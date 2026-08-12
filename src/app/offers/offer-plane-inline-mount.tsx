@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import type { OfferPlaneItem } from "@/lib/offer-plane";
@@ -33,6 +33,24 @@ function isOfferPlaneResponse(value: unknown): value is OfferPlaneResponse {
   return Array.isArray(candidate.items) && typeof candidate.liveOffersAvailable === "boolean";
 }
 
+async function loadOfferPlane(): Promise<OfferPlaneResponse> {
+  const result = await fetch("/api/offers/plane", {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+
+  if (!result.ok) {
+    throw new Error(`Offer search returned ${result.status}.`);
+  }
+
+  const payload: unknown = await result.json();
+  if (!isOfferPlaneResponse(payload)) {
+    throw new Error("Offer search returned an invalid response.");
+  }
+
+  return payload;
+}
+
 export function OfferPlaneInlineMount() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -41,6 +59,10 @@ export function OfferPlaneInlineMount() {
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [explorerOpen, setExplorerOpen] = useState(false);
+  const requestRef = useRef<{
+    attempt: number;
+    promise: Promise<OfferPlaneResponse>;
+  } | null>(null);
 
   const queryState = useMemo(() => {
     const normalizedPath = pathname.length > 1 ? pathname.replace(/\/$/, "") : pathname;
@@ -115,34 +137,33 @@ export function OfferPlaneInlineMount() {
   }, [queryState.shouldShow]);
 
   useEffect(() => {
-    if (!queryState.shouldShow || !explorerOpen) return;
+    if (!queryState.shouldShow || !explorerOpen || response) return;
 
-    const controller = new AbortController();
+    let active = true;
+    let request = requestRef.current;
 
-    fetch("/api/offers/plane", {
-      cache: "no-store",
-      credentials: "same-origin",
-      signal: controller.signal,
-    })
-      .then(async (result) => {
-        if (!result.ok) {
-          throw new Error(`Offer search returned ${result.status}.`);
-        }
+    if (!request || request.attempt !== attempt) {
+      request = {
+        attempt,
+        promise: loadOfferPlane(),
+      };
+      requestRef.current = request;
+    }
 
-        const payload: unknown = await result.json();
-        if (!isOfferPlaneResponse(payload)) {
-          throw new Error("Offer search returned an invalid response.");
-        }
-
+    request.promise
+      .then((payload) => {
+        if (!active) return;
         setResponse(payload);
       })
       .catch((fetchError: unknown) => {
-        if (controller.signal.aborted) return;
+        if (!active) return;
         setError(fetchError instanceof Error ? fetchError.message : "Unable to load the offer plane.");
       });
 
-    return () => controller.abort();
-  }, [attempt, explorerOpen, queryState.shouldShow]);
+    return () => {
+      active = false;
+    };
+  }, [attempt, explorerOpen, queryState.shouldShow, response]);
 
   if (!queryState.shouldShow || !host) return null;
 
