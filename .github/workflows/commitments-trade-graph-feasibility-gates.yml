@@ -67,6 +67,7 @@ jobs:
           git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
           cat > expected-files.txt <<'FILES'
           .github/workflows/commitments-trade-graph-feasibility-gates.yml
+          .github/workflows/commitments-trade-study-planning-gates.yml
           docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/README.md
           docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/graph-feasibility-contract.json
           docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/graph-snapshot.schema.v1.json
