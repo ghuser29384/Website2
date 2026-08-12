@@ -45,6 +45,7 @@ test("offers defaults to an open editorial directory instead of stacked dense pa
   assert.match(participantStyles, /\.actions :global\(\.button\)/);
   assert.match(participantComponent, /data-participant-offer-group/);
   assert.match(participantComponent, /data-participant-offer/);
+  assert.match(participantComponent, /data-participant-exact-terms-note/);
 
   const noteIndex = participantComponent.indexOf("These are the owner&apos;s exact published terms");
   const offersMapIndex = participantComponent.indexOf("offers.map");
