@@ -14,23 +14,24 @@ const createInterfaceSource = integrateCommonGroundCreateSource(
   ),
 );
 const resumeExpression =
-  'const shouldResume = new URLSearchParams(window.location.search).get("resume") === "create";';
+  /const shouldResume\s*=\s*(?:new URLSearchParams\(window\.location\.search\)|createDraftResumeRequestUrl\(\)\.searchParams)\.get\("resume"\)\s*===\s*"create";/;
 
 function getCreateInterfaceSource(resume: boolean) {
   if (!resume) return createInterfaceSource;
-  if (!createInterfaceSource.includes(resumeExpression)) {
+  if (!resumeExpression.test(createInterfaceSource)) {
     throw new Error("The Moral Trade Create resume contract could not be located.");
   }
 
   return createInterfaceSource.replace(
     resumeExpression,
-    `const shouldResume = true || new URLSearchParams(window.location.search).get("resume") === "create";`,
+    "const shouldResume = true;",
   );
 }
 
 export function CreateInterfaceFrame({ resume = false }: CreateInterfaceFrameProps) {
   return (
     <main id="main-content" style={{ minHeight: "100vh" }} tabIndex={-1}>
+      <h1 className="sr-only">Create a Moral Trade</h1>
       <iframe
         allow="clipboard-write"
         aria-label="Moral Trade Create"

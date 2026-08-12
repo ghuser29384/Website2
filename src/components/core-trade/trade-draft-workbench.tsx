@@ -28,12 +28,49 @@ export interface TradeDraftValues {
   voluntaryCertification: boolean;
 }
 
+export interface TradeDraftSourceContext {
+  mode: "counteroffer";
+  counterpartyName: string;
+  sourceUrl: string;
+  sourceOpportunityId: string;
+  exposureRequestId: string;
+  sourceRevision: number;
+  matchContextStorageKey: string;
+  duplicateDraftCount: number;
+  sourceSnapshot: {
+    offeredCause: string;
+    requestedCause: string;
+    offerAction: string;
+    requestAction: string;
+    verification: string;
+    duration: string;
+  };
+}
+
+type ImportedReviewKey =
+  | "counterparty"
+  | "offered_cause"
+  | "requested_cause"
+  | "proposed_action"
+  | "requested_action"
+  | "duration"
+  | "evidence_rule";
+
+interface TransientFeedMatchContext {
+  actionFitLabel: string;
+  matchPercent: number | null;
+  ownerAlias: string;
+  reason: string;
+  reasonDetails: string[];
+}
+
 interface TradeDraftWorkbenchProps {
   acceptCommandHandoff?: boolean;
   formMessage?: { text: string; tone: "error" | "success" } | null;
   initialValues?: Partial<TradeDraftValues>;
   saveAction: (formData: FormData) => void | Promise<void>;
   submissionKey: string;
+  sourceContext?: TradeDraftSourceContext | null;
   templateLabel?: string | null;
 }
 
@@ -63,6 +100,28 @@ const STEP_LABELS = [
   "Evidence",
   "Review",
 ] as const;
+
+const IMPORTED_REVIEW_LABELS: ReadonlyArray<{
+  key: ImportedReviewKey;
+  label: string;
+}> = [
+  { key: "counterparty", label: "Counterparty" },
+  { key: "offered_cause", label: "Priority you advance" },
+  { key: "requested_cause", label: "Priority you want advanced" },
+  { key: "proposed_action", label: "Your commitment" },
+  { key: "requested_action", label: "Counterparty commitment" },
+  { key: "duration", label: "Duration" },
+  { key: "evidence_rule", label: "Evidence requirements" },
+];
+
+const VALUE_REVIEW_KEY: Partial<Record<keyof TradeDraftValues, ImportedReviewKey>> = {
+  offeredCause: "offered_cause",
+  requestedCause: "requested_cause",
+  proposedAction: "proposed_action",
+  requestedAction: "requested_action",
+  duration: "duration",
+  evidenceRule: "evidence_rule",
+};
 
 const DATE_SNAPSHOT_SUBSCRIBE = () => () => {};
 
@@ -160,6 +219,7 @@ export function TradeDraftWorkbench({
   initialValues,
   saveAction,
   submissionKey,
+  sourceContext = null,
   templateLabel,
 }: TradeDraftWorkbenchProps) {
   const [step, setStep] = useState(0);
@@ -188,9 +248,59 @@ export function TradeDraftWorkbench({
     useState(false);
   const [commandHandoffState, setCommandHandoffState] =
     useState<CommandHandoffState>(acceptCommandHandoff ? "loading" : null);
+  const [importedReviews, setImportedReviews] = useState<Record<ImportedReviewKey, boolean>>(
+    () =>
+      Object.fromEntries(
+        IMPORTED_REVIEW_LABELS.map(({ key }) => [key, false]),
+      ) as Record<ImportedReviewKey, boolean>,
+  );
+  const [duplicateAcknowledged, setDuplicateAcknowledged] = useState(false);
+  const [transientMatchContext, setTransientMatchContext] =
+    useState<TransientFeedMatchContext | null>(null);
   const commandHandoff = useRef<
     ReturnType<typeof consumeCommandCenterHandoff> | undefined
   >(undefined);
+
+  useEffect(() => {
+    if (!sourceContext?.matchContextStorageKey) return;
+    try {
+      const raw = window.sessionStorage.getItem(sourceContext.matchContextStorageKey);
+      window.sessionStorage.removeItem(sourceContext.matchContextStorageKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const createdAt = Number(parsed.createdAt);
+      if (!Number.isFinite(createdAt) || Date.now() - createdAt > 30 * 60 * 1000) return;
+      const reasonDetails = Array.isArray(parsed.reasonDetails)
+        ? parsed.reasonDetails
+            .filter((item): item is string => typeof item === "string")
+            .map((item) => item.trim().slice(0, 240))
+            .filter(Boolean)
+            .slice(0, 6)
+        : [];
+      const rawPercent = Number(parsed.matchPercent);
+      const timeoutId = window.setTimeout(() => {
+        setTransientMatchContext({
+          actionFitLabel:
+            typeof parsed.actionFitLabel === "string"
+              ? parsed.actionFitLabel.trim().slice(0, 40)
+              : "",
+          matchPercent: Number.isFinite(rawPercent)
+            ? Math.max(0, Math.min(100, Math.round(rawPercent)))
+            : null,
+          ownerAlias:
+            typeof parsed.ownerAlias === "string"
+              ? parsed.ownerAlias.trim().slice(0, 100)
+              : "",
+          reason:
+            typeof parsed.reason === "string" ? parsed.reason.trim().slice(0, 240) : "",
+          reasonDetails,
+        });
+      }, 0);
+      return () => window.clearTimeout(timeoutId);
+    } catch {
+      // Match context is intentionally optional and session-only.
+    }
+  }, [sourceContext?.matchContextStorageKey]);
 
   useEffect(() => {
     if (!acceptCommandHandoff) return;
@@ -243,9 +353,15 @@ export function TradeDraftWorkbench({
   const evidenceMinimumDate =
     values.startDate && values.startDate > localToday ? values.startDate : localToday;
 
-  const finalTermsComplete = STEP_LABELS.every(
+  const termsComplete = STEP_LABELS.every(
     (_label, index) => validateStep(index, values, localToday) === null,
   );
+  const importedReviewsComplete =
+    !sourceContext || IMPORTED_REVIEW_LABELS.every(({ key }) => importedReviews[key]);
+  const duplicateDecisionComplete =
+    !sourceContext || sourceContext.duplicateDraftCount === 0 || duplicateAcknowledged;
+  const finalTermsComplete =
+    termsComplete && importedReviewsComplete && duplicateDecisionComplete;
 
   function update<K extends keyof TradeDraftValues>(key: K, value: TradeDraftValues[K]) {
     setValues((current) => {
@@ -258,7 +374,20 @@ export function TradeDraftWorkbench({
       }
       return next;
     });
+    const importedKey = VALUE_REVIEW_KEY[key];
+    if (sourceContext && importedKey) {
+      setImportedReviews((current) => ({ ...current, [importedKey]: false }));
+    }
     setError(null);
+  }
+
+  function importedLabel(label: string, key: ImportedReviewKey) {
+    return (
+      <span className={styles.fieldLabelLine} data-imported-field={key}>
+        <span>{label}</span>
+        {sourceContext ? <span className={styles.sourceBadge}>From source</span> : null}
+      </span>
+    );
   }
 
   function nextStep() {
@@ -299,6 +428,34 @@ export function TradeDraftWorkbench({
         <input name="privacy_scope" type="hidden" value={values.privacyScope} />
         <input name="exit_conditions" type="hidden" value={values.exitConditions} />
         <input name="notes" type="hidden" value={values.notes} />
+        {sourceContext ? (
+          <>
+            <input name="source_opportunity_type" type="hidden" value="offer" />
+            <input
+              name="source_opportunity_id"
+              type="hidden"
+              value={sourceContext.sourceOpportunityId}
+            />
+            <input
+              name="exposure_request_id"
+              type="hidden"
+              value={sourceContext.exposureRequestId}
+            />
+            <input
+              name="source_terms_version"
+              type="hidden"
+              value={sourceContext.sourceRevision}
+            />
+            {IMPORTED_REVIEW_LABELS.map(({ key }) =>
+              importedReviews[key] ? (
+                <input key={key} name={`review_${key}`} type="hidden" value="true" />
+              ) : null,
+            )}
+            {duplicateAcknowledged ? (
+              <input name="duplicate_acknowledged" type="hidden" value="true" />
+            ) : null}
+          </>
+        ) : null}
         {values.voluntaryCertification ? (
           <input name="voluntary_certification" type="hidden" value="on" />
         ) : null}
@@ -322,6 +479,72 @@ export function TradeDraftWorkbench({
         </header>
 
         <div>
+          {sourceContext ? (
+            <section className={styles.sourceContext} aria-label="Feed source context">
+              <div className={styles.sourceContextHead}>
+                <div>
+                  <span className={styles.kicker}>Counteroffer source</span>
+                  <h2>Based on {sourceContext.counterpartyName}&apos;s open offer</h2>
+                </div>
+                <Link className={styles.inlineButton} href={sourceContext.sourceUrl}>
+                  View original
+                </Link>
+              </div>
+              <p>
+                The original participant is preselected as the counterparty. Nothing has been
+                sent, and this Phase-1 draft cannot be published, invited, messaged, or converted
+                into an agreement. A true counteroffer remains linked to its exact source revision.
+              </p>
+              <dl className={styles.sourceTerms}>
+                <div>
+                  <dt>They offered</dt>
+                  <dd>{sourceContext.sourceSnapshot.offerAction}</dd>
+                </div>
+                <div>
+                  <dt>They requested</dt>
+                  <dd>{sourceContext.sourceSnapshot.requestAction}</dd>
+                </div>
+                <div>
+                  <dt>Source revision</dt>
+                  <dd>{sourceContext.sourceRevision}</dd>
+                </div>
+              </dl>
+              <div className={styles.matchContext}>
+                <strong>Why it appeared in your Feed</strong>
+                {transientMatchContext ? (
+                  <>
+                    <p>
+                      {transientMatchContext.matchPercent !== null
+                        ? `${transientMatchContext.matchPercent}% match · `
+                        : ""}
+                      {transientMatchContext.actionFitLabel || transientMatchContext.reason || "Feed match"}
+                    </p>
+                    {transientMatchContext.reasonDetails.length ? (
+                      <ul>
+                        {transientMatchContext.reasonDetails.map((detail) => (
+                          <li key={detail}>{detail}</li>
+                        ))}
+                      </ul>
+                    ) : transientMatchContext.reason ? (
+                      <p>{transientMatchContext.reason}</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p>
+                    This source was verified against your authenticated exposure receipt. Match
+                    scores and explanations are session-only and are not stored with the draft.
+                  </p>
+                )}
+              </div>
+              {sourceContext.duplicateDraftCount > 0 ? (
+                <div className={`${styles.message} ${styles.messageError}`} role="status">
+                  You already have {sourceContext.duplicateDraftCount} active draft
+                  {sourceContext.duplicateDraftCount === 1 ? "" : "s"} based on this source.
+                  You may create another only after explicitly acknowledging the duplicate below.
+                </div>
+              ) : null}
+            </section>
+          ) : null}
           {formMessage ? (
             <div
               className={`${styles.message} ${
@@ -369,7 +592,7 @@ export function TradeDraftWorkbench({
                   </div>
                   <div className={`${styles.fields} ${styles.fieldGrid}`}>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Priority you advance</span>
+                      {importedLabel("Priority you advance", "offered_cause")}
                       <input
                         autoComplete="off"
                         autoFocus
@@ -385,7 +608,7 @@ export function TradeDraftWorkbench({
                       </span>
                     </label>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Priority you want advanced</span>
+                      {importedLabel("Priority you want advanced", "requested_cause")}
                       <input
                         autoComplete="off"
                         className={styles.input}
@@ -411,7 +634,7 @@ export function TradeDraftWorkbench({
                   </div>
                   <div className={styles.fields}>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Your commitment</span>
+                      {importedLabel("Your commitment", "proposed_action")}
                       <textarea
                         autoComplete="off"
                         autoFocus
@@ -441,7 +664,7 @@ export function TradeDraftWorkbench({
                   </div>
                   <div className={styles.fields}>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Counterparty commitment</span>
+                      {importedLabel("Counterparty commitment", "requested_action")}
                       <textarea
                         autoComplete="off"
                         autoFocus
@@ -499,7 +722,7 @@ export function TradeDraftWorkbench({
                   <div className={styles.fields}>
                     <div className={`${styles.fieldGrid} ${styles.fieldGridThree}`}>
                       <label className={styles.field}>
-                        <span className={styles.fieldLabel}>Duration</span>
+                        {importedLabel("Duration", "duration")}
                         <input
                           autoComplete="off"
                           autoFocus
@@ -595,7 +818,7 @@ export function TradeDraftWorkbench({
                   </div>
                   <div className={styles.fields}>
                     <label className={styles.field}>
-                      <span className={styles.fieldLabel}>Evidence</span>
+                      {importedLabel("Evidence", "evidence_rule")}
                       <textarea
                         autoComplete="off"
                         autoFocus
@@ -690,6 +913,59 @@ export function TradeDraftWorkbench({
                     </div>
                   </dl>
 
+                  {sourceContext ? (
+                    <section className={styles.importReview} aria-labelledby="import-review-heading">
+                      <div>
+                        <span className={styles.kicker}>Imported-field review</span>
+                        <h2 id="import-review-heading">Confirm each material field separately.</h2>
+                        <p>
+                          Editing an imported field clears its confirmation. These confirmations
+                          are stored; the Feed match score and reasons are not.
+                        </p>
+                      </div>
+                      <div className={styles.importReviewGrid}>
+                        {IMPORTED_REVIEW_LABELS.map(({ key, label }) => (
+                          <label className={styles.importReviewItem} key={key}>
+                            <input
+                              checked={importedReviews[key]}
+                              onChange={(event) =>
+                                setImportedReviews((current) => ({
+                                  ...current,
+                                  [key]: event.target.checked,
+                                }))
+                              }
+                              type="checkbox"
+                            />
+                            <span>
+                              <strong>{label}</strong>
+                              <small>
+                                {key === "counterparty"
+                                  ? sourceContext.counterpartyName
+                                  : "Reviewed against the original source"}
+                              </small>
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                      {sourceContext.duplicateDraftCount > 0 ? (
+                        <label className={`${styles.importReviewItem} ${styles.duplicateReview}`}>
+                          <input
+                            checked={duplicateAcknowledged}
+                            onChange={(event) => setDuplicateAcknowledged(event.target.checked)}
+                            type="checkbox"
+                          />
+                          <span>
+                            <strong>Create another draft from this source</strong>
+                            <small>
+                              I understand that {sourceContext.duplicateDraftCount} active draft
+                              {sourceContext.duplicateDraftCount === 1 ? " already exists" : "s already exist"}.
+                            </small>
+                          </span>
+                        </label>
+                      ) : null}
+                    </section>
+                  ) : null}
+
                   <label className={styles.certification}>
                     <input
                       className={styles.checkbox}
@@ -770,7 +1046,11 @@ export function TradeDraftWorkbench({
           ) : (
             <>
               <span className={styles.footerNote}>
-                Save privately, or certify voluntariness before submitting once for operator review.
+                {sourceContext
+                  ? importedReviewsComplete && duplicateDecisionComplete
+                    ? "Save a private source-bound counteroffer, or submit it for operator review. It will not be delivered in Phase 1."
+                    : "Review every imported field and resolve the duplicate warning before saving."
+                  : "Save privately, or certify voluntariness before submitting once for operator review."}
               </span>
               <PendingSubmitButton
                 className={`${styles.button} ${styles.buttonDark}`}

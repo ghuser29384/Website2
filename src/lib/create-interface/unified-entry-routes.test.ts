@@ -126,5 +126,8 @@ test("Create and Create Offer entries share the durable Create adapter", () => {
     proxySource,
     /searchParams\.get\("view"\) === "templates"[\s\S]*searchParams\.get\("tab"\) === "templates"[\s\S]*return rewriteToUnifiedCreate\(request\)/,
   );
-  assert.match(proxySource, /matcher: \["\/", "\/walkthrough", "\/create", "\/offers"\]/);
+  assert.match(
+    proxySource,
+    /matcher: \["\/", "\/walkthrough", "\/create", "\/offers", "\/offers\/:path\*"\]/,
+  );
 });

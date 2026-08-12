@@ -25,6 +25,10 @@
     "A jointly valued project for {cause}",
   ];
 
+  const picker = window.MoralTradeParticipantPicker;
+  const pickerCleanups = new Map();
+  let viewerLoadSequence = 0;
+
   function isCommonGroundRoute() {
     return state.requestKind === "fund" && state.fundMode === "commonGround";
   }
@@ -42,86 +46,24 @@
     return `${date.toISOString().slice(0, 16).replace("T", " ")} UTC`;
   }
 
-  function exampleParticipants() {
-    return [
-      {
-        id: "cg-a",
-        name: "Participant A",
-        defaultProject: "Animal-welfare project",
-        budget: "10000.00",
-        contribution: "5000.00",
-      },
-      {
-        id: "cg-b",
-        name: "Participant B",
-        defaultProject: "Long-term-future project",
-        budget: "10000.00",
-        contribution: "5000.00",
-      },
-    ];
+  function rowId() {
+    return `cg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   }
 
-  const resumedCommonGroundDraft =
-    state.fundMode === "commonGround" && Array.isArray(state.commonGroundParticipants);
-  let privateValueBps = new Map();
-
-  function initializeState() {
-    if (!Array.isArray(state.commonGroundParticipants) || state.commonGroundParticipants.length < 2) {
-      state.commonGroundParticipants = exampleParticipants();
-    }
-
-    state.commonGroundParticipants = state.commonGroundParticipants
-      .slice(0, 8)
-      .map((participant, index) => ({
-        id: String(participant.id || `cg-${index + 1}`),
-        name: String(participant.name || ""),
-        defaultProject: String(participant.defaultProject || ""),
-        budget: String(participant.budget || ""),
-        contribution: String(participant.contribution || "0.00"),
-      }));
-    state.commonGroundTarget = String(state.commonGroundTarget || "10000.00");
-    state.commonGroundDeadline = String(state.commonGroundDeadline || defaultDeadline());
-    state.commonGroundBaselineConfirmed = resumedCommonGroundDraft
-      ? false
-      : Boolean(state.commonGroundBaselineConfirmed);
-    state.commonGroundParticipantGainChecked = false;
-    state.commonGroundCause = String(state.commonGroundCause || "");
-
-    privateValueBps = new Map(
-      state.commonGroundParticipants.map((participant, index) => [
-        participant.id,
-        resumedCommonGroundDraft ? 0 : index < 2 ? 6000 : 0,
-      ]),
-    );
-  }
-
-  function resetExample({ setProject = true } = {}) {
-    state.commonGroundTarget = "10000.00";
-    state.commonGroundDeadline = defaultDeadline();
-    state.commonGroundParticipants = exampleParticipants();
-    state.commonGroundBaselineConfirmed = false;
-    state.commonGroundParticipantGainChecked = false;
-    state.commonGroundCause = String(state.cause || "");
-    privateValueBps = new Map([
-      ["cg-a", 6000],
-      ["cg-b", 6000],
-    ]);
-
-    if (setProject) {
-      const project = `Shared research and coordination for ${state.cause || "a common cause"}`;
-      state.requestAction = project;
-      const input = $("#requestActionInput");
-      if (input) input.value = project;
-    }
-
-    syncPanel();
+  function blankRow() {
+    return {
+      id: rowId(),
+      target: null,
+      defaultProject: "",
+      budget: "",
+      participationBeatsDefault: false,
+    };
   }
 
   function parseCents(value) {
     const normalized = String(value ?? "").replace(/[$,\s]/g, "");
     const match = normalized.match(/^(\d+)(?:\.(\d{1,2}))?$/);
     if (!match) return null;
-
     const cents = Number(match[1]) * 100 + Number((match[2] || "").padEnd(2, "0"));
     return Number.isSafeInteger(cents) ? cents : null;
   }
@@ -138,232 +80,331 @@
     }).format(Number(cents || 0) / 100);
   }
 
-  function balancedShares(valuesInBps) {
-    const values = valuesInBps.map((value) => value / 10000);
-    if (values.reduce((sum, value) => sum + value, 0) <= 1) return null;
-
-    const active = new Set(values.map((_, index) => index));
-    let lambda = 0;
-
-    while (active.size) {
-      const activeTotal = [...active].reduce((sum, index) => sum + values[index], 0);
-      lambda = (activeTotal - 1) / active.size;
-      const nonPositive = [...active].filter((index) => values[index] <= lambda + 1e-12);
-      if (!nonPositive.length) break;
-      nonPositive.forEach((index) => active.delete(index));
-    }
-
-    if (!active.size) return null;
-    const shares = values.map((value, index) =>
-      active.has(index) ? Math.max(0, value - lambda) : 0,
-    );
-    const total = shares.reduce((sum, value) => sum + value, 0);
-    return total > 0 ? shares.map((value) => value / total) : null;
+  function selectedRows() {
+    return state.commonGroundParticipants.filter((row) => row.target);
   }
 
-  function allocateCents(targetCents, shares) {
-    const raw = shares.map((share) => targetCents * share);
-    const allocations = raw.map(Math.floor);
-    let remainder = targetCents - allocations.reduce((sum, value) => sum + value, 0);
+  function creatorRow() {
+    return state.commonGroundParticipants.find((row) => row.target?.isCreator) || null;
+  }
 
-    raw
-      .map((value, index) => ({ index, remainder: value - Math.floor(value) }))
-      .sort((left, right) => right.remainder - left.remainder || left.index - right.index)
-      .forEach((entry) => {
-        if (remainder <= 0) return;
-        allocations[entry.index] += 1;
-        remainder -= 1;
-      });
+  function initializeState() {
+    const hasNewDraft =
+      Array.isArray(state.commonGroundParticipants) &&
+      state.commonGroundParticipants.some((participant) => "target" in participant);
 
-    return allocations;
+    if (!hasNewDraft) {
+      // Old free-text drafts are deliberately left unresolved instead of silently matching accounts.
+      state.commonGroundParticipants = [blankRow(), blankRow()];
+      state.commonGroundCreatorParticipation = "";
+    } else {
+      state.commonGroundParticipants = state.commonGroundParticipants
+        .slice(0, 100)
+        .map((participant) => ({
+          id: String(participant.id || rowId()),
+          target: participant.target && typeof participant.target === "object"
+            ? participant.target
+            : null,
+          defaultProject: String(participant.defaultProject || ""),
+          budget: String(participant.budget || ""),
+          participationBeatsDefault: participant.participationBeatsDefault === true,
+        }));
+    }
+
+    while (state.commonGroundParticipants.length < 2) {
+      state.commonGroundParticipants.push(blankRow());
+    }
+    state.commonGroundTarget = String(state.commonGroundTarget || "10000.00");
+    state.commonGroundDeadline = String(state.commonGroundDeadline || defaultDeadline());
+    state.commonGroundCreatorParticipation =
+      state.commonGroundCreatorParticipation === "participating" ||
+      state.commonGroundCreatorParticipation === "organizer-only"
+        ? state.commonGroundCreatorParticipation
+        : "";
+    state.commonGroundCause = String(state.commonGroundCause || "");
+  }
+
+  function resetDraft({ setProject = true } = {}) {
+    cleanupPickers();
+    state.commonGroundTarget = "10000.00";
+    state.commonGroundDeadline = defaultDeadline();
+    state.commonGroundParticipants = [blankRow(), blankRow()];
+    state.commonGroundCreatorParticipation = "";
+    state.commonGroundCause = String(state.cause || "");
+    if (setProject) {
+      const project = `Shared research and coordination for ${state.cause || "a common cause"}`;
+      state.requestAction = project;
+      const input = $("#requestActionInput");
+      if (input) input.value = project;
+    }
+    syncPanel();
+  }
+
+  function targetLabel(target) {
+    return target?.kind === "account"
+      ? `@${target.usernameSnapshot}`
+      : target?.displayNameSnapshot
+        ? `${target.displayNameSnapshot} (unclaimed invitee)`
+        : "Participant";
   }
 
   function evaluatePool() {
-    const calculationBlockers = [];
+    const blockers = [];
     const project = $("#requestActionInput")?.value.trim() || state.requestAction.trim();
     const targetCents = parseCents(state.commonGroundTarget);
     const deadline = state.commonGroundDeadline.trim();
     const deadlineTime = Date.parse(deadline);
-    const participants = state.commonGroundParticipants;
+    const selected = selectedRows();
 
-    if (!project) calculationBlockers.push("Name the shared project.");
-    if (!(targetCents > 0)) calculationBlockers.push("Enter a positive target.");
-    if (!deadline) calculationBlockers.push("Add a deadline.");
-    else if (!Number.isFinite(deadlineTime)) {
-      calculationBlockers.push("Use a clear deadline with a timezone.");
-    } else if (deadlineTime <= Date.now() + 30 * 60 * 1000) {
-      calculationBlockers.push("Use a deadline at least 30 minutes away.");
+    if (!project) blockers.push("Name the shared project.");
+    if (!(targetCents > 0)) blockers.push("Enter a positive target.");
+    if (!deadline) blockers.push("Add a deadline.");
+    else if (!Number.isFinite(deadlineTime)) blockers.push("Use a clear deadline with a timezone.");
+    else if (deadlineTime <= Date.now() + 30 * 60 * 1000) {
+      blockers.push("Use a deadline at least 30 minutes away.");
     }
-    if (participants.length < 2 || participants.length > 8) {
-      calculationBlockers.push("Use 2–8 participants.");
+    if (!state.commonGroundCreatorParticipation) {
+      blockers.push("Choose whether you are participating or organizing only.");
+    }
+    if (selected.length < 2 || selected.length > 100) {
+      blockers.push("Select between two and 100 participants.");
+    }
+    if (state.commonGroundParticipants.some((row) => !row.target)) {
+      blockers.push("Select a participant for every row, or remove the unused row.");
     }
 
-    const parsed = participants.map((participant, index) => {
-      const budgetCents = parseCents(participant.budget);
-      const participantPrivateValueBps = Number(privateValueBps.get(participant.id) || 0);
-      if (!participant.name.trim()) calculationBlockers.push(`Name participant ${index + 1}.`);
-      if (!participant.defaultProject.trim()) {
-        calculationBlockers.push(`Add what participant ${index + 1} would fund instead.`);
+    const seenProfileIds = new Set();
+    for (const row of selected) {
+      if (row.target.kind === "account") {
+        if (seenProfileIds.has(row.target.profileId)) blockers.push("The same account cannot be added twice.");
+        seenProfileIds.add(row.target.profileId);
       }
-      if (!(budgetCents > 0)) calculationBlockers.push(`Add participant ${index + 1}’s budget.`);
-      if (!(participantPrivateValueBps > 0)) {
-        calculationBlockers.push(`Add participant ${index + 1}’s private value.`);
-      }
-      return { participant, budgetCents, privateValueBps: participantPrivateValueBps };
-    });
+    }
 
-    let allocations = participants.map(() => 0);
-    let gains = participants.map(() => 0);
-
-    if (targetCents > 0 && parsed.every((row) => row.privateValueBps > 0)) {
-      const shares = balancedShares(parsed.map((row) => row.privateValueBps));
-      if (!shares) {
-        calculationBlockers.push("Combined private value must exceed 100%.");
+    const creator = creatorRow();
+    if (state.commonGroundCreatorParticipation === "participating") {
+      if (!creator) {
+        blockers.push("Your account must have a username before you can participate.");
       } else {
-        allocations = allocateCents(targetCents, shares);
-        parsed.forEach((row, index) => {
-          const contributionCents = allocations[index];
-          const sharedValueCents = Math.floor(
-            (targetCents * row.privateValueBps + 5000) / 10000,
-          );
-          gains[index] = sharedValueCents - contributionCents;
-
-          if (!(contributionCents > 0)) {
-            calculationBlockers.push("Every listed participant needs a positive share.");
-          }
-          if (row.budgetCents != null && contributionCents > row.budgetCents) {
-            calculationBlockers.push(
-              `${row.participant.name || `Participant ${index + 1}`} cannot cover the suggested share.`,
-            );
-          }
-          if (!(gains[index] > 0)) {
-            calculationBlockers.push("No positive-gain split exists for every participant.");
-          }
-        });
+        const budgetCents = parseCents(creator.budget);
+        if (!(budgetCents > 0)) blockers.push("Enter your private maximum contribution.");
+        if (!creator.defaultProject.trim()) blockers.push("Enter what you would fund instead.");
+        if (!creator.participationBeatsDefault) {
+          blockers.push("Confirm that this Co-Fund is better by your lights than your stated default.");
+        }
       }
+    } else if (state.commonGroundCreatorParticipation === "organizer-only" && creator) {
+      blockers.push("An organizer-only creator cannot be included as a participant.");
     }
-
-    const uniqueCalculationBlockers = [...new Set(calculationBlockers)];
-    const calculationOk = uniqueCalculationBlockers.length === 0;
-    const blockers = [...uniqueCalculationBlockers];
-    if (!state.commonGroundBaselineConfirmed) blockers.push("Confirm what each participant would fund instead.");
 
     return {
       ok: blockers.length === 0,
-      calculationOk,
-      blockers,
-      calculationBlockers: uniqueCalculationBlockers,
+      blockers: [...new Set(blockers)],
       project,
       targetCents: targetCents || 0,
       deadline,
-      parsed,
-      allocations,
-      gains,
+      selected,
+      creator,
     };
   }
 
-  function gainStatus(result) {
-    if (!result.calculationOk) {
-      return result.calculationBlockers[0] || "Complete the shared split.";
-    }
-
-    const minimumGain = Math.min(...result.gains);
-    const gainText =
-      result.gains.length === 2 && result.gains[0] === result.gains[1]
-        ? `Both gain ${formatUsd(result.gains[0])} by their own estimates.`
-        : `All ${result.gains.length} gain at least ${formatUsd(minimumGain)} by their own estimates.`;
-    return state.commonGroundBaselineConfirmed
-      ? gainText
-      : `${gainText} Confirm defaults to continue.`;
+  function statusText(result) {
+    if (!result.ok) return result.blockers[0] || "Complete the Co-Fund participant proposal.";
+    const pending = result.selected.filter((row) => !row.target.isCreator).length;
+    return `${result.selected.length} participant identities selected. ${pending} invitee${pending === 1 ? "" : "s"} must enter and confirm their own private terms before any allocation can be frozen.`;
   }
 
   function recalculate() {
     const result = evaluatePool();
-    state.commonGroundParticipants.forEach((participant, index) => {
-      participant.contribution = moneyInput(result.allocations[index] || 0);
-      const output = $(`[data-cg-contribution="${participant.id}"]`);
-      if (output) output.value = participant.contribution;
-    });
-    state.commonGroundParticipantGainChecked = result.calculationOk;
-
     const status = $("#commonGroundStatus");
     if (status) {
-      status.textContent = gainStatus(result);
-      status.classList.toggle("ready", result.calculationOk);
-      status.classList.toggle("blocked", !result.calculationOk);
+      status.textContent = statusText(result);
+      status.classList.toggle("ready", result.ok);
+      status.classList.toggle("blocked", !result.ok);
     }
     return result;
   }
 
+  function cleanupPickers() {
+    pickerCleanups.forEach((cleanup) => cleanup?.());
+    pickerCleanups.clear();
+  }
+
+  function directoryTarget(target, row, isCreator = false) {
+    return {
+      ...target,
+      rowId: row.id,
+      isCreator,
+    };
+  }
+
+  function ensureCreatorParticipant() {
+    const sequence = ++viewerLoadSequence;
+    if (!picker?.loadViewer) {
+      setRequestError("Participant search is unavailable. Reload Create and try again.");
+      renderParticipants();
+      updateRequestContinue();
+      return;
+    }
+    picker.loadViewer().then((viewer) => {
+      if (sequence !== viewerLoadSequence || state.commonGroundCreatorParticipation !== "participating") return;
+      if (!viewer || viewer.usernameRequired || !viewer.username) {
+        setRequestError("Choose a Moral Trade username in Complete Profile before participating in a Co-Fund.");
+        renderParticipants();
+        updateRequestContinue();
+        return;
+      }
+      const existing = creatorRow();
+      const target = {
+        kind: "account",
+        profileId: viewer.profileId,
+        usernameSnapshot: viewer.username,
+        displayNameSnapshot: viewer.displayName,
+        accountType: viewer.accountType,
+        verification: viewer.verification,
+        publicMention: viewer.publicMention,
+        invitationState: "draft",
+        isCreator: true,
+      };
+      if (existing) {
+        existing.target = directoryTarget(target, existing, true);
+      } else {
+        const availableRow = state.commonGroundParticipants.find((row) => !row.target);
+        if (availableRow) {
+          availableRow.target = directoryTarget(target, availableRow, true);
+          state.commonGroundParticipants = [
+            availableRow,
+            ...state.commonGroundParticipants.filter((row) => row !== availableRow),
+          ];
+        } else {
+          const creator = blankRow();
+          creator.target = directoryTarget(target, creator, true);
+          state.commonGroundParticipants.unshift(creator);
+        }
+      }
+      setRequestError("");
+      renderParticipants();
+      updateRequestContinue();
+    }).catch((error) => {
+      if (sequence !== viewerLoadSequence) return;
+      setRequestError(error?.requiresAuth
+        ? "Sign in before participating in a Co-Fund."
+        : error?.message || "Your participant identity could not be loaded.");
+      renderParticipants();
+      updateRequestContinue();
+    });
+  }
+
+  function applyCreatorParticipation(value) {
+    state.commonGroundCreatorParticipation = value;
+    viewerLoadSequence += 1;
+    if (value === "organizer-only") {
+      state.commonGroundParticipants = state.commonGroundParticipants.filter(
+        (row) => !row.target?.isCreator,
+      );
+      while (state.commonGroundParticipants.length < 2) state.commonGroundParticipants.push(blankRow());
+      setRequestError("");
+      renderParticipants();
+      updateRequestContinue();
+      return;
+    }
+    ensureCreatorParticipant();
+  }
+
+  function renderParticipantTerms(row) {
+    if (!row.target) {
+      return `<div class="common-ground-participant-terms pending"><strong>Identity required</strong>Typed text is never silently converted into a participant.</div>`;
+    }
+    if (!row.target.isCreator) {
+      return `<div class="common-ground-participant-terms pending"><strong>Participant-owned terms</strong>${escapeHTML(targetLabel(row.target))} will enter and confirm their own fallback, private maximum contribution, payment terms, and final share after accepting. You cannot enter those terms for them.</div>`;
+    }
+    return `<div class="common-ground-participant-terms">
+      <div class="offer-field">
+        <label for="cg-default-${escapeHTML(row.id)}">What would you fund instead?</label>
+        <input id="cg-default-${escapeHTML(row.id)}" data-cg-own-field="defaultProject" data-cg-id="${escapeHTML(row.id)}" maxlength="240" value="${escapeHTML(row.defaultProject)}" />
+      </div>
+      <div class="offer-field">
+        <label for="cg-budget-${escapeHTML(row.id)}">Your private maximum contribution</label>
+        <input id="cg-budget-${escapeHTML(row.id)}" data-cg-own-field="budget" data-cg-id="${escapeHTML(row.id)}" type="number" inputmode="decimal" min="0.01" step="0.01" value="${escapeHTML(row.budget)}" />
+        <p class="common-ground-private-note">Stored only as your participant term in the private review record. It is not shown to invitees.</p>
+      </div>
+      <label class="common-ground-own-confirm"><input type="checkbox" data-cg-own-field="participationBeatsDefault" data-cg-id="${escapeHTML(row.id)}" ${row.participationBeatsDefault ? "checked" : ""} /><span>This Co-Fund is better by my lights than my stated default.</span></label>
+    </div>`;
+  }
+
   function renderParticipants() {
+    cleanupPickers();
     const list = $("#commonGroundParticipantList");
     if (!list) return;
+    const rows = state.commonGroundParticipants;
+    const selected = selectedRows();
+    $("#commonGroundParticipantCount").textContent = `${selected.length} participant${selected.length === 1 ? "" : "s"} selected`;
+    const addButton = $("#addCommonGroundParticipant");
+    if (addButton) addButton.disabled = rows.length >= 100;
 
-    $("#commonGroundParticipantCount").textContent =
-      `${state.commonGroundParticipants.length} participants`;
-    list.innerHTML = state.commonGroundParticipants
-      .map((participant, index) => {
-        const privateValue = Number(privateValueBps.get(participant.id) || 0);
-        return `
-          <div class="common-ground-participant-row" data-cg-row="${escapeHTML(participant.id)}">
-            <div class="offer-field">
-              <label for="cg-name-${index}">Name</label>
-              <input id="cg-name-${index}" data-cg-field="name" data-cg-id="${escapeHTML(participant.id)}" maxlength="80" value="${escapeHTML(participant.name)}" />
-            </div>
-            <div class="offer-field">
-              <label for="cg-default-${index}">What would you fund instead?</label>
-              <input id="cg-default-${index}" data-cg-field="defaultProject" data-cg-id="${escapeHTML(participant.id)}" maxlength="160" value="${escapeHTML(participant.defaultProject)}" aria-describedby="commonGroundFallbackHelp" />
-            </div>
-            <div class="offer-field">
-              <label for="cg-budget-${index}">Budget</label>
-              <input id="cg-budget-${index}" data-cg-field="budget" data-cg-id="${escapeHTML(participant.id)}" type="number" inputmode="decimal" min="0.01" step="0.01" value="${escapeHTML(participant.budget)}" />
-            </div>
-            <div class="offer-field">
-              <label for="cg-value-${index}">Value (private)</label>
-              <input id="cg-value-${index}" data-cg-field="privateValue" data-cg-id="${escapeHTML(participant.id)}" type="number" inputmode="decimal" min="0.01" max="500" step="0.01" value="${privateValue > 0 ? privateValue / 100 : ""}" aria-label="${escapeHTML(participant.name || `Participant ${index + 1}`)} private value percentage" />
-            </div>
-            <div class="offer-field">
-              <label for="cg-pay-${index}">Pays</label>
-              <input id="cg-pay-${index}" data-cg-contribution="${escapeHTML(participant.id)}" readonly value="${escapeHTML(participant.contribution)}" />
-            </div>
-            ${
-              state.commonGroundParticipants.length > 2
-                ? `<button type="button" class="common-ground-remove" data-cg-remove="${escapeHTML(participant.id)}" aria-label="Remove ${escapeHTML(participant.name || `participant ${index + 1}`)}">Remove</button>`
-                : ""
-            }
-          </div>`;
-      })
-      .join("");
+    list.innerHTML = rows.map((row, index) => `
+      <div class="common-ground-participant-row ${row.target?.isCreator ? "creator-row" : ""}" data-cg-row="${escapeHTML(row.id)}">
+        <div>
+          <div data-cg-picker="${escapeHTML(row.id)}"></div>
+          ${!row.target?.isCreator && rows.length > 2
+            ? `<button type="button" class="common-ground-remove" data-cg-remove-row="${escapeHTML(row.id)}">Remove row</button>`
+            : ""}
+        </div>
+        ${renderParticipantTerms(row)}
+      </div>`).join("");
 
-    $$('[data-cg-field]', list).forEach((input) => {
-      input.addEventListener("input", () => {
-        const participant = state.commonGroundParticipants.find(
-          (row) => row.id === input.dataset.cgId,
-        );
-        if (!participant) return;
+    const selectedProfileIds = selected
+      .filter((row) => row.target.kind === "account")
+      .map((row) => row.target.profileId);
 
-        if (input.dataset.cgField === "privateValue") {
-          const value = Number(input.value);
-          privateValueBps.set(
-            participant.id,
-            Number.isFinite(value) && value > 0 ? Math.round(value * 100) : 0,
-          );
-        } else {
-          participant[input.dataset.cgField] = input.value;
-        }
+    rows.forEach((row, index) => {
+      const root = list.querySelector(`[data-cg-picker="${CSS.escape(row.id)}"]`);
+      if (!root || !picker?.mount) return;
+      const cleanup = picker.mount(root, {
+        label: row.target?.isCreator ? "Your participant identity" : `Participant ${index + 1}`,
+        selected: row.target,
+        locked: Boolean(row.target?.isCreator),
+        excludedProfileIds: selectedProfileIds.filter(
+          (profileId) => row.target?.kind !== "account" || profileId !== row.target.profileId,
+        ),
+        allowExternalClaim: true,
+        onSelect(target) {
+          row.target = directoryTarget(target, row, false);
+          setRequestError("");
+          renderParticipants();
+          updateRequestContinue();
+        },
+        onClear() {
+          row.target = null;
+          setRequestError("");
+          renderParticipants();
+          updateRequestContinue();
+        },
+      });
+      pickerCleanups.set(row.id, cleanup);
+    });
+
+    $$('[data-cg-own-field]', list).forEach((input) => {
+      const eventName = input.type === "checkbox" ? "change" : "input";
+      input.addEventListener(eventName, () => {
+        const row = state.commonGroundParticipants.find((candidate) => candidate.id === input.dataset.cgId);
+        if (!row) return;
+        const field = input.dataset.cgOwnField;
+        if (field === "participationBeatsDefault") row.participationBeatsDefault = input.checked;
+        else if (field === "defaultProject") row.defaultProject = input.value;
+        else if (field === "budget") row.budget = input.value;
         setRequestError("");
         updateRequestContinue();
       });
     });
 
-    $$('[data-cg-remove]', list).forEach((button) => {
+    $$('[data-cg-remove-row]', list).forEach((button) => {
       button.addEventListener("click", () => {
-        if (state.commonGroundParticipants.length <= 2) return;
-        const id = button.dataset.cgRemove;
         state.commonGroundParticipants = state.commonGroundParticipants.filter(
-          (row) => row.id !== id,
+          (row) => row.id !== button.dataset.cgRemoveRow,
         );
-        privateValueBps.delete(id);
+        while (state.commonGroundParticipants.length < 2) state.commonGroundParticipants.push(blankRow());
+        setRequestError("");
         renderParticipants();
         updateRequestContinue();
       });
@@ -373,25 +414,19 @@
   function syncPanel() {
     const target = $("#commonGroundTargetInput");
     const deadline = $("#commonGroundDeadlineInput");
-    const confirmation = $("#commonGroundBaselineConfirm");
     if (target) target.value = state.commonGroundTarget;
     if (deadline) deadline.value = state.commonGroundDeadline;
-    if (confirmation) confirmation.checked = Boolean(state.commonGroundBaselineConfirmed);
+    $$('input[name="common_ground_creator_participation"]').forEach((input) => {
+      input.checked = input.value === state.commonGroundCreatorParticipation;
+    });
     renderParticipants();
     updateRequestContinue();
   }
 
   function addParticipant() {
-    if (state.commonGroundParticipants.length >= 8) return;
-    const id = `cg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-    state.commonGroundParticipants.push({
-      id,
-      name: `Participant ${state.commonGroundParticipants.length + 1}`,
-      defaultProject: "",
-      budget: state.commonGroundTarget || "10000.00",
-      contribution: "0.00",
-    });
-    privateValueBps.set(id, 0);
+    if (state.commonGroundParticipants.length >= 100) return;
+    state.commonGroundParticipants.push(blankRow());
+    setRequestError("");
     renderParticipants();
     updateRequestContinue();
   }
@@ -411,7 +446,7 @@
     state.poolProgressVisibility = "exact";
     state.moralTradeBonusShare = "0";
     state.poolActivation =
-      "Every named participant must confirm the same frozen split before the pool can open.";
+      "Every selected participant must accept, enter their own private terms, and unanimously confirm the final allocation before the Co-Fund can open.";
     state.offers = [];
     state.offerPhase = "choose";
     state.offerDetails = createEmptyOfferDetails();
@@ -420,10 +455,9 @@
   function continueFromCommonGround() {
     const result = recalculate();
     if (!result.ok) {
-      setRequestError(result.blockers[0] || "Complete the Co-Fund split.");
+      setRequestError(result.blockers[0] || "Complete the Co-Fund participant proposal.");
       return;
     }
-
     syncPoolState(result);
     setRequestError("");
     closeSuggestions();
@@ -432,53 +466,52 @@
 
   function renderCompactSummary() {
     const result = recalculate();
-    $("#summaryHeading").textContent = "Review the split.";
+    $("#summaryHeading").textContent = "Review participants.";
     $("#summaryStepLabel").textContent = "Review and submit · 3 of 3";
-    $("#summaryIntro").textContent = "Check the project, target, and who pays.";
+    $("#summaryIntro").textContent = "Check the shared project and the identities invited to supply their own terms.";
     $("#summaryLeftLabel").textContent = "Shared project";
-    $("#summaryLeftFoot").textContent = "One project, one frozen split.";
+    $("#summaryLeftFoot").textContent = "One project and one target.";
     $("#summaryJoin").textContent = "→";
-    $("#summaryRightLabel").textContent = "Who pays";
-    $("#summaryRightFoot").textContent = "Private value estimates are not submitted.";
+    $("#summaryRightLabel").textContent = "Participants";
+    $("#summaryRightFoot").textContent = "No final split or invitation is created at this review stage.";
     $("#summaryRequestKind").textContent = "Fund · Co-Fund";
     $("#summaryRequestAction").textContent = result.project;
 
     const rows = [
       ["Target", `${formatUsd(result.targetCents)} · ${result.deadline}`],
-      ...state.commonGroundParticipants.map((participant) => [
-        participant.name,
-        `${formatUsd(parseCents(participant.contribution) || 0)} · would otherwise fund: ${participant.defaultProject}`,
+      ...result.selected.map((row) => [
+        targetLabel(row.target),
+        row.target.isCreator
+          ? "Creator participating · private terms attached"
+          : "Invitation target selected · participant terms pending",
       ]),
     ];
-    $("#summaryOffers").innerHTML = rows
-      .map(
-        ([label, value], index) => `
-          <div class="seed-offer-item">
-            <span>${String(index + 1).padStart(2, "0")}</span>
-            <div><strong class="seed-offer-title">${escapeHTML(label)}</strong><ul><li>${escapeHTML(value)}</li></ul></div>
-          </div>`,
-      )
-      .join("");
+    $("#summaryOffers").innerHTML = rows.map(([label, value], index) => `
+      <div class="seed-offer-item">
+        <span>${String(index + 1).padStart(2, "0")}</span>
+        <div><strong class="seed-offer-title">${escapeHTML(label)}</strong><ul><li>${escapeHTML(value)}</li></ul></div>
+      </div>`).join("");
 
     $("#publishKicker").textContent = "Private review";
-    $("#publishHeading").textContent = "Submit this pool for review.";
+    $("#publishHeading").textContent = "Submit this participant-bound proposal for review.";
     $("#publishDescription").textContent =
-      "No pledge opens until every named participant confirms and Moral Trade approves the recipient.";
+      "Submitting stores a private review record. It does not send invitations, enroll anyone, freeze a split, or authorize payment.";
     $("#publishFacts").innerHTML = `
       <div class="publish-fact"><span>Target</span><strong>${escapeHTML(formatUsd(result.targetCents))}</strong></div>
-      <div class="publish-fact"><span>Participants</span><strong>${state.commonGroundParticipants.length}</strong></div>
-      <div class="publish-fact"><span>Visibility</span><strong>Private until approved</strong></div>`;
-    $("#publishConfirmTitle").textContent = "The split and fallback projects are accurate.";
-    $("#publishConfirmCopy").textContent = "Private value estimates stay in this tab.";
+      <div class="publish-fact"><span>Participants</span><strong>${result.selected.length}</strong></div>
+      <div class="publish-fact"><span>Allocation</span><strong>Open</strong></div>`;
+    $("#publishConfirmTitle").textContent = "The project and selected participant identities are accurate.";
+    $("#publishConfirmCopy").textContent =
+      "Each invitee must supply their own private and financial terms before any final allocation exists.";
     $("#publishOffer").textContent = "Submit for review →";
     $("#boundaryNote").innerHTML =
-      "<strong>No money moves</strong> Every named participant must confirm the same frozen split before the pool can open.";
+      "<strong>No invitation or money moves</strong> This review record creates no participant acceptance, payment authorization, or obligation.";
   }
 
   updateRequestPageCopy = function commonGroundAwareRequestCopy() {
     if (!isCommonGroundRoute()) return originalUpdateRequestPageCopy();
-    $("#requestHeading").textContent = "What should everyone fund together?";
-    $("#requestIntroCopy").textContent = "Name one shared project and split the target.";
+    $("#requestHeading").textContent = "Who should fund one project together?";
+    $("#requestIntroCopy").textContent = "Choose the project, identify participants, and let each participant enter their own terms.";
   };
 
   updateRequestKindSelection = function commonGroundAwareRequestSelection() {
@@ -486,12 +519,11 @@
     const active = isCommonGroundRoute();
     $("#commonGroundFields").hidden = !active;
     if (!active) return;
-
     $("#dacCreateFields").hidden = true;
     $("#dacExistingFields").hidden = true;
     $("#requestModeNote").hidden = true;
-    $("#requestBottomHint").textContent = "Review the shared split.";
-    $("#continueRequest").textContent = "Review pool →";
+    $("#requestBottomHint").textContent = "Review the participant-bound proposal.";
+    $("#continueRequest").textContent = "Review Co-Fund →";
     syncPanel();
     updateRequestPageCopy();
   };
@@ -517,9 +549,12 @@
     const enteringCommonGround = button.dataset.fundMode === "commonGround";
     const causeChanged = state.commonGroundCause !== String(state.cause || "");
     originalSelectFundMode(button);
-
     if (enteringCommonGround && (causeChanged || !$("#requestActionInput").value.trim())) {
-      resetExample({ setProject: true });
+      state.commonGroundCause = String(state.cause || "");
+      const project = `Shared research and coordination for ${state.cause || "a common cause"}`;
+      state.requestAction = project;
+      $("#requestActionInput").value = project;
+      syncPanel();
     } else if (isCommonGroundRoute()) {
       syncPanel();
     }
@@ -528,26 +563,30 @@
   buildCreateSubmissionPayload = function commonGroundAwarePayload() {
     const payload = originalBuildCreateSubmissionPayload();
     if (!isCommonGroundRoute()) return payload;
-
     const result = evaluatePool();
-    if (!result.ok) {
-      throw new Error(result.blockers[0] || "The Co-Fund split is incomplete.");
-    }
+    if (!result.ok) throw new Error(result.blockers[0] || "The Co-Fund proposal is incomplete.");
 
     payload.fundMode = "dac";
     payload.dacPath = "create";
     payload.pool.commonGround = {
       targetAmountCents: result.targetCents,
-      calculationPolicy: "balanced_surplus_v1",
+      allocationStatus: "open",
+      creatorParticipation: state.commonGroundCreatorParticipation,
       privateValueEstimatesStored: false,
-      participantGainChecked: true,
-      baselineConfirmed: true,
-      participants: state.commonGroundParticipants.map((participant, index) => ({
-        id: participant.id,
-        name: participant.name.trim(),
-        defaultProject: participant.defaultProject.trim(),
-        budgetCents: result.parsed[index].budgetCents,
-        contributionCents: result.allocations[index],
+      participants: result.selected.map((row) => ({
+        target: {
+          ...row.target,
+          rowId: row.id,
+          isCreator: Boolean(row.target.isCreator),
+        },
+        participantTerms: row.target.isCreator
+          ? {
+              maximumBudgetMinor: parseCents(row.budget),
+              noPoolDefault: row.defaultProject.trim(),
+              participationBeatsDefault: true,
+              preauthorizeExecutableFallback: false,
+            }
+          : null,
       })),
     };
     return payload;
@@ -556,23 +595,19 @@
   renderSubmittedReceipt = function commonGroundAwareReceipt(submission) {
     originalRenderSubmittedReceipt(submission);
     if (!isCommonGroundRoute()) return;
-
     const result = evaluatePool();
     $("#publishedObjectLabel").textContent = "Co-Fund proposal";
     $("#publishedHeadline").textContent = result.project;
     $("#publishedLede").textContent =
-      "Saved for review. It stays private and cannot accept pledges until every named participant confirms and the review gates pass.";
+      "Saved for private review. No invitation was sent, no participant was enrolled, and no final allocation or payment authority exists.";
     $("#publishedOfferList").innerHTML = [
       `<li>Target: ${escapeHTML(formatUsd(result.targetCents))}</li>`,
       `<li>Deadline: ${escapeHTML(result.deadline)}</li>`,
-      ...state.commonGroundParticipants.map(
-        (participant) =>
-          `<li>${escapeHTML(participant.name)}: ${escapeHTML(formatUsd(parseCents(participant.contribution) || 0))}; would otherwise fund: ${escapeHTML(participant.defaultProject)}</li>`,
-      ),
-      "<li>Private value estimates were not submitted.</li>",
+      ...result.selected.map((row) => `<li>${escapeHTML(targetLabel(row.target))}: ${row.target.isCreator ? "creator terms attached privately" : "participant terms pending"}</li>`),
+      "<li>Private value estimates and other participants’ financial terms were not submitted.</li>",
     ].join("");
     $("#boundaryNote").innerHTML =
-      "<strong>Submitted</strong> This private review record creates no pledge or payment obligation.";
+      "<strong>Submitted</strong> This private review record creates no invitation, pledge, participant acceptance, or payment obligation.";
   };
 
   initializeState();
@@ -587,15 +622,13 @@
     setRequestError("");
     updateRequestContinue();
   });
-  $("#commonGroundBaselineConfirm").addEventListener("change", (event) => {
-    state.commonGroundBaselineConfirmed = event.target.checked;
-    setRequestError("");
-    updateRequestContinue();
+  $$('input[name="common_ground_creator_participation"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      if (input.checked) applyCreatorParticipation(input.value);
+    });
   });
   $("#addCommonGroundParticipant").addEventListener("click", addParticipant);
-  $("#commonGroundExample").addEventListener("click", () =>
-    resetExample({ setProject: true }),
-  );
+  $("#commonGroundReset").addEventListener("click", () => resetDraft({ setProject: false }));
 
   $("#continueRequest").addEventListener(
     "click",
@@ -610,16 +643,9 @@
 
   ["#startOver", "#makeAnotherOffer"].forEach((selector) => {
     $(selector).addEventListener("click", () => {
-      window.setTimeout(() => resetExample({ setProject: false }), 0);
+      window.setTimeout(() => resetDraft({ setProject: false }), 0);
     });
   });
 
-  if (resumedCommonGroundDraft) {
-    state.commonGroundBaselineConfirmed = false;
-    state.commonGroundParticipantGainChecked = false;
-    updateRequestKindSelection();
-    showStep(2);
-  } else {
-    $("#commonGroundFields").hidden = true;
-  }
+  $("#commonGroundFields").hidden = true;
 })();

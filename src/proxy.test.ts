@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { NextRequest } from "next/server";
 
-import { proxy, WALKTHROUGH_SEEN_COOKIE } from "@/proxy";
+import { config, proxy, WALKTHROUGH_SEEN_COOKIE } from "@/proxy";
 
 const desktopUserAgent =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
@@ -91,7 +91,7 @@ test("the reviewed career-backing lane remains available", () => {
   assert.equal(response.headers.get("x-middleware-rewrite"), null);
 });
 
-test("the legacy queryless offers entry opens Discover", () => {
+test("a human queryless offers navigation transfers to Discover", () => {
   const response = proxy(makeRequest("/offers"));
 
   assert.equal(response.status, 307);
@@ -99,6 +99,17 @@ test("the legacy queryless offers entry opens Discover", () => {
     response.headers.get("location"),
     "https://moraltrade.org/discover?domain=offers&view=list",
   );
+});
+
+test("a queryless offers prefetch stays on the source route", () => {
+  const response = proxy(
+    makeRequest("/offers", { "next-router-prefetch": "1", purpose: "prefetch" }),
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-middleware-next"), "1");
+  assert.equal(response.headers.get("location"), null);
+  assert.equal(response.headers.get("x-middleware-rewrite"), null);
 });
 
 test("query-driven offer searches continue to default to the live list", () => {
@@ -139,4 +150,43 @@ test("non-template explicit offer views pass through without redirecting", () =>
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("x-middleware-next"), "1");
   assert.equal(response.headers.get("location"), null);
+});
+
+test("invalid offer record identifiers fail closed before the dynamic route", () => {
+  for (const path of [
+    "/offers/null",
+    "/offers/undefined?source=legacy",
+    "/offers/not-a-uuid/credibility",
+  ]) {
+    const response = proxy(makeRequest(path));
+
+    assert.equal(response.status, 404, path);
+    assert.equal(
+      response.headers.get("x-middleware-rewrite"),
+      "https://moraltrade.org/invalid-offer-record",
+      path,
+    );
+    assert.equal(response.headers.get("cache-control"), "private, no-store", path);
+    assert.equal(response.headers.get("x-robots-tag"), "noindex, nofollow", path);
+  }
+});
+
+test("valid offer record identifiers and static offer routes pass through", () => {
+  for (const path of [
+    "/offers/1c6b0e57-bfed-3f29-c51f-6f8c23d1960b",
+    "/offers/1c6b0e57-bfed-3f29-c51f-6f8c23d1960b/credibility",
+    "/offers/new",
+    "/offers/examples",
+    "/offers/plane",
+  ]) {
+    const response = proxy(makeRequest(path));
+
+    assert.equal(response.status, 200, path);
+    assert.equal(response.headers.get("x-middleware-next"), "1", path);
+    assert.equal(response.headers.get("x-middleware-rewrite"), null, path);
+  }
+});
+
+test("the proxy matcher covers nested offer record paths", () => {
+  assert.ok(config.matcher.includes("/offers/:path*"));
 });

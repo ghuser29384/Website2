@@ -18,6 +18,16 @@ lint, TypeScript, production-build, and Playwright gates pass. The workflow
 builds the Vercel artifact on GitHub Actions compute and uploads it with
 `vercel deploy --prebuilt`, so Vercel does not repeat the application build.
 
+Every release now deletes prior `.next` and `.vercel/output` state before the
+Vercel build, then compares every checked-in file under `public/` with its
+corresponding file in `.vercel/output/static/`. A missing or byte-different
+asset blocks upload. Production releases then explicitly promote the exact
+uploaded deployment, verify that both `moraltrade.org` and
+`www.moraltrade.org` resolve to that deployment in Vercel's alias records, and
+prove that the canonical critical Create-router asset is byte-identical to the
+checked-in source. The workflow retains the deployment metadata, alias records,
+hash manifests, and release logs as an immutable Actions artifact.
+
 ## Required GitHub secret
 
 Create a Vercel access token with access to the `ellen-s` team and add it to the
@@ -104,7 +114,18 @@ restoration.
    - target: `production`
    - ref: `main`
    - expected SHA: the recorded SHA
-4. Verify the deployment URL and production domains.
+4. Require the workflow to finish all release-integrity stages:
+   - clean the prior application and Vercel build outputs;
+   - byte-verify the complete `public/` tree against the prebuilt artifact;
+   - upload the prebuilt artifact exactly once;
+   - guard the uploaded deployment's project, SHA, target, and READY state;
+   - explicitly promote that deployment;
+   - verify both canonical alias records point to the exact deployment;
+   - byte-verify the canonical critical asset against source.
+5. Inspect the `gated-vercel-release-production-*` evidence artifact and record
+   its digest with the release record.
+6. Perform the scoped runtime-error and 5xx review. Do not infer runtime health
+   solely from successful upload or alias promotion.
 
 ### Release preview
 
@@ -113,7 +134,10 @@ restoration.
    - target: `preview`
    - ref: `release/vercel-preview`
    - expected SHA: the recorded SHA
-3. Review the single resulting preview.
+3. Require the same clean-build and complete public-asset integrity proof before
+   upload.
+4. Review the single resulting preview. Preview releases never run canonical
+   promotion and must leave both production alias records unchanged.
 
 Ordinary feature, repair, QA, documentation, and workflow branches are tested
 in GitHub Actions only and receive no Vercel deployment.
@@ -156,9 +180,12 @@ artifact and disable only items that are both paid and unused.
 If the controlled release workflow fails:
 
 - do not re-enable automatic Git deployments;
-- repair the candidate and rerun GitHub gates;
+- do not manually attach one canonical alias while leaving the other on a
+  different deployment;
+- repair the candidate or release control and rerun the GitHub gates;
 - deploy the previous known-good prebuilt artifact or use Vercel's production
-  rollback controls.
+  rollback controls;
+- verify both alias records and the canonical critical asset after rollback.
 
 If `website2` was disconnected unintentionally, reconnect it only after
 confirming which custom domains depend on it. Do not reconnect it merely to

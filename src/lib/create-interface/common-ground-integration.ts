@@ -62,8 +62,8 @@ const COMPACT_POOL_CARDS = `                <button type="button" class="fund-mo
 const COMMON_GROUND_PANEL = `
             <div class="common-ground-panel" id="commonGroundFields" hidden data-common-ground-create-integration-v1>
               <div class="common-ground-toolbar">
-                <strong>Shared split</strong>
-                <button type="button" id="commonGroundExample">Reset example</button>
+                <strong>Participant-bound proposal</strong>
+                <button type="button" id="commonGroundReset">Reset</button>
               </div>
               <div class="common-ground-top-grid">
                 <div class="offer-field">
@@ -75,23 +75,27 @@ const COMMON_GROUND_PANEL = `
                   <input id="commonGroundDeadlineInput" type="text" maxlength="100" placeholder="e.g. 30 September 2026, 23:59 UTC" />
                 </div>
               </div>
+              <fieldset class="common-ground-creator-choice" id="commonGroundCreatorChoice">
+                <legend>Are you participating in this Co-Fund?</legend>
+                <p>The organizer is not counted automatically. Choose one option before continuing.</p>
+                <label><input type="radio" name="common_ground_creator_participation" value="participating" /> <span>Yes, I am a participant</span></label>
+                <label><input type="radio" name="common_ground_creator_participation" value="organizer-only" /> <span>No, I am organizing only</span></label>
+              </fieldset>
               <div class="common-ground-participants-head">
-                <span id="commonGroundParticipantCount">2 participants</span>
-                <button type="button" id="addCommonGroundParticipant">+ Add</button>
+                <span id="commonGroundParticipantCount">0 participants selected</span>
+                <button type="button" id="addCommonGroundParticipant">+ Add participant</button>
               </div>
-              <p class="common-ground-fallback-help" id="commonGroundFallbackHelp">If this Co-Fund does not happen, where would you otherwise use this money?</p>
+              <p class="common-ground-fallback-help" id="commonGroundParticipantHelp">Search Moral Trade accounts by username or display name. Typed text is not a participant until you explicitly select an account. An external person may be recorded as an unclaimed invitee for a later private claim link.</p>
               <div class="common-ground-participant-list" id="commonGroundParticipantList"></div>
-              <label class="common-ground-confirm">
-                <input type="checkbox" id="commonGroundBaselineConfirm" />
-                <span>These are the projects we would honestly fund if this Co-Fund did not happen.</span>
-              </label>
               <div class="common-ground-status" id="commonGroundStatus" role="status" aria-live="polite"></div>
             </div>
 `;
 
+
 const ASSET_LINKS = `  <link rel="stylesheet" href="/moral-trade-create/common-ground.css" />
 `;
-const DEFERRED_SCRIPT = `  <script defer src="/moral-trade-create/common-ground.js"></script>
+const DEFERRED_SCRIPT = `  <script defer src="/moral-trade-create/participant-picker.js"></script>
+  <script defer src="/moral-trade-create/common-ground.js"></script>
 `;
 
 function occurrenceCount(source: string, value: string) {

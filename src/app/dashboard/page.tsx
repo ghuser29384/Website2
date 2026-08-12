@@ -219,7 +219,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const dashboardData = viewer ? await getDashboardData(viewer.authUser.id) : null;
   const accountSecuritySummary = viewer ? await loadBackgroundAccountSecuritySummary() : null;
   const priorityFundSummary =
-    viewer && supabaseReady ? await getPriorityCorrectionSummary(viewer.authUser.id) : null;
+    viewer && supabaseReady && process.env.SUPABASE_SERVICE_ROLE_KEY
+      ? await getPriorityCorrectionSummary(viewer.authUser.id)
+      : null;
   const collectiveNameById = new Map(
     (dashboardData?.collectives ?? []).map((collective) => [collective.id, collective.name]),
   );
@@ -587,7 +589,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               { href: "/offers", label: "Browse", destination: "Offers" },
               { href: "/contact", label: "Support", destination: "Contact" },
             ].map((item) => (
-              <Link className="v72-shortcut-tile" href={item.href} key={item.label}>
+              <Link
+                className="v72-shortcut-tile"
+                href={item.href}
+                key={item.label}
+                prefetch={item.href === "/offers" ? false : undefined}
+              >
                 <strong>{item.label}</strong>
                 <span>{item.destination}</span>
               </Link>

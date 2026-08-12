@@ -32,6 +32,10 @@ env:
   VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
   RELEASE_PREVIEW_BRANCH: release/vercel-preview
   VERCEL_CLI_VERSION: 50.38.1
+  CANONICAL_APEX_DOMAIN: moraltrade.org
+  CANONICAL_WWW_DOMAIN: www.moraltrade.org
+  RELEASE_EVIDENCE_DIR: vercel-release-evidence
+  RELEASE_CRITICAL_ASSET: moral-trade-live-create-router.js
 
 jobs:
   release:
@@ -51,7 +55,7 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
           test "${{ inputs.expected_sha }}" = "$(git rev-parse HEAD)"
-          test "${#EXPECTED_SHA}" -eq 40
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
           remote_sha="$(git ls-remote origin "refs/heads/${{ inputs.ref }}" | awk '{print $1}')"
           test "$remote_sha" = "${{ inputs.expected_sha }}"
 
@@ -104,7 +108,7 @@ jobs:
         run: |
           set -euo pipefail
           npx playwright install --with-deps chromium
-          npm run test:e2e -- --reporter=line
+          npm run test:e2e:release -- --reporter=line
 
       - name: Link only the canonical Vercel project
         shell: bash
@@ -113,7 +117,7 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$VERCEL_TOKEN"
-          mkdir -p .vercel
+          mkdir -p .vercel "$RELEASE_EVIDENCE_DIR"
           printf '{"orgId":"%s","projectId":"%s"}\n' \
             "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
 
@@ -128,20 +132,46 @@ jobs:
             --environment="${{ inputs.target }}" \
             --token="$VERCEL_TOKEN"
 
-      - name: Build the Vercel artifact on GitHub Actions compute
+      - name: Build a clean Vercel artifact on GitHub Actions compute
         shell: bash
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
+          rm -rf .next .vercel/output
           if [[ '${{ inputs.target }}' == 'production' ]]; then
             npx --yes "vercel@$VERCEL_CLI_VERSION" build \
               --prod \
-              --token="$VERCEL_TOKEN"
+              --token="$VERCEL_TOKEN" \
+              | tee "$RELEASE_EVIDENCE_DIR/vercel-build.log"
           else
             npx --yes "vercel@$VERCEL_CLI_VERSION" build \
-              --token="$VERCEL_TOKEN"
+              --token="$VERCEL_TOKEN" \
+              | tee "$RELEASE_EVIDENCE_DIR/vercel-build.log"
           fi
+
+      - name: Prove every prebuilt public asset matches the checked-in source
+        id: static_integrity
+        shell: bash
+        env:
+          STATIC_SOURCE_DIR: public
+          STATIC_BUILD_DIR: .vercel/output/static
+          STATIC_EVIDENCE_DIR: ${{ env.RELEASE_EVIDENCE_DIR }}
+          STATIC_CRITICAL_ASSET: ${{ env.RELEASE_CRITICAL_ASSET }}
+        run: |
+          set -euo pipefail
+          node scripts/vercel-static-artifact-integrity.mjs \
+            | tee "$RELEASE_EVIDENCE_DIR/static-artifact-integrity.log"
+          critical_sha256="$(jq -r '.critical.sha256' \
+            "$RELEASE_EVIDENCE_DIR/static-artifact-integrity.json")"
+          file_count="$(jq -r '.fileCount' \
+            "$RELEASE_EVIDENCE_DIR/static-artifact-integrity.json")"
+          test -n "$critical_sha256"
+          test "$file_count" -gt 0
+          {
+            echo "critical_sha256=$critical_sha256"
+            echo "file_count=$file_count"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload the already-built artifact exactly once
         id: deploy
@@ -160,9 +190,168 @@ jobs:
               --prebuilt \
               --token="$VERCEL_TOKEN")"
           fi
-          test -n "$deployment_url"
-          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
-          printf 'Deployment URL: %s\n' "$deployment_url"
+          deployment_url="$(printf '%s\n' "$deployment_url" | tr -d '\r' | tail -n 1)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]
+          deployment_host="${deployment_url#https://}"
+          deployment_host="${deployment_host%/}"
+          printf '%s\n' "$deployment_url" \
+            | tee "$RELEASE_EVIDENCE_DIR/deployment-url.txt"
+          {
+            echo "deployment_url=$deployment_url"
+            echo "deployment_host=$deployment_host"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Guard the exact uploaded deployment
+        id: deployment
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_HOST: ${{ steps.deploy.outputs.deployment_host }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          RELEASE_TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          detail_path="$RELEASE_EVIDENCE_DIR/deployment-detail.json"
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/${DEPLOYMENT_HOST}?teamId=${VERCEL_ORG_ID}" \
+            > "$detail_path"
+
+          deployment_id="$(jq -r '.id // .uid // empty' "$detail_path")"
+          test -n "$deployment_id"
+          jq -e \
+            --arg deployment_id "$deployment_id" \
+            --arg deployment_host "$DEPLOYMENT_HOST" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg expected_sha "$EXPECTED_SHA" '
+              ((.id // .uid) == $deployment_id)
+              and (.url == $deployment_host)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.aliasError // null) == null)
+              and (.meta.githubCommitOrg == "ghuser29384")
+              and (.meta.githubCommitRepo == "Website2")
+              and (.meta.githubCommitSha == $expected_sha)
+            ' "$detail_path" >/dev/null
+
+          if [[ "$RELEASE_TARGET" == 'production' ]]; then
+            jq -e '.target == "production"' "$detail_path" >/dev/null
+          else
+            jq -e '(.target // "preview") != "production"' "$detail_path" >/dev/null
+          fi
+
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Verify both canonical aliases and the published critical asset
+        id: canonical
+        if: ${{ inputs.target == 'production' }}
+        shell: bash
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          EXPECTED_DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RELEASE_EVIDENCE_DIR/aliases"
+          verified=false
+
+          for attempt in $(seq 1 40); do
+            aliases_ready=true
+
+            for alias_name in "$CANONICAL_APEX_DOMAIN" "$CANONICAL_WWW_DOMAIN"; do
+              alias_key="${alias_name//./-}"
+              alias_path="$RELEASE_EVIDENCE_DIR/aliases/${alias_key}.json"
+              alias_api="https://api.vercel.com/v4/aliases/${alias_name}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}"
+
+              if ! curl -fsS \
+                -H "Authorization: Bearer $VERCEL_TOKEN" \
+                "$alias_api" \
+                > "$alias_path"; then
+                aliases_ready=false
+                break
+              fi
+
+              if ! jq -e \
+                --arg alias_name "$alias_name" \
+                --arg project_id "$VERCEL_PROJECT_ID" \
+                --arg deployment_id "$EXPECTED_DEPLOYMENT_ID" '
+                  (.alias == $alias_name)
+                  and (.projectId == $project_id)
+                  and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment_id)
+                ' "$alias_path" >/dev/null; then
+                aliases_ready=false
+                break
+              fi
+            done
+
+            detail_path="$RELEASE_EVIDENCE_DIR/canonical-deployment-detail.json"
+            detail_ready=false
+            if curl -fsS \
+              -H "Authorization: Bearer $VERCEL_TOKEN" \
+              "https://api.vercel.com/v13/deployments/${EXPECTED_DEPLOYMENT_ID}?teamId=${VERCEL_ORG_ID}" \
+              > "$detail_path" \
+              && jq -e \
+                --arg deployment_id "$EXPECTED_DEPLOYMENT_ID" \
+                --arg project_id "$VERCEL_PROJECT_ID" \
+                --arg expected_sha "$EXPECTED_SHA" '
+                  ((.id // .uid) == $deployment_id)
+                  and (.target == "production")
+                  and ((.readyState // .state // "") == "READY")
+                  and ((.projectId // .project.id // "") == $project_id)
+                  and ((.aliasError // null) == null)
+                  and (.meta.githubCommitSha == $expected_sha)
+                ' "$detail_path" >/dev/null; then
+              detail_ready=true
+            fi
+
+            if [[ "$aliases_ready" == 'true' && "$detail_ready" == 'true' ]]; then
+              verified=true
+              break
+            fi
+
+            sleep 15
+          done
+
+          if [[ "$verified" != 'true' ]]; then
+            echo 'The exact production deployment did not acquire both canonical aliases.' >&2
+            exit 1
+          fi
+
+          published_asset="$RELEASE_EVIDENCE_DIR/published-$RELEASE_CRITICAL_ASSET"
+          asset_exact=false
+          for attempt in $(seq 1 60); do
+            nonce="$EXPECTED_SHA-$GITHUB_RUN_ID-$attempt"
+            if curl -fsS \
+              -H 'Cache-Control: no-cache' \
+              "https://${CANONICAL_WWW_DOMAIN}/${RELEASE_CRITICAL_ASSET}?integrity=${nonce}" \
+              -o "$published_asset" \
+              && cmp --silent "public/$RELEASE_CRITICAL_ASSET" "$published_asset"; then
+              asset_exact=true
+              break
+            fi
+            sleep 5
+          done
+
+          if [[ "$asset_exact" != 'true' ]]; then
+            echo 'The canonical critical asset did not converge to the checked-in source.' >&2
+            sha256sum "public/$RELEASE_CRITICAL_ASSET" "$published_asset" || true
+            exit 1
+          fi
+
+          sha256sum \
+            "public/$RELEASE_CRITICAL_ASSET" \
+            "$published_asset" \
+            | tee "$RELEASE_EVIDENCE_DIR/published-critical-asset.sha256"
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable release evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gated-vercel-release-${{ inputs.target }}-${{ github.run_id }}
+          path: ${{ env.RELEASE_EVIDENCE_DIR }}
+          if-no-files-found: warn
+          retention-days: 30
 
       - name: Record immutable release evidence
         shell: bash
@@ -175,6 +364,15 @@ jobs:
             echo "- Ref: \`${{ inputs.ref }}\`"
             echo "- Commit: \`${{ inputs.expected_sha }}\`"
             echo "- Project: \`$VERCEL_PROJECT_ID\`"
+            echo "- Deployment ID: \`${{ steps.deployment.outputs.deployment_id }}\`"
             echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
+            echo "- Public assets byte-verified: \`${{ steps.static_integrity.outputs.file_count }}\`"
+            echo "- Critical asset SHA-256: \`${{ steps.static_integrity.outputs.critical_sha256 }}\`"
             echo '- Build location: GitHub Actions (`vercel build` + `vercel deploy --prebuilt`)'
+            if [[ '${{ inputs.target }}' == 'production' ]]; then
+              echo '- Canonical aliases: assigned by the exact production upload and independently verified from both Vercel alias records'
+              echo '- Canonical critical asset: byte-identical to the checked-in source'
+            else
+              echo '- Canonical aliases: unchanged; preview releases never use `--prod`'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
