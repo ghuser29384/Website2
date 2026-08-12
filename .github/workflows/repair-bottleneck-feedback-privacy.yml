@@ -209,9 +209,12 @@ jobs:
           source = source.replace(old_recommendations, new_recommendations)
 
           old_generic_count = '      genericFallbackCount: selected.filter((item) => isGenericTemplate(item.template)).length,'
-          new_generic_count = '''      genericFallbackCount: recommendations.filter(
-                (recommendation) => getSynthesisTemplate(recommendation.metadata.templateId)?.generic === true,
-              ).length,'''
+          new_generic_count = '''      genericFallbackCount: recommendations.filter((recommendation) => {
+                const templateId = recommendation.metadata.templateId;
+                if (typeof templateId !== "string") return false;
+                const template = getSynthesisTemplate(templateId);
+                return Boolean(template && "generic" in template && template.generic === true);
+              }).length,'''
           if source.count(old_generic_count) != 1:
               raise SystemExit(f"Expected one generic count, found {source.count(old_generic_count)}")
           source = source.replace(old_generic_count, new_generic_count)
