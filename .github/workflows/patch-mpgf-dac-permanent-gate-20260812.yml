@@ -1,0 +1,129 @@
+name: Patch permanent MPGF DAC lifecycle gate
+
+on:
+  push:
+    branches:
+      - ops/patch-mpgf-dac-permanent-gate-20260812
+    paths:
+      - ".github/workflows/patch-mpgf-dac-permanent-gate-20260812.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: patch-mpgf-dac-permanent-gate-20260812
+  cancel-in-progress: false
+
+env:
+  EXPECTED_CANDIDATE_SHA: 29dec3ebee50e885d44b9e282c6a755deb42f57a
+  CANDIDATE_REF: integration/mpgf-dac-lifecycle-current-main-20260812
+
+jobs:
+  patch-and-export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out the exact consolidated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          fetch-depth: 1
+
+      - name: Patch the permanent shared-QA gate deterministically
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/mpgf-dac-product-lifecycle-gates.yml')
+          source = path.read_text()
+
+          def replace_once(old: str, new: str, label: str) -> None:
+              global source
+              count = source.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected exactly one match, found {count}')
+              source = source.replace(old, new, 1)
+
+          replace_once(
+              '''  push:\n    branches:\n      - fix/mpgf-dac-product-lifecycle-20260807\n''',
+              '''  push:\n    branches:\n      - main\n''',
+              'push branch contract',
+          )
+          replace_once(
+              '''  pull_request:\n    branches:\n      - fix/mpgf-dac-success-lapse-20260807\n''',
+              '''  pull_request:\n    branches:\n      - main\n''',
+              'pull-request branch contract',
+          )
+
+          migration_path_line = '      - "supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql"\n'
+          migration_path_block = (
+              migration_path_line
+              + '      - "supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql"\n'
+              + '      - "supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql"\n'
+          )
+          if source.count(migration_path_line) != 2:
+              raise SystemExit('Expected the public-terms migration path in push and pull-request filters.')
+          source = source.replace(migration_path_line, migration_path_block)
+
+          replace_once(
+              '''concurrency:\n  group: mpgf-dac-product-lifecycle-${{ github.event.pull_request.head.ref || github.ref_name }}\n  cancel-in-progress: true\n''',
+              '''concurrency:\n  # Every isolated-QA execution mutates the same deterministic synthetic IDs.\n  # Serialize all branches and events so another run cannot drift the shared QA\n  # schema or delete fixtures while an exact-head proof is in progress.\n  group: mpgf-dac-product-lifecycle-shared-qa\n  cancel-in-progress: false\n''',
+              'shared-QA concurrency contract',
+          )
+
+          replace_once(
+              '''            sha256sum \\\n              supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql \\\n              supabase/tests/mpgf_dac_public_terms_api.sql \\\n''',
+              '''            sha256sum \\\n              supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql \\\n              supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql \\\n              supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql \\\n              supabase/tests/mpgf_dac_public_terms_api.sql \\\n''',
+              'exact-head migration hashes',
+          )
+
+          replace_once(
+              '''            src/lib/mpgf/dac-lifecycle-model.test.ts \\\n            src/lib/mpgf/dac-public-terms-migration.test.ts \\\n            src/lib/mpgf/dac-product-lifecycle.test.ts \\\n''',
+              '''            src/lib/mpgf/dac-lifecycle-model.test.ts \\\n            src/lib/mpgf/dac-public-terms-migration.test.ts \\\n            src/lib/mpgf/dac-terminal-event-reconciliation-migration.test.ts \\\n            src/lib/mpgf/dac-terminal-schema-reconciliation-migration.test.ts \\\n            src/lib/mpgf/dac-product-lifecycle.test.ts \\\n''',
+              'focused migration contracts',
+          )
+
+          reconciliation_compile = '''      - name: Compile terminal-schema reconciliation migrations in rollback-only transactions\n        shell: bash\n        run: |\n          set -euo pipefail\n          python3 - <<'PYCODE'\n          from pathlib import Path\n\n          migrations = [\n              Path("supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql"),\n              Path("supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql"),\n          ]\n          for migration in migrations:\n              source = migration.read_text()\n              if not source.lstrip().startswith("begin;"):\n                  raise SystemExit(f"{migration} does not begin with begin;")\n              if not source.rstrip().endswith("commit;"):\n                  raise SystemExit(f"{migration} does not end with commit;")\n              target = Path(f"mpgf-dac-{migration.stem}-rollback.sql")\n              target.write_text(source.rstrip()[:-len("commit;")] + "rollback;\\n")\n          PYCODE\n          for migration in \\\n            mpgf-dac-20260812073000_mpgf_dac_terminal_event_constraint_reconciliation-rollback.sql \\\n            mpgf-dac-20260812074500_mpgf_dac_terminal_schema_reconciliation-rollback.sql; do\n            psql "$QA_SUPABASE_DB_URL" \\\n              --no-psqlrc \\\n              --set ON_ERROR_STOP=1 \\\n              --file "$migration"\n          done 2>&1 | tee mpgf-dac-terminal-reconciliation-compile.log\n\n'''
+          marker = '      - name: Compile the additive public-terms migration in a rollback-only transaction\n'
+          if source.count(marker) != 1:
+              raise SystemExit('Expected exactly one public-terms compile step marker.')
+          source = source.replace(marker, reconciliation_compile + marker, 1)
+
+          reconciliation_apply = '''      - name: Reconcile exact terminal DAC schema immediately before fixtures\n        shell: bash\n        run: |\n          set -euo pipefail\n          sha256sum \\\n            supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql \\\n            supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql \\\n            | tee mpgf-dac-terminal-reconciliation.sha256\n          psql "$QA_SUPABASE_DB_URL" \\\n            --no-psqlrc \\\n            --set ON_ERROR_STOP=1 \\\n            --file supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql \\\n            2>&1 | tee mpgf-dac-terminal-event-reconciliation-apply.log\n          psql "$QA_SUPABASE_DB_URL" \\\n            --no-psqlrc \\\n            --set ON_ERROR_STOP=1 \\\n            --file supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql \\\n            2>&1 | tee mpgf-dac-terminal-schema-reconciliation-apply.log\n\n      - name: Verify exact terminal constraint vocabulary after cleanup\n        shell: bash\n        run: |\n          set -euo pipefail\n          psql "$QA_SUPABASE_DB_URL" \\\n            --no-psqlrc \\\n            --set ON_ERROR_STOP=1 \\\n            --tuples-only \\\n            --no-align <<'SQL' | tee mpgf-dac-terminal-constraint-proof.txt\n          select 'proposal_status=' || coalesce((\n            select pg_get_constraintdef(oid, true) like '%succeeded%'\n              and pg_get_constraintdef(oid, true) like '%lapsed%'\n            from pg_constraint\n            where conrelid = 'public.mpgf_pool_proposals'::regclass\n              and conname = 'mpgf_pool_proposals_status_check'\n          ), false);\n          select 'proposal_lock=' || coalesce((\n            select pg_get_constraintdef(oid, true) like '%approved_as_candidate%'\n              and pg_get_constraintdef(oid, true) like '%succeeded%'\n              and pg_get_constraintdef(oid, true) like '%lapsed%'\n              and pg_get_constraintdef(oid, true) like '%operative_terms_sha256%'\n            from pg_constraint\n            where conrelid = 'public.mpgf_pool_proposals'::regclass\n              and conname = 'mpgf_pool_proposals_lock_complete'\n          ), false);\n          select 'lifecycle_events=' || coalesce((\n            select pg_get_constraintdef(oid, true) like '%pool_succeeded%'\n              and pg_get_constraintdef(oid, true) like '%pool_lapsed%'\n            from pg_constraint\n            where conrelid = 'public.mpgf_pool_lifecycle_events'::regclass\n              and conname = 'mpgf_pool_lifecycle_events_event_type_check'\n          ), false);\n          select 'pledge_events=' || coalesce((\n            select pg_get_constraintdef(oid, true) like '%pledge_created%'\n              and pg_get_constraintdef(oid, true) like '%eligibility_reviewed%'\n              and pg_get_constraintdef(oid, true) like '%pledge_expired%'\n            from pg_constraint\n            where conrelid = 'public.mpgf_dac_pledge_events'::regclass\n              and conname = 'mpgf_dac_pledge_events_type_valid'\n          ), false);\n          SQL\n          grep -Fxq 'proposal_status=true' mpgf-dac-terminal-constraint-proof.txt\n          grep -Fxq 'proposal_lock=true' mpgf-dac-terminal-constraint-proof.txt\n          grep -Fxq 'lifecycle_events=true' mpgf-dac-terminal-constraint-proof.txt\n          grep -Fxq 'pledge_events=true' mpgf-dac-terminal-constraint-proof.txt\n\n'''
+          fixture_marker = '      - name: Create deterministic open, succeeded, and lapsed browser fixtures\n'
+          if source.count(fixture_marker) != 1:
+              raise SystemExit('Expected exactly one deterministic fixture marker.')
+          source = source.replace(fixture_marker, reconciliation_apply + fixture_marker, 1)
+
+          required = [
+              'mpgf-dac-product-lifecycle-shared-qa',
+              '20260812074500_mpgf_dac_terminal_schema_reconciliation.sql',
+              'dac-terminal-schema-reconciliation-migration.test.ts',
+              'Reconcile exact terminal DAC schema immediately before fixtures',
+              "proposal_lock=true",
+          ]
+          for fragment in required:
+              if fragment not in source:
+                  raise SystemExit(f'Missing patched workflow fragment: {fragment}')
+
+          path.write_text(source)
+          PY
+
+          git diff --check
+          ruby -e "require 'yaml'; YAML.load_file('.github/workflows/mpgf-dac-product-lifecycle-gates.yml')"
+          sha256sum .github/workflows/mpgf-dac-product-lifecycle-gates.yml \
+            | tee patched-workflow.sha256
+
+      - name: Upload the exact corrected permanent workflow
+        uses: actions/upload-artifact@v4
+        with:
+          name: corrected-mpgf-dac-permanent-gate
+          path: |
+            .github/workflows/mpgf-dac-product-lifecycle-gates.yml
+            patched-workflow.sha256
+          if-no-files-found: error
+          retention-days: 1
