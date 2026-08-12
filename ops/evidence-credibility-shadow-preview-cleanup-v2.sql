@@ -1,7 +1,8 @@
 \set ON_ERROR_STOP on
 
 -- Trigger-safe, exact cleanup for the isolated-QA evidence-credibility Preview
--- acceptance fixture. Production is never a permitted target.
+-- acceptance fixture. Production is never a permitted target. The fixed IDs
+-- are reserved for the existing evidence-payment browser fixture.
 begin;
 set local session_replication_role = replica;
 
@@ -80,7 +81,11 @@ where evidence_decision_id in (select id from qa_ec_decisions)
    );
 delete from public.credibility_shadow_events
 where evidence_decision_id in (select id from qa_ec_decisions)
-   or settlement_decision_id in (select id from qa_ec_settlements);
+   or settlement_decision_id in (select id from qa_ec_settlements)
+   or agreement_id in (
+     '72000000-0000-4000-8000-000000000001',
+     '72000000-0000-4000-8000-000000000002'
+   );
 delete from public.credibility_shadow_aggregates
 where profile_id in (
   '71000000-0000-4000-8000-000000000001',
@@ -95,36 +100,104 @@ where id in (select id from qa_ec_decisions);
 delete from public.trade_settlement_shadow_decisions
 where id in (select id from qa_ec_settlements);
 
-create temporary table qa_payment_payouts(id uuid primary key) on commit drop;
-insert into qa_payment_payouts(id)
-select payout.id
-from public.trade_milestone_payouts payout
-join public.trade_agreement_milestones milestone
-  on milestone.id = payout.milestone_id
-where milestone.agreement_id in (
-  '72000000-0000-4000-8000-000000000001',
-  '72000000-0000-4000-8000-000000000002'
-);
-
 create temporary table qa_payment_cases(id uuid primary key) on commit drop;
 insert into qa_payment_cases(id)
 select id
 from public.trade_payment_review_cases
-where payout_id in (select id from qa_payment_payouts);
+where payout_id in (
+  '77000000-0000-4000-8000-000000000001',
+  '77000000-0000-4000-8000-000000000002'
+);
 
 delete from public.trade_payment_appeals
 where case_id in (select id from qa_payment_cases);
 delete from public.trade_payment_review_decisions
 where case_id in (select id from qa_payment_cases);
+delete from public.trade_payment_reviewer_nominations
+where case_id in (select id from qa_payment_cases);
 delete from public.trade_payment_review_cases
 where id in (select id from qa_payment_cases);
 delete from public.trade_external_payment_receipts
-where payout_id in (select id from qa_payment_payouts);
+where payout_id in (
+  '77000000-0000-4000-8000-000000000001',
+  '77000000-0000-4000-8000-000000000002'
+);
+
+delete from public.trade_milestone_appeals
+where milestone_id in (
+  '74000000-0000-4000-8000-000000000001',
+  '74000000-0000-4000-8000-000000000002'
+);
+delete from public.trade_milestone_reviewer_nominations
+where milestone_id in (
+  '74000000-0000-4000-8000-000000000001',
+  '74000000-0000-4000-8000-000000000002'
+);
+delete from public.trade_evidence_bundle_items
+where bundle_id in (
+  '75000000-0000-4000-8000-000000000001',
+  '75000000-0000-4000-8000-000000000002'
+);
+delete from public.trade_milestone_payouts
+where id in (
+  '77000000-0000-4000-8000-000000000001',
+  '77000000-0000-4000-8000-000000000002'
+)
+   or milestone_id in (
+     '74000000-0000-4000-8000-000000000001',
+     '74000000-0000-4000-8000-000000000002'
+   );
+delete from public.trade_milestone_reviews
+where id in (
+  '76000000-0000-4000-8000-000000000001',
+  '76000000-0000-4000-8000-000000000002'
+)
+   or milestone_id in (
+     '74000000-0000-4000-8000-000000000001',
+     '74000000-0000-4000-8000-000000000002'
+   );
+delete from public.trade_evidence_bundles
+where id in (
+  '75000000-0000-4000-8000-000000000001',
+  '75000000-0000-4000-8000-000000000002'
+)
+   or milestone_id in (
+     '74000000-0000-4000-8000-000000000001',
+     '74000000-0000-4000-8000-000000000002'
+   );
+delete from public.trade_agreement_confirmations
+where agreement_id in (
+  '72000000-0000-4000-8000-000000000001',
+  '72000000-0000-4000-8000-000000000002'
+)
+   or agreement_version_id in (
+     '73000000-0000-4000-8000-000000000001',
+     '73000000-0000-4000-8000-000000000002'
+   );
+delete from public.trade_agreement_milestones
+where id in (
+  '74000000-0000-4000-8000-000000000001',
+  '74000000-0000-4000-8000-000000000002'
+)
+   or agreement_id in (
+     '72000000-0000-4000-8000-000000000001',
+     '72000000-0000-4000-8000-000000000002'
+   );
+delete from public.trade_agreement_versions
+where id in (
+  '73000000-0000-4000-8000-000000000001',
+  '73000000-0000-4000-8000-000000000002'
+)
+   or agreement_id in (
+     '72000000-0000-4000-8000-000000000001',
+     '72000000-0000-4000-8000-000000000002'
+   );
 delete from public.agreements
 where id in (
   '72000000-0000-4000-8000-000000000001',
   '72000000-0000-4000-8000-000000000002'
 );
+
 delete from public.trade_notifications
 where user_id in (
   '71000000-0000-4000-8000-000000000001',
@@ -194,6 +267,36 @@ begin
     where id in (
       '72000000-0000-4000-8000-000000000001',
       '72000000-0000-4000-8000-000000000002'
+    )
+  ) or exists (
+    select 1 from public.trade_agreement_versions
+    where id in (
+      '73000000-0000-4000-8000-000000000001',
+      '73000000-0000-4000-8000-000000000002'
+    )
+  ) or exists (
+    select 1 from public.trade_agreement_milestones
+    where id in (
+      '74000000-0000-4000-8000-000000000001',
+      '74000000-0000-4000-8000-000000000002'
+    )
+  ) or exists (
+    select 1 from public.trade_evidence_bundles
+    where id in (
+      '75000000-0000-4000-8000-000000000001',
+      '75000000-0000-4000-8000-000000000002'
+    )
+  ) or exists (
+    select 1 from public.trade_milestone_reviews
+    where id in (
+      '76000000-0000-4000-8000-000000000001',
+      '76000000-0000-4000-8000-000000000002'
+    )
+  ) or exists (
+    select 1 from public.trade_milestone_payouts
+    where id in (
+      '77000000-0000-4000-8000-000000000001',
+      '77000000-0000-4000-8000-000000000002'
     )
   ) or exists (
     select 1 from public.trade_evidence_decisions
