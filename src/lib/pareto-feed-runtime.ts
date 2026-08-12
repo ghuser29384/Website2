@@ -120,6 +120,13 @@ const CLASS_PRIORITY: Record<MatchClass, number> = {
   discovery: 1,
 };
 
+const PROFILE_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function profileUuid(value: unknown) {
+  return typeof value === "string" && PROFILE_UUID_PATTERN.test(value) ? value : null;
+}
+
 function numericArray(value: unknown) {
   if (!Array.isArray(value)) return [] as number[];
   const result = value.map(Number);
@@ -161,8 +168,9 @@ function ownerPrior(
   key: "acceptance" | "completion",
   fallback: number,
 ) {
-  if (typeof ownerId !== "string") return fallback;
-  return priors.get(ownerId)?.[key] ?? fallback;
+  const normalizedOwnerId = profileUuid(ownerId);
+  if (!normalizedOwnerId) return fallback;
+  return priors.get(normalizedOwnerId)?.[key] ?? fallback;
 }
 
 function featureSnapshot(
@@ -389,8 +397,8 @@ async function loadRuntimeState(recommendations: readonly RuntimeRecommendation[
     }
     const opportunityKeys = recommendations.map(candidateKey);
     const ownerIds = recommendations
-      .map((recommendation) => (typeof recommendation.ownerId === "string" ? recommendation.ownerId : ""))
-      .filter(Boolean);
+      .map((recommendation) => profileUuid(recommendation.ownerId))
+      .filter((ownerId): ownerId is string => Boolean(ownerId));
     const [profileFactorResult, opportunityFactorResult, priorResult] = await Promise.all([
       service
         .from("recommendation_user_factors")
@@ -469,6 +477,18 @@ function sanitizedRecommendation(recommendation: Record<string, unknown>) {
   return safe;
 }
 
+function errorDetails(error: unknown) {
+  if (error instanceof Error) return { message: error.message };
+  if (!error || typeof error !== "object") return { message: String(error) };
+  const value = error as Record<string, unknown>;
+  return {
+    message: typeof value.message === "string" ? value.message : String(error),
+    code: typeof value.code === "string" ? value.code : undefined,
+    details: typeof value.details === "string" ? value.details : undefined,
+    hint: typeof value.hint === "string" ? value.hint : undefined,
+  };
+}
+
 async function recordAssignmentAndExposures({
   assignment,
   day,
@@ -512,7 +532,7 @@ async function recordAssignmentAndExposures({
       request_id: requestId,
       opportunity_type: opportunityType(recommendation.opportunityType),
       opportunity_id: recommendation.id,
-      owner_id: typeof recommendation.ownerId === "string" ? recommendation.ownerId : null,
+      owner_id: profileUuid(recommendation.ownerId),
       rank: rank + 1,
       match_class: matchClass(recommendation.matchClass),
       was_shown: true,
@@ -541,7 +561,7 @@ async function recordAssignmentAndExposures({
         request_id: requestId,
         opportunity_type: opportunityType(heldOut.opportunityType),
         opportunity_id: heldOut.id,
-        owner_id: typeof heldOut.ownerId === "string" ? heldOut.ownerId : null,
+        owner_id: profileUuid(heldOut.ownerId),
         rank: null,
         match_class: matchClass(heldOut.matchClass),
         was_shown: false,
@@ -568,7 +588,7 @@ async function recordAssignmentAndExposures({
     return "written" as const;
   } catch (error) {
     console.error("[pareto-feed] Failed to write exposure receipts; feed remained available", {
-      message: error instanceof Error ? error.message : String(error),
+      ...errorDetails(error),
       requestId,
     });
     return "failed" as const;

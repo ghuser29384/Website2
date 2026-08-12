@@ -20,6 +20,11 @@ import {
   type LiveNowPriorityAllocation,
 } from "@/lib/live-now-recommendations";
 import {
+  isOpportunitySynthesisEnabled,
+  mergeExistingAndSynthesizedRecommendations,
+  synthesizeBottleneckAtlasRecommendations,
+} from "@/lib/opportunity-synthesis";
+import {
   buildBrowsingCauseWeights,
   buildLearnedActionPreferences,
   buildOpportunityFeedbackState,
@@ -715,6 +720,13 @@ export async function GET() {
     savedOpportunityKeys: feedbackState.savedOpportunityKeys,
     explorationPercent,
   };
+  const opportunitySynthesis = isOpportunitySynthesisEnabled()
+    ? synthesizeBottleneckAtlasRecommendations({
+        profile,
+        now: checkedAt,
+        limit: 6,
+      })
+    : null;
   // The hybrid builder retains rankLiveNowOffers as its lexical and action-learning prior,
   // then adds public-only semantic retrieval and reciprocal acceptance estimates.
   let hybridFeed = await buildHybridLiveNowFeed({
@@ -734,7 +746,12 @@ export async function GET() {
       feasibilityProbe.blockedSources,
     );
   }
-  const recommendations = hybridFeed.recommendations.slice(0, 12);
+  const synthesizedRecommendations = opportunitySynthesis?.recommendations ?? [];
+  const recommendations = mergeExistingAndSynthesizedRecommendations(
+    hybridFeed.recommendations,
+    synthesizedRecommendations,
+    12,
+  );
   const routePlannerResult = presentRoutePlanner(
     buildRoutePlanner({
       profile: runtimeRouteProfile,
@@ -769,8 +786,12 @@ export async function GET() {
     generatedAt: checkedAt.toISOString(),
     matchingOfferCount: hybridFeed.diagnostics.directCount,
     matchingOpportunityCount: hybridFeed.diagnostics.directCount,
+    suggestedOpportunityCount: recommendations.filter(
+      (recommendation) => recommendation.metadata?.origin === "platform_generated",
+    ).length,
     feedOpportunityCount: recommendations.length,
     feedDiagnostics: hybridFeed.diagnostics,
+    opportunitySynthesisDiagnostics: opportunitySynthesis?.diagnostics ?? null,
     profile: {
       causes,
       weightedCauses: causeSignals,

@@ -66,6 +66,17 @@ test("the migration separates participant-visible receipts from service-only mod
   assert.match(migration, /recommendation_exposures_select_own/);
 });
 
+test("generated pseudo-owner identifiers are excluded from UUID-backed learning records", () => {
+  assert.match(runtime, /const PROFILE_UUID_PATTERN/);
+  assert.match(runtime, /function profileUuid/);
+  assert.match(runtime, /owner_id:\s*profileUuid\(recommendation\.ownerId\)/);
+  assert.match(runtime, /owner_id:\s*profileUuid\(heldOut\.ownerId\)/);
+  assert.doesNotMatch(
+    runtime,
+    /owner_id:\s*typeof recommendation\.ownerId === ["']string["']/,
+  );
+});
+
 test("natural training is project-owned, durable, and auditable", () => {
   assert.match(vercel, /buildVercelProjectConfig/);
   assert.match(vercelProjectConfig, /DUPLICATE_WEBSITE2_PROJECT_ID/);

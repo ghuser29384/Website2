@@ -39,7 +39,8 @@ test("Feed cards use the existing authenticated snapshot and never issue a secon
   assert.match(feedStyles, /@media \(max-width: 620px\)/);
 });
 
-test("only complete nonfinancial bilateral offers are eligible and native-action opportunity types remain native", () => {
+test("only complete published nonfinancial bilateral offers are eligible and native-action opportunity types remain native", () => {
+  assert.match(feedScript, /metadata\.origin === "platform_generated"/);
   assert.match(feedScript, /value\.opportunityType !== "offer"/);
   assert.match(feedScript, /value\.mode !== "pledge"/);
   assert.match(feedScript, /!text\(value\.verification/);

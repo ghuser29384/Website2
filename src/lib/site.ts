@@ -73,6 +73,7 @@ export const FOOTER_LINK_GROUPS: SiteFooterLinkGroup[] = [
       { href: "/walkthrough", label: "Interactive walkthrough" },
       { href: "/what-is-moral-trade", label: "What is Moral Trade?" },
       { href: "/research", label: "Research" },
+      { href: "/bottleneck-atlas", label: "Bottleneck Atlas" },
       { href: "/moral-trade/technical-spec", label: "Technical specification" },
       { href: "/worked-examples", label: "Worked examples" },
     ],

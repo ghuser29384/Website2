@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { getViewer } from "@/lib/app-data";
+import { getAtlasField } from "@/lib/bottleneck-atlas";
 import {
   getActionDescriptor,
   isRecommendationEventType,
@@ -9,6 +10,11 @@ import {
   type RecommendationEventType,
   type RecommendationOpportunityType,
 } from "@/lib/recommendation-learning";
+import {
+  OPPORTUNITY_SYNTHESIS_VERSION,
+  SYNTHESIZED_OPPORTUNITY_PREFIX,
+  parseSynthesizedOpportunityId,
+} from "@/lib/opportunity-synthesis";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,11 +23,23 @@ export const revalidate = 0;
 
 const MAX_EVENTS_PER_REQUEST = 20;
 const MAX_DWELL_MS = 30 * 60 * 1_000;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PASSIVE_EVENT_TYPES = new Set<RecommendationEventType>([
   "impression",
   "open",
   "dwell",
   "cause_view",
+]);
+const SYNTHESIZED_CANDIDATE_EVENT_TYPES = new Set<RecommendationEventType>([
+  "impression",
+  "open",
+  "dwell",
+  "save",
+  "unsave",
+  "hide",
+  "not_for_me",
+  "easy",
+  "hard",
 ]);
 const SAFE_SURFACES = new Set([
   "home_feed",
@@ -239,12 +257,20 @@ export async function POST(request: Request) {
 
   const offerIds = [...new Set(
     normalizedEvents
-      .filter((event) => event.opportunityType === "offer" || event.opportunityType === "donation_redirect")
+      .filter(
+        (event) =>
+          (event.opportunityType === "offer" || event.opportunityType === "donation_redirect") &&
+          !event.opportunityId.startsWith(SYNTHESIZED_OPPORTUNITY_PREFIX) &&
+          UUID_PATTERN.test(event.opportunityId),
+      )
       .map((event) => event.opportunityId),
   )];
   const poolIds = [...new Set(
     normalizedEvents
-      .filter((event) => event.opportunityType === "donation_pool")
+      .filter(
+        (event) =>
+          event.opportunityType === "donation_pool" && UUID_PATTERN.test(event.opportunityId),
+      )
       .map((event) => event.opportunityId),
   )];
 
@@ -313,6 +339,55 @@ export async function POST(request: Request) {
           dwell_ms: event.dwellMs,
           idempotency_key: event.idempotencyKey,
           metadata: { ...event.metadata, model_version: "adaptive-moral-feed-v1" },
+          occurred_at: occurredAt,
+        },
+      ];
+    }
+
+    const synthesized = parseSynthesizedOpportunityId(event.opportunityId);
+    if (synthesized) {
+      const canonicalType: RecommendationOpportunityType =
+        synthesized.template.id === "reciprocal-donation-redirect"
+          ? "donation_redirect"
+          : "offer";
+      if (event.opportunityType !== canonicalType) return [];
+      if (!SYNTHESIZED_CANDIDATE_EVENT_TYPES.has(event.eventType)) return [];
+
+      const sourceCauses = synthesized.template.sourceFieldIds.flatMap((fieldId) => {
+        const field = getAtlasField(fieldId);
+        return field ? [field.name, ...field.aliases.slice(0, 2)] : [];
+      });
+      const benefitCauses = uniqueCauses(
+        [synthesized.matchedCause, synthesized.template.offeredCause],
+        sourceCauses,
+      );
+      const actionCauses = uniqueCauses(
+        [synthesized.template.requestedCause],
+        sourceCauses,
+      );
+      const descriptor = getActionDescriptor({
+        actionText: synthesized.template.firstPartyGives,
+        actionCause: actionCauses[0] ?? synthesized.template.requestedCause,
+        mode: canonicalType === "donation_redirect" ? "offset" : "pledge",
+        opportunityType: canonicalType,
+      });
+      return [
+        {
+          profile_id: profileId,
+          opportunity_type: canonicalType,
+          opportunity_id: event.opportunityId,
+          event_type: event.eventType,
+          benefit_causes: benefitCauses,
+          action_causes: actionCauses,
+          action_key: descriptor.key,
+          action_label: descriptor.label,
+          inferred_difficulty: descriptor.defaultDifficulty,
+          dwell_ms: event.dwellMs,
+          idempotency_key: event.idempotencyKey,
+          metadata: {
+            ...event.metadata,
+            model_version: OPPORTUNITY_SYNTHESIS_VERSION,
+          },
           occurred_at: occurredAt,
         },
       ];
