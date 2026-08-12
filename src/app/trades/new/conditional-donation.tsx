@@ -7,6 +7,7 @@ import {
   startDirectDonationUpgradeCheckoutAction,
   withdrawDirectDonationUpgradeBackupAction,
 } from "@/app/direct-donation-upgrade-actions";
+import { DirectUpgradeAmountFields } from "@/components/donation-upgrades/direct-upgrade-amount-fields";
 import {
   DirectUpgradeDeadlineField,
   DirectUpgradeLocalDateTime,
@@ -14,7 +15,12 @@ import {
 import { EveryOrgNonprofitSelector } from "@/components/donation-upgrades/every-org-nonprofit-selector";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
-import { Breadcrumbs, PageHero, SectionHeader, StepCard } from "@/components/ui/page-primitives";
+import {
+  Breadcrumbs,
+  PageHero,
+  SectionHeader,
+  StepCard,
+} from "@/components/ui/page-primitives";
 import { requireViewer } from "@/lib/app-data";
 import {
   DIRECT_DONATION_UPGRADE_DEFAULT_MATCH_DAYS,
@@ -22,8 +28,12 @@ import {
   formatDirectDonationUpgradeUsd,
   getDirectDonationUpgradeConfig,
   type DirectDonationUpgradeCandidateRow,
-  type DirectDonationUpgradeOfferRow,
 } from "@/lib/direct-donation-upgrade";
+import type {
+  DirectDonationUpgradeProposalRow,
+  PartialDirectDonationUpgradeOfferRow,
+} from "@/lib/direct-donation-upgrade-negotiation";
+import { formatDirectDonationUpgradeRedirectPercentage } from "@/lib/direct-donation-upgrade-split";
 import { loadDirectDonationUpgradeViewerData } from "@/lib/direct-donation-upgrade-data";
 import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -32,13 +42,16 @@ function statusLabel(value: unknown) {
   return String(value ?? "unknown").replaceAll("_", " ");
 }
 
-function offerTitle(offer: {
-  creator_amount_cents: number;
-  matcher_amount_cents: number;
-  upgraded_recipient: { name: string };
-}) {
-  return `${formatDirectDonationUpgradeUsd(
-    offer.creator_amount_cents + offer.matcher_amount_cents,
+function offerTitle(
+  offer: Pick<
+    PartialDirectDonationUpgradeOfferRow,
+    "redirected_amount_cents" | "matcher_amount_cents" | "upgraded_recipient"
+  >,
+) {
+  return `Redirect ${formatDirectDonationUpgradeUsd(
+    offer.redirected_amount_cents,
+  )} and add ${formatDirectDonationUpgradeUsd(
+    offer.matcher_amount_cents,
   )} for ${offer.upgraded_recipient.name}`;
 }
 
@@ -59,35 +72,80 @@ export async function ConditionalDonationCreate({
   const viewer = await requireViewer(returnTo);
   const config = getDirectDonationUpgradeConfig();
   const renderedQaNoServiceData =
-    process.env.DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE === "true";
+    process.env.DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE ===
+    "true";
   const pageData =
     config.environment && !renderedQaNoServiceData
       ? await loadDirectDonationUpgradeViewerData({
           viewerId: viewer.authUser.id,
           environment: config.environment,
         })
-      : { publicOffers: [], creatorOffers: [], viewerCandidates: [], viewerObligations: [] };
+      : {
+          publicOffers: [],
+          creatorOffers: [],
+          viewerCandidates: [],
+          viewerObligations: [],
+          viewerProposals: [],
+        };
   const formMessage = getFormMessage(params);
   const now = await loadRenderClockMs();
   const creatorOfferById = new Map(
     pageData.creatorOffers.map((offer) => [String(offer.id), offer]),
   );
   const viewerCandidateByOfferId = new Map(
-    pageData.viewerCandidates.map((candidate) => [candidateOfferId(candidate), candidate]),
+    pageData.viewerCandidates.map((candidate) => [
+      candidateOfferId(candidate),
+      candidate,
+    ]),
+  );
+  const viewerProposalByOfferId = new Map(
+    pageData.viewerProposals.map((proposal) => [
+      String(proposal.offer_id),
+      proposal,
+    ]),
   );
   const viewerObligationByOfferId = new Map(
-    pageData.viewerObligations.map((obligation) => [String(obligation.offer_id), obligation]),
+    pageData.viewerObligations.map((obligation) => [
+      String(obligation.offer_id),
+      obligation,
+    ]),
   );
   const activityByOffer = new Map<
     string,
-    { offer: DirectDonationUpgradeOfferRow | null; candidate: DirectDonationUpgradeCandidateRow | null }
+    {
+      offer: PartialDirectDonationUpgradeOfferRow | null;
+      candidate: DirectDonationUpgradeCandidateRow | null;
+      proposal: DirectDonationUpgradeProposalRow | null;
+    }
   >();
   for (const offer of pageData.creatorOffers) {
-    activityByOffer.set(String(offer.id), { offer, candidate: null });
+    activityByOffer.set(String(offer.id), {
+      offer,
+      candidate: null,
+      proposal: null,
+    });
   }
   for (const candidate of pageData.viewerCandidates) {
     const id = candidateOfferId(candidate);
-    if (!activityByOffer.has(id)) activityByOffer.set(id, { offer: null, candidate });
+    if (!activityByOffer.has(id)) {
+      activityByOffer.set(id, {
+        offer: null,
+        candidate,
+        proposal: null,
+      });
+    }
+  }
+  for (const proposal of pageData.viewerProposals) {
+    const id = String(proposal.offer_id);
+    const activity = activityByOffer.get(id);
+    if (activity) activity.proposal = proposal;
+    else {
+      activityByOffer.set(id, {
+        offer: null,
+        candidate: null,
+        proposal,
+      });
+    }
   }
 
   return (
@@ -108,13 +166,16 @@ export async function ConditionalDonationCreate({
         <PageHero
           eyebrow="Create · Donation Upgrade"
           title="Turn a planned donation into a larger donation to a more effective recipient."
-          description="Publish the commitment without entering payment information. If someone adds the stated amount, you each donate directly to the upgraded recipient. If nobody matches, you complete the original donation instead. Moral Trade records fulfillment only after exact Every.org confirmation."
+          description="Choose how much of the original donation moves. If someone matches, the retained portion still goes to the original recipient, the redirected portion goes to the upgraded recipient, and the matcher adds a separate donation. Counterparties can accept the published terms or propose a different percentage and matcher amount."
           actions={
             <>
               <Link className="button button-secondary" href="/trades/new">
                 Back to Create
               </Link>
-              <Link className="button button-secondary" href="/donation-upgrades">
+              <Link
+                className="button button-secondary"
+                href="/donation-upgrades"
+              >
                 Browse Donation Upgrades
               </Link>
             </>
@@ -134,54 +195,56 @@ export async function ConditionalDonationCreate({
           </div>
         ) : null}
         {!config.readyForCommitments ? (
-          <div className="status-banner status-banner-error" role="status">
-            <strong>Donation Upgrade commitments are temporarily unavailable.</strong>{" "}
-            {config.blockers[0] ?? "The direct Every.org rail is not configured."} No payment
+          <div
+            className="status-banner status-banner-error"
+            role="status"
+          >
+            <strong>
+              Donation Upgrade commitments are temporarily unavailable.
+            </strong>{" "}
+            {config.blockers[0] ??
+              "The direct Every.org rail is not configured."} No payment
             authorization or charge can be created from this page.
           </div>
         ) : null}
 
-        <section className="section section-white" aria-labelledby="create-upgrade-heading">
+        <section
+          className="section section-white"
+          aria-labelledby="create-upgrade-heading"
+        >
           <SectionHeader
             eyebrow="Create"
             id="create-upgrade-heading"
-            title="Freeze the original plan before asking someone to add to it."
+            title="Freeze the original plan and the offered split before publishing."
           >
-            The baseline and both recipient identities are immutable after publication. The
-            original and upgraded recipients must be different Every.org nonprofits.
+            The baseline, recipient identities, amount, redirect percentage,
+            and requested matcher amount are immutable within a published
+            offer. Accepting a counteroffer creates a new immutable revision
+            rather than rewriting history.
           </SectionHeader>
-          <form action={createDirectDonationUpgradeOfferAction} className="panel form-stack">
+          <form
+            action={createDirectDonationUpgradeOfferAction}
+            className="panel form-stack"
+          >
+            <DirectUpgradeAmountFields />
+
             <div className="form-grid">
-              <label>
-                Your planned donation
-                <input
-                  name="creator_amount"
-                  type="number"
-                  min="1.00"
-                  max="50000.00"
-                  step="0.01"
-                  defaultValue="10.00"
-                  required
-                />
-              </label>
-              <label>
-                Amount someone adds
-                <input
-                  name="matcher_amount"
-                  type="number"
-                  min="1.00"
-                  max="50000.00"
-                  step="0.01"
-                  defaultValue="10.00"
-                  required
-                />
-              </label>
               <DirectUpgradeDeadlineField
                 defaultValueIso={new Date(
-                  now + DIRECT_DONATION_UPGRADE_DEFAULT_MATCH_DAYS * 24 * 60 * 60 * 1000,
+                  now +
+                    DIRECT_DONATION_UPGRADE_DEFAULT_MATCH_DAYS *
+                      24 *
+                      60 *
+                      60 *
+                      1000,
                 ).toISOString()}
                 maximumIso={new Date(
-                  now + DIRECT_DONATION_UPGRADE_MAX_MATCH_DAYS * 24 * 60 * 60 * 1000,
+                  now +
+                    DIRECT_DONATION_UPGRADE_MAX_MATCH_DAYS *
+                      24 *
+                      60 *
+                      60 *
+                      1000,
                 ).toISOString()}
                 minimumIso={new Date(now + 60 * 60 * 1000).toISOString()}
               />
@@ -194,21 +257,22 @@ export async function ConditionalDonationCreate({
                   </option>
                 </select>
                 <span className="field-note">
-                  Private identities remain hidden publicly if the commitment expires or defaults.
+                  Private identities remain hidden publicly if the commitment
+                  expires or defaults.
                 </span>
               </label>
             </div>
 
             <EveryOrgNonprofitSelector
               inputName="original_recipient_identifier"
-              label="If nobody matches"
-              description="Choose the nonprofit you already planned to support."
+              label="Original recipient"
+              description="Choose the nonprofit you already planned to support. Any unredirected remainder still goes here."
               placeholder="Search your local charity"
             />
             <EveryOrgNonprofitSelector
               inputName="upgraded_recipient_identifier"
-              label="If someone matches"
-              description="Choose the recipient that receives both separate direct donations."
+              label="Upgraded recipient"
+              description="The redirected portion and the matcher’s added donation go here as separate direct donations."
               defaultQuery="GiveWell Top Charities Fund"
               placeholder="Search GiveWell Top Charities Fund"
             />
@@ -224,16 +288,18 @@ export async function ConditionalDonationCreate({
                 required
               />
               <span className="field-note">
-                This pre-commitment record is frozen to distinguish incremental impact from a
-                donation you were already going to make. The creator’s original amount is not
-                counted as incremental impact.
+                This pre-commitment record is frozen to distinguish incremental
+                impact from a donation you were already going to make. The
+                creator’s original amount is not counted as incremental impact;
+                only the verified portion that moves is counted as redirected.
               </span>
             </label>
             <label className="check-row">
               <input name="baseline_confirmed" type="checkbox" required />
               <span>
-                Before publishing, I independently intended to make the stated donation to the
-                original recipient even if nobody matched.
+                Before publishing, I independently intended to make the full
+                stated donation to the original recipient even if nobody
+                matched.
               </span>
             </label>
             <button
@@ -244,81 +310,157 @@ export async function ConditionalDonationCreate({
               Commit and publish
             </button>
             <p className="field-note">
-              No card or bank information is collected now. Once the outcome is fixed, each
-              participant completes their own direct Every.org donation within seven days.
+              No card or bank information is collected now. Once the branch is
+              fixed, each participant completes their exact direct Every.org
+              donation obligations within seven days. A partial matched branch
+              can create two creator donations and one matcher donation.
             </p>
           </form>
         </section>
 
-        <section className="section section-subtle" aria-labelledby="open-upgrades-heading">
+        <section
+          className="section section-subtle"
+          aria-labelledby="open-upgrades-heading"
+        >
           <SectionHeader
             eyebrow="Open"
             id="open-upgrades-heading"
-            title="Add to someone’s planned donation."
+            title="Accept the offered terms or negotiate the split."
           >
-            The first eligible matcher becomes primary. Later participants become backups and may
-            be promoted if the primary matcher does not fulfill the donation.
+            The first eligible matcher who accepts the exact published terms
+            becomes primary. A counteroffer instead proposes a different
+            redirect percentage and matcher amount; creator acceptance creates
+            a new matched revision. Later exact-term participants become
+            backups.
           </SectionHeader>
           <div className="data-grid">
             {pageData.publicOffers.map((offer) => {
               const ownOffer = creatorOfferById.get(String(offer.id));
               const candidate = viewerCandidateByOfferId.get(String(offer.id));
+              const proposal = viewerProposalByOfferId.get(String(offer.id));
               return (
                 <article className="panel data-card" key={offer.id}>
-                  <p className="detail-kicker">{statusLabel(offer.status)}</p>
+                  <p className="detail-kicker">
+                    {statusLabel(offer.status)} ·{" "}
+                    {formatDirectDonationUpgradeRedirectPercentage(
+                      offer.redirect_basis_points,
+                    )}{" "}
+                    redirect
+                  </p>
                   <h3>{offerTitle(offer)}</h3>
                   <p>
-                    Without a match: {formatDirectDonationUpgradeUsd(offer.creator_amount_cents)} to{" "}
-                    {offer.original_recipient.name}.
-                  </p>
-                  <p>
-                    With a match: two direct donations totaling{" "}
-                    {formatDirectDonationUpgradeUsd(
-                      offer.creator_amount_cents + offer.matcher_amount_cents,
+                    Without a match: {formatDirectDonationUpgradeUsd(
+                      offer.creator_amount_cents,
                     )}{" "}
-                    to {offer.upgraded_recipient.name}.
+                    to {offer.original_recipient.name}.
                   </p>
                   <p>
-                    Match by <DirectUpgradeLocalDateTime value={offer.match_deadline_at} />
+                    With a match: {formatDirectDonationUpgradeUsd(
+                      offer.retained_amount_cents,
+                    )}{" "}
+                    stays with {offer.original_recipient.name};{" "}
+                    {formatDirectDonationUpgradeUsd(
+                      offer.redirected_amount_cents,
+                    )}{" "}
+                    moves to {offer.upgraded_recipient.name}; the matcher adds{" "}
+                    {formatDirectDonationUpgradeUsd(
+                      offer.matcher_amount_cents,
+                    )}{" "}
+                    there.
+                  </p>
+                  <p>
+                    Match by{" "}
+                    <DirectUpgradeLocalDateTime
+                      value={offer.match_deadline_at}
+                    />
                   </p>
                   <p className="field-note">
-                    {offer.matcher_count} matcher commitment{offer.matcher_count === 1 ? "" : "s"}
+                    {offer.matcher_count} matcher commitment
+                    {offer.matcher_count === 1 ? "" : "s"} ·{" "}
+                    {offer.proposal_count} counteroffer
+                    {offer.proposal_count === 1 ? "" : "s"}
                   </p>
                   <div className="form-actions">
-                    <Link className="button button-secondary" href={`/donation-upgrades/${offer.id}`}>
-                      View exact terms
+                    <Link
+                      className="button button-secondary"
+                      href={`/donation-upgrades/${offer.id}`}
+                    >
+                      View or negotiate
                     </Link>
                     {ownOffer?.status === "open" ? (
                       <form action={cancelDirectDonationUpgradeOfferAction}>
-                        <input name="offer_id" type="hidden" value={offer.id} />
-                        <button className="button button-secondary" type="submit">
+                        <input
+                          name="offer_id"
+                          type="hidden"
+                          value={offer.id}
+                        />
+                        <button
+                          className="button button-secondary"
+                          type="submit"
+                        >
                           Cancel unmatched offer
                         </button>
                       </form>
                     ) : candidate ? (
                       candidate.status === "backup" ? (
-                        <form action={withdrawDirectDonationUpgradeBackupAction}>
-                          <input name="offer_id" type="hidden" value={offer.id} />
-                          <button className="button button-secondary" type="submit">
+                        <form
+                          action={withdrawDirectDonationUpgradeBackupAction}
+                        >
+                          <input
+                            name="offer_id"
+                            type="hidden"
+                            value={offer.id}
+                          />
+                          <button
+                            className="button button-secondary"
+                            type="submit"
+                          >
                             Withdraw backup commitment
                           </button>
                         </form>
                       ) : (
-                        <span className="badge">Your status: {statusLabel(candidate.status)}</span>
+                        <span className="badge">
+                          Your status: {statusLabel(candidate.status)}
+                        </span>
                       )
-                    ) : !ownOffer && ["open", "matched"].includes(offer.status) ? (
-                      <form action={joinDirectDonationUpgradeOfferAction} className="form-stack">
-                        <input name="offer_id" type="hidden" value={offer.id} />
+                    ) : !ownOffer &&
+                      ["open", "matched"].includes(offer.status) ? (
+                      <form
+                        action={joinDirectDonationUpgradeOfferAction}
+                        className="form-stack"
+                      >
+                        <input
+                          name="offer_id"
+                          type="hidden"
+                          value={offer.id}
+                        />
+                        {proposal?.status === "pending" ? (
+                          <span className="badge">
+                            Your counteroffer is pending
+                          </span>
+                        ) : null}
                         <label className="check-row">
-                          <input name="matcher_commitment" type="checkbox" required />
+                          <input
+                            name="matcher_commitment"
+                            type="checkbox"
+                            required
+                          />
                           <span>
                             If selected, I will donate exactly{" "}
-                            {formatDirectDonationUpgradeUsd(offer.matcher_amount_cents)} directly to{" "}
-                            {offer.upgraded_recipient.name} within seven days.
+                            {formatDirectDonationUpgradeUsd(
+                              offer.matcher_amount_cents,
+                            )}{" "}
+                            directly to {offer.upgraded_recipient.name} within
+                            seven days under the current published terms.
                           </span>
                         </label>
-                        <button className="button button-primary" type="submit">
-                          {offer.status === "open" ? "Become primary matcher" : "Join as backup"}
+                        <button
+                          className="button button-primary"
+                          type="submit"
+                        >
+                          {offer.status === "open"
+                            ? "Accept current terms"
+                            : "Join as backup"}
                         </button>
                       </form>
                     ) : null}
@@ -335,35 +477,46 @@ export async function ConditionalDonationCreate({
           </div>
         </section>
 
-        <section className="section section-white" aria-labelledby="your-upgrades-heading">
+        <section
+          className="section section-white"
+          aria-labelledby="your-upgrades-heading"
+        >
           <SectionHeader
             eyebrow="Your activity"
             id="your-upgrades-heading"
-            title="Commitments and direct donation obligations."
+            title="Commitments, counteroffers, and direct donation obligations."
           >
-            Browser returns, screenshots, and self-attestation do not complete an obligation.
-            Moral Trade waits for the exact Every.org partner webhook.
+            Browser returns, screenshots, and self-attestation do not complete
+            an obligation. Moral Trade waits for the exact Every.org partner
+            webhook for each donation leg.
           </SectionHeader>
           <div className="data-grid">
             {pageData.viewerObligations.map((obligation) => (
               <article className="panel data-card" key={obligation.id}>
                 <p className="detail-kicker">
-                  {obligation.participant_role} · {statusLabel(obligation.status)}
+                  {statusLabel(obligation.obligation_kind)} ·{" "}
+                  {statusLabel(obligation.status)}
                 </p>
                 <h3>
-                  {formatDirectDonationUpgradeUsd(obligation.expected_amount_cents)} to{" "}
-                  {obligation.expected_recipient.name}
+                  {formatDirectDonationUpgradeUsd(
+                    obligation.expected_amount_cents,
+                  )}{" "}
+                  to {obligation.expected_recipient.name}
                 </h3>
                 <p>
                   Due <DirectUpgradeLocalDateTime value={obligation.due_at} />
                 </p>
                 {obligation.status === "verified" ? (
                   <p className="field-note">
-                    Verified gross {formatDirectDonationUpgradeUsd(
+                    Verified gross{" "}
+                    {formatDirectDonationUpgradeUsd(
                       obligation.provider_gross_amount_cents ?? 0,
-                    )}; verified net {formatDirectDonationUpgradeUsd(
+                    )}
+                    ; verified net{" "}
+                    {formatDirectDonationUpgradeUsd(
                       obligation.provider_net_amount_cents ?? 0,
-                    )}.
+                    )}
+                    .
                   </p>
                 ) : null}
                 <div className="form-actions">
@@ -373,10 +526,20 @@ export async function ConditionalDonationCreate({
                   >
                     View commitment
                   </Link>
-                  {["pending", "checkout_started"].includes(obligation.status) ? (
+                  {["pending", "checkout_started"].includes(
+                    obligation.status,
+                  ) ? (
                     <form action={startDirectDonationUpgradeCheckoutAction}>
-                      <input name="offer_id" type="hidden" value={obligation.offer_id} />
-                      <input name="obligation_id" type="hidden" value={obligation.id} />
+                      <input
+                        name="offer_id"
+                        type="hidden"
+                        value={obligation.offer_id}
+                      />
+                      <input
+                        name="obligation_id"
+                        type="hidden"
+                        value={obligation.id}
+                      />
                       <button
                         className="button button-primary"
                         type="submit"
@@ -392,16 +555,31 @@ export async function ConditionalDonationCreate({
             {[...activityByOffer.entries()]
               .filter(([offerId]) => !viewerObligationByOfferId.has(offerId))
               .map(([offerId, activity]) => (
-                <article className="panel data-card" key={`activity:${offerId}`}>
+                <article
+                  className="panel data-card"
+                  key={`activity:${offerId}`}
+                >
                   <p className="detail-kicker">
-                    {activity.offer ? "Creator" : "Matcher"} ·{" "}
-                    {statusLabel(activity.offer?.status ?? activity.candidate?.status)}
+                    {activity.offer
+                      ? "Creator"
+                      : activity.candidate
+                        ? "Matcher"
+                        : "Counteroffer"}{" "}
+                    ·{" "}
+                    {statusLabel(
+                      activity.offer?.status ??
+                        activity.candidate?.status ??
+                        activity.proposal?.status,
+                    )}
                   </p>
                   <h3>Donation Upgrade commitment</h3>
                   <p className="field-note">
                     No direct donation obligation is currently due from you.
                   </p>
-                  <Link className="button button-secondary" href={`/donation-upgrades/${offerId}`}>
+                  <Link
+                    className="button button-secondary"
+                    href={`/donation-upgrades/${offerId}`}
+                  >
                     View commitment
                   </Link>
                 </article>
@@ -409,34 +587,48 @@ export async function ConditionalDonationCreate({
             {!pageData.viewerObligations.length && !activityByOffer.size ? (
               <article className="panel data-card">
                 <h3>No Donation Upgrade activity yet</h3>
-                <p>Your created, matched, backup, and verified commitments appear here.</p>
+                <p>
+                  Your created, negotiated, matched, backup, and verified
+                  commitments appear here.
+                </p>
               </article>
             ) : null}
           </div>
         </section>
 
-        <section className="section section-subtle" aria-labelledby="direct-flow-heading">
+        <section
+          className="section section-subtle"
+          aria-labelledby="direct-flow-heading"
+        >
           <SectionHeader
             eyebrow="Direct verified rail"
             id="direct-flow-heading"
-            title="A complete commitment flow without Moral Trade holding money."
+            title="A complete split and bargaining flow without Moral Trade holding money."
           />
           <div className="step-card-grid">
             <StepCard index={1} title="Commit without a payment method.">
-              Freeze the baseline, amounts, recipients, deadline, and privacy setting.
+              Freeze the baseline, total amount, split, recipients, deadline,
+              and privacy setting.
             </StepCard>
-            <StepCard index={2} title="Fix the branch and fulfill directly.">
-              A match creates two direct donations to the upgraded recipient; no match creates one
-              direct donation to the original recipient.
+            <StepCard index={2} title="Accept or counteroffer.">
+              A matcher may accept the exact terms or propose a different
+              redirect percentage and added amount. Acceptance creates a new
+              immutable revision.
             </StepCard>
-            <StepCard index={3} title="Verify before awarding impact.">
-              Exact provider confirmation records gross, net, incremental, and redirected amounts.
+            <StepCard index={3} title="Fix the branch and fulfill directly.">
+              A partial match creates separate retained, redirected, and
+              matcher donation legs. No match creates the original full
+              donation.
+            </StepCard>
+            <StepCard index={4} title="Verify before awarding impact.">
+              Exact provider confirmation records gross, net, incremental, and
+              redirected amounts for each leg.
             </StepCard>
           </div>
           <p className="field-note">
-            The separate managed automatic-payment rail remains unavailable until its legal and
-            payment operator exists. Existing direct commitments are never silently converted into
-            automatic charges.
+            The separate managed automatic-payment rail remains unavailable
+            until its legal and payment operator exists. Existing direct
+            commitments are never silently converted into automatic charges.
           </p>
         </section>
       </main>
