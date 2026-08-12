@@ -137,13 +137,13 @@ jobs:
           test -f supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql
           test -f supabase/migrations/20260812043000_evidence_credibility_calibration_export_v1.sql
           test "$(find supabase/tests -maxdepth 1 -type f -name 'evidence_credibility_*.sql' | wc -l)" -eq 12
+          test ! -e .github/workflows/repair-evidence-credibility-integration-plan-hash.yml
 
           grep -q "mode.*shadow" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
           grep -q "milestone_cutover_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
           grep -q "public_effects_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
           grep -q "ranking_effects_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
           grep -q "eligibility_effects_enabled.*false" supabase/migrations/20260810160000_evidence_credibility_shadow_schema_core.sql
-          grep -q '"activationAuthorized": false' docs/moral-trade/evidence-credibility-calibration-analysis-plan-v1.md || true
           grep -q "activationAuthorized: false" src/lib/evidence-credibility-calibration-analysis.ts
 
           for file in supabase/tests/evidence_credibility_*.sql; do
@@ -156,7 +156,7 @@ jobs:
         run: npm ci
 
       - name: Verify frozen analysis plan hash
-        run: sha256sum -c analysis/evidence-credibility-calibration-v1/plan.sha256
+        run: cd analysis/evidence-credibility-calibration-v1 && sha256sum -c plan.sha256
 
       - name: Run focused evidence-credibility contracts
         run: |
