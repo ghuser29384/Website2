@@ -36,7 +36,7 @@ concurrency:
 
 env:
   EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-  EXPECTED_BASE_SHA: 8ee3e14b340fdb486c211d86703e02f9226811ab
+  EXPECTED_BASE_SHA: b637a18e52a560b4bbd992eeca2891ed9af86fa6
 
 jobs:
   source-and-contracts:
