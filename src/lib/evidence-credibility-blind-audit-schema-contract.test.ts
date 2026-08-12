@@ -8,13 +8,21 @@ const workflow = readFileSync(
   join(root, ".github/workflows/evidence-credibility-blind-audit-qa.yml"),
   "utf8",
 );
-const migration = readFileSync(
+const baseMigration = readFileSync(
   join(
     root,
     "supabase/migrations/20260812022000_evidence_credibility_blind_audit_v1.sql",
   ),
   "utf8",
 );
+const hardeningMigration = readFileSync(
+  join(
+    root,
+    "supabase/migrations/20260812022001_evidence_credibility_blind_audit_hardening.sql",
+  ),
+  "utf8",
+);
+const migration = `${baseMigration}\n${hardeningMigration}`;
 const actions = readFileSync(
   join(root, "src/app/evidence-credibility-audit-actions.ts"),
   "utf8",
@@ -38,7 +46,7 @@ const document = readFileSync(
 
 function functionBody(name: string) {
   const marker = `create or replace function ${name}`;
-  const start = migration.indexOf(marker);
+  const start = migration.lastIndexOf(marker);
   assert.notEqual(start, -1, `Missing ${name}`);
   const end = migration.indexOf("$function$;", start);
   assert.notEqual(end, -1, `Unterminated ${name}`);
@@ -51,6 +59,12 @@ const reviewerProjection = functionBody(
 const labelFunction = functionBody(
   "public.record_evidence_credibility_calibration_label_v1",
 );
+const assignmentFunction = functionBody(
+  "public.assign_evidence_credibility_calibration_audit_v1",
+);
+const fileAccessFunction = functionBody(
+  "public.can_access_my_evidence_credibility_calibration_file_v1",
+);
 
 test("the exact-head workflow uses explicit fail-closed negative guards", () => {
   assert.match(
@@ -62,6 +76,10 @@ test("the exact-head workflow uses explicit fail-closed negative guards", () => 
     /if grep -Eqi[\s\S]*The blind-audit migration contains an active-effect write/i,
   );
   assert.doesNotMatch(workflow, /^\s*!\s+grep/gm);
+  assert.match(
+    workflow,
+    /20260812022001_evidence_credibility_blind_audit_hardening\.sql/i,
+  );
   assert.match(
     workflow,
     /test ! -e \.github\/workflows\/harden-blind-audit-scope-guard\.yml/i,
@@ -123,21 +141,57 @@ test("every audit surface is AAL2-gated and active effects remain fail-closed", 
   assert.doesNotMatch(migration, /insert into public\.credibility_restrictions/i);
 });
 
-test("assignment excludes the original reviewer and both parties", () => {
+test("assignment excludes both parties and the complete review lineage", () => {
   assert.match(
     migration,
-    /p_reviewer_id in \([\s\S]*draw_row\.subject_profile_id[\s\S]*draw_row\.counterparty_profile_id[\s\S]*draw_row\.original_reviewer_id[\s\S]*\)/i,
+    /calibration_conflicted_reviewer_ids_v1[\s\S]*trade_milestone_reviews[\s\S]*trade_payment_review_decisions/i,
   );
   assert.match(
-    migration,
-    /The calibration reviewer must be independent of the original reviewer and parties\./i,
+    assignmentFunction,
+    /p_reviewer_id = any\([\s\S]*calibration_conflicted_reviewer_ids_v1/i,
   );
   assert.match(
-    migration,
+    assignmentFunction,
+    /independent of every reviewer in the decision lineage and both parties/i,
+  );
+  assert.match(
+    assignmentFunction,
     /reviewer_grant\.role = 'reviewer'[\s\S]*reviewer_grant\.active[\s\S]*reviewer_grant\.revoked_at is null/i,
   );
   assert.match(adminPage, /excluded_reviewer_ids/i);
+  assert.match(adminPage, /complete review lineage/i);
   assert.match(actions, /assign_evidence_credibility_calibration_audit_v1/i);
+});
+
+test("superseded and expired assignments fail closed and receive explicit events", () => {
+  assert.match(
+    migration,
+    /calibration_draw_is_current_v1[\s\S]*supersedes_decision_id/i,
+  );
+  assert.match(
+    assignmentFunction,
+    /no longer represents the current terminal decision/i,
+  );
+  assert.match(
+    reviewerProjection,
+    /calibration_draw_is_current_v1\(draw\.id\)/i,
+  );
+  assert.match(
+    labelFunction,
+    /no longer represents the current terminal decision/i,
+  );
+  assert.match(
+    fileAccessFunction,
+    /calibration_draw_is_current_v1\(draw\.id\)/i,
+  );
+  assert.match(
+    hardeningMigration,
+    /reconcile_evidence_credibility_calibration_assignments_v1[\s\S]*target_superseded[\s\S]*assignment_window_expired/i,
+  );
+  assert.match(
+    actions,
+    /reconcileEvidenceCredibilityAuditAssignmentsAction/i,
+  );
 });
 
 test("the reviewer projection omits every forbidden prior-judgment field", () => {
@@ -176,7 +230,7 @@ test("the reviewer projection omits every forbidden prior-judgment field", () =>
   assert.match(reviewerPage, /Review the evidence, not the prior judgment/i);
 });
 
-test("private file delivery authorizes first and never reveals a storage path", () => {
+test("private file delivery authorizes first and exposes only the projected receipt", () => {
   const permissionIndex = fileRoute.indexOf(
     "can_access_my_evidence_credibility_calibration_file_v1",
   );
@@ -190,12 +244,16 @@ test("private file delivery authorizes first and never reveals a storage path", 
   assert.match(fileRoute, /X-Content-Type-Options": "nosniff"/i);
   assert.doesNotMatch(fileRoute, /NextResponse\.json\([\s\S]{0,200}storagePath/i);
   assert.match(
-    migration,
-    /can_access_my_evidence_credibility_calibration_file_v1/i,
+    fileAccessFunction,
+    /p_item_id =[\s\S]*calibration_projected_receipt_id_v1\(draw\.id\)/i,
+  );
+  assert.match(
+    reviewerProjection,
+    /receipt\.id =[\s\S]*calibration_projected_receipt_id_v1\(draw\.id\)/i,
   );
 });
 
-test("independent labels preserve continuous error and validate target-specific vocabularies", () => {
+test("independent labels preserve continuous error and payload-exact replay", () => {
   assert.match(
     migration,
     /absolute_error_value := case[\s\S]*abs\(draw_row\.original_outcome - p_final_outcome\)/i,
@@ -216,15 +274,15 @@ test("independent labels preserve continuous error and validate target-specific 
   );
   assert.match(
     labelFunction,
-    /Choose a permitted independent evidence finality\./i,
+    /existing_label\.final_status is distinct from p_final_status/i,
   );
   assert.match(
     labelFunction,
-    /Choose a permitted independent settlement finality\./i,
+    /existing_label\.private_rationale is distinct from btrim\(p_private_rationale\)/i,
   );
   assert.match(
     labelFunction,
-    /Settlement labels must leave evidence-conduct findings not applicable\./i,
+    /The immutable calibration-label request differs from this request/i,
   );
   assert.match(actions, /record_evidence_credibility_calibration_label_v1/i);
   assert.match(reviewerPage, /name="final_outcome"/i);
