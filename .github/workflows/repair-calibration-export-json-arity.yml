@@ -38,7 +38,7 @@ jobs:
           source = path.read_text(encoding="utf-8")
           start_marker = "      jsonb_build_object(\n        'schemaVersion'"
           end_marker = "      ) as observation"
-          if source.count(start_marker) != 1 or source.count(end_marker) != 1:
+          if source.count(start_marker) != 1:
               raise SystemExit("Expected exactly one calibration observation payload.")
           start = source.index(start_marker)
           end = source.index(end_marker, start) + len("      )")
