@@ -113,14 +113,16 @@ test.describe("Offers directory density", () => {
     expect(formStyle.boxShadow).toBe("none");
 
     const explorer = page.locator("details").filter({ hasText: "Optional visual explorer" });
+    const explorerSummary = explorer.locator(":scope > summary");
     await expect(explorer).toBeVisible();
+    await expect(explorerSummary).toHaveCount(1);
     expect(await explorer.evaluate((element) => (element as HTMLDetailsElement).open)).toBe(false);
 
     await expect.poll(getPlaneRequestCount).toBe(1);
-    await explorer.locator("summary").click();
+    await explorerSummary.click();
     await expect(explorer).toHaveJSProperty("open", true);
     await expect.poll(getPlaneRequestCount).toBe(2);
-    await explorer.locator("summary").click();
+    await explorerSummary.click();
     await expect(explorer).toHaveJSProperty("open", false);
 
     await expectNoHorizontalOverflow(page);
@@ -172,7 +174,9 @@ test.describe("Offers directory density", () => {
     expect(heroHeadingSize).toBeLessThanOrEqual(76);
 
     const explorer = page.locator("details").filter({ hasText: "Optional visual explorer" });
-    await explorer.locator("summary").click();
+    const explorerSummary = explorer.locator(":scope > summary");
+    await expect(explorerSummary).toHaveCount(1);
+    await explorerSummary.click();
     await expect(explorer).toHaveJSProperty("open", true);
 
     await expectNoHorizontalOverflow(page);
