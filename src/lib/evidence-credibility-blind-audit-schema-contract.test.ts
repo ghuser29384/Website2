@@ -73,7 +73,7 @@ test("the exact-head workflow uses explicit fail-closed negative guards", () => 
   );
   assert.match(
     workflow,
-    /if grep -Eqi[\s\S]*The blind-audit migration contains an active-effect write/i,
+    /if grep -Eqi[\s\S]*A blind-audit migration contains an active-effect write/i,
   );
   assert.doesNotMatch(workflow, /^\s*!\s+grep/gm);
   assert.match(
