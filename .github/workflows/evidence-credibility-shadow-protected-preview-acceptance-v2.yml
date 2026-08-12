@@ -27,6 +27,7 @@ env:
   EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
   VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
   VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 58.9.4
   PGSSLMODE: require
   EVIDENCE_CREDIBILITY_QA_RUN_KEY: ${{ github.run_id }}-${{ github.run_attempt }}
 
@@ -99,7 +100,7 @@ jobs:
             "$DEPLOYMENT_ID" "$DEPLOYMENT_URL" "$EXPECTED_QA_REF" \
             > preview-evidence/environment.txt
 
-      - name: Install exact dependencies, Chromium, PostgreSQL client, and current Vercel CLI
+      - name: Install exact dependencies, Chromium, PostgreSQL client, and pinned Vercel CLI
         shell: bash
         run: |
           set -euo pipefail
@@ -110,15 +111,17 @@ jobs:
           npx playwright install --with-deps chromium
           mkdir -p .vercel
           printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
-          npx vercel@latest --version 2>&1 | tee ../preview-evidence/vercel-cli-version.txt
-          npx vercel@latest curl --help 2>&1 | tee ../preview-evidence/vercel-curl-help.txt
+          npx --yes "vercel@$VERCEL_CLI_VERSION" --version 2>&1 | tee ../preview-evidence/vercel-cli-version.txt
+          npx --yes "vercel@$VERCEL_CLI_VERSION" curl --help 2>&1 \
+            | tee ../preview-evidence/vercel-curl-help.txt || true
 
       - name: Verify the existing deployment remains ready, preview-targeted, and protected
         shell: bash
         run: |
           set -euo pipefail
           cd candidate
-          npx vercel@latest inspect "$DEPLOYMENT_URL" --wait --timeout=5m --token="$VERCEL_TOKEN" \
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$DEPLOYMENT_URL" \
+            --wait --timeout=5m --token="$VERCEL_TOKEN" \
             2>&1 | tee ../preview-evidence/vercel-inspect.txt
           grep -Eq 'status[[:space:]]+● Ready|status[[:space:]]+Ready' ../preview-evidence/vercel-inspect.txt
           grep -Eq 'target[[:space:]]+preview' ../preview-evidence/vercel-inspect.txt
@@ -133,11 +136,13 @@ jobs:
         run: |
           set -euo pipefail
           cd candidate
-          npx vercel@latest curl "$DEPLOYMENT_URL/login" \
-            -H 'x-vercel-set-bypass-cookie: true' \
-            -D /tmp/vercel-bypass-headers.txt \
-            -o /tmp/vercel-bypass-body.html \
+          npx --yes "vercel@$VERCEL_CLI_VERSION" curl /login \
+            --deployment "$DEPLOYMENT_URL" \
             --token="$VERCEL_TOKEN" \
+            -- \
+            --header 'x-vercel-set-bypass-cookie: true' \
+            --dump-header /tmp/vercel-bypass-headers.txt \
+            --output /tmp/vercel-bypass-body.html \
             2> ../preview-evidence/vercel-curl-stderr.txt
 
           node <<'NODE'
@@ -232,7 +237,8 @@ jobs:
         run: |
           set -euo pipefail
           cd candidate
-          npx vercel@latest logs "$DEPLOYMENT_URL" --level=error --since=30m --token="$VERCEL_TOKEN" \
+          npx --yes "vercel@$VERCEL_CLI_VERSION" logs "$DEPLOYMENT_URL" \
+            --level=error --since=30m --token="$VERCEL_TOKEN" \
             2>&1 | tee ../preview-evidence/vercel-error-logs.txt || true
           if grep -Eqi '(Unhandled|Internal Server Error|FUNCTION_INVOCATION_FAILED|MIDDLEWARE_INVOCATION_FAILED)' \
             ../preview-evidence/vercel-error-logs.txt; then
