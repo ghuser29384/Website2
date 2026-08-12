@@ -126,10 +126,10 @@
   "participantDefinition": "if ever executed, both users in an eligible dyad may be research participants because assignment can alter invitations and relational outcomes; no real participant exists in this artifact",
   "consentOrWaiver": {
     "status": "not_determined",
-    "indepentlyApproved": false
+    "independentlyApproved": false
   },
   "controlConditionJustification": "not approved; a future ethics review must determine whether withholding an invitation removes any entitlement or creates differential risk",
-  "vulnerableParticipantProtections": "exclude minors and any user facing material hierarchical, economic, social, or relational pressure unless indepently approved safeguards exist",
+  "vulnerableParticipantProtections": "exclude minors and any user facing material hierarchical, economic, social, or relational pressure unless independently approved safeguards exist",
   "debriefingPolicy": "not determined; required before execution review if assignment is not fully transparent at enrollment",
   "adverseEventMonitoring": "monitor every blocking safety outcome continuously and suspend assignment immediately on any observed or unresolved veto",
   "stopAndSuspensionRules": [
@@ -167,7 +167,6 @@
   ],
   "assignmentCodeHash": "sha256:0f12661ba6f959299cd85da38646477c70899aca0a9b25d23b35c056fd97911e",
   "analysisCodeHash": "sha256:7106516340686b7f93df9f19dcdd1c82bde8134e693be65690ab0925644bf45f",
-  "studyInstancePayloadHash": "sha256:1e31b1db59899fbf07fbf8b6219c8699f0c6b0ddbeb6e8717f989487660aaba2",
   "appendOnlyRegistryRecord": "qa-registry://synthetic/not-registered/trade-bilateral-encouragement-planning-v1",
   "protectedTagOrEquivalent": "github://ghuser29384/Website2/commit/2c51f6b6460a6679037d11c49ef63119ddf17f00",
   "amendmentLog": [],
@@ -175,5 +174,6 @@
   "instrumentationEnvironment": "qa",
   "subjectMode": "synthetic_only",
   "executionAuthorized": false,
-  "realUserAssignmentAllowed": false
+  "realUserAssignmentAllowed": false,
+  "studyInstancePayloadHash": "sha256:1e31b1db59899fbf07fbf8b6219c8699f0c6b0ddbeb6e8717f989487660aaba2"
 }
