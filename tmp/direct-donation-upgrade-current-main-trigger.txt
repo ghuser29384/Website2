@@ -1,1 +1,0 @@
-Trigger exact current-main Donation Upgrade gates after the bot-authored merge.
