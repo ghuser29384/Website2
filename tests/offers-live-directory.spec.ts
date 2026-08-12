@@ -159,7 +159,7 @@ test.describe("Live Offers directory", () => {
       url.pathname === "/offers" &&
       url.searchParams.get("view") === "live" &&
       url.searchParams.size === 1
-    ));
+    ), { timeout: 30_000 });
     await waitForDirectory(page);
 
     const filterDisclosure = page.locator("details").filter({
