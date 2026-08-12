@@ -113,3 +113,22 @@
     white-space: nowrap;
   }
 }
+
+@media (max-width: 360px) {
+  .scope :global(.mt-site-topbar.topbar-with-search) {
+    grid-template-areas:
+      "brand"
+      "actions"
+      "nav";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+  }
+
+  .scope :global(.mt-site-topbar .brand) {
+    min-height: 2.5rem;
+  }
+
+  .scope :global(.mt-site-topbar .topbar-actions) {
+    justify-content: flex-start;
+  }
+}

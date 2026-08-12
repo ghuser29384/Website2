@@ -82,4 +82,8 @@ test("the offers topbar stays compact after removing duplicate global search", (
     topbarStyles,
     /@media \(max-width: 760px\)[\s\S]*?\.mt-site-topbar\.topbar-with-search\)[\s\S]*?display:\s*grid;/,
   );
+  assert.match(
+    topbarStyles,
+    /@media \(max-width: 360px\)[\s\S]*?grid-template-areas:\s*"brand"\s*"actions"\s*"nav";/,
+  );
 });
