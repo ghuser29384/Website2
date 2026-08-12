@@ -2,14 +2,14 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
-  title: "Explore ordinary offers by challenge and return",
+  title: "Explore live offers",
   description:
-    "Explore Moral Trade offers and pledge swaps on the challenge-return plane embedded in the ordinary offer search page.",
+    "Browse the live Moral Trade offer directory, grouped by participant with transparent ranking and filters.",
   alternates: {
     canonical: "/offers",
   },
 };
 
 export default function LegacyOfferPlanePage() {
-  redirect("/offers#challenge-return-explorer");
+  redirect("/offers?view=live");
 }

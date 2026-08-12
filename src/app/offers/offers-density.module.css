@@ -2,303 +2,1038 @@
   min-width: 0;
 }
 
-/* Keep the search page focused on scanning and comparison. */
-.scope :global(.mt-explore-hero) {
-  grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.24fr);
+.shell {
+  --offers-paper: #f7f3eb;
+  --offers-surface: #fffdf8;
+  --offers-ink: #070707;
+  --offers-muted: #67625b;
+  --offers-rule: rgba(7, 7, 7, 0.22);
+  --offers-rule-strong: rgba(7, 7, 7, 0.46);
+  --offers-action: #1648ff;
+  --offers-action-hover: #0839ef;
+  --offers-context: #7b42c3;
+  --offers-safe: #198448;
+  min-width: 0;
+  min-height: 100vh;
+  overflow-x: clip;
+  background: var(--offers-paper);
+  color: var(--offers-ink);
 }
 
-.scope :global(.mt-explore-copy),
-.scope :global(.mt-explore-side) {
-  gap: 0.7rem;
-  padding: clamp(1.35rem, 3vw, 2.4rem);
+.shell *,
+.shell *::before,
+.shell *::after {
+  box-sizing: border-box;
 }
 
-.scope :global(.mt-explore-copy h1) {
-  max-width: 19ch;
-  font-size: clamp(2.65rem, 4.5vw, 4.6rem);
-  line-height: 0.94;
+.routeHeader {
+  border-bottom: 1px solid var(--offers-ink);
+  background: color-mix(in srgb, var(--offers-paper) 96%, transparent);
 }
 
-.scope :global(.mt-explore-copy > p:not(.mt-product-kicker)) {
-  display: -webkit-box;
-  max-width: 54ch;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.scope :global(.mt-explore-side) {
-  align-content: center;
-}
-
-.scope :global(.mt-explore-side .mt-product-kicker),
-.scope :global(.mt-explore-side p:last-child) {
-  display: none;
-}
-
-.scope :global(.mt-explore-side strong) {
-  font-family: var(--font-body);
-  font-size: 0.98rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-}
-
-.scope :global(.mt-product-section) {
-  gap: 1.25rem;
-  padding: clamp(2rem, 4vw, 3.4rem) clamp(0.85rem, 2vw, 1.5rem);
-}
-
-.scope :global(.mt-product-section-head) {
-  gap: 1rem;
-}
-
-.scope :global(.mt-product-section-head h2) {
-  max-width: 20ch;
-  font-size: clamp(2.15rem, 3.7vw, 3.6rem);
-}
-
-.scope :global(.mt-product-section-head > p) {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.scope :global(.mt-directory-toolbar) {
-  margin-top: 0;
-}
-
-/* The interactive plane already supplies the live-offer filters. Keep the
-   server-rendered panel as a no-JavaScript fallback, but remove the duplicate
-   panel after the plane mounts. */
-.scope :global(#ordinary-offer-plane-host) + form[role="search"] {
-  display: none;
-}
-
-.scope :global(.mt-directory-view) {
-  gap: 0.85rem;
-  padding-top: 1.15rem;
-}
-
-.scope :global(.mt-directory-view-head) {
+.routeTopbar {
+  display: grid !important;
+  width: min(calc(100% - 2rem), 1320px) !important;
+  min-height: 5.1rem !important;
+  grid-template-areas: "brand nav context search actions" !important;
+  grid-template-columns: auto auto minmax(8.5rem, 1fr) minmax(15rem, 22rem) auto !important;
   align-items: center;
-  gap: 0.5rem 1rem;
+  gap: 0.8rem 1.2rem !important;
+  margin: 0 auto !important;
+  padding: 0.7rem 0 !important;
+  border: 0 !important;
 }
 
-.scope :global(.mt-directory-view-head h2) {
-  font-size: clamp(2rem, 3vw, 2.9rem);
-  line-height: 0.98;
+.routeTopbar :global(.brand) {
+  grid-area: brand;
+  min-width: max-content;
+  font-size: clamp(1.35rem, 2vw, 1.8rem) !important;
 }
 
-.scope :global(.mt-directory-view-head > p) {
-  display: none;
-}
-
-.scope :global(.mt-market-grid) {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.scope :global(.mt-market-card) {
-  min-height: 0;
-  align-content: start;
-  gap: 0.8rem;
-  padding: 1rem;
-}
-
-.scope :global(.mt-market-card-head) {
-  gap: 0.4rem;
-}
-
-.scope :global(.mt-market-state) {
-  min-height: 1.45rem;
-  padding: 0.16rem 0.36rem;
-  font-size: 0.58rem;
-}
-
-.scope :global(.mt-market-card h3) {
-  max-height: 3.15em;
-  overflow: hidden;
-  font-size: clamp(1.45rem, 1.9vw, 1.95rem);
-  line-height: 1.03;
-}
-
-.scope :global(.mt-market-card h3 span) {
-  display: inline;
-  margin: 0 0.36rem;
-  font-size: 0.7rem;
-  vertical-align: 0.18em;
-}
-
-.scope :global(.mt-market-card .listing-alias) {
-  margin: -0.18rem 0 0;
-  color: var(--ink-muted);
-  font-size: 0.8rem;
-  line-height: 1.3;
-}
-
-.scope :global(.mt-market-card .tag-row) {
-  gap: 0.35rem;
-  margin: 0;
-}
-
-.scope :global(.mt-market-card .tag-row .badge) {
-  display: none;
-}
-
-.scope :global(.mt-market-card .tag-row .source-pill) {
-  min-height: 1.65rem;
-  padding: 0.25rem 0.48rem;
+.routeTopbar :global(.topbar-context) {
+  grid-area: context;
+  justify-self: center;
+  color: var(--offers-context);
+  font-family: var(--font-mono);
   font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  line-height: 1.3;
+  text-align: center;
+  text-transform: uppercase;
   white-space: nowrap;
 }
 
-.scope :global(.mt-market-card .tag-row .text-button) {
+.routeTopbar :global(.topbar-links) {
+  grid-area: nav;
+  display: flex;
+  width: auto;
+  justify-content: flex-start;
+  padding: 0;
+  border: 0;
+}
+
+.routeTopbar :global(.topbar-menu-trigger) {
+  min-height: 2.3rem !important;
+  padding: 0.45rem 0.65rem !important;
+  border: 1px solid transparent !important;
+  border-radius: 0 !important;
+  font-family: var(--font-mono);
+  font-size: 0.62rem !important;
+  letter-spacing: 0.06em !important;
+}
+
+.routeTopbar :global(.topbar-menu-trigger:hover),
+.routeTopbar :global(.topbar-menu-trigger:focus-visible),
+.routeTopbar :global(.topbar-menu[open] .topbar-menu-trigger) {
+  border-color: var(--offers-ink) !important;
+  background: transparent !important;
+  color: var(--offers-action) !important;
+}
+
+.routeTopbar :global(.topbar-menu-panel) {
+  top: calc(100% + 0.55rem);
+  min-width: 18rem;
+  padding: 0.45rem;
+  border: 1px solid var(--offers-ink);
+  border-radius: 0;
+  background: var(--offers-surface);
+  box-shadow: 0.55rem 0.55rem 0 var(--offers-ink);
+}
+
+.routeTopbar :global(.topbar-search) {
+  grid-area: search;
+  min-width: 0;
+}
+
+.routeTopbar :global(.topbar-search-box) {
+  min-height: 2.45rem;
+  border: 1px solid var(--offers-rule-strong);
+  border-radius: 0;
+  background: var(--offers-surface);
+  box-shadow: none;
+}
+
+.routeTopbar :global(.topbar-search-box:focus-within) {
+  border-color: var(--offers-action);
+  box-shadow: 0 0 0 1px var(--offers-action);
+}
+
+.routeTopbar :global(.topbar-search input) {
+  min-width: 0;
+  font-family: var(--font-body);
   font-size: 0.76rem;
 }
 
-.scope :global(.mt-market-card dl) {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
-  border-top: 0;
+.routeTopbar :global(.topbar-search-submit) {
+  min-width: 2.6rem;
+  border-radius: 0;
+  background: var(--offers-action);
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
 }
 
-.scope :global(.mt-market-card dl div) {
-  grid-template-columns: 1fr;
-  align-content: start;
-  gap: 0.25rem;
-  min-width: 0;
-  padding: 0.62rem;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface-muted) 48%, transparent);
+.routeTopbar :global(.topbar-actions) {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
 }
 
-.scope :global(.mt-market-card dl div:nth-child(3)) {
-  grid-column: 1 / -1;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  gap: 0.6rem;
-  padding-block: 0.48rem;
-}
-
-.scope :global(.mt-market-card dt) {
-  font-size: 0.58rem;
-  font-weight: 700;
+.routeTopbar :global(.topbar-actions .button),
+.routeTopbar :global(.topbar-utility) {
+  min-height: 2.45rem;
+  padding: 0.5rem 0.72rem;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 0.59rem;
+  font-weight: 600;
   letter-spacing: 0.035em;
+  white-space: nowrap;
 }
 
-.scope :global(.mt-market-card dd) {
-  display: -webkit-box;
+.routeTopbar :global(.topbar-actions .button-nav) {
+  border-color: var(--offers-action);
+  background: var(--offers-action);
+  color: #ffffff;
+}
+
+.routeTopbar :global(.topbar-actions .button-nav:hover) {
+  border-color: var(--offers-action-hover);
+  background: var(--offers-action-hover);
+}
+
+.routeTopbar :global(.topbar-actions .button-secondary) {
+  border-color: var(--offers-ink);
+  background: transparent;
+  color: var(--offers-ink);
+}
+
+.main {
+  width: min(calc(100% - 2rem), 1320px);
+  margin: 0 auto;
+  padding: 1.35rem 0 3.5rem;
+}
+
+.statusStack {
+  display: grid;
+  gap: 0.55rem;
+  margin-bottom: 0.9rem;
+}
+
+.statusStack :global(.status-banner) {
+  margin: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-size: 0.78rem;
+}
+
+.workspace {
+  display: grid;
   min-width: 0;
-  overflow: hidden;
-  font-size: 0.8rem;
-  line-height: 1.35;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  grid-template-areas:
+    "intro controls"
+    "intro results"
+    "other other";
+  grid-template-columns: minmax(13.5rem, 15.5rem) minmax(0, 1fr);
+  align-items: start;
+  border-top: 1px solid var(--offers-ink);
 }
 
-.scope :global(.mt-market-card dl div:nth-child(3) dd) {
-  -webkit-line-clamp: 1;
+.introRail {
+  grid-area: intro;
+  position: sticky;
+  top: 0;
+  display: flex;
+  min-width: 0;
+  min-height: 32rem;
+  flex-direction: column;
+  align-self: start;
+  padding: 2rem 1.6rem 1.6rem 0.2rem;
+  border-right: 1px solid var(--offers-rule);
 }
 
-.scope :global(.mt-market-card-foot) {
+.sectionLabel {
+  margin: 0 0 0.7rem;
+  color: var(--offers-context);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.introRail h1 {
+  margin: 0;
+  max-width: 8ch;
+  font-family: var(--font-heading);
+  font-size: clamp(2.35rem, 3.25vw, 3.55rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.96;
+}
+
+.introCopy {
+  margin: 1.35rem 0 0;
+  color: var(--offers-ink);
+  font-family: var(--font-heading);
+  font-size: 1.02rem;
+  line-height: 1.38;
+}
+
+.infoDisclosure {
+  margin-top: 1.5rem;
+  border-top: 1px solid var(--offers-ink);
+  border-bottom: 1px solid var(--offers-rule);
+}
+
+.infoDisclosure summary,
+.rankingDisclosure summary {
+  padding: 0.72rem 0;
+  color: var(--offers-context);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.infoDisclosure summary::-webkit-details-marker,
+.rankingDisclosure summary::-webkit-details-marker,
+.filterDisclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.infoDisclosure summary::after,
+.rankingDisclosure summary::after {
+  float: right;
+  content: "+";
+}
+
+.infoDisclosure[open] summary::after,
+.rankingDisclosure[open] summary::after {
+  content: "−";
+}
+
+.infoDisclosure > div {
+  padding: 0 0 0.85rem;
+}
+
+.infoDisclosure strong {
+  font-family: var(--font-body);
+  font-size: 0.77rem;
+}
+
+.infoDisclosure p {
+  margin: 0.4rem 0 0;
+  color: var(--offers-muted);
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  line-height: 1.5;
+}
+
+.introLinks {
+  display: grid;
+  gap: 0.55rem;
   margin-top: auto;
-  padding-top: 0.1rem;
-  font-size: 0.6rem;
+  padding-top: 1.5rem;
 }
 
-.scope :global(.mt-market-card-foot a) {
+.introLinks a {
+  width: fit-content;
+  color: var(--offers-ink);
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration-color: var(--offers-rule-strong);
+  text-underline-offset: 0.22em;
+}
+
+.introLinks a:hover {
+  color: var(--offers-action);
+}
+
+.directoryForm {
+  grid-area: controls;
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 14rem;
+  border-bottom: 1px solid var(--offers-ink);
+  background: var(--offers-surface);
+}
+
+.searchStage {
+  display: grid;
+  min-width: 0;
+  gap: 0.75rem;
+  padding: 1.15rem 1.3rem 1rem;
+}
+
+.resultsHeading {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 1rem;
+}
+
+.resultsHeading h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: clamp(1.65rem, 2.5vw, 2.25rem);
+  font-weight: 400;
+  letter-spacing: -0.04em;
+  line-height: 0.98;
+}
+
+.resultCount {
+  max-width: 25rem;
+  margin: 0;
+  color: var(--offers-muted);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  line-height: 1.45;
+  text-align: right;
+}
+
+.resultCount strong {
+  color: var(--offers-ink);
   font-size: 0.8rem;
 }
 
-/* The plane is the primary visual control. Keep its copy short and use the
-   full offer page for detailed terms. */
-.scope :global(#challenge-return-explorer) {
-  gap: 1rem;
-  padding-block: clamp(1rem, 2vw, 1.5rem);
+.searchControl {
+  display: grid;
+  min-width: 0;
+  gap: 0.3rem;
 }
 
-.scope :global(#challenge-return-explorer > header) {
+.searchControl > label {
+  color: var(--offers-muted);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.searchControl > div {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.searchControl input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--offers-ink);
+  border-right: 0;
+  border-radius: 0;
+  background: var(--offers-surface);
+  color: var(--offers-ink);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+}
+
+.searchControl button,
+.filterSubmit,
+.emptyPrimary {
+  display: inline-flex;
+  min-height: 2.75rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--offers-action);
+  border-radius: 0;
+  background: var(--offers-action);
+  color: #ffffff;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.searchControl button:hover,
+.filterSubmit:hover,
+.emptyPrimary:hover {
+  border-color: var(--offers-action-hover);
+  background: var(--offers-action-hover);
+  color: #ffffff;
+}
+
+.searchControl input:focus-visible,
+.filterContent select:focus-visible,
+.searchControl button:focus-visible,
+.filterSubmit:focus-visible,
+.filterDisclosure > summary:focus-visible,
+.infoDisclosure summary:focus-visible,
+.rankingDisclosure summary:focus-visible,
+.introLinks a:focus-visible,
+.pagination a:focus-visible,
+.otherRoutes a:focus-visible {
+  outline: 2px solid var(--offers-action);
+  outline-offset: 3px;
+}
+
+.activeState {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--offers-muted);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  line-height: 1.35;
+}
+
+.activeState > span {
+  overflow-wrap: anywhere;
+}
+
+.activeState a {
+  flex: none;
+  color: var(--offers-action);
+  font-weight: 600;
+  text-underline-offset: 0.2em;
+}
+
+.filterDisclosure {
+  min-width: 0;
+  border-left: 1px solid var(--offers-rule);
+}
+
+.filterDisclosure > summary {
+  display: flex;
+  min-height: 3.4rem;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.3rem;
+  padding: 0.7rem 1rem;
+  color: var(--offers-ink);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.61rem;
+  font-weight: 600;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.filterDisclosure > summary::before {
+  color: var(--offers-action);
+  content: "+";
+  float: left;
+  margin-right: 0.35rem;
+}
+
+.filterDisclosure[open] > summary::before {
+  content: "−";
+}
+
+.filterDisclosure > summary small {
+  width: 100%;
+  overflow: hidden;
+  color: var(--offers-muted);
+  font-size: 0.53rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.filterContent {
+  display: grid !important;
+  gap: 0.7rem;
+  padding: 1.15rem 1rem 1rem;
+}
+
+.filterDisclosure:not([open]) > .filterContent {
+  display: none !important;
+}
+
+.filterContent > label {
+  display: grid;
+  gap: 0.28rem;
+  min-width: 0;
+  color: var(--offers-muted);
+  font-family: var(--font-mono);
+  font-size: 0.57rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.filterContent select {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.35rem;
+  padding: 0.48rem 0.55rem;
+  border: 1px solid var(--offers-rule-strong);
+  border-radius: 0;
+  background: var(--offers-surface);
+  color: var(--offers-ink);
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.filterSubmit {
+  min-height: 2.35rem;
+}
+
+.rankingDisclosure {
+  border-top: 1px solid var(--offers-rule);
+}
+
+.rankingDisclosure summary {
+  padding-bottom: 0.35rem;
+  font-size: 0.56rem;
+}
+
+.rankingDisclosure p {
+  margin: 0;
+  padding: 0.35rem 0 0.2rem;
+  color: var(--offers-muted);
+  font-family: var(--font-body);
+  font-size: 0.64rem;
+  line-height: 1.45;
+}
+
+.resultsStage {
+  grid-area: results;
+  min-width: 0;
+  padding: 1rem 0 0 1.3rem;
+}
+
+.groupList {
+  display: grid;
+  min-width: 0;
+  gap: 1.1rem;
+}
+
+.groupList > * {
+  animation: directoryEnter 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes directoryEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.emptyState {
+  display: grid;
+  gap: 0.8rem;
+  padding: 2rem 0;
+  border-top: 1px solid var(--offers-ink);
+  border-bottom: 1px solid var(--offers-ink);
+}
+
+.emptyState h3,
+.emptyState p {
+  margin: 0;
+}
+
+.emptyState h3 {
+  font-family: var(--font-heading);
+  font-size: 1.65rem;
+  font-weight: 400;
+}
+
+.emptyState p {
+  max-width: 64ch;
+  color: var(--offers-muted);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.emptyState > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 0.75rem;
 }
 
-.scope :global(#challenge-return-explorer > header h2) {
-  font-size: clamp(1.9rem, 3vw, 2.8rem);
+.emptyState > div > a:not(.emptyPrimary) {
+  color: var(--offers-ink);
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
 }
 
-.scope :global(#challenge-return-explorer > header p:last-child) {
-  display: -webkit-box;
-  max-width: 62ch;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.pagination {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 0;
+  color: var(--offers-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
 }
 
-.scope :global(#challenge-return-explorer [role="note"] span) {
-  display: none;
+.pagination a {
+  width: fit-content;
+  color: var(--offers-ink);
+  font-weight: 600;
+  text-underline-offset: 0.22em;
 }
 
-.scope :global(#challenge-return-explorer article > p) {
-  display: none;
+.pagination a:last-child {
+  justify-self: end;
 }
 
-.scope :global(#challenge-return-explorer article h4) {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.otherRoutes {
+  grid-area: other;
+  display: grid;
+  grid-template-columns: minmax(13.5rem, 15.5rem) minmax(0, 1fr);
+  margin-top: 2.6rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--offers-ink);
 }
 
-.scope :global(#challenge-return-explorer aside h3) {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+.otherRoutes > div {
+  padding-right: 1.4rem;
 }
 
-.scope :global(#challenge-return-explorer aside dd) {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+.otherRoutes h2 {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  font-weight: 400;
+  letter-spacing: -0.03em;
 }
 
-@media (max-width: 980px) {
-  .scope :global(.mt-explore-hero) {
+.otherRoutes nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-left: 1px solid var(--offers-rule);
+}
+
+.otherRoutes a {
+  display: grid;
+  gap: 0.22rem;
+  min-width: 0;
+  padding: 0.35rem 1.1rem 0.65rem;
+  border-right: 1px solid var(--offers-rule);
+  color: var(--offers-ink);
+  text-decoration: none;
+}
+
+.otherRoutes a:hover strong {
+  color: var(--offers-action);
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.otherRoutes strong {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.otherRoutes span {
+  color: var(--offers-muted);
+  font-family: var(--font-mono);
+  font-size: 0.55rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 1120px) {
+  .routeTopbar {
+    grid-template-areas:
+      "brand context context"
+      "nav search actions" !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+  }
+
+  .routeTopbar :global(.topbar-context) {
+    justify-self: start;
+  }
+
+  .directoryForm {
     grid-template-columns: 1fr;
   }
 
-  .scope :global(.mt-explore-copy) {
-    border-right: 0;
+  .filterDisclosure {
+    border-top: 1px solid var(--offers-rule);
+    border-left: 0;
   }
 
-  .scope :global(.mt-explore-side) {
-    display: none;
+  .filterDisclosure > summary {
+    min-height: 2.8rem;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.65rem 1.3rem;
+    color: var(--offers-ink);
+    cursor: pointer;
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 600;
+    list-style: none;
+    text-transform: uppercase;
   }
 
-  .scope :global(.mt-market-grid) {
+  .filterDisclosure > summary::before {
+    display: inline-block;
+    width: 1rem;
+    color: var(--offers-action);
+    content: "+";
+  }
+
+  .filterDisclosure[open] > summary::before {
+    content: "−";
+  }
+
+  .filterDisclosure > summary small {
+    width: auto;
+    margin-left: auto;
+    overflow: hidden;
+    color: var(--offers-muted);
+    font-size: 0.54rem;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
+  .filterContent {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0.2rem 1.3rem 1rem;
+  }
+
+  .filterSubmit {
+    align-self: end;
+  }
+
+  .rankingDisclosure {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 820px) {
+  .workspace {
+    grid-template-areas:
+      "intro"
+      "controls"
+      "results"
+      "other";
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .introRail {
+    position: static;
+    min-height: 0;
+    padding: 1.5rem 0 1.2rem;
+    border-right: 0;
+    border-bottom: 1px solid var(--offers-rule);
+  }
+
+  .introRail h1 {
+    max-width: 13ch;
+  }
+
+  .introCopy {
+    max-width: 52ch;
+  }
+
+  .introLinks {
+    grid-template-columns: repeat(2, max-content);
+    margin-top: 0;
+  }
+
+  .resultsStage {
+    padding-left: 0;
+  }
+
+  .otherRoutes {
+    grid-template-columns: 1fr;
+  }
+
+  .otherRoutes > div {
+    padding: 0 0 0.8rem;
+  }
+
+  .otherRoutes nav {
+    border-top: 1px solid var(--offers-rule);
+    border-left: 0;
   }
 }
 
 @media (max-width: 680px) {
-  .scope :global(.mt-product-section) {
-    padding-inline: 0.65rem;
+  .routeHeader {
+    padding-inline: 0.75rem;
   }
 
-  .scope :global(.mt-product-section-head) {
+  .routeTopbar {
+    width: 100% !important;
+    min-height: 0 !important;
+    grid-template-areas:
+      "brand nav"
+      "search search"
+      "actions actions" !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    gap: 0.5rem 0.45rem !important;
+    padding: 0.55rem 0 0.6rem !important;
+  }
+
+  .routeTopbar :global(.brand) {
+    font-size: 1.25rem !important;
+  }
+
+  .routeTopbar :global(.topbar-context) {
+    display: none;
+  }
+
+  .routeTopbar :global(.topbar-links) {
+    justify-self: start;
+    overflow: visible;
+    padding: 0;
+    border: 0;
+  }
+
+  .routeTopbar :global(.topbar-actions) {
+    justify-self: start;
+  }
+
+  .routeTopbar :global(.topbar-menu-trigger) {
+    min-height: 2.2rem !important;
+    padding: 0.35rem 0.45rem !important;
+    font-size: 0.56rem !important;
+  }
+
+  .routeTopbar :global(.topbar-menu-panel) {
+    position: fixed;
+    top: 4.2rem;
+    right: 0.75rem;
+    left: 0.75rem;
+    max-height: calc(100dvh - 5.5rem);
+    overflow-y: auto;
+  }
+
+  .routeTopbar :global(.topbar-search) {
+    width: 100%;
+  }
+
+  .routeTopbar :global(.topbar-search-box) {
+    min-height: 2.25rem;
+  }
+
+  .routeTopbar :global(.topbar-actions) {
+    display: flex;
+    max-width: 13.5rem;
+    flex-wrap: wrap;
+  }
+
+  .routeTopbar :global(.topbar-actions .button),
+  .routeTopbar :global(.topbar-utility) {
+    display: inline-flex;
+    width: auto;
+    min-height: 2rem;
+    padding: 0.4rem 0.55rem;
+    font-size: 0.52rem;
+  }
+
+  .main {
+    width: min(calc(100% - 1.5rem), 1320px);
+    padding-top: 0.6rem;
+  }
+
+  .introRail {
+    padding: 0.85rem 0 0.7rem;
+  }
+
+  .introRail h1 {
+    max-width: 16ch;
+    font-size: clamp(2rem, 9.5vw, 2.35rem);
+    line-height: 0.97;
+  }
+
+  .introCopy {
+    margin-top: 0.7rem;
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+
+  .infoDisclosure {
+    margin-top: 0.7rem;
+  }
+
+  .infoDisclosure summary {
+    padding: 0.52rem 0;
+  }
+
+  .introLinks {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+    padding-top: 0.65rem;
+  }
+
+  .introLinks a {
+    font-size: 0.56rem;
+  }
+
+  .searchStage {
+    gap: 0.55rem;
+    padding: 0.75rem 0 0.7rem;
+  }
+
+  .resultsHeading {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+
+  .resultsHeading h2 {
+    font-size: 1.55rem;
+  }
+
+  .resultCount {
+    max-width: none;
+    text-align: left;
+  }
+
+  .searchControl > div {
+    grid-template-columns: minmax(0, 1fr) 4.6rem;
+  }
+
+  .searchControl input {
+    min-height: 2.5rem;
+    padding-inline: 0.6rem;
+    font-size: 0.72rem;
+  }
+
+  .activeState {
+    align-items: flex-start;
+  }
+
+  .activeState > span {
+    white-space: normal;
+  }
+
+  .filterDisclosure > summary,
+  .filterContent {
+    padding-right: 0;
+    padding-left: 0;
+  }
+
+  .filterDisclosure > summary {
+    min-height: 2.4rem;
+    padding-block: 0.5rem;
+  }
+
+  .filterContent {
     grid-template-columns: 1fr;
   }
 
-  .scope :global(.mt-market-grid) {
-    grid-template-columns: 1fr;
-  }
-
-  .scope :global(.mt-market-card dl) {
-    grid-template-columns: 1fr;
-  }
-
-  .scope :global(.mt-market-card dl div:nth-child(3)) {
+  .rankingDisclosure {
     grid-column: auto;
+  }
+
+  .otherRoutes {
+    margin-top: 2rem;
+  }
+
+  .otherRoutes nav {
+    grid-template-columns: 1fr;
+  }
+
+  .otherRoutes a {
+    padding: 0.7rem 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--offers-rule);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .groupList > * {
+    animation: none;
+  }
+
+  .scope *,
+  .scope *::before,
+  .scope *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

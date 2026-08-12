@@ -68,9 +68,12 @@ test("the returning homepage keeps the action-first screenshot contract", () => 
 });
 
 test("examples remain available only as a secondary learning resource", () => {
-  assert.doesNotMatch(primaryAcquisitionCopy, /\/worked-examples/);
+  assert.doesNotMatch([home, start, status, cohort, onboarding, visitorPaths].join("\n"), /\/worked-examples/);
   assert.doesNotMatch(notFound, /\/worked-examples|View examples/);
-  assert.doesNotMatch(offers, /CANONICAL_WORKED_CASE_OFFERS|view=examples|Inspect example/);
+  assert.doesNotMatch(offers, /CANONICAL_WORKED_CASE_OFFERS|Inspect example/);
+  assert.doesNotMatch(offers, /<Link[^>]+href="\/worked-examples"/);
+  assert.match(offers, /WORKED_EXAMPLE_VIEWS/);
+  assert.match(offers, /redirect\("\/worked-examples"\)/);
   assert.match(notFound, /href="\/offers\?view=live"/);
   assert.match(notFound, /href="\/donate"/);
   assert.match(site, /href: "\/worked-examples", label: "Worked examples"/);

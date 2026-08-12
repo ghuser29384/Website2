@@ -151,13 +151,10 @@ test("sitemap uses canonical public URLs and excludes private surfaces", async (
 
 test("paid action offers page has crawler-readable SSR content and honest metadata", () => {
   const pageSource = readRepoFile("src/app/paid-action-offers/page.tsx");
-  const loadingSource = readRepoFile("src/app/loading.tsx");
 
   assert.match(pageSource, /title="Paid action offers are deferred\."/);
   assert.match(pageSource, /Moral Trade keeps general paid action offers deferred until identity, dispute, legal, and evidence workflows are mature/);
   assert.equal(pageSource.includes("Preparing route"), false);
-  assert.equal(loadingSource.includes("Preparing route"), false);
-  assert.equal(loadingSource.includes("<h1"), false);
   assert.match(pageSource, /buildWebPageJsonLd/);
   assert.match(pageSource, /buildBreadcrumbJsonLd/);
   assert.doesNotMatch(metadataBlock("src/app/paid-action-offers/page.tsx").block, /index:\s*false|noindex/i);

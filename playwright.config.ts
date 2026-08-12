@@ -17,7 +17,7 @@ export default defineConfig({
     command: useProductionServer
       ? "npm run start -- -H 127.0.0.1 -p 3210"
       : "npm run dev -- -H 127.0.0.1 -p 3210",
-    reuseExistingServer: true,
+    reuseExistingServer: !useProductionServer,
     timeout: 120_000,
     url: "http://127.0.0.1:3210",
   },

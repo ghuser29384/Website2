@@ -38,6 +38,8 @@ interface SiteTopbarProps {
   brandHref: string;
   links: NavLinkItem[];
   authLink?: NavRouteItem;
+  className?: string;
+  contextLabel?: string;
   primaryAction?: NavRouteItem;
   showSearch?: boolean;
   showLogout?: boolean;
@@ -145,6 +147,8 @@ export function SiteTopbar({
   brandHref,
   links,
   authLink,
+  className,
+  contextLabel,
   primaryAction,
   showSearch = true,
   showLogout = false,
@@ -248,11 +252,17 @@ export function SiteTopbar({
   return (
     <nav
       aria-label="Primary"
-      className={showSearch ? "topbar mt-site-topbar topbar-with-search" : "topbar mt-site-topbar"}
+      className={[
+        "topbar",
+        "mt-site-topbar",
+        showSearch ? "topbar-with-search" : "",
+        className,
+      ].filter(Boolean).join(" ")}
     >
       <Link prefetch={false} aria-label="Moral Trade, home" className="brand mt-brand-link" href={brandHref}>
         <MoralTradeWordmark />
       </Link>
+      {contextLabel ? <span className="topbar-context">{contextLabel}</span> : null}
       <div className="topbar-links">
         {links.map((link) =>
           link.items?.length ? (

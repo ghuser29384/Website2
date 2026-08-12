@@ -2290,7 +2290,7 @@ export function MarketplaceHome({
   const visibleDeals = zeroLive ? [...examples, ...nonExamples] : surface.deals;
   const railLinks = [
     { href: "/offers?view=templates", label: "Reviewed templates" },
-    { href: "/offers?tab=worked_examples", label: "Worked examples" },
+    { href: "/worked-examples", label: "Worked examples" },
     { href: "/mpgf", label: "Public goods" },
   ];
   const availableFilters = new Set<MarketplaceFilterKey>(
@@ -2482,7 +2482,7 @@ export function MarketplaceHome({
         {(zeroLive
           ? [
               ["Templates", "/offers?view=templates"],
-              ["Examples", "/offers?tab=worked_examples"],
+              ["Examples", "/worked-examples"],
               ["Public goods", "/mpgf"],
               ["Guides", "/worked-examples"],
             ]
@@ -2490,7 +2490,7 @@ export function MarketplaceHome({
               ["Live", "/offers?tab=live"],
               ["Preview", "/offers"],
               ["Templates", "/offers?view=templates"],
-              ["Examples", "/offers?tab=worked_examples"],
+              ["Examples", "/worked-examples"],
               ["Guides", "/worked-examples"],
             ]
         ).map(([label, href]) => (
