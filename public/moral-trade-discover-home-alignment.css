@@ -651,3 +651,10 @@ border-left: 0;
 scroll-behavior: auto !important;
 }
 }
+
+
+/* The blue transaction accent is a rule, not an elevated-card shadow. */
+.transaction-row.offer-transaction-row {
+  border-left: 3px solid var(--blue) !important;
+  box-shadow: none !important;
+}
