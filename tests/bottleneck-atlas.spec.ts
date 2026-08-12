@@ -109,18 +109,29 @@ const feedFixture = {
 };
 
 test.describe("Bottleneck Atlas and generated feed", () => {
-  test("renders the complete public atlas without horizontal overflow", async ({ page }) => {
+  test("uses progressive disclosure without hiding the complete public atlas", async ({ page }) => {
     await page.goto("/bottleneck-atlas", { waitUntil: "domcontentloaded" });
 
     await expect(page.getByRole("heading", { level: 1, name: "Bottleneck Atlas" })).toBeVisible();
     await expect(page.locator("[data-atlas-field]")).toHaveCount(18);
     await expect(page.locator("[data-synthesis-template]")).toHaveCount(9);
     await expect(page.getByText(/field evidence is a search prior/i).first()).toBeVisible();
+
+    await expect(page.locator("details[data-synthesis-template][open]")).toHaveCount(1);
+    await expect(page.locator("details[data-atlas-cluster][open]")).toHaveCount(1);
+    await expect(page.locator("details[data-atlas-field][open]")).toHaveCount(0);
+
+    const firstField = page.locator("details[data-atlas-field]").first();
+    await firstField.locator(":scope > summary").click();
+    await expect(firstField).toHaveJSProperty("open", true);
+    await expect(firstField.getByRole("heading", { name: "Trade implication" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator("[data-atlas-field]")).toHaveCount(18);
+    await expect(page.locator("details[data-synthesis-template][open]")).toHaveCount(1);
+    await expect(page.locator("details[data-atlas-cluster][open]")).toHaveCount(1);
     await expectNoHorizontalOverflow(page);
   });
 
