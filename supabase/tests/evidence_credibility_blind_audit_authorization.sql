@@ -25,21 +25,25 @@ begin
 end;
 $test$;
 
-insert into public.trade_review_role_grants(profile_id, role, active, granted_by)
-select actor.profile_id, grant_role, true, payer.profile_id
-from qa_auth_actors actor
-cross join qa_auth_actors payer
-cross join lateral (
-  select grant_role
-  from unnest(case actor.actor_role
-    when 'payer' then array['administrator']::text[]
-    when 'original_reviewer' then array['reviewer']::text[]
-    when 'audit_reviewer' then array['reviewer']::text[]
-    when 'unassigned_reviewer' then array['reviewer']::text[]
-    else array[]::text[]
-  end) grant_role
-) roles
+insert into public.trade_review_role_grants(
+  profile_id, role, active, granted_by
+)
+select payer.profile_id, 'administrator', true, payer.profile_id
+from qa_auth_actors payer
 where payer.actor_role = 'payer'
+on conflict(profile_id, role) do update
+set active = true, revoked_at = null, granted_by = excluded.granted_by;
+
+insert into public.trade_review_role_grants(
+  profile_id, role, active, granted_by
+)
+select reviewer.profile_id, 'reviewer', true, payer.profile_id
+from qa_auth_actors reviewer
+cross join qa_auth_actors payer
+where reviewer.actor_role in (
+  'original_reviewer', 'audit_reviewer', 'unassigned_reviewer'
+)
+  and payer.actor_role = 'payer'
 on conflict(profile_id, role) do update
 set active = true, revoked_at = null, granted_by = excluded.granted_by;
 

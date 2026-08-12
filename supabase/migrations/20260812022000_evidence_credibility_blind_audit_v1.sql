@@ -212,6 +212,31 @@ create table if not exists public.evidence_credibility_calibration_labels (
     (final_status = 'eligible' and final_outcome between 0 and 1)
     or (final_status <> 'eligible' and final_outcome is null)
   ),
+  constraint evidence_credibility_calibration_labels_finality_check
+  check (final_finality_reason in (
+    'review_final', 'replacement_success', 'terminal_rejection',
+    'replacement_expired', 'appeal_affirmed', 'appeal_overturned',
+    'permissible_exit', 'force_majeure', 'mutual_cancellation',
+    'unjustified_abandonment', 'unresolved_dispute', 'late_cure',
+    'confirmed', 'adjudicated_paid', 'adjudicated_unpaid', 'not_due',
+    'permissible_cancellation', 'late_payment_cure',
+    'administrative_correction'
+  )),
+constraint evidence_credibility_calibration_labels_integrity_check
+  check (final_integrity_finding in (
+    'not_assessed', 'supported_honest', 'reckless_misleading',
+    'deliberate_fabrication', 'not_applicable'
+  )),
+constraint evidence_credibility_calibration_labels_responsiveness_check
+  check (final_responsiveness_finding in (
+    'not_assessed', 'on_time', 'late_cure', 'missed_deadline',
+    'excused', 'not_applicable'
+  )),
+constraint evidence_credibility_calibration_labels_dispute_check
+  check (final_dispute_conduct_finding in (
+    'not_assessed', 'cooperative', 'obstructive', 'retaliatory',
+    'evidence_destruction', 'abusive_appeal', 'not_applicable'
+  )),
   constraint evidence_credibility_calibration_labels_absolute_error_check
     check (absolute_error is null or absolute_error between 0 and 1),
   constraint evidence_credibility_calibration_labels_rationale_check
@@ -1129,11 +1154,48 @@ begin
   from public.evidence_credibility_calibration_draws draw
   where draw.id = assignment_row.draw_id;
 
-  if draw_row.target_type = 'settlement_decision'
-     and p_final_status = 'eligible'
-     and p_final_outcome not in (0, 1) then
+  if draw_row.target_type = 'evidence_decision' then
+  if p_final_finality_reason not in (
+    'review_final', 'replacement_success', 'terminal_rejection',
+    'replacement_expired', 'appeal_affirmed', 'appeal_overturned',
+    'permissible_exit', 'force_majeure', 'mutual_cancellation',
+    'unjustified_abandonment', 'unresolved_dispute', 'late_cure',
+    'administrative_correction'
+  ) then
+    raise exception 'Choose a permitted independent evidence finality.';
+  end if;
+  if p_final_integrity_finding not in (
+       'not_assessed', 'supported_honest', 'reckless_misleading',
+       'deliberate_fabrication'
+     )
+     or p_final_responsiveness_finding not in (
+       'not_assessed', 'on_time', 'late_cure', 'missed_deadline', 'excused'
+     )
+     or p_final_dispute_conduct_finding not in (
+       'not_assessed', 'cooperative', 'obstructive', 'retaliatory',
+       'evidence_destruction', 'abusive_appeal'
+     ) then
+    raise exception 'Choose permitted independent evidence findings.';
+  end if;
+elsif draw_row.target_type = 'settlement_decision' then
+  if p_final_finality_reason not in (
+    'confirmed', 'adjudicated_paid', 'adjudicated_unpaid', 'not_due',
+    'unresolved_dispute', 'permissible_cancellation',
+    'late_payment_cure', 'administrative_correction'
+  ) then
+    raise exception 'Choose a permitted independent settlement finality.';
+  end if;
+  if p_final_integrity_finding <> 'not_applicable'
+     or p_final_responsiveness_finding <> 'not_applicable'
+     or p_final_dispute_conduct_finding <> 'not_applicable' then
+    raise exception 'Settlement labels must leave evidence-conduct findings not applicable.';
+  end if;
+  if p_final_status = 'eligible' and p_final_outcome not in (0, 1) then
     raise exception 'Independent settlement outcomes must be paid or still due.';
   end if;
+else
+  raise exception 'The calibration target type is invalid.';
+end if;
 
   absolute_error_value := case
     when draw_row.original_outcome is not null and p_final_outcome is not null
