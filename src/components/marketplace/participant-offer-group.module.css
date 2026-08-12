@@ -1,74 +1,99 @@
 .group {
-  overflow: hidden;
-  border: 1px solid #dfe8e1;
-  border-radius: 22px;
-  background: #ffffff;
-  box-shadow: 0 12px 30px rgba(18, 46, 29, 0.07);
+  overflow: visible;
+  border: 0;
+  border-top: 1px solid var(--ink);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .groupHeader {
-  display: flex;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem 2rem;
   align-items: center;
-  justify-content: space-between;
-  padding: 18px 20px;
-  border-bottom: 1px solid #e6ede8;
-  background: linear-gradient(145deg, #f7fbf8 0%, #eef6f0 100%);
+  padding: 1.2rem 0 0.9rem;
+  border: 0;
+  background: transparent;
 }
 
 .identity {
   display: flex;
-  gap: 12px;
-  align-items: center;
   min-width: 0;
+  align-items: center;
+  gap: 0.8rem;
 }
 
 .identity h3,
 .offerHeading h4 {
   margin: 0;
-  color: #172119;
+  color: var(--ink);
+  font-family: var(--font-heading);
+  font-weight: 400;
 }
 
 .identity h3 {
-  font-size: 1.05rem;
+  font-size: clamp(1.9rem, 3vw, 2.65rem);
+  letter-spacing: -0.04em;
+  line-height: 1;
 }
 
 .avatar {
-  display: inline-flex;
+  display: inline-grid;
+  width: 2.35rem;
+  height: 2.35rem;
   flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 50%;
-  background: #0a8f47;
-  color: #ffffff;
-  font-size: 0.78rem;
-  font-weight: 800;
+  place-items: center;
+  border: 1px solid var(--accent);
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent-deep);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
   letter-spacing: 0.04em;
 }
 
 .kicker {
-  margin: 0 0 4px;
-  color: #08763c;
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
+  margin: 0 0 0.28rem;
+  color: var(--accent-deep);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  line-height: 1.2;
   text-transform: uppercase;
 }
 
 .proposalCount,
 .liveState {
   display: inline-flex;
-  flex: 0 0 auto;
   align-items: center;
-  min-height: 28px;
-  padding: 5px 10px;
-  border-radius: 999px;
-  background: #ffffff;
-  color: #31503a;
-  font-size: 0.76rem;
-  font-weight: 700;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.proposalCount {
+  justify-self: end;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.groupNote {
+  max-width: 72ch;
+  margin: 0;
+  padding: 0 0 1rem 3.15rem;
+  border-bottom: 1px solid var(--line-strong);
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 .offerList {
@@ -77,96 +102,158 @@
 
 .offer {
   display: grid;
-  gap: 16px;
-  padding: 20px;
+  grid-template-columns: minmax(11rem, 0.72fr) minmax(0, 1.35fr) minmax(10.5rem, 0.56fr);
+  grid-template-areas:
+    "heading exchange actions"
+    "meta exchange actions";
+  gap: 0.75rem 1.5rem;
+  min-width: 0;
+  padding: 1.25rem 0;
 }
 
 .offer + .offer {
-  border-top: 1px solid #e6ede8;
+  border-top: 1px solid var(--line-strong);
 }
 
 .offerHeading {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-  justify-content: space-between;
+  grid-area: heading;
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.55rem;
 }
 
 .offerHeading h4 {
-  font-size: 1rem;
-  line-height: 1.35;
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.liveState {
+  align-self: start;
 }
 
 .exchange {
+  grid-area: exchange;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 12px;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) 1.6rem minmax(0, 1fr);
+  gap: 0.65rem;
+  min-width: 0;
+  align-items: start;
 }
 
 .termCard {
   display: grid;
-  gap: 6px;
   min-width: 0;
-  padding: 14px;
-  border: 1px solid #e1e9e3;
-  border-radius: 16px;
-  background: #fbfdfb;
+  gap: 0.4rem;
+  padding: 0.72rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
 }
 
 .termCard span {
-  color: #607066;
-  font-size: 0.72rem;
-  font-weight: 800;
+  color: var(--accent-deep);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .termCard strong {
-  color: #1d2b21;
-  font-size: 0.92rem;
-  line-height: 1.45;
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  font-weight: 520;
+  line-height: 1.4;
   overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
 }
 
 .exchangeArrow {
   display: inline-flex;
+  min-height: 2.15rem;
   align-items: center;
-  color: #0a8f47;
-  font-weight: 800;
+  justify-content: center;
+  color: var(--accent-deep);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .meta {
+  grid-area: meta;
   display: flex;
+  min-width: 0;
   flex-wrap: wrap;
-  gap: 8px;
+  align-items: center;
+  gap: 0.28rem 0.55rem;
 }
 
 .meta span {
-  padding: 6px 9px;
-  border-radius: 999px;
-  background: #f0f5f1;
-  color: #46564b;
-  font-size: 0.75rem;
+  min-width: 0;
+  color: var(--ink-muted);
+  font-family: var(--font-mono);
+  font-size: 0.56rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.meta span + span::before {
+  margin-right: 0.55rem;
+  color: var(--line-strong);
+  content: "·";
 }
 
 .actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
+  grid-area: actions;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.38rem;
+  min-width: 0;
+  align-content: start;
+}
+
+.actions > :first-child {
+  grid-column: 1 / -1;
 }
 
 .actions form {
-  display: inline-flex;
+  display: contents;
   margin: 0;
 }
 
+.actions :global(.button) {
+  width: 100%;
+  min-height: 2.25rem;
+  justify-content: center;
+  padding: 0.42rem 0.5rem;
+  border-radius: 0;
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  text-align: center;
+}
+
 .detailLink {
-  margin-left: auto;
-  color: #08763c;
-  font-size: 0.82rem;
-  font-weight: 700;
+  grid-column: 1 / -1;
+  margin: 0.18rem 0 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--line);
+  color: var(--accent-deep);
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.025em;
   text-decoration: none;
 }
 
@@ -175,43 +262,134 @@
   text-decoration: underline;
 }
 
-.truthNote {
-  margin: 0;
-  color: #66736b;
-  font-size: 0.78rem;
-  line-height: 1.5;
-}
-
-@media (max-width: 720px) {
-  .groupHeader,
-  .offerHeading {
-    align-items: flex-start;
+@media (max-width: 980px) {
+  .offer {
+    grid-template-columns: minmax(10rem, 0.65fr) minmax(0, 1fr);
+    grid-template-areas:
+      "heading exchange"
+      "meta exchange"
+      "actions actions";
   }
 
-  .groupHeader,
-  .offerHeading,
-  .exchange {
-    grid-template-columns: 1fr;
+  .actions {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .groupHeader,
-  .offerHeading {
-    flex-direction: column;
-  }
-
-  .exchange {
-    display: grid;
-  }
-
-  .exchangeArrow {
-    justify-content: center;
-    min-height: 18px;
-    transform: rotate(90deg);
+  .actions > :first-child {
+    grid-column: auto;
   }
 
   .detailLink {
-    width: 100%;
-    margin-left: 0;
-    padding-top: 4px;
+    grid-column: auto;
+    align-self: center;
+    margin: 0;
+    padding: 0;
+    border-top: 0;
+    text-align: right;
+  }
+}
+
+@media (max-width: 720px) {
+  .groupHeader {
+    grid-template-columns: 1fr;
+    gap: 0.65rem;
+    align-items: start;
+  }
+
+  .identity {
+    align-items: flex-start;
+  }
+
+  .identity h3 {
+    font-size: clamp(1.75rem, 8vw, 2.25rem);
+  }
+
+  .proposalCount {
+    justify-self: start;
+    padding-left: 3.15rem;
+  }
+
+  .groupNote {
+    padding-left: 3.15rem;
+  }
+
+  .offer {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "heading"
+      "exchange"
+      "meta"
+      "actions";
+    gap: 0.8rem;
+    padding: 1.15rem 0;
+  }
+
+  .offerHeading {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.8rem;
+    align-items: start;
+  }
+
+  .offerHeading h4 {
+    font-size: clamp(1.3rem, 6.4vw, 1.65rem);
+    -webkit-line-clamp: 2;
+  }
+
+  .liveState {
+    max-width: 7.5rem;
+    justify-content: flex-end;
+    text-align: right;
+  }
+
+  .exchange {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+
+  .termCard {
+    padding-top: 0.6rem;
+  }
+
+  .termCard strong {
+    -webkit-line-clamp: 3;
+  }
+
+  .exchangeArrow {
+    min-height: 0.9rem;
+    justify-content: flex-start;
+    padding-left: 0.2rem;
+    transform: rotate(90deg);
+    transform-origin: center;
+  }
+
+  .actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .actions > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .detailLink {
+    grid-column: 1 / -1;
+    margin-top: 0.15rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--line);
+    text-align: left;
+  }
+}
+
+@media (max-width: 420px) {
+  .groupNote,
+  .proposalCount {
+    padding-left: 0;
+  }
+
+  .liveState {
+    display: none;
+  }
+
+  .offerHeading {
+    grid-template-columns: 1fr;
   }
 }
