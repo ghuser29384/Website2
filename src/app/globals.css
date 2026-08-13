@@ -349,6 +349,15 @@ body.font-accessible {
   text-align: right;
 }
 
+.mpgf-status-panel-custom dl div {
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  align-items: start;
+}
+
+.mpgf-status-panel-custom dd {
+  overflow-wrap: anywhere;
+}
+
 .mpgf-kpi-grid {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

@@ -16,6 +16,7 @@ const standardPublicRoutes = [
   "/wish-registry",
   "/people",
   "/mpgf",
+  "/mpgf/compacts",
   "/public-goods-fund",
   "/mpgf/contribute",
   "/mpgf/account/contributions",

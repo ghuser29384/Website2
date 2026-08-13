@@ -7823,6 +7823,166 @@ export interface Database {
         };
         Relationships: [];
       };
+      mpgf_public_goods_compacts: {
+        Row: {
+          id: string;
+          public_key: string;
+          cause_key: "future_flourishing" | "animal_welfare" | "global_health";
+          title: string;
+          summary: string;
+          display_order: number;
+          constitution_version: string;
+          constitution_published_at: string;
+          contribution_rate_bps: number;
+          monthly_contribution_cap_cents: number;
+          activation_threshold_members: number;
+          minimum_term_months: number;
+          exit_notice_days: number;
+          project_selection_rule: string;
+          audit_rule: string;
+          opt_in_only: boolean;
+          random_assignment_allowed: boolean;
+          core_marketplace_taxed: boolean;
+          binding_only_after_activation: boolean;
+          per_project_refusal_allowed_after_activation: boolean;
+          exit_prospective_only_after_activation: boolean;
+          money_moves_on_join: boolean;
+          automatic_collection_enabled: boolean;
+          collection_state: string;
+          status: "recruiting" | "active";
+          accepted_member_count: number;
+          activated_at: string | null;
+          constitution_frozen_at: string | null;
+          frozen_constitution_version: string | null;
+          allocation_electorate_active: boolean;
+          allocation_electorate_key: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          public_key: string;
+          cause_key: "future_flourishing" | "animal_welfare" | "global_health";
+          title: string;
+          summary: string;
+          display_order: number;
+          constitution_version: string;
+          constitution_published_at: string;
+          contribution_rate_bps?: number;
+          monthly_contribution_cap_cents?: number;
+          activation_threshold_members?: number;
+          minimum_term_months?: number;
+          exit_notice_days?: number;
+          project_selection_rule: string;
+          audit_rule: string;
+          opt_in_only?: boolean;
+          random_assignment_allowed?: boolean;
+          core_marketplace_taxed?: boolean;
+          binding_only_after_activation?: boolean;
+          per_project_refusal_allowed_after_activation?: boolean;
+          exit_prospective_only_after_activation?: boolean;
+          money_moves_on_join?: boolean;
+          automatic_collection_enabled?: boolean;
+          collection_state?: string;
+          status?: "recruiting" | "active";
+          accepted_member_count?: number;
+          activated_at?: string | null;
+          constitution_frozen_at?: string | null;
+          frozen_constitution_version?: string | null;
+          allocation_electorate_active?: boolean;
+          allocation_electorate_key?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_compacts"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_compact_memberships: {
+        Row: {
+          id: string;
+          compact_id: string;
+          user_id: string;
+          profile_id: string;
+          constitution_version_accepted: string;
+          declared_eligible_monthly_spending_cents: number;
+          scheduled_monthly_contribution_cents: number;
+          status: "pending_activation" | "active" | "exit_notice" | "revoked" | "exited";
+          accepted_at: string;
+          activated_at: string | null;
+          revoked_at: string | null;
+          exit_requested_at: string | null;
+          exit_effective_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          compact_id: string;
+          user_id: string;
+          profile_id: string;
+          constitution_version_accepted: string;
+          declared_eligible_monthly_spending_cents: number;
+          scheduled_monthly_contribution_cents: number;
+          status: "pending_activation" | "active" | "exit_notice" | "revoked" | "exited";
+          accepted_at?: string;
+          activated_at?: string | null;
+          revoked_at?: string | null;
+          exit_requested_at?: string | null;
+          exit_effective_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_compact_memberships"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_compact_delegations: {
+        Row: {
+          id: string;
+          compact_id: string;
+          electorate_key: string;
+          delegator_membership_id: string;
+          delegatee_membership_id: string;
+          created_by: string;
+          status: "active" | "revoked";
+          created_at: string;
+          revoked_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          compact_id: string;
+          electorate_key: string;
+          delegator_membership_id: string;
+          delegatee_membership_id: string;
+          created_by: string;
+          status?: "active" | "revoked";
+          created_at?: string;
+          revoked_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_compact_delegations"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_compact_idempotency_keys: {
+        Row: {
+          id: string;
+          user_id: string;
+          operation: "join" | "request_exit" | "set_delegation" | "clear_delegation";
+          idempotency_key: string;
+          request_hash: string;
+          response_json: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          operation: "join" | "request_exit" | "set_delegation" | "clear_delegation";
+          idempotency_key: string;
+          request_hash: string;
+          response_json: Json;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
       mpgf_round_rulebooks: {
         Row: {
           id: string;
@@ -11140,6 +11300,43 @@ export interface Database {
       };
     };
     Functions: {
+      get_mpgf_public_goods_compacts_state: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      join_mpgf_public_goods_compact: {
+        Args: {
+          p_compact_public_key: string;
+          p_constitution_version: string;
+          p_declared_eligible_monthly_spending_cents: number;
+          p_idempotency_key: string;
+        };
+        Returns: Json;
+      };
+      request_mpgf_public_goods_compact_exit: {
+        Args: {
+          p_compact_public_key: string;
+          p_idempotency_key: string;
+        };
+        Returns: Json;
+      };
+      set_mpgf_public_goods_compact_delegation: {
+        Args: {
+          p_compact_public_key: string;
+          p_electorate_key: string;
+          p_delegatee_membership_id: string;
+          p_idempotency_key: string;
+        };
+        Returns: Json;
+      };
+      clear_mpgf_public_goods_compact_delegation: {
+        Args: {
+          p_compact_public_key: string;
+          p_electorate_key: string;
+          p_idempotency_key: string;
+        };
+        Returns: Json;
+      };
       normalize_profile_username_v1: {
         Args: { p_username: string };
         Returns: string;
