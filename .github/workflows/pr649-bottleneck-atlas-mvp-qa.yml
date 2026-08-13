@@ -6,6 +6,10 @@ on:
       - feature/bottleneck-atlas-mvp-20260813
     paths:
       - .github/workflows/pr649-bottleneck-atlas-mvp-qa.yml
+      - src/app/bottleneck-atlas/**
+      - src/lib/bottleneck-atlas-matcher.ts
+      - src/lib/bottleneck-atlas-matcher.test.ts
+      - tests/bottleneck-atlas.spec.ts
 
 permissions:
   actions: read
@@ -220,4 +224,4 @@ jobs:
           fi
           gh pr comment 649 --repo "$GITHUB_REPOSITORY" --body "$body"
 
-# One-use QA workflow. Delete before merge.
+# Exact-head one-use QA workflow. Delete before merge.
