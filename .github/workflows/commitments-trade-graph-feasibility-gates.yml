@@ -1,0 +1,132 @@
+name: Commitments Reciprocal Trade graph-feasibility gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/commitments-trade-graph-feasibility-gates.yml"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/**"
+      - "scripts/commitments-trade-study/graph-feasibility-core.mjs"
+      - "scripts/commitments-trade-study/graph-feasibility.mjs"
+      - "scripts/commitments-trade-study/validate-graph-feasibility-package.mjs"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/commitments-trade-graph-feasibility-gates.yml"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/**"
+      - "scripts/commitments-trade-study/graph-feasibility-core.mjs"
+      - "scripts/commitments-trade-study/graph-feasibility.mjs"
+      - "scripts/commitments-trade-study/validate-graph-feasibility-package.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commitments-trade-graph-feasibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate synthetic graph diagnostics and no-assignment boundary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate graph contract, privacy boundary, and adversarial cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/commitments-trade-study/validate-graph-feasibility-package.mjs \
+            2>&1 | tee trade-graph-feasibility-validation.log
+
+      - name: Reject isolated nodes as false independent clusters
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' \
+            2>&1 | tee trade-graph-isolated-node-negative.log
+          import fs from "node:fs";
+          import {
+            diagnoseSyntheticGraph,
+            generateSyntheticSnapshot,
+          } from "./scripts/commitments-trade-study/graph-feasibility-core.mjs";
+
+          const spec = JSON.parse(fs.readFileSync(
+            "docs/commitments/impact-identification/study-candidates/" +
+              "trade-bilateral-encouragement-planning-v1/graph-feasibility/" +
+              "synthetic-graph-spec.json",
+            "utf8",
+          ));
+          const snapshot = generateSyntheticSnapshot(spec);
+          snapshot.nodes.push({ nodeKey: "synthetic:isolated:negative-control" });
+          let rejected = false;
+          try {
+            diagnoseSyntheticGraph(snapshot, spec.planningEnvelope);
+          } catch {
+            rejected = true;
+          }
+          if (!rejected) {
+            throw new Error("An isolated node was incorrectly counted as an eligible cluster.");
+          }
+          process.stdout.write(`${JSON.stringify({ ok: true, isolatedNodeRejected: true })}\n`);
+          NODE
+
+      - name: Reproduce deterministic synthetic graph report
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/commitments-trade-study/graph-feasibility.mjs --check \
+            2>&1 | tee trade-graph-feasibility-report-check.log
+
+      - name: Enforce exact graph-feasibility file scope
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
+          git diff --check "$base" "$GITHUB_SHA" | tee trade-graph-feasibility-diff-check.log
+          git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
+          cat > expected-files.txt <<'FILES'
+          .github/workflows/commitments-trade-graph-feasibility-gates.yml
+          .github/workflows/commitments-trade-study-planning-gates.yml
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/README.md
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/graph-feasibility-contract.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/graph-snapshot.schema.v1.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/synthetic-graph-report.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/synthetic-graph-spec.json
+          scripts/commitments-trade-study/graph-feasibility-core.mjs
+          scripts/commitments-trade-study/graph-feasibility.mjs
+          scripts/commitments-trade-study/validate-graph-feasibility-package.mjs
+          FILES
+          sort -o expected-files.txt expected-files.txt
+          diff -u expected-files.txt actual-files.txt
+
+      - name: Upload exact graph-feasibility evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-trade-graph-feasibility-${{ github.run_id }}
+          path: |
+            trade-graph-feasibility-validation.log
+            trade-graph-isolated-node-negative.log
+            trade-graph-feasibility-report-check.log
+            trade-graph-feasibility-diff-check.log
+            expected-files.txt
+            actual-files.txt
+            docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/graph-feasibility-contract.json
+            docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/graph-snapshot.schema.v1.json
+            docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/synthetic-graph-spec.json
+            docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/graph-feasibility/synthetic-graph-report.json
+            scripts/commitments-trade-study/graph-feasibility-core.mjs
+          if-no-files-found: warn

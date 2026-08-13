@@ -42,8 +42,9 @@ function credibility(
 }
 
 function offer(overrides: Partial<OfferDiscoveryLike> & Pick<OfferDiscoveryLike, "id">): OfferDiscoveryLike {
+  const { id, ...optionalOverrides } = overrides;
   return {
-    id: overrides.id,
+    id,
     mode: "pledge",
     offered_cause: "Animal welfare",
     requested_cause: "Global poverty",
@@ -57,17 +58,18 @@ function offer(overrides: Partial<OfferDiscoveryLike> & Pick<OfferDiscoveryLike,
     payment_interval_value: null,
     created_at: "2026-07-01T00:00:00.000Z",
     donationOffset: null,
-    ...overrides,
+    ...optionalOverrides,
   };
 }
 
 function profile(
   overrides: Partial<ProfileDiscoveryLike> & Pick<ProfileDiscoveryLike, "id" | "resolvedName">,
 ): ProfileDiscoveryLike {
+  const { id, resolvedName, ...optionalOverrides } = overrides;
   return {
-    id: overrides.id,
-    resolvedName: overrides.resolvedName,
-    display_name: overrides.resolvedName,
+    id,
+    resolvedName,
+    display_name: resolvedName,
     bio: "Public member",
     publicLocation: "London, United Kingdom",
     wishPreview: "Open to evidence-backed cooperation",
@@ -80,7 +82,7 @@ function profile(
     ratingCount: 0,
     verificationBadges: [],
     created_at: "2026-07-01T00:00:00.000Z",
-    ...overrides,
+    ...optionalOverrides,
   };
 }
 

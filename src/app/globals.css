@@ -538,6 +538,148 @@ body.font-accessible {
   color: var(--mpgf-accent-strong);
 }
 
+
+.mpgf-threshold-editor {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid rgba(50, 107, 104, 0.34);
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #fbfdfc 0%, #f3f8f7 100%);
+}
+
+.mpgf-threshold-editor-header,
+.mpgf-threshold-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.mpgf-threshold-editor-header > div,
+.mpgf-threshold-card-header > div:first-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.mpgf-threshold-editor-header h3,
+.mpgf-threshold-editor-header p,
+.mpgf-threshold-policy-note p,
+.mpgf-threshold-schedule-summary p {
+  margin: 0;
+}
+
+.mpgf-threshold-policy-note,
+.mpgf-threshold-schedule-summary,
+.mpgf-threshold-errors {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.85rem;
+  border: 1px solid var(--mpgf-line);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+}
+
+.mpgf-threshold-policy-note p,
+.mpgf-threshold-schedule-summary p {
+  color: var(--ink-soft);
+}
+
+.mpgf-threshold-policy-grid,
+.mpgf-threshold-input-grid,
+.mpgf-threshold-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.mpgf-percent-input {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.mpgf-threshold-card-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.mpgf-threshold-card {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.9rem;
+  border: 1px solid var(--mpgf-line);
+  border-radius: var(--radius-sm);
+  background: #ffffff;
+}
+
+.mpgf-threshold-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.mpgf-threshold-card-actions .button {
+  min-height: 2.2rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.mpgf-threshold-metrics {
+  margin: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.mpgf-threshold-metrics div {
+  display: grid;
+  gap: 0.15rem;
+  min-height: 4rem;
+  padding: 0.65rem;
+  border: 1px solid var(--mpgf-line);
+  border-radius: var(--radius-sm);
+  background: #fbfdfc;
+}
+
+.mpgf-threshold-metrics dt {
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  line-height: 1.25;
+}
+
+.mpgf-threshold-metrics dd {
+  margin: 0;
+  color: var(--mpgf-accent-strong);
+  font-weight: 700;
+}
+
+.mpgf-add-threshold-button {
+  justify-self: start;
+}
+
+.mpgf-threshold-errors {
+  border-color: rgba(153, 64, 64, 0.36);
+  background: #fff8f7;
+  color: #7b2f2f;
+}
+
+.mpgf-threshold-errors ul {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.mpgf-threshold-schedule-summary {
+  border-color: rgba(50, 107, 104, 0.34);
+  background: var(--mpgf-accent-soft);
+  color: var(--mpgf-accent-strong);
+}
+
+.mpgf-persisted-threshold-list {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0.45rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--ink-soft);
+}
+
 .mpgf-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1064,6 +1206,12 @@ body.font-accessible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .mpgf-threshold-policy-grid,
+  .mpgf-threshold-input-grid,
+  .mpgf-threshold-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .mpgf-hero-copy {
     min-height: auto;
   }
@@ -1112,6 +1260,22 @@ body.font-accessible {
   .mpgf-status-panel dd,
   .mpgf-summary-grid dd {
     text-align: left;
+  }
+
+  .mpgf-threshold-editor-header,
+  .mpgf-threshold-card-header {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .mpgf-threshold-card-actions {
+    justify-content: flex-start;
+  }
+
+  .mpgf-threshold-policy-grid,
+  .mpgf-threshold-input-grid,
+  .mpgf-threshold-metrics {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -14007,6 +14171,14 @@ pre,
 
 .marketplace-app-shell #main-content > .section {
   display: none;
+}
+
+.trade-workflow-shell.marketplace-app-shell #main-content > .section {
+  display: block;
+}
+
+.evidence-outcomes-shell.marketplace-app-shell #main-content > .section {
+  display: block;
 }
 
 .offer-create-shell.marketplace-app-shell #main-content > .section {

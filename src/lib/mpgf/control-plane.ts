@@ -617,6 +617,7 @@ export function mpgfGatesForAdminSection(section: string, gates: MpgfProductionG
     genesis: ["governance", "production_verification"],
     cycles: ["exact_pilot", "governance"],
     pools: ["governance", "solver"],
+    "failure-bonus": ["governance", "exact_pilot", "real_money", "payout_compliance"],
     registry: ["payout_compliance", "governance"],
     round: ["exact_pilot", "solver", "governance"],
     safety: ["governance", "exact_pilot"],

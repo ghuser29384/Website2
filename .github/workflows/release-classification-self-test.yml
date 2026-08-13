@@ -1,0 +1,68 @@
+name: Release classification self-test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/pull_request_template.md"
+      - ".github/workflows/release-classification.yml"
+      - ".github/workflows/release-classification-self-test.yml"
+      - "docs/release-policy.md"
+      - "scripts/validate-release-pr-body.mjs"
+      - "scripts/validate-release-pr-body.test.mjs"
+      - "scripts/release-classification-workflow-contract.test.mjs"
+  push:
+    branches: [main]
+    paths:
+      - ".github/pull_request_template.md"
+      - ".github/workflows/release-classification.yml"
+      - ".github/workflows/release-classification-self-test.yml"
+      - "docs/release-policy.md"
+      - "scripts/validate-release-pr-body.mjs"
+      - "scripts/validate-release-pr-body.test.mjs"
+      - "scripts/release-classification-workflow-contract.test.mjs"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-classification-self-test-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Parser and workflow contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Check parser syntax
+        run: node --check scripts/validate-release-pr-body.mjs
+
+      - name: Run parser and workflow-contract tests
+        run: >-
+          node --test
+          scripts/validate-release-pr-body.test.mjs
+          scripts/release-classification-workflow-contract.test.mjs
+
+      - name: Parse workflow YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path) or abort("invalid YAML: #{path}") }' \
+            .github/workflows/release-classification.yml \
+            .github/workflows/release-classification-self-test.yml
+
+      - name: Validate this pull request body
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: node scripts/validate-release-pr-body.mjs

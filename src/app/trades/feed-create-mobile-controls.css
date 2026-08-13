@@ -1,0 +1,36 @@
+@media (max-width: 840px) {
+  #main-content [class*="trade-draft-workbench_ghostCard__"] {
+    display: none !important;
+  }
+}
+
+@media (max-width: 540px) {
+  #main-content > form > footer > button {
+    width: 0;
+    max-width: 100%;
+    flex: 1 1 0;
+    min-width: 0;
+    padding-inline: 8px;
+    overflow-wrap: anywhere;
+    white-space: normal;
+    text-align: center;
+    line-height: 1.25;
+  }
+
+  #main-content > form > footer > button svg {
+    display: none;
+  }
+
+  .mt-input-assist-panel {
+    left: 12px !important;
+    right: 12px !important;
+    width: auto !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+
+  .mt-input-assist-panel,
+  .mt-input-assist-panel * {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

@@ -1,4 +1,11 @@
 import type {
+  FailureBonusEligibilityPolicy,
+  FailureBonusSuccessPremiumPayer,
+  FailureBonusSuccessPremiumPricingAssumptions,
+  FailureBonusSuccessPremiumScheduleQuote,
+} from "./failure-bonus-success-premium";
+import type { FailureBonusScheduleStatus } from "./failure-bonus-threshold-editor";
+import type {
   MpgfBallot,
   MpgfPledge,
   MpgfPublicGoodsCaptureMode,
@@ -37,6 +44,21 @@ export interface MpgfPoolProposalRecord {
   publicGoodsDestinationRef?: string;
   publicGoodsThresholdAmountCents?: number;
   publicGoodsThresholdSupporters?: number;
+  publicGoodsFailureBonusEnabled?: boolean;
+  publicGoodsFailureBonusRateBps?: number;
+  publicGoodsFailureBonusEligibilityPolicy?: FailureBonusEligibilityPolicy;
+  publicGoodsFailureBonusMaxParticipants?: number;
+  publicGoodsFailureBonusMaxPerParticipantCents?: number;
+  publicGoodsThresholdSchedule?: FailureBonusSuccessPremiumScheduleQuote;
+  publicGoodsFailureBonusScheduleStatus?: FailureBonusScheduleStatus;
+  publicGoodsSuccessPremiumRateBps?: number;
+  publicGoodsSuccessPremiumCents?: number;
+  publicGoodsSuccessPremiumPayer?: FailureBonusSuccessPremiumPayer;
+  publicGoodsSuccessPremiumPolicyVersion?: string;
+  publicGoodsSuccessPremiumIncludedInNetThreshold?: false;
+  publicGoodsSuccessPremiumProvisional?: boolean;
+  publicGoodsGrossSuccessRequirementCents?: number;
+  publicGoodsSuccessPremiumPricingAssumptions?: FailureBonusSuccessPremiumPricingAssumptions;
   publicGoodsDeadlineAt?: string;
   publicGoodsVerificationMethod?: string;
   publicGoodsBaselineRule?: string;

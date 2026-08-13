@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="description" content="Moral Trade — decide, allocate, negotiate, and verify reciprocal commitments.">
+  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
   <title>Moral Trade — Live</title>
   <style>
     html,body{margin:0;background:#f5f2e9;color:#111;font-family:system-ui,sans-serif}
@@ -12,9 +15,15 @@
   </style>
 </head>
 <body>
+  <!-- The root URL remains the live Feed; Trade creation routes through /trades/new. -->
   <main><p id="loading">Loading Moral Trade…</p></main>
   <script>
     (async () => {
+      if (window.location.hash === '#trade') {
+        window.location.replace('/trades/new');
+        return;
+      }
+
       try {
         const stripLegacyNowFocus = (source) => {
           const startMarker = 'function nowFocus(){';
@@ -36,6 +45,18 @@
  return '<div class="plan-grid" data-mt-live-route-planner="loading"><aside class="panel plan-control"><div class="eyebrow orange">Private route profile</div><p class="muted">Loading your limits…</p></aside><main><section class="panel route"><div class="eyebrow orange">Checking live routes</div><h2>Loading private limits and current opportunities.</h2><p class="muted">No fixed or fallback route is shown.</p></section></main><aside class="stack"><section class="panel"><div class="eyebrow">Route tools</div><p class="muted">Loading only when useful…</p></section></aside></div>';
 }`;
           return `${withoutFocus.slice(0, planStart)}${loadingPlan}${withoutFocus.slice(planEnd)}`;
+        };
+        const retireLegacyTradeBuilder = (source) => {
+          const startMarker = 'function clauseBuilder(){';
+          const endMarker = '\nfunction exchangeBuilder(){';
+          const start = source.indexOf(startMarker);
+          const end = source.indexOf(endMarker, start);
+          if (start < 0 || end <= start) throw new Error('legacy Trade builder source markers');
+
+          const retiredBuilder = `function clauseBuilder(){
+ return '<div class="builder-layout" data-mt-legacy-trade-builder="retired"><main><section class="panel"><div class="eyebrow">Create a trade</div><h2>Trade creation has moved.</h2><p>Use the all-trades creation page for every new commitment, exchange, redirect, or collective action.</p><a class="btn primary" href="/trades/new">Open Create →</a></section></main></div>';
+}`;
+          return `${source.slice(0, start)}${retiredBuilder}${source.slice(end)}`;
         };
         const names = ['0a','0b','0c','0d','1','2','3','4a','4b','4c','4d','5a','5b','5c','5d'];
         const unavailableLiveNow = (payload = {}) => ({
@@ -95,7 +116,9 @@
           throw new Error('integrity');
         }
 
-        const source = stripLegacyNowFocus(new TextDecoder().decode(raw));
+        const source = retireLegacyTradeBuilder(
+          stripLegacyNowFocus(new TextDecoder().decode(raw)),
+        );
         const accountJson = JSON.stringify(liveAccount)
           .replace(/</g, '\\u003c')
           .replace(/>/g, '\\u003e')
@@ -108,11 +131,17 @@
           .replace(/&/g, '\\u0026')
           .replace(/\u2028/g, '\\u2028')
           .replace(/\u2029/g, '\\u2029');
+        const faviconLinks = [
+          '<link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+        ].join('');
         const enhancementStyles = [
           '<link id="mt-inline-itinerary-editor-styles" rel="stylesheet" href="/moral-trade-live-itinerary-editor.css">',
           '<link id="mt-plan-resources-styles" rel="stylesheet" href="/moral-trade-live-plan-resources.css">',
           '<link id="mt-custom-route-styles" rel="stylesheet" href="/moral-trade-live-custom-route.css">',
           '<link id="mt-adaptive-feed-styles" rel="stylesheet" href="/moral-trade-live-feed.css">',
+          '<link id="mt-feed-create-phase1-styles" rel="stylesheet" href="/moral-trade-live-feed-create.css">',
           '<link id="mt-reciprocal-feed-diagnostics-styles" rel="stylesheet" href="/moral-trade-live-feed-diagnostics.css">',
           '<link id="mt-pareto-feed-learning-styles" rel="stylesheet" href="/moral-trade-live-learning-diagnostics.css">',
           '<link id="mt-home-offer-cta-styles" rel="stylesheet" href="/moral-trade-live-home-offer.css">',
@@ -126,11 +155,12 @@
           '<script src="/moral-trade-account-identity.js"><\/script>',
           '<script src="/moral-trade-live-account.js"><\/script>',
         ].join('');
-        const headEnhancements = `${enhancementStyles}${accountScripts}`;
+        const headEnhancements = `${faviconLinks}${enhancementStyles}${accountScripts}`;
         const accountAwareSource = source.includes('</head>')
           ? source.replace('</head>', `${headEnhancements}</head>`)
           : `${headEnhancements}${source}`;
         const enhancementScripts = [
+          '<script src="/moral-trade-live-create-router.js"><\/script>',
           '<script src="/moral-trade-live-navigation.js"><\/script>',
           '<script src="/moral-trade-live-local-time.js"><\/script>',
           '<script src="/moral-trade-live-route-resources.js"><\/script>',
@@ -141,6 +171,8 @@
           '<script src="/moral-trade-live-verification.js"><\/script>',
           '<script src="/moral-trade-live-templates.js"><\/script>',
           '<script src="/moral-trade-live-now.js"><\/script>',
+          '<script src="/moral-trade-live-feed-identity.js"><\/script>',
+          '<script src="/moral-trade-live-feed-create.js"><\/script>',
           '<script src="/moral-trade-live-feed-diagnostics.js"><\/script>',
           '<script src="/moral-trade-live-learning-diagnostics.js"><\/script>',
           '<script src="/moral-trade-live-route-recommendations.js"><\/script>',
