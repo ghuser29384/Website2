@@ -243,7 +243,7 @@ test("the conditional donation page renders and enforces the unavailable state",
   assert.match(page, /loadConditionalRedirectPageData/);
   assert.match(
     page,
-    /Conditional donation authorizations are temporarily unavailable/,
+    /Donation Upgrade authorizations are temporarily unavailable/,
   );
   assert.match(
     page,

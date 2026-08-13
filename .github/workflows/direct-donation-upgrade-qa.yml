@@ -1,0 +1,417 @@
+name: Direct verified Donation Upgrade isolated QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/direct-donation-upgrade-qa.yml"
+      - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
+      - "supabase/tests/direct_verified_donation_upgrade.sql"
+      - "src/lib/direct-donation-upgrade*.ts"
+      - "src/app/direct-donation-upgrade-actions.ts"
+      - "src/app/api/connectors/every-org/**"
+      - "src/app/api/jobs/donation-upgrades/**"
+  workflow_dispatch:
+    inputs:
+      confirm_target:
+        description: Type the exact MoralTrade QA project ref
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-donation-upgrade-isolated-qa
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_QA_DATABASE: postgres
+      EXPECTED_QA_DATABASE_USER: postgres
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      PGSSLMODE: require
+      MIGRATION: supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
+      REGRESSION: supabase/tests/direct_verified_donation_upgrade.sql
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Validate exact isolated-QA target and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            test "${{ inputs.confirm_target }}" = "$EXPECTED_QA_REF"
+          fi
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected_ref = os.environ["EXPECTED_QA_REF"]
+          ssl_modes = parse_qs(parsed.query).get("sslmode")
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and parsed.username == f"postgres.{expected_ref}"
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == f"/{os.environ['EXPECTED_QA_DATABASE']}"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
+          PY
+          test "$(grep -cF 'create or replace function public.' "$MIGRATION")" = "18"
+          test "$(grep -c '^\$\$;' "$MIGRATION")" = "18"
+          test "$(grep -c '^begin;$' "$REGRESSION")" = "1"
+          test "$(grep -c '^rollback;$' "$REGRESSION")" = "1"
+          ! grep -Fq 'where offer_id = offer_id' "$REGRESSION"
+          git diff --check
+          git fetch --no-tags origin main
+          current_main="$(git rev-parse origin/main)"
+          head="$(git rev-parse HEAD)"
+          expected_head="${{ github.event.pull_request.head.sha || github.sha }}"
+          test "$head" = "$expected_head"
+          if ! git merge-base --is-ancestor "$current_main" "$head"; then
+            echo "Candidate HEAD does not contain fetched current main ($current_main)." >&2
+            exit 1
+          fi
+          merge_base="$(git merge-base origin/main HEAD)"
+          test "$merge_base" = "$current_main"
+          {
+            printf 'fetched_current_main=%s\n' "$current_main"
+            printf 'merge_base=%s\n' "$merge_base"
+            printf 'head=%s\n' "$head"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'migration_blob=%s\n' "$(git hash-object "$MIGRATION")"
+            printf 'regression_blob=%s\n' "$(git hash-object "$REGRESSION")"
+          } | tee direct-upgrade-qa-exact-source.txt
+          sha256sum "$MIGRATION" "$REGRESSION" | tee direct-upgrade-qa-sql-sha256.txt
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Verify live isolated-QA database, user, and TLS session
+        id: verify-target
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee direct-upgrade-qa-session.json
+          select jsonb_build_object(
+            'database', current_database(),
+            'user', current_user,
+            'ssl', coalesce(
+              (select connection.ssl
+               from pg_catalog.pg_stat_ssl connection
+               where connection.pid = pg_backend_pid()),
+              false
+            ),
+            'serverVersion', current_setting('server_version')
+          );
+          SQL
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          rows = [
+              line.strip()
+              for line in Path("direct-upgrade-qa-session.json").read_text().splitlines()
+              if line.strip()
+          ]
+          if len(rows) != 1:
+              raise SystemExit(f"Expected one QA session row, received {len(rows)}.")
+          session = json.loads(rows[0])
+          expected = {
+              "database": os.environ["EXPECTED_QA_DATABASE"],
+              "user": os.environ["EXPECTED_QA_DATABASE_USER"],
+              "ssl": True,
+          }
+          actual = {key: session.get(key) for key in expected}
+          if actual != expected:
+              raise SystemExit(f"Refusing unexpected live QA session: {actual!r}")
+          print(json.dumps(session, sort_keys=True))
+          PY
+          printf 'verified=true\n' >> "$GITHUB_OUTPUT"
+
+      - name: Compile and apply or verify the immutable migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=20260801050000
+          name=direct_verified_donation_upgrades
+          source_blob="$(git hash-object "$MIGRATION")"
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
+            | tee direct-upgrade-qa-migration-compile.log
+          begin;
+          \i $MIGRATION
+          rollback;
+          SQL
+
+          count="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where version='${version}';" \
+            | tr -d '[:space:]')"
+          if [[ "$count" == "0" ]]; then
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --single-transaction \
+              --file "$MIGRATION" \
+              --command "insert into supabase_migrations.schema_migrations(version, statements, name, created_by) values ('${version}', array['source-git-blob:${source_blob}'], '${name}', 'github-actions:direct-donation-upgrade-qa');" \
+              | tee direct-upgrade-qa-migration-apply.log
+          elif [[ "$count" == "1" ]]; then
+            recorded="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+              --set ON_ERROR_STOP=1 \
+              --command "select coalesce(statements[1],'') from supabase_migrations.schema_migrations where version='${version}';" \
+              | tr -d '[:space:]')"
+            test "$recorded" = "source-git-blob:${source_blob}"
+            printf 'Migration already recorded with exact source blob %s.\n' "$source_blob" \
+              | tee direct-upgrade-qa-migration-apply.log
+          else
+            echo "Unexpected migration-history count: $count" >&2
+            exit 1
+          fi
+
+      - name: Verify required schema and privilege boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
+            | tee direct-upgrade-qa-schema-inventory.log
+          do $$
+          declare
+            missing text[];
+          begin
+            select array_agg(item.name order by item.name)
+            into missing
+            from (values
+              ('table:offers', to_regclass('public.direct_donation_upgrade_offers') is not null),
+              ('table:candidates', to_regclass('public.direct_donation_upgrade_candidates') is not null),
+              ('table:obligations', to_regclass('public.direct_donation_upgrade_obligations') is not null),
+              ('table:credits', to_regclass('public.direct_donation_upgrade_impact_credits') is not null),
+              ('table:audit', to_regclass('public.direct_donation_upgrade_audit_events') is not null),
+              ('view:public_offers', to_regclass('public.direct_donation_upgrade_public_offers') is not null),
+              ('function:create', to_regprocedure('public.create_direct_donation_upgrade_offer(uuid,text,integer,integer,timestamptz,text,jsonb,jsonb,text,text,text)') is not null),
+              ('function:join', to_regprocedure('public.join_direct_donation_upgrade_offer(uuid,uuid,text)') is not null),
+              ('function:complete', to_regprocedure('public.complete_direct_donation_upgrade_obligation(uuid,boolean,text,text,text,text,integer,integer,text,text,text,timestamptz,text)') is not null),
+              ('function:lifecycle', to_regprocedure('public.run_direct_donation_upgrade_lifecycle(timestamptz)') is not null)
+            ) as item(name, present)
+            where not item.present;
+            if missing is not null then
+              raise exception 'Missing Direct Donation Upgrade schema objects: %', missing;
+            end if;
+          end;
+          $$;
+
+          select routine_name, grantee, privilege_type
+          from information_schema.routine_privileges
+          where routine_schema = 'public'
+            and routine_name in (
+              'create_direct_donation_upgrade_offer',
+              'join_direct_donation_upgrade_offer',
+              'withdraw_direct_donation_upgrade_backup',
+              'cancel_direct_donation_upgrade_offer',
+              'start_direct_donation_upgrade_checkout',
+              'complete_direct_donation_upgrade_obligation',
+              'run_direct_donation_upgrade_lifecycle'
+            )
+          order by routine_name, grantee;
+          SQL
+
+          forbidden="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tr -d '[:space:]'
+          select count(*)
+          from information_schema.routine_privileges
+          where routine_schema = 'public'
+            and routine_name in (
+              'create_direct_donation_upgrade_offer',
+              'join_direct_donation_upgrade_offer',
+              'withdraw_direct_donation_upgrade_backup',
+              'cancel_direct_donation_upgrade_offer',
+              'start_direct_donation_upgrade_checkout',
+              'complete_direct_donation_upgrade_obligation',
+              'run_direct_donation_upgrade_lifecycle'
+            )
+            and grantee in ('PUBLIC', 'anon', 'authenticated');
+          SQL
+          )"
+          test "$forbidden" = "0"
+
+      - name: Run rollback-only lifecycle, privacy, replay, and backup regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$REGRESSION" | tee direct-upgrade-qa-regression.log
+
+      - name: Prove zero persistent synthetic residue
+        if: ${{ always() && steps.verify-target.outputs.verified == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee direct-upgrade-qa-residue.json
+          with fixture_profiles(profile_id) as (
+            values
+              ('da111111-1111-4111-8111-111111111111'::uuid),
+              ('da222222-2222-4222-8222-222222222222'::uuid),
+              ('da333333-3333-4333-8333-333333333333'::uuid),
+              ('da444444-4444-4444-8444-444444444444'::uuid)
+          ),
+          fixture_offers(offer_id) as (
+            select offer.id
+            from public.direct_donation_upgrade_offers offer
+            where offer.creator_profile_id in (select profile_id from fixture_profiles)
+            union
+            select candidate.offer_id
+            from public.direct_donation_upgrade_candidates candidate
+            where candidate.profile_id in (select profile_id from fixture_profiles)
+            union
+            select obligation.offer_id
+            from public.direct_donation_upgrade_obligations obligation
+            where obligation.participant_profile_id in (select profile_id from fixture_profiles)
+            union
+            select credit.offer_id
+            from public.direct_donation_upgrade_impact_credits credit
+            where credit.profile_id in (select profile_id from fixture_profiles)
+            union
+            select audit.offer_id
+            from public.direct_donation_upgrade_audit_events audit
+            where audit.actor_profile_id in (select profile_id from fixture_profiles)
+              and audit.offer_id is not null
+          ),
+          fixture_candidates(candidate_id) as (
+            select candidate.id
+            from public.direct_donation_upgrade_candidates candidate
+            where candidate.profile_id in (select profile_id from fixture_profiles)
+               or candidate.offer_id in (select offer_id from fixture_offers)
+          ),
+          fixture_obligations(obligation_id) as (
+            select obligation.id
+            from public.direct_donation_upgrade_obligations obligation
+            where obligation.participant_profile_id in (select profile_id from fixture_profiles)
+               or obligation.offer_id in (select offer_id from fixture_offers)
+               or obligation.candidate_id in (select candidate_id from fixture_candidates)
+          )
+          select jsonb_build_object(
+            'authUsers', (
+              select count(*) from auth.users
+              where id in (select profile_id from fixture_profiles)
+                 or email like 'direct-upgrade-%@example.test'
+            ),
+            'authIdentities', (
+              select count(*) from auth.identities
+              where user_id in (select profile_id from fixture_profiles)
+            ),
+            'profiles', (
+              select count(*) from public.profiles
+              where id in (select profile_id from fixture_profiles)
+                 or email like 'direct-upgrade-%@example.test'
+            ),
+            'offers', (
+              select count(*) from public.direct_donation_upgrade_offers
+              where id in (select offer_id from fixture_offers)
+            ),
+            'candidates', (select count(*) from fixture_candidates),
+            'obligations', (select count(*) from fixture_obligations),
+            'credits', (
+              select count(*) from public.direct_donation_upgrade_impact_credits credit
+              where credit.profile_id in (select profile_id from fixture_profiles)
+                 or credit.offer_id in (select offer_id from fixture_offers)
+                 or credit.obligation_id in (select obligation_id from fixture_obligations)
+            ),
+            'restrictions', (
+              select count(*) from public.credibility_restrictions restriction
+              where restriction.profile_id in (select profile_id from fixture_profiles)
+                and restriction.reason_code = 'direct_donation_upgrade_default'
+            ),
+            'credibilityEvents', (
+              select count(*) from public.credibility_events event
+              where event.profile_id in (select profile_id from fixture_profiles)
+                 or event.counterparty_id in (select profile_id from fixture_profiles)
+                 or event.created_by in (select profile_id from fixture_profiles)
+                 or (
+                   event.source_type = 'direct_donation_upgrade'
+                   and event.source_id in (
+                     select obligation_id::text from fixture_obligations
+                   )
+                 )
+                 or event.metadata->>'offerId' in (
+                   select offer_id::text from fixture_offers
+                 )
+            ),
+            'notifications', (
+              select count(*) from public.trade_notifications notification
+              where notification.notification_type like 'direct_donation_upgrade_%'
+                and (
+                  notification.user_id in (select profile_id from fixture_profiles)
+                  or notification.href in (
+                    select '/donation-upgrades/' || offer_id::text
+                    from fixture_offers
+                  )
+                )
+            ),
+            'auditEvents', (
+              select count(*) from public.direct_donation_upgrade_audit_events audit
+              where audit.actor_profile_id in (select profile_id from fixture_profiles)
+                 or audit.offer_id in (select offer_id from fixture_offers)
+                 or audit.obligation_id in (select obligation_id from fixture_obligations)
+                 or audit.candidate_id in (select candidate_id from fixture_candidates)
+            )
+          );
+          SQL
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          rows = [line.strip() for line in Path('direct-upgrade-qa-residue.json').read_text().splitlines() if line.strip()]
+          if len(rows) != 1:
+              raise SystemExit(f"Expected exactly one residue result row; found {len(rows)}.")
+          state = json.loads(rows[0])
+          expected = {
+              "authUsers", "authIdentities", "profiles", "offers", "candidates",
+              "obligations", "credits", "restrictions", "credibilityEvents",
+              "notifications", "auditEvents",
+          }
+          if set(state) != expected:
+              raise SystemExit(f"Residue proof returned an unexpected key set: {sorted(state)}")
+          if not all(type(value) is int for value in state.values()):
+              raise SystemExit(f"Residue proof returned non-integer counts: {state}")
+          unexpected = {key: value for key, value in state.items() if value != 0}
+          if unexpected:
+              raise SystemExit(f"Persistent Direct Donation Upgrade QA residue found: {unexpected}")
+          print(json.dumps(state, sort_keys=True))
+          PY
+
+      - name: Upload isolated-QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-donation-upgrade-isolated-qa-${{ github.run_id }}
+          path: |
+            direct-upgrade-qa-exact-source.txt
+            direct-upgrade-qa-sql-sha256.txt
+            direct-upgrade-qa-session.json
+            direct-upgrade-qa-migration-compile.log
+            direct-upgrade-qa-migration-apply.log
+            direct-upgrade-qa-schema-inventory.log
+            direct-upgrade-qa-regression.log
+            direct-upgrade-qa-residue.json
+          if-no-files-found: warn
+          retention-days: 30

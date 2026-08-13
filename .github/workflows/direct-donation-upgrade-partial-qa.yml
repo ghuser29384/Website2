@@ -1,0 +1,599 @@
+name: Donation Upgrade partial redirect isolated QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/direct-donation-upgrade-partial-gates.yml"
+      - ".github/workflows/direct-donation-upgrade-partial-qa.yml"
+      - "supabase/migrations/*donation_upgrade*.sql"
+      - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
+      - "supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql"
+      - "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql"
+      - "supabase/tests/*donation_upgrade*.sql"
+      - "supabase/tests/direct_verified_donation_upgrade.sql"
+      - "supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql"
+      - "src/lib/direct-donation-upgrade*.ts"
+      - "src/app/direct-donation-upgrade-actions.ts"
+      - "src/app/api/connectors/every-org/**"
+      - "src/app/api/jobs/donation-upgrades/**"
+      - "src/app/donation-upgrades/**"
+      - "src/app/trades/new/conditional-donation.tsx"
+      - "src/app/trades/new/direct-donation-upgrade-create.tsx"
+      - "src/components/donation-upgrades/**"
+  workflow_dispatch:
+    inputs:
+      confirm_target:
+        description: Type the exact MoralTrade QA project ref
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-donation-upgrade-isolated-qa
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_QA_DATABASE: postgres
+      EXPECTED_QA_DATABASE_USER: postgres
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      BASE_MIGRATION: supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
+      SPLIT_MIGRATION: supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql
+      LIFECYCLE_MIGRATION: supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql
+      BASE_REGRESSION: supabase/tests/direct_verified_donation_upgrade.sql
+      SPLIT_REGRESSION: supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Validate exact isolated-QA target and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            test "${{ inputs.confirm_target }}" = "$EXPECTED_QA_REF"
+          fi
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected_ref = os.environ["EXPECTED_QA_REF"]
+          ssl_modes = parse_qs(parsed.query).get("sslmode")
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and parsed.username == f"postgres.{expected_ref}"
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
+          PY
+          grep -Fq 'direct_donation_upgrade_proposals' "$SPLIT_MIGRATION"
+          grep -Fq 'direct_donation_upgrade_guard_completion' "$LIFECYCLE_MIGRATION"
+          grep -Fq 'with (security_barrier = true, security_invoker = true)' "$SPLIT_MIGRATION"
+          grep -Fq 'revoke all on public.direct_donation_upgrade_public_offers from public, anon, authenticated;' "$SPLIT_MIGRATION"
+          test "$(grep -c '^begin;$' "$BASE_REGRESSION")" = "1"
+          test "$(grep -c '^rollback;$' "$BASE_REGRESSION")" = "1"
+          test "$(grep -c '^begin;$' "$SPLIT_REGRESSION")" = "1"
+          test "$(grep -c '^rollback;$' "$SPLIT_REGRESSION")" = "1"
+          for rpc in \
+            propose_direct_donation_upgrade_terms \
+            withdraw_direct_donation_upgrade_proposal \
+            reject_direct_donation_upgrade_proposal \
+            accept_direct_donation_upgrade_proposal \
+            cancel_direct_donation_upgrade_offer \
+            complete_direct_donation_upgrade_obligation \
+            run_direct_donation_upgrade_lifecycle
+          do
+            grep -Eq "(perform|select|:=).*public\\.${rpc}\\(" "$SPLIT_REGRESSION"
+          done
+          git diff --check
+          git fetch --no-tags origin main
+          current_main="$(git rev-parse origin/main)"
+          if ! git merge-base --is-ancestor "$current_main" HEAD; then
+            echo "Candidate HEAD does not contain current origin/main ($current_main)." >&2
+            exit 1
+          fi
+          merge_base="$(git merge-base origin/main HEAD)"
+          test "$merge_base" = "$current_main"
+          {
+            printf 'current_main=%s\n' "$current_main"
+            printf 'merge_base=%s\n' "$merge_base"
+            printf 'commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'base_blob=%s\n' "$(git hash-object "$BASE_MIGRATION")"
+            printf 'split_blob=%s\n' "$(git hash-object "$SPLIT_MIGRATION")"
+            printf 'lifecycle_blob=%s\n' "$(git hash-object "$LIFECYCLE_MIGRATION")"
+            printf 'base_regression_blob=%s\n' "$(git hash-object "$BASE_REGRESSION")"
+            printf 'regression_blob=%s\n' "$(git hash-object "$SPLIT_REGRESSION")"
+          } | tee donation-upgrade-partial-qa-source.txt
+          sha256sum "$BASE_MIGRATION" "$SPLIT_MIGRATION" "$LIFECYCLE_MIGRATION" \
+            "$BASE_REGRESSION" "$SPLIT_REGRESSION" \
+            | tee donation-upgrade-partial-qa-sha256.txt
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Set up pinned Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.110.0
+          github-token: ${{ github.token }}
+
+      - name: Verify connected QA session and capture pre-migration advisors
+        id: verify-target
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee donation-upgrade-partial-qa-session.txt
+          select jsonb_build_object(
+            'database', current_database(),
+            'user', current_user,
+            'ssl', coalesce(
+              (select connection.ssl
+               from pg_catalog.pg_stat_ssl connection
+               where connection.pid = pg_backend_pid()),
+              false
+            ),
+            'serverVersion', current_setting('server_version')
+          );
+          SQL
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          rows = [
+              line.strip()
+              for line in Path("donation-upgrade-partial-qa-session.txt").read_text().splitlines()
+              if line.strip()
+          ]
+          if len(rows) != 1:
+              raise SystemExit(f"Expected one QA session row, received {len(rows)}.")
+          session = json.loads(rows[0])
+          expected = {
+              "database": os.environ["EXPECTED_QA_DATABASE"],
+              "user": os.environ["EXPECTED_QA_DATABASE_USER"],
+              "ssl": True,
+          }
+          actual = {key: session.get(key) for key in expected}
+          if actual != expected:
+              raise SystemExit(f"Refusing unexpected live QA session: {actual!r}")
+          print(json.dumps(session, sort_keys=True))
+          PY
+          printf 'verified=true\n' >> "$GITHUB_OUTPUT"
+
+          supabase db advisors --help | tee donation-upgrade-partial-advisors-help.txt
+          supabase db advisors \
+            --db-url "$QA_SUPABASE_DB_URL" \
+            --type all \
+            --level warn \
+            --fail-on none \
+            > donation-upgrade-partial-advisors-before.json 2>&1
+          cat donation-upgrade-partial-advisors-before.json
+
+      - name: Compile the additive migration pair transactionally
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
+            | tee donation-upgrade-partial-compile.log
+          begin;
+          \i $SPLIT_MIGRATION
+          \i $LIFECYCLE_MIGRATION
+          rollback;
+          SQL
+
+      - name: Apply or verify both immutable migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration_state() {
+            local version="$1"
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+              --field-separator='|' --set ON_ERROR_STOP=1 \
+              --command "select count(*), coalesce(max(statements[1]), ''), coalesce(max(name), '') from supabase_migrations.schema_migrations where version='${version}';"
+          }
+
+          base_blob="$(git hash-object "$BASE_MIGRATION")"
+          split_blob="$(git hash-object "$SPLIT_MIGRATION")"
+          lifecycle_blob="$(git hash-object "$LIFECYCLE_MIGRATION")"
+          base_state="$(migration_state 20260801050000)"
+          split_state="$(migration_state 20260813150000)"
+          lifecycle_state="$(migration_state 20260813151000)"
+          expected_base="1|source-git-blob:${base_blob}|direct_verified_donation_upgrades"
+          expected_split="1|source-git-blob:${split_blob}|direct_donation_upgrade_partial_redirect_negotiation"
+          expected_lifecycle="1|source-git-blob:${lifecycle_blob}|direct_donation_upgrade_partial_redirect_lifecycle"
+
+          if [[ "$base_state" != "$expected_base" ]]; then
+            echo "Base migration is absent, duplicated, renamed, or differs from the immutable source blob: $base_state" >&2
+            exit 1
+          fi
+
+          if [[ "$split_state" == "0||" && "$lifecycle_state" == "0||" ]]; then
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+              --single-transaction \
+              --command "select pg_advisory_xact_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));" \
+              --file "$SPLIT_MIGRATION" \
+              --file "$LIFECYCLE_MIGRATION" \
+              --command "insert into supabase_migrations.schema_migrations(version, statements, name, created_by) values ('20260813150000', array['source-git-blob:${split_blob}'], 'direct_donation_upgrade_partial_redirect_negotiation', 'github-actions:donation-upgrade-partial-qa'), ('20260813151000', array['source-git-blob:${lifecycle_blob}'], 'direct_donation_upgrade_partial_redirect_lifecycle', 'github-actions:donation-upgrade-partial-qa');" \
+              | tee donation-upgrade-partial-apply.log
+            printf 'applied_pair_atomically\n' | tee donation-upgrade-partial-migration-state.txt
+          elif [[ "$split_state" == "$expected_split" && "$lifecycle_state" == "$expected_lifecycle" ]]; then
+            {
+              printf 'Both partial migrations are already recorded with exact source blobs.\n'
+              printf 'split=%s\n' "$split_blob"
+              printf 'lifecycle=%s\n' "$lifecycle_blob"
+            } | tee donation-upgrade-partial-apply.log
+            printf 'verified_existing_pair\n' | tee donation-upgrade-partial-migration-state.txt
+          else
+            {
+              echo "Refusing a mixed, duplicated, renamed, or source-mismatched partial migration history."
+              printf 'split_state=%s\n' "$split_state"
+              printf 'lifecycle_state=%s\n' "$lifecycle_state"
+            } | tee donation-upgrade-partial-apply.log >&2
+            exit 1
+          fi
+
+      - name: Verify schema, generated split, and privilege boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
+            | tee donation-upgrade-partial-schema.log
+          do $$
+          declare
+            missing text[];
+          begin
+            select array_agg(item.name order by item.name)
+            into missing
+            from (values
+              ('table:proposals', to_regclass('public.direct_donation_upgrade_proposals') is not null),
+              ('view:public_offers', to_regclass('public.direct_donation_upgrade_public_offers') is not null),
+              ('function:create_v2', to_regprocedure('public.create_direct_donation_upgrade_offer(uuid,text,integer,integer,timestamptz,text,jsonb,jsonb,text,text,text,integer)') is not null),
+              ('function:join_bound', to_regprocedure('public.join_direct_donation_upgrade_offer(uuid,uuid,text,text)') is not null),
+              ('function:propose_bound', to_regprocedure('public.propose_direct_donation_upgrade_terms(uuid,uuid,integer,integer,integer,integer,text,text,text)') is not null),
+              ('function:withdraw_proposal_bound', to_regprocedure('public.withdraw_direct_donation_upgrade_proposal(uuid,uuid,text)') is not null),
+              ('function:reject_bound', to_regprocedure('public.reject_direct_donation_upgrade_proposal(uuid,uuid,text,text)') is not null),
+              ('function:accept_bound', to_regprocedure('public.accept_direct_donation_upgrade_proposal(uuid,uuid,text,text)') is not null),
+              ('function:withdraw_backup_bound', to_regprocedure('public.withdraw_direct_donation_upgrade_backup(uuid,uuid,text)') is not null),
+              ('function:cancel_bound', to_regprocedure('public.cancel_direct_donation_upgrade_offer(uuid,uuid,text)') is not null),
+              ('function:checkout_bound', to_regprocedure('public.start_direct_donation_upgrade_checkout(uuid,uuid,text)') is not null),
+              ('function:complete_bound', to_regprocedure('public.complete_direct_donation_upgrade_obligation(uuid,boolean,text,text,text,text,integer,integer,text,text,text,timestamptz,text,text)') is not null),
+              ('function:lifecycle_bound', to_regprocedure('public.run_direct_donation_upgrade_lifecycle(timestamptz,text)') is not null),
+              ('column:redirect_basis_points', exists (
+                select 1 from information_schema.columns
+                where table_schema='public' and table_name='direct_donation_upgrade_offers'
+                  and column_name='redirect_basis_points'
+              )),
+              ('column:obligation_kind', exists (
+                select 1 from information_schema.columns
+                where table_schema='public' and table_name='direct_donation_upgrade_obligations'
+                  and column_name='obligation_kind'
+              )),
+              ('rls:proposals', exists (
+                select 1
+                from pg_class c
+                join pg_namespace n on n.oid = c.relnamespace
+                where n.nspname = 'public'
+                  and c.relname = 'direct_donation_upgrade_proposals'
+                  and c.relrowsecurity
+              )),
+              ('view:security_invoker', exists (
+                select 1
+                from pg_class c
+                join pg_namespace n on n.oid = c.relnamespace
+                where n.nspname = 'public'
+                  and c.relname = 'direct_donation_upgrade_public_offers'
+                  and coalesce(c.reloptions, '{}'::text[]) @> array['security_invoker=true']
+              ))
+            ) as item(name, present)
+            where not item.present;
+            if missing is not null then
+              raise exception 'Missing partial Donation Upgrade schema objects: %', missing;
+            end if;
+          end;
+          $$;
+
+          select public.direct_donation_upgrade_redirected_amount(1000, 2000) as redirected_cents;
+          SQL
+
+          forbidden="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tr -d '[:space:]'
+          select count(*)
+          from information_schema.routine_privileges
+          where routine_schema = 'public'
+            and (
+              routine_name like 'direct_donation_upgrade_%'
+              or routine_name in (
+                'create_direct_donation_upgrade_offer',
+                'join_direct_donation_upgrade_offer',
+                'withdraw_direct_donation_upgrade_backup',
+                'cancel_direct_donation_upgrade_offer',
+                'start_direct_donation_upgrade_checkout',
+                'complete_direct_donation_upgrade_obligation',
+                'run_direct_donation_upgrade_lifecycle',
+                'propose_direct_donation_upgrade_terms',
+                'withdraw_direct_donation_upgrade_proposal',
+                'reject_direct_donation_upgrade_proposal',
+                'accept_direct_donation_upgrade_proposal'
+              )
+            )
+            and grantee in ('PUBLIC', 'anon', 'authenticated');
+          SQL
+          )"
+          test "$forbidden" = "0"
+
+          exposed_view="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tr -d '[:space:]'
+          select count(*)
+          from information_schema.table_privileges
+          where table_schema = 'public'
+            and table_name = 'direct_donation_upgrade_public_offers'
+            and privilege_type = 'SELECT'
+            and grantee in ('PUBLIC', 'anon', 'authenticated');
+          SQL
+          )"
+          test "$exposed_view" = "0"
+
+      - name: Run rollback-only compatibility and partial-schema regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$BASE_REGRESSION" | tee donation-upgrade-partial-base-regression.log
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$SPLIT_REGRESSION" | tee donation-upgrade-partial-split-regression.log
+
+      - name: Capture post-migration advisors and reject new or feature-scoped findings
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase db advisors \
+            --db-url "$QA_SUPABASE_DB_URL" \
+            --type all \
+            --level warn \
+            --fail-on none \
+            > donation-upgrade-partial-advisors-after.json 2>&1
+          cat donation-upgrade-partial-advisors-after.json
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          def load_advisors(path: str) -> list[dict]:
+              text = Path(path).read_text(errors="replace")
+              start = text.find("[")
+              end = text.rfind("]")
+              if start >= 0 and end >= start:
+                  payload = json.loads(text[start : end + 1])
+                  if not isinstance(payload, list) or not all(isinstance(item, dict) for item in payload):
+                      raise SystemExit(f"Unexpected Supabase advisor payload in {path}.")
+                  return payload
+              if "No issues found" in text:
+                  return []
+              raise SystemExit(f"Supabase advisor output in {path} was neither a JSON issue array nor an explicit no-issues result.")
+
+          def signature(item: dict) -> tuple[str, str, str]:
+              return (
+                  str(item.get("name", "")),
+                  str(item.get("level", "")),
+                  str(item.get("cache_key", "")),
+              )
+
+          before = load_advisors("donation-upgrade-partial-advisors-before.json")
+          after = load_advisors("donation-upgrade-partial-advisors-after.json")
+          before_by_key = {signature(item): item for item in before}
+          after_by_key = {signature(item): item for item in after}
+          new_keys = sorted(after_by_key.keys() - before_by_key.keys())
+          resolved_keys = sorted(before_by_key.keys() - after_by_key.keys())
+          preexisting_keys = sorted(after_by_key.keys() & before_by_key.keys())
+          new_findings = [after_by_key[key] for key in new_keys]
+          direct_findings = [
+              item
+              for item in after
+              if any(
+                  marker in json.dumps(item, sort_keys=True).lower()
+                  for marker in ("direct_donation_upgrade", "direct donation upgrade")
+              )
+          ]
+          classification = {
+              "beforeCount": len(before),
+              "afterCount": len(after),
+              "new": new_findings,
+              "preexisting": [after_by_key[key] for key in preexisting_keys],
+              "resolved": [before_by_key[key] for key in resolved_keys],
+              "featureScopedAfter": direct_findings,
+          }
+          Path("donation-upgrade-partial-advisors-classification.json").write_text(
+              json.dumps(classification, indent=2, sort_keys=True) + "\n"
+          )
+          print(json.dumps({
+              "beforeCount": len(before),
+              "afterCount": len(after),
+              "newCount": len(new_findings),
+              "resolvedCount": len(resolved_keys),
+              "featureScopedAfterCount": len(direct_findings),
+          }, sort_keys=True))
+          if new_findings:
+              raise SystemExit("Supabase advisors reported new warning-or-error findings after the partial migration pair.")
+          if direct_findings:
+              raise SystemExit("Supabase advisors still report warning-or-error findings scoped to Direct Donation Upgrade objects.")
+          PY
+
+      - name: Prove zero persistent synthetic residue
+        if: ${{ always() && steps.verify-target.outputs.verified == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee donation-upgrade-partial-residue.json
+          with fixture_profiles(profile_id) as (
+            values
+              ('da111111-1111-4111-8111-111111111111'::uuid),
+              ('da222222-2222-4222-8222-222222222222'::uuid),
+              ('da333333-3333-4333-8333-333333333333'::uuid),
+              ('da444444-4444-4444-8444-444444444444'::uuid),
+              ('db110000-0000-4000-8000-000000000001'::uuid),
+              ('db110000-0000-4000-8000-000000000002'::uuid),
+              ('db110000-0000-4000-8000-000000000003'::uuid),
+              ('db110000-0000-4000-8000-000000000004'::uuid),
+              ('db110000-0000-4000-8000-000000000005'::uuid),
+              ('db110000-0000-4000-8000-000000000006'::uuid),
+              ('db110000-0000-4000-8000-000000000007'::uuid),
+              ('db110000-0000-4000-8000-000000000008'::uuid),
+              ('db110000-0000-4000-8000-000000000009'::uuid),
+              ('db110000-0000-4000-8000-00000000000a'::uuid),
+              ('db110000-0000-4000-8000-00000000000b'::uuid)
+          ),
+          fixture_offers(offer_id) as (
+            select offer.id
+            from public.direct_donation_upgrade_offers offer
+            where offer.creator_profile_id in (select profile_id from fixture_profiles)
+          ),
+          fixture_candidates(candidate_id) as (
+            select candidate.id
+            from public.direct_donation_upgrade_candidates candidate
+            where candidate.profile_id in (select profile_id from fixture_profiles)
+               or candidate.offer_id in (select offer_id from fixture_offers)
+          ),
+          fixture_obligations(obligation_id) as (
+            select obligation.id
+            from public.direct_donation_upgrade_obligations obligation
+            where obligation.participant_profile_id in (select profile_id from fixture_profiles)
+               or obligation.offer_id in (select offer_id from fixture_offers)
+               or obligation.candidate_id in (select candidate_id from fixture_candidates)
+          )
+          select jsonb_build_object(
+            'authUsers', (
+              select count(*) from auth.users
+              where id in (select profile_id from fixture_profiles)
+                 or email like 'direct-upgrade-%@example.test'
+                 or email like 'partial-upgrade-%@example.test'
+            ),
+            'authIdentities', (
+              select count(*) from auth.identities
+              where user_id in (select profile_id from fixture_profiles)
+            ),
+            'profiles', (
+              select count(*) from public.profiles
+              where id in (select profile_id from fixture_profiles)
+                 or email like 'direct-upgrade-%@example.test'
+                 or email like 'partial-upgrade-%@example.test'
+            ),
+            'offers', (select count(*) from fixture_offers),
+            'candidates', (select count(*) from fixture_candidates),
+            'proposals', (
+              select count(*) from public.direct_donation_upgrade_proposals proposal
+              where proposal.proposer_profile_id in (select profile_id from fixture_profiles)
+                 or proposal.offer_id in (select offer_id from fixture_offers)
+                 or proposal.accepted_offer_id in (select offer_id from fixture_offers)
+            ),
+            'obligations', (select count(*) from fixture_obligations),
+            'credits', (
+              select count(*) from public.direct_donation_upgrade_impact_credits credit
+              where credit.profile_id in (select profile_id from fixture_profiles)
+                 or credit.offer_id in (select offer_id from fixture_offers)
+                 or credit.obligation_id in (select obligation_id from fixture_obligations)
+            ),
+            'restrictions', (
+              select count(*) from public.credibility_restrictions restriction
+              where restriction.profile_id in (select profile_id from fixture_profiles)
+                and restriction.reason_code = 'direct_donation_upgrade_default'
+            ),
+            'credibilityEvents', (
+              select count(*) from public.credibility_events event
+              where event.profile_id in (select profile_id from fixture_profiles)
+                 or event.counterparty_id in (select profile_id from fixture_profiles)
+                 or event.created_by in (select profile_id from fixture_profiles)
+                 or (
+                   event.source_type = 'direct_donation_upgrade'
+                   and event.source_id in (
+                     select obligation_id::text from fixture_obligations
+                   )
+                 )
+                 or event.metadata->>'offerId' in (
+                   select offer_id::text from fixture_offers
+                 )
+            ),
+            'notifications', (
+              select count(*) from public.trade_notifications notification
+              where notification.user_id in (select profile_id from fixture_profiles)
+                and notification.notification_type like 'direct_donation_upgrade_%'
+            ),
+            'auditEvents', (
+              select count(*) from public.direct_donation_upgrade_audit_events audit
+              where audit.actor_profile_id in (select profile_id from fixture_profiles)
+                 or audit.offer_id in (select offer_id from fixture_offers)
+                 or audit.obligation_id in (select obligation_id from fixture_obligations)
+                 or audit.candidate_id in (select candidate_id from fixture_candidates)
+            )
+          );
+          SQL
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          rows = [line.strip() for line in Path('donation-upgrade-partial-residue.json').read_text().splitlines() if line.strip()]
+          if len(rows) != 1:
+              raise SystemExit(f"Expected exactly one residue result row; found {len(rows)}.")
+          state = json.loads(rows[0])
+          expected = {
+              "authUsers", "authIdentities", "profiles", "offers", "candidates",
+              "proposals", "obligations", "credits", "restrictions",
+              "credibilityEvents", "notifications", "auditEvents",
+          }
+          if set(state) != expected:
+              raise SystemExit(f"Residue proof returned an unexpected key set: {sorted(state)}")
+          if not all(type(value) is int for value in state.values()):
+              raise SystemExit(f"Residue proof returned non-integer counts: {state}")
+          unexpected = {key: value for key, value in state.items() if value != 0}
+          if unexpected:
+              raise SystemExit(f"Persistent Donation Upgrade QA residue found: {unexpected}")
+          print(json.dumps(state, sort_keys=True))
+          PY
+
+      - name: Upload isolated-QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: donation-upgrade-partial-qa-${{ github.run_id }}
+          path: |
+            donation-upgrade-partial-qa-source.txt
+            donation-upgrade-partial-qa-sha256.txt
+            donation-upgrade-partial-qa-session.txt
+            donation-upgrade-partial-advisors-help.txt
+            donation-upgrade-partial-advisors-before.json
+            donation-upgrade-partial-advisors-after.json
+            donation-upgrade-partial-advisors-classification.json
+            donation-upgrade-partial-compile.log
+            donation-upgrade-partial-apply.log
+            donation-upgrade-partial-migration-state.txt
+            donation-upgrade-partial-schema.log
+            donation-upgrade-partial-base-regression.log
+            donation-upgrade-partial-split-regression.log
+            donation-upgrade-partial-residue.json
+          if-no-files-found: warn
+          retention-days: 30
