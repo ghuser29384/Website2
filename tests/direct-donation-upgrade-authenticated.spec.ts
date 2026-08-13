@@ -398,7 +398,10 @@ async function exerciseNoChargeForm(
       page.getByText(/This atomically cancels this revision as superseded/i),
     ).toBeVisible();
     await expect(
-      page.getByText("The creator kept the current split.", { exact: true }),
+      page.getByText(
+        "Creator response: The creator kept the current split.",
+        { exact: true },
+      ),
     ).toBeVisible();
     await expectStableResponsivePage(page);
     await page.screenshot({
