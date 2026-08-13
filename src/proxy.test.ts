@@ -18,29 +18,14 @@ function makeRequest(path: string, headers: Record<string, string> = {}) {
   });
 }
 
-test("a first human homepage visit redirects to the mandatory walkthrough", () => {
+test("the root route is owned by the Next account-activation page", () => {
   const response = proxy(makeRequest("/?utm_source=invite"));
 
-  assert.equal(response.status, 307);
-  assert.equal(
-    response.headers.get("location"),
-    "https://moraltrade.org/walkthrough?utm_source=invite",
-  );
-  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE)?.value, "1");
-  assert.equal(response.headers.get("cache-control"), "private, no-store");
-});
-
-test("a returning visitor receives the live personalized homepage", () => {
-  const response = proxy(
-    makeRequest("/?utm_source=invite", { cookie: `${WALKTHROUGH_SEEN_COOKIE}=1` }),
-  );
-
+  assert.equal(config.matcher.includes("/"), false);
   assert.equal(response.status, 200);
-  assert.equal(
-    response.headers.get("x-middleware-rewrite"),
-    "https://moraltrade.org/moral-trade-live.html?utm_source=invite",
-  );
+  assert.equal(response.headers.get("x-middleware-next"), "1");
   assert.equal(response.headers.get("location"), null);
+  assert.equal(response.headers.get("x-middleware-rewrite"), null);
   assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
 });
 
@@ -53,23 +38,17 @@ test("opening the walkthrough directly records the visit without redirecting", (
   assert.equal(response.headers.get("cache-control"), "private, no-store");
 });
 
-test("bots and prefetches receive the live homepage without consuming the walkthrough", () => {
-  const botResponse = proxy(
-    makeRequest("/", { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }),
-  );
-  const prefetchResponse = proxy(
-    makeRequest("/", { "next-router-prefetch": "1", purpose: "prefetch" }),
+test("walkthrough prefetches do not consume the setup visit", () => {
+  const response = proxy(
+    makeRequest("/walkthrough", {
+      "next-router-prefetch": "1",
+      purpose: "prefetch",
+    }),
   );
 
-  for (const response of [botResponse, prefetchResponse]) {
-    assert.equal(response.status, 200);
-    assert.equal(
-      response.headers.get("x-middleware-rewrite"),
-      "https://moraltrade.org/moral-trade-live.html",
-    );
-    assert.equal(response.headers.get("location"), null);
-    assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
-  }
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-middleware-next"), "1");
+  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
 });
 
 test("the default Create route is replaced by the unified Create interface", () => {
