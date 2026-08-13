@@ -305,7 +305,7 @@
         "pr534ActivationAllowed"
       ],
       "properties": {
-        "realGraphDiagosticsOnly": {
+        "realGraphDiagnosticsOnly": {
           "const": true
         },
         "studyRegistrationAuthorized": {
