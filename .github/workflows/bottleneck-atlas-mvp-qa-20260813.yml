@@ -6,6 +6,8 @@ on:
       - feat/bottleneck-atlas-working-mvp-20260813
     paths:
       - .github/workflows/bottleneck-atlas-mvp-qa-20260813.yml
+      - src/app/bottleneck-atlas/**
+      - tests/bottleneck-atlas.spec.ts
 
 permissions:
   actions: read
