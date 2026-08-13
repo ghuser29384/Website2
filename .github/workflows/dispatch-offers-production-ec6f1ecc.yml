@@ -1,0 +1,59 @@
+name: Dispatch exact Offers production release ec6f1ecc
+
+on:
+  push:
+    branches:
+      - release/offers-production-ec6f1ecc
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: dispatch-offers-production-ec6f1ecc
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: ec6f1ecc12df5db74e3e2f8acb87c3f04aedae5b
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Guard repository and exact current main
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          main_sha="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$main_sha" = "$EXPECTED_SHA"
+
+      - name: Dispatch the canonical gated production workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/vercel-release.yml/dispatches" \
+            -f ref=main \
+            -f 'inputs[target]=production' \
+            -f 'inputs[ref]=main' \
+            -f "inputs[expected_sha]=$EXPECTED_SHA"
+
+      - name: Record dispatch summary
+        shell: bash
+        run: |
+          {
+            echo '### Offers production release dispatched'
+            echo
+            echo '- Target: `production`'
+            echo '- Ref: `main`'
+            echo "- Expected SHA: \`$EXPECTED_SHA\`"
+            echo '- Workflow: `.github/workflows/vercel-release.yml`'
+          } >> "$GITHUB_STEP_SUMMARY"
