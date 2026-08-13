@@ -3,6 +3,7 @@ import { createClient as createSupabaseClient, type Session } from "@supabase/su
 import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
 const BASE_URL = process.env.DIRECT_UPGRADE_RENDERED_BASE_URL ?? "http://127.0.0.1:3211";
+const BASE_ORIGIN = new URL(BASE_URL).origin;
 const SUPABASE_URL =
   process.env.NEXT_PUBLIC_SUPABASE_URL ?? "https://hvmxfjjbdcgjjudmthdz.supabase.co";
 const SUPABASE_KEY =
@@ -157,6 +158,16 @@ function prohibitedBrowserRequest(method: string, rawUrl: string) {
   return "";
 }
 
+function isSuppressedSitewideTelemetry(method: string, rawUrl: string) {
+  const url = new URL(rawUrl);
+  return (
+    method.toUpperCase() === "POST" &&
+    url.origin === BASE_ORIGIN &&
+    url.pathname === "/api/funnel-events" &&
+    url.search === ""
+  );
+}
+
 async function moveRangeInput(page: Page, value: string) {
   const slider = page.getByRole("slider", {
     name: "Redirect percentage slider",
@@ -211,6 +222,7 @@ async function exerciseNoChargeForm(
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
   const prohibitedRequests: string[] = [];
+  const suppressedSitewideTelemetry: string[] = [];
   let caughtFailure: unknown;
 
   page.on("pageerror", (error) => pageErrors.push(error.message));
@@ -219,6 +231,11 @@ async function exerciseNoChargeForm(
   });
   await page.route("**/*", async (route) => {
     const request = route.request();
+    if (isSuppressedSitewideTelemetry(request.method(), request.url())) {
+      suppressedSitewideTelemetry.push(`${request.method()} /api/funnel-events`);
+      await route.fulfill({ status: 204, body: "" });
+      return;
+    }
     const reason = prohibitedBrowserRequest(request.method(), request.url());
     if (reason) {
       prohibitedRequests.push(`${reason}: ${request.method()} ${request.url()}`);
@@ -412,6 +429,9 @@ async function exerciseNoChargeForm(
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
     expect(prohibitedRequests).toEqual([]);
+    for (const request of suppressedSitewideTelemetry) {
+      expect(request).toBe("POST /api/funnel-events");
+    }
   } catch (error) {
     caughtFailure = error;
     throw error;
