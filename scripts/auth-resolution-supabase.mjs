@@ -106,6 +106,9 @@ const tokens = { ...validTokens, invalid: invalidSignatureToken() };
 const modeByToken = new Map(Object.entries(tokens).map(([mode, token]) => [token, mode]));
 const attempts = new Map();
 const verificationEvents = [];
+let verificationGateEnabled = false;
+let verificationGateSequence = 0;
+const pendingVerificationGates = new Map();
 
 function fixtureSession(mode) {
   const accessToken = tokens[mode];
@@ -145,6 +148,17 @@ function bearerToken(request) {
 
 function hasFixtureControlAccess(request) {
   return request.headers["x-auth-resolution-fixture-control"] === fixtureControlSecret;
+}
+
+function releaseVerificationGate(gateId) {
+  const gate = pendingVerificationGates.get(gateId);
+  if (!gate) return false;
+  gate.release();
+  return true;
+}
+
+function cancelPendingVerificationGates() {
+  for (const gate of pendingVerificationGates.values()) gate.cancel();
 }
 
 function emptyPostgrest(response, request) {
@@ -207,9 +221,27 @@ const server = http.createServer((request, response) => {
   }
 
   if (request.method === "POST" && url.pathname === "/__fixture/reset") {
+    cancelPendingVerificationGates();
     attempts.clear();
     verificationEvents.splice(0, verificationEvents.length);
+    verificationGateEnabled = false;
     json(response, 200, { reset: true });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/__fixture/verification-gate") {
+    verificationGateEnabled = true;
+    json(response, 200, { enabled: true });
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/__fixture/verification-gate/release") {
+    const gateId = url.searchParams.get("gateId") ?? "";
+    if (!releaseVerificationGate(gateId)) {
+      json(response, 409, { message: "Verification gate is not pending." });
+      return;
+    }
+    json(response, 200, { gateId, released: true });
     return;
   }
 
@@ -269,7 +301,6 @@ const server = http.createServer((request, response) => {
 
     if (mode === "delayed" && nextAttempt === 1) {
       verificationEvents.push({
-        atMs: Date.now(),
         delayMs: 250,
         mode,
         nextAttempt,
@@ -282,18 +313,48 @@ const server = http.createServer((request, response) => {
     }
 
     if (mode === "expired") {
-      verificationEvents.push({ atMs: Date.now(), mode, nextAttempt, result: "definitive_401" });
+      verificationEvents.push({ mode, nextAttempt, result: "definitive_401" });
       json(response, 401, { code: "bad_jwt", message: "JWT expired" });
       return;
     }
 
     if (mode === "fast" || mode === "delayed" || mode === "mismatch") {
-      verificationEvents.push({ atMs: Date.now(), mode, nextAttempt, result: "verified_user" });
+      if (mode === "delayed" && verificationGateEnabled) {
+        const gateId = `verification-${++verificationGateSequence}`;
+        verificationEvents.push({ gateId, mode, nextAttempt, result: "pending_verified_user" });
+        let settled = false;
+        let expiry;
+        const cleanup = () => {
+          pendingVerificationGates.delete(gateId);
+          clearTimeout(expiry);
+          response.off("close", cancel);
+        };
+        const cancel = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          verificationEvents.push({ gateId, mode, nextAttempt, result: "cancelled_verified_user" });
+          response.destroy();
+        };
+        const release = () => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          verificationEvents.push({ gateId, mode, nextAttempt, result: "verified_user" });
+          json(response, 200, fixtureUser(USER_ID));
+        };
+        expiry = setTimeout(cancel, 9_000);
+        expiry.unref();
+        response.once("close", cancel);
+        pendingVerificationGates.set(gateId, { cancel, release });
+        return;
+      }
+      verificationEvents.push({ mode, nextAttempt, result: "verified_user" });
       json(response, 200, fixtureUser(USER_ID));
       return;
     }
 
-    verificationEvents.push({ atMs: Date.now(), mode, nextAttempt, result: "definitive_401" });
+    verificationEvents.push({ mode, nextAttempt, result: "definitive_401" });
     json(response, 401, { code: "bad_jwt", message: "Invalid JWT signature" });
     return;
   }

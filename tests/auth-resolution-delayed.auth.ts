@@ -116,7 +116,6 @@ function latencySummary(values: number[]) {
 
 interface AuthDomState {
   authenticatedSurface: boolean;
-  observedAtMs: number;
   privateContent: boolean;
   signedIn: boolean;
   signedOut: boolean;
@@ -133,9 +132,11 @@ async function installAuthDomObserver(page: Page) {
   );
   await page.addInitScript(() => {
     const observedWindow = window as typeof window & {
+      __flushAuthResolutionDomState?: () => Promise<void>;
       __recordAuthResolutionDomState?: (state: AuthDomState) => Promise<void>;
     };
     let previous = "";
+    let pendingRecord = Promise.resolve();
     const record = () => {
       const text = document.body?.innerText ?? "";
       const feedState = document
@@ -171,22 +172,37 @@ async function installAuthDomObserver(page: Page) {
       };
       const serialized = JSON.stringify(state);
       if (serialized !== previous) {
-        void observedWindow.__recordAuthResolutionDomState?.({
-          ...state,
-          observedAtMs: Date.now(),
-          url: window.location.href,
+        pendingRecord = pendingRecord.then(async () => {
+          await observedWindow.__recordAuthResolutionDomState?.({
+            ...state,
+            url: window.location.href,
+          });
         });
         previous = serialized;
       }
+      return pendingRecord;
     };
-    new MutationObserver(record).observe(document, {
+    observedWindow.__flushAuthResolutionDomState = async () => {
+      await record();
+      await pendingRecord;
+    };
+    new MutationObserver(() => void record()).observe(document, {
       childList: true,
       characterData: true,
       subtree: true,
     });
-    document.addEventListener("DOMContentLoaded", record, { once: true });
+    document.addEventListener("DOMContentLoaded", () => void record(), { once: true });
   });
   return history;
+}
+
+async function flushAuthDomObserver(page: Page) {
+  await page.evaluate(async () => {
+    const observedWindow = window as typeof window & {
+      __flushAuthResolutionDomState?: () => Promise<void>;
+    };
+    await observedWindow.__flushAuthResolutionDomState?.();
+  });
 }
 
 function expectNoSignedOutFlash(history: AuthDomState[]) {
@@ -194,48 +210,106 @@ function expectNoSignedOutFlash(history: AuthDomState[]) {
 }
 
 interface VerificationEvent {
-  atMs: number;
+  gateId?: string;
   mode: string;
   nextAttempt: number;
   result: string;
 }
 
-async function expectOrderedDelayedRecoveryBeforeAuthenticatedRender(
+async function enableVerificationGate(request: APIRequestContext) {
+  const response = await request.post(`${MOCK_URL}/__fixture/verification-gate`, {
+    headers: { "x-auth-resolution-fixture-control": FIXTURE_CONTROL_SECRET },
+  });
+  expect(response.ok()).toBeTruthy();
+}
+
+async function releaseVerificationGate(request: APIRequestContext, gateId: string) {
+  const response = await request.post(
+    `${MOCK_URL}/__fixture/verification-gate/release?gateId=${encodeURIComponent(gateId)}`,
+    { headers: { "x-auth-resolution-fixture-control": FIXTURE_CONTROL_SECRET } },
+  );
+  expect(response.ok()).toBeTruthy();
+}
+
+async function expectCausallyGatedDelayedRecovery(
+  page: Page,
   request: APIRequestContext,
   history: AuthDomState[],
   historyStart: number,
   expectedAttempts = 2,
 ) {
-  const fixtureEvents = (await getFixtureJson(request, "/__fixture/events")) as {
+  const expectedSuccessfulVerifications = expectedAttempts - 1;
+  const getEvents = () =>
+    getFixtureJson(request, "/__fixture/events") as Promise<{
     attempts: Record<string, number>;
     verificationEvents: VerificationEvent[];
-  };
-  expect(fixtureEvents.attempts).toEqual({ delayed: expectedAttempts });
-  const expectedVerificationEvents = Array.from(
-    { length: expectedAttempts },
-    (_, index) => ({
-      mode: "delayed",
-      nextAttempt: index + 1,
-      result: index === 0 ? "retryable_503" : "verified_user",
-    }),
-  );
-  expect(
-    fixtureEvents.verificationEvents.map(({ mode, nextAttempt, result }) => ({
-      mode,
-      nextAttempt,
-      result,
-    })),
-  ).toEqual(expectedVerificationEvents);
+    }>;
+
+  for (let verification = 0; verification < expectedSuccessfulVerifications; verification += 1) {
+    await expect
+      .poll(async () => {
+        const fixtureEvents = await getEvents();
+        return fixtureEvents.verificationEvents.filter(
+          (event) => event.result === "pending_verified_user",
+        ).length;
+      }, { timeout: 20_000 })
+      .toBeGreaterThanOrEqual(verification + 1);
+
+    const beforeRelease = await getEvents();
+    const pendingEvent = beforeRelease.verificationEvents.filter(
+      (event) => event.result === "pending_verified_user",
+    )[verification];
+    expect(pendingEvent?.gateId).toEqual(expect.any(String));
+    await expect
+      .poll(async () => {
+        try {
+          await flushAuthDomObserver(page);
+          return true;
+        } catch {
+          return false;
+        }
+      })
+      .toBe(true);
+    expect(history.slice(historyStart).some((state) => state.authenticatedSurface)).toBe(false);
+    expect(history.slice(historyStart).some((state) => state.privateContent)).toBe(false);
+    await releaseVerificationGate(request, pendingEvent.gateId!);
+  }
 
   await expect
-    .poll(() => history.slice(historyStart).some((state) => state.authenticatedSurface))
+    .poll(() => history.slice(historyStart).some((state) => state.authenticatedSurface), {
+      timeout: 20_000,
+    })
     .toBe(true);
-  const firstAuthenticatedRender = history
-    .slice(historyStart)
-    .find((state) => state.authenticatedSurface);
-  const verifiedAtMs = fixtureEvents.verificationEvents[1]?.atMs;
-  expect(verifiedAtMs).toEqual(expect.any(Number));
-  expect(firstAuthenticatedRender?.observedAtMs).toBeGreaterThanOrEqual(verifiedAtMs);
+  const fixtureEvents = await getEvents();
+  expect(fixtureEvents.attempts).toEqual({ delayed: expectedAttempts });
+  expect(fixtureEvents.verificationEvents[0]).toMatchObject({
+    mode: "delayed",
+    nextAttempt: 1,
+    result: "retryable_503",
+  });
+  const gatedEvents = fixtureEvents.verificationEvents.slice(1);
+  const pendingEvents = gatedEvents.filter((event) => event.result === "pending_verified_user");
+  const verifiedEvents = gatedEvents.filter((event) => event.result === "verified_user");
+  const expectedSuccessfulAttempts = Array.from(
+    { length: expectedSuccessfulVerifications },
+    (_, index) => index + 2,
+  );
+  expect(pendingEvents.map((event) => event.nextAttempt)).toEqual(expectedSuccessfulAttempts);
+  expect(verifiedEvents.map((event) => event.nextAttempt)).toEqual(expectedSuccessfulAttempts);
+  for (const pendingEvent of pendingEvents) {
+    const pendingIndex = gatedEvents.indexOf(pendingEvent);
+    const verifiedIndex = gatedEvents.findIndex(
+      (event) => event.gateId === pendingEvent.gateId && event.result === "verified_user",
+    );
+    expect(verifiedIndex).toBeGreaterThan(pendingIndex);
+  }
+}
+
+async function expectNoHorizontalOverflow(page: Page) {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow).toBeLessThanOrEqual(1);
 }
 
 function isExpectedNextPrefetchAbort(request: Request) {
@@ -333,10 +407,7 @@ async function expectNoBrowserFailures(
   page: Page,
   failures: ReturnType<typeof watchPage>,
 ) {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(1);
+  await expectNoHorizontalOverflow(page);
   expect({
     badResponses: failures.badResponses,
     consoleErrors: failures.consoleErrors,
@@ -371,10 +442,19 @@ for (const viewport of viewports) {
     const profileLatenciesMs: number[] = [];
 
     for (let iteration = 0; iteration < 10; iteration += 1) {
+      await page.goto("about:blank");
       await resetFixture(request);
+      await enableVerificationGate(request);
       const profileHistoryStart = authHistory.length;
       const profileStartedAt = Date.now();
-      const profileResponse = await page.goto(`/profile?auth_iteration=${iteration}`);
+      const profileNavigation = page.goto(`/profile?auth_iteration=${iteration}`);
+      await expectCausallyGatedDelayedRecovery(
+        page,
+        request,
+        authHistory,
+        profileHistoryStart,
+      );
+      const profileResponse = await profileNavigation;
       profileLatenciesMs.push(Date.now() - profileStartedAt);
       expect(profileResponse?.ok()).toBeTruthy();
       await expect(page.getByRole("heading", { name: "Your profile" })).toBeVisible({
@@ -382,47 +462,66 @@ for (const viewport of viewports) {
       });
       await expect(page.getByText("Signed in", { exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Profile unavailable" })).toHaveCount(0);
-      await expectOrderedDelayedRecoveryBeforeAuthenticatedRender(
-        request,
-        authHistory,
-        profileHistoryStart,
-      );
+      await expectNoHorizontalOverflow(page);
       expectNoSignedOutFlash(authHistory);
 
+      await page.goto("about:blank");
       await resetFixture(request);
+      await enableVerificationGate(request);
       const composerHistoryStart = authHistory.length;
-      const composerResponse = await page.goto(
+      const composerNavigation = page.goto(
         `/trades/new?example=seed-victoria&auth_iteration=${iteration}`,
       );
+      await expectCausallyGatedDelayedRecovery(
+        page,
+        request,
+        authHistory,
+        composerHistoryStart,
+      );
+      const composerResponse = await composerNavigation;
       expect(composerResponse?.ok()).toBeTruthy();
       await expect(
         page.getByRole("heading", { name: "What priorities are being exchanged?" }),
       ).toBeVisible();
       await expect(page.getByRole("heading", { name: "Sign in to build a trade." })).toHaveCount(0);
-      await expectOrderedDelayedRecoveryBeforeAuthenticatedRender(
-        request,
-        authHistory,
-        composerHistoryStart,
-      );
+      await expectNoHorizontalOverflow(page);
       expectNoSignedOutFlash(authHistory);
 
+      await page.goto("about:blank");
       await resetFixture(request);
+      await enableVerificationGate(request);
       const dashboardHistoryStart = authHistory.length;
-      const dashboardResponse = await page.goto(`/dashboard?auth_iteration=${iteration}`);
-      expect(dashboardResponse?.ok()).toBeTruthy();
-      await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
-      await expectOrderedDelayedRecoveryBeforeAuthenticatedRender(
+      const dashboardNavigation = page.goto(`/dashboard?auth_iteration=${iteration}`);
+      await expectCausallyGatedDelayedRecovery(
+        page,
         request,
         authHistory,
         dashboardHistoryStart,
       );
+      const dashboardResponse = await dashboardNavigation;
+      expect(dashboardResponse?.ok()).toBeTruthy();
+      await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
+      await expectNoHorizontalOverflow(page);
       expectNoSignedOutFlash(authHistory);
 
+      await page.goto("about:blank");
       await resetFixture(request);
+      await enableVerificationGate(request);
       const feedHistoryStart = authHistory.length;
-      const feedResponse = await page.goto(`/feed?auth_iteration=${iteration}`, {
+      const feedNavigation = page.goto(`/feed?auth_iteration=${iteration}`, {
         waitUntil: "domcontentloaded",
       });
+      await expectCausallyGatedDelayedRecovery(
+        page,
+        request,
+        authHistory,
+        feedHistoryStart,
+        // Feed loads its server-rendered shell and then two distinct private
+        // API resources. The first resolver consumes the single bounded retry;
+        // both later request-scoped resolvers succeed on their first attempt.
+        4,
+      );
+      const feedResponse = await feedNavigation;
       expect(feedResponse?.ok()).toBeTruthy();
       const liveFeed = page.locator('[data-mt-live-now="adaptive"]');
       await expect(liveFeed).toBeVisible({ timeout: 20_000 });
@@ -432,15 +531,7 @@ for (const viewport of viewports) {
           name: "Sign in to see a feed based on your moral priorities.",
         }),
       ).toHaveCount(0);
-      await expectOrderedDelayedRecoveryBeforeAuthenticatedRender(
-        request,
-        authHistory,
-        feedHistoryStart,
-        // Feed loads its server-rendered shell and then two distinct private
-        // API resources. The first resolver consumes the single bounded retry;
-        // both later request-scoped resolvers succeed on their first attempt.
-        4,
-      );
+      await expectNoHorizontalOverflow(page);
       expectNoSignedOutFlash(authHistory);
 
       await expectNoBrowserFailures(page, failures);
@@ -458,6 +549,7 @@ for (const viewport of viewports) {
 }
 
 test("normal remote verification does not enter retry backoff", async ({ context, page, request }) => {
+  test.setTimeout(150_000);
   await installPreviewBypass(context);
   await installAuthDomObserver(page);
   await resetFixture(request);
@@ -550,11 +642,14 @@ test("expired and invalid identities fail closed without private content", async
       }
       await expect(page.getByText("Auth Resolution QA", { exact: true })).toHaveCount(0);
       await expect(page.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
+      await flushAuthDomObserver(page);
+      await expect.poll(() => authHistory.length).toBeGreaterThan(0);
       expect(
         authHistory.some(
           (state) => state.privateContent || state.authenticatedSurface || state.signedIn,
         ),
       ).toBe(false);
+      await expectNoHorizontalOverflow(page);
       await expectNoBrowserFailures(page, failures);
       await attachExpectedBrowserAborts(
         `auth-resolution-${mode}-${negativeRoute.type}`,
@@ -565,13 +660,41 @@ test("expired and invalid identities fail closed without private content", async
   }
 });
 
-test("fixture controls reject missing and incorrect credentials", async ({ request }) => {
+test("fixture controls reject credentials and cancel stale verification gates", async ({ request }) => {
   const missing = await request.get(`${MOCK_URL}/__fixture/session?mode=fast`);
   expect(missing.status()).toBe(404);
   const incorrect = await request.get(`${MOCK_URL}/__fixture/session?mode=fast`, {
     headers: { "x-auth-resolution-fixture-control": "incorrect-fixture-secret" },
   });
   expect(incorrect.status()).toBe(404);
+
+  const fixture = await getFixtureSession(request, "delayed");
+  await resetFixture(request);
+  await enableVerificationGate(request);
+  const headers = { authorization: `Bearer ${fixture.accessToken}` };
+  const retryable = await request.get(`${MOCK_URL}/auth/v1/user`, { headers });
+  expect(retryable.status()).toBe(503);
+  const pendingVerification = request
+    .get(`${MOCK_URL}/auth/v1/user`, {
+      headers,
+      timeout: 15_000,
+    })
+    .then(
+      () => false,
+      () => true,
+    );
+  await expect
+    .poll(async () => {
+      const events = (await getFixtureJson(request, "/__fixture/events")) as {
+        verificationEvents: VerificationEvent[];
+      };
+      return events.verificationEvents.some(
+        (event) => event.result === "pending_verified_user",
+      );
+    })
+    .toBe(true);
+  await resetFixture(request);
+  expect(await pendingVerification).toBe(true);
 });
 
 test("cryptographically verified claims/session mismatch fails closed", async ({ request }) => {
