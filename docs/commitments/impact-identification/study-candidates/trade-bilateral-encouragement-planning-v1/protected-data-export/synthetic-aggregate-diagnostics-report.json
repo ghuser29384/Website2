@@ -1,0 +1,57 @@
+{
+  "schemaVersion": "commitments-trade-aggregate-diagnostics-report-v1",
+  "reportKey": "synthetic:trade-protected-export-aggregate-v1",
+  "subjectMode": "synthetic_only",
+  "containsRealData": false,
+  "containsPseudonyms": false,
+  "boundContractPayloadHash": "sha256:00200a595e80c8902235ada38663e169938d8fd10a3d9bab6b29c43b37d4453b",
+  "boundRequestPayloadHash": "sha256:48eeb0d4f6369cba39fe08af5336fe638b78504687a596f465f8912809f14118",
+  "dataWindowStartDate": "2026-01-01",
+  "dataWindowEndDate": "2026-01-31",
+  "privacyReleaseChecks": {
+    "minimumEligibleNodeCountMet": true,
+    "minimumEligibleDyadCountMet": true,
+    "allPublishedCellsMeetMinimum": true,
+    "containsComponentMembership": false,
+    "containsExactTimestamps": false,
+    "containsPseudonyms": false,
+    "aggregateReleaseEligible": true
+  },
+  "graphSummary": {
+    "nodeCount": 28800,
+    "eligibleDirectedDyadCount": 25600,
+    "weaklyConnectedComponentCount": 3200,
+    "meanEligibleDyadsPerCluster": 8,
+    "clusterSizeCoefficientOfVariation": 0.395284707521,
+    "maximumEligibleDyadsPerCluster": 12,
+    "largestClusterDyadShare": 0.00046875
+  },
+  "componentCountByStratum": [
+    {
+      "stratumKey": "synthetic:small-low-action",
+      "componentCount": 800,
+      "suppressed": false
+    },
+    {
+      "stratumKey": "synthetic:medium-low-funding",
+      "componentCount": 800,
+      "suppressed": false
+    },
+    {
+      "stratumKey": "synthetic:medium-medium-mixed",
+      "componentCount": 800,
+      "suppressed": false
+    },
+    {
+      "stratumKey": "synthetic:large-high-mixed",
+      "componentCount": 800,
+      "suppressed": false
+    }
+  ],
+  "structuralDetermination": "compatible_with_frozen_precision_envelope",
+  "realGraphDiagnosticsStatus": "required_not_completed",
+  "executionDecision": "no_access_no_export_no_launch",
+  "assignmentGenerated": false,
+  "realUserAssignmentAllowed": false,
+  "reportPayloadHash": "sha256:a3a3f6dd3f900df62b25ee259bc9c3010b454ca3ab7d5d503eee81bad6cd0ba3"
+}
