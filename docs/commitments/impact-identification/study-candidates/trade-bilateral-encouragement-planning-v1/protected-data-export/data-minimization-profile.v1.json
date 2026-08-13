@@ -1,0 +1,75 @@
+{
+  "schemaVersion": "commitments-trade-data-minimization-profile-v1",
+  "status": "design_only_no_real_access",
+  "purpose": "reciprocal_trade_eligible_graph_feasibility",
+  "sourceBoundaryTransientFields": [
+    "internalParticipantId",
+    "internalDirectedDyadId",
+    "sourceParticipantId",
+    "targetParticipantId",
+    "eligibilityDecision",
+    "opportunityTypeBand",
+    "baselineCompletionRiskBand"
+  ],
+  "protectedSnapshotAllowedFields": {
+    "node": [
+      "nodeKey"
+    ],
+    "dyad": [
+      "dyadKey",
+      "sourceNodeKey",
+      "targetNodeKey",
+      "opportunityTypeBand",
+      "baselineCompletionRiskBand"
+    ],
+    "metadata": [
+      "schemaVersion",
+      "exportKey",
+      "studyInstancePayloadHash",
+      "eligibilityRuleHash",
+      "sourceQueryHash",
+      "dataWindowStartDate",
+      "dataWindowEndDate",
+      "pseudonymizationKeyVersion"
+    ]
+  },
+  "aggregateReportAllowedFields": {
+    "global": [
+      "nodeCount",
+      "eligibleDirectedDyadCount",
+      "weaklyConnectedComponentCount",
+      "meanEligibleDyadsPerCluster",
+      "clusterSizeCoefficientOfVariation",
+      "maximumEligibleDyadsPerCluster",
+      "largestClusterDyadShare",
+      "structuralDetermination"
+    ],
+    "stratum": [
+      "stratumKey",
+      "componentCount",
+      "suppressed"
+    ]
+  },
+  "forbiddenDataClasses": [
+    "direct_or_quasi_identifiers",
+    "names_handles_contacts_or_addresses",
+    "moral_cause_or_ideology_labels",
+    "religion_politics_health_sexuality_or_other_sensitive_traits",
+    "free_text_or_messages",
+    "exact_wishes_requested_actions_or_offer_text",
+    "evidence_artifacts_receipts_or_external_urls",
+    "payments_or_transactions",
+    "geolocation_ip_device_or_session_data",
+    "credibility_scores_or_fraud_signals",
+    "raw_baseline_statements_or_counterfactual_evidence",
+    "exact_event_timestamps",
+    "component_membership_or_row_level_topology_in_aggregate_output"
+  ],
+  "coarseningRules": {
+    "baselineCompletionRiskBand": "low_medium_high_only",
+    "opportunityTypeBand": "four_resource_structure_bands_only",
+    "dataWindow": "calendar_dates_only_no_exact_times",
+    "publishedStrata": "exact_counts_only_when_cell_size_at_least_twenty_else_suppressed"
+  },
+  "profilePayloadHash": "sha256:014152e24f0772f91ee143cce1b214a75bd8cb843d6bf2fe301354d871795e4d"
+}
