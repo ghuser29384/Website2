@@ -1,0 +1,46 @@
+name: Verify Home Now truth boundary
+
+on:
+  push:
+    branches:
+      - fix/home-now-truth-boundary-20260813
+    paths:
+      - public/moral-trade-live-local-time.js
+      - src/live-now-truth-boundary.test.ts
+      - tests/returning-homepage.spec.ts
+      - tests/returning-homepage-truth-boundary.spec.ts
+      - .github/workflows/verify-home-now-truth-boundary.yml
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Source and lint gates
+        run: |
+          node --check public/moral-trade-live-local-time.js
+          node --import tsx --test src/live-now-truth-boundary.test.ts src/lib/live-discover-navigation.test.ts src/proxy.test.ts
+          npx eslint public/moral-trade-live-local-time.js src/live-now-truth-boundary.test.ts tests/returning-homepage.spec.ts tests/returning-homepage-truth-boundary.spec.ts
+      - name: Rendered desktop and mobile gates
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test tests/returning-homepage.spec.ts tests/returning-homepage-truth-boundary.spec.ts
+      - name: Production build
+        run: npm run build
+      - name: Upload rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: home-now-truth-boundary-rendered-evidence
+          path: test-results/**/*.png
+          if-no-files-found: warn
+          retention-days: 14
