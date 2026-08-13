@@ -58,7 +58,7 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1);
 }
 
-test("labels desktop recommendations as review-only rather than agreements", async ({ page }) => {
+test("labels desktop recommendations as review-only rather than agreements", async ({ page }, testInfo) => {
   await openReadyHome(page, 1487, 1058);
 
   await expect(page.locator("#mt-live-document-heading")).toHaveText(
@@ -73,12 +73,14 @@ test("labels desktop recommendations as review-only rather than agreements", asy
     "/offers/1c6b0e57-bfed-3f29-c51f-6f8c23d1960b",
   );
   await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("home-now-review-boundary-desktop.png") });
 });
 
-test("keeps the review-only boundary readable without mobile overflow", async ({ page }) => {
+test("keeps the review-only boundary readable without mobile overflow", async ({ page }, testInfo) => {
   await openReadyHome(page, 390, 844);
 
   await expect(page.getByRole("note", { name: "Recommendation status" })).toBeVisible();
   await expect(page.locator("[data-mt-live-now-recommendation]")).toHaveCount(1);
   await expectNoHorizontalOverflow(page);
+  await page.screenshot({ path: testInfo.outputPath("home-now-review-boundary-mobile.png") });
 });
