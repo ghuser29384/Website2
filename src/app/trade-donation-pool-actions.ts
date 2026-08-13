@@ -25,7 +25,6 @@ import {
 import {
   getTradeDonationProviderConfig,
   loadTradeDonationAgreementContext,
-  payerUserIdForRole,
   rpcRow,
 } from "@/lib/trade-donation";
 
@@ -117,8 +116,8 @@ export async function startTradeDonationPoolFundingAction(formData: FormData) {
     );
   }
   const agreement = context.agreement as Record<string, unknown>;
-  const payerUserId = payerUserIdForRole(agreement, context.term.payer_role);
-  if (payerUserId !== viewer.authUser.id) {
+  const payerUserId = context.payerUserId;
+  if (!payerUserId || payerUserId !== viewer.authUser.id) {
     redirectWithMessage(returnTo, "error", "Only the designated payer can fund this obligation.");
   }
   if (
