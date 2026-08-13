@@ -1,0 +1,70 @@
+name: Pooled settlement payer fix validation 20260813
+
+on:
+  push:
+    branches:
+      - qa/pooled-settlement-payer-fix-current-main-20260813
+    paths:
+      - .github/workflows/pooled-settlement-payer-fix-validation-20260813.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pooled-settlement-payer-fix-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_CANDIDATE_SHA: d055f785b4470f97db3ce2e6e705078588a2dfa2
+      WORKFLOW_PATH: .github/workflows/pooled-settlement-payer-fix-validation-20260813.yml
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out the exact validation revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Verify exact candidate and workflow-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE_SHA" HEAD)" = "$WORKFLOW_PATH"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run payment tests
+        run: npm run test:payments
+
+      - name: Run conditional-payment tests
+        run: npm run test:conditional-payments
+
+      - name: Run repository tests
+        run: npm test
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint -- --quiet
+
+      - name: Build the production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
