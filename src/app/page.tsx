@@ -48,7 +48,10 @@ function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>)
 
 async function getOnboardingStatus(profileId: string): Promise<AccountActivationStatus> {
   const supabase = await createClient();
-  const { data, error } = await supabase
+  // This table predates the generated database type snapshot used by createClient.
+  // Keep the compatibility cast local until those generated types are refreshed.
+  const typedSupabase = supabase as any;
+  const { data, error } = await typedSupabase
     .from("cohort_onboarding_profiles")
     .select("status")
     .eq("profile_id", profileId)
