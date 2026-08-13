@@ -154,7 +154,7 @@ jobs:
           PY
           printf 'verified=true\n' >> "$GITHUB_OUTPUT"
 
-      - name: Compile and apply or verify the immutable migration
+      - name: Apply absent or verify recorded immutable migration
         shell: bash
         run: |
           set -euo pipefail

@@ -50,6 +50,7 @@ jobs:
       EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      PGSSLMODE: require
       BASE_MIGRATION: supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
       SPLIT_MIGRATION: supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql
       LIFECYCLE_MIGRATION: supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql
@@ -78,13 +79,17 @@ jobs:
           parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
           expected_ref = os.environ["EXPECTED_QA_REF"]
           ssl_modes = parse_qs(parsed.query).get("sslmode")
+          tls_required = (
+              ssl_modes == ["require"]
+              or (not ssl_modes and os.environ.get("PGSSLMODE") == "require")
+          )
           valid = (
               parsed.scheme in {"postgres", "postgresql"}
               and parsed.username == f"postgres.{expected_ref}"
               and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
               and parsed.port == 5432
               and parsed.path == "/postgres"
-              and ssl_modes == ["require"]
+              and tls_required
               and bool(parsed.password)
           )
           if not valid:
@@ -153,17 +158,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --command '\conninfo' \
+            | tee donation-upgrade-partial-qa-conninfo.txt
+          grep -Fq 'SSL connection' donation-upgrade-partial-qa-conninfo.txt
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
             --set ON_ERROR_STOP=1 <<'SQL' | tee donation-upgrade-partial-qa-session.txt
           select jsonb_build_object(
             'database', current_database(),
             'user', current_user,
-            'ssl', coalesce(
-              (select connection.ssl
-               from pg_catalog.pg_stat_ssl connection
-               where connection.pid = pg_backend_pid()),
-              false
-            ),
             'serverVersion', current_setting('server_version')
           );
           SQL
@@ -183,7 +185,6 @@ jobs:
           expected = {
               "database": os.environ["EXPECTED_QA_DATABASE"],
               "user": os.environ["EXPECTED_QA_DATABASE_USER"],
-              "ssl": True,
           }
           actual = {key: session.get(key) for key in expected}
           if actual != expected:
@@ -1320,6 +1321,7 @@ jobs:
           path: |
             donation-upgrade-partial-qa-source.txt
             donation-upgrade-partial-qa-sha256.txt
+            donation-upgrade-partial-qa-conninfo.txt
             donation-upgrade-partial-qa-session.txt
             donation-upgrade-partial-advisors-help.txt
             donation-upgrade-partial-advisors-before.json
