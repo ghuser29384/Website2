@@ -1,0 +1,68 @@
+{
+  "schemaVersion": "commitments-trade-protected-export-request-v1",
+  "requestKey": "synthetic:trade-protected-export-design-v1",
+  "subjectMode": "synthetic_only",
+  "containsRealData": false,
+  "purpose": "design_protected_real_eligible_graph_diagnostics",
+  "boundContractPayloadHash": "sha256:00200a595e80c8902235ada38663e169938d8fd10a3d9bab6b29c43b37d4453b",
+  "boundStudyInstancePayloadHash": "sha256:1e31b1db59899fbf07fbf8b6219c8699f0c6b0ddbeb6e8717f989487660aaba2",
+  "boundPrecisionReportPayloadHash": "sha256:3ff2613f93d166e5e06a5bf8cfcaf029cd49d4e56690e345f676a51f982f6b4f",
+  "boundGraphFeasibilityContractPayloadHash": "sha256:6c6879a80062a6e923714bdf3e7e79105de8049a3347088a6f4b77507b8e6c95",
+  "requestedSourceEnvironment": "synthetic_fixture",
+  "requestedFields": {
+    "node": [
+      "nodeKey"
+    ],
+    "dyad": [
+      "dyadKey",
+      "sourceNodeKey",
+      "targetNodeKey",
+      "opportunityTypeBand",
+      "baselineCompletionRiskBand"
+    ],
+    "metadata": [
+      "schemaVersion",
+      "exportKey",
+      "studyInstancePayloadHash",
+      "eligibilityRuleHash",
+      "sourceQueryHash",
+      "dataWindowStartDate",
+      "dataWindowEndDate",
+      "pseudonymizationKeyVersion"
+    ]
+  },
+  "eligibilityRuleHash": "sha256:dbe4052bcdf48baffbc2f0b8e41e002578b330c616700aadba5d8c3409b7935a",
+  "sourceQueryHash": "sha256:bf1010d8d2385b04906291c98db8854c0835692faf3efd4ff1c72a4c89b18a2c",
+  "dataWindowStartDate": "2026-01-01",
+  "dataWindowEndDate": "2026-01-31",
+  "approvals": {
+    "privacy": "not_requested",
+    "ethics": "not_requested",
+    "security": "not_requested",
+    "dataSteward": "not_requested",
+    "productOwner": "not_requested"
+  },
+  "keyCustody": {
+    "scheme": "hmac_sha256_hkdf_per_export",
+    "minimumRootKeyBits": 256,
+    "perExportKey": true,
+    "domainSeparated": true,
+    "crossExportLinkability": false,
+    "keyMaterialPresent": false,
+    "reversibleMappingPresent": false
+  },
+  "retention": {
+    "rawQueryResultMaximumHours": 0,
+    "pseudonymizedSnapshotMaximumHours": 0,
+    "aggregateReportMaximumDays": 30,
+    "automaticDeletion": true,
+    "deletionAttestation": true
+  },
+  "authorization": {
+    "realDataAccessAuthorized": false,
+    "exportExecutionAuthorized": false,
+    "studyExecutionAuthorized": false,
+    "assignmentGenerationAuthorized": false
+  },
+  "requestPayloadHash": "sha256:48eeb0d4f6369cba39fe08af5336fe638b78504687a596f465f8912809f14118"
+}
