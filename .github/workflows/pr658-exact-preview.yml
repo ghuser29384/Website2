@@ -1,0 +1,230 @@
+name: Temporary PR 658 exact protected Preview
+
+on:
+  push:
+    branches:
+      - ops/pr658-cofund-adjudication-20260813
+    paths:
+      - .github/workflows/pr658-exact-preview.yml
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+
+concurrency:
+  group: pr658-exact-protected-preview
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/pr658-cofund-adjudication-20260813
+  CONTROLLER_WORKFLOW: .github/workflows/pr658-exact-preview.yml
+  CONTROLLER_SCRIPT: scripts/pr658-hosted-preview-qa.mjs
+  MAIN_SHA: ec6f1ecc12df5db74e3e2f8acb87c3f04aedae5b
+  CANDIDATE_BRANCH: fix/home-now-truth-boundary-20260813
+  CANDIDATE_SHA: ef436446096fa680813a2115710fbba46dfdf767
+  PRODUCT_PR: '658'
+  EVIDENCE_DIR: /tmp/pr658-exact-protected-preview
+  STATUS_CONTEXT: QA / PR 658 exact protected Preview
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  EXPECTED_PRODUCTION_ID: dpl_AdaLHzerFrkKwKjVPXoqL2DTEQbo
+  EXPECTED_PRODUCTION_SHA: ec6f1ecc12df5db74e3e2f8acb87c3f04aedae5b
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - name: Initialize evidence
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          printf '%s\n' "$MAIN_SHA" > "$EVIDENCE_DIR/main-sha.txt"
+          printf '%s\n' "$CANDIDATE_SHA" > "$EVIDENCE_DIR/candidate-sha.txt"
+
+      - name: Mark exact Preview review pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$CANDIDATE_SHA" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description='Building an exact protected Preview and exercising Home truth boundaries' \
+            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
+
+      - name: Check out exact temporary controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Guard controller, PR, exact base, and product scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = "refs/heads/$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^^)" = "$MAIN_SHA"
+          git diff --name-only "$MAIN_SHA" HEAD | tee "$EVIDENCE_DIR/controller-files.txt"
+          cat > "$EVIDENCE_DIR/expected-controller-files.txt" <<EOF
+          $CONTROLLER_WORKFLOW
+          $CONTROLLER_SCRIPT
+          EOF
+          diff -u "$EVIDENCE_DIR/expected-controller-files.txt" "$EVIDENCE_DIR/controller-files.txt"
+          cp "$CONTROLLER_SCRIPT" /tmp/pr658-hosted-preview-qa.mjs
+
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          remote_candidate="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_main" = "$MAIN_SHA"
+          test "$remote_candidate" = "$CANDIDATE_SHA"
+
+          product_pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PRODUCT_PR")"
+          test "$(jq -r .state <<<"$product_pr")" = 'open'
+          test "$(jq -r .draft <<<"$product_pr")" = 'true'
+          test "$(jq -r .head.ref <<<"$product_pr")" = "$CANDIDATE_BRANCH"
+          test "$(jq -r .head.sha <<<"$product_pr")" = "$CANDIDATE_SHA"
+          test "$(jq -r .base.ref <<<"$product_pr")" = 'main'
+          test "$(jq -r .base.sha <<<"$product_pr")" = "$MAIN_SHA"
+          printf '%s\n' "$product_pr" > "$EVIDENCE_DIR/product-pr.json"
+
+          git fetch origin "$CANDIDATE_BRANCH"
+          git merge-base --is-ancestor "$MAIN_SHA" "$CANDIDATE_SHA"
+          git diff --check "$MAIN_SHA"..."$CANDIDATE_SHA"
+          git diff --name-only "$MAIN_SHA" "$CANDIDATE_SHA" | tee "$EVIDENCE_DIR/changed-files.txt"
+          cat > "$EVIDENCE_DIR/expected-files.txt" <<'EOF'
+          public/moral-trade-live-local-time.js
+          src/live-now-truth-boundary.test.ts
+          tests/returning-homepage-truth-boundary.spec.ts
+          tests/returning-homepage.spec.ts
+          EOF
+          diff -u "$EVIDENCE_DIR/expected-files.txt" "$EVIDENCE_DIR/changed-files.txt"
+          for path in package.json package-lock.json playwright.config.ts playwright.release.config.ts public/moral-trade-live-now.js src/proxy.ts tests/discover-cofund.spec.ts; do
+            test "$(git rev-parse "$MAIN_SHA:$path")" = "$(git rev-parse "$CANDIDATE_SHA:$path")"
+          done
+
+      - name: Check out immutable product candidate
+        run: |
+          set -euo pipefail
+          git checkout -B "$CANDIDATE_BRANCH" "$CANDIDATE_SHA"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run source, lint, build, and local rendered gates
+        run: |
+          set -euo pipefail
+          node --check public/moral-trade-live-local-time.js 2>&1 | tee "$EVIDENCE_DIR/javascript-syntax.log"
+          node --import tsx --test src/live-now-truth-boundary.test.ts src/lib/live-discover-navigation.test.ts src/proxy.test.ts 2>&1 | tee "$EVIDENCE_DIR/source-tests.log"
+          npx eslint public/moral-trade-live-local-time.js src/live-now-truth-boundary.test.ts tests/returning-homepage.spec.ts tests/returning-homepage-truth-boundary.spec.ts 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+          NEXT_PUBLIC_SITE_URL='https://www.moraltrade.org' SITE_URL='https://www.moraltrade.org' VERCEL='1' VERCEL_ENV='preview' npm run build 2>&1 | tee "$EVIDENCE_DIR/next-build.log"
+          npx playwright install --with-deps chromium 2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+          CI='true' PLAYWRIGHT_USE_PRODUCTION_SERVER='1' NEXT_PUBLIC_SITE_URL='http://127.0.0.1:3210' SITE_URL='http://127.0.0.1:3210' npx playwright test tests/returning-homepage.spec.ts tests/returning-homepage-truth-boundary.spec.ts --workers=1 --reporter=line 2>&1 | tee "$EVIDENCE_DIR/local-rendered-home.log"
+          if [[ -d test-results ]]; then cp -a test-results "$EVIDENCE_DIR/local-test-results"; fi
+
+      - name: Guard unchanged production deployment and aliases
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_TOKEN"
+          mkdir -p "$EVIDENCE_DIR/production-before/aliases"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$EXPECTED_PRODUCTION_ID?teamId=$VERCEL_ORG_ID" > "$EVIDENCE_DIR/production-before/deployment.json"
+          jq -e --arg id "$EXPECTED_PRODUCTION_ID" --arg project "$VERCEL_PROJECT_ID" --arg sha "$EXPECTED_PRODUCTION_SHA" '((.id // .uid) == $id) and (.target == "production") and ((.readyState // .state // "") == "READY") and ((.projectId // .project.id // "") == $project) and (.meta.githubCommitSha == $sha)' "$EVIDENCE_DIR/production-before/deployment.json" >/dev/null
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            alias_key="${alias_name//./-}"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v4/aliases/$alias_name?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID" > "$EVIDENCE_DIR/production-before/aliases/$alias_key.json"
+            jq -e --arg alias_name "$alias_name" --arg project "$VERCEL_PROJECT_ID" --arg deployment "$EXPECTED_PRODUCTION_ID" '(.alias == $alias_name) and (.projectId == $project) and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)' "$EVIDENCE_DIR/production-before/aliases/$alias_key.json" >/dev/null
+          done
+
+      - name: Pull Preview environment and build exact prebuilt artifact
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          STATIC_SOURCE_DIR: public
+          STATIC_BUILD_DIR: .vercel/output/static
+          STATIC_EVIDENCE_DIR: ${{ env.EVIDENCE_DIR }}
+          STATIC_CRITICAL_ASSET: moral-trade-live-local-time.js
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull --yes --environment=preview --token="$VERCEL_TOKEN" 2>&1 | tee "$EVIDENCE_DIR/vercel-pull.log"
+          rm -rf .next .vercel/output
+          npx --yes "vercel@$VERCEL_CLI_VERSION" build --token="$VERCEL_TOKEN" 2>&1 | tee "$EVIDENCE_DIR/vercel-build.log"
+          node scripts/vercel-static-artifact-integrity.mjs 2>&1 | tee "$EVIDENCE_DIR/static-artifact-integrity.log"
+
+      - name: Upload exact artifact to Preview only
+        id: deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy --prebuilt --token="$VERCEL_TOKEN")"
+          deployment_url="$(printf '%s\n' "$deployment_url" | tr -d '\r' | tail -n 1)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]
+          deployment_host="${deployment_url#https://}"
+          deployment_host="${deployment_host%/}"
+          printf '%s\n' "$deployment_url" > "$EVIDENCE_DIR/deployment-url.txt"
+          echo "deployment_url=$deployment_url" >> "$GITHUB_OUTPUT"
+          echo "deployment_host=$deployment_host" >> "$GITHUB_OUTPUT"
+
+      - name: Guard exact READY Preview and unchanged production
+        id: deployment
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DEPLOYMENT_HOST: ${{ steps.deploy.outputs.deployment_host }}
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$DEPLOYMENT_HOST?teamId=$VERCEL_ORG_ID" > "$EVIDENCE_DIR/preview-deployment.json"
+          deployment_id="$(jq -r '.id // .uid // empty' "$EVIDENCE_DIR/preview-deployment.json")"
+          test -n "$deployment_id"
+          jq -e --arg id "$deployment_id" --arg host "$DEPLOYMENT_HOST" --arg project "$VERCEL_PROJECT_ID" --arg sha "$CANDIDATE_SHA" '((.id // .uid) == $id) and (.url == $host) and ((.projectId // .project.id // "") == $project) and ((.readyState // .state // "") == "READY") and ((.target // "preview") != "production") and ((.aliasError // null) == null) and (.meta.githubCommitOrg == "ghuser29384") and (.meta.githubCommitRepo == "Website2") and (.meta.githubCommitSha == $sha)' "$EVIDENCE_DIR/preview-deployment.json" >/dev/null
+          echo "deployment_id=$deployment_id" >> "$GITHUB_OUTPUT"
+
+          mkdir -p "$EVIDENCE_DIR/production-after/aliases"
+          curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v13/deployments/$EXPECTED_PRODUCTION_ID?teamId=$VERCEL_ORG_ID" > "$EVIDENCE_DIR/production-after/deployment.json"
+          jq -e --arg id "$EXPECTED_PRODUCTION_ID" --arg sha "$EXPECTED_PRODUCTION_SHA" '((.id // .uid) == $id) and (.target == "production") and ((.readyState // .state // "") == "READY") and (.meta.githubCommitSha == $sha)' "$EVIDENCE_DIR/production-after/deployment.json" >/dev/null
+          for alias_name in moraltrade.org www.moraltrade.org; do
+            alias_key="${alias_name//./-}"
+            curl -fsS -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v4/aliases/$alias_name?projectId=$VERCEL_PROJECT_ID&teamId=$VERCEL_ORG_ID" > "$EVIDENCE_DIR/production-after/aliases/$alias_key.json"
+            jq -e --arg alias_name "$alias_name" --arg project "$VERCEL_PROJECT_ID" --arg deployment "$EXPECTED_PRODUCTION_ID" '(.alias == $alias_name) and (.projectId == $project) and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment)' "$EVIDENCE_DIR/production-after/aliases/$alias_key.json" >/dev/null
+          done
+
+      - name: Exercise protected hosted signed-out and ready states
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "$VERCEL_AUTOMATION_BYPASS_SECRET"
+          cp /tmp/pr658-hosted-preview-qa.mjs scripts/.tmp-pr658-hosted-preview-qa.mjs
+          node scripts/.tmp-pr658-hosted-preview-qa.mjs 2>&1 | tee "$EVIDENCE_DIR/hosted-browser-qa.log"
+          rm scripts/.tmp-pr658-hosted-preview-qa.mjs
+
+      - name: Mark success and comment on PR 658
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$CANDIDATE_SHA" -f state=success -f context="$STATUS_CONTEXT" -f description='Exact protected Preview passed signed-out and ready desktop/mobile review' -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
+          gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --body "Exact protected Preview review passed for \`$CANDIDATE_SHA\`. Deployment: $DEPLOYMENT_URL (\`$DEPLOYMENT_ID\`). Candidate-specific source, lint, production build, local desktop/mobile Home tests, static-artifact integrity, exact deployment metadata, hosted signed-out behavior, hosted mocked-ready behavior, the Why-this-match interaction, console/page/HTTP health, and horizontal-overflow checks passed. Production remains \`$EXPECTED_PRODUCTION_ID\` at \`$EXPECTED_PRODUCTION_SHA\`; both canonical aliases were re-read after deployment and remain attached to that production deployment. Evidence: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. PR #$PRODUCT_PR remains draft and unmerged."
+
+      - name: Upload immutable exact Preview evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr658-exact-protected-preview-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: warn
+          retention-days: 30
