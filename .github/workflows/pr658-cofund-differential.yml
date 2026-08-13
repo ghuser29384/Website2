@@ -1,0 +1,233 @@
+name: Temporary PR 658 Co-Fund differential
+
+on:
+  push:
+    branches:
+      - ops/pr658-cofund-differential-20260813
+    paths:
+      - .github/workflows/pr658-cofund-differential.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr658-cofund-differential
+  cancel-in-progress: false
+
+env:
+  BASE_SHA: ec6f1ecc12df5db74e3e2f8acb87c3f04aedae5b
+  CANDIDATE_SHA: ef436446096fa680813a2115710fbba46dfdf767
+  CANDIDATE_BRANCH: fix/home-now-truth-boundary-20260813
+  EVIDENCE_DIR: ${{ github.workspace }}/pr658-cofund-differential-evidence
+  GREP_PATTERN: Co-Fund control available|full Co-Fund sheet
+  REPEAT_EACH: '5'
+
+jobs:
+  differential:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Check out the temporary controller with full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard exact base, exact candidate, and disjoint product scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/ops/pr658-cofund-differential-20260813'
+          test "$(git rev-parse HEAD^)" = "$BASE_SHA"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = '.github/workflows/pr658-cofund-differential.yml'
+
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          remote_candidate="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_main" = "$BASE_SHA"
+          test "$remote_candidate" = "$CANDIDATE_SHA"
+
+          git cat-file -e "$BASE_SHA^{commit}"
+          git cat-file -e "$CANDIDATE_SHA^{commit}"
+          git merge-base --is-ancestor "$BASE_SHA" "$CANDIDATE_SHA"
+
+          git diff --name-only "$BASE_SHA" "$CANDIDATE_SHA" | tee /tmp/pr658-files.txt
+          cat > /tmp/pr658-expected-files.txt <<'EOF'
+          public/moral-trade-live-local-time.js
+          src/live-now-truth-boundary.test.ts
+          tests/returning-homepage-truth-boundary.spec.ts
+          tests/returning-homepage.spec.ts
+          EOF
+          diff -u /tmp/pr658-expected-files.txt /tmp/pr658-files.txt
+
+          test "$(git rev-parse "$BASE_SHA:tests/discover-cofund.spec.ts")" = \
+            "$(git rev-parse "$CANDIDATE_SHA:tests/discover-cofund.spec.ts")"
+          test "$(git rev-parse "$BASE_SHA:playwright.release.config.ts")" = \
+            "$(git rev-parse "$CANDIDATE_SHA:playwright.release.config.ts")"
+          test "$(git rev-parse "$BASE_SHA:package-lock.json")" = \
+            "$(git rev-parse "$CANDIDATE_SHA:package-lock.json")"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Run the two exact failures repeatedly on candidate and base
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+
+          run_side() {
+            local label="$1"
+            local sha="$2"
+            local worktree="$RUNNER_TEMP/pr658-$label"
+
+            git worktree add --detach "$worktree" "$sha"
+            pushd "$worktree" >/dev/null
+
+            npm ci 2>&1 | tee "$EVIDENCE_DIR/$label-npm-ci.log"
+            if [[ "$label" == 'candidate' ]]; then
+              npx playwright install --with-deps chromium \
+                2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+            fi
+
+            NEXT_PUBLIC_SITE_URL='https://www.moraltrade.org' \
+            SITE_URL='https://www.moraltrade.org' \
+            VERCEL='1' \
+            VERCEL_ENV='preview' \
+              npm run build 2>&1 | tee "$EVIDENCE_DIR/$label-build.log"
+
+            set +e
+            CI='true' \
+            NEXT_PUBLIC_SITE_URL='http://127.0.0.1:3210' \
+            SITE_URL='http://127.0.0.1:3210' \
+            PLAYWRIGHT_HTML_OPEN='never' \
+              npx playwright test tests/discover-cofund.spec.ts \
+                --config=playwright.release.config.ts \
+                --grep "$GREP_PATTERN" \
+                --repeat-each="$REPEAT_EACH" \
+                --workers=1 \
+                --reporter=json \
+                > "$EVIDENCE_DIR/$label-report.json" \
+                2> "$EVIDENCE_DIR/$label-stderr.log"
+            status=$?
+            set -e
+
+            printf '%s\n' "$status" > "$EVIDENCE_DIR/$label-exit-status.txt"
+            if [[ -d test-results ]]; then
+              cp -a test-results "$EVIDENCE_DIR/$label-test-results"
+            fi
+
+            popd >/dev/null
+            fuser -k 3210/tcp || true
+          }
+
+          run_side candidate "$CANDIDATE_SHA"
+          run_side base "$BASE_SHA"
+
+      - name: Classify regression versus exact-base failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from collections import defaultdict
+          from pathlib import Path
+
+          evidence = Path(os.environ["EVIDENCE_DIR"])
+          repeat_each = int(os.environ["REPEAT_EACH"])
+          expected_titles = {
+              "keeps Co-Fund control available and exposes exact $10 + $10 proposal terms",
+              "renders the full Co-Fund sheet on a narrow mobile viewport",
+          }
+
+          def collect(label: str):
+              report = json.loads((evidence / f"{label}-report.json").read_text())
+              counts = defaultdict(lambda: defaultdict(int))
+
+              def visit(value):
+                  if isinstance(value, dict):
+                      title = value.get("title")
+                      results = value.get("results")
+                      if isinstance(title, str) and isinstance(results, list):
+                          for result in results:
+                              if isinstance(result, dict):
+                                  counts[title][str(result.get("status", "unknown"))] += 1
+                      for child in value.values():
+                          visit(child)
+                  elif isinstance(value, list):
+                      for child in value:
+                          visit(child)
+
+              visit(report.get("suites", []))
+              selected = {title: dict(counts.get(title, {})) for title in sorted(expected_titles)}
+              return report.get("stats", {}), selected
+
+          summary = {"repeatEach": repeat_each, "expectedTitles": sorted(expected_titles), "sides": {}}
+          for label in ("base", "candidate"):
+              stats, counts = collect(label)
+              summary["sides"][label] = {
+                  "exitStatus": int((evidence / f"{label}-exit-status.txt").read_text().strip()),
+                  "reportStats": stats,
+                  "tests": counts,
+              }
+
+          def totals(side, title):
+              statuses = summary["sides"][side]["tests"][title]
+              skipped = statuses.get("skipped", 0)
+              passed = statuses.get("passed", 0)
+              total = sum(statuses.values())
+              failed = total - passed - skipped
+              return total, passed, failed, skipped
+
+          defects = []
+          base_failed_total = 0
+          candidate_failed_total = 0
+          for title in sorted(expected_titles):
+              base_total, base_passed, base_failed, base_skipped = totals("base", title)
+              candidate_total, candidate_passed, candidate_failed, candidate_skipped = totals("candidate", title)
+              base_failed_total += base_failed
+              candidate_failed_total += candidate_failed
+
+              if base_total != repeat_each:
+                  defects.append(f"base executed {base_total}/{repeat_each} repetitions: {title}")
+              if candidate_total != repeat_each:
+                  defects.append(f"candidate executed {candidate_total}/{repeat_each} repetitions: {title}")
+              if base_skipped or candidate_skipped:
+                  defects.append(f"skipped occurrence detected: {title}")
+              if candidate_failed > base_failed:
+                  defects.append(
+                      f"candidate failed {candidate_failed} times versus base {base_failed}: {title}"
+                  )
+
+          if defects:
+              classification = "candidate-regression-or-invalid-differential"
+          elif base_failed_total == 0 and candidate_failed_total == 0:
+              classification = "transient-release-gate-failure"
+          elif base_failed_total > 0:
+              classification = "pre-existing-exact-base-failure"
+          else:
+              classification = "candidate-regression-or-invalid-differential"
+
+          summary["baseFailedOccurrences"] = base_failed_total
+          summary["candidateFailedOccurrences"] = candidate_failed_total
+          summary["classification"] = classification
+          summary["defects"] = defects
+          (evidence / "differential-summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+          print(json.dumps(summary, indent=2))
+
+          if defects:
+              raise SystemExit("Differential failed closed: " + "; ".join(defects))
+          PY
+
+      - name: Upload immutable differential evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr658-cofund-differential-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
