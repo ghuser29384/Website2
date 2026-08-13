@@ -4,21 +4,36 @@ import { notFound } from "next/navigation";
 
 import {
   confirmAgreementVersionAction,
-  confirmTradeCompletionAction,
   declineProposedAgreementAction,
-  proposeAgreementAmendmentAction,
   requestAgreementExitAction,
   respondAgreementExitAction,
-  reviewTradeEvidenceAction,
-  submitTradeEvidenceAction,
 } from "@/app/core-trade-actions";
+import {
+  createTradeAgreementMilestoneAction,
+  finalizeTradeMilestoneManifestAction,
+  finalizeTradeMilestoneReviewAction,
+  finalizeTradePaymentReviewAction,
+  nominateTradeAppealReviewerAction,
+  nominateTradeMilestoneReviewerAction,
+  nominateTradePaymentAppealReviewerAction,
+  nominateTradePaymentReviewerAction,
+  reportTradeExternalPaymentAction,
+  requestTradePaymentAppealAction,
+  requestTradeMilestoneAppealAction,
+  respondTradeExternalPaymentAction,
+  startTradeMilestoneAmendmentAction,
+  submitNeutralTradeMilestoneReviewAction,
+  submitTradeEvidenceBundleAction,
+} from "@/app/trade-milestone-actions";
 import { TradeAgreementStage } from "@/components/core-trade/trade-agreement-stage";
+import { TradeMilestoneWorkflow } from "@/components/core-trade/trade-milestone-workflow";
 import { PendingSubmitButton } from "@/components/core-trade/pending-submit-button";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 import { requireViewer } from "@/lib/app-data";
-import { getCoreAgreementForUser } from "@/lib/core-trade";
+import { getCoreAgreementForUser, listTradeReviewerCandidates } from "@/lib/core-trade";
 import { getFormMessage } from "@/lib/form-state";
+import { buildTradeMilestoneView } from "@/lib/trade-milestone-view";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -35,7 +50,6 @@ interface TradeAgreementPageProps {
 
 const FINAL_STATES = new Set(["completed", "cancelled", "expired"]);
 const ACTIVE_STATES = new Set(["active", "evidence_due", "disputed"]);
-
 function formatDate(value: string | null | undefined) {
   if (!value) return "Not set";
   return <LocalDateTime value={value} fallback={value} />;
@@ -59,7 +73,10 @@ export default async function TradeAgreementPage({
 }: TradeAgreementPageProps) {
   const [{ agreementId }, resolvedSearchParams] = await Promise.all([params, searchParams]);
   const viewer = await requireViewer(`/trade-agreements/${agreementId}`);
-  const detail = await getCoreAgreementForUser(agreementId, viewer.authUser.id);
+  const [detail, reviewerCandidates] = await Promise.all([
+    getCoreAgreementForUser(agreementId, viewer.authUser.id),
+    listTradeReviewerCandidates(),
+  ]);
   if (!detail) notFound();
 
   const formMessage = getFormMessage(resolvedSearchParams);
@@ -76,30 +93,26 @@ export default async function TradeAgreementPage({
   const responderConfirmed = detail.confirmations.some(
     (confirmation) => String(confirmation.user_id) === String(agreement.responder_id),
   );
-  const viewerCompleted = detail.completionConfirmations.some(
-    (confirmation) => String(confirmation.user_id) === viewer.authUser.id,
-  );
-  const proposerCompleted = detail.completionConfirmations.some(
-    (confirmation) => String(confirmation.user_id) === String(agreement.proposer_id),
-  );
-  const responderCompleted = detail.completionConfirmations.some(
-    (confirmation) => String(confirmation.user_id) === String(agreement.responder_id),
-  );
-  const acceptedEvidenceCount = detail.evidence.filter((item) => item.status === "accepted").length;
+  const acceptedEvidenceCount = detail.milestoneReviews.filter(
+    (review) => review.is_final && review.outcome === "graded",
+  ).length;
   const pendingMutualExit = detail.exitRequests.find(
     (request) => request.request_type === "mutual_cancel" && request.status === "pending",
   );
-  const canConfirm = Boolean(version) && lifecycleStatus === "proposed" && !viewerConfirmed;
-  const canAmend = Boolean(version) && !FINAL_STATES.has(lifecycleStatus);
-  const canSubmitEvidence = ACTIVE_STATES.has(lifecycleStatus);
-  const canConfirmCompletion =
-    ["active", "evidence_due"].includes(lifecycleStatus) &&
-    acceptedEvidenceCount > 0 &&
-    !viewerCompleted;
+  const milestoneManifestReady =
+    !version?.requires_milestone_manifest || Boolean(version?.milestone_manifest_hash);
+  const canConfirm =
+    Boolean(version) &&
+    lifecycleStatus === "proposed" &&
+    milestoneManifestReady &&
+    !viewerConfirmed;
+  const canStartFreshMilestoneVersion =
+    lifecycleStatus === "proposed" &&
+    (Boolean(version?.milestone_manifest_hash) || detail.confirmations.length > 0);
 
   if (!version) {
     return (
-      <div className="page-shell marketplace-app-shell">
+      <div className="page-shell marketplace-app-shell trade-workflow-shell">
         <main id="main-content" tabIndex={-1}>
           <section className="section section-white">
             <div className="status-banner status-banner-error">
@@ -130,9 +143,30 @@ export default async function TradeAgreementPage({
     proposer,
     responder,
   );
+  const participantLabels = new Map([
+    [String(agreement.proposer_id), proposerLabel],
+    [String(agreement.responder_id), responderLabel],
+  ]);
+  const milestoneViews = buildTradeMilestoneView({
+    agreementLifecycleStatus: lifecycleStatus,
+    appeals: detail.milestoneAppeals,
+    bundles: detail.evidenceBundles,
+    bundleItems: detail.evidenceBundleItems,
+    currentViewerId: viewer.authUser.id,
+    externalPaymentReceipts: detail.externalPaymentReceipts,
+    milestones: detail.milestones,
+    participantLabels,
+    paymentAppeals: detail.paymentAppeals,
+    paymentReviewCases: detail.paymentReviewCases,
+    paymentReviewDecisions: detail.paymentReviewDecisions,
+    payouts: detail.milestonePayouts,
+    reviewerCandidates,
+    reviews: detail.milestoneReviews,
+    versionId: String(version.id),
+  });
 
   return (
-    <div className="marketplace-app-shell">
+    <div className="marketplace-app-shell trade-workflow-shell">
       <div id="main-content" tabIndex={-1}>
         <TradeAgreementStage
           acceptedEvidenceCount={acceptedEvidenceCount}
@@ -140,12 +174,12 @@ export default async function TradeAgreementPage({
           agreementId={agreementId}
           canConfirm={canConfirm}
           completedAt={agreement.completed_at ? String(agreement.completed_at) : null}
-          completionConfirmationCount={detail.completionConfirmations.length}
+          completionConfirmationCount={detail.milestonePayouts.filter((payout) => payout.is_final).length}
           confirmAction={confirmAgreementVersionAction}
           confirmationCount={detail.confirmations.length}
           counterpartLabel={counterpart?.display_name ?? "the other participant"}
           declineAction={declineProposedAgreementAction}
-          evidenceCount={detail.evidence.length}
+          evidenceCount={detail.evidenceBundles.length}
           evidenceDueAt={agreement.evidence_due_at ? String(agreement.evidence_due_at) : null}
           exitReason={agreement.exit_reason ? String(agreement.exit_reason) : null}
           formMessage={formMessage}
@@ -242,62 +276,27 @@ export default async function TradeAgreementPage({
             </p>
           </article>
 
-          {canAmend ? (
+          {canStartFreshMilestoneVersion ? (
             <details className="panel subtle-panel">
-              <summary className="panel-summary">Propose a new version</summary>
-              <form action={proposeAgreementAmendmentAction} className="stack-form">
+              <summary className="panel-summary">Replace these proposed milestone terms</summary>
+              <form action={startTradeMilestoneAmendmentAction} className="stack-form">
                 <input name="agreement_id" type="hidden" value={agreementId} />
-                <label className="field">
-                  <span>Offer-maker action</span>
-                  <textarea defaultValue={String(version.proposed_action)} name="proposed_action" required rows={3} />
-                </label>
-                <label className="field">
-                  <span>Counterparty action</span>
-                  <textarea defaultValue={String(version.requested_action)} name="requested_action" required rows={3} />
-                </label>
-                <label className="field">
-                  <span>No-trade baseline</span>
-                  <textarea defaultValue={String(version.no_trade_baseline)} name="no_trade_baseline" required rows={3} />
-                </label>
-                <div className="field-grid">
-                  <label className="field">
-                    <span>Duration</span>
-                    <input defaultValue={String(version.duration)} name="duration" required />
-                  </label>
-                  <label className="field">
-                    <span>Start date</span>
-                    <input defaultValue={version.start_date ? String(version.start_date) : ""} name="start_date" type="date" />
-                  </label>
-                  <label className="field">
-                    <span>Evidence due date</span>
-                    <input
-                      defaultValue={version.evidence_due_date ? String(version.evidence_due_date) : ""}
-                      name="evidence_due_date"
-                      type="date"
-                    />
-                  </label>
-                </div>
-                <label className="field">
-                  <span>Evidence</span>
-                  <textarea defaultValue={String(version.evidence_rule)} name="evidence_rule" required rows={3} />
-                </label>
-                <label className="field">
-                  <span>Commitment limit</span>
-                  <textarea defaultValue={String(version.maximum_burden)} name="maximum_burden" required rows={3} />
-                </label>
-                <label className="field">
-                  <span>Privacy scope</span>
-                  <textarea defaultValue={String(version.privacy_scope)} name="privacy_scope" required rows={3} />
-                </label>
-                <label className="field">
-                  <span>Exit conditions</span>
-                  <textarea defaultValue={String(version.exit_conditions)} name="exit_conditions" required rows={3} />
-                </label>
+                <p className="route-text">
+                  This creates a fresh proposed version with an empty milestone manifest. Earlier
+                  confirmations are not copied. The current version remains in history.
+                </p>
                 <PendingSubmitButton pendingLabel="Creating new version...">
-                  Propose amendment
+                  Start fresh milestone version
                 </PendingSubmitButton>
               </form>
             </details>
+          ) : null}
+
+          {ACTIVE_STATES.has(lifecycleStatus) ? (
+            <p className="panel-note">
+              Active obligations cannot be rewritten in place. End future obligations under the
+              exit rules below, then negotiate a new agreement for materially different terms.
+            </p>
           ) : null}
 
           {detail.versions.length > 1 ? (
@@ -316,233 +315,43 @@ export default async function TradeAgreementPage({
           ) : null}
         </section>
 
-        <section className="section section-subtle" id="evidence" aria-labelledby="evidence-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Evidence</p>
-            <h2 id="evidence-heading">Submit public-safe proof, then let the other participant review it.</h2>
-            <p>
-              Evidence records and certified public-safe source copies are public by default. Remove
-              exact addresses, account numbers, private contact details, and unrelated personal
-              information before submission. The submitter cannot review their own evidence, and a
-              challenge moves the agreement into disputed state.
-            </p>
-          </div>
-
-          <div className="panel">
-            <p className="detail-kicker">Evidence viewer</p>
-            <h3>
-              {detail.evidence.length
-                ? `Review ${detail.evidence.length} submitted artifact${detail.evidence.length === 1 ? "" : "s"} together`
-                : "Your evidence page is ready before the first submission"}
-            </h3>
-            <p className="route-text">
-              {detail.evidence.length
-                ? "Inspect public-safe source copies, exact terms, participant review state, privacy notes, and the full verification history in one place."
-                : "Open the awaiting-evidence state now to inspect the frozen terms, evidence requirements, privacy scope, and trade history."}
-            </p>
-            <Link className="button button-primary" href={`/evidence/${agreementId}`}>
-              {detail.evidence.length ? "Review evidence" : "Open evidence page"}
-            </Link>
-          </div>
-
-          {canSubmitEvidence ? (
-            <form action={submitTradeEvidenceAction} className="panel stack-form" encType="multipart/form-data">
-              <input name="agreement_id" type="hidden" value={agreementId} />
-              <label className="field">
-                <span>Public-safe evidence file (PDF, image, or text; 10 MB maximum)</span>
-                <input
-                  accept="application/pdf,image/png,image/jpeg,image/webp,text/plain"
-                  name="evidence_file"
-                  type="file"
-                />
-              </label>
-              <label className="field">
-                <span>External evidence link</span>
-                <input name="evidence_url" placeholder="https://..." type="url" />
-              </label>
-              <label className="field">
-                <span>Participant attestation</span>
-                <textarea
-                  name="attestation"
-                  placeholder="State exactly what action was completed and over what period"
-                  rows={4}
-                />
-              </label>
-              <label className="radio-row">
-                <input name="public_safe_copy" required type="checkbox" />
-                <span>
-                  I understand this evidence item and its source will be publicly inspectable. I have
-                  removed sensitive identifiers and unrelated personal information.
-                </span>
-              </label>
-              <p className="panel-note">
-                Provide one evidence form above. Public visibility is separate from submitted,
-                accepted, or challenged review status.
-              </p>
-              <PendingSubmitButton pendingLabel="Uploading evidence...">
-                Submit evidence
-              </PendingSubmitButton>
-            </form>
-          ) : (
-            <div className="status-banner">
-              <strong>Evidence submission unavailable in this state</strong>
-              <p>The agreement must be bilaterally active before evidence can be submitted.</p>
-            </div>
-          )}
-
-          <div className="data-grid">
-            {detail.evidence.length ? (
-              detail.evidence.map((item) => {
-                const submittedByViewer = String(item.submitted_by) === viewer.authUser.id;
-                return (
-                  <article className="panel data-card" key={item.id}>
-                    <p className="detail-kicker">{String(item.evidence_type).replaceAll("_", " ")}</p>
-                    <h3>{String(item.status).replaceAll("_", " ")}</h3>
-                    <div className="tag-row">
-                      <span className="source-pill">
-                        Submitted by{" "}
-                        {participantLabel(
-                          String(item.submitted_by),
-                          viewer.authUser.id,
-                          proposer,
-                          responder,
-                        )}
-                      </span>
-                      <span className="source-pill">{formatDate(item.created_at)}</span>
-                      <span className="source-pill">
-                        Challenge until {formatDate(item.challenge_window_ends_at)}
-                      </span>
-                      <span className="source-pill">
-                        Visibility: {String(item.public_visibility ?? "public").replaceAll("_", " ")}
-                      </span>
-                      <span className="source-pill">
-                        Redaction: {String(item.redaction_status ?? "pending_review").replaceAll("_", " ")}
-                      </span>
-                    </div>
-                    {item.attestation ? <p className="route-text">{item.attestation}</p> : null}
-                    {item.signedUrl ? (
-                      <a className="inline-link" href={item.signedUrl}>
-                        Open uploaded evidence
-                      </a>
-                    ) : null}
-                    {item.evidence_url ? (
-                      <a className="inline-link" href={item.evidence_url}>
-                        Open external evidence
-                      </a>
-                    ) : null}
-                    {item.challenge_reason ? (
-                      <div className="status-banner status-banner-error">
-                        <strong>Challenge reason</strong>
-                        <p>{item.challenge_reason}</p>
-                      </div>
-                    ) : null}
-
-                    {!submittedByViewer && item.status === "submitted" ? (
-                      <div className="clean-stack">
-                        <form action={reviewTradeEvidenceAction}>
-                          <input name="agreement_id" type="hidden" value={agreementId} />
-                          <input name="evidence_id" type="hidden" value={item.id} />
-                          <input name="decision" type="hidden" value="accept" />
-                          <PendingSubmitButton
-                            className="button button-primary button-mini"
-                            pendingLabel="Accepting..."
-                          >
-                            Accept evidence
-                          </PendingSubmitButton>
-                        </form>
-                        <form action={reviewTradeEvidenceAction} className="stack-form">
-                          <input name="agreement_id" type="hidden" value={agreementId} />
-                          <input name="evidence_id" type="hidden" value={item.id} />
-                          <input name="decision" type="hidden" value="challenge" />
-                          <label className="field">
-                            <span>Challenge reason</span>
-                            <textarea
-                              name="challenge_reason"
-                              placeholder="Identify the factual, scope, duplicate-proof, or coercion issue"
-                              required
-                              rows={3}
-                            />
-                          </label>
-                          <PendingSubmitButton
-                            className="button button-secondary button-mini"
-                            pendingLabel="Challenging..."
-                          >
-                            Challenge evidence
-                          </PendingSubmitButton>
-                        </form>
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })
-            ) : (
-              <div className="empty-state">
-                <div>
-                  <strong>No evidence submitted.</strong>
-                  <p>Use a file, link, or attestation after bilateral activation.</p>
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        <section className="section section-white" id="completion" aria-labelledby="completion-heading">
-          <div className="section-head section-head-compact">
-            <p className="eyebrow">Completion</p>
-            <h2 id="completion-heading">Both parties close the loop.</h2>
-            <p>
-              At least one evidence item must be accepted. Completion is final only after both
-              participants independently confirm it.
-            </p>
-          </div>
-
-          <div className="data-grid">
-            <article className="panel data-card">
-              <p className="detail-kicker">Completion confirmations</p>
-              <h3>{acceptedEvidenceCount} accepted evidence item{acceptedEvidenceCount === 1 ? "" : "s"}</h3>
-              <div className="mini-list">
-                <span className="source-pill">
-                  {proposer?.display_name ?? "Proposer"}: {proposerCompleted ? "confirmed" : "waiting"}
-                </span>
-                <span className="source-pill">
-                  {responder?.display_name ?? "Responder"}: {responderCompleted ? "confirmed" : "waiting"}
-                </span>
-              </div>
-              {canConfirmCompletion ? (
-                <form action={confirmTradeCompletionAction}>
-                  <input name="agreement_id" type="hidden" value={agreementId} />
-                  <PendingSubmitButton pendingLabel="Confirming completion...">
-                    Confirm completion
-                  </PendingSubmitButton>
-                </form>
-              ) : viewerCompleted && lifecycleStatus !== "completed" ? (
-                <p className="panel-note">Your completion confirmation is recorded.</p>
-              ) : null}
-            </article>
-
-            {lifecycleStatus === "completed" ? (
-              <article className="panel data-card">
-                <p className="detail-kicker">Final Deal Receipt</p>
-                <h3>Completed by both parties</h3>
-                <p className="route-text">
-                  {version.proposed_action} ↔ {version.requested_action}
-                </p>
-                <p className="route-text">
-                  Evidence accepted: {acceptedEvidenceCount}. Completed {formatDate(agreement.completed_at)}.
-                </p>
-                <span className="badge">Final · version {version.version}</span>
-              </article>
-            ) : (
-              <article className="panel data-card">
-                <p className="detail-kicker">Final receipt</p>
-                <h3>Not final yet</h3>
-                <p className="route-text">
-                  The final receipt appears after accepted evidence and two completion confirmations.
-                </p>
-              </article>
-            )}
-          </div>
-        </section>
+        <TradeMilestoneWorkflow
+          actions={{
+            confirmExternalPaymentAction: respondTradeExternalPaymentAction,
+            createMilestoneAction: createTradeAgreementMilestoneAction,
+            finalizeMilestoneManifestAction: finalizeTradeMilestoneManifestAction,
+            finalizeMilestoneReviewAction: finalizeTradeMilestoneReviewAction,
+            finalizePaymentReviewAction: finalizeTradePaymentReviewAction,
+            nominateAppealReviewerAction: nominateTradeAppealReviewerAction,
+            nominatePaymentAppealReviewerAction:
+              nominateTradePaymentAppealReviewerAction,
+            nominatePaymentReviewerAction: nominateTradePaymentReviewerAction,
+            nominateReviewerAction: nominateTradeMilestoneReviewerAction,
+            reportExternalPaymentAction: reportTradeExternalPaymentAction,
+            requestAppealAction: requestTradeMilestoneAppealAction,
+            requestPaymentAppealAction: requestTradePaymentAppealAction,
+            submitEvidenceBundleAction: submitTradeEvidenceBundleAction,
+            submitNeutralReviewAction: submitNeutralTradeMilestoneReviewAction,
+          }}
+          agreementId={agreementId}
+          canCreateMilestones={
+            lifecycleStatus === "proposed" &&
+            detail.confirmations.length === 0 &&
+            !version.milestone_manifest_hash
+          }
+          currentParticipantId={viewer.authUser.id}
+          manifestFinalized={Boolean(version.milestone_manifest_hash)}
+          milestones={milestoneViews}
+          participants={[
+            { id: String(agreement.proposer_id), label: proposerLabel },
+            { id: String(agreement.responder_id), label: responderLabel },
+          ]}
+          reviewerCandidates={reviewerCandidates}
+          returnTo={`/trade-agreements/${agreementId}`}
+          versionConfirmed={viewerConfirmed}
+          versionId={String(version.id)}
+          versionNumber={Number(version.version)}
+        />
 
         {!FINAL_STATES.has(lifecycleStatus) ? (
           <section className="section section-subtle" id="exit" aria-labelledby="exit-heading">

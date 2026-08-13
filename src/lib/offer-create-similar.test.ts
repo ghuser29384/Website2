@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+process.env.MORAL_TRADE_DISABLE_SUPABASE = "true";
+
 import { POST as offerCreateSimilarRoute } from "../app/api/offers/[offerId]/create-similar/route";
 
 import type { OfferRecord } from "./app-data";

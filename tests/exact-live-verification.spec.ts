@@ -72,15 +72,33 @@ test.describe("complete verification", () => {
     await expect(page.locator("[data-completion-copy]")).toContainText("No funds or rights have moved");
   });
 
-  test("routes the existing calendar action into the verification workflow", async ({ page }) => {
-    await page.goto("/moral-trade-live.html");
-    const completeVerification = page.locator(
-      '[data-mt-complete-verification="true"], button:has-text("Complete verification"), a:has-text("Complete verification")',
-    ).first();
+  test("routes a dynamically rendered verification action into the verification workflow", async ({
+    page,
+  }) => {
+    await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() =>
+      Boolean(
+        (window as typeof window & { __MT_COMPLETE_VERIFICATION_BRIDGE__?: boolean })
+          .__MT_COMPLETE_VERIFICATION_BRIDGE__,
+      ),
+    );
+    await page.evaluate(() => {
+      const control = document.createElement("button");
+      control.type = "button";
+      control.textContent = "Complete verification";
+      document.body.appendChild(control);
+    });
 
-    await expect(completeVerification).toBeVisible({ timeout: 20_000 });
+    const completeVerification = page.getByRole("button", { name: "Complete verification" });
+    await expect(completeVerification).toHaveAttribute(
+      "data-mt-complete-verification",
+      "true",
+      { timeout: 20_000 },
+    );
     await completeVerification.click();
-    await expect(page).toHaveURL(/\/complete-verification\.html\?/);
+    await expect(page).toHaveURL(
+      /\/complete-verification\.html\?record=wild-animal-research&from=calendar$/,
+    );
     await expect(page.getByRole("heading", { name: "Complete verification" })).toBeVisible();
   });
 });

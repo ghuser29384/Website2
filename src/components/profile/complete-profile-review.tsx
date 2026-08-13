@@ -19,6 +19,7 @@ import {
   type CompleteProfileMaxCommitment,
   type CompleteProfileMonthlyTime,
 } from "@/lib/complete-profile";
+import { validateProfileUsername } from "@/lib/profile-username";
 import {
   buildInitialProfilePriorityAllocation,
   COMPLETE_PROFILE_SPARK_COUNT,
@@ -42,6 +43,8 @@ const INITIAL_ALLOCATION = buildInitialProfilePriorityAllocation();
 
 interface ReviewState {
   displayName: string;
+  username: string;
+  publicInvitationMentionsEnabled: boolean;
   role: string;
   affiliation: string;
   email: string;
@@ -57,10 +60,14 @@ interface CompleteProfileReviewProps {
   draft: WalkthroughProfileDraft;
   initialAffiliation: string;
   initialDisplayName: string;
+  initialUsername: string;
+  initialPublicInvitationMentionsEnabled: boolean;
+  initialDetailsOpen: boolean;
   isAuthenticated: boolean;
   loginHref: string;
   returnTo: string;
   signupHref: string;
+  successTo: string;
 }
 
 type IconName =
@@ -171,7 +178,15 @@ function SubmitButton({ isAuthenticated }: { isAuthenticated: boolean }) {
   );
 }
 
+function getRefinementContext(draft: WalkthroughProfileDraft) {
+  return `${draft.source}|${draft.causeArea}|${draft.offerType}|${draft.matchName}`;
+}
+
 function getDefaultBio(draft: WalkthroughProfileDraft) {
+  if (draft.source === "direct") {
+    return "I look for concrete, verifiable ways to make progress on the priorities I rank here without taking on open-ended commitments.";
+  }
+
   return `I look for concrete, verifiable ways to support ${draft.causeArea.toLowerCase()} without taking on open-ended commitments.`;
 }
 
@@ -180,18 +195,24 @@ export function CompleteProfileReview({
   draft,
   initialAffiliation,
   initialDisplayName,
+  initialUsername,
+  initialPublicInvitationMentionsEnabled,
+  initialDetailsOpen,
   isAuthenticated,
   loginHref,
   returnTo,
   signupHref,
+  successTo,
 }: CompleteProfileReviewProps) {
   const [allocation, setAllocation] = useState<ProfilePriorityAllocation>(INITIAL_ALLOCATION);
   const [focusedPriorityId, setFocusedPriorityId] = useState<ProfilePriorityId | null>(null);
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(initialDetailsOpen);
   const [restored, setRestored] = useState(false);
   const [validationMessage, setValidationMessage] = useState("");
   const [profile, setProfile] = useState<ReviewState>({
     displayName: initialDisplayName,
+    username: initialUsername,
+    publicInvitationMentionsEnabled: initialPublicInvitationMentionsEnabled,
     role: "",
     affiliation: initialAffiliation,
     email: accountEmail,
@@ -211,7 +232,7 @@ export function CompleteProfileReview({
             priorityAllocation?: unknown;
           })
         : null;
-      const context = `${draft.causeArea}|${draft.offerType}|${draft.matchName}`;
+      const context = getRefinementContext(draft);
 
       if (stored?.context === context) {
         const restoredAllocation = normalizeProfilePriorityAllocation(
@@ -223,6 +244,14 @@ export function CompleteProfileReview({
           ...current,
           ...stored,
           email: isAuthenticated ? accountEmail : String(stored.email ?? current.email),
+          username: isAuthenticated
+            ? initialUsername
+            : String(stored.username ?? current.username),
+          publicInvitationMentionsEnabled: isAuthenticated
+            ? initialPublicInvitationMentionsEnabled
+            : typeof stored.publicInvitationMentionsEnabled === "boolean"
+              ? stored.publicInvitationMentionsEnabled
+              : current.publicInvitationMentionsEnabled,
           maxCommitment: COMPLETE_PROFILE_MAX_COMMITMENTS.includes(
             Number(stored.maxCommitment) as CompleteProfileMaxCommitment,
           )
@@ -249,7 +278,16 @@ export function CompleteProfileReview({
     } finally {
       setRestored(true);
     }
-  }, [accountEmail, draft.causeArea, draft.matchName, draft.offerType, isAuthenticated]);
+  }, [
+    accountEmail,
+    draft.causeArea,
+    draft.matchName,
+    draft.offerType,
+    draft.source,
+    initialPublicInvitationMentionsEnabled,
+    initialUsername,
+    isAuthenticated,
+  ]);
 
   useEffect(() => {
     if (!restored) return;
@@ -259,7 +297,7 @@ export function CompleteProfileReview({
         REFINEMENT_STORAGE_KEY,
         JSON.stringify({
           ...profile,
-          context: `${draft.causeArea}|${draft.offerType}|${draft.matchName}`,
+          context: getRefinementContext(draft),
           priorityAllocation: JSON.parse(serializeProfilePriorityAllocation(allocation)),
           version: 3,
         }),
@@ -267,7 +305,15 @@ export function CompleteProfileReview({
     } catch (error) {
       console.warn("Moral Trade could not save the profile refinement draft.", error);
     }
-  }, [allocation, draft.causeArea, draft.matchName, draft.offerType, profile, restored]);
+  }, [
+    allocation,
+    draft.causeArea,
+    draft.matchName,
+    draft.offerType,
+    draft.source,
+    profile,
+    restored,
+  ]);
 
   useEffect(() => {
     if (!detailsOpen) return;
@@ -325,9 +371,10 @@ export function CompleteProfileReview({
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     setValidationMessage("");
 
-    if (!profile.displayName.trim() || !profile.role.trim() || !profile.email.trim()) {
+    const usernameResult = validateProfileUsername(profile.username);
+    if (!profile.displayName.trim() || !profile.role.trim() || !profile.email.trim() || !usernameResult.ok) {
       event.preventDefault();
-      setValidationMessage("Add a display name, role, and email before continuing.");
+      setValidationMessage(usernameResult.ok ? "Add a display name, role, and email before continuing." : usernameResult.message);
       setDetailsOpen(true);
       return;
     }
@@ -352,8 +399,9 @@ export function CompleteProfileReview({
         <input
           name="success_to"
           type="hidden"
-          value="/discover?source=profile-complete&domain=offers&view=constellation"
+          value={successTo}
         />
+        <input name="profile_source" type="hidden" value={draft.source} />
         <input name="walkthrough_cause" type="hidden" value={draft.originalCause} />
         <input name="cause_area" type="hidden" value={draft.causeArea} />
         <input name="offer_type" type="hidden" value={draft.offerType} />
@@ -372,24 +420,40 @@ export function CompleteProfileReview({
         />
 
         <header className={styles.profileHeader}>
-          <Link aria-label="Moral Trade home" className={styles.brandLockup} href="/">
+          <Link
+            aria-label="Moral Trade home"
+            className={styles.brandLockup}
+            href="/"
+            prefetch={false}
+          >
             <MoralMark />
             <span>Moral Trade</span>
           </Link>
-          <div
-            aria-label="Walkthrough progress: final step"
-            className={styles.walkthroughProgress}
-          >
-            <span>1&nbsp; Welcome</span>
-            <i />
-            <span>2&nbsp; Explore</span>
-            <i />
-            <span>3&nbsp; Priorities</span>
-            <i />
-            <strong>
-              <b>4</b> Complete
-            </strong>
-          </div>
+          {draft.source === "walkthrough" ? (
+            <div
+              aria-label="Walkthrough progress: final step"
+              className={styles.walkthroughProgress}
+            >
+              <span>1&nbsp; Welcome</span>
+              <i />
+              <span>2&nbsp; Explore</span>
+              <i />
+              <span>3&nbsp; Priorities</span>
+              <i />
+              <strong>
+                <b>4</b> Complete
+              </strong>
+            </div>
+          ) : (
+            <div
+              aria-label="Profile setup: priorities"
+              className={styles.walkthroughProgress}
+            >
+              <strong>
+                <b aria-hidden="true">✦</b> Profile setup
+              </strong>
+            </div>
+          )}
           <button
             className={styles.primaryAction}
             onClick={() => setDetailsOpen(true)}
@@ -613,9 +677,21 @@ export function CompleteProfileReview({
 
               <div className={styles.contextStrip}>
                 <div>
-                  <span>Walkthrough priority</span>
-                  <strong>{draft.originalCause}</strong>
-                  <small>{draft.causeArea}</small>
+                  <span>
+                    {draft.source === "walkthrough"
+                      ? "Walkthrough priority"
+                      : "Priority basis"}
+                  </span>
+                  <strong>
+                    {draft.source === "walkthrough"
+                      ? draft.originalCause
+                      : "Your 100-spark ranking"}
+                  </strong>
+                  <small>
+                    {draft.source === "walkthrough"
+                      ? draft.causeArea
+                      : "Saved from the priorities you assign here."}
+                  </small>
                 </div>
                 <div>
                   <span>Personal emphasis</span>
@@ -623,9 +699,17 @@ export function CompleteProfileReview({
                   <small>{unassigned} unassigned blocks remain</small>
                 </div>
                 <div>
-                  <span>Offer boundary</span>
-                  <strong>{draft.offerType}</strong>
-                  <small>No offer or obligation has been created.</small>
+                  <span>
+                    {draft.source === "walkthrough" ? "Offer boundary" : "Offer status"}
+                  </span>
+                  <strong>
+                    {draft.source === "walkthrough" ? draft.offerType : "Not set here"}
+                  </strong>
+                  <small>
+                    {draft.source === "walkthrough"
+                      ? "No offer or obligation has been created."
+                      : "Saving does not create or publish an offer."}
+                  </small>
                 </div>
               </div>
 
@@ -650,16 +734,32 @@ export function CompleteProfileReview({
                       />
                     </label>
                     <label className={styles.field}>
-                      <span>Role or short descriptor</span>
+                      <span>Username</span>
                       <input
-                        name="role"
-                        placeholder="e.g. Policy researcher"
+                        autoCapitalize="none"
+                        autoComplete="username"
+                        maxLength={32}
+                        name="username"
+                        pattern="[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
+                        placeholder="e.g. ellen-sun"
                         required
-                        value={profile.role}
-                        onChange={(event) => updateProfile("role", event.target.value)}
+                        spellCheck={false}
+                        value={profile.username}
+                        onChange={(event) => updateProfile("username", event.target.value.toLowerCase().replace(/^@+/u, ""))}
                       />
+                      <small>Unique and public. Existing accounts are not assigned a generated username.</small>
                     </label>
                   </div>
+                  <label className={`${styles.field} ${styles.spacedField}`}>
+                    <span>Role or short descriptor</span>
+                    <input
+                      name="role"
+                      placeholder="e.g. Policy researcher"
+                      required
+                      value={profile.role}
+                      onChange={(event) => updateProfile("role", event.target.value)}
+                    />
+                  </label>
                   <label className={`${styles.field} ${styles.spacedField}`}>
                     <span>Company, organization, or university (optional)</span>
                     <input
@@ -795,6 +895,24 @@ export function CompleteProfileReview({
                       aria-pressed={profile.privateProfile}
                       className={styles.switch}
                       onClick={() => updateProfile("privateProfile", !profile.privateProfile)}
+                      type="button"
+                    />
+                  </div>
+                  <div className={styles.toggleLine}>
+                    <div>
+                      <strong>Show my username on public pending invitations</strong>
+                      <small>Turning this off does not disable private participant search; public pages use “Pending invitee” until acceptance.</small>
+                    </div>
+                    <input
+                      name="public_invitation_mentions_enabled"
+                      type="hidden"
+                      value={profile.publicInvitationMentionsEnabled ? "on" : "off"}
+                    />
+                    <button
+                      aria-label="Show my username on public pending invitations"
+                      aria-pressed={profile.publicInvitationMentionsEnabled}
+                      className={styles.switch}
+                      onClick={() => updateProfile("publicInvitationMentionsEnabled", !profile.publicInvitationMentionsEnabled)}
                       type="button"
                     />
                   </div>

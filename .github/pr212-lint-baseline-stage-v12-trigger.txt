@@ -1,0 +1,5 @@
+PR #212 lint-baseline staging controller v12
+Expected draft head: 0f5c352cafaa6225665049a44f492ebad5ea2e4d
+Observed exact-head QA failure: stale non-institutional lint baseline in run 30835353373
+Retry reason: PR #513 repaired the staging controller’s YAML and exact indentation construction after the first trigger could not register a run
+This marker is repository-only and will be removed during final controller cleanup.

@@ -4,11 +4,15 @@ on:
   pull_request:
     paths:
       - "src/lib/smart-query*"
+      - "src/lib/discover-search*"
       - "src/lib/smart-discovery-ranking.ts"
       - "src/lib/smart-evidence-ranking*"
       - "src/lib/smart-people-ranking.ts"
       - "src/lib/site-search-smart.ts"
+      - "src/lib/live-discover-navigation.test.ts"
+      - "src/discover/**"
       - "src/app/api/query/**"
+      - "src/app/api/discover/**"
       - "src/app/layout.tsx"
       - "src/app/offers/**"
       - "src/app/people/**"
@@ -17,11 +21,29 @@ on:
       - "src/app/pools/**"
       - "src/app/mpgf/pools/**"
       - "src/components/layout/site-topbar.tsx"
+      - "src/components/marketplace/participant-offer-group*"
       - "src/components/search/**"
+      - "src/offers-walkthrough-density.test.ts"
+      - "public/discover/payload/**"
       - "public/moral-trade-smart-query.js"
+      - "public/moral-trade-discover-search-preflight.js"
+      - "public/moral-trade-discover-search.js"
       - "public/moral-trade-discover.html"
+      - "scripts/pack-discover-payload.mjs"
+      - "scripts/discover-two-sided-contract.test.mjs"
+      - "scripts/discover-cofund-contract.test.mjs"
+      - "scripts/discover-live-search-loader-contract.test.mjs"
       - "tests/smart-query*.spec.ts"
       - "tests/discover-query-audit.spec.ts"
+      - "tests/discover-live-search.spec.ts"
+      - "tests/discover-preflight-filter.spec.ts"
+      - "tests/discover-payload-cache.spec.ts"
+      - "tests/discover-cofund.spec.ts"
+      - "tests/offers-density.spec.ts"
+      - "playwright.smart-query.config.ts"
+      - "package.json"
+      - "scripts/capture-rendered-qa-offers.mjs"
+      - "scripts/rendered-qa-supabase.mjs"
       - ".github/workflows/smart-query-qa.yml"
   push:
     branches:
@@ -38,7 +60,7 @@ concurrency:
 jobs:
   smart-query-qa:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -53,9 +75,23 @@ jobs:
       - name: Inventory query surfaces
         run: |
           mkdir -p qa-results
-          rg -n --glob '!public/discover/payload/**' --glob '!public/mt-live-*' --glob '!package-lock.json' \
+          set +e
+          grep -RInE \
+            --include='*.ts' \
+            --include='*.tsx' \
+            --include='*.js' \
+            --include='*.mjs' \
+            --include='*.html' \
+            --exclude='package-lock.json' \
+            --exclude-dir='payload' \
+            --exclude='mt-live-*' \
             'role="search"|type="search"|name="(search|q|query|sort|filter)"|searchParams|URLSearchParams|\.order\(' \
-            src public tests > qa-results/query-surface-audit.txt || true
+            src public tests > qa-results/query-surface-audit.txt
+          status=$?
+          set -e
+          if [ "$status" -gt 1 ]; then
+            exit "$status"
+          fi
 
       - name: Install dependencies
         run: npm ci
@@ -70,18 +106,28 @@ jobs:
             src/lib/smart-query-llm.ts \
             src/lib/smart-query-llm-gate.ts \
             src/lib/smart-query-llm-gate.test.ts \
+            src/lib/smart-query-llm-timeout.test.ts \
+            src/lib/smart-query-llm-generation.test.ts \
             src/lib/smart-query-personalization.ts \
             src/lib/smart-query-records.ts \
             src/lib/smart-query-scoring.ts \
             src/lib/smart-query-surface-policy.ts \
             src/lib/smart-query.test.ts \
+            src/lib/discover-search.ts \
+            src/lib/discover-search-plan.ts \
+            src/lib/discover-search.test.ts \
             src/lib/smart-discovery-ranking.ts \
             src/lib/smart-evidence-ranking.ts \
             src/lib/smart-evidence-ranking.test.ts \
             src/lib/smart-people-ranking.ts \
             src/lib/site-search-smart.ts \
+            src/lib/live-discover-navigation.test.ts \
             src/app/api/query/interpret/route.ts \
+            src/app/api/discover/search/route.ts \
             src/app/layout.tsx \
+            src/app/offers/layout.tsx \
+            src/app/offers/offer-plane-inline-mount.tsx \
+            src/app/offers/offer-visual-directory-mount.tsx \
             src/app/offers/page.tsx \
             src/app/people/page.tsx \
             src/app/pools/page.tsx \
@@ -89,17 +135,38 @@ jobs:
             src/app/wish-registry/page.tsx \
             'src/app/evidence/[[...recordId]]/page.tsx' \
             src/components/layout/site-topbar.tsx \
+            src/components/marketplace/participant-offer-group.tsx \
             src/components/search/smart-query-auto-enhancer.tsx \
             src/components/search/smart-query-form.tsx \
-            tests/discover-query-audit.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
+            src/offers-walkthrough-density.test.ts \
+            tests/discover-query-audit.spec.ts \
+            tests/discover-live-search.spec.ts \
+            tests/discover-preflight-filter.spec.ts \
+            tests/discover-payload-cache.spec.ts \
+            tests/discover-cofund.spec.ts \
+            tests/offers-density.spec.ts 2>&1 | tee qa-results/smart-query-lint.txt
 
-      - name: Test deterministic and semantic query interpretation
+      - name: Test deterministic query interpretation and Discover loader semantics
         run: |
           set -o pipefail
           node --import tsx --test \
             src/lib/smart-query.test.ts \
             src/lib/smart-query-llm-gate.test.ts \
-            src/lib/smart-evidence-ranking.test.ts 2>&1 | tee qa-results/smart-query-test.txt
+            src/lib/smart-query-llm-timeout.test.ts \
+            src/lib/smart-query-llm-generation.test.ts \
+            src/lib/smart-evidence-ranking.test.ts \
+            src/lib/live-discover-navigation.test.ts 2>&1 | tee qa-results/smart-query-test.txt
+
+      - name: Test offers density and progressive-disclosure contracts
+        run: |
+          set -o pipefail
+          node --import tsx --test \
+            src/offers-walkthrough-density.test.ts 2>&1 | tee qa-results/offers-density-contract.txt
+
+      - name: Verify canonical Discover payload, Co-Fund, live-search, and two-sided contracts
+        run: |
+          set -o pipefail
+          npm run verify:discover 2>&1 | tee qa-results/discover-contracts.txt
 
       - name: Build production application
         run: |
@@ -109,23 +176,36 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Audit rendered Discover query controls
+      - name: Capture one immutable public Offers page for rendered QA
+        run: node scripts/capture-rendered-qa-offers.mjs qa-results/rendered-qa-offers.json
+
+      - name: Run rendered Discover and offers desktop/mobile QA
         run: |
           set -o pipefail
-          npx playwright test tests/discover-query-audit.spec.ts --reporter=line 2>&1 | \
-            tee qa-results/smart-query-e2e.txt
+          npx playwright test \
+            tests/discover-query-audit.spec.ts \
+            tests/discover-live-search.spec.ts \
+            tests/discover-preflight-filter.spec.ts \
+            tests/discover-payload-cache.spec.ts \
+            tests/discover-cofund.spec.ts \
+            tests/offers-density.spec.ts \
+            --config=playwright.smart-query.config.ts \
+            --workers=1 \
+            --reporter=line 2>&1 | tee qa-results/smart-query-e2e.txt
 
-      - name: Upload query audit evidence
+      - name: Upload Discover and offers QA evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smart-query-audit
+          name: discover-live-search-cofund-offers-qa
           path: |
-            test-results/discover-query-audit.json
-            test-results/discover-inline-source.js
+            test-results/discover-*
+            test-results/offers-density
             qa-results/query-surface-audit.txt
             qa-results/smart-query-lint.txt
             qa-results/smart-query-test.txt
+            qa-results/offers-density-contract.txt
+            qa-results/discover-contracts.txt
             qa-results/smart-query-build.txt
             qa-results/smart-query-e2e.txt
           if-no-files-found: warn

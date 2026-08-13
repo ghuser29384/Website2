@@ -1,0 +1,129 @@
+name: PR 212 E2E cleanup repair controller
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/pr212-e2e-cleanup-repair-controller-20260804.yml
+      - .github/scripts/pr212_repair_institutional_e2e.py
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr212-e2e-cleanup-repair-controller-20260804
+  cancel-in-progress: false
+
+jobs:
+  patch-feature-branch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TARGET_BRANCH: feat/institutional-trade-system
+      EXPECTED_HEAD: 32f177ec7b08ca44f3f564ad201d3b9cc716e578
+      PATCH_SCRIPT: .github/scripts/pr212_repair_institutional_e2e.py
+      TARGET_FILE: .github/scripts/institutional-trade-qa-e2e.mjs
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Check out the controller commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          path: controller
+
+      - name: Check out the exact PR 212 branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          path: target
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+
+      - name: Install dependencies with transient-registry retry
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npm ci; then
+              exit 0
+            fi
+            if (( attempt == 4 )); then
+              echo "npm ci failed after four attempts." >&2
+              exit 1
+            fi
+            delay=$((attempt * 20))
+            echo "npm ci attempt $attempt failed; retrying after ${delay}s." >&2
+            sleep "$delay"
+          done
+
+      - name: Apply and verify the narrow E2E repair
+        id: patch
+        shell: bash
+        working-directory: target
+        run: |
+          set -euo pipefail
+          current="$(git rev-parse HEAD)"
+          [[ "$current" == "$EXPECTED_HEAD" ]] || {
+            echo "Feature head moved: expected $EXPECTED_HEAD, found $current" >&2
+            exit 1
+          }
+
+          python ../controller/$PATCH_SCRIPT
+          node --check "$TARGET_FILE"
+          node --import tsx --test \
+            src/institutional-individual-capacity.test.ts \
+            src/institutional-product-completeness.test.ts \
+            src/institutional-pool-record-trigger.test.ts
+          git diff --check
+
+          mapfile -t changed < <(git diff --name-only)
+          [[ "${#changed[@]}" -eq 1 && "${changed[0]}" == "$TARGET_FILE" ]] || {
+            printf 'Unexpected changed files:\n%s\n' "${changed[*]:-none}" >&2
+            exit 1
+          }
+
+          grep -Fq 'qa_fixture: true' "$TARGET_FILE"
+          grep -Fq 'one_person_qa_run_id: runId' "$TARGET_FILE"
+          grep -Fq 'await panel.scrollIntoViewIfNeeded();' "$TARGET_FILE"
+          grep -Fq 'admin.rpc("cleanup_one_person_qa_fixture_v1"' "$TARGET_FILE"
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add "$TARGET_FILE"
+          git commit -m 'Repair institutional MFA visibility and QA fixture cleanup'
+          new_head="$(git rev-parse HEAD)"
+
+          remote="$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | awk '{print $1}')"
+          [[ "$remote" == "$EXPECTED_HEAD" ]] || {
+            echo "Feature branch advanced concurrently to $remote" >&2
+            exit 1
+          }
+          git push origin "HEAD:$TARGET_BRANCH"
+          echo "new_head=$new_head" >> "$GITHUB_OUTPUT"
+
+      - name: Record the repaired exact head on PR 212
+        if: success()
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-e2e-cleanup-repair-20260804 -->
+          Published the narrow authenticated-QA repair as exact head \`${{ steps.patch.outputs.new_head }}\`.
+
+          Changes are limited to the institutional E2E driver: it scrolls the account-security panel into view before AAL2 verification, marks synthetic accounts for the existing fail-closed QA cleanup RPC, and uses that RPC to delete person-account, profile, and auth-user records atomically. Focused contract tests and JavaScript syntax checks passed before publication. The complete Institutional trade QA workflow must still pass on this exact head before any release decision.
+
+          PR #212 remains draft and unmerged. No production database, payment, custody, payout, or feature-flag state was changed."
+
+      - name: Record controller failure on PR 212
+        if: failure()
+        shell: bash
+        run: |
+          gh pr comment 212 --repo "$GITHUB_REPOSITORY" --body "<!-- pr212-e2e-cleanup-repair-20260804-failure -->
+          The narrow E2E repair controller failed in run $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. PR #212 remains draft and unmerged; no production database, payment, custody, payout, or feature-flag state was changed."

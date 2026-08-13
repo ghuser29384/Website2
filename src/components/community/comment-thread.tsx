@@ -112,8 +112,8 @@ export function CommentThread({ comments, offerId, returnTo, viewerId }: Comment
     return (
       <div className="empty-state">
         <div>
-          <strong>No public comments yet.</strong>
-          <p>Use comments for clarifications, objections, and structured follow-up.</p>
+          <strong>No public questions or comments yet.</strong>
+          <p>Ask for a missing premise, evidence standard, boundary, or clarification.</p>
         </div>
       </div>
     );

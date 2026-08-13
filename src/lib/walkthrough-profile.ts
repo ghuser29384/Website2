@@ -37,10 +37,11 @@ type SearchParams = Record<string, string | string[] | undefined>;
 
 export type WalkthroughOfferType = (typeof WALKTHROUGH_OFFER_TYPES)[number];
 export type WalkthroughCauseArea = (typeof COHORT_CAUSES)[number];
+export type CompleteProfileDraftSource = "walkthrough" | "direct";
 
 export interface WalkthroughProfileDraft {
   version: 1;
-  source: "walkthrough";
+  source: CompleteProfileDraftSource;
   originalCause: string;
   causeArea: WalkthroughCauseArea;
   offerType: WalkthroughOfferType;
@@ -175,6 +176,40 @@ export function getWalkthroughProfileDraft({
   }
 
   return parseWalkthroughProfileDraft(cookieValue);
+}
+
+export function createDirectCompleteProfileDraft(
+  createdAt = new Date().toISOString(),
+): WalkthroughProfileDraft {
+  return {
+    version: 1,
+    source: "direct",
+    originalCause: "Profile priorities",
+    causeArea: "Cause prioritization",
+    offerType: "Time",
+    matchName: "Direct profile setup",
+    matchGet: "",
+    matchGive: "",
+    participantKind: "individual",
+    primaryGoal: "find_counterparty",
+    firstAction: "create_broad_preview",
+    createdAt,
+  };
+}
+
+export function getCompleteProfileDraft({
+  cookieValue,
+  searchParams,
+  allowDirect = false,
+}: {
+  cookieValue?: string | null;
+  searchParams?: SearchParams;
+  allowDirect?: boolean;
+}) {
+  const walkthroughDraft = getWalkthroughProfileDraft({ cookieValue, searchParams });
+  if (walkthroughDraft) return walkthroughDraft;
+
+  return allowDirect ? createDirectCompleteProfileDraft() : null;
 }
 
 export function buildWalkthroughOnboardingPath(draft: WalkthroughProfileDraft) {

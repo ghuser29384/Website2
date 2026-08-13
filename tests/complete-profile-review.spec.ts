@@ -41,6 +41,10 @@ test("100-Spark Mosaic ranks priorities and preserves the account completion flo
   await expect(details).toContainText("Factory farming");
 
   await page.getByLabel("Display name").fill("Alex Morgan");
+  await page
+    .getByRole("textbox", { name: "Username Unique and public." })
+    .fill("alex-morgan");
+  await expect(page.getByText("Existing accounts are not assigned a generated username.")).toBeVisible();
   await page.getByLabel("Role or short descriptor").fill("Policy researcher");
   await page
     .getByLabel("Company, organization, or university (optional)")
@@ -64,4 +68,69 @@ test("all twelve priorities remain reachable on a narrow screen", async ({ page 
   await expect(page.getByRole("complementary", { name: "Your ranking" })).toContainText(
     "5 sparks",
   );
+});
+
+test("a first-time Complete Profile visit is still sent to the mandatory Walkthrough", async ({
+  context,
+  page,
+}) => {
+  await context.clearCookies();
+  await page.goto("/complete-profile");
+
+  await expect(page).toHaveURL(/\/walkthrough$/);
+  await expect(page.getByLabel("Profile setup: priorities")).toHaveCount(0);
+
+  const cookies = await context.cookies();
+  expect(cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")?.value).toBe("1");
+});
+
+test("a returning-user Complete Profile visit opens the 100-spark page instead of the Walkthrough", async ({
+  page,
+}) => {
+  await page.goto("/complete-profile");
+
+  await expect(page).toHaveURL(/\/complete-profile$/);
+  await expect(
+    page.getByRole("heading", { name: "Spend 100 sparks of attention." }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Profile setup: priorities")).toBeVisible();
+  await expect(page.getByLabel("Walkthrough progress: final step")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Save profile" }).click();
+  const details = page.getByRole("dialog", { name: "Finish the practical details." });
+  await expect(details).toContainText("Your 100-spark ranking");
+  await expect(details).toContainText("Not set here");
+  await expect(details).toContainText("Saving does not create or publish an offer.");
+});
+
+test("the returning-user Complete Profile page remains usable at 390 by 844", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/complete-profile");
+
+  await expect(page.getByLabel("80 of 100 attention points assigned")).toBeVisible();
+  await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
+  await expect(page.getByRole("button", { name: "Decrease Space governance" })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+    await page.evaluate(() => window.innerWidth),
+  );
+});
+
+test("the Complete Profile brand link does not prefetch the rewritten home route", async ({
+  page,
+}) => {
+  const rootRscRequests: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname === "/" && url.searchParams.has("_rsc")) {
+      rootRscRequests.push(request.url());
+    }
+  });
+
+  await page.goto("/complete-profile");
+  await expect(
+    page.getByRole("heading", { name: "Spend 100 sparks of attention." }),
+  ).toBeVisible();
+  await page.waitForTimeout(1_000);
+
+  expect(rootRscRequests).toEqual([]);
 });

@@ -1,0 +1,75 @@
+name: Compact Co-Fund UI
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/create-common-ground-pool-ui.yml"
+      - "docs/common-ground-pool-create.md"
+      - "public/moral-trade-create/common-ground.*"
+      - "src/components/create/create-interface-frame.tsx"
+      - "src/lib/create-interface/common-ground-*"
+      - "src/lib/create-interface/persistence.ts"
+      - "src/lib/create-interface/source-contract.test.ts"
+      - "src/lib/create-interface/types.ts"
+      - "src/lib/create-interface/validation.ts"
+      - "tests/create-common-ground-pool.spec.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: create-common-ground-pool-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out exact pull request head
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify compact Create JavaScript syntax
+        run: node --check public/moral-trade-create/common-ground.js
+
+      - name: Run focused Create tests
+        run: node --import tsx --test src/lib/create-interface/*.test.ts
+
+      - name: Lint changed implementation
+        run: >-
+          npx eslint
+          src/components/create/create-interface-frame.tsx
+          src/lib/create-interface/common-ground-integration.ts
+          src/lib/create-interface/common-ground-integration.test.ts
+          src/lib/create-interface/common-ground-validation.test.ts
+          src/lib/create-interface/persistence.ts
+          src/lib/create-interface/source-contract.test.ts
+          src/lib/create-interface/types.ts
+          src/lib/create-interface/validation.ts
+          tests/create-common-ground-pool.spec.ts
+
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run desktop and mobile browser checks
+        run: npx playwright test tests/create-common-ground-pool.spec.ts --reporter=line
+
+      - name: Check whitespace
+        run: git diff --check

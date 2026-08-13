@@ -1,0 +1,190 @@
+name: Dashboard Account security hotfix gates
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+    paths:
+      - "src/app/dashboard/dashboard-account-security.css"
+      - "src/app/dashboard/layout.tsx"
+      - "src/app/dashboard/page.tsx"
+      - "src/components/dashboard/background-account-security-panel.tsx"
+      - "src/components/layout/site-footer.tsx"
+      - "src/components/layout/site-topbar.tsx"
+      - "src/dashboard-account-security-visibility.test.ts"
+      - "src/proxy.test.ts"
+      - "src/proxy.ts"
+      - "tests/dashboard-account-security-visibility.spec.ts"
+      - ".github/workflows/dashboard-account-security-hotfix-gates.yml"
+  push:
+    branches:
+      - hotfix/dashboard-account-security-visible-20260807
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dashboard-account-security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Test, lint, typecheck, build, and exact diff
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused visibility and routing contracts
+        shell: bash
+        run: |
+          set -o pipefail
+          node --import tsx --test \
+            src/dashboard-account-security-visibility.test.ts \
+            src/proxy.test.ts \
+            2>&1 | tee focused-dashboard-account-security.log
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee repository-tests.log
+
+      - name: Run complete ESLint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint -- --quiet 2>&1 | tee repository-lint.log
+
+      - name: Run TypeScript
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee typescript.log
+
+      - name: Run optimized production build
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee production-build.log
+
+      - name: Prove the exact current-main diff stays inside the Account-security surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
+          git diff --check "$base" "$GITHUB_SHA" | tee diff-check.log
+          git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
+          test -s actual-files.txt
+          cat > allowed-files.txt <<'EOF'
+          .github/workflows/dashboard-account-security-hotfix-gates.yml
+          src/app/dashboard/dashboard-account-security.css
+          src/app/dashboard/layout.tsx
+          src/app/dashboard/page.tsx
+          src/components/dashboard/background-account-security-panel.tsx
+          src/components/layout/site-footer.tsx
+          src/components/layout/site-topbar.tsx
+          src/dashboard-account-security-visibility.test.ts
+          src/proxy.test.ts
+          src/proxy.ts
+          tests/dashboard-account-security-visibility.spec.ts
+          EOF
+          sort -o allowed-files.txt allowed-files.txt
+          unexpected_files="$(comm -23 actual-files.txt allowed-files.txt)"
+          if [[ -n "$unexpected_files" ]]; then
+            echo 'Unexpected files in the Account-security change:' >&2
+            printf '%s\n' "$unexpected_files" >&2
+            exit 1
+          fi
+
+      - name: Upload quality evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-account-security-quality-${{ github.run_id }}
+          path: |
+            focused-dashboard-account-security.log
+            repository-tests.log
+            repository-lint.log
+            typescript.log
+            production-build.log
+            diff-check.log
+            allowed-files.txt
+            actual-files.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+  rendered:
+    name: Rendered dashboard and offers routing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+      SITE_URL: http://127.0.0.1:3210
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the focused desktop and mobile Account-security gate
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e -- tests/dashboard-account-security-visibility.spec.ts --reporter=line \
+            2>&1 | tee rendered-dashboard-account-security.log
+
+      - name: Run the human offers-to-Discover browser contract
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run test:e2e -- tests/public-routes.spec.ts \
+            --grep '/offers transfers to the dedicated Discover shell' \
+            --reporter=line \
+            2>&1 | tee rendered-offers-redirect.log
+
+      - name: Upload rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-account-security-rendered-${{ github.run_id }}
+          path: |
+            rendered-dashboard-account-security.log
+            rendered-offers-redirect.log
+            test-results/
+            playwright-report/
+          if-no-files-found: warn
+          retention-days: 30

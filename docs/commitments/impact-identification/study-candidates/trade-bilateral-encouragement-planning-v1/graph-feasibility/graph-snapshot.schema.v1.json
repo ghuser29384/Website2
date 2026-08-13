@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moraltrade.org/schemas/commitments-trade-graph-snapshot-v1.json",
+  "title": "Synthetic Reciprocal Trade eligible-graph snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "snapshotKey",
+    "subjectMode",
+    "instrumentationEnvironment",
+    "eligibilityFrozen",
+    "containsRealUserData",
+    "identifierPolicy",
+    "nodes",
+    "dyads"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "commitments-trade-graph-snapshot-v1"
+    },
+    "snapshotKey": {
+      "type": "string",
+      "pattern": "^synthetic:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$"
+    },
+    "subjectMode": {
+      "const": "synthetic_only"
+    },
+    "instrumentationEnvironment": {
+      "const": "qa"
+    },
+    "eligibilityFrozen": {
+      "const": false
+    },
+    "containsRealUserData": {
+      "const": false
+    },
+    "identifierPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scheme",
+        "reversibleMappingPresent",
+        "rawIdentifierFieldsPresent"
+      ],
+      "properties": {
+        "scheme": {
+          "const": "synthetic_prefixed"
+        },
+        "reversibleMappingPresent": {
+          "const": false
+        },
+        "rawIdentifierFieldsPresent": {
+          "const": false
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["nodeKey"],
+        "properties": {
+          "nodeKey": {
+            "type": "string",
+            "pattern": "^synthetic:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$"
+          }
+        }
+      }
+    },
+    "dyads": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "dyadKey",
+          "sourceNodeKey",
+          "targetNodeKey",
+          "baselineCompletionRiskBand",
+          "opportunityTypeBand"
+        ],
+        "properties": {
+          "dyadKey": {
+            "type": "string",
+            "pattern": "^synthetic:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$"
+          },
+          "sourceNodeKey": {
+            "type": "string",
+            "pattern": "^synthetic:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$"
+          },
+          "targetNodeKey": {
+            "type": "string",
+            "pattern": "^synthetic:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$"
+          },
+          "baselineCompletionRiskBand": {
+            "enum": ["low", "medium", "high"]
+          },
+          "opportunityTypeBand": {
+            "enum": [
+              "action_for_action",
+              "funding_for_action",
+              "funding_for_funding",
+              "mixed_resources"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

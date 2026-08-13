@@ -649,6 +649,7 @@ export const mpgfAdminSections = [
   "cycles",
   "pools",
   "public-goods",
+  "failure-bonus",
   "registry",
   "round",
   "safety",

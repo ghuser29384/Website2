@@ -6,87 +6,293 @@
   <meta name="theme-color" content="#050505">
   <meta name="description" content="Explore Moral Trade offers, threshold pools, and trusted counterparties through transparent, inspectable discovery views.">
   <link rel="canonical" href="https://moraltrade.org/discover">
+  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
+  <link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">
   <title>Moral Trade — Discover</title>
   <style>
     html,body{margin:0;min-height:100%;background:#f7f5ef;color:#0b0b0a;font-family:system-ui,sans-serif}
-    main{min-height:100vh;display:grid;place-items:center;padding:24px}
+    main{min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center}
     p{max-width:42rem;line-height:1.5}
+    button{border:1px solid #0b0b0a;background:#0b0b0a;color:#fff;padding:10px 16px;font:600 14px system-ui,sans-serif;cursor:pointer}
+    button:focus-visible{outline:3px solid rgba(18,63,241,.28);outline-offset:3px}
   </style>
 </head>
 <body>
-  <main><p id="loading">Loading Discover…</p></main>
-  <script src="/moral-trade-discover-local-time.js"></script>
+  <main><div><p id="loading" role="status" aria-live="polite">Loading Discover…</p></div></main>
   <script>
-    (async () => {
-      try {
-        const paths = [
-          "/discover/payload/0.txt",
-          "/discover/payload/1.txt",
-          "/discover/payload/2.txt",
-          "/discover/payload/3.txt",
-          "/discover/payload/4.txt",
-          "/discover/payload/5.txt",
-          "/discover/payload/6.txt",
-        ];
-        const accountPromise = fetch("/api/live-account", {
+    (() => {
+      "use strict";
+
+      window.__MT_DISCOVER_INITIAL_URL__ = window.location.href;
+
+      const MANIFEST_PATH = "/discover/payload/manifest.json";
+      const MAX_PAYLOAD_PARTS = 32;
+      const VERSION_PATTERN = /^[a-f0-9]{40}$/;
+      const PART_PATTERN = /^\d+\.txt$/;
+      const VERSIONED_HEAD_ASSETS = [
+        "/moral-trade-discover-local-time.js",
+        "/moral-trade-account-identity.js",
+        "/moral-trade-live-account.js",
+      ];
+      const VERSIONED_BODY_ASSETS = [
+        "/moral-trade-discover-navigation.js",
+        "/moral-trade-discover-value-hover.js",
+        "/moral-trade-brand.js",
+        "/moral-trade-requester-identity.js",
+        "/moral-trade-input-assist.js",
+        "/moral-trade-discover-search-preflight.js",
+        "/moral-trade-discover-search.js",
+      ];
+
+      const wait = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+
+      function buildAssetUrl(path, version, reloadToken = "") {
+        const url = new URL(path, window.location.origin);
+        if (version) url.searchParams.set("v", version);
+        if (reloadToken) url.searchParams.set("reload", reloadToken);
+        return `${url.pathname}${url.search}`;
+      }
+
+      async function fetchJson(path, reloadToken = "") {
+        const url = new URL(path, window.location.origin);
+        if (reloadToken) url.searchParams.set("reload", reloadToken);
+        const response = await fetch(`${url.pathname}${url.search}`, {
+          cache: "no-store",
           credentials: "same-origin",
           headers: { Accept: "application/json" },
-        })
-          .then((response) => (response.ok ? response.json() : { authenticated: false }))
-          .catch(() => ({ authenticated: false }));
-        const [parts, liveAccount] = await Promise.all([
-          Promise.all(
-            paths.map(async (path) => {
-              const response = await fetch(path, { cache: "force-cache" });
-              if (!response.ok) throw new Error(`Discover payload ${path} returned ${response.status}`);
-              return response.text();
-            }),
-          ),
-          accountPromise,
-        ]);
-        const bytes = Uint8Array.from(atob(parts.join("")), (character) => character.charCodeAt(0));
+        });
+        if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+        return response.json();
+      }
+
+      function validateManifest(manifest) {
+        if (
+          !manifest ||
+          typeof manifest.version !== "string" ||
+          !VERSION_PATTERN.test(manifest.version) ||
+          manifest.encoding !== "gzip+base64" ||
+          !Array.isArray(manifest.parts) ||
+          manifest.parts.length < 1 ||
+          manifest.parts.length > MAX_PAYLOAD_PARTS ||
+          manifest.parts.some((part) => typeof part !== "string" || !PART_PATTERN.test(part)) ||
+          new Set(manifest.parts).size !== manifest.parts.length
+        ) {
+          throw new Error("Discover payload manifest is invalid");
+        }
+        return manifest;
+      }
+
+      async function loadAccount(reloadToken = "") {
+        try {
+          return await fetchJson("/api/live-account", reloadToken);
+        } catch {
+          return { authenticated: false };
+        }
+      }
+
+      async function loadRuntime(path, version, reloadToken = "") {
+        const src = buildAssetUrl(path, version, reloadToken);
+        const existing = document.querySelector(`script[data-mt-loader-runtime="${path}"]`);
+        if (existing?.dataset.loaded === "true") return;
+        existing?.remove();
+
+        await new Promise((resolve, reject) => {
+          const script = document.createElement("script");
+          script.src = src;
+          script.async = false;
+          script.dataset.mtLoaderRuntime = path;
+          script.addEventListener("load", () => {
+            script.dataset.loaded = "true";
+            resolve();
+          }, { once: true });
+          script.addEventListener("error", () => reject(new Error(`${path} failed to load`)), { once: true });
+          document.head.append(script);
+        });
+      }
+
+      async function decodePayload(manifest, reloadToken = "") {
+        const parts = await Promise.all(
+          manifest.parts.map(async (part) => {
+            const path = `/discover/payload/${part}`;
+            const response = await fetch(buildAssetUrl(path, manifest.version, reloadToken), {
+              cache: "no-store",
+              credentials: "same-origin",
+              headers: { Accept: "text/plain" },
+            });
+            if (!response.ok) throw new Error(`${path} returned ${response.status}`);
+            const text = await response.text();
+            if (!text.trim()) throw new Error(`${path} was empty`);
+            return text;
+          }),
+        );
+
+        const encoded = parts.join("").replace(/\s+/g, "");
+        let binary;
+        try {
+          binary = atob(encoded);
+        } catch {
+          throw new Error("Discover payload was not valid base64");
+        }
+
+        if (typeof window.DecompressionStream !== "function") {
+          throw new Error("This browser cannot decompress the Discover payload");
+        }
+
+        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
         const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("gzip"));
         const source = await new Response(stream).text();
-        const localTimeRuntime = window.MoralTradeDiscoverLocalTime;
-        if (!localTimeRuntime) throw new Error("Discover local-time runtime did not load");
-        const localizedSource = localTimeRuntime.transformSource(source);
-        const accountJson = JSON.stringify(liveAccount)
+        if (!source.includes("</head>") || !source.includes("</body>")) {
+          throw new Error("Discover payload is incomplete");
+        }
+        return source;
+      }
+
+      async function gitBlobSha1(value) {
+        if (!window.crypto?.subtle) return "";
+        const encoder = new TextEncoder();
+        const content = encoder.encode(value);
+        const header = encoder.encode(`blob ${content.byteLength}\0`);
+        const bytes = new Uint8Array(header.byteLength + content.byteLength);
+        bytes.set(header, 0);
+        bytes.set(content, header.byteLength);
+        const digest = await window.crypto.subtle.digest("SHA-1", bytes);
+        return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      }
+
+      async function verifyPayload(source, manifest) {
+        const sourceBytes = new TextEncoder().encode(source).byteLength;
+        if (Number.isInteger(manifest.sourceBytes) && manifest.sourceBytes !== sourceBytes) {
+          throw new Error("Discover payload byte length mismatch");
+        }
+        const digest = await gitBlobSha1(source);
+        if (digest && digest !== manifest.version) {
+          throw new Error("Discover payload version mismatch");
+        }
+      }
+
+      function localizeSource(source) {
+        const runtime = window.MoralTradeDiscoverLocalTime;
+        if (!runtime?.transformSource) return source;
+        try {
+          return runtime.transformSource(source);
+        } catch (error) {
+          console.warn("Discover local-time enhancement was skipped", error);
+          return source;
+        }
+      }
+
+      function escapeBootstrap(value) {
+        return JSON.stringify(value)
           .replace(/</g, "\\u003c")
           .replace(/>/g, "\\u003e")
           .replace(/&/g, "\\u0026")
           .replace(/\u2028/g, "\\u2028")
           .replace(/\u2029/g, "\\u2029");
+      }
+
+      function scriptTag(path, version, reloadToken = "") {
+        const src = buildAssetUrl(path, version, reloadToken).replace(/&/g, "&amp;");
+        return `<script src="${src}"></scr` + "ipt>";
+      }
+
+      function stylesheetTag(path, version, reloadToken = "") {
+        const href = buildAssetUrl(path, version, reloadToken).replace(/&/g, "&amp;");
+        return `<link rel="stylesheet" href="${href}">`;
+      }
+
+      function composeDocument(source, manifest, liveAccount, reloadToken = "", localTimeAvailable = false) {
+        const localizedSource = localizeSource(source);
+        const faviconLinks = [
+          '<link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+          '<link rel="apple-touch-icon" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730">',
+        ].join("");
         const headScripts = [
-          '<link rel="stylesheet" href="/moral-trade-input-assist.css">',
-          '<script src="/moral-trade-discover-local-time.js"></scr' + 'ipt>',
-          `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${accountJson};</scr` + 'ipt>',
-          '<script src="/moral-trade-account-identity.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-live-account.js"></scr' + 'ipt>',
+          faviconLinks,
+          stylesheetTag("/moral-trade-input-assist.css", manifest.version, reloadToken),
+          localTimeAvailable ? scriptTag(VERSIONED_HEAD_ASSETS[0], manifest.version, reloadToken) : "",
+          `<script>window.__MT_LIVE_ACCOUNT_BOOTSTRAP__=${escapeBootstrap(liveAccount)};</scr` + "ipt>",
+          ...VERSIONED_HEAD_ASSETS.slice(1).map((path) => scriptTag(path, manifest.version, reloadToken)),
         ].join("");
-        if (!localizedSource.includes("</head>")) {
-          throw new Error("Discover payload is missing its closing head tag");
+        const withHead = localizedSource.replace("</head>", `${headScripts}</head>`);
+        const enhancementScripts = VERSIONED_BODY_ASSETS
+          .map((path) => scriptTag(path, manifest.version, reloadToken))
+          .join("");
+        return withHead.replace("</body>", `${enhancementScripts}</body>`);
+      }
+
+      async function loadDiscover(reloadToken = "") {
+        const [manifest, liveAccount] = await Promise.all([
+          fetchJson(MANIFEST_PATH, reloadToken).then(validateManifest),
+          loadAccount(reloadToken),
+        ]);
+        window.__MT_DISCOVER_PAYLOAD_VERSION__ = manifest.version;
+
+        let localTimeAvailable = false;
+        try {
+          await loadRuntime("/moral-trade-discover-local-time.js", manifest.version, reloadToken);
+          localTimeAvailable = Boolean(window.MoralTradeDiscoverLocalTime?.transformSource);
+        } catch (error) {
+          console.warn("Discover local-time runtime was unavailable", error);
         }
-        const replacementSource = localizedSource.replace("</head>", `${headScripts}</head>`);
-        const enhancementScripts = [
-          '<script src="/moral-trade-discover-navigation.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-discover-value-hover.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-brand.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-requester-identity.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-input-assist.js"></scr' + 'ipt>',
-          '<script src="/moral-trade-smart-query.js"></scr' + 'ipt>',
-        ].join("");
-        const enhancedSource = replacementSource.includes("</body>")
-          ? replacementSource.replace("</body>", `${enhancementScripts}</body>`)
-          : `${replacementSource}${enhancementScripts}`;
+        const source = await decodePayload(manifest, reloadToken);
+        await verifyPayload(source, manifest);
+        const enhancedSource = composeDocument(
+          source,
+          manifest,
+          liveAccount,
+          reloadToken,
+          localTimeAvailable,
+        );
 
         document.open();
         document.write(enhancedSource);
         document.close();
-      } catch (error) {
-        const loading = document.getElementById("loading");
-        if (loading) loading.textContent = "Unable to load Discover. Please refresh.";
-        console.error(error);
       }
+
+      function showFailure(error) {
+        console.error(error);
+        const main = document.querySelector("main");
+        if (!main) return;
+        const wrapper = document.createElement("div");
+        const message = document.createElement("p");
+        message.id = "loading";
+        message.setAttribute("role", "alert");
+        message.textContent = "Discover could not be loaded. Retry to fetch a clean copy.";
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.textContent = "Retry Discover";
+        retry.addEventListener("click", () => {
+          retry.disabled = true;
+          message.setAttribute("role", "status");
+          message.textContent = "Reloading Discover…";
+          boot(true);
+        }, { once: true });
+        wrapper.append(message, retry);
+        main.replaceChildren(wrapper);
+      }
+
+      async function boot(forceReload = false) {
+        let lastError = null;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          const bypassCache = forceReload || attempt > 0;
+          const reloadToken = bypassCache
+            ? `${Date.now()}-${attempt}-${Math.random().toString(36).slice(2)}`
+            : "";
+          try {
+            await loadDiscover(reloadToken);
+            return;
+          } catch (error) {
+            lastError = error;
+            console.warn(`Discover loader attempt ${attempt + 1} failed`, error);
+            if (attempt === 0) await wait(120);
+          }
+        }
+        showFailure(lastError || new Error("Discover failed to load"));
+      }
+
+      boot(false);
     })();
   </script>
   <noscript><main><p>JavaScript is required to use Discover.</p></main></noscript>
