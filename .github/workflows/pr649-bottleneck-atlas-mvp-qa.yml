@@ -17,7 +17,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  MORAL_TRADE_DISABLE_SUPABASE: "true"
   OPPORTUNITY_SYNTHESIS_ENABLED: "true"
   NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
   SITE_URL: http://127.0.0.1:3211
@@ -70,11 +69,12 @@ jobs:
           npm test | tee "$QA_OUTPUT/full-tests.log"
           npm run lint -- --quiet | tee "$QA_OUTPUT/lint.log"
           npx tsc --noEmit --pretty false | tee "$QA_OUTPUT/typescript.log"
-          npm run build | tee "$QA_OUTPUT/build.log"
+          MORAL_TRADE_DISABLE_SUPABASE=true npm run build | tee "$QA_OUTPUT/build.log"
 
       - name: Run focused rendered interaction gate
         shell: bash
         env:
+          MORAL_TRADE_DISABLE_SUPABASE: "true"
           PLAYWRIGHT_USE_PRODUCTION_SERVER: "1"
         run: |
           set -euo pipefail
@@ -83,6 +83,8 @@ jobs:
 
       - name: Capture compact MVP evidence
         shell: bash
+        env:
+          MORAL_TRADE_DISABLE_SUPABASE: "true"
         run: |
           set -euo pipefail
           npm run start -- -H 127.0.0.1 -p 3211 > "$QA_OUTPUT/server.log" 2>&1 &
