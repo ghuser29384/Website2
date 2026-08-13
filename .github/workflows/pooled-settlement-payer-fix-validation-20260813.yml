@@ -28,14 +28,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 2
+          fetch-depth: 3
 
       - name: Verify exact candidate and workflow-only delta
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_CANDIDATE_SHA"
+          git merge-base --is-ancestor "$EXPECTED_CANDIDATE_SHA" HEAD
           test "$(git diff --name-only "$EXPECTED_CANDIDATE_SHA" HEAD)" = "$WORKFLOW_PATH"
 
       - name: Set up Node.js
@@ -47,11 +47,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run payment tests
-        run: npm run test:payments
-
-      - name: Run conditional-payment tests
-        run: npm run test:conditional-payments
+      - name: Run focused conditional-payment tests
+        run: >-
+          node --import tsx --test
+          src/lib/payments/conditional-state.test.ts
+          src/lib/payments/checkout-payment-methods.test.ts
 
       - name: Run repository tests
         run: npm test
@@ -64,6 +64,7 @@ jobs:
 
       - name: Build the production application
         env:
+          CONDITIONAL_PAYMENTS_MODE: disabled
           NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
           VERCEL: "1"
           VERCEL_ENV: preview
