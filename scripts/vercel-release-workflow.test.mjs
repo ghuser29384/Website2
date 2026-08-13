@@ -139,6 +139,68 @@ test("preview pulls branch-specific env while production remains unbranched", as
   assert.ok(previewGuard < branchArg && branchArg < guardEnd && guardEnd < pull);
 });
 
+test("a synthetic Auth origin is narrowly isolated to one guarded Preview deployment", async () => {
+  const source = await workflow();
+  assert.match(source, /VERCEL_CLI_VERSION: 50\.38\.1/);
+  assert.match(source, /synthetic_auth_fixture_url:\n\s+description: Optional synthetic Auth origin for the guarded Preview only/);
+  assert.match(source, /SYNTHETIC_AUTH_PUBLISHABLE_KEY: auth-resolution-public-fixture/);
+  assert.match(source, /SYNTHETIC_AUTH_SERVICE_KEY: auth-resolution-service-fixture/);
+
+  const guardStart = source.indexOf("- name: Guard repository, branch, and immutable candidate");
+  const buildStart = source.indexOf("- name: Build a clean Vercel artifact on GitHub Actions compute");
+  const integrityStart = source.indexOf("- name: Prove every prebuilt public asset matches the checked-in source");
+  const deployStart = source.indexOf("- name: Upload the already-built artifact exactly once");
+  const deploymentGuardStart = source.indexOf("- name: Guard the exact uploaded deployment");
+  for (const index of [guardStart, buildStart, integrityStart, deployStart, deploymentGuardStart]) {
+    assert.notEqual(index, -1);
+  }
+
+  const guardStep = source.slice(guardStart, source.indexOf("- name: Set up Node.js", guardStart));
+  const buildStep = source.slice(buildStart, integrityStart);
+  const deployStep = source.slice(deployStart, deploymentGuardStart);
+  for (const step of [guardStep, buildStep, deployStep]) {
+    assert.match(step, /SYNTHETIC_AUTH_FIXTURE_URL: \$\{\{ inputs\.synthetic_auth_fixture_url \}\}/);
+  }
+
+  assert.match(guardStep, /if \[\[ -n "\$SYNTHETIC_AUTH_FIXTURE_URL" \]\]; then/);
+  assert.match(guardStep, /test "\$RELEASE_TARGET" = 'preview'/);
+  assert.ok(
+    guardStep.includes(
+      '[[ "$SYNTHETIC_AUTH_FIXTURE_URL" =~ ^https://[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.trycloudflare\\.com$ ]]',
+    ),
+  );
+
+  const productionBuild = buildStep.slice(
+    buildStep.indexOf("            production)"),
+    buildStep.indexOf("            preview)"),
+  );
+  const previewBuild = buildStep.slice(buildStep.indexOf("            preview)"));
+  assert.match(productionBuild, /test -z "\$SYNTHETIC_AUTH_FIXTURE_URL"/);
+  assert.doesNotMatch(productionBuild, /NEXT_PUBLIC_SUPABASE_URL/);
+  assert.match(previewBuild, /export NEXT_PUBLIC_SUPABASE_URL="\$SYNTHETIC_AUTH_FIXTURE_URL"/);
+  assert.match(previewBuild, /export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="\$SYNTHETIC_AUTH_PUBLISHABLE_KEY"/);
+  assert.match(previewBuild, /export SUPABASE_SERVICE_ROLE_KEY="\$SYNTHETIC_AUTH_SERVICE_KEY"/);
+
+  const productionDeploy = deployStep.slice(
+    deployStep.indexOf("            production)"),
+    deployStep.indexOf("            preview)"),
+  );
+  const previewDeploy = deployStep.slice(deployStep.indexOf("            preview)"));
+  assert.match(productionDeploy, /test -z "\$SYNTHETIC_AUTH_FIXTURE_URL"/);
+  assert.doesNotMatch(productionDeploy, /--env/);
+  assert.equal((previewDeploy.match(/--env /g) ?? []).length, 3);
+  assert.match(previewDeploy, /--env "NEXT_PUBLIC_SUPABASE_URL=\$SYNTHETIC_AUTH_FIXTURE_URL"/);
+  assert.match(previewDeploy, /--env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=\$SYNTHETIC_AUTH_PUBLISHABLE_KEY"/);
+  assert.match(previewDeploy, /--env "SUPABASE_SERVICE_ROLE_KEY=\$SYNTHETIC_AUTH_SERVICE_KEY"/);
+  const deployCommand = previewDeploy.indexOf('"vercel@$VERCEL_CLI_VERSION" deploy');
+  const deployArgs = previewDeploy.indexOf('"${deploy_args[@]}"', deployCommand);
+  assert.notEqual(deployCommand, -1);
+  assert.ok(deployCommand < deployArgs);
+
+  assert.doesNotMatch(source, /vercel@\$VERCEL_CLI_VERSION" env (?:add|rm)/);
+  assert.doesNotMatch(source, /git connect|git disconnect/);
+});
+
 test("quality gates complete before an immutable prebuilt deployment", async () => {
   const source = await workflow();
   const testIndex = source.indexOf("npm test");
