@@ -8,7 +8,9 @@
     "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/README.md": "sha256:748f04a58b575412e52dea605889c84d132a69a231b0e189a3fca51101dc1bf2",
     "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/aggregate-readiness-report.schema.v1.json": "sha256:5c4fb53abd901d6b71e62438147ee3f50cd5706ac461f58b5169753d23865366",
     "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/current-readiness-evidence.2026-08-13.json": "sha256:54e878c35a5bfff2324bdf1a101f4fb6791dcc7fa4cac002d5af5d4366605492",
-    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/protected-data-run-contract.schema.v1.json": "sha256:bc65c24e32a615519d2eb2edb4638a40defe344db938548c29314b288354c29b"
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/protected-data-run-contract.schema.v1.json": "sha256:bc65c24e32a615519d2eb2edb4638a40defe344db938548c29314b288354c29b",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/real-graph-readiness-contract.v1.json": "sha256:21b361823647b9bac87d4f295955cf444b241dc73ddc473eb1640d3003f17b24",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/synthetic-readiness-fixtures.v1.json": "sha256:24725faf72451596a679b37998816228bc9579446e515ec4f15d1a2bdcc64de2"
   },
   "authoritativeResult": {
     "dataReadiness": "insufficient_real_eligible_graph",
@@ -19,5 +21,5 @@
     "assignmentSeedGenerated": false,
     "executionDecision": "no_launch"
   },
-  "manifestPayloadHash": "sha256:28c7e9edaa5271599142b82f9f16a6cd6604bafabe19e910d0577afdf4f66f28"
+  "manifestPayloadHash": "sha256:a0b7d9a391482dff38d764ec95b7fc26e5b2fb20215aa28d71a204775ed6a401"
 }
