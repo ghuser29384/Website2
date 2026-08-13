@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "commitments-trade-protected-export-design-v1",
+  "status": "design_only_no_real_data_access",
+  "boundStudyKey": "synthetic:trade-bilateral-encouragement-planning-v1",
+  "boundStudyInstancePayloadHash": "sha256:1e31b1db59899fbf07fbf8b6219c8699f0c6b0ddbeb6e8717f989487660aaba2",
+  "boundPrecisionReportPayloadHash": "sha256:3ff2613f93d166e5e06a5bf8cfcaf029cd49d4e56690e345f676a51f982f6b4f",
+  "boundGraphFeasibilityContractPayloadHash": "sha256:6c6879a80062a6e923714bdf3e7e79105de8049a3347088a6f4b77507b8e6c95",
+  "boundProtocolPayloadHash": "sha256:cd663ae722ee028ddfe3e1b866acab9ef79b5fcf5b5418d053bd3687eca3881a",
+  "boundTemplatePayloadHash": "sha256:cf0a7a96294b431dcd79879fa01b7d1031ea50a842cebca6986e13351bcbb1e1",
+  "purpose": "design_protected_real_eligible_graph_diagnostics",
+  "dataFlow": {
+    "rawSourceBoundary": "moraltrade_protected_data_store",
+    "protectedComputationBoundary": "separately_authorized_research_enclave",
+    "repositoryBoundary": "schemas_design_and_aggregate_reports_only",
+    "rawIdentifiersLeaveSourceBoundary": false,
+    "pseudonymizedSnapshotLeavesProtectedBoundary": false,
+    "aggregateOnlyMayLeaveProtectedBoundary": true
+  },
+  "authorizationBoundary": {
+    "realDataAccessAuthorized": false,
+    "exportExecutionAuthorized": false,
+    "studyExecutionAuthorized": false,
+    "assignmentGenerationAuthorized": false,
+    "requiredIndependentApprovals": [
+      "privacy",
+      "ethics",
+      "security",
+      "data_steward",
+      "product_owner"
+    ],
+    "twoPersonReleaseRule": true,
+    "shortLivedReadOnlyCredentialsRequired": true,
+    "productionServiceRolePermitted": false
+  },
+  "pseudonymization": {
+    "algorithm": "HMAC-SHA-256",
+    "perExportKeyDerivation": "HKDF-SHA-256",
+    "minimumRootKeyBits": 256,
+    "domainLabels": [
+      "node",
+      "dyad"
+    ],
+    "crossExportLinkabilityPermitted": false,
+    "keyMaterialMayEnterRepositoryOrCI": false,
+    "reversibleMappingPermitted": false,
+    "pseudonymizationIsAnonymization": false
+  },
+  "dataMinimizationProfileHash": "sha256:014152e24f0772f91ee143cce1b214a75bd8cb843d6bf2fe301354d871795e4d",
+  "publicationBoundary": {
+    "aggregateOnly": true,
+    "pseudonymsInPublishedReportPermitted": false,
+    "minimumEligibleNodeCount": 100,
+    "minimumEligibleDyadCount": 100,
+    "minimumPublishedCellSize": 20,
+    "smallCellAction": "suppress_exact_count_and_mark_suppressed",
+    "exactTimestampsPermitted": false,
+    "componentMembershipPermitted": false
+  },
+  "retentionBoundary": {
+    "rawQueryResultMaximumHours": 4,
+    "pseudonymizedSnapshotMaximumHours": 24,
+    "aggregateReportMaximumDays": 365,
+    "automaticDeletionRequired": true,
+    "deletionAttestationRequired": true
+  },
+  "auditBoundary": {
+    "appendOnlyAuthorizationRecordRequired": true,
+    "queryHashRequired": true,
+    "payloadLoggingPermitted": false,
+    "secretLoggingPermitted": false,
+    "releaseRecordRequired": true
+  },
+  "incidentBoundary": {
+    "stopOnSuspectedDisclosure": true,
+    "rotatePerExportKeyOnIncident": true,
+    "notifyDataStewardAndPrivacyReviewer": true,
+    "reidentifyOrContactParticipantsFromSnapshotPermitted": false
+  },
+  "requestSchemaHash": "sha256:964047f3d6ecaa9333d65a4c7d1289dc55cb70356f1136edee8a81a9db3cb8fe",
+  "reportSchemaHash": "sha256:5e416b091e24ba63862899e771ecc830e19df60b49566fdaab61e2a33adffab3",
+  "threatModelRawHash": "sha256:e663750a5bcc8244ebbb069ccee8d97761463396a5188f31c0ee7191bae01789",
+  "validatorRawHash": "sha256:66c9120eaa78096cdeb7fa586245b6b03071e1539722630be8ee3824f3477cf2",
+  "realGraphDiagnosticsStatus": "required_not_completed",
+  "executionDecision": "no_access_no_export_no_launch",
+  "contractPayloadHash": "sha256:09179e941d887b322bd0199b8d72e54d8d6c07ac45e7b58169b362cce454e706"
+}
