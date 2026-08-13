@@ -109,29 +109,50 @@ const feedFixture = {
 };
 
 test.describe("Bottleneck Atlas and generated feed", () => {
-  test("uses progressive disclosure without hiding the complete public atlas", async ({ page }) => {
+  test("works as a compact match finder with evidence available on demand", async ({ page }) => {
     await page.goto("/bottleneck-atlas", { waitUntil: "domcontentloaded" });
 
-    await expect(page.getByRole("heading", { level: 1, name: "Bottleneck Atlas" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Find a cross-cause trade." }),
+    ).toBeVisible();
+    await expect(page.locator("[data-atlas-mvp]")).toBeVisible();
+    await expect(page.locator("[data-atlas-empty-state]")).toBeVisible();
+    await expect(page.locator("[data-atlas-match]")).toHaveCount(0);
+
+    await page.locator("[data-atlas-offer-select]").selectOption("funding");
+    await page.locator("[data-atlas-need-select]").selectOption("operations");
+    await page.locator("[data-atlas-find-matches]").click();
+
+    const match = page.locator("[data-atlas-match]");
+    await expect(match).toHaveCount(1);
+    await expect(match).toHaveAttribute(
+      "data-synthesis-template",
+      "ai-governance-advocacy-operations",
+    );
+    await expect(match).toContainText("You offer");
+    await expect(match).toContainText("You receive");
+    await expect(match).toContainText("No counterparty is confirmed");
+    await expect(match.getByRole("link", { name: "Review this possibility" })).toHaveAttribute(
+      "href",
+      "/suggested-opportunities/ai-governance-advocacy-operations",
+    );
+
+    await page.getByRole("tab", { name: "Browse evidence" }).click();
     await expect(page.locator("[data-atlas-field]")).toHaveCount(18);
-    await expect(page.locator("[data-synthesis-template]")).toHaveCount(9);
-    await expect(page.getByText(/field evidence is a search prior/i).first()).toBeVisible();
-
-    await expect(page.locator("details[data-synthesis-template][open]")).toHaveCount(1);
-    await expect(page.locator("details[data-atlas-cluster][open]")).toHaveCount(1);
-    await expect(page.locator("details[data-atlas-field][open]")).toHaveCount(0);
-
-    const firstField = page.locator("details[data-atlas-field]").first();
-    await firstField.locator(":scope > summary").click();
-    await expect(firstField).toHaveJSProperty("open", true);
-    await expect(firstField.getByRole("heading", { name: "Trade implication" })).toBeVisible();
+    await page.getByLabel("Search fields").fill("AI governance");
+    await expect(page.locator("[data-atlas-field]")).toHaveCount(1);
+    await page.getByRole("button", { name: /AI governance and policy/ }).click();
+    await expect(page.locator("[data-atlas-field-detail]")).toHaveAttribute(
+      "data-atlas-field-detail",
+      "ai-governance",
+    );
+    await expect(page.getByRole("heading", { name: "Bottlenecks" })).toBeVisible();
+    await expect(page.locator("[data-atlas-field-detail] a[href^='http']")).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.locator("[data-atlas-field]")).toHaveCount(18);
-    await expect(page.locator("details[data-synthesis-template][open]")).toHaveCount(1);
-    await expect(page.locator("details[data-atlas-cluster][open]")).toHaveCount(1);
+    await expect(page.locator("[data-atlas-mvp]")).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
