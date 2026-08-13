@@ -269,6 +269,7 @@ const server = http.createServer((request, response) => {
 
     if (mode === "delayed" && nextAttempt === 1) {
       verificationEvents.push({
+        atMs: Date.now(),
         delayMs: 250,
         mode,
         nextAttempt,
@@ -281,18 +282,18 @@ const server = http.createServer((request, response) => {
     }
 
     if (mode === "expired") {
-      verificationEvents.push({ mode, nextAttempt, result: "definitive_401" });
+      verificationEvents.push({ atMs: Date.now(), mode, nextAttempt, result: "definitive_401" });
       json(response, 401, { code: "bad_jwt", message: "JWT expired" });
       return;
     }
 
     if (mode === "fast" || mode === "delayed" || mode === "mismatch") {
-      verificationEvents.push({ mode, nextAttempt, result: "verified_user" });
+      verificationEvents.push({ atMs: Date.now(), mode, nextAttempt, result: "verified_user" });
       json(response, 200, fixtureUser(USER_ID));
       return;
     }
 
-    verificationEvents.push({ mode, nextAttempt, result: "definitive_401" });
+    verificationEvents.push({ atMs: Date.now(), mode, nextAttempt, result: "definitive_401" });
     json(response, 401, { code: "bad_jwt", message: "Invalid JWT signature" });
     return;
   }

@@ -115,27 +115,49 @@ function latencySummary(values: number[]) {
 }
 
 interface AuthDomState {
+  authenticatedSurface: boolean;
+  observedAtMs: number;
   privateContent: boolean;
   signedIn: boolean;
   signedOut: boolean;
+  url: string;
 }
 
 async function installAuthDomObserver(page: Page) {
+  const history: AuthDomState[] = [];
+  await page.exposeBinding(
+    "__recordAuthResolutionDomState",
+    (_source, state: AuthDomState) => {
+      history.push(state);
+    },
+  );
   await page.addInitScript(() => {
     const observedWindow = window as typeof window & {
-      __authResolutionDomHistory?: AuthDomState[];
+      __recordAuthResolutionDomState?: (state: AuthDomState) => Promise<void>;
     };
-    observedWindow.__authResolutionDomHistory = [];
     let previous = "";
     const record = () => {
       const text = document.body?.innerText ?? "";
-      const state: AuthDomState = {
+      const feedState = document
+        .querySelector('[data-mt-live-now="adaptive"]')
+        ?.getAttribute("data-mt-live-now-state");
+      const state = {
+        authenticatedSurface:
+          text.includes("Your profile") ||
+          text.includes("What priorities are being exchanged?") ||
+          text.includes("Account — saved settings and records.") ||
+          feedState === "ready" ||
+          feedState === "no_matches" ||
+          feedState === "profile_incomplete",
         privateContent:
           text.includes("Auth Resolution QA") ||
           text.includes("History limited") ||
           text.includes("Your profile") ||
           text.includes("What priorities are being exchanged?") ||
           text.includes("Account — saved settings and records.") ||
+          feedState === "ready" ||
+          feedState === "no_matches" ||
+          feedState === "profile_incomplete" ||
           Boolean(document.querySelector("[data-mt-live-now-recommendation]")),
         signedIn:
           text.includes("Signed in") ||
@@ -149,7 +171,11 @@ async function installAuthDomObserver(page: Page) {
       };
       const serialized = JSON.stringify(state);
       if (serialized !== previous) {
-        observedWindow.__authResolutionDomHistory?.push(state);
+        void observedWindow.__recordAuthResolutionDomState?.({
+          ...state,
+          observedAtMs: Date.now(),
+          url: window.location.href,
+        });
         previous = serialized;
       }
     };
@@ -160,20 +186,56 @@ async function installAuthDomObserver(page: Page) {
     });
     document.addEventListener("DOMContentLoaded", record, { once: true });
   });
+  return history;
 }
 
-async function authDomHistory(page: Page) {
-  return await page.evaluate(() => {
-    const observedWindow = window as typeof window & {
-      __authResolutionDomHistory?: AuthDomState[];
-    };
-    return observedWindow.__authResolutionDomHistory ?? [];
-  });
-}
-
-async function expectNoSignedOutFlash(page: Page) {
-  const history = await authDomHistory(page);
+function expectNoSignedOutFlash(history: AuthDomState[]) {
   expect(history.some((state) => state.signedOut)).toBe(false);
+}
+
+interface VerificationEvent {
+  atMs: number;
+  mode: string;
+  nextAttempt: number;
+  result: string;
+}
+
+async function expectOrderedDelayedRecoveryBeforeAuthenticatedRender(
+  request: APIRequestContext,
+  history: AuthDomState[],
+  historyStart: number,
+  expectedAttempts = 2,
+) {
+  const fixtureEvents = (await getFixtureJson(request, "/__fixture/events")) as {
+    attempts: Record<string, number>;
+    verificationEvents: VerificationEvent[];
+  };
+  expect(fixtureEvents.attempts).toEqual({ delayed: expectedAttempts });
+  const expectedVerificationEvents = Array.from(
+    { length: expectedAttempts },
+    (_, index) => ({
+      mode: "delayed",
+      nextAttempt: index + 1,
+      result: index === 0 ? "retryable_503" : "verified_user",
+    }),
+  );
+  expect(
+    fixtureEvents.verificationEvents.map(({ mode, nextAttempt, result }) => ({
+      mode,
+      nextAttempt,
+      result,
+    })),
+  ).toEqual(expectedVerificationEvents);
+
+  await expect
+    .poll(() => history.slice(historyStart).some((state) => state.authenticatedSurface))
+    .toBe(true);
+  const firstAuthenticatedRender = history
+    .slice(historyStart)
+    .find((state) => state.authenticatedSurface);
+  const verifiedAtMs = fixtureEvents.verificationEvents[1]?.atMs;
+  expect(verifiedAtMs).toEqual(expect.any(Number));
+  expect(firstAuthenticatedRender?.observedAtMs).toBeGreaterThanOrEqual(verifiedAtMs);
 }
 
 function isExpectedNextPrefetchAbort(request: Request) {
@@ -302,7 +364,7 @@ for (const viewport of viewports) {
     test.setTimeout(240_000);
     await installPreviewBypass(context);
     await page.setViewportSize(viewport);
-    await installAuthDomObserver(page);
+    const authHistory = await installAuthDomObserver(page);
     const fixture = await getFixtureSession(request, "delayed");
     await setSession(context, fixture);
     const failures = watchPage(page);
@@ -310,38 +372,25 @@ for (const viewport of viewports) {
 
     for (let iteration = 0; iteration < 10; iteration += 1) {
       await resetFixture(request);
+      const profileHistoryStart = authHistory.length;
       const profileStartedAt = Date.now();
       const profileResponse = await page.goto(`/profile?auth_iteration=${iteration}`);
       profileLatenciesMs.push(Date.now() - profileStartedAt);
       expect(profileResponse?.ok()).toBeTruthy();
-      const profileEvents = await getFixtureJson(request, "/__fixture/events");
-      const sawTransientFailure = profileEvents.verificationEvents.some(
-        (event: { result?: string }) => event.result === "retryable_503",
-      );
-      const sawVerifiedRecovery = profileEvents.verificationEvents.some(
-        (event: { result?: string }) => event.result === "verified_user",
-      );
-      if (
-        profileEvents.attempts.delayed < 2 ||
-        !sawTransientFailure ||
-        !sawVerifiedRecovery
-      ) {
-        throw new Error(`Unexpected fixture calls: ${JSON.stringify(profileEvents)}`);
-      }
       await expect(page.getByRole("heading", { name: "Your profile" })).toBeVisible({
         timeout: 20_000,
       });
-      await expect
-        .poll(async () => {
-          const profileStats = await getFixtureJson(request, "/__fixture/stats");
-          return profileStats.delayed >= 2;
-        })
-        .toBe(true);
       await expect(page.getByText("Signed in", { exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Profile unavailable" })).toHaveCount(0);
-      await expectNoSignedOutFlash(page);
+      await expectOrderedDelayedRecoveryBeforeAuthenticatedRender(
+        request,
+        authHistory,
+        profileHistoryStart,
+      );
+      expectNoSignedOutFlash(authHistory);
 
       await resetFixture(request);
+      const composerHistoryStart = authHistory.length;
       const composerResponse = await page.goto(
         `/trades/new?example=seed-victoria&auth_iteration=${iteration}`,
       );
@@ -350,15 +399,27 @@ for (const viewport of viewports) {
         page.getByRole("heading", { name: "What priorities are being exchanged?" }),
       ).toBeVisible();
       await expect(page.getByRole("heading", { name: "Sign in to build a trade." })).toHaveCount(0);
-      await expectNoSignedOutFlash(page);
+      await expectOrderedDelayedRecoveryBeforeAuthenticatedRender(
+        request,
+        authHistory,
+        composerHistoryStart,
+      );
+      expectNoSignedOutFlash(authHistory);
 
       await resetFixture(request);
+      const dashboardHistoryStart = authHistory.length;
       const dashboardResponse = await page.goto(`/dashboard?auth_iteration=${iteration}`);
       expect(dashboardResponse?.ok()).toBeTruthy();
       await expect(page.getByRole("heading", { name: "Account" })).toBeVisible();
-      await expectNoSignedOutFlash(page);
+      await expectOrderedDelayedRecoveryBeforeAuthenticatedRender(
+        request,
+        authHistory,
+        dashboardHistoryStart,
+      );
+      expectNoSignedOutFlash(authHistory);
 
       await resetFixture(request);
+      const feedHistoryStart = authHistory.length;
       const feedResponse = await page.goto(`/feed?auth_iteration=${iteration}`, {
         waitUntil: "domcontentloaded",
       });
@@ -371,7 +432,16 @@ for (const viewport of viewports) {
           name: "Sign in to see a feed based on your moral priorities.",
         }),
       ).toHaveCount(0);
-      await expectNoSignedOutFlash(page);
+      await expectOrderedDelayedRecoveryBeforeAuthenticatedRender(
+        request,
+        authHistory,
+        feedHistoryStart,
+        // Feed loads its server-rendered shell and then two distinct private
+        // API resources. The first resolver consumes the single bounded retry;
+        // both later request-scoped resolvers succeed on their first attempt.
+        4,
+      );
+      expectNoSignedOutFlash(authHistory);
 
       await expectNoBrowserFailures(page, failures);
     }
@@ -457,7 +527,7 @@ test("expired and invalid identities fail closed without private content", async
       await installPreviewBypass(context);
       await setSession(context, fixture);
       const page = await context.newPage();
-      await installAuthDomObserver(page);
+      const authHistory = await installAuthDomObserver(page);
       const failures = watchPage(page);
 
       const separator = negativeRoute.route.includes("?") ? "&" : "?";
@@ -480,8 +550,11 @@ test("expired and invalid identities fail closed without private content", async
       }
       await expect(page.getByText("Auth Resolution QA", { exact: true })).toHaveCount(0);
       await expect(page.locator("[data-mt-live-now-recommendation]")).toHaveCount(0);
-      const history = await authDomHistory(page);
-      expect(history.some((state) => state.privateContent || state.signedIn)).toBe(false);
+      expect(
+        authHistory.some(
+          (state) => state.privateContent || state.authenticatedSurface || state.signedIn,
+        ),
+      ).toBe(false);
       await expectNoBrowserFailures(page, failures);
       await attachExpectedBrowserAborts(
         `auth-resolution-${mode}-${negativeRoute.type}`,
