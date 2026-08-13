@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moraltrade.org/schemas/commitments-trade-aggregate-diagnostics-report-v1.json",
+  "title": "Moral Trade aggregate eligible-graph diagnostics report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "reportKey",
+    "subjectMode",
+    "containsRealData",
+    "containsPseudonyms",
+    "boundContractPayloadHash",
+    "boundRequestPayloadHash",
+    "dataWindowStartDate",
+    "dataWindowEndDate",
+    "privacyReleaseChecks",
+    "graphSummary",
+    "componentCountByStratum",
+    "structuralDetermination",
+    "realGraphDiagnosticsStatus",
+    "executionDecision",
+    "assignmentGenerated",
+    "realUserAssignmentAllowed",
+    "reportPayloadHash"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "commitments-trade-aggregate-diagnostics-report-v1"},
+    "reportKey": {"type": "string", "pattern": "^synthetic:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$"},
+    "subjectMode": {"const": "synthetic_only"},
+    "containsRealData": {"const": false},
+    "containsPseudonyms": {"const": false},
+    "boundContractPayloadHash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "boundRequestPayloadHash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"},
+    "dataWindowStartDate": {"type": "string", "format": "date"},
+    "dataWindowEndDate": {"type": "string", "format": "date"},
+    "privacyReleaseChecks": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimumEligibleNodeCountMet", "minimumEligibleDyadCountMet", "allPublishedCellsMeetMinimum", "containsComponentMembership", "containsExactTimestamps", "containsPseudonyms", "aggregateReleaseEligible"],
+      "properties": {
+        "minimumEligibleNodeCountMet": {"type": "boolean"},
+        "minimumEligibleDyadCountMet": {"type": "boolean"},
+        "allPublishedCellsMeetMinimum": {"type": "boolean"},
+        "containsComponentMembership": {"const": false},
+        "containsExactTimestamps": {"const": false},
+        "containsPseudonyms": {"const": false},
+        "aggregateReleaseEligible": {"type": "boolean"}
+      }
+    },
+    "graphSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeCount", "eligibleDirectedDyadCount", "weaklyConnectedComponentCount", "meanEligibleDyadsPerCluster", "clusterSizeCoefficientOfVariation", "maximumEligibleDyadsPerCluster", "largestClusterDyadShare"],
+      "properties": {
+        "nodeCount": {"type": "integer", "minimum": 0},
+        "eligibleDirectedDyadCount": {"type": "integer", "minimum": 0},
+        "weaklyConnectedComponentCount": {"type": "integer", "minimum": 0},
+        "meanEligibleDyadsPerCluster": {"type": "number", "minimum": 0},
+        "clusterSizeCoefficientOfVariation": {"type": "number", "minimum": 0},
+        "maximumEligibleDyadsPerCluster": {"type": "integer", "minimum": 0},
+        "largestClusterDyadShare": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "componentCountByStratum": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["stratumKey", "componentCount", "suppressed"],
+        "properties": {
+          "stratumKey": {"type": "string"},
+          "componentCount": {"type": ["integer", "null"], "minimum": 0},
+          "suppressed": {"type": "boolean"}
+        },
+        "allOf": [{"if": {"properties": {"suppressed": {"const": true}}}, "then": {"properties": {"componentCount": {"const": null}}}}]
+      }
+    },
+    "structuralDetermination": {"enum": ["compatible_with_frozen_precision_envelope", "requires_new_precision_or_partition_review", "not_releasable_due_to_privacy_thresholds"]},
+    "realGraphDiagnosticsStatus": {"const": "required_not_completed"},
+    "executionDecision": {"const": "no_access_no_export_no_launch"},
+    "assignmentGenerated": {"const": false},
+    "realUserAssignmentAllowed": {"const": false},
+    "reportPayloadHash": {"type": "string", "pattern": "^sha256:[a-f0-9]{64}$"}
+  }
+}
