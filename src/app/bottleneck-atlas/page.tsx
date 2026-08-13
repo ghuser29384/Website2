@@ -40,7 +40,7 @@ const MATCHER_TEMPLATES: readonly AtlasMatcherTemplate[] =
     actorScopes: template.actorScopes,
     candidateStructure: template.candidateStructures[0] ?? "Bounded pilot",
     confidence: template.confidence,
-    generic: Boolean(template.generic),
+    generic: "generic" in template && template.generic === true,
   }));
 
 export default async function BottleneckAtlasPage() {
