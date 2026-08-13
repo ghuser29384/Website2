@@ -1,0 +1,260 @@
+name: Donation Upgrade partial redirect isolated QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/direct-donation-upgrade-partial-qa.yml"
+      - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
+      - "supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql"
+      - "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql"
+      - "supabase/tests/direct_verified_donation_upgrade.sql"
+      - "supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql"
+      - "src/lib/direct-donation-upgrade*.ts"
+      - "src/app/direct-donation-upgrade-actions.ts"
+  workflow_dispatch:
+    inputs:
+      confirm_target:
+        description: Type the exact MoralTrade QA project ref
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: donation-upgrade-partial-isolated-qa
+  cancel-in-progress: false
+
+jobs:
+  qa:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      BASE_MIGRATION: supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
+      SPLIT_MIGRATION: supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql
+      LIFECYCLE_MIGRATION: supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql
+      BASE_REGRESSION: supabase/tests/direct_verified_donation_upgrade.sql
+      SPLIT_REGRESSION: supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Validate exact isolated-QA target and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            test "${{ inputs.confirm_target }}" = "$EXPECTED_QA_REF"
+          fi
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
+          PY
+          grep -Fq 'direct_donation_upgrade_proposals' "$SPLIT_MIGRATION"
+          grep -Fq 'direct_donation_upgrade_guard_completion' "$LIFECYCLE_MIGRATION"
+          git diff --check
+          {
+            printf 'commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'split_blob=%s\n' "$(git hash-object "$SPLIT_MIGRATION")"
+            printf 'lifecycle_blob=%s\n' "$(git hash-object "$LIFECYCLE_MIGRATION")"
+            printf 'regression_blob=%s\n' "$(git hash-object "$SPLIT_REGRESSION")"
+          } | tee donation-upgrade-partial-qa-source.txt
+          sha256sum "$SPLIT_MIGRATION" "$LIFECYCLE_MIGRATION" "$SPLIT_REGRESSION" \
+            | tee donation-upgrade-partial-qa-sha256.txt
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Compile the additive migration pair transactionally
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
+            | tee donation-upgrade-partial-compile.log
+          begin;
+          \i $SPLIT_MIGRATION
+          \i $LIFECYCLE_MIGRATION
+          rollback;
+          SQL
+
+      - name: Apply or verify both immutable migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          apply_or_verify() {
+            local version="$1" name="$2" file="$3"
+            local source_blob count recorded
+            source_blob="$(git hash-object "$file")"
+            count="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+              --set ON_ERROR_STOP=1 \
+              --command "select count(*) from supabase_migrations.schema_migrations where version='${version}';" \
+              | tr -d '[:space:]')"
+            if [[ "$count" == "0" ]]; then
+              psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+                --single-transaction --file "$file" \
+                --command "insert into supabase_migrations.schema_migrations(version, statements, name, created_by) values ('${version}', array['source-git-blob:${source_blob}'], '${name}', 'github-actions:donation-upgrade-partial-qa');"
+            elif [[ "$count" == "1" ]]; then
+              recorded="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+                --set ON_ERROR_STOP=1 \
+                --command "select coalesce(statements[1],'') from supabase_migrations.schema_migrations where version='${version}';" \
+                | tr -d '[:space:]')"
+              test "$recorded" = "source-git-blob:${source_blob}"
+              printf '%s already recorded with exact source blob %s.\n' "$version" "$source_blob"
+            else
+              echo "Unexpected migration-history count for $version: $count" >&2
+              exit 1
+            fi
+          }
+
+          apply_or_verify 20260813150000 direct_donation_upgrade_partial_redirect_negotiation "$SPLIT_MIGRATION" \
+            | tee donation-upgrade-partial-apply.log
+          apply_or_verify 20260813151000 direct_donation_upgrade_partial_redirect_lifecycle "$LIFECYCLE_MIGRATION" \
+            | tee -a donation-upgrade-partial-apply.log
+
+      - name: Verify schema, generated split, and privilege boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
+            | tee donation-upgrade-partial-schema.log
+          do $$
+          declare
+            missing text[];
+          begin
+            select array_agg(item.name order by item.name)
+            into missing
+            from (values
+              ('table:proposals', to_regclass('public.direct_donation_upgrade_proposals') is not null),
+              ('function:create_v2', to_regprocedure('public.create_direct_donation_upgrade_offer(uuid,text,integer,integer,timestamptz,text,jsonb,jsonb,text,text,text,integer)') is not null),
+              ('function:propose', to_regprocedure('public.propose_direct_donation_upgrade_terms(uuid,uuid,integer,integer,integer,integer,text,text)') is not null),
+              ('function:accept', to_regprocedure('public.accept_direct_donation_upgrade_proposal(uuid,uuid,text)') is not null),
+              ('function:lifecycle', to_regprocedure('public.run_direct_donation_upgrade_lifecycle(timestamptz)') is not null),
+              ('column:redirect_basis_points', exists (
+                select 1 from information_schema.columns
+                where table_schema='public' and table_name='direct_donation_upgrade_offers'
+                  and column_name='redirect_basis_points'
+              )),
+              ('column:obligation_kind', exists (
+                select 1 from information_schema.columns
+                where table_schema='public' and table_name='direct_donation_upgrade_obligations'
+                  and column_name='obligation_kind'
+              ))
+            ) as item(name, present)
+            where not item.present;
+            if missing is not null then
+              raise exception 'Missing partial Donation Upgrade schema objects: %', missing;
+            end if;
+          end;
+          $$;
+
+          select public.direct_donation_upgrade_redirected_amount(1000, 2000) as redirected_cents;
+          SQL
+
+          forbidden="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tr -d '[:space:]'
+          select count(*)
+          from information_schema.routine_privileges
+          where routine_schema = 'public'
+            and routine_name in (
+              'propose_direct_donation_upgrade_terms',
+              'withdraw_direct_donation_upgrade_proposal',
+              'reject_direct_donation_upgrade_proposal',
+              'accept_direct_donation_upgrade_proposal'
+            )
+            and grantee in ('PUBLIC', 'anon', 'authenticated');
+          SQL
+          )"
+          test "$forbidden" = "0"
+
+      - name: Run rollback-only compatibility and partial-schema regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$BASE_REGRESSION" | tee donation-upgrade-partial-base-regression.log
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file "$SPLIT_REGRESSION" | tee donation-upgrade-partial-split-regression.log
+
+      - name: Prove zero persistent synthetic residue
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee donation-upgrade-partial-residue.json
+          select jsonb_build_object(
+            'baseOffers', (select count(*) from public.direct_donation_upgrade_offers where creator_profile_id in (
+              'da111111-1111-4111-8111-111111111111',
+              'da444444-4444-4444-8444-444444444444'
+            )),
+            'baseCandidates', (select count(*) from public.direct_donation_upgrade_candidates where profile_id in (
+              'da222222-2222-4222-8222-222222222222',
+              'da333333-3333-4333-8333-333333333333'
+            )),
+            'baseProposals', (select count(*) from public.direct_donation_upgrade_proposals where proposer_profile_id in (
+              'da222222-2222-4222-8222-222222222222',
+              'da333333-3333-4333-8333-333333333333'
+            )),
+            'baseObligations', (select count(*) from public.direct_donation_upgrade_obligations where participant_profile_id in (
+              'da111111-1111-4111-8111-111111111111',
+              'da222222-2222-4222-8222-222222222222',
+              'da333333-3333-4333-8333-333333333333',
+              'da444444-4444-4444-8444-444444444444'
+            ))
+          );
+          SQL
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          rows = [line.strip() for line in Path('donation-upgrade-partial-residue.json').read_text().splitlines() if line.strip()]
+          state = json.loads(rows[-1])
+          unexpected = {key: value for key, value in state.items() if value != 0}
+          if unexpected:
+              raise SystemExit(f"Persistent Donation Upgrade QA residue found: {unexpected}")
+          print(json.dumps(state, sort_keys=True))
+          PY
+
+      - name: Upload isolated-QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: donation-upgrade-partial-qa-${{ github.run_id }}
+          path: |
+            donation-upgrade-partial-qa-source.txt
+            donation-upgrade-partial-qa-sha256.txt
+            donation-upgrade-partial-compile.log
+            donation-upgrade-partial-apply.log
+            donation-upgrade-partial-schema.log
+            donation-upgrade-partial-base-regression.log
+            donation-upgrade-partial-split-regression.log
+            donation-upgrade-partial-residue.json
+          if-no-files-found: warn
+          retention-days: 30
