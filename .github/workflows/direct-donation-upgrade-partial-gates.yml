@@ -1,0 +1,192 @@
+name: Donation Upgrade partial redirect gates
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/direct-donation-upgrade-partial-gates.yml"
+      - ".github/workflows/direct-donation-upgrade-partial-qa.yml"
+      - "src/app/direct-donation-upgrade-actions.ts"
+      - "src/app/api/connectors/every-org/**"
+      - "src/app/api/jobs/donation-upgrades/**"
+      - "src/app/donation-upgrades/**"
+      - "src/app/trades/new/conditional-donation.tsx"
+      - "src/app/trades/new/direct-donation-upgrade-create.tsx"
+      - "src/components/donation-upgrades/**"
+      - "src/lib/direct-donation-upgrade*.ts"
+      - "supabase/migrations/*donation_upgrade*.sql"
+      - "supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql"
+      - "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql"
+      - "supabase/tests/*donation_upgrade*.sql"
+      - "supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: donation-upgrade-partial-gates-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Focused split and negotiation tests
+        run: >-
+          node --import tsx --test
+          src/lib/direct-donation-upgrade.test.ts
+          src/lib/direct-donation-upgrade-split.test.ts
+          src/lib/direct-donation-upgrade-environment-contract.test.ts
+          src/lib/direct-donation-upgrade-source-contract.test.ts
+
+      - name: Complete repository tests
+        id: tests
+        continue-on-error: true
+        run: npm test > donation-upgrade-partial-tests.log 2>&1
+
+      - name: Absolute TypeScript
+        id: typecheck
+        continue-on-error: true
+        run: npx tsc --noEmit > donation-upgrade-partial-typecheck.log 2>&1
+
+      - name: Absolute ESLint
+        id: lint
+        continue-on-error: true
+        run: npm run lint -- --quiet > donation-upgrade-partial-lint.log 2>&1
+
+      - name: Production build with money rails disabled
+        id: build
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+          DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false"
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+        run: npm run build > donation-upgrade-partial-build.log 2>&1
+
+      - name: Schema, non-custody, and diff integrity
+        id: integrity
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          schema=supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql
+          lifecycle=supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql
+          regression=supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql
+
+          grep -Fq 'redirect_basis_points integer not null default 10000' "$schema"
+          grep -Fq 'direct_donation_upgrade_proposals' "$schema"
+          grep -Fq 'accept_direct_donation_upgrade_proposal' "$schema"
+          grep -Fq "obligation_kind = 'creator_retained'" "$lifecycle"
+          grep -Fq 'direct_donation_upgrade_guard_completion' "$lifecycle"
+          grep -Fq 'actual_creator_count <> expected_creator_count' "$lifecycle"
+          grep -Fq 'with (security_barrier = true, security_invoker = true)' "$schema"
+          grep -Fq 'revoke all on public.direct_donation_upgrade_public_offers from public, anon, authenticated;' "$schema"
+          grep -Fq 'counteroffer RPC is executable by a public user role' "$regression"
+          test "$(grep -c '^begin;$' "$regression")" = "1"
+          test "$(grep -c '^rollback;$' "$regression")" = "1"
+          for rpc in \
+            propose_direct_donation_upgrade_terms \
+            withdraw_direct_donation_upgrade_proposal \
+            reject_direct_donation_upgrade_proposal \
+            accept_direct_donation_upgrade_proposal \
+            cancel_direct_donation_upgrade_offer \
+            complete_direct_donation_upgrade_obligation \
+            run_direct_donation_upgrade_lifecycle
+          do
+            grep -Eq "(perform|select|:=).*public\\.${rpc}\\(" "$regression"
+          done
+
+          ! grep -R -E '@/lib/stripe|stripe\.checkout|payment_intent|setup_intent' \
+            src/lib/direct-donation-upgrade-split.ts \
+            src/lib/direct-donation-upgrade-negotiation.ts \
+            src/components/donation-upgrades/direct-upgrade-amount-fields.tsx \
+            src/app/direct-donation-upgrade-actions.ts
+
+          git fetch --no-tags origin main
+          current_main="$(git rev-parse origin/main)"
+          if ! git merge-base --is-ancestor "$current_main" HEAD; then
+            echo "Candidate HEAD does not contain current origin/main ($current_main)." >&2
+            exit 1
+          fi
+          base="$(git merge-base origin/main HEAD)"
+          test "$base" = "$current_main"
+          git diff --check "$base"...HEAD
+          git diff --name-only "$base"...HEAD | sort | tee donation-upgrade-partial-changed-files.txt
+          {
+            printf 'current_main=%s\n' "$current_main"
+            printf 'merge_base=%s\n' "$base"
+            printf 'head=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'split_blob=%s\n' "$(git hash-object "$schema")"
+            printf 'lifecycle_blob=%s\n' "$(git hash-object "$lifecycle")"
+            printf 'regression_blob=%s\n' "$(git hash-object "$regression")"
+          } | tee donation-upgrade-partial-source.txt
+          sha256sum "$schema" "$lifecycle" "$regression" \
+            | tee donation-upgrade-partial-sql-sha256.txt
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: donation-upgrade-partial-gates-${{ github.run_id }}
+          path: |
+            donation-upgrade-partial-tests.log
+            donation-upgrade-partial-typecheck.log
+            donation-upgrade-partial-lint.log
+            donation-upgrade-partial-build.log
+            donation-upgrade-partial-changed-files.txt
+            donation-upgrade-partial-source.txt
+            donation-upgrade-partial-sql-sha256.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Require every engineering gate
+        if: always()
+        shell: bash
+        env:
+          TESTS: ${{ steps.tests.outcome }}
+          TYPECHECK: ${{ steps.typecheck.outcome }}
+          LINT: ${{ steps.lint.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          INTEGRITY: ${{ steps.integrity.outcome }}
+        run: |
+          set -euo pipefail
+          failed=0
+          report() {
+            local label="$1" outcome="$2" log="$3"
+            if [[ "$outcome" != "success" ]]; then
+              failed=1
+              echo "::error title=${label} failed::Last 200 lines follow"
+              test -f "$log" && tail -n 200 "$log" || true
+            fi
+          }
+          report "Complete repository tests" "$TESTS" donation-upgrade-partial-tests.log
+          report "Absolute TypeScript" "$TYPECHECK" donation-upgrade-partial-typecheck.log
+          report "Absolute ESLint" "$LINT" donation-upgrade-partial-lint.log
+          report "Production build" "$BUILD" donation-upgrade-partial-build.log
+          report "Schema and diff integrity" "$INTEGRITY" donation-upgrade-partial-changed-files.txt
+          exit "$failed"
