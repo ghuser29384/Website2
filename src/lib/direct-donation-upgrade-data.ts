@@ -9,11 +9,20 @@ import type {
   PartialDirectDonationUpgradeObligationRow,
   PartialDirectDonationUpgradeOfferRow,
 } from "@/lib/direct-donation-upgrade-negotiation";
+import { calculateDirectDonationUpgradeSplit } from "@/lib/direct-donation-upgrade-split";
 
 export const DIRECT_DONATION_UPGRADE_RENDERED_QA_PROPOSER_OFFER_ID =
   "d2000000-0000-4000-8000-000000000002";
 export const DIRECT_DONATION_UPGRADE_RENDERED_QA_CREATOR_OFFER_ID =
   "d3000000-0000-4000-8000-000000000003";
+export const DIRECT_DONATION_UPGRADE_RENDERED_QA_EXPIRED_OFFER_ID =
+  "d4000000-0000-4000-8000-000000000004";
+export const DIRECT_DONATION_UPGRADE_RENDERED_QA_REVISION_OFFER_ID =
+  "d5000000-0000-4000-8000-000000000005";
+export const DIRECT_DONATION_UPGRADE_RENDERED_QA_ACCEPTED_REVISION_ID =
+  "d5100000-0000-4000-8000-000000000051";
+export const DIRECT_DONATION_UPGRADE_RENDERED_QA_FULL_REDIRECT_OFFER_ID =
+  "d6000000-0000-4000-8000-000000000006";
 export const DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID =
   "d1000000-0000-4000-8000-000000000001";
 
@@ -43,22 +52,32 @@ function renderedQaOffer(input: {
   creatorProfileId: string;
   id: string;
   termsHash: string;
+  matchDeadlineAt?: string;
+  redirectBasisPoints?: number;
+  status?: PartialDirectDonationUpgradeOfferRow["status"];
+  supersededByOfferId?: string | null;
 }): PartialDirectDonationUpgradeOfferRow {
   const [originalRecipient, upgradedRecipient] = qaFixtureIdentities();
+  const creatorAmountCents = 1_000;
+  const split = calculateDirectDonationUpgradeSplit(
+    creatorAmountCents,
+    input.redirectBasisPoints ?? 2_000,
+  );
   return {
     id: input.id,
     creator_profile_id: input.creatorProfileId,
     environment: "staging",
-    status: "open",
+    status: input.status ?? "open",
     selected_branch: null,
     privacy_mode: "public",
-    creator_amount_cents: 1_000,
-    redirect_basis_points: 2_000,
-    redirected_amount_cents: 200,
-    retained_amount_cents: 800,
+    creator_amount_cents: creatorAmountCents,
+    redirect_basis_points: split.redirectBasisPoints,
+    redirected_amount_cents: split.redirectedAmountCents,
+    retained_amount_cents: split.retainedAmountCents,
     matcher_amount_cents: 1_500,
     currency: "USD",
-    match_deadline_at: "2099-08-20T12:00:00.000Z",
+    match_deadline_at:
+      input.matchDeadlineAt ?? "2099-08-20T12:00:00.000Z",
     fulfillment_deadline_at: null,
     webhook_grace_ends_at: null,
     original_recipient: originalRecipient,
@@ -78,7 +97,7 @@ function renderedQaOffer(input: {
     failure_code: "",
     failure_message: "",
     supersedes_offer_id: null,
-    superseded_by_offer_id: null,
+    superseded_by_offer_id: input.supersededByOfferId ?? null,
     created_at: "2026-08-13T12:00:00.000Z",
     updated_at: "2026-08-13T12:00:00.000Z",
   };
@@ -206,6 +225,70 @@ function renderedQaDetailFixture(input: {
     };
   }
 
+  if (input.offerId === DIRECT_DONATION_UPGRADE_RENDERED_QA_EXPIRED_OFFER_ID) {
+    const offer = renderedQaOffer({
+      creatorProfileId: "d4000000-0000-4000-8000-000000000040",
+      id: input.offerId,
+      matchDeadlineAt: "2020-08-20T12:00:00.000Z",
+      termsHash: "c".repeat(64),
+    });
+    return {
+      publicOffer: renderedQaPublicOffer(offer, "QA Expired Fixture Creator", 0),
+      offer: null,
+      candidates: [],
+      obligations: [],
+      impactCredits: [],
+      proposals: [],
+      isParticipant: false,
+    };
+  }
+
+  if (input.offerId === DIRECT_DONATION_UPGRADE_RENDERED_QA_REVISION_OFFER_ID) {
+    const offer = renderedQaOffer({
+      creatorProfileId: DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
+      id: input.offerId,
+      redirectBasisPoints: 2_000,
+      status: "cancelled",
+      supersededByOfferId:
+        DIRECT_DONATION_UPGRADE_RENDERED_QA_ACCEPTED_REVISION_ID,
+      termsHash: "d".repeat(64),
+    });
+    const acceptedProposal: DirectDonationUpgradeProposalRow = {
+      id: "d5200000-0000-4000-8000-000000000052",
+      offer_id: offer.id,
+      proposer_profile_id: "d5200000-0000-4000-8000-000000000020",
+      status: "accepted",
+      base_terms_hash: offer.terms_hash,
+      proposed_redirect_basis_points: 10_000,
+      proposed_redirected_amount_cents: 1_000,
+      proposed_retained_amount_cents: 0,
+      proposed_matcher_amount_cents: 2_500,
+      currency: "USD",
+      message: "I can add more if the creator redirects the complete baseline.",
+      response_message: "Accepted as the matched revision.",
+      commitment_version: "direct-donation-upgrade-proposal-v1-2026-08-12",
+      commitment_accepted_at: "2026-08-13T14:00:00.000Z",
+      responded_at: "2026-08-13T14:15:00.000Z",
+      accepted_offer_id:
+        DIRECT_DONATION_UPGRADE_RENDERED_QA_ACCEPTED_REVISION_ID,
+      created_at: "2026-08-13T14:00:00.000Z",
+      updated_at: "2026-08-13T14:15:00.000Z",
+      profile: {
+        id: "d5200000-0000-4000-8000-000000000020",
+        display_name: "QA Accepted Proposer",
+      },
+    };
+    return {
+      publicOffer: renderedQaPublicOffer(offer, "QA Direct Upgrade Creator", 1),
+      offer,
+      candidates: [],
+      obligations: [],
+      impactCredits: [],
+      proposals: [acceptedProposal],
+      isParticipant: true,
+    };
+  }
+
   return null;
 }
 
@@ -246,6 +329,28 @@ export interface DirectDonationUpgradeViewerData {
   viewerCandidates: DirectDonationUpgradeCandidateRow[];
   viewerObligations: PartialDirectDonationUpgradeObligationRow[];
   viewerProposals: DirectDonationUpgradeProposalRow[];
+}
+
+export function directDonationUpgradeRenderedQaViewerFixture(input: {
+  viewerId: string | null;
+  environment: DirectDonationUpgradeEnvironment;
+}): DirectDonationUpgradeViewerData | null {
+  if (!renderedQaFixtureEnabled(input)) return null;
+  const fullRedirectOffer = renderedQaOffer({
+    creatorProfileId: "d6000000-0000-4000-8000-000000000060",
+    id: DIRECT_DONATION_UPGRADE_RENDERED_QA_FULL_REDIRECT_OFFER_ID,
+    redirectBasisPoints: 10_000,
+    termsHash: "f".repeat(64),
+  });
+  return {
+    publicOffers: [
+      renderedQaPublicOffer(fullRedirectOffer, "QA Full Redirect Creator", 0),
+    ],
+    creatorOffers: [],
+    viewerCandidates: [],
+    viewerObligations: [],
+    viewerProposals: [],
+  };
 }
 
 export async function loadPublicDirectDonationUpgrades(input: {

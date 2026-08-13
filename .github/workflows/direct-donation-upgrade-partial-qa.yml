@@ -11,6 +11,7 @@ on:
       - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
       - "supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql"
       - "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql"
+      - "supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql"
       - "supabase/tests/*donation_upgrade*.sql"
       - "supabase/tests/direct_verified_donation_upgrade.sql"
       - "supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql"
@@ -33,7 +34,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: direct-donation-upgrade-isolated-qa
+  group: direct-donation-upgrade-stateful-isolated-qa
   cancel-in-progress: false
 
 jobs:
@@ -52,6 +53,7 @@ jobs:
       BASE_MIGRATION: supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
       SPLIT_MIGRATION: supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql
       LIFECYCLE_MIGRATION: supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql
+      HARDENING_MIGRATION: supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql
       BASE_REGRESSION: supabase/tests/direct_verified_donation_upgrade.sql
       SPLIT_REGRESSION: supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql
     steps:
@@ -90,6 +92,8 @@ jobs:
           PY
           grep -Fq 'direct_donation_upgrade_proposals' "$SPLIT_MIGRATION"
           grep -Fq 'direct_donation_upgrade_guard_completion' "$LIFECYCLE_MIGRATION"
+          grep -Fq 'direct_donation_upgrade_lock_profile_eligibility' "$HARDENING_MIGRATION"
+          grep -Fq 'provider_charge_reused' "$HARDENING_MIGRATION"
           grep -Fq 'with (security_barrier = true, security_invoker = true)' "$SPLIT_MIGRATION"
           grep -Fq 'revoke all on public.direct_donation_upgrade_public_offers from public, anon, authenticated;' "$SPLIT_MIGRATION"
           test "$(grep -c '^begin;$' "$BASE_REGRESSION")" = "1"
@@ -124,10 +128,12 @@ jobs:
             printf 'base_blob=%s\n' "$(git hash-object "$BASE_MIGRATION")"
             printf 'split_blob=%s\n' "$(git hash-object "$SPLIT_MIGRATION")"
             printf 'lifecycle_blob=%s\n' "$(git hash-object "$LIFECYCLE_MIGRATION")"
+            printf 'hardening_blob=%s\n' "$(git hash-object "$HARDENING_MIGRATION")"
             printf 'base_regression_blob=%s\n' "$(git hash-object "$BASE_REGRESSION")"
             printf 'regression_blob=%s\n' "$(git hash-object "$SPLIT_REGRESSION")"
           } | tee donation-upgrade-partial-qa-source.txt
           sha256sum "$BASE_MIGRATION" "$SPLIT_MIGRATION" "$LIFECYCLE_MIGRATION" \
+            "$HARDENING_MIGRATION" \
             "$BASE_REGRESSION" "$SPLIT_REGRESSION" \
             | tee donation-upgrade-partial-qa-sha256.txt
 
@@ -195,19 +201,91 @@ jobs:
             > donation-upgrade-partial-advisors-before.json 2>&1
           cat donation-upgrade-partial-advisors-before.json
 
-      - name: Compile the additive migration pair transactionally
+      - name: Compile the additive migration chain transactionally
         shell: bash
         run: |
           set -euo pipefail
+          base_blob="$(git hash-object "$BASE_MIGRATION")"
+          split_blob="$(git hash-object "$SPLIT_MIGRATION")"
+          lifecycle_blob="$(git hash-object "$LIFECYCLE_MIGRATION")"
+          hardening_blob="$(git hash-object "$HARDENING_MIGRATION")"
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
             | tee donation-upgrade-partial-compile.log
           begin;
+          select pg_advisory_xact_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${base_blob}'
+              and max(name) = 'direct_verified_donation_upgrades' as base_exact
+          from supabase_migrations.schema_migrations
+          where version = '20260801050000' \gset
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${split_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_negotiation' as split_exact,
+            count(*) = 0 as split_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813150000' \gset
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${lifecycle_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_lifecycle' as lifecycle_exact,
+            count(*) = 0 as lifecycle_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813151000' \gset
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${hardening_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_hardening' as hardening_exact,
+            count(*) = 0 as hardening_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813152000' \gset
+          \if :base_exact
+            \if :split_exact
+              \if :lifecycle_exact
+                \if :hardening_exact
+                  \echo 'Compiling after exact immutable three-migration history validation.'
+                \else
+                  \if :hardening_absent
+                    \echo 'Compiling exact immutable applied pair plus absent hardening migration.'
+                  \else
+                    \echo 'Refusing hardening replay before its recorded source is validated.'
+                    \quit 3
+                  \endif
+                \endif
+              \else
+                \echo 'Refusing migration replay from mixed or source-mismatched lifecycle history.'
+                \quit 3
+              \endif
+            \else
+              \if :split_absent
+                \if :lifecycle_absent
+                  \if :hardening_absent
+                    \echo 'Compiling the clean absent partial-migration chain.'
+                  \else
+                    \echo 'Refusing hardening history without its prerequisite pair.'
+                    \quit 3
+                  \endif
+                \else
+                  \echo 'Refusing lifecycle history without its negotiation prerequisite.'
+                  \quit 3
+                \endif
+              \else
+                \echo 'Refusing negotiation replay before its recorded source is validated.'
+                \quit 3
+              \endif
+            \endif
+          \else
+            \echo 'Refusing migration replay before exact base history validation.'
+            \quit 3
+          \endif
           \i $SPLIT_MIGRATION
           \i $LIFECYCLE_MIGRATION
+          \i $HARDENING_MIGRATION
           rollback;
           SQL
 
-      - name: Apply or verify both immutable migrations
+      - name: Apply or verify the three immutable partial migrations
         shell: bash
         run: |
           set -euo pipefail
@@ -221,42 +299,100 @@ jobs:
           base_blob="$(git hash-object "$BASE_MIGRATION")"
           split_blob="$(git hash-object "$SPLIT_MIGRATION")"
           lifecycle_blob="$(git hash-object "$LIFECYCLE_MIGRATION")"
+          hardening_blob="$(git hash-object "$HARDENING_MIGRATION")"
           base_state="$(migration_state 20260801050000)"
-          split_state="$(migration_state 20260813150000)"
-          lifecycle_state="$(migration_state 20260813151000)"
           expected_base="1|source-git-blob:${base_blob}|direct_verified_donation_upgrades"
           expected_split="1|source-git-blob:${split_blob}|direct_donation_upgrade_partial_redirect_negotiation"
           expected_lifecycle="1|source-git-blob:${lifecycle_blob}|direct_donation_upgrade_partial_redirect_lifecycle"
+          expected_hardening="1|source-git-blob:${hardening_blob}|direct_donation_upgrade_partial_redirect_hardening"
 
           if [[ "$base_state" != "$expected_base" ]]; then
             echo "Base migration is absent, duplicated, renamed, or differs from the immutable source blob: $base_state" >&2
             exit 1
           fi
 
-          if [[ "$split_state" == "0||" && "$lifecycle_state" == "0||" ]]; then
-            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
-              --single-transaction \
-              --command "select pg_advisory_xact_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));" \
-              --file "$SPLIT_MIGRATION" \
-              --file "$LIFECYCLE_MIGRATION" \
-              --command "insert into supabase_migrations.schema_migrations(version, statements, name, created_by) values ('20260813150000', array['source-git-blob:${split_blob}'], 'direct_donation_upgrade_partial_redirect_negotiation', 'github-actions:donation-upgrade-partial-qa'), ('20260813151000', array['source-git-blob:${lifecycle_blob}'], 'direct_donation_upgrade_partial_redirect_lifecycle', 'github-actions:donation-upgrade-partial-qa');" \
-              | tee donation-upgrade-partial-apply.log
-            printf 'applied_pair_atomically\n' | tee donation-upgrade-partial-migration-state.txt
-          elif [[ "$split_state" == "$expected_split" && "$lifecycle_state" == "$expected_lifecycle" ]]; then
-            {
-              printf 'Both partial migrations are already recorded with exact source blobs.\n'
-              printf 'split=%s\n' "$split_blob"
-              printf 'lifecycle=%s\n' "$lifecycle_blob"
-            } | tee donation-upgrade-partial-apply.log
-            printf 'verified_existing_pair\n' | tee donation-upgrade-partial-migration-state.txt
-          else
-            {
-              echo "Refusing a mixed, duplicated, renamed, or source-mismatched partial migration history."
-              printf 'split_state=%s\n' "$split_state"
-              printf 'lifecycle_state=%s\n' "$lifecycle_state"
-            } | tee donation-upgrade-partial-apply.log >&2
+          # Recheck history only after taking the database lock. Distinct QA
+          # workflow concurrency groups may otherwise race on an absent 152000.
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
+            | tee donation-upgrade-partial-apply.log
+          begin;
+          select pg_advisory_xact_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${split_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_negotiation' as split_exact,
+            count(*) = 0 as split_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813150000' \gset
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${lifecycle_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_lifecycle' as lifecycle_exact,
+            count(*) = 0 as lifecycle_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813151000' \gset
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${hardening_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_hardening' as hardening_exact,
+            count(*) = 0 as hardening_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813152000' \gset
+          \if :split_exact
+            \if :lifecycle_exact
+              \if :hardening_exact
+                \echo 'Verified existing exact three-migration chain.'
+              \else
+                \if :hardening_absent
+                  \i $HARDENING_MIGRATION
+                  insert into supabase_migrations.schema_migrations(version, statements, name, created_by)
+                  values ('20260813152000', array['source-git-blob:${hardening_blob}'], 'direct_donation_upgrade_partial_redirect_hardening', 'github-actions:donation-upgrade-partial-qa');
+                \else
+                  \echo 'Refusing duplicated, renamed, or source-mismatched hardening history.'
+                  \quit 3
+                \endif
+              \endif
+            \else
+              \echo 'Refusing mixed or source-mismatched negotiation/lifecycle history.'
+              \quit 3
+            \endif
+          \else
+            \if :split_absent
+              \if :lifecycle_absent
+                \if :hardening_absent
+                  \i $SPLIT_MIGRATION
+                  \i $LIFECYCLE_MIGRATION
+                  \i $HARDENING_MIGRATION
+                  insert into supabase_migrations.schema_migrations(version, statements, name, created_by)
+                  values
+                    ('20260813150000', array['source-git-blob:${split_blob}'], 'direct_donation_upgrade_partial_redirect_negotiation', 'github-actions:donation-upgrade-partial-qa'),
+                    ('20260813151000', array['source-git-blob:${lifecycle_blob}'], 'direct_donation_upgrade_partial_redirect_lifecycle', 'github-actions:donation-upgrade-partial-qa'),
+                    ('20260813152000', array['source-git-blob:${hardening_blob}'], 'direct_donation_upgrade_partial_redirect_hardening', 'github-actions:donation-upgrade-partial-qa');
+                \else
+                  \echo 'Refusing hardening history without its prerequisite pair.'
+                  \quit 3
+                \endif
+              \else
+                \echo 'Refusing lifecycle history without its negotiation prerequisite.'
+                \quit 3
+              \endif
+            \else
+              \echo 'Refusing duplicated, renamed, or source-mismatched negotiation history.'
+              \quit 3
+            \endif
+          \endif
+          commit;
+          SQL
+
+          split_state="$(migration_state 20260813150000)"
+          lifecycle_state="$(migration_state 20260813151000)"
+          hardening_state="$(migration_state 20260813152000)"
+          if [[ "$split_state" != "$expected_split" || "$lifecycle_state" != "$expected_lifecycle" || "$hardening_state" != "$expected_hardening" ]]; then
+            printf 'split_state=%s\nlifecycle_state=%s\nhardening_state=%s\n' \
+              "$split_state" "$lifecycle_state" "$hardening_state" >&2
             exit 1
           fi
+          printf 'verified_exact_three_migration_chain\n' | tee donation-upgrade-partial-migration-state.txt
 
       - name: Verify schema, generated split, and privilege boundaries
         shell: bash
@@ -284,6 +420,7 @@ jobs:
               ('function:checkout_bound', to_regprocedure('public.start_direct_donation_upgrade_checkout(uuid,uuid,text)') is not null),
               ('function:complete_bound', to_regprocedure('public.complete_direct_donation_upgrade_obligation(uuid,boolean,text,text,text,text,integer,integer,text,text,text,timestamptz,text,text)') is not null),
               ('function:lifecycle_bound', to_regprocedure('public.run_direct_donation_upgrade_lifecycle(timestamptz,text)') is not null),
+              ('function:profile_eligibility_lock', to_regprocedure('public.direct_donation_upgrade_lock_profile_eligibility(uuid)') is not null),
               ('column:redirect_basis_points', exists (
                 select 1 from information_schema.columns
                 where table_schema='public' and table_name='direct_donation_upgrade_offers'
@@ -309,6 +446,13 @@ jobs:
                 where n.nspname = 'public'
                   and c.relname = 'direct_donation_upgrade_public_offers'
                   and coalesce(c.reloptions, '{}'::text[]) @> array['security_invoker=true']
+              )),
+              ('trigger:candidate_profile_eligibility', exists (
+                select 1
+                from pg_trigger trigger
+                where trigger.tgrelid = 'public.direct_donation_upgrade_candidates'::regclass
+                  and trigger.tgname = 'direct_donation_upgrade_candidate_00_profile_eligible'
+                  and not trigger.tgisinternal
               ))
             ) as item(name, present)
             where not item.present;
@@ -364,9 +508,581 @@ jobs:
         run: |
           set -euo pipefail
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
-            --file "$BASE_REGRESSION" | tee donation-upgrade-partial-base-regression.log
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
-            --file "$SPLIT_REGRESSION" | tee donation-upgrade-partial-split-regression.log
+            --set BASE_REGRESSION="$BASE_REGRESSION" \
+            --set SPLIT_REGRESSION="$SPLIT_REGRESSION" <<'SQL'
+          select pg_advisory_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          \o donation-upgrade-partial-base-regression.log
+          \i :BASE_REGRESSION
+          \o donation-upgrade-partial-split-regression.log
+          \i :SPLIT_REGRESSION
+          \o
+          select pg_advisory_unlock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          SQL
+
+      - name: Prove concurrent counteroffer acceptance has one winner
+        id: concurrent-acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BARRIER_HELD="$RUNNER_TEMP/direct-upgrade-concurrent-${GITHUB_RUN_ID}.held"
+          export BARRIER_RELEASE="$RUNNER_TEMP/direct-upgrade-concurrent-${GITHUB_RUN_ID}.release"
+          test ! -e "$BARRIER_HELD"
+          test ! -e "$BARRIER_RELEASE"
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
+            | tee donation-upgrade-partial-concurrent-setup.log
+          begin;
+          do $fixture_guard$
+          declare
+            fixture_ids constant uuid[] := array[
+              'dc110000-0000-4000-8000-000000000001'::uuid,
+              'dc110000-0000-4000-8000-000000000002'::uuid,
+              'dc110000-0000-4000-8000-000000000003'::uuid
+            ];
+          begin
+            if exists (
+                 select 1 from auth.users
+                 where id = any(fixture_ids)
+                    or email like 'partial-upgrade-concurrent-%@example.test'
+               )
+               or exists (select 1 from auth.identities where user_id = any(fixture_ids))
+               or exists (select 1 from auth.sessions where user_id = any(fixture_ids))
+               or exists (select 1 from auth.refresh_tokens where user_id::text = any(fixture_ids::text[]))
+               or exists (select 1 from public.profiles where id = any(fixture_ids))
+               or exists (select 1 from moral_trade_private.person_accounts where profile_id = any(fixture_ids))
+               or exists (select 1 from moral_trade_private.person_account_aliases where alias_profile_id = any(fixture_ids) or canonical_profile_id = any(fixture_ids))
+               or exists (select 1 from public.direct_donation_upgrade_offers where creator_profile_id = any(fixture_ids))
+               or exists (select 1 from public.direct_donation_upgrade_proposals where proposer_profile_id = any(fixture_ids))
+               or exists (select 1 from public.direct_donation_upgrade_candidates where profile_id = any(fixture_ids))
+               or exists (select 1 from public.direct_donation_upgrade_obligations where participant_profile_id = any(fixture_ids))
+               or exists (select 1 from public.direct_donation_upgrade_impact_credits where profile_id = any(fixture_ids))
+               or exists (select 1 from public.direct_donation_upgrade_audit_events where actor_profile_id = any(fixture_ids))
+               or exists (select 1 from public.trade_notifications where user_id = any(fixture_ids))
+               or exists (select 1 from public.credibility_restrictions where profile_id = any(fixture_ids))
+               or exists (select 1 from public.credibility_events where profile_id = any(fixture_ids) or counterparty_id = any(fixture_ids) or created_by = any(fixture_ids))
+               or exists (select 1 from public.conditional_payment_mandates where profile_id = any(fixture_ids))
+               or exists (select 1 from public.conditional_payment_audit_events where actor_profile_id = any(fixture_ids))
+               or exists (select 1 from public.conditional_payment_customers where profile_id = any(fixture_ids))
+               or exists (select 1 from public.trade_donation_pool_obligations where payer_user_id = any(fixture_ids)) then
+              raise exception 'Refusing stale concurrent-acceptance QA fixture residue.';
+            end if;
+          end;
+          $fixture_guard$;
+
+          insert into auth.users (
+            id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+            raw_app_meta_data, raw_user_meta_data, confirmation_token, recovery_token,
+            email_change_token_new, email_change_token_current, reauthentication_token,
+            is_sso_user, is_anonymous, created_at, updated_at
+          )
+          select
+            fixture.id,
+            '00000000-0000-0000-0000-000000000000'::uuid,
+            'authenticated',
+            'authenticated',
+            fixture.email,
+            '',
+            timezone('utc', now()),
+            '{"provider":"email","providers":["email"]}'::jsonb,
+            jsonb_build_object('display_name', fixture.display_name, 'qa_fixture', true),
+            '', '', '', '', '', false, false,
+            timezone('utc', now()),
+            timezone('utc', now())
+          from (values
+            ('dc110000-0000-4000-8000-000000000001'::uuid, 'partial-upgrade-concurrent-creator@example.test', 'Concurrent Acceptance Creator'),
+            ('dc110000-0000-4000-8000-000000000002'::uuid, 'partial-upgrade-concurrent-a@example.test', 'Concurrent Proposer A'),
+            ('dc110000-0000-4000-8000-000000000003'::uuid, 'partial-upgrade-concurrent-b@example.test', 'Concurrent Proposer B')
+          ) as fixture(id, email, display_name);
+
+          insert into public.profiles (id, email, display_name, bio)
+          select id, email, display_name, ''
+          from (values
+            ('dc110000-0000-4000-8000-000000000001'::uuid, 'partial-upgrade-concurrent-creator@example.test', 'Concurrent Acceptance Creator'),
+            ('dc110000-0000-4000-8000-000000000002'::uuid, 'partial-upgrade-concurrent-a@example.test', 'Concurrent Proposer A'),
+            ('dc110000-0000-4000-8000-000000000003'::uuid, 'partial-upgrade-concurrent-b@example.test', 'Concurrent Proposer B')
+          ) as fixture(id, email, display_name)
+          on conflict (id) do update
+          set email = excluded.email,
+              display_name = excluded.display_name,
+              bio = excluded.bio;
+
+          do $fixture$
+          declare
+            creator_id constant uuid := 'dc110000-0000-4000-8000-000000000001';
+            deadline_at timestamptz := timezone('utc', now()) + interval '7 days';
+            original_recipient jsonb := jsonb_build_object(
+              'schemaVersion', 'moral-trade-every-org-nonprofit-identity-v1',
+              'provider', 'every_org',
+              'providerNonprofitId', 'partial-qa-concurrent-original',
+              'name', 'Concurrent QA Original Recipient',
+              'primarySlug', 'partial-qa-concurrent-original',
+              'ein', '333333333',
+              'isDisbursable', true,
+              'profileUrl', 'https://www.every.org/partial-qa-concurrent-original',
+              'websiteUrl', 'https://example.test/concurrent-original',
+              'locationAddress', 'QA only',
+              'description', 'Committed only long enough to exercise two database sessions.',
+              'logoUrl', '',
+              'identityHash', repeat('a', 64)
+            );
+            upgraded_recipient jsonb := jsonb_build_object(
+              'schemaVersion', 'moral-trade-every-org-nonprofit-identity-v1',
+              'provider', 'every_org',
+              'providerNonprofitId', 'partial-qa-concurrent-upgraded',
+              'name', 'Concurrent QA Upgraded Recipient',
+              'primarySlug', 'partial-qa-concurrent-upgraded',
+              'ein', '444444444',
+              'isDisbursable', true,
+              'profileUrl', 'https://www.every.org/partial-qa-concurrent-upgraded',
+              'websiteUrl', 'https://example.test/concurrent-upgraded',
+              'locationAddress', 'QA only',
+              'description', 'Committed only long enough to exercise two database sessions.',
+              'logoUrl', '',
+              'identityHash', repeat('b', 64)
+            );
+            created_offer jsonb;
+            offer_id uuid;
+          begin
+            created_offer := public.create_direct_donation_upgrade_offer(
+              creator_id, 'staging', 1000, 500, deadline_at, 'public',
+              original_recipient, upgraded_recipient,
+              'direct-donation-upgrade-baseline-v1-2026-08-01',
+              'A full no-match baseline for the isolated concurrent acceptance proof.',
+              public.direct_donation_upgrade_terms_hash_v2(
+                creator_id, 1000, 2000, 500, repeat('a', 64), repeat('b', 64),
+                deadline_at, 'public', 'staging',
+                'A full no-match baseline for the isolated concurrent acceptance proof.'
+              ),
+              2000
+            );
+            offer_id := (created_offer->>'id')::uuid;
+
+            perform public.propose_direct_donation_upgrade_terms(
+              'dc110000-0000-4000-8000-000000000002'::uuid,
+              offer_id, 3000, 300, 700, 600,
+              'Concurrent proposal A.',
+              'direct-donation-upgrade-proposal-v1-2026-08-12',
+              'staging'
+            );
+            perform public.propose_direct_donation_upgrade_terms(
+              'dc110000-0000-4000-8000-000000000003'::uuid,
+              offer_id, 4000, 400, 600, 700,
+              'Concurrent proposal B.',
+              'direct-donation-upgrade-proposal-v1-2026-08-12',
+              'staging'
+            );
+          end;
+          $fixture$;
+          commit;
+          SQL
+          printf 'fixture_created=true\n' >> "$GITHUB_OUTPUT"
+
+          PGAPPNAME=direct-upgrade-concurrent-barrier \
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
+            > donation-upgrade-partial-concurrent-barrier.log 2>&1 &
+          select pg_advisory_lock(
+            hashtextextended('moraltrade:direct-donation-upgrade-concurrent-acceptance-qa', 0)
+          );
+          \! touch "$BARRIER_HELD"
+          \! while [ ! -f "$BARRIER_RELEASE" ]; do sleep 0.1; done
+          select pg_advisory_unlock(
+            hashtextextended('moraltrade:direct-donation-upgrade-concurrent-acceptance-qa', 0)
+          );
+          SQL
+          barrier_pid=$!
+
+          concurrent_cleanup() {
+            touch "$BARRIER_RELEASE" 2>/dev/null || true
+            if [[ -n "${barrier_pid:-}" ]]; then
+              wait "$barrier_pid" 2>/dev/null || true
+            fi
+            if [[ -n "${accept_a_pid:-}" ]]; then
+              wait "$accept_a_pid" 2>/dev/null || true
+            fi
+            if [[ -n "${accept_b_pid:-}" ]]; then
+              wait "$accept_b_pid" 2>/dev/null || true
+            fi
+            rm -f "$BARRIER_HELD" "$BARRIER_RELEASE"
+          }
+          trap concurrent_cleanup EXIT
+
+          barrier_ready=false
+          for attempt in $(seq 1 100); do
+            if [[ -f "$BARRIER_HELD" ]]; then
+              barrier_ready=true
+              break
+            fi
+            sleep 0.1
+          done
+          if [[ "$barrier_ready" != true ]]; then
+            echo 'The concurrent-acceptance barrier did not become ready.' >&2
+            exit 1
+          fi
+
+          PGAPPNAME=direct-upgrade-concurrent-accept-a \
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
+            > donation-upgrade-partial-concurrent-a.log 2>&1 &
+          begin;
+          set local lock_timeout = '30s';
+          select
+            proposal.id as proposal_id,
+            public.direct_donation_upgrade_terms_hash_v2(
+              offer.creator_profile_id,
+              offer.creator_amount_cents,
+              proposal.proposed_redirect_basis_points,
+              proposal.proposed_matcher_amount_cents,
+              offer.original_recipient_hash,
+              offer.upgraded_recipient_hash,
+              offer.match_deadline_at,
+              offer.privacy_mode,
+              offer.environment,
+              offer.baseline_attestation
+            ) as accepted_terms_hash
+          from public.direct_donation_upgrade_proposals proposal
+          join public.direct_donation_upgrade_offers offer on offer.id = proposal.offer_id
+          where proposal.proposer_profile_id = 'dc110000-0000-4000-8000-000000000002'::uuid
+            and proposal.status = 'pending'
+          \gset
+          select pg_advisory_xact_lock_shared(
+            hashtextextended('moraltrade:direct-donation-upgrade-concurrent-acceptance-qa', 0)
+          );
+          select public.accept_direct_donation_upgrade_proposal(
+            'dc110000-0000-4000-8000-000000000001'::uuid,
+            :'proposal_id'::uuid,
+            :'accepted_terms_hash',
+            'staging'
+          );
+          commit;
+          SQL
+          accept_a_pid=$!
+
+          PGAPPNAME=direct-upgrade-concurrent-accept-b \
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
+            > donation-upgrade-partial-concurrent-b.log 2>&1 &
+          begin;
+          set local lock_timeout = '30s';
+          select
+            proposal.id as proposal_id,
+            public.direct_donation_upgrade_terms_hash_v2(
+              offer.creator_profile_id,
+              offer.creator_amount_cents,
+              proposal.proposed_redirect_basis_points,
+              proposal.proposed_matcher_amount_cents,
+              offer.original_recipient_hash,
+              offer.upgraded_recipient_hash,
+              offer.match_deadline_at,
+              offer.privacy_mode,
+              offer.environment,
+              offer.baseline_attestation
+            ) as accepted_terms_hash
+          from public.direct_donation_upgrade_proposals proposal
+          join public.direct_donation_upgrade_offers offer on offer.id = proposal.offer_id
+          where proposal.proposer_profile_id = 'dc110000-0000-4000-8000-000000000003'::uuid
+            and proposal.status = 'pending'
+          \gset
+          select pg_advisory_xact_lock_shared(
+            hashtextextended('moraltrade:direct-donation-upgrade-concurrent-acceptance-qa', 0)
+          );
+          select public.accept_direct_donation_upgrade_proposal(
+            'dc110000-0000-4000-8000-000000000001'::uuid,
+            :'proposal_id'::uuid,
+            :'accepted_terms_hash',
+            'staging'
+          );
+          commit;
+          SQL
+          accept_b_pid=$!
+
+          observed_two_waiters=false
+          for attempt in $(seq 1 100); do
+            waiters="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+              --set ON_ERROR_STOP=1 \
+              --command "select count(*) from pg_stat_activity where application_name in ('direct-upgrade-concurrent-accept-a','direct-upgrade-concurrent-accept-b') and wait_event_type='Lock' and wait_event='advisory';" \
+              | tr -d '[:space:]')"
+            if [[ "$waiters" == "2" ]]; then
+              observed_two_waiters=true
+              break
+            fi
+            sleep 0.1
+          done
+          touch "$BARRIER_RELEASE"
+
+          set +e
+          wait "$barrier_pid"
+          barrier_status=$?
+          wait "$accept_a_pid"
+          accept_a_status=$?
+          wait "$accept_b_pid"
+          accept_b_status=$?
+          set -e
+          rm -f "$BARRIER_HELD" "$BARRIER_RELEASE"
+          trap - EXIT
+
+          printf 'barrier=%s\naccept_a=%s\naccept_b=%s\ntwo_waiters=%s\n' \
+            "$barrier_status" "$accept_a_status" "$accept_b_status" "$observed_two_waiters" \
+            | tee donation-upgrade-partial-concurrent-status.txt
+          success_count=$(( (accept_a_status == 0 ? 1 : 0) + (accept_b_status == 0 ? 1 : 0) ))
+          if [[ "$barrier_status" -ne 0 || "$observed_two_waiters" != true || "$success_count" -ne 1 ]]; then
+            tail -n 200 donation-upgrade-partial-concurrent-a.log || true
+            tail -n 200 donation-upgrade-partial-concurrent-b.log || true
+            echo 'Expected two blocked sessions and exactly one successful acceptance.' >&2
+            exit 1
+          fi
+
+          failed_log=donation-upgrade-partial-concurrent-a.log
+          if [[ "$accept_a_status" -eq 0 ]]; then
+            failed_log=donation-upgrade-partial-concurrent-b.log
+          fi
+          if ! grep -Eq 'original Donation Upgrade is no longer open|Pending counteroffer not found' "$failed_log"; then
+            echo 'The losing acceptance failed for an unexpected reason.' >&2
+            tail -n 200 "$failed_log"
+            exit 1
+          fi
+
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
+            | tee donation-upgrade-partial-concurrent-result.json
+          do $assertion$
+          declare
+            original_offer_id uuid;
+            successor_offer_id uuid;
+          begin
+            select id into strict original_offer_id
+            from public.direct_donation_upgrade_offers
+            where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid
+              and supersedes_offer_id is null;
+            select id into strict successor_offer_id
+            from public.direct_donation_upgrade_offers
+            where supersedes_offer_id = original_offer_id;
+
+            if not exists (
+                 select 1 from public.direct_donation_upgrade_offers
+                 where id = original_offer_id
+                   and status = 'cancelled'
+                   and superseded_by_offer_id = successor_offer_id
+               )
+               or not exists (
+                 select 1 from public.direct_donation_upgrade_offers
+                 where id = successor_offer_id
+                   and status = 'matched'
+                   and selected_branch = 'matched'
+                   and supersedes_offer_id = original_offer_id
+               )
+               or (select count(*) from public.direct_donation_upgrade_offers where supersedes_offer_id = original_offer_id) <> 1
+               or (select count(*) from public.direct_donation_upgrade_proposals where offer_id = original_offer_id and status = 'accepted' and accepted_offer_id = successor_offer_id) <> 1
+               or (select count(*) from public.direct_donation_upgrade_proposals where offer_id = original_offer_id and status = 'superseded' and accepted_offer_id is null) <> 1
+               or (select count(*) from public.direct_donation_upgrade_candidates where offer_id = successor_offer_id and status = 'primary') <> 1
+               or (select count(*) from public.direct_donation_upgrade_obligations where offer_id = successor_offer_id) <> 3 then
+              raise exception 'Concurrent proposal acceptance did not leave exactly one reciprocal matched revision.';
+            end if;
+          end;
+          $assertion$;
+
+          select jsonb_build_object(
+            'successorCount', (
+              select count(*)
+              from public.direct_donation_upgrade_offers successor
+              where successor.supersedes_offer_id = (
+                select id from public.direct_donation_upgrade_offers
+                where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid
+                  and supersedes_offer_id is null
+              )
+            ),
+            'acceptedProposalCount', (
+              select count(*) from public.direct_donation_upgrade_proposals
+              where proposer_profile_id in (
+                'dc110000-0000-4000-8000-000000000002'::uuid,
+                'dc110000-0000-4000-8000-000000000003'::uuid
+              ) and status = 'accepted'
+            ),
+            'supersededProposalCount', (
+              select count(*) from public.direct_donation_upgrade_proposals
+              where proposer_profile_id in (
+                'dc110000-0000-4000-8000-000000000002'::uuid,
+                'dc110000-0000-4000-8000-000000000003'::uuid
+              ) and status = 'superseded'
+            )
+          );
+          SQL
+
+      - name: Always remove the concurrent acceptance fixture
+        if: ${{ always() && steps.concurrent-acceptance.outputs.fixture_created == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
+            | tee donation-upgrade-partial-concurrent-cleanup.log
+          begin;
+          select pg_advisory_xact_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          do $cleanup_guard$
+          declare
+            fixture_ids constant uuid[] := array[
+              'dc110000-0000-4000-8000-000000000001'::uuid,
+              'dc110000-0000-4000-8000-000000000002'::uuid,
+              'dc110000-0000-4000-8000-000000000003'::uuid
+            ];
+          begin
+            if exists (
+                 select 1
+                 from public.direct_donation_upgrade_candidates candidate
+                 join public.direct_donation_upgrade_offers offer on offer.id = candidate.offer_id
+                 where candidate.profile_id = any(fixture_ids)
+                   and offer.creator_profile_id <> all(fixture_ids)
+               )
+               or exists (
+                 select 1
+                 from public.direct_donation_upgrade_proposals proposal
+                 join public.direct_donation_upgrade_offers offer on offer.id = proposal.offer_id
+                 where proposal.proposer_profile_id = any(fixture_ids)
+                   and offer.creator_profile_id <> all(fixture_ids)
+               )
+               or exists (select 1 from public.conditional_payment_mandates where profile_id = any(fixture_ids))
+               or exists (select 1 from public.conditional_payment_audit_events where actor_profile_id = any(fixture_ids))
+               or exists (select 1 from public.conditional_payment_customers where profile_id = any(fixture_ids))
+               or exists (select 1 from public.trade_donation_pool_obligations where payer_user_id = any(fixture_ids))
+               or exists (select 1 from public.credibility_restrictions where profile_id = any(fixture_ids))
+               or exists (select 1 from public.credibility_events where profile_id = any(fixture_ids) or counterparty_id = any(fixture_ids) or created_by = any(fixture_ids)) then
+              raise exception 'Concurrent-acceptance fixture escaped its isolated mechanism scope; preserving evidence.';
+            end if;
+          end;
+          $cleanup_guard$;
+
+          alter table public.direct_donation_upgrade_audit_events
+            disable trigger direct_donation_upgrade_audit_immutable;
+          alter table public.direct_donation_upgrade_impact_credits
+            disable trigger direct_donation_upgrade_impact_immutable;
+          alter table public.direct_donation_upgrade_proposals
+            disable trigger direct_donation_upgrade_proposal_terms_immutable;
+          alter table public.direct_donation_upgrade_obligations
+            disable trigger direct_donation_upgrade_obligation_terms_immutable;
+          alter table public.direct_donation_upgrade_candidates
+            disable trigger direct_donation_upgrade_candidate_identity_immutable;
+          alter table public.direct_donation_upgrade_offers
+            disable trigger direct_donation_upgrade_offer_terms_immutable;
+          alter table public.direct_donation_upgrade_offers
+            disable trigger direct_donation_upgrade_revision_links_consistent;
+
+          delete from public.direct_donation_upgrade_audit_events
+          where actor_profile_id in (
+              'dc110000-0000-4000-8000-000000000001'::uuid,
+              'dc110000-0000-4000-8000-000000000002'::uuid,
+              'dc110000-0000-4000-8000-000000000003'::uuid
+            )
+             or offer_id in (
+               select id from public.direct_donation_upgrade_offers
+               where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid
+             );
+          delete from public.direct_donation_upgrade_impact_credits
+          where profile_id in (
+              'dc110000-0000-4000-8000-000000000001'::uuid,
+              'dc110000-0000-4000-8000-000000000002'::uuid,
+              'dc110000-0000-4000-8000-000000000003'::uuid
+            )
+             or offer_id in (
+               select id from public.direct_donation_upgrade_offers
+               where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid
+             );
+          delete from public.direct_donation_upgrade_obligations
+          where offer_id in (
+            select id from public.direct_donation_upgrade_offers
+            where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid
+          );
+          update public.direct_donation_upgrade_offers
+          set winning_candidate_id = null
+          where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid;
+          delete from public.direct_donation_upgrade_candidates
+          where offer_id in (
+            select id from public.direct_donation_upgrade_offers
+            where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid
+          );
+          update public.direct_donation_upgrade_proposals
+          set accepted_offer_id = null
+          where offer_id in (
+            select id from public.direct_donation_upgrade_offers
+            where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid
+          );
+          delete from public.direct_donation_upgrade_proposals
+          where offer_id in (
+              select id from public.direct_donation_upgrade_offers
+              where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid
+            )
+             or proposer_profile_id in (
+               'dc110000-0000-4000-8000-000000000002'::uuid,
+               'dc110000-0000-4000-8000-000000000003'::uuid
+             );
+          delete from public.direct_donation_upgrade_offers
+          where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid;
+
+          alter table public.direct_donation_upgrade_offers
+            enable trigger direct_donation_upgrade_revision_links_consistent;
+          alter table public.direct_donation_upgrade_offers
+            enable trigger direct_donation_upgrade_offer_terms_immutable;
+          alter table public.direct_donation_upgrade_candidates
+            enable trigger direct_donation_upgrade_candidate_identity_immutable;
+          alter table public.direct_donation_upgrade_obligations
+            enable trigger direct_donation_upgrade_obligation_terms_immutable;
+          alter table public.direct_donation_upgrade_proposals
+            enable trigger direct_donation_upgrade_proposal_terms_immutable;
+          alter table public.direct_donation_upgrade_audit_events
+            enable trigger direct_donation_upgrade_audit_immutable;
+          alter table public.direct_donation_upgrade_impact_credits
+            enable trigger direct_donation_upgrade_impact_immutable;
+
+          delete from public.trade_notifications
+          where user_id in (
+              'dc110000-0000-4000-8000-000000000001'::uuid,
+              'dc110000-0000-4000-8000-000000000002'::uuid,
+              'dc110000-0000-4000-8000-000000000003'::uuid
+            )
+            and notification_type like 'direct_donation_upgrade_%';
+          delete from moral_trade_private.person_account_aliases
+          where alias_profile_id in (
+              'dc110000-0000-4000-8000-000000000001'::uuid,
+              'dc110000-0000-4000-8000-000000000002'::uuid,
+              'dc110000-0000-4000-8000-000000000003'::uuid
+            )
+             or canonical_profile_id in (
+              'dc110000-0000-4000-8000-000000000001'::uuid,
+              'dc110000-0000-4000-8000-000000000002'::uuid,
+              'dc110000-0000-4000-8000-000000000003'::uuid
+            );
+          delete from moral_trade_private.person_accounts
+          where profile_id in (
+            'dc110000-0000-4000-8000-000000000001'::uuid,
+            'dc110000-0000-4000-8000-000000000002'::uuid,
+            'dc110000-0000-4000-8000-000000000003'::uuid
+          );
+          delete from public.profiles
+          where id in (
+            'dc110000-0000-4000-8000-000000000001'::uuid,
+            'dc110000-0000-4000-8000-000000000002'::uuid,
+            'dc110000-0000-4000-8000-000000000003'::uuid
+          );
+          delete from auth.refresh_tokens
+          where user_id::text in (
+            'dc110000-0000-4000-8000-000000000001',
+            'dc110000-0000-4000-8000-000000000002',
+            'dc110000-0000-4000-8000-000000000003'
+          );
+          delete from auth.sessions
+          where user_id in (
+            'dc110000-0000-4000-8000-000000000001'::uuid,
+            'dc110000-0000-4000-8000-000000000002'::uuid,
+            'dc110000-0000-4000-8000-000000000003'::uuid
+          );
+          delete from auth.identities
+          where user_id in (
+            'dc110000-0000-4000-8000-000000000001'::uuid,
+            'dc110000-0000-4000-8000-000000000002'::uuid,
+            'dc110000-0000-4000-8000-000000000003'::uuid
+          );
+          delete from auth.users
+          where id in (
+            'dc110000-0000-4000-8000-000000000001'::uuid,
+            'dc110000-0000-4000-8000-000000000002'::uuid,
+            'dc110000-0000-4000-8000-000000000003'::uuid
+          );
+          commit;
+          SQL
 
       - name: Capture post-migration advisors and reject new or feature-scoped findings
         shell: bash
@@ -439,7 +1155,7 @@ jobs:
               "featureScopedAfterCount": len(direct_findings),
           }, sort_keys=True))
           if new_findings:
-              raise SystemExit("Supabase advisors reported new warning-or-error findings after the partial migration pair.")
+              raise SystemExit("Supabase advisors reported new warning-or-error findings after the partial migration chain.")
           if direct_findings:
               raise SystemExit("Supabase advisors still report warning-or-error findings scoped to Direct Donation Upgrade objects.")
           PY
@@ -467,7 +1183,10 @@ jobs:
               ('db110000-0000-4000-8000-000000000008'::uuid),
               ('db110000-0000-4000-8000-000000000009'::uuid),
               ('db110000-0000-4000-8000-00000000000a'::uuid),
-              ('db110000-0000-4000-8000-00000000000b'::uuid)
+              ('db110000-0000-4000-8000-00000000000b'::uuid),
+              ('dc110000-0000-4000-8000-000000000001'::uuid),
+              ('dc110000-0000-4000-8000-000000000002'::uuid),
+              ('dc110000-0000-4000-8000-000000000003'::uuid)
           ),
           fixture_offers(offer_id) as (
             select offer.id
@@ -498,11 +1217,28 @@ jobs:
               select count(*) from auth.identities
               where user_id in (select profile_id from fixture_profiles)
             ),
+            'authSessions', (
+              select count(*) from auth.sessions
+              where user_id in (select profile_id from fixture_profiles)
+            ),
+            'authRefreshTokens', (
+              select count(*) from auth.refresh_tokens
+              where user_id::text in (select profile_id::text from fixture_profiles)
+            ),
             'profiles', (
               select count(*) from public.profiles
               where id in (select profile_id from fixture_profiles)
                  or email like 'direct-upgrade-%@example.test'
                  or email like 'partial-upgrade-%@example.test'
+            ),
+            'personAccounts', (
+              select count(*) from moral_trade_private.person_accounts
+              where profile_id in (select profile_id from fixture_profiles)
+            ),
+            'personAccountAliases', (
+              select count(*) from moral_trade_private.person_account_aliases
+              where alias_profile_id in (select profile_id from fixture_profiles)
+                 or canonical_profile_id in (select profile_id from fixture_profiles)
             ),
             'offers', (select count(*) from fixture_offers),
             'candidates', (select count(*) from fixture_candidates),
@@ -561,9 +1297,10 @@ jobs:
               raise SystemExit(f"Expected exactly one residue result row; found {len(rows)}.")
           state = json.loads(rows[0])
           expected = {
-              "authUsers", "authIdentities", "profiles", "offers", "candidates",
-              "proposals", "obligations", "credits", "restrictions",
-              "credibilityEvents", "notifications", "auditEvents",
+              "authUsers", "authIdentities", "authSessions", "authRefreshTokens",
+              "profiles", "personAccounts", "personAccountAliases", "offers",
+              "candidates", "proposals", "obligations", "credits",
+              "restrictions", "credibilityEvents", "notifications", "auditEvents",
           }
           if set(state) != expected:
               raise SystemExit(f"Residue proof returned an unexpected key set: {sorted(state)}")
@@ -594,6 +1331,13 @@ jobs:
             donation-upgrade-partial-schema.log
             donation-upgrade-partial-base-regression.log
             donation-upgrade-partial-split-regression.log
+            donation-upgrade-partial-concurrent-setup.log
+            donation-upgrade-partial-concurrent-barrier.log
+            donation-upgrade-partial-concurrent-a.log
+            donation-upgrade-partial-concurrent-b.log
+            donation-upgrade-partial-concurrent-status.txt
+            donation-upgrade-partial-concurrent-result.json
+            donation-upgrade-partial-concurrent-cleanup.log
             donation-upgrade-partial-residue.json
           if-no-files-found: warn
           retention-days: 30

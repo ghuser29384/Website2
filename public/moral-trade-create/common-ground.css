@@ -2,6 +2,37 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.conditional-donation-actions {
+  display: grid;
+  gap: 8px;
+  min-width: 250px;
+}
+
+.conditional-donation-legacy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  border: 1px solid var(--blue);
+  padding: 0 14px;
+  background: white;
+  color: var(--blue);
+  font: 700 9px/1.2 var(--mono);
+  letter-spacing: 0.06em;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+
+.conditional-donation-legacy:hover {
+  background: var(--blue-soft);
+}
+
+.conditional-donation-legacy:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
 .common-ground-panel {
   margin: 14px 0 0;
   border: 1px solid var(--line-strong);
@@ -335,6 +366,11 @@
 }
 
 @media (max-width: 700px) {
+  .conditional-donation-actions {
+    min-width: 0;
+    width: 100%;
+  }
+
   .common-ground-toolbar,
   .common-ground-participants-head {
     align-items: flex-start;

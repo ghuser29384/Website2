@@ -66,8 +66,13 @@ test("the accepted Create interface is mounted with Donation Upgrade and compact
   assert.match(html, /data-fund-mode="conditional"/);
   assert.match(
     html,
-    /window\.top\.location\.assign\("\/trades\/new\?structure=conditional-donation"\)/,
+    /window\.top\.location\.assign\("\/trades\/new\?structure=conditional-donation&rail=direct"\)/,
   );
+  assert.match(
+    html,
+    /href="\/trades\/new\?structure=conditional-donation" target="_top">\s*Managed conditional donation →/,
+  );
+  assert.match(html, /No card or bank information is collected now\./);
   assert.match(html, /Dominant assurance contract pool/);
   assert.match(html, /Co-Fund/);
   assert.match(html, /data-fund-mode="commonGround"/);

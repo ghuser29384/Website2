@@ -27,6 +27,7 @@ on:
       - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
       - "supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql"
       - "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql"
+      - "supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql"
       - "supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql"
       - "supabase/tests/direct_verified_donation_upgrade.sql"
   push:
@@ -110,6 +111,7 @@ jobs:
           base_migration=supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
           negotiation_migration=supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql
           lifecycle_migration=supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql
+          hardening_migration=supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql
           base_qa=supabase/tests/direct_verified_donation_upgrade.sql
           partial_qa=supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql
 
@@ -117,6 +119,7 @@ jobs:
             "$base_migration" \
             "$negotiation_migration" \
             "$lifecycle_migration" \
+            "$hardening_migration" \
             "$base_qa" \
             "$partial_qa"; do
             test -s "$source"
@@ -128,6 +131,8 @@ jobs:
           grep -Fq 'direct_donation_upgrade_proposal_terms_immutable' "$negotiation_migration"
           grep -Fq 'direct_donation_upgrade_revision_links_consistent' "$lifecycle_migration"
           grep -Fq 'direct_donation_upgrade_complete_obligation_20260801' "$lifecycle_migration"
+          grep -Fq 'direct_donation_upgrade_lock_profile_eligibility' "$hardening_migration"
+          grep -Fq "completion_result->>'reason' = 'provider_charge_reused'" "$hardening_migration"
           test -f src/app/api/jobs/donation-upgrades/route.ts
           ! grep -Fq '/api/jobs/donation-upgrades' scripts/vercel-project-config.mjs
           ! grep -Fq 'where offer_id = offer_id' "$base_qa"
@@ -162,6 +167,7 @@ jobs:
             "$base_migration" \
             "$negotiation_migration" \
             "$lifecycle_migration" \
+            "$hardening_migration" \
             "$base_qa" \
             "$partial_qa" \
             | tee direct-upgrade-sql-sha256.txt
@@ -169,6 +175,7 @@ jobs:
             "$base_migration" \
             "$negotiation_migration" \
             "$lifecycle_migration" \
+            "$hardening_migration" \
             "$base_qa" \
             "$partial_qa" \
             | tee direct-upgrade-sql-git-blobs.txt

@@ -15,7 +15,10 @@ import {
   formatDirectDonationUpgradeUsd,
   getDirectDonationUpgradeConfig,
 } from "@/lib/direct-donation-upgrade";
-import { formatDirectDonationUpgradeRedirectPercentage } from "@/lib/direct-donation-upgrade-split";
+import {
+  describeDirectDonationUpgradeRetainedLeg,
+  formatDirectDonationUpgradeRedirectPercentage,
+} from "@/lib/direct-donation-upgrade-split";
 import { loadPublicDirectDonationUpgrades } from "@/lib/direct-donation-upgrade-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -147,10 +150,10 @@ export default async function DonationUpgradesPage() {
                   to {offer.original_recipient.name}.
                 </p>
                 <p>
-                  Match: {formatDirectDonationUpgradeUsd(
+                  Match: {describeDirectDonationUpgradeRetainedLeg(
                     offer.retained_amount_cents,
-                  )}{" "}
-                  remains with {offer.original_recipient.name};{" "}
+                    offer.original_recipient.name,
+                  )};{" "}
                   {formatDirectDonationUpgradeUsd(
                     offer.redirected_amount_cents,
                   )}{" "}

@@ -76,7 +76,12 @@ test.describe("Create route workbench", () => {
 
     await create.locator('[data-fund-mode="conditional"]').click();
     await expect(create.locator("#conditionalDonationEntry")).toBeVisible();
-    await expect(create.getByRole("button", { name: "Set up donation →" })).toBeVisible();
+    await expect(
+      create.getByRole("button", { name: "Set up direct Donation Upgrade →" }),
+    ).toBeVisible();
+    await expect(
+      create.getByRole("link", { name: "Managed conditional donation →" }),
+    ).toHaveAttribute("href", "/trades/new?structure=conditional-donation");
     expect(publishRequestCount).toBe(0);
 
     if (captureVisuals) {
@@ -156,7 +161,12 @@ test.describe("Create route workbench", () => {
     await create.locator('[data-request-kind="fund"]').click();
     await create.locator('[data-fund-mode="conditional"]').click();
     await expect(create.locator("#conditionalDonationEntry")).toBeVisible();
-    await expect(create.getByRole("button", { name: "Set up donation →" })).toBeVisible();
+    await expect(
+      create.getByRole("button", { name: "Set up direct Donation Upgrade →" }),
+    ).toBeVisible();
+    await expect(
+      create.getByRole("link", { name: "Managed conditional donation →" }),
+    ).toBeVisible();
 
     const frameHasHorizontalOverflow = await create.locator("html").evaluate(
       (element) => element.scrollWidth > element.clientWidth + 1,

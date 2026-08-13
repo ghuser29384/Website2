@@ -7,16 +7,21 @@ on:
     paths:
       - ".github/workflows/direct-donation-upgrade-rendered-qa.yml"
       - "tests/direct-donation-upgrade-authenticated.spec.ts"
+      - "public/moral-trade-create/**"
       - "src/app/direct-donation-upgrade-actions.ts"
       - "src/app/donation-upgrades/**"
       - "src/app/trades/new/conditional-donation.tsx"
       - "src/app/trades/new/direct-donation-upgrade-create.tsx"
+      - "src/app/trades/new/page.tsx"
       - "src/app/api/donation-upgrades/**"
       - "src/components/donation-upgrades/**"
+      - "src/components/create/create-interface-frame.tsx"
+      - "src/lib/create-interface/**"
       - "src/lib/direct-donation-upgrade*.ts"
       - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
       - "supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql"
       - "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql"
+      - "supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql"
   workflow_dispatch:
     inputs:
       confirm_target:
@@ -28,7 +33,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: direct-donation-upgrade-isolated-qa
+  group: direct-donation-upgrade-stateful-isolated-qa
   cancel-in-progress: false
 
 jobs:
@@ -45,6 +50,7 @@ jobs:
       BASE_MIGRATION: supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
       SPLIT_MIGRATION: supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql
       LIFECYCLE_MIGRATION: supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql
+      HARDENING_MIGRATION: supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
       NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
       NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
@@ -123,8 +129,10 @@ jobs:
             printf 'base_blob=%s\n' "$(git hash-object "$BASE_MIGRATION")"
             printf 'split_blob=%s\n' "$(git hash-object "$SPLIT_MIGRATION")"
             printf 'lifecycle_blob=%s\n' "$(git hash-object "$LIFECYCLE_MIGRATION")"
+            printf 'hardening_blob=%s\n' "$(git hash-object "$HARDENING_MIGRATION")"
           } | tee direct-upgrade-rendered-source.txt
           sha256sum "$BASE_MIGRATION" "$SPLIT_MIGRATION" "$LIFECYCLE_MIGRATION" \
+            "$HARDENING_MIGRATION" \
             | tee direct-upgrade-rendered-migration-sha256.txt
 
       - name: Install dependencies and PostgreSQL client
@@ -175,15 +183,88 @@ jobs:
           PY
           printf 'DIRECT_UPGRADE_QA_TARGET_VERIFIED=true\n' >> "$GITHUB_ENV"
 
-      - name: Compile and atomically apply or verify the exact additive migration pair
+      - name: Compile and atomically apply or verify the exact additive migration chain
         shell: bash
         run: |
           set -euo pipefail
+          base_blob="$(git hash-object "$BASE_MIGRATION")"
+          split_blob="$(git hash-object "$SPLIT_MIGRATION")"
+          lifecycle_blob="$(git hash-object "$LIFECYCLE_MIGRATION")"
+          hardening_blob="$(git hash-object "$HARDENING_MIGRATION")"
+
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
             | tee direct-upgrade-rendered-migration-compile.log
           begin;
+          select pg_advisory_xact_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${base_blob}'
+              and max(name) = 'direct_verified_donation_upgrades' as base_exact
+          from supabase_migrations.schema_migrations
+          where version = '20260801050000' \gset
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${split_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_negotiation' as split_exact,
+            count(*) = 0 as split_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813150000' \gset
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${lifecycle_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_lifecycle' as lifecycle_exact,
+            count(*) = 0 as lifecycle_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813151000' \gset
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${hardening_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_hardening' as hardening_exact,
+            count(*) = 0 as hardening_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813152000' \gset
+          \if :base_exact
+            \if :split_exact
+              \if :lifecycle_exact
+                \if :hardening_exact
+                  \echo 'Recorded migration chain matches source before compile replay.'
+                \else
+                  \if :hardening_absent
+                    \echo 'Recorded immutable pair matches source; hardening is cleanly absent.'
+                  \else
+                    \echo 'Refusing mismatched hardening history before compile replay.'
+                    \quit 3
+                  \endif
+                \endif
+              \else
+                \echo 'Refusing mixed or mismatched lifecycle history before compile replay.'
+                \quit 3
+              \endif
+            \else
+              \if :split_absent
+                \if :lifecycle_absent
+                  \if :hardening_absent
+                    \echo 'Partial migration chain is cleanly absent before compile replay.'
+                  \else
+                    \echo 'Refusing hardening without its immutable predecessors.'
+                    \quit 3
+                  \endif
+                \else
+                  \echo 'Refusing lifecycle without negotiation.'
+                  \quit 3
+                \endif
+              \else
+                \echo 'Refusing mismatched negotiation history before compile replay.'
+                \quit 3
+              \endif
+            \endif
+          \else
+            \echo 'Refusing absent or source-mismatched base migration before compile replay.'
+            \quit 3
+          \endif
           \i $SPLIT_MIGRATION
           \i $LIFECYCLE_MIGRATION
+          \i $HARDENING_MIGRATION
           rollback;
           SQL
 
@@ -194,41 +275,96 @@ jobs:
               --command "select count(*), coalesce(max(statements[1]), ''), coalesce(max(name), '') from supabase_migrations.schema_migrations where version='${version}';"
           }
 
-          base_blob="$(git hash-object "$BASE_MIGRATION")"
-          split_blob="$(git hash-object "$SPLIT_MIGRATION")"
-          lifecycle_blob="$(git hash-object "$LIFECYCLE_MIGRATION")"
           base_state="$(migration_state 20260801050000)"
-          split_state="$(migration_state 20260813150000)"
-          lifecycle_state="$(migration_state 20260813151000)"
           expected_base="1|source-git-blob:${base_blob}|direct_verified_donation_upgrades"
           expected_split="1|source-git-blob:${split_blob}|direct_donation_upgrade_partial_redirect_negotiation"
           expected_lifecycle="1|source-git-blob:${lifecycle_blob}|direct_donation_upgrade_partial_redirect_lifecycle"
+          expected_hardening="1|source-git-blob:${hardening_blob}|direct_donation_upgrade_partial_redirect_hardening"
 
           if [[ "$base_state" != "$expected_base" ]]; then
             echo "Base migration is absent, duplicated, renamed, or differs from the immutable source blob: $base_state" >&2
             exit 1
           fi
 
-          if [[ "$split_state" == "0||" && "$lifecycle_state" == "0||" ]]; then
-            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
-              --single-transaction \
-              --command "select pg_advisory_xact_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));" \
-              --file "$SPLIT_MIGRATION" \
-              --file "$LIFECYCLE_MIGRATION" \
-              --command "insert into supabase_migrations.schema_migrations(version, statements, name, created_by) values ('20260813150000', array['source-git-blob:${split_blob}'], 'direct_donation_upgrade_partial_redirect_negotiation', 'github-actions:direct-donation-upgrade-rendered-qa'), ('20260813151000', array['source-git-blob:${lifecycle_blob}'], 'direct_donation_upgrade_partial_redirect_lifecycle', 'github-actions:direct-donation-upgrade-rendered-qa');" \
-              | tee direct-upgrade-rendered-migration-apply.log
-          elif [[ "$split_state" == "$expected_split" && "$lifecycle_state" == "$expected_lifecycle" ]]; then
-            {
-              printf 'Both additive migrations already match the exact rendered candidate.\n'
-              printf 'split=%s\n' "$split_blob"
-              printf 'lifecycle=%s\n' "$lifecycle_blob"
-            } | tee direct-upgrade-rendered-migration-apply.log
-          else
-            {
-              echo "Refusing mixed, duplicated, renamed, or source-mismatched partial migration history."
-              printf 'split_state=%s\n' "$split_state"
-              printf 'lifecycle_state=%s\n' "$lifecycle_state"
-            } | tee direct-upgrade-rendered-migration-apply.log >&2
+          # Recheck history only after taking the database lock. Distinct QA
+          # workflow concurrency groups may otherwise race on an absent 152000.
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
+            | tee direct-upgrade-rendered-migration-apply.log
+          begin;
+          select pg_advisory_xact_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${split_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_negotiation' as split_exact,
+            count(*) = 0 as split_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813150000' \gset
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${lifecycle_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_lifecycle' as lifecycle_exact,
+            count(*) = 0 as lifecycle_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813151000' \gset
+          select
+            count(*) = 1
+              and max(statements[1]) = 'source-git-blob:${hardening_blob}'
+              and max(name) = 'direct_donation_upgrade_partial_redirect_hardening' as hardening_exact,
+            count(*) = 0 as hardening_absent
+          from supabase_migrations.schema_migrations
+          where version = '20260813152000' \gset
+          \if :split_exact
+            \if :lifecycle_exact
+              \if :hardening_exact
+                \echo 'Verified existing exact three-migration chain.'
+              \else
+                \if :hardening_absent
+                  \i $HARDENING_MIGRATION
+                  insert into supabase_migrations.schema_migrations(version, statements, name, created_by)
+                  values ('20260813152000', array['source-git-blob:${hardening_blob}'], 'direct_donation_upgrade_partial_redirect_hardening', 'github-actions:direct-donation-upgrade-rendered-qa');
+                \else
+                  \echo 'Refusing duplicated, renamed, or source-mismatched hardening history.'
+                  \quit 3
+                \endif
+              \endif
+            \else
+              \echo 'Refusing mixed or source-mismatched negotiation/lifecycle history.'
+              \quit 3
+            \endif
+          \else
+            \if :split_absent
+              \if :lifecycle_absent
+                \if :hardening_absent
+                  \i $SPLIT_MIGRATION
+                  \i $LIFECYCLE_MIGRATION
+                  \i $HARDENING_MIGRATION
+                  insert into supabase_migrations.schema_migrations(version, statements, name, created_by)
+                  values
+                    ('20260813150000', array['source-git-blob:${split_blob}'], 'direct_donation_upgrade_partial_redirect_negotiation', 'github-actions:direct-donation-upgrade-rendered-qa'),
+                    ('20260813151000', array['source-git-blob:${lifecycle_blob}'], 'direct_donation_upgrade_partial_redirect_lifecycle', 'github-actions:direct-donation-upgrade-rendered-qa'),
+                    ('20260813152000', array['source-git-blob:${hardening_blob}'], 'direct_donation_upgrade_partial_redirect_hardening', 'github-actions:direct-donation-upgrade-rendered-qa');
+                \else
+                  \echo 'Refusing hardening history without its prerequisite pair.'
+                  \quit 3
+                \endif
+              \else
+                \echo 'Refusing lifecycle history without its negotiation prerequisite.'
+                \quit 3
+              \endif
+            \else
+              \echo 'Refusing duplicated, renamed, or source-mismatched negotiation history.'
+              \quit 3
+            \endif
+          \endif
+          commit;
+          SQL
+
+          split_state="$(migration_state 20260813150000)"
+          lifecycle_state="$(migration_state 20260813151000)"
+          hardening_state="$(migration_state 20260813152000)"
+          if [[ "$split_state" != "$expected_split" || "$lifecycle_state" != "$expected_lifecycle" || "$hardening_state" != "$expected_hardening" ]]; then
+            printf 'split_state=%s\nlifecycle_state=%s\nhardening_state=%s\n' \
+              "$split_state" "$lifecycle_state" "$hardening_state" >&2
             exit 1
           fi
 
@@ -526,6 +662,9 @@ jobs:
           )
           select jsonb_build_object(
             'authUsers', (select count(*) from auth.users where id='d1000000-0000-4000-8000-000000000001'),
+            'authIdentities', (select count(*) from auth.identities where user_id='d1000000-0000-4000-8000-000000000001'::uuid),
+            'authSessions', (select count(*) from auth.sessions where user_id='d1000000-0000-4000-8000-000000000001'::uuid),
+            'authRefreshTokens', (select count(*) from auth.refresh_tokens where user_id::text='d1000000-0000-4000-8000-000000000001'),
             'profiles', (select count(*) from public.profiles where id='d1000000-0000-4000-8000-000000000001'),
             'personAccounts', (select count(*) from moral_trade_private.person_accounts where profile_id='d1000000-0000-4000-8000-000000000001'),
             'personAccountAliases', (select count(*) from moral_trade_private.person_account_aliases where alias_profile_id='d1000000-0000-4000-8000-000000000001' or canonical_profile_id='d1000000-0000-4000-8000-000000000001'),

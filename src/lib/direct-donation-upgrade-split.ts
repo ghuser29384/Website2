@@ -18,11 +18,34 @@ export function parseDirectDonationUpgradeUsdValue(value: string) {
   return Number.isSafeInteger(cents) ? cents : null;
 }
 
+export function parseDirectDonationUpgradeDirectLegUsdValue(value: string) {
+  const cents = parseDirectDonationUpgradeUsdValue(value);
+  if (
+    cents === null ||
+    cents < DIRECT_DONATION_UPGRADE_MIN_DIRECT_LEG_CENTS ||
+    cents > DIRECT_DONATION_UPGRADE_MAX_DIRECT_LEG_CENTS
+  ) {
+    return null;
+  }
+  return cents;
+}
+
 export function formatDirectDonationUpgradeUsdValue(cents: number) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
   }).format(cents / 100);
+}
+
+export function describeDirectDonationUpgradeRetainedLeg(
+  retainedAmountCents: number,
+  originalRecipientName: string,
+) {
+  return retainedAmountCents === 0
+    ? "no retained creator obligation is created"
+    : `${formatDirectDonationUpgradeUsdValue(
+        retainedAmountCents,
+      )} remains with ${originalRecipientName}`;
 }
 
 export function parseDirectDonationUpgradeRedirectPercentage(value: string) {
@@ -78,6 +101,14 @@ export function calculateDirectDonationUpgradeSplit(
 
   if (redirectedAmountCents < DIRECT_DONATION_UPGRADE_MIN_DIRECT_LEG_CENTS) {
     throw new Error("The redirected portion must be at least $1.00.");
+  }
+  if (
+    retainedAmountCents === 0 &&
+    redirectBasisPoints !== DIRECT_DONATION_UPGRADE_MAX_REDIRECT_BASIS_POINTS
+  ) {
+    throw new Error(
+      "Only an exact 100% redirect may create no retained obligation.",
+    );
   }
   if (
     retainedAmountCents > 0 &&

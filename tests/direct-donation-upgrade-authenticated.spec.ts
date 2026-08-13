@@ -12,6 +12,9 @@ const QA_EMAIL = "direct-upgrade-rendered-creator@qa.invalid";
 const QA_PASSWORD = process.env.DIRECT_UPGRADE_RENDERED_QA_PASSWORD ?? "";
 const PROPOSER_DETAIL_FIXTURE_ID = "d2000000-0000-4000-8000-000000000002";
 const CREATOR_DETAIL_FIXTURE_ID = "d3000000-0000-4000-8000-000000000003";
+const EXPIRED_DETAIL_FIXTURE_ID = "d4000000-0000-4000-8000-000000000004";
+const REVISION_DETAIL_FIXTURE_ID = "d5000000-0000-4000-8000-000000000005";
+const ACCEPTED_REVISION_FIXTURE_ID = "d5100000-0000-4000-8000-000000000051";
 const SAFE_BROWSER_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 const VIEWPORTS = [
@@ -210,12 +213,14 @@ async function exerciseNoChargeForm(
   const page = await context.newPage();
   const pageErrors: string[] = [];
   const consoleErrors: string[] = [];
+  const consoleWarnings: string[] = [];
   const prohibitedRequests: string[] = [];
   let caughtFailure: unknown;
 
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
+    if (message.type() === "warning") consoleWarnings.push(message.text());
   });
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -229,11 +234,31 @@ async function exerciseNoChargeForm(
   });
 
   try {
-    await page.goto("/trades/new?structure=conditional-donation&rail=direct");
+    await page.goto("/trades/new");
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveTitle(/Create/);
+    await expect(page).toHaveURL(/\/trades\/new$/);
+    const createFrame = page.frameLocator('iframe[title="Moral Trade Create"]');
+    await createFrame.getByRole("button", { name: "Future flourishing" }).click();
+    await createFrame.locator('[data-request-kind="fund"]').click();
+    await createFrame.locator('[data-fund-mode="conditional"]').click();
+    await expect(
+      createFrame.getByRole("link", { name: "Managed conditional donation →" }),
+    ).toHaveAttribute("href", "/trades/new?structure=conditional-donation");
+    await Promise.all([
+      page.waitForURL(
+        /\/trades\/new\?structure=conditional-donation&rail=direct$/,
+      ),
+      createFrame
+        .getByRole("button", { name: "Set up direct Donation Upgrade →" })
+        .click(),
+    ]);
     await page.waitForLoadState("networkidle");
 
-    expect(page.url()).toContain("structure=conditional-donation");
-    expect(page.url()).toContain("rail=direct");
+    await expect(page).toHaveTitle(/Create/);
+    await expect(page).toHaveURL(
+      /\/trades\/new\?structure=conditional-donation&rail=direct$/,
+    );
     await expect(
       page.getByRole("heading", {
         name: "Turn a planned donation into a larger donation to a more effective recipient.",
@@ -246,6 +271,13 @@ async function exerciseNoChargeForm(
     await expect(
       page.getByText(/first eligible matcher who accepts the exact published terms becomes primary/i),
     ).toBeVisible();
+    await expect(
+      page.getByText(
+        "With a match: no retained creator obligation is created; $10.00 moves to GiveWell Top Charities Fund; the matcher adds $15.00 there.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/\$0\.00 (?:stays|remains) with/)).toHaveCount(0);
 
     const creatorAmount = page.locator('input[name="creator_amount"]');
     const matcherAmount = page.locator('input[name="matcher_amount"]');
@@ -267,6 +299,20 @@ async function exerciseNoChargeForm(
       share: "100%",
       matcher: "$10.00",
     });
+
+    await matcherAmount.fill("0.50");
+    await expect(matcherAmount).toHaveAttribute("aria-invalid", "true");
+    await expect(
+      page.getByText(
+        "The matcher donation must be between $1.00 and $50,000.00.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(splitValue(page, "Matcher adds")).toHaveText(
+      "Enter $1.00 to $50,000.00",
+    );
+    await matcherAmount.fill("10.00");
+    await expect(matcherAmount).not.toHaveAttribute("aria-invalid", "true");
 
     await moveRangeInput(page, "20");
     await expect(redirectPercentage).toHaveValue("20");
@@ -290,13 +336,23 @@ async function exerciseNoChargeForm(
       page.getByText("The redirected portion must be at least $1.00.", { exact: true }),
     ).toBeVisible();
     await redirectPercentage.fill("95");
+    await expect(redirectPercentage).toHaveAttribute("aria-invalid", "true");
     await expect(
       page.getByText(
         "The portion remaining with the original recipient must be either $0.00 or at least $1.00.",
         { exact: true },
       ),
     ).toBeVisible();
+    await redirectPercentage.fill("99.99");
+    await expect(redirectPercentage).toHaveAttribute("aria-invalid", "true");
+    await expect(
+      page.getByText(
+        "Only an exact 100% redirect may create no retained obligation.",
+        { exact: true },
+      ),
+    ).toBeVisible();
     await redirectPercentage.fill("20");
+    await expect(redirectPercentage).not.toHaveAttribute("aria-invalid", "true");
     await expectSplitPreview(page, {
       retained: "$8.00",
       redirected: "$2.00",
@@ -346,6 +402,10 @@ async function exerciseNoChargeForm(
 
     await page.goto(`/donation-upgrades/${PROPOSER_DETAIL_FIXTURE_ID}`);
     await page.waitForLoadState("networkidle");
+    await expect(page).toHaveTitle(/Donation Upgrade/);
+    await expect(page).toHaveURL(
+      new RegExp(`/donation-upgrades/${PROPOSER_DETAIL_FIXTURE_ID}$`),
+    );
     await expect(
       page.getByRole("heading", {
         name: "Accept the current terms or send a binding counteroffer.",
@@ -355,13 +415,30 @@ async function exerciseNoChargeForm(
     await expect(
       page.getByText(/submitting it records a binding advance commitment/i),
     ).toBeVisible();
+    await expect(
+      page.getByRole("checkbox", {
+        name: /If selected, I will donate exactly \$15\.00 directly to GiveWell Top Charities Fund within seven days\. I accept the frozen 20% creator redirect\./,
+      }),
+    ).toBeVisible();
     const proposedPercentage = page.locator(
       'input[name="proposed_redirect_percentage"]',
     );
     const proposedMatcherAmount = page.locator(
       'input[name="proposed_matcher_amount"]',
     );
+    await proposedPercentage.fill("99.99");
+    await expect(proposedPercentage).toHaveAttribute("aria-invalid", "true");
+    await expect(
+      page.getByText(
+        "Only an exact 100% redirect may create no retained obligation.",
+        { exact: true },
+      ),
+    ).toBeVisible();
     await proposedPercentage.fill("40");
+    await expect(proposedPercentage).not.toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
     await proposedMatcherAmount.fill("25.00");
     await expect(
       page.getByText(
@@ -372,6 +449,16 @@ async function exerciseNoChargeForm(
     await expect(
       page.getByRole("button", { name: "Send counteroffer", exact: true }),
     ).toBeEnabled();
+    await proposedMatcherAmount.fill("0.50");
+    await expect(proposedMatcherAmount).toHaveAttribute("aria-invalid", "true");
+    await expect(
+      page.getByText(
+        "The proposed matcher donation must be between $1.00 and $50,000.00.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByText(/^Proposed matched branch:/)).toHaveCount(0);
+    await proposedMatcherAmount.fill("25.00");
     await expectStableResponsivePage(page);
     await page.screenshot({
       path: `direct-upgrade-rendered-${viewportName}-counteroffer.png`,
@@ -380,6 +467,10 @@ async function exerciseNoChargeForm(
 
     await page.goto(`/donation-upgrades/${CREATOR_DETAIL_FIXTURE_ID}`);
     await page.waitForLoadState("networkidle");
+    await expect(page).toHaveTitle(/Donation Upgrade/);
+    await expect(page).toHaveURL(
+      new RegExp(`/donation-upgrades/${CREATOR_DETAIL_FIXTURE_ID}$`),
+    );
     await expect(
       page.getByRole("heading", {
         name: "Review exact alternative splits.",
@@ -398,7 +489,10 @@ async function exerciseNoChargeForm(
       page.getByText(/This atomically cancels this revision as superseded/i),
     ).toBeVisible();
     await expect(
-      page.getByText("The creator kept the current split.", { exact: true }),
+      page.getByText(
+        "Creator response: The creator kept the current split.",
+        { exact: true },
+      ),
     ).toBeVisible();
     await expectStableResponsivePage(page);
     await page.screenshot({
@@ -406,8 +500,56 @@ async function exerciseNoChargeForm(
       fullPage: true,
     });
 
+    await page.goto(`/donation-upgrades/${EXPIRED_DETAIL_FIXTURE_ID}`);
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveTitle(/Donation Upgrade/);
+    await expect(page).toHaveURL(
+      new RegExp(`/donation-upgrades/${EXPIRED_DETAIL_FIXTURE_ID}$`),
+    );
+    await expect(
+      page.getByText(
+        "The matching deadline has passed. This offer is awaiting its lifecycle update and cannot be accepted or negotiated.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Accept current terms", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Send counteroffer", exact: true }),
+    ).toHaveCount(0);
+    await expectStableResponsivePage(page);
+
+    await page.goto(`/donation-upgrades/${REVISION_DETAIL_FIXTURE_ID}`);
+    await page.waitForLoadState("networkidle");
+    await expect(page).toHaveTitle(/Donation Upgrade/);
+    await expect(
+      page.getByText(
+        "no retained creator obligation is created; $10.00 moves to GiveWell Top Charities Fund.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Replaced by accepted terms", exact: true }),
+    ).toHaveAttribute(
+      "href",
+      `/donation-upgrades/${ACCEPTED_REVISION_FIXTURE_ID}`,
+    );
+    await expect(
+      page.getByRole("link", { name: "View accepted revision", exact: true }),
+    ).toHaveAttribute(
+      "href",
+      `/donation-upgrades/${ACCEPTED_REVISION_FIXTURE_ID}`,
+    );
+    await expectStableResponsivePage(page);
+    await page.screenshot({
+      path: `direct-upgrade-rendered-${viewportName}-accepted-revision.png`,
+      fullPage: true,
+    });
+
     expect(pageErrors).toEqual([]);
     expect(consoleErrors).toEqual([]);
+    expect(consoleWarnings).toEqual([]);
     expect(prohibitedRequests).toEqual([]);
   } catch (error) {
     caughtFailure = error;

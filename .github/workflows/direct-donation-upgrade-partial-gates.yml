@@ -18,6 +18,7 @@ on:
       - "supabase/migrations/*donation_upgrade*.sql"
       - "supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql"
       - "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql"
+      - "supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql"
       - "supabase/tests/*donation_upgrade*.sql"
       - "supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql"
   workflow_dispatch:
@@ -95,6 +96,7 @@ jobs:
           set -euo pipefail
           schema=supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql
           lifecycle=supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql
+          hardening=supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql
           regression=supabase/tests/direct_donation_upgrade_partial_redirect_schema.sql
 
           grep -Fq 'redirect_basis_points integer not null default 10000' "$schema"
@@ -103,9 +105,12 @@ jobs:
           grep -Fq "obligation_kind = 'creator_retained'" "$lifecycle"
           grep -Fq 'direct_donation_upgrade_guard_completion' "$lifecycle"
           grep -Fq 'actual_creator_count <> expected_creator_count' "$lifecycle"
+          grep -Fq 'direct_donation_upgrade_lock_profile_eligibility' "$hardening"
+          grep -Fq 'A $0 retained leg is valid only for an exact 100%% redirect.' "$hardening"
+          grep -Fq "completion_result->>'reason' = 'provider_charge_reused'" "$hardening"
           grep -Fq 'with (security_barrier = true, security_invoker = true)' "$schema"
           grep -Fq 'revoke all on public.direct_donation_upgrade_public_offers from public, anon, authenticated;' "$schema"
-          grep -Fq 'counteroffer RPC is executable by a public user role' "$regression"
+          grep -Fq 'Donation Upgrade mutator or internal lock function is executable by a public user role' "$regression"
           test "$(grep -c '^begin;$' "$regression")" = "1"
           test "$(grep -c '^rollback;$' "$regression")" = "1"
           for rpc in \
@@ -143,9 +148,10 @@ jobs:
             printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
             printf 'split_blob=%s\n' "$(git hash-object "$schema")"
             printf 'lifecycle_blob=%s\n' "$(git hash-object "$lifecycle")"
+            printf 'hardening_blob=%s\n' "$(git hash-object "$hardening")"
             printf 'regression_blob=%s\n' "$(git hash-object "$regression")"
           } | tee donation-upgrade-partial-source.txt
-          sha256sum "$schema" "$lifecycle" "$regression" \
+          sha256sum "$schema" "$lifecycle" "$hardening" "$regression" \
             | tee donation-upgrade-partial-sql-sha256.txt
 
       - name: Upload evidence

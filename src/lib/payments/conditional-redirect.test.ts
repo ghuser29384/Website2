@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
+import { integrateCommonGroundCreateSource } from "@/lib/create-interface/common-ground-integration";
+
 import {
   arbitrationClosesAt,
   conditionalRedirectKind,
@@ -175,9 +177,8 @@ test("the feature is discoverable and exposes recovery, withdrawal, and local de
   );
   const createPage = readFileSync("src/app/trades/new/page.tsx", "utf8");
   const nextConfig = readFileSync("next.config.ts", "utf8");
-  const createInterface = readFileSync(
-    "public/moral-trade-create/index.html",
-    "utf8",
+  const createInterface = integrateCommonGroundCreateSource(
+    readFileSync("public/moral-trade-create/index.html", "utf8"),
   );
   const deadlineField = readFileSync(
     "src/app/donation-offsets/conditional/deadline-field.tsx",
@@ -194,7 +195,11 @@ test("the feature is discoverable and exposes recovery, withdrawal, and local de
   assert.match(createInterface, /data-fund-mode="conditional"/);
   assert.match(
     createInterface,
-    /window\.top\.location\.assign\("\/trades\/new\?structure=conditional-donation"\)/,
+    /href="\/trades\/new\?structure=conditional-donation" target="_top">\s*Managed conditional donation →/,
+  );
+  assert.match(
+    createInterface,
+    /window\.top\.location\.assign\("\/trades\/new\?structure=conditional-donation&rail=direct"\)/,
   );
   assert.match(
     offsetsPage,

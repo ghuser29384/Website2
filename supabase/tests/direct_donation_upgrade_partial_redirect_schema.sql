@@ -154,14 +154,102 @@ declare
   before_creator_obligations integer;
   before_creator_credits integer;
   before_matcher_obligations integer;
+  lifecycle_function_definition text;
+  completion_function_definition text;
+  commitment_function_definition text;
 begin
   -- Schema and deterministic split prerequisites.
   if to_regclass('public.direct_donation_upgrade_proposals') is null
      or to_regprocedure('public.create_direct_donation_upgrade_offer(uuid,text,integer,integer,timestamptz,text,jsonb,jsonb,text,text,text,integer)') is null
      or to_regprocedure('public.propose_direct_donation_upgrade_terms(uuid,uuid,integer,integer,integer,integer,text,text,text)') is null
      or to_regprocedure('public.accept_direct_donation_upgrade_proposal(uuid,uuid,text,text)') is null
+     or to_regprocedure('public.direct_donation_upgrade_lock_profile_eligibility(uuid)') is null
+     or to_regprocedure('public.direct_donation_upgrade_start_checkout_20260813(uuid,uuid,text)') is null
+     or to_regprocedure('public.direct_donation_upgrade_run_lifecycle_20260813(timestamptz,text)') is null
      or to_regprocedure('public.run_direct_donation_upgrade_lifecycle(timestamptz,text)') is null then
     raise exception 'The partial Donation Upgrade schema or RPC surface is incomplete.';
+  end if;
+
+  select pg_catalog.pg_get_functiondef(
+    'public.run_direct_donation_upgrade_lifecycle(timestamptz,text)'::regprocedure
+  ) into lifecycle_function_definition;
+  if position(
+       'moraltrade:direct-donation-upgrade-lifecycle-worker'
+       in lifecycle_function_definition
+     ) = 0
+     or position(
+       'moraltrade:direct-donation-upgrade-lifecycle-worker'
+       in lifecycle_function_definition
+     ) >= position(
+       'direct_donation_upgrade_run_lifecycle_20260813'
+       in lifecycle_function_definition
+     ) then
+    raise exception 'Lifecycle processing is not globally serialized before offer iteration.';
+  end if;
+
+  select pg_catalog.pg_get_functiondef(
+    'public.complete_direct_donation_upgrade_obligation(uuid,boolean,text,text,text,text,integer,integer,text,text,text,timestamptz,text,text)'::regprocedure
+  ) into completion_function_definition;
+  if position(
+       'moraltrade:direct-donation-upgrade-lifecycle-worker'
+       in completion_function_definition
+     ) = 0
+     or position(
+       'moraltrade:direct-donation-upgrade-lifecycle-worker'
+       in completion_function_definition
+     ) >= position(
+       'hashtextextended(normalized_charge_hash, 0)'
+       in completion_function_definition
+     )
+     or position(
+       'hashtextextended(normalized_charge_hash, 0)'
+       in completion_function_definition
+     ) = 0
+     or position(
+       'hashtextextended(normalized_charge_hash, 0)'
+       in completion_function_definition
+     ) >= position('order by affected_offer.id' in completion_function_definition)
+     or position('order by affected_offer.id' in completion_function_definition)
+        >= position('select * into obligation_row' in completion_function_definition) then
+    raise exception 'Provider-charge completion does not lock affected offers canonically before obligations.';
+  end if;
+
+  foreach commitment_function_definition in array array[
+    pg_catalog.pg_get_functiondef(
+      'public.create_direct_donation_upgrade_offer(uuid,text,integer,integer,timestamptz,text,jsonb,jsonb,text,text,text,integer)'::regprocedure
+    ),
+    pg_catalog.pg_get_functiondef(
+      'public.join_direct_donation_upgrade_offer(uuid,uuid,text,text)'::regprocedure
+    ),
+    pg_catalog.pg_get_functiondef(
+      'public.propose_direct_donation_upgrade_terms(uuid,uuid,integer,integer,integer,integer,text,text,text)'::regprocedure
+    ),
+    pg_catalog.pg_get_functiondef(
+      'public.accept_direct_donation_upgrade_proposal(uuid,uuid,text,text)'::regprocedure
+    ),
+    pg_catalog.pg_get_functiondef(
+      'public.start_direct_donation_upgrade_checkout(uuid,uuid,text)'::regprocedure
+    )
+  ] loop
+    if position('pg_advisory_xact_lock_shared' in commitment_function_definition) = 0
+       or position(
+         'moraltrade:direct-donation-upgrade-lifecycle-worker'
+         in commitment_function_definition
+       ) = 0
+       or position('pg_advisory_xact_lock_shared' in commitment_function_definition)
+          >= position('return public.direct_donation_upgrade_' in commitment_function_definition) then
+      raise exception 'A commitment wrapper does not share the lifecycle gate before delegation.';
+    end if;
+  end loop;
+
+  if (
+    select count(*)
+    from pg_catalog.pg_attribute attribute
+    where attribute.attrelid = 'public.direct_donation_upgrade_offers'::regclass
+      and attribute.attname in ('redirected_amount_cents', 'retained_amount_cents')
+      and attribute.attgenerated = 's'
+  ) <> 2 then
+    raise exception 'The split amount columns are not both stored generated columns.';
   end if;
 
   if public.direct_donation_upgrade_redirected_amount(1000, 2000) <> 200
@@ -171,6 +259,16 @@ begin
   end if;
   perform public.direct_donation_upgrade_validate_split(1000, 2000, 200, 800);
   perform public.direct_donation_upgrade_validate_split(1000, 10000, 1000, 0);
+
+  blocked := false;
+  begin
+    perform public.direct_donation_upgrade_validate_split(1000, 9999, 1000, 0);
+  exception when others then
+    blocked := position('exact 100%' in lower(sqlerrm)) > 0;
+  end;
+  if not blocked then
+    raise exception 'A 99.99%% redirect was allowed to round into a zero retained leg.';
+  end if;
 
   blocked := false;
   begin
@@ -200,6 +298,34 @@ begin
   end;
   if not blocked then
     raise exception 'A nonzero retained leg below $1 was accepted.';
+  end if;
+
+  -- The immutable source text must be exactly the text committed by the terms
+  -- hash. The applied creator truncated after hashing, so the additive wrapper
+  -- must reject overlong direct database callers before any row is stored.
+  blocked := false;
+  begin
+    perform public.create_direct_donation_upgrade_offer(
+      creator_id, 'staging', 1000, 500,
+      match_deadline,
+      'public', original_recipient, upgraded_recipient,
+      baseline_version,
+      repeat('x', 2001),
+      public.direct_donation_upgrade_terms_hash_v2(
+        creator_id, 1000, 2000, 500, repeat('1', 64), repeat('2', 64),
+        match_deadline, 'public', 'staging', repeat('x', 2001)
+      ), 2000
+    );
+  exception when others then
+    blocked := position('2,000 characters' in sqlerrm) > 0;
+  end;
+  if not blocked
+     or exists (
+       select 1
+       from public.direct_donation_upgrade_offers
+       where creator_profile_id = creator_id
+     ) then
+    raise exception 'An overlong baseline attestation was accepted or partially stored.';
   end if;
 
   -- A live fixture in the same transaction proves that the staging lifecycle
@@ -678,6 +804,38 @@ begin
     raise exception 'Lifecycle retry duplicated promotion or matcher-default consequences.';
   end if;
 
+  -- The final mutation-boundary trigger must independently reject a restricted
+  -- profile even if a caller bypasses the RPC's earlier eligibility read.
+  blocked := false;
+  begin
+    insert into public.direct_donation_upgrade_candidates(
+      offer_id,
+      profile_id,
+      rank,
+      status,
+      commitment_version,
+      commitment_accepted_at
+    ) values (
+      isolated_live_offer_id,
+      default_matcher_id,
+      1,
+      'primary',
+      matcher_version,
+      timezone('utc', now())
+    );
+  exception when others then
+    blocked := position('temporarily restricted' in lower(sqlerrm)) > 0;
+  end;
+  if not blocked
+     or exists (
+       select 1
+       from public.direct_donation_upgrade_candidates
+       where offer_id = isolated_live_offer_id
+         and profile_id = default_matcher_id
+     ) then
+    raise exception 'The locked eligibility trigger allowed a restricted matcher commitment.';
+  end if;
+
   -- 100% compatibility and provider replay behavior.
   result := public.create_direct_donation_upgrade_offer(
     replay_creator_id, 'staging', 1000, 700,
@@ -758,7 +916,7 @@ begin
   select id into cross_obligation_id from public.direct_donation_upgrade_obligations
     where candidate_id = cross_candidate_id and obligation_kind = 'matcher_incremental';
   cross_reuse_result := public.complete_direct_donation_upgrade_obligation(
-    cross_obligation_id, true, '', '', repeat('4', 64), repeat('7', 64),
+    cross_obligation_id, true, '', '', repeat('3', 64), repeat('7', 64),
     750, 710, 'USD', 'partial-qa-upgraded', '222222222',
     timezone('utc', now()) + interval '1 day', 'rollback-test', 'staging'
   );
@@ -767,10 +925,27 @@ begin
      or exists (select 1 from public.direct_donation_upgrade_impact_credits
                 where obligation_id = cross_obligation_id)
      or (select count(*) from public.direct_donation_upgrade_obligations
-         where provider_charge_id_hash = repeat('4', 64)) <> 1
+         where provider_charge_id_hash = repeat('3', 64)) <> 1
      or (select count(*) from public.direct_donation_upgrade_impact_credits
-         where provider_charge_id_hash = repeat('4', 64)) <> 1 then
-    raise exception 'One provider charge could satisfy more than one obligation: %', cross_reuse_result;
+         where provider_charge_id_hash = repeat('3', 64)) <> 1
+     or not exists (
+       select 1
+       from public.direct_donation_upgrade_offers
+       where id = offer_20_id
+         and status = 'needs_review'
+         and failure_code = 'provider_charge_reused'
+         and completed_at is not null
+     )
+     or not exists (
+       select 1
+       from public.direct_donation_upgrade_obligations
+       where id = matcher_20_id
+         and status = 'needs_review'
+         and failure_code = 'provider_charge_reused'
+     )
+     or (select count(*) from public.direct_donation_upgrade_impact_credits
+         where obligation_id = matcher_20_id) <> 1 then
+    raise exception 'A charge reused from a completed offer did not fail every affected record closed: %', cross_reuse_result;
   end if;
 
   -- Binding counteroffer lifecycle and immutable revision acceptance.
@@ -1170,6 +1345,15 @@ begin
       'start_direct_donation_upgrade_checkout',
       'complete_direct_donation_upgrade_obligation',
       'direct_donation_upgrade_complete_obligation_20260801',
+      'direct_donation_upgrade_lock_profile_eligibility',
+      'direct_donation_upgrade_guard_profile_eligibility',
+      'direct_donation_upgrade_record_default',
+      'direct_donation_upgrade_create_offer_20260813',
+      'direct_donation_upgrade_join_offer_20260813',
+      'direct_donation_upgrade_propose_terms_20260813',
+      'direct_donation_upgrade_accept_proposal_20260813',
+      'direct_donation_upgrade_start_checkout_20260813',
+      'direct_donation_upgrade_run_lifecycle_20260813',
       'run_direct_donation_upgrade_lifecycle',
       'propose_direct_donation_upgrade_terms',
       'withdraw_direct_donation_upgrade_proposal',
@@ -1178,7 +1362,55 @@ begin
     )
     and grantee in ('PUBLIC', 'anon', 'authenticated');
   if forbidden_privileges <> 0 then
-    raise exception 'A counteroffer RPC is executable by a public user role; the complete mutating RPC set must remain service-only.';
+    raise exception 'A Donation Upgrade mutator or internal lock function is executable by a public user role.';
+  end if;
+
+  if has_function_privilege(
+       'service_role',
+       'public.direct_donation_upgrade_lock_profile_eligibility(uuid)',
+       'execute'
+     )
+     or has_function_privilege(
+       'service_role',
+       'public.direct_donation_upgrade_guard_profile_eligibility()',
+       'execute'
+     )
+     or has_function_privilege(
+       'service_role',
+       'public.direct_donation_upgrade_record_default(uuid,uuid,uuid,uuid,integer)',
+       'execute'
+     )
+     or has_function_privilege(
+       'service_role',
+       'public.direct_donation_upgrade_create_offer_20260813(uuid,text,integer,integer,timestamptz,text,jsonb,jsonb,text,text,text,integer)',
+       'execute'
+     )
+     or has_function_privilege(
+       'service_role',
+       'public.direct_donation_upgrade_join_offer_20260813(uuid,uuid,text,text)',
+       'execute'
+     )
+     or has_function_privilege(
+       'service_role',
+       'public.direct_donation_upgrade_propose_terms_20260813(uuid,uuid,integer,integer,integer,integer,text,text,text)',
+       'execute'
+     )
+     or has_function_privilege(
+       'service_role',
+       'public.direct_donation_upgrade_accept_proposal_20260813(uuid,uuid,text,text)',
+       'execute'
+     )
+     or has_function_privilege(
+       'service_role',
+       'public.direct_donation_upgrade_start_checkout_20260813(uuid,uuid,text)',
+       'execute'
+     )
+     or has_function_privilege(
+       'service_role',
+       'public.direct_donation_upgrade_run_lifecycle_20260813(timestamptz,text)',
+       'execute'
+     ) then
+    raise exception 'An internal Donation Upgrade helper is directly executable by service_role.';
   end if;
 
   select count(*) into insecure_definers
@@ -1187,6 +1419,12 @@ begin
   where namespace.nspname = 'public'
     and procedure.proname in (
       'create_direct_donation_upgrade_offer',
+      'direct_donation_upgrade_create_offer_20260813',
+      'direct_donation_upgrade_join_offer_20260813',
+      'direct_donation_upgrade_propose_terms_20260813',
+      'direct_donation_upgrade_accept_proposal_20260813',
+      'direct_donation_upgrade_start_checkout_20260813',
+      'direct_donation_upgrade_run_lifecycle_20260813',
       'join_direct_donation_upgrade_offer',
       'withdraw_direct_donation_upgrade_backup',
       'cancel_direct_donation_upgrade_offer',

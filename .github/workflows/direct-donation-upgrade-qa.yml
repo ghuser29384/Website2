@@ -23,7 +23,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: direct-donation-upgrade-isolated-qa
+  # All three workflows mutate or lifecycle-scan the same isolated QA target.
+  # Serialize their complete fixture lifetimes, not only their DDL sections.
+  group: direct-donation-upgrade-stateful-isolated-qa
   cancel-in-progress: false
 
 jobs:
@@ -64,13 +66,17 @@ jobs:
           parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
           expected_ref = os.environ["EXPECTED_QA_REF"]
           ssl_modes = parse_qs(parsed.query).get("sslmode")
+          tls_required = (
+              ssl_modes == ["require"]
+              or (not ssl_modes and os.environ.get("PGSSLMODE") == "require")
+          )
           valid = (
               parsed.scheme in {"postgres", "postgresql"}
               and parsed.username == f"postgres.{expected_ref}"
               and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
               and parsed.port == 5432
               and parsed.path == f"/{os.environ['EXPECTED_QA_DATABASE']}"
-              and ssl_modes == ["require"]
+              and tls_required
               and bool(parsed.password)
           )
           if not valid:
@@ -113,17 +119,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --command '\conninfo' \
+            | tee direct-upgrade-qa-conninfo.txt
+          grep -Fq 'SSL connection' direct-upgrade-qa-conninfo.txt
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
             --set ON_ERROR_STOP=1 <<'SQL' | tee direct-upgrade-qa-session.json
           select jsonb_build_object(
             'database', current_database(),
             'user', current_user,
-            'ssl', coalesce(
-              (select connection.ssl
-               from pg_catalog.pg_stat_ssl connection
-               where connection.pid = pg_backend_pid()),
-              false
-            ),
             'serverVersion', current_setting('server_version')
           );
           SQL
@@ -143,7 +146,6 @@ jobs:
           expected = {
               "database": os.environ["EXPECTED_QA_DATABASE"],
               "user": os.environ["EXPECTED_QA_DATABASE_USER"],
-              "ssl": True,
           }
           actual = {key: session.get(key) for key in expected}
           if actual != expected:
@@ -160,34 +162,72 @@ jobs:
           name=direct_verified_donation_upgrades
           source_blob="$(git hash-object "$MIGRATION")"
 
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
-            | tee direct-upgrade-qa-migration-compile.log
-          begin;
-          \i $MIGRATION
-          rollback;
-          SQL
+          # Use one session-level chain lock for the history check, rollback-only
+          # replay, and any first application. The partial and rendered workflows
+          # use the same key, so none can replace shared routines concurrently.
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --set expected_record="source-git-blob:${source_blob}" \
+            --set expected_name="${name}" <<SQL \
+            | tee direct-upgrade-qa-migration-compile.log \
+            | tee direct-upgrade-qa-migration-apply.log
+          select pg_advisory_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
 
-          count="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
-            --set ON_ERROR_STOP=1 \
-            --command "select count(*) from supabase_migrations.schema_migrations where version='${version}';" \
-            | tr -d '[:space:]')"
-          if [[ "$count" == "0" ]]; then
-            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --single-transaction \
-              --file "$MIGRATION" \
-              --command "insert into supabase_migrations.schema_migrations(version, statements, name, created_by) values ('${version}', array['source-git-blob:${source_blob}'], '${name}', 'github-actions:direct-donation-upgrade-qa');" \
-              | tee direct-upgrade-qa-migration-apply.log
-          elif [[ "$count" == "1" ]]; then
-            recorded="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
-              --set ON_ERROR_STOP=1 \
-              --command "select coalesce(statements[1],'') from supabase_migrations.schema_migrations where version='${version}';" \
-              | tr -d '[:space:]')"
-            test "$recorded" = "source-git-blob:${source_blob}"
-            printf 'Migration already recorded with exact source blob %s.\n' "$source_blob" \
-              | tee direct-upgrade-qa-migration-apply.log
-          else
-            echo "Unexpected migration-history count: $count" >&2
-            exit 1
-          fi
+          select
+            count(*) = 0 as migration_absent,
+            count(*) = 1 as history_count_valid,
+            coalesce(bool_and(
+              coalesce(statements[1], '') = :'expected_record'
+              and name = :'expected_name'
+            ), false) as recorded_history_exact
+          from supabase_migrations.schema_migrations
+          where version = '${version}'
+          \gset
+
+          select count(*) = 0 as successors_absent
+          from supabase_migrations.schema_migrations
+          where version in ('20260813150000', '20260813151000', '20260813152000')
+          \gset
+
+          \if :history_count_valid
+            \if :recorded_history_exact
+              \echo Historical migration is recorded exactly; it is not replayed over additive successors.
+            \else
+              \echo Refusing immutable migration source mismatch.
+              \quit 1
+            \endif
+          \else
+            \if :migration_absent
+              \if :successors_absent
+                \echo Migration is absent and may be applied after rollback-only compilation.
+              \else
+                \echo Refusing to apply an absent base migration after additive successors.
+                \quit 1
+              \endif
+            \else
+              \echo Refusing unexpected migration-history cardinality.
+              \quit 1
+            \endif
+          \endif
+
+          \if :migration_absent
+            begin;
+            \i $MIGRATION
+            rollback;
+
+            begin;
+            \i $MIGRATION
+            insert into supabase_migrations.schema_migrations(version, statements, name, created_by)
+            values (
+              '${version}',
+              array[:'expected_record'],
+              '${name}',
+              'github-actions:direct-donation-upgrade-qa'
+            );
+            commit;
+          \endif
+
+          select pg_advisory_unlock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          SQL
 
       - name: Verify required schema and privilege boundary
         shell: bash
@@ -258,8 +298,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
-            --file "$REGRESSION" | tee direct-upgrade-qa-regression.log
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
+            | tee direct-upgrade-qa-regression.log
+          select pg_advisory_lock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          \i $REGRESSION
+          select pg_advisory_unlock(hashtextextended('moraltrade:direct-donation-upgrade-migration-chain', 0));
+          SQL
 
       - name: Prove zero persistent synthetic residue
         if: ${{ always() && steps.verify-target.outputs.verified == 'true' }}
@@ -407,6 +451,7 @@ jobs:
           path: |
             direct-upgrade-qa-exact-source.txt
             direct-upgrade-qa-sql-sha256.txt
+            direct-upgrade-qa-conninfo.txt
             direct-upgrade-qa-session.json
             direct-upgrade-qa-migration-compile.log
             direct-upgrade-qa-migration-apply.log

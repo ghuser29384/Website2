@@ -7,12 +7,16 @@ import {
 } from "@/lib/direct-donation-upgrade";
 import {
   buildDirectDonationUpgradeTermsHashV2,
+  directDonationUpgradeCounterofferWindowOpen,
+  directDonationUpgradeJoinWindowOpen,
   DIRECT_DONATION_UPGRADE_PROPOSAL_COMMITMENT_VERSION,
 } from "@/lib/direct-donation-upgrade-negotiation";
 import {
   calculateDirectDonationUpgradeSplit,
+  describeDirectDonationUpgradeRetainedLeg,
   formatDirectDonationUpgradeRedirectPercentage,
   formatDirectDonationUpgradeUsdValue,
+  parseDirectDonationUpgradeDirectLegUsdValue,
   parseDirectDonationUpgradeRedirectPercentage,
   parseDirectDonationUpgradeUsdValue,
 } from "@/lib/direct-donation-upgrade-split";
@@ -74,6 +78,79 @@ test("USD values use one canonical exact-cent lexical parser", () => {
   assert.equal(formatDirectDonationUpgradeUsdValue(1_001), "$10.01");
 });
 
+test("direct donation legs enforce the provider amount range", () => {
+  assert.equal(parseDirectDonationUpgradeDirectLegUsdValue("1.00"), 100);
+  assert.equal(
+    parseDirectDonationUpgradeDirectLegUsdValue("50000.00"),
+    5_000_000,
+  );
+  assert.equal(parseDirectDonationUpgradeDirectLegUsdValue("0.50"), null);
+  assert.equal(parseDirectDonationUpgradeDirectLegUsdValue("50000.01"), null);
+  assert.equal(parseDirectDonationUpgradeDirectLegUsdValue("1e2"), null);
+});
+
+test("retained-leg copy distinguishes a real leg from a 100% redirect", () => {
+  assert.equal(
+    describeDirectDonationUpgradeRetainedLeg(800, "Original nonprofit"),
+    "$8.00 remains with Original nonprofit",
+  );
+  assert.equal(
+    describeDirectDonationUpgradeRetainedLeg(0, "Original nonprofit"),
+    "no retained creator obligation is created",
+  );
+});
+
+test("matching actions fail closed when their database window has ended", () => {
+  const now = Date.parse("2026-08-20T12:00:00.000Z");
+  const openOffer = {
+    status: "open" as const,
+    match_deadline_at: "2026-08-20T12:00:01.000Z",
+    webhook_grace_ends_at: null,
+  };
+  assert.equal(directDonationUpgradeJoinWindowOpen(openOffer, now), true);
+  assert.equal(
+    directDonationUpgradeCounterofferWindowOpen(openOffer, now),
+    true,
+  );
+  assert.equal(
+    directDonationUpgradeJoinWindowOpen(
+      { ...openOffer, match_deadline_at: "2026-08-20T12:00:00.000Z" },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    directDonationUpgradeCounterofferWindowOpen(
+      { ...openOffer, match_deadline_at: "not-a-date" },
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    directDonationUpgradeJoinWindowOpen(
+      {
+        ...openOffer,
+        status: "matched",
+        match_deadline_at: "2026-08-19T12:00:00.000Z",
+        webhook_grace_ends_at: "2026-08-20T12:00:01.000Z",
+      },
+      now,
+    ),
+    true,
+  );
+  assert.equal(
+    directDonationUpgradeJoinWindowOpen(
+      {
+        ...openOffer,
+        status: "matched",
+        webhook_grace_ends_at: "2026-08-20T12:00:00.000Z",
+      },
+      now,
+    ),
+    false,
+  );
+});
+
 test("split calculation preserves exact cents and supports a full redirect", () => {
   assert.deepEqual(calculateDirectDonationUpgradeSplit(1_000, 2_000), {
     redirectBasisPoints: 2_000,
@@ -128,6 +205,10 @@ test("split calculation rejects provider legs between one cent and ninety-nine c
   assert.throws(
     () => calculateDirectDonationUpgradeSplit(150, 6_667),
     /remaining with the original recipient must be either \$0\.00 or at least \$1\.00/,
+  );
+  assert.throws(
+    () => calculateDirectDonationUpgradeSplit(1_000, 9_999),
+    /Only an exact 100% redirect may create no retained obligation/,
   );
 });
 

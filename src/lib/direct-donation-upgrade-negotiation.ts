@@ -74,6 +74,38 @@ export interface DirectDonationUpgradeProposalRow {
     | null;
 }
 
+function futureTimestamp(value: string | null | undefined, nowMs: number) {
+  if (!value) return false;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) && timestamp > nowMs;
+}
+
+export function directDonationUpgradeCounterofferWindowOpen(
+  offer: { status: string; match_deadline_at: string },
+  nowMs: number,
+) {
+  return (
+    offer.status === "open" && futureTimestamp(offer.match_deadline_at, nowMs)
+  );
+}
+
+export function directDonationUpgradeJoinWindowOpen(
+  offer: {
+    status: string;
+    match_deadline_at: string;
+    webhook_grace_ends_at: string | null;
+  },
+  nowMs: number,
+) {
+  if (offer.status === "open") {
+    return futureTimestamp(offer.match_deadline_at, nowMs);
+  }
+  if (offer.status === "matched") {
+    return futureTimestamp(offer.webhook_grace_ends_at, nowMs);
+  }
+  return false;
+}
+
 export function buildDirectDonationUpgradeTermsHashV2(input: {
   creatorProfileId: string;
   creatorAmountCents: number;

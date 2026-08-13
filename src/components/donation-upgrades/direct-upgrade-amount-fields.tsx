@@ -1,23 +1,34 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   calculateDirectDonationUpgradeSplit,
   formatDirectDonationUpgradeUsdValue,
   formatDirectDonationUpgradeRedirectPercentage,
+  parseDirectDonationUpgradeDirectLegUsdValue,
   parseDirectDonationUpgradeRedirectPercentage,
-  parseDirectDonationUpgradeUsdValue,
 } from "@/lib/direct-donation-upgrade-split";
 
 function useSplitPreview(creatorAmount: string, redirectPercentage: string) {
   return useMemo(() => {
-    const creatorAmountCents = parseDirectDonationUpgradeUsdValue(creatorAmount);
+    const creatorAmountCents = parseDirectDonationUpgradeDirectLegUsdValue(
+      creatorAmount,
+    );
     const redirectBasisPoints = parseDirectDonationUpgradeRedirectPercentage(
       redirectPercentage,
     );
-    if (creatorAmountCents === null || redirectBasisPoints === null) {
-      return { split: null, error: "Enter a valid planned amount and redirect percentage." };
+    if (creatorAmountCents === null) {
+      return {
+        split: null,
+        error: "The planned donation must be between $1.00 and $50,000.00.",
+      };
+    }
+    if (redirectBasisPoints === null) {
+      return {
+        split: null,
+        error: "Enter a redirect percentage from 0.01% through 100%.",
+      };
     }
     try {
       return {
@@ -57,11 +68,19 @@ export function DirectUpgradeAmountFields({
   );
   const preview = useSplitPreview(creatorAmount, redirectPercentage);
   const creatorAmountInvalid =
-    parseDirectDonationUpgradeUsdValue(creatorAmount) === null;
-  const matcherAmountCents = parseDirectDonationUpgradeUsdValue(matcherAmount);
+    parseDirectDonationUpgradeDirectLegUsdValue(creatorAmount) === null;
+  const matcherAmountCents =
+    parseDirectDonationUpgradeDirectLegUsdValue(matcherAmount);
   const matcherAmountInvalid = matcherAmountCents === null;
   const redirectInvalid =
     parseDirectDonationUpgradeRedirectPercentage(redirectPercentage) === null;
+  const splitConstraintError =
+    !creatorAmountInvalid && !redirectInvalid ? preview.error : "";
+  const redirectInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    redirectInputRef.current?.setCustomValidity(splitConstraintError);
+  }, [splitConstraintError]);
 
   function updateRedirectPercentage(value: string) {
     setRedirectPercentage(value);
@@ -98,17 +117,29 @@ export function DirectUpgradeAmountFields({
             value={matcherAmount}
             onChange={(event) => setMatcherAmount(event.target.value)}
             aria-invalid={matcherAmountInvalid || undefined}
-            aria-describedby="direct-upgrade-split-guidance"
+            aria-describedby="direct-upgrade-matcher-guidance direct-upgrade-split-guidance"
             required
           />
         </label>
       </div>
+
+      <p
+        className="field-note"
+        id="direct-upgrade-matcher-guidance"
+        role={matcherAmountInvalid ? "status" : undefined}
+        aria-live="polite"
+      >
+        {matcherAmountInvalid
+          ? "The matcher donation must be between $1.00 and $50,000.00."
+          : ""}
+      </p>
 
       <fieldset className="panel form-stack">
         <legend>How much of your planned donation moves?</legend>
         <label>
           Redirect percentage
           <input
+            ref={redirectInputRef}
             name="redirect_percentage"
             type="number"
             min="0.01"
@@ -116,7 +147,9 @@ export function DirectUpgradeAmountFields({
             step="0.01"
             value={redirectPercentage}
             onChange={(event) => updateRedirectPercentage(event.target.value)}
-            aria-invalid={redirectInvalid || undefined}
+            aria-invalid={
+              redirectInvalid || Boolean(splitConstraintError) || undefined
+            }
             aria-describedby="direct-upgrade-split-guidance"
             required
           />
@@ -162,7 +195,7 @@ export function DirectUpgradeAmountFields({
               <dt>Matcher adds</dt>
               <dd>
                 {matcherAmountCents === null
-                  ? "Enter an amount"
+                  ? "Enter $1.00 to $50,000.00"
                   : formatDirectDonationUpgradeUsdValue(matcherAmountCents)}
               </dd>
             </div>
@@ -203,9 +236,16 @@ export function DirectUpgradeProposalFields({
     defaultRedirectBasisPoints,
   );
   const preview = useSplitPreview(creatorAmount, redirectPercentage);
-  const matcherAmountCents = parseDirectDonationUpgradeUsdValue(matcherAmount);
+  const matcherAmountCents =
+    parseDirectDonationUpgradeDirectLegUsdValue(matcherAmount);
   const redirectInvalid =
     parseDirectDonationUpgradeRedirectPercentage(redirectPercentage) === null;
+  const splitConstraintError = !redirectInvalid ? preview.error : "";
+  const redirectInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    redirectInputRef.current?.setCustomValidity(splitConstraintError);
+  }, [splitConstraintError]);
 
   function updateRedirectPercentage(value: string) {
     setRedirectPercentage(value);
@@ -219,6 +259,7 @@ export function DirectUpgradeProposalFields({
         <label>
           Proposed redirect percentage
           <input
+            ref={redirectInputRef}
             name="proposed_redirect_percentage"
             type="number"
             min="0.01"
@@ -226,7 +267,9 @@ export function DirectUpgradeProposalFields({
             step="0.01"
             value={redirectPercentage}
             onChange={(event) => updateRedirectPercentage(event.target.value)}
-            aria-invalid={redirectInvalid || undefined}
+            aria-invalid={
+              redirectInvalid || Boolean(splitConstraintError) || undefined
+            }
             aria-describedby="direct-upgrade-proposal-summary"
             required
           />
@@ -242,11 +285,21 @@ export function DirectUpgradeProposalFields({
             value={matcherAmount}
             onChange={(event) => setMatcherAmount(event.target.value)}
             aria-invalid={matcherAmountCents === null || undefined}
-            aria-describedby="direct-upgrade-proposal-summary"
+            aria-describedby="direct-upgrade-proposal-matcher-guidance direct-upgrade-proposal-summary"
             required
           />
         </label>
       </div>
+      <p
+        className="field-note"
+        id="direct-upgrade-proposal-matcher-guidance"
+        role={matcherAmountCents === null ? "status" : undefined}
+        aria-live="polite"
+      >
+        {matcherAmountCents === null
+          ? "The proposed matcher donation must be between $1.00 and $50,000.00."
+          : ""}
+      </p>
       <input
         aria-label="Proposed redirect percentage slider"
         type="range"
@@ -281,7 +334,9 @@ export function DirectUpgradeProposalFields({
           id="direct-upgrade-proposal-summary"
           role="status"
         >
-          {preview.error || "Enter a valid matcher amount."}
+          {matcherAmountCents === null
+            ? "Enter a proposed matcher donation from $1.00 to $50,000.00."
+            : preview.error}
         </p>
       )}
     </div>

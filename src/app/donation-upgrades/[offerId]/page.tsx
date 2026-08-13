@@ -27,12 +27,17 @@ import {
   getDirectDonationUpgradeConfig,
   type DirectDonationUpgradeCandidateRow,
 } from "@/lib/direct-donation-upgrade";
-import type {
-  DirectDonationUpgradeProposalRow,
-  PartialDirectDonationUpgradeObligationRow,
-  PartialDirectDonationUpgradeOfferRow,
+import {
+  directDonationUpgradeCounterofferWindowOpen,
+  directDonationUpgradeJoinWindowOpen,
+  type DirectDonationUpgradeProposalRow,
+  type PartialDirectDonationUpgradeObligationRow,
+  type PartialDirectDonationUpgradeOfferRow,
 } from "@/lib/direct-donation-upgrade-negotiation";
-import { formatDirectDonationUpgradeRedirectPercentage } from "@/lib/direct-donation-upgrade-split";
+import {
+  describeDirectDonationUpgradeRetainedLeg,
+  formatDirectDonationUpgradeRedirectPercentage,
+} from "@/lib/direct-donation-upgrade-split";
 import { loadDirectDonationUpgradePrivateDetail } from "@/lib/direct-donation-upgrade-data";
 import { getFormMessage } from "@/lib/form-state";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -52,6 +57,10 @@ interface PageProps {
 
 function statusLabel(value: unknown) {
   return String(value ?? "unknown").replaceAll("_", " ");
+}
+
+async function loadRenderClockMs() {
+  return Date.now();
 }
 
 function profileName(candidate: Record<string, unknown>) {
@@ -89,6 +98,17 @@ export default async function DonationUpgradeDetailPage({
   if (!publicOffer && !detail.offer) notFound();
   const displayOffer = (detail.offer ??
     publicOffer!) as PartialDirectDonationUpgradeOfferRow;
+  const renderClockMs = await loadRenderClockMs();
+  const counterofferWindowOpen =
+    directDonationUpgradeCounterofferWindowOpen(displayOffer, renderClockMs);
+  const joinWindowOpen = directDonationUpgradeJoinWindowOpen(
+    displayOffer,
+    renderClockMs,
+  );
+  const matchingDeadlinePassed =
+    displayOffer.status === "open" && !counterofferWindowOpen;
+  const backupWindowClosed =
+    displayOffer.status === "matched" && !joinWindowOpen;
   const formMessage = getFormMessage(resolvedSearchParams);
   const viewerId = viewer?.authUser.id ?? null;
   const candidates = detail.candidates as Array<
@@ -110,13 +130,13 @@ export default async function DonationUpgradeDetailPage({
     viewer &&
       !isCreator &&
       !viewerCandidate &&
-      ["open", "matched"].includes(String(displayOffer.status)),
+      joinWindowOpen,
   );
   const canPropose = Boolean(
     viewer &&
       !isCreator &&
       !viewerCandidate &&
-      String(displayOffer.status) === "open",
+      counterofferWindowOpen,
   );
   const pendingViewerProposal = proposals.find(
     (proposal) =>
@@ -125,12 +145,10 @@ export default async function DonationUpgradeDetailPage({
   const pendingCreatorProposals = isCreator
     ? proposals.filter((proposal) => proposal.status === "pending")
     : [];
-  const retainedBranchDescription =
-    displayOffer.retained_amount_cents === 0
-      ? "no retained creator obligation is created"
-      : `${formatDirectDonationUpgradeUsd(
-          displayOffer.retained_amount_cents,
-        )} remains with ${displayOffer.original_recipient.name}`;
+  const retainedBranchDescription = describeDirectDonationUpgradeRetainedLeg(
+    displayOffer.retained_amount_cents,
+    displayOffer.original_recipient.name,
+  );
 
   return (
     <div className="page-shell">
@@ -353,6 +371,17 @@ export default async function DonationUpgradeDetailPage({
             conditional on the creator accepting it before the deadline.
           </SectionHeader>
           <div className="panel form-stack">
+            {matchingDeadlinePassed ? (
+              <p className="field-note" role="status">
+                The matching deadline has passed. This offer is awaiting its
+                lifecycle update and cannot be accepted or negotiated.
+              </p>
+            ) : null}
+            {backupWindowClosed ? (
+              <p className="field-note" role="status">
+                The backup-matcher window has closed.
+              </p>
+            ) : null}
             {isCreator && displayOffer.status === "open" ? (
               <form action={cancelDirectDonationUpgradeOfferAction}>
                 <input name="offer_id" type="hidden" value={offerId} />
@@ -414,8 +443,7 @@ export default async function DonationUpgradeDetailPage({
                     : "Join as backup"}
                 </button>
               </form>
-            ) : !viewer &&
-              ["open", "matched"].includes(String(displayOffer.status)) ? (
+            ) : !viewer && joinWindowOpen ? (
               <Link
                 className="button button-primary"
                 href={`/login?returnTo=${encodeURIComponent(
@@ -471,12 +499,16 @@ export default async function DonationUpgradeDetailPage({
             ) : null}
             {pendingViewerProposal ? (
               <p className="field-note">
-                You already have a pending counteroffer. Withdraw it before
-                submitting revised terms. If you accept the published terms
-                instead, this pending counteroffer will be superseded.
+                {counterofferWindowOpen
+                  ? "You already have a pending counteroffer. Withdraw it before submitting revised terms. If you accept the published terms instead, this pending counteroffer will be superseded."
+                  : "Your pending counteroffer remains in the audit trail. You may withdraw it while this offer awaits its lifecycle update."}
               </p>
             ) : null}
-            {!canJoin && viewer && !detail.isParticipant ? (
+            {!canJoin &&
+            viewer &&
+            !detail.isParticipant &&
+            !matchingDeadlinePassed &&
+            !backupWindowClosed ? (
               <p className="field-note">
                 This commitment is no longer accepting matchers or
                 counteroffers.
@@ -519,10 +551,10 @@ export default async function DonationUpgradeDetailPage({
                     )}
                   </h3>
                   <p>
-                    {formatDirectDonationUpgradeUsd(
+                    {describeDirectDonationUpgradeRetainedLeg(
                       proposal.proposed_retained_amount_cents,
-                    )}{" "}
-                    stays with {displayOffer.original_recipient.name};{" "}
+                      displayOffer.original_recipient.name,
+                    )};{" "}
                     {formatDirectDonationUpgradeUsd(
                       proposal.proposed_redirected_amount_cents,
                     )}{" "}
@@ -563,31 +595,38 @@ export default async function DonationUpgradeDetailPage({
                   {proposal.status === "pending" &&
                   displayOffer.status === "open" ? (
                     <div className="form-stack">
-                      <form
-                        action={acceptDirectDonationUpgradeProposalAction}
-                      >
-                        <input
-                          name="offer_id"
-                          type="hidden"
-                          value={offerId}
-                        />
-                        <input
-                          name="proposal_id"
-                          type="hidden"
-                          value={proposal.id}
-                        />
-                        <button
-                          className="button button-primary"
-                          type="submit"
+                      {counterofferWindowOpen ? (
+                        <form
+                          action={acceptDirectDonationUpgradeProposalAction}
                         >
-                          Accept and create matched revision
-                        </button>
+                          <input
+                            name="offer_id"
+                            type="hidden"
+                            value={offerId}
+                          />
+                          <input
+                            name="proposal_id"
+                            type="hidden"
+                            value={proposal.id}
+                          />
+                          <button
+                            className="button button-primary"
+                            type="submit"
+                          >
+                            Accept and create matched revision
+                          </button>
+                          <p className="field-note">
+                            This atomically cancels this revision as superseded,
+                            creates and links one matched revision, installs the
+                            proposer as primary, and creates every required leg.
+                          </p>
+                        </form>
+                      ) : (
                         <p className="field-note">
-                          This atomically cancels this revision as superseded,
-                          creates and links one matched revision, installs the
-                          proposer as primary, and creates every required leg.
+                          This counteroffer cannot be accepted after the matching
+                          deadline. It remains visible in the audit trail.
                         </p>
-                      </form>
+                      )}
                       <form
                         action={rejectDirectDonationUpgradeProposalAction}
                         className="form-stack"

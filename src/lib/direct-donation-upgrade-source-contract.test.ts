@@ -34,6 +34,10 @@ const lifecycleMigration = readFileSync(
   "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql",
   "utf8",
 );
+const hardeningMigration = readFileSync(
+  "supabase/migrations/20260813152000_direct_donation_upgrade_partial_redirect_hardening.sql",
+  "utf8",
+);
 const vercelConfig = readFileSync("scripts/vercel-project-config.mjs", "utf8");
 const renderedQaWorkflow = readFileSync(
   ".github/workflows/direct-donation-upgrade-rendered-qa.yml",
@@ -50,6 +54,10 @@ test("rendered QA can inspect the commitment form without loading service-role d
   assert.match(
     renderedQaWorkflow,
     /DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true"/,
+  );
+  assert.match(
+    renderedQaWorkflow,
+    /HARDENING_MIGRATION: supabase\/migrations\/20260813152000_direct_donation_upgrade_partial_redirect_hardening\.sql/,
   );
   assert.doesNotMatch(renderedQaWorkflow, /secrets\.SUPABASE_SERVICE_ROLE_KEY/);
 });
@@ -196,6 +204,138 @@ test("provider charge allocation is serialized before the unique-charge reuse ch
   );
 });
 
+test("additive hardening reserves zero retained cents for an exact 100% redirect", () => {
+  assert.match(
+    hardeningMigration,
+    /\(p_redirect_basis_points = 10000\) is distinct from \(p_retained_amount_cents = 0\)/,
+  );
+  assert.match(
+    hardeningMigration,
+    /\(\(redirect_basis_points = 10000\) = \(retained_amount_cents = 0\)\)/,
+  );
+  assert.match(
+    hardeningMigration,
+    /split amounts must remain stored generated columns/,
+  );
+});
+
+test("additive creator wrapper preserves exact attestation hash-to-text identity", () => {
+  assert.match(
+    hardeningMigration,
+    /rename to direct_donation_upgrade_create_offer_20260813/,
+  );
+  assert.match(
+    hardeningMigration,
+    /char_length\(trim\(coalesce\(p_baseline_attestation, ''\)\)\) > 2000/,
+  );
+  assert.match(
+    hardeningMigration,
+    /return public\.direct_donation_upgrade_create_offer_20260813\(/,
+  );
+});
+
+test("commitment eligibility is rechecked under the same lock used by defaults", () => {
+  assert.match(
+    hardeningMigration,
+    /create or replace function public\.direct_donation_upgrade_lock_profile_eligibility/,
+  );
+  assert.match(
+    hardeningMigration,
+    /direct_donation_upgrade_default:' \|\| p_profile_id::text/,
+  );
+  assert.match(
+    hardeningMigration,
+    /before insert or update of status on public\.direct_donation_upgrade_candidates/,
+  );
+  assert.match(
+    hardeningMigration,
+    /public\.direct_donation_upgrade_temporarily_restricted\(profile_id_value\)/,
+  );
+});
+
+test("lifecycle profile locking is globally serialized before offer processing", () => {
+  const workerLock = hardeningMigration.indexOf(
+    "moraltrade:direct-donation-upgrade-lifecycle-worker",
+  );
+  const delegate = hardeningMigration.indexOf(
+    "return public.direct_donation_upgrade_run_lifecycle_20260813(",
+  );
+  assert.ok(workerLock >= 0, "the global lifecycle worker lock must exist");
+  assert.ok(delegate > workerLock, "the lifecycle must lock before delegating");
+});
+
+test("commitments share the lifecycle gate before taking any offer lock", () => {
+  const wrapperDelegates = [
+    "return public.direct_donation_upgrade_create_offer_20260813(",
+    "return public.direct_donation_upgrade_join_offer_20260813(",
+    "return public.direct_donation_upgrade_propose_terms_20260813(",
+    "return public.direct_donation_upgrade_accept_proposal_20260813(",
+    "return public.direct_donation_upgrade_start_checkout_20260813(",
+  ];
+  for (const delegate of wrapperDelegates) {
+    const delegateIndex = hardeningMigration.indexOf(delegate);
+    const wrapperStart = hardeningMigration.lastIndexOf(
+      "create or replace function public.",
+      delegateIndex,
+    );
+    const wrapper = hardeningMigration.slice(wrapperStart, delegateIndex);
+    assert.ok(delegateIndex > wrapperStart, `${delegate} wrapper must exist`);
+    assert.match(
+      wrapper,
+      /pg_catalog\.pg_advisory_xact_lock_shared\([\s\S]*moraltrade:direct-donation-upgrade-lifecycle-worker/,
+    );
+  }
+});
+
+test("charge reuse locks all affected offers before any obligation row", () => {
+  const completionStart = hardeningMigration.indexOf(
+    "create or replace function public.complete_direct_donation_upgrade_obligation(",
+  );
+  const completion = hardeningMigration.slice(completionStart);
+  const lifecycleExclusion = completion.indexOf(
+    "moraltrade:direct-donation-upgrade-lifecycle-worker",
+  );
+  const chargeLock = completion.indexOf(
+    "pg_catalog.hashtextextended(normalized_charge_hash, 0)",
+  );
+  const canonicalOfferLocks = completion.indexOf("order by affected_offer.id");
+  const obligationLock = completion.indexOf("select * into obligation_row");
+  assert.ok(
+    lifecycleExclusion >= 0,
+    "completion must exclude the lifecycle worker before row locking",
+  );
+  assert.ok(
+    chargeLock > lifecycleExclusion,
+    "the global lifecycle lock must precede the charge allocation lock",
+  );
+  assert.ok(
+    canonicalOfferLocks > chargeLock,
+    "affected offers must be locked after stabilizing the charge allocation",
+  );
+  assert.ok(
+    obligationLock > canonicalOfferLocks,
+    "all affected offers must be locked before the current obligation",
+  );
+});
+
+test("provider charge reuse invalidates affected completed offers", () => {
+  assert.match(
+    hardeningMigration,
+    /completion_result->>'reason' = 'provider_charge_reused'/,
+  );
+  assert.match(
+    hardeningMigration,
+    /update public\.direct_donation_upgrade_offers affected_offer[\s\S]*failure_code = 'provider_charge_reused'/,
+  );
+  assert.doesNotMatch(
+    hardeningMigration.slice(
+      hardeningMigration.indexOf("if completion_result->>'reason' = 'provider_charge_reused'"),
+      hardeningMigration.indexOf("return completion_result"),
+    ),
+    /status <> 'completed'/,
+  );
+});
+
 test("the matcher-first lifecycle edge preserves a fulfilled matcher when the creator defaults", () => {
   assert.match(
     lifecycleMigration,
@@ -267,7 +407,7 @@ test("impact accounting separates gross, net, incremental, and redirected amount
 test("all mutating RPCs are revoked from users and granted only to service_role", () => {
   const normalizedNegotiation = negotiationMigration.replace(/\s+/g, " ");
   const normalizedLifecycle = lifecycleMigration.replace(/\s+/g, " ");
-  const normalizedAdditiveMigrations = `${negotiationMigration} ${lifecycleMigration}`.replace(
+  const normalizedAdditiveMigrations = `${negotiationMigration} ${lifecycleMigration} ${hardeningMigration}`.replace(
     /\s+/g,
     " ",
   );
@@ -292,7 +432,7 @@ test("all mutating RPCs are revoked from users and granted only to service_role"
       `${signature} must be revoked before its least-privilege grant`,
     );
     assert.ok(
-      normalizedLifecycle.includes(
+      normalizedAdditiveMigrations.includes(
         `grant execute on function public.${signature} to service_role;`,
       ),
       `${signature} must be service-role-only`,
@@ -332,4 +472,23 @@ test("all mutating RPCs are revoked from users and granted only to service_role"
     normalizedLifecycle,
     /grant select on public\.direct_donation_upgrade_impact_credits to service_role;/,
   );
+  const normalizedHardening = hardeningMigration.replace(/\s+/g, " ");
+  for (const signature of [
+    "direct_donation_upgrade_lock_profile_eligibility(uuid)",
+    "direct_donation_upgrade_guard_profile_eligibility()",
+    "direct_donation_upgrade_record_default(uuid, uuid, uuid, uuid, integer)",
+    "direct_donation_upgrade_create_offer_20260813(uuid, text, integer, integer, timestamptz, text, jsonb, jsonb, text, text, text, integer)",
+    "direct_donation_upgrade_join_offer_20260813(uuid, uuid, text, text)",
+    "direct_donation_upgrade_propose_terms_20260813(uuid, uuid, integer, integer, integer, integer, text, text, text)",
+    "direct_donation_upgrade_accept_proposal_20260813(uuid, uuid, text, text)",
+    "direct_donation_upgrade_start_checkout_20260813(uuid, uuid, text)",
+    "direct_donation_upgrade_run_lifecycle_20260813(timestamptz, text)",
+  ]) {
+    assert.ok(
+      normalizedHardening.includes(
+        `revoke execute on function public.${signature} from public, anon, authenticated, service_role;`,
+      ),
+      `${signature} must remain internal even to service_role`,
+    );
+  }
 });

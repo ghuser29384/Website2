@@ -37,6 +37,15 @@ const UUID_PATTERN =
 
 class PublicDonationUpgradeError extends Error {}
 
+const PUBLIC_SPLIT_ERRORS: ReadonlySet<string> = new Set([
+  "The planned donation must be between $1.00 and $50,000.00.",
+  "The redirect percentage must be greater than 0% and no more than 100%.",
+  "The planned donation and redirect percentage exceed the exact arithmetic range.",
+  "The redirected portion must be at least $1.00.",
+  "Only an exact 100% redirect may create no retained obligation.",
+  "The portion remaining with the original recipient must be either $0.00 or at least $1.00.",
+]);
+
 function read(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
 }
@@ -114,6 +123,25 @@ function parseRedirectBasisPoints(formData: FormData, key: string) {
     );
   }
   return basisPoints;
+}
+
+function requireValidSplit(
+  creatorAmountCents: number,
+  redirectBasisPoints: number,
+) {
+  try {
+    return calculateDirectDonationUpgradeSplit(
+      creatorAmountCents,
+      redirectBasisPoints,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    throw new PublicDonationUpgradeError(
+      PUBLIC_SPLIT_ERRORS.has(message)
+        ? message
+        : "Choose a redirect percentage that creates valid donation legs.",
+    );
+  }
 }
 
 function parseDeadline(formData: FormData) {
@@ -248,7 +276,7 @@ export async function createDirectDonationUpgradeOfferAction(
       formData,
       "redirect_percentage",
     );
-    calculateDirectDonationUpgradeSplit(
+    requireValidSplit(
       creatorAmountCents,
       redirectBasisPoints,
     );
@@ -404,7 +432,7 @@ export async function proposeDirectDonationUpgradeTermsAction(
       formData,
       "proposed_matcher_amount",
     );
-    const split = calculateDirectDonationUpgradeSplit(
+    const split = requireValidSplit(
       offer.creator_amount_cents,
       redirectBasisPoints,
     );

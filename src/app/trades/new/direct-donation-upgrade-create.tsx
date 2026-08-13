@@ -29,13 +29,19 @@ import {
   getDirectDonationUpgradeConfig,
   type DirectDonationUpgradeCandidateRow,
 } from "@/lib/direct-donation-upgrade";
-import type {
-  DirectDonationUpgradeProposalRow,
-  PartialDirectDonationUpgradeOfferRow,
+import {
+  directDonationUpgradeCounterofferWindowOpen,
+  directDonationUpgradeJoinWindowOpen,
+  type DirectDonationUpgradeProposalRow,
+  type PartialDirectDonationUpgradeOfferRow,
 } from "@/lib/direct-donation-upgrade-negotiation";
-import { formatDirectDonationUpgradeRedirectPercentage } from "@/lib/direct-donation-upgrade-split";
+import {
+  describeDirectDonationUpgradeRetainedLeg,
+  formatDirectDonationUpgradeRedirectPercentage,
+} from "@/lib/direct-donation-upgrade-split";
 import {
   directDonationUpgradeRenderedQaNoServiceDataEnabled,
+  directDonationUpgradeRenderedQaViewerFixture,
   loadDirectDonationUpgradeViewerData,
 } from "@/lib/direct-donation-upgrade-data";
 import { getFormMessage } from "@/lib/form-state";
@@ -79,13 +85,20 @@ export async function DirectDonationUpgradeCreate({
       viewerId: viewer.authUser.id,
       environment: config.environment,
     });
+  const renderedQaViewerFixture =
+    config.environment && renderedQaNoServiceData
+      ? directDonationUpgradeRenderedQaViewerFixture({
+          viewerId: viewer.authUser.id,
+          environment: config.environment,
+        })
+      : null;
   const pageData =
     config.environment && !renderedQaNoServiceData
       ? await loadDirectDonationUpgradeViewerData({
           viewerId: viewer.authUser.id,
           environment: config.environment,
         })
-      : {
+      : renderedQaViewerFixture ?? {
           publicOffers: [],
           creatorOffers: [],
           viewerCandidates: [],
@@ -349,6 +362,12 @@ export async function DirectDonationUpgradeCreate({
               const ownOffer = creatorOfferById.get(String(offer.id));
               const candidate = viewerCandidateByOfferId.get(String(offer.id));
               const proposal = viewerProposalByOfferId.get(String(offer.id));
+              const counterofferWindowOpen =
+                directDonationUpgradeCounterofferWindowOpen(offer, now);
+              const joinWindowOpen = directDonationUpgradeJoinWindowOpen(
+                offer,
+                now,
+              );
               return (
                 <article className="panel data-card" key={offer.id}>
                   <p className="detail-kicker">
@@ -366,10 +385,10 @@ export async function DirectDonationUpgradeCreate({
                     to {offer.original_recipient.name}.
                   </p>
                   <p>
-                    With a match: {formatDirectDonationUpgradeUsd(
+                    With a match: {describeDirectDonationUpgradeRetainedLeg(
                       offer.retained_amount_cents,
-                    )}{" "}
-                    stays with {offer.original_recipient.name};{" "}
+                      offer.original_recipient.name,
+                    )};{" "}
                     {formatDirectDonationUpgradeUsd(
                       offer.redirected_amount_cents,
                     )}{" "}
@@ -385,6 +404,17 @@ export async function DirectDonationUpgradeCreate({
                       value={offer.match_deadline_at}
                     />
                   </p>
+                  {offer.status === "open" && !counterofferWindowOpen ? (
+                    <p className="field-note" role="status">
+                      The matching deadline has passed. This offer is awaiting
+                      its lifecycle update and cannot be accepted or negotiated.
+                    </p>
+                  ) : null}
+                  {offer.status === "matched" && !joinWindowOpen ? (
+                    <p className="field-note" role="status">
+                      The backup-matcher window has closed.
+                    </p>
+                  ) : null}
                   <p className="field-note">
                     {offer.matcher_count} matcher commitment
                     {offer.matcher_count === 1 ? "" : "s"} ·{" "}
@@ -433,8 +463,7 @@ export async function DirectDonationUpgradeCreate({
                           Your status: {statusLabel(candidate.status)}
                         </span>
                       )
-                    ) : !ownOffer &&
-                      ["open", "matched"].includes(offer.status) ? (
+                    ) : !ownOffer && joinWindowOpen ? (
                       <form
                         action={joinDirectDonationUpgradeOfferAction}
                         className="form-stack"

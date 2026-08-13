@@ -13,6 +13,51 @@ const FUND_KICKER = [
   '<div class="fund-mode-kicker">Choose a funding structure</div>',
 ] as const;
 
+const CONDITIONAL_DONATION_CARD_COPY = [
+  "Authorize a fallback donation that changes destination—or becomes a larger match—when someone adds money.",
+  "Move part or all of a planned donation when someone adds a separate direct donation.",
+] as const;
+
+const CONDITIONAL_DONATION_MODE_NOTE = [
+  "Set the fallback donation, the matched destination, the added amount, and the deadline before authorizing.",
+  "Freeze the full no-match baseline, redirect share, added amount, recipients, and deadline before publishing.",
+] as const;
+
+const CONDITIONAL_DONATION_INTRO_COPY = [
+  "Continue to choose both destinations, both amounts, and the deadline. You will see the exact future-charge terms before authorizing.",
+  "Continue to freeze both recipients, the planned amount, redirect percentage, matcher amount, and deadline. No payment method is collected when you publish.",
+] as const;
+
+const CONDITIONAL_DONATION_ENTRY = `              <div class="conditional-donation-entry" id="conditionalDonationEntry" hidden>
+                <div>
+                  <strong>Authorize inside Create</strong>
+                  <p>No money is held now. The next step shows the exact matched and fallback branches before any payment method is saved.</p>
+                </div>
+                <button class="conditional-donation-open" id="openConditionalDonation" type="button">
+                  Set up donation →
+                </button>
+              </div>`;
+
+const DONATION_UPGRADE_ENTRY = `              <div class="conditional-donation-entry" id="conditionalDonationEntry" hidden>
+                <div>
+                  <strong>Commit a direct Donation Upgrade</strong>
+                  <p>No card or bank information is collected now. Each exact donation leg is later completed directly through Every.org.</p>
+                </div>
+                <div class="conditional-donation-actions" aria-label="Donation Upgrade routes">
+                  <button class="conditional-donation-open" id="openConditionalDonation" type="button">
+                    Set up direct Donation Upgrade →
+                  </button>
+                  <a class="conditional-donation-legacy" href="/trades/new?structure=conditional-donation" target="_top">
+                    Managed conditional donation →
+                  </a>
+                </div>
+              </div>`;
+
+const CONDITIONAL_DONATION_NAVIGATION = [
+  'window.top.location.assign("/trades/new?structure=conditional-donation");',
+  'window.top.location.assign("/trades/new?structure=conditional-donation&rail=direct");',
+] as const;
+
 const BLANK_FAVICON = '  <link rel="icon" href="data:," />\n';
 const CANONICAL_FAVICONS = `  <link rel="icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
   <link rel="shortcut icon" type="image/png" sizes="512x512" href="/brand/moral-trade-mark.png?v=20260730" />
@@ -118,6 +163,36 @@ export function integrateCommonGroundCreateSource(source: string) {
     "Set up a conditional donation.",
     "Set up a Donation Upgrade.",
     "Donation Upgrade heading",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    CONDITIONAL_DONATION_CARD_COPY[0],
+    CONDITIONAL_DONATION_CARD_COPY[1],
+    "Donation Upgrade card copy",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    CONDITIONAL_DONATION_MODE_NOTE[0],
+    CONDITIONAL_DONATION_MODE_NOTE[1],
+    "Donation Upgrade mode note",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    CONDITIONAL_DONATION_INTRO_COPY[0],
+    CONDITIONAL_DONATION_INTRO_COPY[1],
+    "Donation Upgrade intro copy",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    CONDITIONAL_DONATION_ENTRY,
+    DONATION_UPGRADE_ENTRY,
+    "Donation Upgrade routes",
+  );
+  integrated = replaceExactlyOnce(
+    integrated,
+    CONDITIONAL_DONATION_NAVIGATION[0],
+    CONDITIONAL_DONATION_NAVIGATION[1],
+    "direct Donation Upgrade navigation",
   );
   integrated = replaceExactlyOnce(integrated, FUND_KICKER[0], FUND_KICKER[1], "fund-kicker");
   integrated = replaceExactlyOnce(
