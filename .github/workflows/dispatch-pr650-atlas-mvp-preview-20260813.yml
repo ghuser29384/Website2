@@ -1,0 +1,68 @@
+name: Dispatch PR 650 Bottleneck Atlas MVP Preview
+
+on:
+  push:
+    branches:
+      - ops/dispatch-pr650-atlas-mvp-preview-20260813
+    paths:
+      - .github/workflows/dispatch-pr650-atlas-mvp-preview-20260813.yml
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: dispatch-pr650-atlas-mvp-preview-20260813
+  cancel-in-progress: false
+
+env:
+  EXPECTED_CANDIDATE_SHA: 945101d65ed04675e619cb67afa0f5d624550816
+  PRODUCT_REF: feat/bottleneck-atlas-working-mvp-20260813
+  RELEASE_REF: release/vercel-preview
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out one-use controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Guard exact refs and one-file controller scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/ops/dispatch-pr650-atlas-mvp-preview-20260813'
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = '.github/workflows/dispatch-pr650-atlas-mvp-preview-20260813.yml'
+          test "$(git ls-remote origin "refs/heads/$PRODUCT_REF" | awk '{print $1}')" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git ls-remote origin "refs/heads/$RELEASE_REF" | awk '{print $1}')" = "$EXPECTED_CANDIDATE_SHA"
+
+      - name: Dispatch permanent gated Preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run vercel-release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f target=preview \
+            -f ref="$RELEASE_REF" \
+            -f expected_sha="$EXPECTED_CANDIDATE_SHA"
+
+      - name: Record dispatch on PR 650
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr comment 650 --repo "$GITHUB_REPOSITORY" --body "Protected Preview dispatched for exact Bottleneck Atlas MVP candidate \`$EXPECTED_CANDIDATE_SHA\`. Target: Preview only. Production remains unchanged."
+
+# One-use dispatcher. Never merge this branch into main.
