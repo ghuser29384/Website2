@@ -7,12 +7,14 @@ on:
       - ".github/workflows/commitments-trade-real-graph-readiness-gates.yml"
       - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/**"
       - "scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs"
+      - "scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs"
   push:
     branches: [main]
     paths:
       - ".github/workflows/commitments-trade-real-graph-readiness-gates.yml"
       - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/**"
       - "scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs"
+      - "scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs"
 
 permissions:
   contents: read
@@ -45,6 +47,13 @@ jobs:
           node scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs \
             2>&1 | tee trade-real-graph-readiness-validation.log
 
+      - name: Verify exact hashes, bindings, and synthetic dyad controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs \
+            2>&1 | tee trade-real-graph-readiness-integrity.log
+
       - name: Revalidate bound planning, graph-feasibility, and master protocol
         shell: bash
         run: |
@@ -74,6 +83,7 @@ jobs:
           docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/real-graph-readiness-contract.v1.json
           docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/real-graph-readiness-manifest.v1.json
           docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/synthetic-readiness-fixtures.v1.json
+          scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs
           scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs
           FILES
           sort -o expected-files.txt expected-files.txt
@@ -91,6 +101,7 @@ jobs:
           name: commitments-trade-real-graph-readiness-${{ github.run_id }}
           path: |
             trade-real-graph-readiness-validation.log
+            trade-real-graph-readiness-integrity.log
             trade-real-graph-readiness-planning.log
             trade-real-graph-readiness-graph.log
             trade-real-graph-readiness-protocol.log
@@ -98,5 +109,6 @@ jobs:
             expected-files.txt
             actual-files.txt
             docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/**
+            scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs
             scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs
           if-no-files-found: warn
