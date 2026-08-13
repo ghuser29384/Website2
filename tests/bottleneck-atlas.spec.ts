@@ -112,9 +112,7 @@ test.describe("Bottleneck Atlas and generated feed", () => {
   test("works as a compact match finder with evidence available on demand", async ({ page }) => {
     await page.goto("/bottleneck-atlas", { waitUntil: "domcontentloaded" });
 
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Find a cross-cause trade." }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Find a trade." })).toBeVisible();
     await expect(page.locator("[data-atlas-mvp]")).toBeVisible();
     await expect(page.locator("[data-atlas-empty-state]")).toBeVisible();
     await expect(page.locator("[data-atlas-match]")).toHaveCount(0);
@@ -129,10 +127,18 @@ test.describe("Bottleneck Atlas and generated feed", () => {
       "data-synthesis-template",
       "ai-governance-advocacy-operations",
     );
+    await expect
+      .poll(() =>
+        match.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.top >= 0 && rect.top < window.innerHeight;
+        }),
+      )
+      .toBe(true);
     await expect(match).toContainText("You offer");
     await expect(match).toContainText("You receive");
     await expect(match).toContainText("No counterparty is confirmed");
-    await expect(match.getByRole("link", { name: "Review this possibility" })).toHaveAttribute(
+    await expect(match.getByRole("link", { name: "Review possibility" })).toHaveAttribute(
       "href",
       "/suggested-opportunities/ai-governance-advocacy-operations",
     );
