@@ -4,7 +4,15 @@ import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
 
 import {
+  MPGF_PUBLIC_GOODS_COMPACT_COLLECTION_GATE,
+  MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION,
+  MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS,
+  MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS,
+  MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
+  MPGF_PUBLIC_GOODS_COMPACT_TERMS,
   buildMpgfPublicGoodsCompactPublishedExamplesState,
+  calculateMpgfPublicGoodsCompactContributionCents,
+  type MpgfPublicGoodsCompactAcknowledgements,
   type MpgfPublicGoodsCompactsState,
 } from "./public-goods-compacts";
 
@@ -48,6 +56,136 @@ function summarizeRpcError(error: RpcErrorLike) {
   );
 }
 
+function hasExactAcknowledgements(
+  value: unknown,
+): value is MpgfPublicGoodsCompactAcknowledgements {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const requiredKeys = Object.keys(
+    MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
+  );
+
+  return (
+    Object.keys(value).length === requiredKeys.length &&
+    requiredKeys.every((key) => value[key] === true)
+  );
+}
+
+function hasExactTerms(value: unknown) {
+  return (
+    isRecord(value) &&
+    value.contributionRateBps === MPGF_PUBLIC_GOODS_COMPACT_TERMS.contributionRateBps &&
+    value.monthlyContributionCapCents ===
+      MPGF_PUBLIC_GOODS_COMPACT_TERMS.monthlyContributionCapCents &&
+    value.activationThresholdMembers ===
+      MPGF_PUBLIC_GOODS_COMPACT_TERMS.activationThresholdMembers &&
+    value.minimumTermMonths === MPGF_PUBLIC_GOODS_COMPACT_TERMS.minimumTermMonths &&
+    value.exitNoticeDays === MPGF_PUBLIC_GOODS_COMPACT_TERMS.exitNoticeDays &&
+    value.projectSelectionRule ===
+      MPGF_PUBLIC_GOODS_COMPACT_TERMS.projectSelectionRule &&
+    value.auditRule === MPGF_PUBLIC_GOODS_COMPACT_TERMS.auditRule &&
+    value.noProjectOptOutRule ===
+      MPGF_PUBLIC_GOODS_COMPACT_TERMS.noProjectOptOutRule
+  );
+}
+
+function hasExactInvariants(value: unknown) {
+  return (
+    isRecord(value) &&
+    value.optInOnly === MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.optInOnly &&
+    value.randomAssignmentAllowed ===
+      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.randomAssignmentAllowed &&
+    value.coreMarketplaceTaxed ===
+      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.coreMarketplaceTaxed &&
+    value.bindingOnlyAfterActivation ===
+      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.bindingOnlyAfterActivation &&
+    value.perProjectRefusalAllowedAfterActivation ===
+      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.perProjectRefusalAllowedAfterActivation &&
+    value.exitProspectiveOnlyAfterActivation ===
+      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.exitProspectiveOnlyAfterActivation &&
+    value.moneyMovesOnJoin ===
+      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.moneyMovesOnJoin &&
+    value.automaticCollectionEnabled ===
+      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.automaticCollectionEnabled
+  );
+}
+
+function hasSafeMembership(value: unknown, compactPublicKey: string) {
+  if (value === null) {
+    return true;
+  }
+
+  if (
+    !isRecord(value) ||
+    value.compactPublicKey !== compactPublicKey ||
+    value.constitutionVersionAccepted !==
+      MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION ||
+    !hasExactAcknowledgements(value.acknowledgements) ||
+    !Number.isSafeInteger(value.declaredEligibleMonthlySpendingCents) ||
+    (value.declaredEligibleMonthlySpendingCents as number) < 0 ||
+    !Number.isSafeInteger(value.scheduledMonthlyContributionCents)
+  ) {
+    return false;
+  }
+
+  try {
+    return (
+      value.scheduledMonthlyContributionCents ===
+      calculateMpgfPublicGoodsCompactContributionCents(
+        value.declaredEligibleMonthlySpendingCents as number,
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hasSafeCompactState(value: unknown) {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  const foundingCharter = MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.find(
+    (charter) => charter.publicKey === value.publicKey,
+  );
+
+  return Boolean(
+    foundingCharter &&
+      value.causeKey === foundingCharter.causeKey &&
+      value.title === foundingCharter.title &&
+      value.constitutionVersion === MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION &&
+      value.collectionState === MPGF_PUBLIC_GOODS_COMPACT_COLLECTION_GATE &&
+      hasExactTerms(value.terms) &&
+      hasExactInvariants(value.invariants) &&
+      Number.isSafeInteger(value.acceptedMemberCount) &&
+      (value.acceptedMemberCount as number) >= 0 &&
+      value.memberCountAvailable === true &&
+      hasSafeMembership(value.membership, foundingCharter.publicKey),
+  );
+}
+
+function isSafeDatabaseState(value: unknown): value is MpgfPublicGoodsCompactsState {
+  if (
+    !isRecord(value) ||
+    value.available !== true ||
+    value.source !== "database" ||
+    !Array.isArray(value.compacts) ||
+    value.compacts.length !== MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.length ||
+    value.moneyMovesOnPageAction !== false ||
+    value.automaticCollectionEnabled !== false ||
+    !value.compacts.every(hasSafeCompactState)
+  ) {
+    return false;
+  }
+
+  return (
+    new Set(value.compacts.map((compact) => (compact as Record<string, unknown>).publicKey))
+      .size === MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.length
+  );
+}
+
 async function getRpcClient() {
   return (await createClient()) as unknown as CompactRpcClient;
 }
@@ -83,14 +221,7 @@ export async function loadMpgfPublicGoodsCompactsState(): Promise<MpgfPublicGood
       );
     }
 
-    if (
-      !isRecord(data) ||
-      data.available !== true ||
-      data.source !== "database" ||
-      !Array.isArray(data.compacts) ||
-      data.moneyMovesOnPageAction !== false ||
-      data.automaticCollectionEnabled !== false
-    ) {
+    if (!isSafeDatabaseState(data)) {
       return unavailableState(
         "Durable compact membership state returned an invalid safety contract. Published charter examples are shown instead.",
       );
@@ -136,6 +267,7 @@ async function runMutation<T extends MpgfPublicGoodsCompactMutationResult>(
 export function joinMpgfPublicGoodsCompact(input: {
   compactPublicKey: string;
   constitutionVersion: string;
+  acknowledgements: MpgfPublicGoodsCompactAcknowledgements;
   declaredEligibleMonthlySpendingCents: number;
   idempotencyKey: string;
 }) {
@@ -144,6 +276,7 @@ export function joinMpgfPublicGoodsCompact(input: {
     {
       p_compact_public_key: input.compactPublicKey,
       p_constitution_version: input.constitutionVersion,
+      p_acknowledgements: input.acknowledgements,
       p_declared_eligible_monthly_spending_cents:
         input.declaredEligibleMonthlySpendingCents,
       p_idempotency_key: input.idempotencyKey,

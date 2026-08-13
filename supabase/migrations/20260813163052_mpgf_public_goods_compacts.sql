@@ -81,6 +81,14 @@ create table public.mpgf_public_goods_compact_memberships (
   constitution_version_accepted text not null check (
     char_length(constitution_version_accepted) between 8 and 120
   ),
+  acknowledgements jsonb not null check (
+    acknowledgements = '{
+      "voluntaryChoice": true,
+      "exactConstitution": true,
+      "activationAndNoProjectOptOut": true,
+      "noPaymentMandate": true
+    }'::jsonb
+  ),
   declared_eligible_monthly_spending_cents bigint not null check (
     declared_eligible_monthly_spending_cents between 0 and 100000000000
   ),
@@ -237,8 +245,11 @@ begin
       message = 'An activated compact cannot return to recruiting.';
   end if;
 
-  if old.status = 'active' and (
-    new.cause_key is distinct from old.cause_key
+  if (old.status = 'active' or old.accepted_member_count > 0) and (
+    new.public_key is distinct from old.public_key
+    or new.cause_key is distinct from old.cause_key
+    or new.title is distinct from old.title
+    or new.summary is distinct from old.summary
     or new.constitution_version is distinct from old.constitution_version
     or new.constitution_published_at is distinct from old.constitution_published_at
     or new.contribution_rate_bps is distinct from old.contribution_rate_bps
@@ -257,13 +268,20 @@ begin
     or new.money_moves_on_join is distinct from old.money_moves_on_join
     or new.automatic_collection_enabled is distinct from old.automatic_collection_enabled
     or new.collection_state is distinct from old.collection_state
-    or new.activated_at is distinct from old.activated_at
+  ) then
+    raise exception using
+      errcode = '23514',
+      message = 'Published compact terms are immutable after the first current acceptance.';
+  end if;
+
+  if old.status = 'active' and (
+    new.activated_at is distinct from old.activated_at
     or new.constitution_frozen_at is distinct from old.constitution_frozen_at
     or new.frozen_constitution_version is distinct from old.frozen_constitution_version
   ) then
     raise exception using
       errcode = '23514',
-      message = 'Activated compact constitutional terms and activation snapshot are immutable.';
+      message = 'Activated compact activation snapshot is immutable.';
   end if;
 
   if old.status = 'recruiting' and new.status = 'active' and (
@@ -465,6 +483,7 @@ begin
             'compactId', membership.compact_id::text,
             'compactPublicKey', compact.public_key,
             'constitutionVersionAccepted', membership.constitution_version_accepted,
+            'acknowledgements', membership.acknowledgements,
             'declaredEligibleMonthlySpendingCents', membership.declared_eligible_monthly_spending_cents,
             'scheduledMonthlyContributionCents', membership.scheduled_monthly_contribution_cents,
             'status', membership.status,
@@ -521,6 +540,7 @@ create or replace function public.join_mpgf_public_goods_compact(
   p_compact_public_key text,
   p_constitution_version text,
   p_declared_eligible_monthly_spending_cents bigint,
+  p_acknowledgements jsonb,
   p_idempotency_key text
 )
 returns jsonb
@@ -552,10 +572,18 @@ begin
   then
     raise exception using errcode = '22023', message = 'Declared eligible monthly spending cents are invalid.';
   end if;
+  if p_acknowledgements is distinct from '{
+    "voluntaryChoice": true,
+    "exactConstitution": true,
+    "activationAndNoProjectOptOut": true,
+    "noPaymentMandate": true
+  }'::jsonb then
+    raise exception using errcode = '22023', message = 'Every required compact acknowledgement must be explicit.';
+  end if;
 
   request_hash := pg_catalog.encode(
     extensions.digest(
-      p_compact_public_key || '|' || p_constitution_version || '|' || p_declared_eligible_monthly_spending_cents::text,
+      p_compact_public_key || '|' || p_constitution_version || '|' || p_declared_eligible_monthly_spending_cents::text || '|' || p_acknowledgements::text,
       'sha256'
     ),
     'hex'
@@ -608,6 +636,7 @@ begin
       user_id,
       profile_id,
       constitution_version_accepted,
+      acknowledgements,
       declared_eligible_monthly_spending_cents,
       scheduled_monthly_contribution_cents,
       status,
@@ -618,6 +647,7 @@ begin
       viewer_id,
       viewer_id,
       p_constitution_version,
+      p_acknowledgements,
       p_declared_eligible_monthly_spending_cents,
       contribution_cents,
       case when compact_record.status = 'active' then 'active' else 'pending_activation' end,
@@ -632,6 +662,7 @@ begin
   elsif membership_record.status = 'revoked' and compact_record.status = 'recruiting' then
     update public.mpgf_public_goods_compact_memberships
     set constitution_version_accepted = p_constitution_version,
+        acknowledgements = p_acknowledgements,
         declared_eligible_monthly_spending_cents = p_declared_eligible_monthly_spending_cents,
         scheduled_monthly_contribution_cents = contribution_cents,
         status = 'pending_activation',
@@ -676,6 +707,7 @@ begin
     'compactPublicKey', p_compact_public_key,
     'membershipId', membership_record.id::text,
     'membershipStatus', membership_record.status,
+    'acknowledgementsRecorded', membership_record.acknowledgements = p_acknowledgements,
     'scheduledMonthlyContributionCents', membership_record.scheduled_monthly_contribution_cents,
     'acceptedMemberCount', accepted_count,
     'activatedNow', activated_now,
@@ -714,6 +746,7 @@ declare
   action_at timestamptz := pg_catalog.statement_timestamp();
   effective_at timestamptz;
   immediate_revocation boolean := false;
+  delegations_revoked integer := 0;
 begin
   if viewer_id is null then
     raise exception using errcode = '42501', message = 'Authentication is required to leave a compact.';
@@ -769,6 +802,16 @@ begin
         exit_effective_at = effective_at
     where id = membership_record.id
     returning * into membership_record;
+
+    update public.mpgf_public_goods_compact_delegations
+    set status = 'revoked', revoked_at = action_at
+    where compact_id = compact_record.id
+      and status = 'active'
+      and (
+        delegator_membership_id = membership_record.id
+        or delegatee_membership_id = membership_record.id
+      );
+    get diagnostics delegations_revoked = row_count;
   elsif membership_record.status = 'exit_notice' then
     effective_at := membership_record.exit_effective_at;
   else
@@ -781,6 +824,7 @@ begin
     'membershipStatus', membership_record.status,
     'revokedImmediately', immediate_revocation,
     'exitEffectiveAt', membership_record.exit_effective_at,
+    'delegationsRevoked', delegations_revoked,
     'moneyMoved', false,
     'paymentMandateChanged', false,
     'automaticCollectionEnabled', false
@@ -1011,13 +1055,13 @@ revoke all on function public.mpgf_public_goods_compact_enforce_constitution_fre
 revoke all on function public.mpgf_public_goods_compact_idempotency_lookup(uuid, text, text, text) from public, anon, authenticated;
 revoke all on function public.mpgf_public_goods_compact_idempotency_store(uuid, text, text, text, jsonb) from public, anon, authenticated;
 revoke all on function public.get_mpgf_public_goods_compacts_state() from public, anon, authenticated;
-revoke all on function public.join_mpgf_public_goods_compact(text, text, bigint, text) from public, anon, authenticated;
+revoke all on function public.join_mpgf_public_goods_compact(text, text, bigint, jsonb, text) from public, anon, authenticated;
 revoke all on function public.request_mpgf_public_goods_compact_exit(text, text) from public, anon, authenticated;
 revoke all on function public.set_mpgf_public_goods_compact_delegation(text, text, uuid, text) from public, anon, authenticated;
 revoke all on function public.clear_mpgf_public_goods_compact_delegation(text, text, text) from public, anon, authenticated;
 
 grant execute on function public.get_mpgf_public_goods_compacts_state() to anon, authenticated;
-grant execute on function public.join_mpgf_public_goods_compact(text, text, bigint, text) to authenticated;
+grant execute on function public.join_mpgf_public_goods_compact(text, text, bigint, jsonb, text) to authenticated;
 grant execute on function public.request_mpgf_public_goods_compact_exit(text, text) to authenticated;
 grant execute on function public.set_mpgf_public_goods_compact_delegation(text, text, uuid, text) to authenticated;
 grant execute on function public.clear_mpgf_public_goods_compact_delegation(text, text, text) to authenticated;

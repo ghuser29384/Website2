@@ -15,11 +15,13 @@ The founding charter is versioned as `mpgf-public-goods-compact/founding-v1`. It
 ## Lifecycle
 
 1. **Published:** Moral Trade publishes a cause-specific constitution. Published examples contain no fabricated members, ballots, or activity.
-2. **Accepted while recruiting:** a signed-in user with a Moral Trade profile enters self-declared eligible monthly spending and explicitly acknowledges the current constitution. The durable membership remains `pending_activation` and is not binding. The member may revoke immediately.
+2. **Accepted while recruiting:** a signed-in user with a Moral Trade profile enters self-declared eligible monthly spending and explicitly acknowledges voluntary choice, the exact constitution, activation/no-project-opt-out terms, and the no-payment boundary. The RPC rejects incomplete acknowledgement payloads and the durable membership stores the acknowledgement record with the accepted constitution version. It remains `pending_activation` and is not binding. The member may revoke immediately.
 3. **Activated once:** the transaction that reaches 5,000 accepted members freezes the exact constitutional version, timestamps activation, and moves every accepted recruiting membership to `active`. The 12-month minimum term begins at that instant.
 4. **Governed:** an allocation electorate must be explicitly activated before voting-credit delegation appears. Delegation is same-compact, active-member-only, non-self, and revocable. It transfers no membership, money, or reputation. The implementation does not invent an active ballot.
-5. **Prospective exit:** an active member may request exit. Its effective date is the later of the activation date plus 12 calendar months and the request date plus 30 days. There is no per-project opt-out state.
+5. **Prospective exit:** an active member may request exit. Its effective date is the later of the activation date plus 12 calendar months and the request date plus 30 days. The same transaction revokes active outgoing and incoming delegations so an `exit_notice` membership cannot remain a delegation endpoint. There is no per-project opt-out state.
 6. **Reported:** selected projects remain subject to independent review, additionality checks, conflicts and recusals, minority protections, and public post-round reporting.
+
+Once a recruiting compact has a current acceptance, its published identity and constitutional terms cannot be changed. This prevents an earlier acceptance from activating under a version the member never accepted. If no current acceptances exist, a future charter revision must still be published and accepted as its exact current version before it can bind anyone.
 
 ## Money and legal boundaries
 

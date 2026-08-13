@@ -4,6 +4,7 @@ import { getViewer } from "@/lib/app-data";
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
 import {
   asMpgfPublicGoodsCompactRecord,
+  parseMpgfPublicGoodsCompactAcknowledgements,
   parseMpgfPublicGoodsCompactConstitutionVersion,
   parseMpgfPublicGoodsCompactIdempotencyKey,
   parseMpgfPublicGoodsCompactPublicKey,
@@ -41,6 +42,9 @@ export async function POST(request: Request) {
       ),
       constitutionVersion: parseMpgfPublicGoodsCompactConstitutionVersion(
         record.constitutionVersion,
+      ),
+      acknowledgements: parseMpgfPublicGoodsCompactAcknowledgements(
+        record.acknowledgements,
       ),
       declaredEligibleMonthlySpendingCents:
         parseMpgfPublicGoodsCompactSpendingCents(

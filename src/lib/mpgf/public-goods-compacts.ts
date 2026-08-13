@@ -29,6 +29,13 @@ export const MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS = {
 export const MPGF_PUBLIC_GOODS_COMPACT_COLLECTION_GATE =
   "disabled_pending_legal_fiscal_sponsor_provider_donor_of_record_receipt_custody_sanctions_and_production_release_gates" as const;
 
+export const MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS = {
+  voluntaryChoice: true,
+  exactConstitution: true,
+  activationAndNoProjectOptOut: true,
+  noPaymentMandate: true,
+} as const;
+
 export const MPGF_PUBLIC_GOODS_COMPACT_MAX_DECLARED_SPENDING_CENTS =
   100_000_000_000;
 
@@ -59,6 +66,9 @@ export type MpgfPublicGoodsCompactDelegationState =
 export type MpgfPublicGoodsCompactCollectionState =
   typeof MPGF_PUBLIC_GOODS_COMPACT_COLLECTION_GATE;
 
+export type MpgfPublicGoodsCompactAcknowledgements =
+  typeof MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS;
+
 export interface MpgfPublicGoodsCompactCharter {
   publicKey: string;
   causeKey: MpgfPublicGoodsCompactCauseKey;
@@ -83,6 +93,7 @@ export interface MpgfPublicGoodsCompactMembership {
   compactId: string;
   compactPublicKey: string;
   constitutionVersionAccepted: string;
+  acknowledgements: MpgfPublicGoodsCompactAcknowledgements;
   declaredEligibleMonthlySpendingCents: number;
   scheduledMonthlyContributionCents: number;
   status: MpgfPublicGoodsCompactMembershipStatus;

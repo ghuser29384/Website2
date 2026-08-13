@@ -67,6 +67,8 @@ test("authenticated security-definer RPCs are versioned, idempotent, and search-
   assert.match(migration, /auth\.uid\(\)/);
   assert.match(migration, /A Moral Trade profile is required/);
   assert.match(migration, /exact current constitution version/);
+  assert.match(migration, /Every required compact acknowledgement must be explicit/);
+  assert.match(migration, /acknowledgements = '\{[\s\S]*"voluntaryChoice": true[\s\S]*"noPaymentMandate": true/);
   assert.match(migration, /mpgf_public_goods_compact_idempotency_lookup/);
   assert.match(migration, /different request/);
 });
@@ -88,6 +90,10 @@ test("constitutional database checks prohibit assignment, marketplace tax, proje
   assert.match(migration, /frozen_constitution_version = constitution_version/);
   assert.match(migration, /set status = 'active', activated_at = action_at/);
   assert.match(migration, /greatest\([\s\S]*make_interval\(months[\s\S]*make_interval\(days/);
+  assert.match(
+    migration,
+    /old\.accepted_member_count > 0[\s\S]*Published compact terms are immutable after the first current acceptance/,
+  );
 });
 
 test("delegation is same-compact, active-only, non-self, and revocable", () => {
@@ -95,6 +101,10 @@ test("delegation is same-compact, active-only, non-self, and revocable", () => {
   assert.match(migration, /allocation_electorate_active/);
   assert.match(migration, /delegatee_record[\s\S]*compact_id = compact_record\.id[\s\S]*status = 'active'/);
   assert.match(migration, /Self-delegation is not allowed/);
+  assert.match(
+    migration,
+    /set status = 'exit_notice'[\s\S]*delegator_membership_id = membership_record\.id[\s\S]*delegatee_membership_id = membership_record\.id[\s\S]*get diagnostics delegations_revoked = row_count/,
+  );
   assert.match(migration, /membershipTransferred', false/);
   assert.match(migration, /moneyTransferred', false/);
   assert.match(migration, /reputationTransferred', false/);
@@ -121,6 +131,7 @@ test("server and APIs fail closed and reuse authenticated MPGF no-store patterns
   assert.match(getRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
   assert.match(membershipRoute, /getViewer/);
   assert.match(membershipRoute, /parseMpgfPublicGoodsCompactConstitutionVersion/);
+  assert.match(membershipRoute, /parseMpgfPublicGoodsCompactAcknowledgements/);
   assert.match(delegationRoute, /getViewer/);
   assert.match(delegationRoute, /parseMpgfPublicGoodsCompactMembershipId/);
 });
@@ -143,6 +154,18 @@ test("new compact sources contain no payment capture or fake-success path", () =
   assert.match(newSources, /moneyMoved/);
   assert.match(newSources, /automaticCollectionEnabled/);
   assert.match(component, /No compact allocation electorate is active/);
+  assert.match(component, /activationAndNoProjectOptOut: acknowledgements\.binding/);
+  assert.match(component, /status !== "revoked"/);
+  assert.match(component, /Revoked before activation; not binding/);
+  assert.match(component, /explicitly accept the current constitution again/);
+});
+
+test("database state is deeply validated before the server trusts live compact data", () => {
+  assert.match(server, /isSafeDatabaseState/);
+  assert.match(server, /hasExactTerms/);
+  assert.match(server, /hasExactInvariants/);
+  assert.match(server, /hasExactAcknowledgements/);
+  assert.match(server, /calculateMpgfPublicGoodsCompactContributionCents/);
 });
 
 test("the public compact route is included in the canonical sitemap", () => {

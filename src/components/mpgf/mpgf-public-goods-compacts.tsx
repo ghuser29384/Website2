@@ -58,6 +58,23 @@ function statusLabel(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function bindingStatusLabel(status: string) {
+  switch (status) {
+    case "pending_activation":
+      return "Not binding while recruiting";
+    case "active":
+      return "Bound after activation under frozen terms";
+    case "exit_notice":
+      return "Bound until the prospective exit takes effect";
+    case "revoked":
+      return "Revoked before activation; not binding";
+    case "exited":
+      return "Prospective exit effective; no longer binding";
+    default:
+      return "Binding state unavailable";
+  }
+}
+
 function idempotencyKey(scope: string) {
   return `mpgf.compact.${scope}.${crypto.randomUUID()}`;
 }
@@ -250,6 +267,12 @@ export function MpgfPublicGoodsCompacts({
         mutationRequest("/api/mpgf/compacts/membership", "POST", {
           compactPublicKey: selectedCompact.publicKey,
           constitutionVersion: selectedCompact.constitutionVersion,
+          acknowledgements: {
+            voluntaryChoice: acknowledgements.voluntary,
+            exactConstitution: acknowledgements.constitution,
+            activationAndNoProjectOptOut: acknowledgements.binding,
+            noPaymentMandate: acknowledgements.noPayment,
+          },
           declaredEligibleMonthlySpendingCents: spendingCents,
           idempotencyKey: idempotencyKey("join"),
         }),
@@ -384,7 +407,8 @@ export function MpgfPublicGoodsCompacts({
             <p className="eyebrow">Your voluntary acceptance</p>
             <h3 id="compact-workspace-heading">{selectedCompact.title}</h3>
 
-            {selectedCompact.membership ? (
+            {selectedCompact.membership &&
+            selectedCompact.membership.status !== "revoked" ? (
               <div className={styles.membershipSummary}>
                 <div className={styles.charterHeader}>
                   <h4>Durable membership state</h4>
@@ -408,9 +432,7 @@ export function MpgfPublicGoodsCompacts({
                   <div>
                     <span>Binding status</span>
                     <strong>
-                      {selectedCompact.membership.status === "pending_activation"
-                        ? "Not binding while recruiting"
-                        : "Bound after activation under frozen terms"}
+                      {bindingStatusLabel(selectedCompact.membership.status)}
                     </strong>
                   </div>
                   <div>
@@ -447,6 +469,12 @@ export function MpgfPublicGoodsCompacts({
               </div>
             ) : (
               <>
+                {selectedCompact.membership?.status === "revoked" ? (
+                  <p className={styles.statusMessage}>
+                    Your earlier recruiting acceptance was revoked and is not binding. You may
+                    explicitly accept the current constitution again.
+                  </p>
+                ) : null}
                 <div className={styles.field}>
                   <label htmlFor="eligible-spending">
                     Self-declared eligible monthly spending (USD)

@@ -1,7 +1,9 @@
 import {
   MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS,
   MPGF_PUBLIC_GOODS_COMPACT_MAX_DECLARED_SPENDING_CENTS,
+  MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
   MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION,
+  type MpgfPublicGoodsCompactAcknowledgements,
 } from "./public-goods-compacts";
 
 const compactPublicKeys = new Set<string>(
@@ -30,6 +32,28 @@ export function parseMpgfPublicGoodsCompactConstitutionVersion(value: unknown) {
   }
 
   return value;
+}
+
+export function parseMpgfPublicGoodsCompactAcknowledgements(
+  value: unknown,
+): MpgfPublicGoodsCompactAcknowledgements {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Complete every required compact acknowledgement.");
+  }
+
+  const record = value as Record<string, unknown>;
+  const requiredKeys = Object.keys(
+    MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
+  );
+
+  if (
+    Object.keys(record).length !== requiredKeys.length ||
+    requiredKeys.some((key) => record[key] !== true)
+  ) {
+    throw new Error("Complete every required compact acknowledgement.");
+  }
+
+  return MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS;
 }
 
 export function parseMpgfPublicGoodsCompactSpendingCents(value: unknown) {

@@ -4,11 +4,13 @@ import test from "node:test";
 import {
   MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS,
   MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS,
+  MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
   calculateMpgfPublicGoodsCompactActivationProgress,
   calculateMpgfPublicGoodsCompactContributionCents,
   calculateMpgfPublicGoodsCompactProspectiveExitDate,
   parseMpgfPublicGoodsCompactSpendingToCents,
 } from "./public-goods-compacts";
+import { parseMpgfPublicGoodsCompactAcknowledgements } from "./public-goods-compacts-input";
 
 test("compact contribution arithmetic is whole-cent, one percent, and capped at ten dollars", () => {
   assert.equal(calculateMpgfPublicGoodsCompactContributionCents(0), 0);
@@ -77,6 +79,28 @@ test("compact invariants prohibit assignment, marketplace tax, project opt-out, 
     moneyMovesOnJoin: false,
     automaticCollectionEnabled: false,
   });
+});
+
+test("compact acceptance requires every explicit acknowledgement", () => {
+  assert.deepEqual(
+    parseMpgfPublicGoodsCompactAcknowledgements({
+      voluntaryChoice: true,
+      exactConstitution: true,
+      activationAndNoProjectOptOut: true,
+      noPaymentMandate: true,
+    }),
+    MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
+  );
+  assert.throws(
+    () =>
+      parseMpgfPublicGoodsCompactAcknowledgements({
+        voluntaryChoice: true,
+        exactConstitution: true,
+        activationAndNoProjectOptOut: false,
+        noPaymentMandate: true,
+      }),
+    /every required compact acknowledgement/i,
+  );
 });
 
 test("founding charters are unique, cause-specific, and contain no activity", () => {

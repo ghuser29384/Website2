@@ -7904,6 +7904,7 @@ export interface Database {
           user_id: string;
           profile_id: string;
           constitution_version_accepted: string;
+          acknowledgements: Json;
           declared_eligible_monthly_spending_cents: number;
           scheduled_monthly_contribution_cents: number;
           status: "pending_activation" | "active" | "exit_notice" | "revoked" | "exited";
@@ -7921,6 +7922,7 @@ export interface Database {
           user_id: string;
           profile_id: string;
           constitution_version_accepted: string;
+          acknowledgements: Json;
           declared_eligible_monthly_spending_cents: number;
           scheduled_monthly_contribution_cents: number;
           status: "pending_activation" | "active" | "exit_notice" | "revoked" | "exited";
@@ -11309,6 +11311,7 @@ export interface Database {
           p_compact_public_key: string;
           p_constitution_version: string;
           p_declared_eligible_monthly_spending_cents: number;
+          p_acknowledgements: Json;
           p_idempotency_key: string;
         };
         Returns: Json;
