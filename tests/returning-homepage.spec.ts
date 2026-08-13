@@ -103,7 +103,7 @@ test.describe("Adaptive homepage", () => {
       "/complete-profile",
     );
 
-    for (const rule of ["No guessed priorities", "No demo records", "Live opportunities only"]) {
+    for (const rule of ["No guessed priorities", "No demo records", "No invented counterparties"]) {
       await expect(feed.getByText(rule, { exact: true })).toBeVisible();
     }
 

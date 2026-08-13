@@ -4,6 +4,9 @@
   if (window.__MT_FEED_CREATE_PHASE1_ACTIVE__) return;
   window.__MT_FEED_CREATE_PHASE1_ACTIVE__ = true;
 
+  const POSTGRES_UUID_PATTERN =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
   const bootstrap =
     window.__MT_LIVE_NOW_BOOTSTRAP__ &&
     typeof window.__MT_LIVE_NOW_BOOTSTRAP__ === "object"
@@ -32,14 +35,20 @@
 
   function completeRecommendation(value) {
     if (!value || typeof value !== "object") return null;
+    const metadata =
+      value.metadata && typeof value.metadata === "object" && !Array.isArray(value.metadata)
+        ? value.metadata
+        : {};
+    if (metadata.origin === "platform_generated") return null;
+
     const id = text(value.id, 160);
     const exposureRequestId = text(value.exposureRequestId, 160);
     const sourceRevision = positiveInteger(value.sourceRevision);
     if (
       value.opportunityType !== "offer" ||
       value.mode !== "pledge" ||
-      !id ||
-      !exposureRequestId ||
+      !POSTGRES_UUID_PATTERN.test(id) ||
+      !POSTGRES_UUID_PATTERN.test(exposureRequestId) ||
       !sourceRevision ||
       !text(value.ownerAlias, 100) ||
       !text(value.offeredCause, 180) ||

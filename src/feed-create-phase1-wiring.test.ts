@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { runInNewContext } from "node:vm";
 
 const feedScript = readFileSync("public/moral-trade-live-feed-create.js", "utf8");
 const feedStyles = readFileSync("public/moral-trade-live-feed-create.css", "utf8");
@@ -26,6 +27,50 @@ const authenticatedRuntimeMigration = readFileSync(
   "utf8",
 );
 
+function runFeedScript(opportunityId: string) {
+  let observerCreated = false;
+  runInNewContext(feedScript, {
+    document: {
+      documentElement: {},
+      querySelectorAll: () => [],
+    },
+    MutationObserver: class {
+      constructor() {
+        observerCreated = true;
+      }
+
+      observe() {}
+    },
+    queueMicrotask: (callback: () => void) => callback(),
+    window: {
+      addEventListener() {},
+      __MT_LIVE_NOW_BOOTSTRAP__: {
+        authenticated: true,
+        status: "ready",
+        learningDiagnostics: { exposureWriteStatus: "written" },
+        recommendations: [
+          {
+            id: opportunityId,
+            opportunityType: "offer",
+            mode: "pledge",
+            exposureRequestId: "fa500000-0000-4000-8000-000000000001",
+            sourceRevision: 1,
+            ownerAlias: "Participant",
+            offeredCause: "Cause A",
+            requestedCause: "Cause B",
+            offerAction: "Complete action A.",
+            requestAction: "Complete action B.",
+            verification: "Review dated evidence.",
+            duration: "One month",
+            metadata: { origin: "published" },
+          },
+        ],
+      },
+    },
+  });
+  return observerCreated;
+}
+
 test("Feed cards use the existing authenticated snapshot and never issue a second ranking or exposure request", () => {
   assert.match(liveShell, /moral-trade-live-feed-create\.css/);
   assert.match(liveShell, /moral-trade-live-feed-create\.js/);
@@ -39,9 +84,12 @@ test("Feed cards use the existing authenticated snapshot and never issue a secon
   assert.match(feedStyles, /@media \(max-width: 620px\)/);
 });
 
-test("only complete nonfinancial bilateral offers are eligible and native-action opportunity types remain native", () => {
+test("only complete published nonfinancial bilateral offers are eligible and native-action opportunity types remain native", () => {
+  assert.match(feedScript, /metadata\.origin === "platform_generated"/);
   assert.match(feedScript, /value\.opportunityType !== "offer"/);
   assert.match(feedScript, /value\.mode !== "pledge"/);
+  assert.match(feedScript, /POSTGRES_UUID_PATTERN\.test\(id\)/);
+  assert.match(feedScript, /POSTGRES_UUID_PATTERN\.test\(exposureRequestId\)/);
   assert.match(feedScript, /!text\(value\.verification/);
   assert.match(feedScript, /!text\(value\.duration/);
   assert.doesNotMatch(feedScript, /donation_pool[\s\S]*Create a trade from this/);
@@ -49,6 +97,12 @@ test("only complete nonfinancial bilateral offers are eligible and native-action
   assert.match(liveNowRoute, /terms_version/);
   assert.match(liveNowRoute, /sourceRevision:\s*offer\.terms_version/);
   assert.match(liveNowModel, /sourceRevision\?: number/);
+});
+
+test("the client fails closed before wiring Create actions for non-UUID opportunity identifiers", () => {
+  assert.equal(runFeedScript("synth:ai-governance:animal-welfare"), false);
+  assert.equal(runFeedScript("fa300000-0000-0000-8000-000000000001"), true);
+  assert.equal(runFeedScript("fa300000-0000-4000-8000-000000000001"), true);
 });
 
 test("the server verifies the exact viewer, receipt, source owner, source revision, and open published state", () => {

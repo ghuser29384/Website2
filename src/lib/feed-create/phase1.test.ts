@@ -123,6 +123,19 @@ test("fails closed for a malformed or non-offer request", () => {
   );
 });
 
+test("accepts canonical PostgreSQL UUIDs independently of RFC version bits", () => {
+  const postgresUuid = "fa300000-0000-0000-8000-000000000001";
+  const parsed = feedCreateRequestFromSearchParams({
+    fromFeed: "1",
+    sourceType: "offer",
+    sourceId: postgresUuid,
+    exposureRequestId: REQUEST_A,
+    sourceRevision: "3",
+  });
+  assert.equal(parsed?.opportunityId, postgresUuid);
+  assert.equal(isValidFeedCreateRequest(parsed!), true);
+});
+
 test("two authenticated viewers receive distinct source, counterparty, Feed key, and receipt projections", () => {
   const resultA = requireSuccess(
     evaluateFeedCreateSourceRecords({
