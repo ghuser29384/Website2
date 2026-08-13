@@ -40,13 +40,6 @@ function markWalkthroughSeen(response: NextResponse, request: NextRequest) {
   return response;
 }
 
-function rewriteToLiveHome(request: NextRequest) {
-  const liveUrl = request.nextUrl.clone();
-  liveUrl.pathname = "/moral-trade-live.html";
-
-  return NextResponse.rewrite(liveUrl);
-}
-
 function rewriteToUnifiedCreate(request: NextRequest) {
   const createUrl = request.nextUrl.clone();
   createUrl.pathname = "/trades/new";
@@ -89,21 +82,10 @@ function rewriteToInvalidOfferRecord(request: NextRequest) {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const shouldRecordVisit =
-    isHumanNavigation(request) && !request.cookies.has(WALKTHROUGH_SEEN_COOKIE);
-
-  if (pathname === "/") {
-    if (shouldRecordVisit) {
-      const walkthroughUrl = request.nextUrl.clone();
-      walkthroughUrl.pathname = "/walkthrough";
-
-      return markWalkthroughSeen(NextResponse.redirect(walkthroughUrl), request);
-    }
-
-    return rewriteToLiveHome(request);
-  }
 
   if (pathname === "/walkthrough") {
+    const shouldRecordVisit =
+      isHumanNavigation(request) && !request.cookies.has(WALKTHROUGH_SEEN_COOKIE);
     const response = NextResponse.next();
     return shouldRecordVisit ? markWalkthroughSeen(response, request) : response;
   }
@@ -155,5 +137,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/walkthrough", "/create", "/offers", "/offers/:path*"],
+  matcher: ["/walkthrough", "/create", "/offers", "/offers/:path*"],
 };

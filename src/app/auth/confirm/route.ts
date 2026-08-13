@@ -2,7 +2,7 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { ensureAccountRowsForUser, getViewer } from "@/lib/app-data";
-import { buildAuthPath, normalizeAuthMode } from "@/lib/auth-routes";
+import { buildAuthPath, getAuthDefaultReturnTo, normalizeAuthMode } from "@/lib/auth-routes";
 import { getSafeInternalPath } from "@/lib/paths";
 import { buildUsernameCompletionPath, profileNeedsUsername } from "@/lib/profile-username";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
@@ -14,7 +14,10 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") as EmailOtpType | null;
   const code = searchParams.get("code");
   const mode = normalizeAuthMode(searchParams.get("mode"));
-  const next = getSafeInternalPath(searchParams.get("next"), "/dashboard");
+  const next = getSafeInternalPath(
+    searchParams.get("next"),
+    getAuthDefaultReturnTo(mode),
+  );
   const authPath = buildAuthPath({
     mode,
     returnTo: next,

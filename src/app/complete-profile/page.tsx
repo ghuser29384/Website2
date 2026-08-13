@@ -102,7 +102,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
   };
   const requestedSuccessTo = getSafeInternalPath(
     readSearchParam(resolvedSearchParams.next),
-    "/discover?source=profile-complete&domain=offers&view=constellation",
+    "/feed",
   );
   const baseReturnTo = buildCompleteProfilePath(profileDraft);
   const returnTo = usernamePromptRequested
