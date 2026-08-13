@@ -1,0 +1,311 @@
+name: Evidence credibility capture QA
+
+on:
+  push:
+    branches:
+      - feature/evidence-credibility-capture-queue-20260811
+    paths:
+      - .github/workflows/evidence-credibility-capture-qa.yml
+      - docs/moral-trade/evidence-credibility-capture-queue-v1.md
+      - src/app/evidence-credibility-capture-actions.ts
+      - src/app/admin/evidence-calibration/page.tsx
+      - src/lib/evidence-credibility-capture-schema-contract.test.ts
+      - supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
+      - supabase/tests/evidence_credibility_shadow_capture_queue.sql
+      - supabase/tests/evidence_credibility_shadow_capture_authorization.sql
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evidence-credibility-capture-qa-${{ github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  EXPECTED_HEAD_SHA: ${{ github.sha }}
+  EXPECTED_BASE_SHA: 59a3266786f84e02bb27c0bedf3e80fd10330234
+
+jobs:
+  source-and-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Check out exact capture candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+
+      - name: Guard exact stacked scope and shadow boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git cat-file -e "${EXPECTED_BASE_SHA}^{commit}"
+
+          cat > /tmp/expected-files.txt <<'EOF'
+          .github/workflows/evidence-credibility-capture-qa.yml
+          docs/moral-trade/evidence-credibility-capture-queue-v1.md
+          src/app/admin/evidence-calibration/page.tsx
+          src/app/evidence-credibility-capture-actions.ts
+          src/lib/evidence-credibility-capture-schema-contract.test.ts
+          supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
+          supabase/tests/evidence_credibility_shadow_capture_authorization.sql
+          supabase/tests/evidence_credibility_shadow_capture_queue.sql
+          EOF
+          git diff --name-only "$EXPECTED_BASE_SHA...HEAD" | sort > /tmp/actual-files.txt
+          sort -o /tmp/expected-files.txt /tmp/expected-files.txt
+          diff -u /tmp/expected-files.txt /tmp/actual-files.txt
+
+          test -f docs/moral-trade/evidence-credibility-capture-queue-v1.md
+          test -f src/app/admin/evidence-calibration/page.tsx
+          test -f src/app/evidence-credibility-capture-actions.ts
+          test -f src/lib/evidence-credibility-capture-schema-contract.test.ts
+          test -f supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
+          test -f supabase/tests/evidence_credibility_shadow_capture_queue.sql
+          test -f supabase/tests/evidence_credibility_shadow_capture_authorization.sql
+
+          grep -q "current_actor_has_trade_role('administrator')" \
+            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
+          grep -q "control.mode = 'shadow'" \
+            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
+          grep -q "not control.public_effects_enabled" \
+            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
+          grep -q "not control.ranking_effects_enabled" \
+            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
+          grep -q "not control.eligibility_effects_enabled" \
+            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql
+          ! grep -R "jnpoxvalyjtdghnperyu" \
+            .github/workflows/evidence-credibility-capture-qa.yml \
+            src/app/admin/evidence-calibration/page.tsx \
+            src/app/evidence-credibility-capture-actions.ts \
+            src/lib/evidence-credibility-capture-schema-contract.test.ts \
+            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql \
+            supabase/tests/evidence_credibility_shadow_capture_queue.sql \
+            supabase/tests/evidence_credibility_shadow_capture_authorization.sql
+
+          for file in supabase/tests/evidence_credibility_shadow_capture_*.sql; do
+            grep -qi '^begin;' "$file"
+            grep -qi '^rollback;' "$file"
+          done
+          git diff --check
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run capture source contract
+        run: node --import tsx --test src/lib/evidence-credibility-capture-schema-contract.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Run repository-wide ESLint
+        run: npm run lint -- --quiet
+
+      - name: Run strict TypeScript
+        run: npx tsc --noEmit
+
+      - name: Build production application
+        run: npm run build
+
+      - name: Preserve exact-head source evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(git status --short)"
+          test -z "$status"
+          mkdir -p capture-evidence
+          git rev-parse HEAD > capture-evidence/head-sha.txt
+          git rev-parse "$EXPECTED_BASE_SHA" > capture-evidence/base-sha.txt
+          git diff --name-status "$EXPECTED_BASE_SHA...HEAD" \
+            > capture-evidence/stacked-diff.txt
+          printf '%s' "$status" > capture-evidence/status.txt
+          sha256sum \
+            .github/workflows/evidence-credibility-capture-qa.yml \
+            docs/moral-trade/evidence-credibility-capture-queue-v1.md \
+            src/app/admin/evidence-calibration/page.tsx \
+            src/app/evidence-credibility-capture-actions.ts \
+            src/lib/evidence-credibility-capture-schema-contract.test.ts \
+            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql \
+            supabase/tests/evidence_credibility_shadow_capture_queue.sql \
+            supabase/tests/evidence_credibility_shadow_capture_authorization.sql \
+            > capture-evidence/file-sha256.txt
+
+      - name: Upload exact-head source evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-capture-source-${{ github.run_id }}-${{ env.EXPECTED_HEAD_SHA }}
+          path: capture-evidence
+          if-no-files-found: error
+          retention-days: 30
+
+  isolated-database:
+    needs: source-and-contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+    steps:
+      - name: Check out exact capture candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.EXPECTED_HEAD_SHA }}
+
+      - name: Guard exact candidate and isolated QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit(
+                  "Refusing a database URL outside the exact TLS-only MoralTrade QA target."
+              )
+          PY
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Apply the idempotent capture migration to isolated QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p capture-database-evidence
+          sha256sum \
+            supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql \
+            > capture-database-evidence/migration-sha256.txt
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/migrations/20260811170500_evidence_credibility_shadow_capture_queue.sql \
+            | tee capture-database-evidence/migration.log
+
+      - name: Record active, shadow, and capture baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' \
+            > capture-database-evidence/before-counts.txt
+          select 'active_events|' || count(*) from public.credibility_events
+          union all select 'active_aggregates|' || count(*) from public.credibility_public_aggregates
+          union all select 'active_restrictions|' || count(*) from public.credibility_restrictions
+          union all select 'evidence_decisions|' || count(*) from public.trade_evidence_decisions
+          union all select 'settlement_decisions|' || count(*) from public.trade_settlement_shadow_decisions
+          union all select 'shadow_events|' || count(*) from public.credibility_shadow_events
+          union all select 'shadow_aggregates|' || count(*) from public.credibility_shadow_aggregates
+          union all select 'capture_records|' || count(*) from public.trade_shadow_capture_records
+          order by 1;
+          SQL
+
+      - name: Run rollback-only capture SQL suites
+        shell: bash
+        run: |
+          set -euo pipefail
+          for suite in \
+            evidence_credibility_shadow_capture_queue \
+            evidence_credibility_shadow_capture_authorization; do
+            psql "$QA_SUPABASE_DB_URL" \
+              --no-psqlrc \
+              --set ON_ERROR_STOP=1 \
+              --file "supabase/tests/${suite}.sql" \
+              | tee "capture-database-evidence/${suite}.log"
+          done
+
+      - name: Prove zero residue, authorization, and fail-closed controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' \
+            > capture-database-evidence/after-counts.txt
+          select 'active_events|' || count(*) from public.credibility_events
+          union all select 'active_aggregates|' || count(*) from public.credibility_public_aggregates
+          union all select 'active_restrictions|' || count(*) from public.credibility_restrictions
+          union all select 'evidence_decisions|' || count(*) from public.trade_evidence_decisions
+          union all select 'settlement_decisions|' || count(*) from public.trade_settlement_shadow_decisions
+          union all select 'shadow_events|' || count(*) from public.credibility_shadow_events
+          union all select 'shadow_aggregates|' || count(*) from public.credibility_shadow_aggregates
+          union all select 'capture_records|' || count(*) from public.trade_shadow_capture_records
+          order by 1;
+          SQL
+          diff -u \
+            capture-database-evidence/before-counts.txt \
+            capture-database-evidence/after-counts.txt
+
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | sed '/^[[:space:]]*$/d' \
+            > capture-database-evidence/final-readback.txt
+          select 'control|' || mode || '|' ||
+            milestone_cutover_enabled || '|' ||
+            public_effects_enabled || '|' ||
+            ranking_effects_enabled || '|' ||
+            eligibility_effects_enabled
+          from public.credibility_shadow_controls
+          where control_key = 'evidence_decision_v2';
+          select 'capture_rows|' || count(*)
+          from public.trade_shadow_capture_records;
+          select 'anon_table_select|' ||
+            has_table_privilege('anon','public.trade_shadow_capture_records','SELECT');
+          select 'authenticated_table_select|' ||
+            has_table_privilege('authenticated','public.trade_shadow_capture_records','SELECT');
+          SQL
+          grep -q '^control|shadow|false|false|false|false$' \
+            capture-database-evidence/final-readback.txt
+          grep -q '^capture_rows|0$' \
+            capture-database-evidence/final-readback.txt
+          grep -q '^anon_table_select|false$' \
+            capture-database-evidence/final-readback.txt
+          grep -q '^authenticated_table_select|false$' \
+            capture-database-evidence/final-readback.txt
+
+      - name: Upload isolated-database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-credibility-capture-database-${{ github.run_id }}-${{ env.EXPECTED_HEAD_SHA }}
+          path: capture-database-evidence
+          if-no-files-found: error
+          retention-days: 30
