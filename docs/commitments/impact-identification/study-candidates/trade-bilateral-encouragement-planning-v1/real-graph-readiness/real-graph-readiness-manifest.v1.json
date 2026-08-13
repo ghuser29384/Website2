@@ -13,7 +13,7 @@
   "authoritativeResult": {
     "dataReadiness": "insufficient_real_eligible_graph",
     "eligibleDirectedDyadCount": 0,
-    "realGraphDiagosticsStatus": "blocked_not_run",
+    "realGraphDiagnosticsStatus": "blocked_not_run",
     "protectedDataExportAuthorized": false,
     "assignmentGenerated": false,
     "assignmentSeedGenerated": false,
