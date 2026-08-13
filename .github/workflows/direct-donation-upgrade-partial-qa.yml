@@ -152,17 +152,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --command '\conninfo' \
+            | tee donation-upgrade-partial-qa-conninfo.txt
+          grep -Fq 'SSL connection' donation-upgrade-partial-qa-conninfo.txt
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
             --set ON_ERROR_STOP=1 <<'SQL' | tee donation-upgrade-partial-qa-session.txt
           select jsonb_build_object(
             'database', current_database(),
             'user', current_user,
-            'ssl', coalesce(
-              (select connection.ssl
-               from pg_catalog.pg_stat_ssl connection
-               where connection.pid = pg_backend_pid()),
-              false
-            ),
             'serverVersion', current_setting('server_version')
           );
           SQL
@@ -182,7 +179,6 @@ jobs:
           expected = {
               "database": os.environ["EXPECTED_QA_DATABASE"],
               "user": os.environ["EXPECTED_QA_DATABASE_USER"],
-              "ssl": True,
           }
           actual = {key: session.get(key) for key in expected}
           if actual != expected:
@@ -588,6 +584,7 @@ jobs:
           path: |
             donation-upgrade-partial-qa-source.txt
             donation-upgrade-partial-qa-sha256.txt
+            donation-upgrade-partial-qa-conninfo.txt
             donation-upgrade-partial-qa-session.txt
             donation-upgrade-partial-advisors-help.txt
             donation-upgrade-partial-advisors-before.json
