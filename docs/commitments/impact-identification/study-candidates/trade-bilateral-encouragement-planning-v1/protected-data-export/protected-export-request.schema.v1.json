@@ -35,10 +35,7 @@
       "pattern": "^synthetic:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$"
     },
     "subjectMode": {
-      "enum": [
-        "synthetic_only",
-        "pseudonymous_real_requested"
-      ]
+      "const": "synthetic_only"
     },
     "containsRealData": {
       "const": false
@@ -63,11 +60,7 @@
       "pattern": "^sha256:[a-f0-9]{64}$"
     },
     "requestedSourceEnvironment": {
-      "enum": [
-        "synthetic_fixture",
-        "protected_qa",
-        "protected_research_enclave"
-      ]
+      "const": "synthetic_fixture"
     },
     "requestedFields": {
       "type": "object",
@@ -168,45 +161,19 @@
       ],
       "properties": {
         "privacy": {
-          "enum": [
-            "not_requested",
-            "pending",
-            "approved",
-            "rejected"
-          ]
+          "const": "not_requested"
         },
         "ethics": {
-          "enum": [
-            "not_requested",
-            "pending",
-            "approved",
-            "rejected",
-            "not_applicable_with_independent_determination"
-          ]
+          "const": "not_requested"
         },
         "security": {
-          "enum": [
-            "not_requested",
-            "pending",
-            "approved",
-            "rejected"
-          ]
+          "const": "not_requested"
         },
         "dataSteward": {
-          "enum": [
-            "not_requested",
-            "pending",
-            "approved",
-            "rejected"
-          ]
+          "const": "not_requested"
         },
         "productOwner": {
-          "enum": [
-            "not_requested",
-            "pending",
-            "approved",
-            "rejected"
-          ]
+          "const": "not_requested"
         }
       }
     },
@@ -292,10 +259,10 @@
       ],
       "properties": {
         "realDataAccessAuthorized": {
-          "type": "boolean"
+          "const": false
         },
         "exportExecutionAuthorized": {
-          "type": "boolean"
+          "const": false
         },
         "studyExecutionAuthorized": {
           "const": false
@@ -309,103 +276,5 @@
       "type": "string",
       "pattern": "^sha256:[a-f0-9]{64}$"
     }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "subjectMode": {
-            "const": "synthetic_only"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "requestedSourceEnvironment": {
-            "const": "synthetic_fixture"
-          },
-          "approvals": {
-            "properties": {
-              "privacy": {
-                "const": "not_requested"
-              },
-              "ethics": {
-                "const": "not_requested"
-              },
-              "security": {
-                "const": "not_requested"
-              },
-              "dataSteward": {
-                "const": "not_requested"
-              },
-              "productOwner": {
-                "const": "not_requested"
-              }
-            }
-          },
-          "authorization": {
-            "properties": {
-              "realDataAccessAuthorized": {
-                "const": false
-              },
-              "exportExecutionAuthorized": {
-                "const": false
-              }
-            }
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "authorization": {
-            "properties": {
-              "realDataAccessAuthorized": {
-                "const": true
-              },
-              "exportExecutionAuthorized": {
-                "const": true
-              }
-            }
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "subjectMode": {
-            "const": "pseudonymous_real_requested"
-          },
-          "requestedSourceEnvironment": {
-            "enum": [
-              "protected_qa",
-              "protected_research_enclave"
-            ]
-          },
-          "approvals": {
-            "properties": {
-              "privacy": {
-                "const": "approved"
-              },
-              "ethics": {
-                "enum": [
-                  "approved",
-                  "not_applicable_with_independent_determination"
-                ]
-              },
-              "security": {
-                "const": "approved"
-              },
-              "dataSteward": {
-                "const": "approved"
-              },
-              "productOwner": {
-                "const": "approved"
-              }
-            }
-          }
-        }
-      }
-    }
-  ]
+  }
 }
