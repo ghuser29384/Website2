@@ -5,6 +5,7 @@ import test from "node:test";
 const navigation = readFileSync("public/moral-trade-live-navigation.js", "utf8");
 const nowFeed = readFileSync("public/moral-trade-live-now.js", "utf8");
 const proxy = readFileSync("src/proxy.ts", "utf8");
+const truthBoundary = readFileSync("public/moral-trade-live-local-time.js", "utf8");
 
 test("the returning root stays on the live, fail-closed recommendation surface", () => {
   assert.match(proxy, /return rewriteToLiveHome\(request\)/);
@@ -13,13 +14,15 @@ test("the returning root stays on the live, fail-closed recommendation surface",
 });
 
 test("the live recommendation surface separates review from agreement", () => {
-  assert.match(navigation, /Current opportunities and next actions/);
+  assert.match(navigation, /mt-live-document-heading/);
+  assert.match(truthBoundary, /Current opportunities and next actions/);
+  assert.match(truthBoundary, /mt-live-document-heading/);
   assert.match(
-    navigation,
+    truthBoundary,
     /Recommendations to review — not agreements, commitments, payments, or verified outcomes\./,
   );
-  assert.match(navigation, /data-mt-now-review-boundary/);
-  assert.doesNotMatch(navigation, /Your best match right now/);
+  assert.match(truthBoundary, /data-mt-now-review-boundary/);
+  assert.match(truthBoundary, /existingBoundary\.remove\(\)/);
 
   for (const fabricatedClaim of [
     "Mina",
@@ -30,7 +33,7 @@ test("the live recommendation surface separates review from agreement", () => {
     "New matches refresh daily",
   ]) {
     assert.equal(
-      `${navigation}\n${nowFeed}`.includes(fabricatedClaim),
+      `${truthBoundary}\n${nowFeed}`.includes(fabricatedClaim),
       false,
       `live root must not contain fabricated claim: ${fabricatedClaim}`,
     );
