@@ -15,9 +15,10 @@ test("funding for operations surfaces the AI-governance operations exchange", ()
     fieldId: "ai-governance",
   });
 
-  assert.equal(match?.template.id, "ai-governance-advocacy-operations");
-  assert.equal(match?.orientation, "first_party");
-  assert.equal(match?.fit, "strong");
+  assert.ok(match);
+  assert.equal(match.template.id, "ai-governance-advocacy-operations");
+  assert.equal(match.orientation, "first_party");
+  assert.equal(match.fit, "strong");
 });
 
 test("operations for funding reverses the same exchange coherently", () => {
@@ -28,8 +29,9 @@ test("operations for funding reverses the same exchange coherently", () => {
     fieldId: "ai-governance",
   });
 
-  assert.equal(match?.template.id, "ai-governance-advocacy-operations");
-  assert.equal(match?.orientation, "counterparty");
+  assert.ok(match);
+  assert.equal(match.template.id, "ai-governance-advocacy-operations");
+  assert.equal(match.orientation, "counterparty");
   const terms = orientedTemplateTerms(match.template, match.orientation);
   assert.match(terms.gives, /transferable capability/i);
   assert.match(terms.receives, /opportunity-cost coverage/i);
@@ -47,10 +49,12 @@ test("forecasting and decision access match in either direction", () => {
     actor: "organization",
   });
 
-  assert.equal(forecastingSide?.template.id, "forecasting-live-decisions");
-  assert.equal(forecastingSide?.orientation, "first_party");
-  assert.equal(decisionSide?.template.id, "forecasting-live-decisions");
-  assert.equal(decisionSide?.orientation, "counterparty");
+  assert.ok(forecastingSide);
+  assert.ok(decisionSide);
+  assert.equal(forecastingSide.template.id, "forecasting-live-decisions");
+  assert.equal(forecastingSide.orientation, "first_party");
+  assert.equal(decisionSide.template.id, "forecasting-live-decisions");
+  assert.equal(decisionSide.orientation, "counterparty");
 });
 
 test("funding for funding surfaces the canonical reciprocal redirect", () => {
@@ -60,5 +64,6 @@ test("funding for funding surfaces the canonical reciprocal redirect", () => {
     actor: "individual",
   });
 
-  assert.equal(match?.template.id, "reciprocal-donation-redirect");
+  assert.ok(match);
+  assert.equal(match.template.id, "reciprocal-donation-redirect");
 });
