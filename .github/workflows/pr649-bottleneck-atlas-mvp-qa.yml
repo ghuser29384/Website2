@@ -131,10 +131,9 @@ jobs:
               if (message.type() === 'error') evidence.consoleErrors.push(`${label}: ${message.text()}`);
             });
             await page.goto(`${baseURL}/bottleneck-atlas`, { waitUntil: 'networkidle' });
-            await page.getByRole('heading', { level: 1, name: 'Find a cross-cause trade.' }).waitFor();
+            await page.getByRole('heading', { level: 1, name: 'Find a trade.' }).waitFor();
 
             const initial = await page.evaluate(() => {
-              const main = document.querySelector('main');
               const viewportText = [...document.querySelectorAll('main *')]
                 .filter((node) => {
                   const rect = node.getBoundingClientRect();
@@ -150,11 +149,10 @@ jobs:
                 visibleTextCharacters: viewportText.length,
                 matchCount: document.querySelectorAll('[data-atlas-match]').length,
                 fieldCount: document.querySelectorAll('[data-atlas-field]').length,
-                mainText: main?.textContent?.trim().slice(0, 220) ?? '',
               };
             });
             assert.ok(initial.scrollWidth <= initial.width + 1, `${label} initial overflow`);
-            assert.ok(initial.visibleTextCharacters < 900, `${label} initial viewport is still word-heavy: ${initial.visibleTextCharacters}`);
+            assert.ok(initial.visibleTextCharacters < 650, `${label} initial viewport is still word-heavy: ${initial.visibleTextCharacters}`);
             assert.equal(initial.matchCount, 0);
             assert.equal(initial.fieldCount, 0);
             await page.screenshot({ path: `${output}/${label}-initial.png`, fullPage: false });
@@ -162,9 +160,15 @@ jobs:
             await page.locator('[data-atlas-offer-select]').selectOption('funding');
             await page.locator('[data-atlas-need-select]').selectOption('operations');
             await page.locator('[data-atlas-find-matches]').click();
-            await page.locator('[data-atlas-match]').waitFor();
-            const result = await page.locator('[data-atlas-match]').getAttribute('data-synthesis-template');
+            const match = page.locator('[data-atlas-match]');
+            await match.waitFor();
+            const result = await match.getAttribute('data-synthesis-template');
+            const resultPosition = await match.evaluate((element) => {
+              const rect = element.getBoundingClientRect();
+              return { top: rect.top, bottom: rect.bottom, viewportHeight: innerHeight };
+            });
             assert.equal(result, 'ai-governance-advocacy-operations');
+            assert.ok(resultPosition.top >= 0 && resultPosition.top < resultPosition.viewportHeight);
             await page.screenshot({ path: `${output}/${label}-match.png`, fullPage: false });
 
             await page.getByRole('tab', { name: 'Browse evidence' }).click();
@@ -180,7 +184,7 @@ jobs:
             }));
             assert.ok(final.scrollWidth <= final.width + 1, `${label} evidence overflow`);
             await context.close();
-            return { initial, result, final };
+            return { initial, result, resultPosition, final };
           }
 
           evidence.views.desktop = await inspect('desktop', { width: 1440, height: 900 });
@@ -210,7 +214,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$JOB_STATUS" = success ]]; then
-            body="## Bottleneck Atlas MVP QA passed\n\n- Candidate: \`$GITHUB_SHA\`\n- Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\n- Functional flow: offer + need → ranked match → guarded detail route\n- Evidence flow: search/filter → one selected field at a time\n- Initial viewport: under the enforced 900-character visible-text ceiling\n- Desktop/mobile: no horizontal overflow\n- Focused tests, full tests, lint, TypeScript, production build, and Playwright: passed\n- Production changed: no\n\nScreenshots and structured render metrics are retained in the workflow artifact."
+            body="## Bottleneck Atlas MVP QA passed\n\n- Candidate: \`$GITHUB_SHA\`\n- Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\n- Functional flow: offer + need → ranked match → guarded detail route\n- Result automatically enters the viewport after submission\n- Evidence flow: search/filter → one selected field at a time\n- Initial viewport: under the enforced 650-character visible-text ceiling\n- Desktop/mobile: no horizontal overflow\n- Focused tests, full tests, lint, TypeScript, production build, and Playwright: passed\n- Production changed: no\n\nScreenshots and structured render metrics are retained in the workflow artifact."
           else
             body="## Bottleneck Atlas MVP QA failed closed\n\n- Candidate: \`$GITHUB_SHA\`\n- Run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\n- Production changed: no\n\nPR #649 remains blocked pending diagnosis."
           fi
