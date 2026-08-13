@@ -1,0 +1,411 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moraltrade.org/schemas/commitments-trade-protected-export-request-v1.json",
+  "title": "Moral Trade protected eligible-graph export authorization request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "requestKey",
+    "subjectMode",
+    "containsRealData",
+    "purpose",
+    "boundContractPayloadHash",
+    "boundStudyInstancePayloadHash",
+    "boundPrecisionReportPayloadHash",
+    "boundGraphFeasibilityContractPayloadHash",
+    "requestedSourceEnvironment",
+    "requestedFields",
+    "eligibilityRuleHash",
+    "sourceQueryHash",
+    "dataWindowStartDate",
+    "dataWindowEndDate",
+    "approvals",
+    "keyCustody",
+    "retention",
+    "authorization",
+    "requestPayloadHash"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "commitments-trade-protected-export-request-v1"
+    },
+    "requestKey": {
+      "type": "string",
+      "pattern": "^synthetic:[A-Za-z0-9][A-Za-z0-9._:-]{0,191}$"
+    },
+    "subjectMode": {
+      "enum": [
+        "synthetic_only",
+        "pseudonymous_real_requested"
+      ]
+    },
+    "containsRealData": {
+      "const": false
+    },
+    "purpose": {
+      "const": "design_protected_real_eligible_graph_diagnostics"
+    },
+    "boundContractPayloadHash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "boundStudyInstancePayloadHash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "boundPrecisionReportPayloadHash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "boundGraphFeasibilityContractPayloadHash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "requestedSourceEnvironment": {
+      "enum": [
+        "synthetic_fixture",
+        "protected_qa",
+        "protected_research_enclave"
+      ]
+    },
+    "requestedFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node",
+        "dyad",
+        "metadata"
+      ],
+      "properties": {
+        "node": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "nodeKey"
+            }
+          ],
+          "items": false
+        },
+        "dyad": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "dyadKey"
+            },
+            {
+              "const": "sourceNodeKey"
+            },
+            {
+              "const": "targetNodeKey"
+            },
+            {
+              "const": "opportunityTypeBand"
+            },
+            {
+              "const": "baselineCompletionRiskBand"
+            }
+          ],
+          "items": false
+        },
+        "metadata": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "const": "schemaVersion"
+            },
+            {
+              "const": "exportKey"
+            },
+            {
+              "const": "studyInstancePayloadHash"
+            },
+            {
+              "const": "eligibilityRuleHash"
+            },
+            {
+              "const": "sourceQueryHash"
+            },
+            {
+              "const": "dataWindowStartDate"
+            },
+            {
+              "const": "dataWindowEndDate"
+            },
+            {
+              "const": "pseudonymizationKeyVersion"
+            }
+          ],
+          "items": false
+        }
+      }
+    },
+    "eligibilityRuleHash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "sourceQueryHash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "dataWindowStartDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "dataWindowEndDate": {
+      "type": "string",
+      "format": "date"
+    },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "privacy",
+        "ethics",
+        "security",
+        "dataSteward",
+        "productOwner"
+      ],
+      "properties": {
+        "privacy": {
+          "enum": [
+            "not_requested",
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "ethics": {
+          "enum": [
+            "not_requested",
+            "pending",
+            "approved",
+            "rejected",
+            "not_applicable_with_independent_determination"
+          ]
+        },
+        "security": {
+          "enum": [
+            "not_requested",
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "dataSteward": {
+          "enum": [
+            "not_requested",
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "productOwner": {
+          "enum": [
+            "not_requested",
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        }
+      }
+    },
+    "keyCustody": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scheme",
+        "minimumRootKeyBits",
+        "perExportKey",
+        "domainSeparated",
+        "crossExportLinkability",
+        "keyMaterialPresent",
+        "reversibleMappingPresent"
+      ],
+      "properties": {
+        "scheme": {
+          "const": "hmac_sha256_hkdf_per_export"
+        },
+        "minimumRootKeyBits": {
+          "type": "integer",
+          "minimum": 256
+        },
+        "perExportKey": {
+          "const": true
+        },
+        "domainSeparated": {
+          "const": true
+        },
+        "crossExportLinkability": {
+          "const": false
+        },
+        "keyMaterialPresent": {
+          "const": false
+        },
+        "reversibleMappingPresent": {
+          "const": false
+        }
+      }
+    },
+    "retention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rawQueryResultMaximumHours",
+        "pseudonymizedSnapshotMaximumHours",
+        "aggregateReportMaximumDays",
+        "automaticDeletion",
+        "deletionAttestation"
+      ],
+      "properties": {
+        "rawQueryResultMaximumHours": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "pseudonymizedSnapshotMaximumHours": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 24
+        },
+        "aggregateReportMaximumDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365
+        },
+        "automaticDeletion": {
+          "const": true
+        },
+        "deletionAttestation": {
+          "const": true
+        }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "realDataAccessAuthorized",
+        "exportExecutionAuthorized",
+        "studyExecutionAuthorized",
+        "assignmentGenerationAuthorized"
+      ],
+      "properties": {
+        "realDataAccessAuthorized": {
+          "type": "boolean"
+        },
+        "exportExecutionAuthorized": {
+          "type": "boolean"
+        },
+        "studyExecutionAuthorized": {
+          "const": false
+        },
+        "assignmentGenerationAuthorized": {
+          "const": false
+        }
+      }
+    },
+    "requestPayloadHash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "subjectMode": {
+            "const": "synthetic_only"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "requestedSourceEnvironment": {
+            "const": "synthetic_fixture"
+          },
+          "approvals": {
+            "properties": {
+              "privacy": {
+                "const": "not_requested"
+              },
+              "ethics": {
+                "const": "not_requested"
+              },
+              "security": {
+                "const": "not_requested"
+              },
+              "dataSteward": {
+                "const": "not_requested"
+              },
+              "productOwner": {
+                "const": "not_requested"
+              }
+            }
+          },
+          "authorization": {
+            "properties": {
+              "realDataAccessAuthorized": {
+                "const": false
+              },
+              "exportExecutionAuthorized": {
+                "const": false
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "authorization": {
+            "properties": {
+              "realDataAccessAuthorized": {
+                "const": true
+              },
+              "exportExecutionAuthorized": {
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "subjectMode": {
+            "const": "pseudonymous_real_requested"
+          },
+          "requestedSourceEnvironment": {
+            "enum": [
+              "protected_qa",
+              "protected_research_enclave"
+            ]
+          },
+          "approvals": {
+            "properties": {
+              "privacy": {
+                "const": "approved"
+              },
+              "ethics": {
+                "enum": [
+                  "approved",
+                  "not_applicable_with_independent_determination"
+                ]
+              },
+              "security": {
+                "const": "approved"
+              },
+              "dataSteward": {
+                "const": "approved"
+              },
+              "productOwner": {
+                "const": "approved"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
