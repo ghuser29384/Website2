@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "commitments-trade-real-graph-readiness-manifest-v1",
+  "repository": "ghuser29384/Website2",
+  "baseCommit": "ec6f1ecc12df5db74e3e2f8acb87c3f04aedae5b",
+  "preparedAtUtc": "2026-08-13T15:46:35Z",
+  "status": "repository_only_no_launch",
+  "files": {
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/README.md": "sha256:748f04a58b575412e52dea605889c84d132a69a231b0e189a3fca51101dc1bf2",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/real-graph-readiness-contract.v1.json": "sha256:56480390e959c69a9d42901fe1b185804de1421244ac3cb35cb6c3f74d85c34d",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/aggregate-readiness-report.schema.v1.json": "sha256:5c4fb53abd901d6b71e62438147ee3f50cd5706ac461f58b5169753d23865366",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/current-readiness-evidence.2026-08-13.json": "sha256:54e878c35a5bfff2324bdf1a101f4fb6791dcc7fa4cac002d5af5d4366605492",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/protected-data-run-contract.schema.v1.json": "sha256:bc65c24e32a615519d2eb2edb4638a40defe344db938548c29314b288354c29b",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/real-graph-readiness/synthetic-readiness-fixtures.v1.json": "sha256:24725faf72451596a679b37998816228bc9579446e515ec4f15d1a2bdcc64de2",
+    "scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs": "sha256:5142c8151938da463c016318e7b984f5ff2513bf17e68cc5de83ef6f2fd89678"
+  },
+  "authoritativeResult": {
+    "dataReadiness": "insufficient_real_eligible_graph",
+    "eligibleDirectedDyadCount": 0,
+    "realGraphDiagnosticsStatus": "blocked_not_run",
+    "protectedDataExportAuthorized": false,
+    "assignmentGenerated": false,
+    "assignmentSeedGenerated": false,
+    "executionDecision": "no_launch"
+  },
+  "manifestPayloadHash": "sha256:5f64359af3ae3ab2b3eb6d9b75cf0630bdc273d57cbd36c2230a36bf2b65c4b6"
+}

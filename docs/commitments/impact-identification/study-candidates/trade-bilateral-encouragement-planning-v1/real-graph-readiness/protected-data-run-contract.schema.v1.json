@@ -1,0 +1,329 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "moral-trade://schemas/commitments/trade-protected-data-run-contract-v1",
+  "title": "Future protected Reciprocal Trade graph diagnostic run contract",
+  "$comment": "This schema defines a future authorization record. Its existence does not authorize a run.",
+  "x-currentStatus": {
+    "protectedDataExportAuthorized": false,
+    "privacyReviewStatus": "required_not_completed",
+    "ethicsDeterminationStatus": "required_not_completed",
+    "realGraphDiagnosticsStatus": "required_not_completed",
+    "executionDecision": "no_launch"
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "authorization",
+    "canonicalEligibility",
+    "accessControl",
+    "pseudonymization",
+    "inputBoundary",
+    "processingBoundary",
+    "outputBoundary",
+    "provenance",
+    "executionBoundary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "commitments-trade-protected-data-run-contract-v1"
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "privacyReviewStatus",
+        "ethicsDeterminationStatus",
+        "consentOrWaiverStatus",
+        "protectedDataExportAuthorized"
+      ],
+      "properties": {
+        "privacyReviewStatus": {
+          "const": "passed"
+        },
+        "ethicsDeterminationStatus": {
+          "const": "passed"
+        },
+        "consentOrWaiverStatus": {
+          "enum": [
+            "independently_approved_consent",
+            "independently_approved_waiver_or_alteration"
+          ]
+        },
+        "protectedDataExportAuthorized": {
+          "const": true
+        }
+      }
+    },
+    "canonicalEligibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "sourceKind",
+        "sourcePathOrQualifiedName",
+        "sourceCommitOrMigrationHash",
+        "frozenQueryHash",
+        "recommendationGraphEdgesUsed"
+      ],
+      "properties": {
+        "status": {
+          "const": "passed"
+        },
+        "sourceKind": {
+          "enum": [
+            "server_function",
+            "database_view_or_function"
+          ]
+        },
+        "sourcePathOrQualifiedName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "sourceCommitOrMigrationHash": {
+          "type": "string",
+          "pattern": "^(?:[a-f0-9]{40}|sha256:[a-f0-9]{64})$"
+        },
+        "frozenQueryHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "recommendationGraphEdgesUsed": {
+          "const": false
+        }
+      }
+    },
+    "accessControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "purposeCode",
+        "serviceIdentityRef",
+        "leastPrivilege",
+        "appendOnlyAccessLog",
+        "accessLogHash"
+      ],
+      "properties": {
+        "purposeCode": {
+          "const": "reciprocal_trade_graph_diagnostic"
+        },
+        "serviceIdentityRef": {
+          "type": "string",
+          "pattern": "^protected-service://[a-z0-9/_-]+$"
+        },
+        "leastPrivilege": {
+          "const": true
+        },
+        "appendOnlyAccessLog": {
+          "const": true
+        },
+        "accessLogHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "pseudonymization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "method",
+        "keyBits",
+        "freshStudySpecificKey",
+        "keyStoredOutsideGitHub",
+        "keyStoredOutsideArtifacts",
+        "unkeyedHashPermitted",
+        "reversibleMappingPermitted"
+      ],
+      "properties": {
+        "method": {
+          "const": "hmac_sha256"
+        },
+        "keyBits": {
+          "const": 256
+        },
+        "freshStudySpecificKey": {
+          "const": true
+        },
+        "keyStoredOutsideGitHub": {
+          "const": true
+        },
+        "keyStoredOutsideArtifacts": {
+          "const": true
+        },
+        "unkeyedHashPermitted": {
+          "const": false
+        },
+        "reversibleMappingPermitted": {
+          "const": false
+        }
+      }
+    },
+    "inputBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "rawIdentifiersRemainInSource",
+        "freeTextRemainsInSource",
+        "minimumTopologyOnly",
+        "coarseStrataPreapproved",
+        "priorContactEdgesSeparatelyReviewed"
+      ],
+      "properties": {
+        "rawIdentifiersRemainInSource": {
+          "const": true
+        },
+        "freeTextRemainsInSource": {
+          "const": true
+        },
+        "minimumTopologyOnly": {
+          "const": true
+        },
+        "coarseStrataPreapproved": {
+          "const": true
+        },
+        "priorContactEdgesSeparatelyReviewed": {
+          "const": true
+        }
+      }
+    },
+    "processingBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "encryptedEphemeralStorage",
+        "maxWorkingRetentionHours",
+        "rawInputLogged",
+        "nodeOrEdgeArtifactsPublished",
+        "assignmentEntropyGenerated",
+        "assignmentManifestGenerated"
+      ],
+      "properties": {
+        "encryptedEphemeralStorage": {
+          "const": true
+        },
+        "maxWorkingRetentionHours": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 24
+        },
+        "rawInputLogged": {
+          "const": false
+        },
+        "nodeOrEdgeArtifactsPublished": {
+          "const": false
+        },
+        "assignmentEntropyGenerated": {
+          "const": false
+        },
+        "assignmentManifestGenerated": {
+          "const": false
+        }
+      }
+    },
+    "outputBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "aggregateOnly",
+        "nodeListIncluded",
+        "edgeListIncluded",
+        "smallCellPolicyStatus",
+        "smallCellPolicyHash",
+        "verifiedDeletion",
+        "deletionReceiptHash"
+      ],
+      "properties": {
+        "aggregateOnly": {
+          "const": true
+        },
+        "nodeListIncluded": {
+          "const": false
+        },
+        "edgeListIncluded": {
+          "const": false
+        },
+        "smallCellPolicyStatus": {
+          "const": "independently_approved_before_run"
+        },
+        "smallCellPolicyHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "verifiedDeletion": {
+          "const": true
+        },
+        "deletionReceiptHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceSnapshotTime",
+        "sourceWatermarkHash",
+        "codeHash",
+        "schemaHash",
+        "aggregateReportHash"
+      ],
+      "properties": {
+        "sourceSnapshotTime": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sourceWatermarkHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "codeHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "schemaHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "aggregateReportHash": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "executionBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "realGraphDiagnosticsOnly",
+        "studyRegistrationAuthorized",
+        "realUserAssignmentAllowed",
+        "invitationsAllowed",
+        "participantCausalCreditAllowed",
+        "pr534ActivationAllowed"
+      ],
+      "properties": {
+        "realGraphDiagosticsOnly": {
+          "const": true
+        },
+        "studyRegistrationAuthorized": {
+          "const": false
+        },
+        "realUserAssignmentAllowed": {
+          "const": false
+        },
+        "invitationsAllowed": {
+          "const": false
+        },
+        "participantCausalCreditAllowed": {
+          "const": false
+        },
+        "pr534ActivationAllowed": {
+          "const": false
+        }
+      }
+    }
+  }
+}
