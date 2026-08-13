@@ -1,0 +1,166 @@
+name: Temporary PR 658 protected Preview controller
+
+on:
+  push:
+    branches:
+      - ops/pr658-preview-20260813
+    paths:
+      - .github/workflows/pr658-protected-preview-controller.yml
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr658-protected-preview-controller
+  cancel-in-progress: false
+
+env:
+  CONTROLLER_BRANCH: ops/pr658-preview-20260813
+  CONTROLLER_PATH: .github/workflows/pr658-protected-preview-controller.yml
+  MAIN_SHA: ec6f1ecc12df5db74e3e2f8acb87c3f04aedae5b
+  CANDIDATE_BRANCH: fix/home-now-truth-boundary-20260813
+  CANDIDATE_SHA: ef436446096fa680813a2115710fbba46dfdf767
+  RELEASE_BRANCH: release/vercel-preview
+  PREVIOUS_RELEASE_SHA: ba2321991059e0829c11ff80faf4e930deceba6e
+  RELEASE_WORKFLOW: vercel-release.yml
+  PR_NUMBER: '658'
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - name: Check out the exact temporary controller
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+
+      - name: Guard the controller, candidate, main, and existing Preview lease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = "refs/heads/$CONTROLLER_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$MAIN_SHA"
+          changed="$(git diff-tree --no-commit-id --name-only -r HEAD | sed '/^$/d')"
+          test "$changed" = "$CONTROLLER_PATH"
+
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          remote_candidate="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          remote_release="$(git ls-remote origin "refs/heads/$RELEASE_BRANCH" | awk '{print $1}')"
+          test "$remote_main" = "$MAIN_SHA"
+          test "$remote_candidate" = "$CANDIDATE_SHA"
+          test "$remote_release" = "$PREVIOUS_RELEASE_SHA"
+
+          pr_head="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha)"
+          pr_state="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .state)"
+          pr_draft="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .draft)"
+          test "$pr_head" = "$CANDIDATE_SHA"
+          test "$pr_state" = 'open'
+          test "$pr_draft" = 'true'
+
+      - name: Lease the Preview branch, run the permanent gate, and restore the prior candidate
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          restore_release_branch() {
+            gh api --method PATCH \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "repos/$GITHUB_REPOSITORY/git/refs/heads/$RELEASE_BRANCH" \
+              -f sha="$PREVIOUS_RELEASE_SHA" \
+              -F force=true >/dev/null
+          }
+          trap restore_release_branch EXIT
+
+          previous_run_id="$(
+            gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?event=workflow_dispatch&per_page=20" \
+              --jq '[.workflow_runs[].id] | max // 0'
+          )"
+
+          gh api --method PATCH \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "repos/$GITHUB_REPOSITORY/git/refs/heads/$RELEASE_BRANCH" \
+            -f sha="$CANDIDATE_SHA" \
+            -F force=true >/dev/null
+
+          leased_sha="$(git ls-remote origin "refs/heads/$RELEASE_BRANCH" | awk '{print $1}')"
+          test "$leased_sha" = "$CANDIDATE_SHA"
+
+          jq -n \
+            --arg workflow_ref main \
+            --arg release_ref "$RELEASE_BRANCH" \
+            --arg expected_sha "$CANDIDATE_SHA" \
+            '{ref:$workflow_ref,inputs:{target:"preview",ref:$release_ref,expected_sha:$expected_sha}}' \
+            | gh api --method POST \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/dispatches" \
+                --input - >/dev/null
+
+          run_id=''
+          for _ in $(seq 1 60); do
+            while IFS= read -r candidate_id; do
+              [[ -n "$candidate_id" ]] || continue
+              candidate="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$candidate_id")"
+              if [[ "$(jq -r '.event' <<<"$candidate")" = 'workflow_dispatch' \
+                && "$(jq -r '.head_branch' <<<"$candidate")" = 'main' \
+                && "$(jq -r '.inputs.target // empty' <<<"$candidate")" = 'preview' \
+                && "$(jq -r '.inputs.ref // empty' <<<"$candidate")" = "$RELEASE_BRANCH" \
+                && "$(jq -r '.inputs.expected_sha // empty' <<<"$candidate")" = "$CANDIDATE_SHA" ]]; then
+                run_id="$candidate_id"
+                break 2
+              fi
+            done < <(
+              gh api "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?event=workflow_dispatch&per_page=20" \
+                --jq ".workflow_runs[] | select(.id > $previous_run_id) | .id"
+            )
+            sleep 2
+          done
+
+          test -n "$run_id"
+          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status --interval 15
+
+          artifact_name="gated-vercel-release-preview-$run_id"
+          mkdir -p preview-evidence
+          gh run download "$run_id" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name "$artifact_name" \
+            --dir preview-evidence
+
+          deployment_url="$(tr -d '\r\n' < preview-evidence/deployment-url.txt)"
+          deployment_id="$(jq -r '.id // .uid // empty' preview-evidence/deployment-detail.json)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]
+          test -n "$deployment_id"
+
+          restore_release_branch
+          trap - EXIT
+          restored_sha="$(git ls-remote origin "refs/heads/$RELEASE_BRANCH" | awk '{print $1}')"
+          test "$restored_sha" = "$PREVIOUS_RELEASE_SHA"
+
+          {
+            echo "run_id=$run_id"
+            echo "deployment_url=$deployment_url"
+            echo "deployment_id=$deployment_id"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Record the immutable protected Preview on PR 658
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.release.outputs.run_id }}
+          DEPLOYMENT_URL: ${{ steps.release.outputs.deployment_url }}
+          DEPLOYMENT_ID: ${{ steps.release.outputs.deployment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "The permanent gated Vercel workflow completed for exact candidate \`$CANDIDATE_SHA\`. Protected Preview: $DEPLOYMENT_URL (deployment \`$DEPLOYMENT_ID\`). Release evidence: https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID. The prior Bottleneck Atlas Preview branch pointer was restored to \`$PREVIOUS_RELEASE_SHA\`. Production was not targeted, no canonical alias changed, and PR #$PR_NUMBER remains draft pending hosted visual and interaction review."
