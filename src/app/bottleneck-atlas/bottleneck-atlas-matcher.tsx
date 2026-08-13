@@ -38,6 +38,7 @@ type NeedKey =
   | "infrastructure"
   | "demand"
   | "decisions"
+  | "analysis"
   | "implementation"
   | "coordination";
 
@@ -65,6 +66,7 @@ const NEED_OPTIONS: readonly { value: NeedKey; label: string }[] = [
   { value: "infrastructure", label: "Infrastructure or tools" },
   { value: "demand", label: "Customers or procurement" },
   { value: "decisions", label: "Better decision support" },
+  { value: "analysis", label: "Research or analysis" },
   { value: "implementation", label: "Implementation capacity" },
   { value: "coordination", label: "A coordinated coalition" },
 ];
@@ -164,7 +166,7 @@ export function BottleneckAtlasMatcher({
 
         return { template, score, offerMatch, needMatch, actorMatch };
       })
-      .filter((match) => match.offerMatch || match.needMatch)
+      .filter((match) => match.actorMatch && match.offerMatch && match.needMatch)
       .sort((a, b) => b.score - a.score || b.template.confidence - a.template.confidence)
       .slice(0, 3);
   }, [actor, need, offer, submitted, templates]);
