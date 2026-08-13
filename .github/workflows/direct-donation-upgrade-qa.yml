@@ -152,7 +152,7 @@ jobs:
           PY
           printf 'verified=true\n' >> "$GITHUB_OUTPUT"
 
-      - name: Compile and apply or verify the immutable migration
+      - name: Apply absent or verify recorded immutable migration
         shell: bash
         run: |
           set -euo pipefail
@@ -160,18 +160,21 @@ jobs:
           name=direct_verified_donation_upgrades
           source_blob="$(git hash-object "$MIGRATION")"
 
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
-            | tee direct-upgrade-qa-migration-compile.log
-          begin;
-          \i $MIGRATION
-          rollback;
-          SQL
-
           count="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
             --set ON_ERROR_STOP=1 \
             --command "select count(*) from supabase_migrations.schema_migrations where version='${version}';" \
             | tr -d '[:space:]')"
           if [[ "$count" == "0" ]]; then
+            successor_count="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+              --set ON_ERROR_STOP=1 \
+              --command "select count(*) from supabase_migrations.schema_migrations where version in ('20260813150000', '20260813151000');" \
+              | tr -d '[:space:]')"
+            test "$successor_count" = "0"
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+              --command 'begin;' \
+              --file "$MIGRATION" \
+              --command 'rollback;' \
+              | tee direct-upgrade-qa-migration-compile.log
             psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --single-transaction \
               --file "$MIGRATION" \
               --command "insert into supabase_migrations.schema_migrations(version, statements, name, created_by) values ('${version}', array['source-git-blob:${source_blob}'], '${name}', 'github-actions:direct-donation-upgrade-qa');" \
@@ -182,6 +185,8 @@ jobs:
               --command "select coalesce(statements[1],'') from supabase_migrations.schema_migrations where version='${version}';" \
               | tr -d '[:space:]')"
             test "$recorded" = "source-git-blob:${source_blob}"
+            printf 'Historical migration is already recorded exactly; it is not replayed over additive successors.\n' \
+              | tee direct-upgrade-qa-migration-compile.log
             printf 'Migration already recorded with exact source blob %s.\n' "$source_blob" \
               | tee direct-upgrade-qa-migration-apply.log
           else
