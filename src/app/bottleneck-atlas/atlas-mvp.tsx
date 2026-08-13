@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { type FormEvent, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   BottleneckAtlasField,
@@ -73,6 +73,7 @@ export function AtlasMvp({ fields, templates, reviewedAt }: AtlasMvpProps) {
   const [fieldQuery, setFieldQuery] = useState("");
   const [cluster, setCluster] = useState("");
   const [selectedFieldId, setSelectedFieldId] = useState("");
+  const resultRef = useRef<HTMLDivElement>(null);
 
   const matches = useMemo(() => {
     if (!offer || !need) return [];
@@ -107,12 +108,16 @@ export function AtlasMvp({ fields, templates, reviewedAt }: AtlasMvpProps) {
     });
   }, [cluster, fieldQuery, fields]);
 
-  const selectedField =
-    fields.find((field) => field.id === selectedFieldId) ?? null;
+  const selectedField = fields.find((field) => field.id === selectedFieldId) ?? null;
   const bestMatch = matches[0] ?? null;
   const bestTerms = bestMatch
     ? orientedTemplateTerms(bestMatch.template, bestMatch.orientation)
     : null;
+
+  useEffect(() => {
+    if (!hasSearched || !bestMatch) return;
+    resultRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
+  }, [bestMatch, hasSearched]);
 
   function submitMatch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -246,18 +251,17 @@ export function AtlasMvp({ fields, templates, reviewedAt }: AtlasMvpProps) {
                 disabled={!offer || !need}
                 type="submit"
               >
-                Find matches
+                Show match
               </button>
-              <span>Uses {templates.length} reviewed trade patterns</span>
             </div>
           </form>
 
           {!hasSearched ? (
             <div className={styles.matchPrompt} data-atlas-empty-state>
-              Choose two resources to see the strongest current pattern.
+              Choose two resources.
             </div>
           ) : bestMatch && bestTerms ? (
-            <div className={styles.results} aria-live="polite">
+            <div className={styles.results} aria-live="polite" ref={resultRef} tabIndex={-1}>
               <article
                 className={styles.bestMatch}
                 data-atlas-match
@@ -287,14 +291,14 @@ export function AtlasMvp({ fields, templates, reviewedAt }: AtlasMvpProps) {
                     className={styles.resultLink}
                     href={`/suggested-opportunities/${encodeURIComponent(bestMatch.template.id)}`}
                   >
-                    Review this possibility
+                    Review possibility
                   </Link>
                 </div>
               </article>
 
               {matches.length > 1 ? (
                 <div className={styles.alternatives} aria-label="Other possible matches">
-                  <span>Other possible matches</span>
+                  <span>Other matches</span>
                   {matches.slice(1).map((match) => (
                     <Link
                       data-atlas-alternative
@@ -309,9 +313,7 @@ export function AtlasMvp({ fields, templates, reviewedAt }: AtlasMvpProps) {
             </div>
           ) : (
             <div className={styles.matchPrompt} role="status">
-              No strong pattern matches that combination yet. Try a broader resource or open your
-              personalized feed.
-              <Link href="/feed">Open feed</Link>
+              No strong match yet. Try a broader resource.
             </div>
           )}
         </div>
@@ -323,7 +325,7 @@ export function AtlasMvp({ fields, templates, reviewedAt }: AtlasMvpProps) {
               <input
                 aria-label="Search fields"
                 onChange={(event) => setFieldQuery(event.target.value)}
-                placeholder="AI governance, animal welfare, biosecurity…"
+                placeholder="AI governance, animal welfare…"
                 type="search"
                 value={fieldQuery}
               />
@@ -410,7 +412,7 @@ export function AtlasMvp({ fields, templates, reviewedAt }: AtlasMvpProps) {
               ) : (
                 <div className={styles.fieldPlaceholder}>
                   <strong>Select one field.</strong>
-                  <span>Only that field’s evidence will appear here.</span>
+                  <span>Only its evidence appears here.</span>
                 </div>
               )}
             </article>
