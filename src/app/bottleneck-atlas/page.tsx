@@ -55,7 +55,7 @@ export default async function BottleneckAtlasPage() {
         />
 
         <aside className={styles.boundary} aria-label="Atlas evidence boundary">
-          <strong>Evidence is a search prior, not a live claim.</strong>
+          <strong>Field evidence is a search prior, not a live claim.</strong>
           <span>No counterparty, capacity, consent, or agreement is confirmed here.</span>
         </aside>
       </main>
