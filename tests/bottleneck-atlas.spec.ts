@@ -109,29 +109,36 @@ const feedFixture = {
 };
 
 test.describe("Bottleneck Atlas and generated feed", () => {
-  test("uses progressive disclosure without hiding the complete public atlas", async ({ page }) => {
+  test("provides a compact working trade matcher", async ({ page }) => {
     await page.goto("/bottleneck-atlas", { waitUntil: "domcontentloaded" });
 
-    await expect(page.getByRole("heading", { level: 1, name: "Bottleneck Atlas" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Find a potential trade." })).toBeVisible();
+    await expect(page.locator("[data-atlas-matcher]")).toBeVisible();
+    await expect(page.locator("[data-atlas-match-results]")).toHaveCount(0);
     await expect(page.locator("[data-atlas-field]")).toHaveCount(18);
-    await expect(page.locator("[data-synthesis-template]")).toHaveCount(9);
-    await expect(page.getByText(/field evidence is a search prior/i).first()).toBeVisible();
 
-    await expect(page.locator("details[data-synthesis-template][open]")).toHaveCount(1);
-    await expect(page.locator("details[data-atlas-cluster][open]")).toHaveCount(1);
-    await expect(page.locator("details[data-atlas-field][open]")).toHaveCount(0);
+    await page.locator("[data-atlas-offer]").selectOption("funding");
+    await page.locator("[data-atlas-need]").selectOption("talent");
+    await page.locator("[data-atlas-actor]").selectOption("funder");
+    await page.getByRole("button", { name: "Find matches" }).click();
 
-    const firstField = page.locator("details[data-atlas-field]").first();
-    await firstField.locator(":scope > summary").click();
-    await expect(firstField).toHaveJSProperty("open", true);
-    await expect(firstField.getByRole("heading", { name: "Trade implication" })).toBeVisible();
+    const results = page.locator("[data-atlas-match-results]");
+    await expect(results).toBeVisible();
+    await expect(results.locator("[data-atlas-match]")).toHaveCount(3);
+    await expect(
+      results.locator('[data-atlas-match="gcr-funder-talent-pipeline"]'),
+    ).toContainText("GCR funder and cross-cause talent pipeline");
+    await expect(
+      results
+        .locator('[data-atlas-match="gcr-funder-talent-pipeline"]')
+        .getByRole("link", { name: "Review match" }),
+    ).toHaveAttribute("href", "/suggested-opportunities/gcr-funder-talent-pipeline");
+    await expect(results).toContainText("No counterparty is confirmed.");
     await expectNoHorizontalOverflow(page);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.locator("[data-atlas-field]")).toHaveCount(18);
-    await expect(page.locator("details[data-synthesis-template][open]")).toHaveCount(1);
-    await expect(page.locator("details[data-atlas-cluster][open]")).toHaveCount(1);
+    await expect(page.locator("[data-atlas-matcher]")).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
