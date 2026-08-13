@@ -42,19 +42,24 @@ export function ParticipantOfferGroup({
   const headingId = `participant-${ownerId}`;
 
   return (
-    <article aria-labelledby={headingId} className={styles.group}>
+    <article aria-labelledby={headingId} className={styles.group} data-participant-offer-group>
       <header className={styles.groupHeader}>
         <div className={styles.identity}>
           <span aria-hidden="true" className={styles.avatar}>{initials(participantName)}</span>
           <div>
-            <p className={styles.kicker}>Participant menu</p>
+            <p className={styles.kicker}>Participant</p>
             <h3 id={headingId}>{participantName}</h3>
           </div>
         </div>
         <span className={styles.proposalCount}>
-          {offers.length} exact proposal{offers.length === 1 ? "" : "s"}
+          {offers.length} open proposal{offers.length === 1 ? "" : "s"}
         </span>
       </header>
+
+      <p className={styles.groupNote} data-participant-exact-terms-note>
+        These are the owner&apos;s exact published terms. Counteroffer opens a new proposal;
+        it does not imply that this participant has already accepted a different combination.
+      </p>
 
       <div className={styles.offerList}>
         {offers.map((offer) => {
@@ -67,7 +72,7 @@ export function ParticipantOfferGroup({
           const verified = isVerifiedEvidenceText(offer.verification);
 
           return (
-            <section className={styles.offer} key={offer.id}>
+            <section className={styles.offer} data-participant-offer key={offer.id}>
               <div className={styles.offerHeading}>
                 <div>
                   <p className={styles.kicker}>{formatMode(offer.mode)}</p>
@@ -130,11 +135,6 @@ export function ParticipantOfferGroup({
                 ) : null}
                 <Link className={styles.detailLink} href={offerHref}>Open full terms ↗</Link>
               </div>
-
-              <p className={styles.truthNote}>
-                These are the owner&apos;s exact published terms. Counteroffer opens a new proposal;
-                it does not imply that this participant has already accepted a different combination.
-              </p>
             </section>
           );
         })}
