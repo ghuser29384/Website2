@@ -64,13 +64,17 @@ jobs:
           parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
           expected_ref = os.environ["EXPECTED_QA_REF"]
           ssl_modes = parse_qs(parsed.query).get("sslmode")
+          tls_required = (
+              ssl_modes == ["require"]
+              or (not ssl_modes and os.environ.get("PGSSLMODE") == "require")
+          )
           valid = (
               parsed.scheme in {"postgres", "postgresql"}
               and parsed.username == f"postgres.{expected_ref}"
               and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
               and parsed.port == 5432
               and parsed.path == f"/{os.environ['EXPECTED_QA_DATABASE']}"
-              and ssl_modes == ["require"]
+              and tls_required
               and bool(parsed.password)
           )
           if not valid:

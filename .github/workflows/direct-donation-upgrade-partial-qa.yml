@@ -49,6 +49,7 @@ jobs:
       EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
       QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      PGSSLMODE: require
       BASE_MIGRATION: supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql
       SPLIT_MIGRATION: supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql
       LIFECYCLE_MIGRATION: supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql
@@ -76,13 +77,17 @@ jobs:
           parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
           expected_ref = os.environ["EXPECTED_QA_REF"]
           ssl_modes = parse_qs(parsed.query).get("sslmode")
+          tls_required = (
+              ssl_modes == ["require"]
+              or (not ssl_modes and os.environ.get("PGSSLMODE") == "require")
+          )
           valid = (
               parsed.scheme in {"postgres", "postgresql"}
               and parsed.username == f"postgres.{expected_ref}"
               and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
               and parsed.port == 5432
               and parsed.path == "/postgres"
-              and ssl_modes == ["require"]
+              and tls_required
               and bool(parsed.password)
           )
           if not valid:
