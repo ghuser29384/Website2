@@ -1,304 +1,496 @@
 .scope {
+  --offers-paper: #f7f3eb;
+  --offers-paper-2: #fffdf8;
+  --offers-ink: #070707;
+  --offers-muted: #67625b;
+  --offers-rule: rgba(7, 7, 7, 0.2);
+  --offers-blue: #1648ff;
+  --offers-violet: #7b42c3;
   min-width: 0;
 }
 
-/* Keep the search page focused on scanning and comparison. */
-.scope :global(.mt-explore-hero) {
-  grid-template-columns: minmax(0, 1fr) minmax(13rem, 0.24fr);
+.scope :global(.marketplace-product-shell) {
+  --bg: var(--offers-paper);
+  --surface: var(--offers-paper-2);
+  --surface-muted: #eee8de;
+  --surface-soft: #e5ddd1;
+  --surface-strong: #d9d0c2;
+  --line: var(--offers-rule);
+  --line-strong: rgba(7, 7, 7, 0.48);
+  --ink: var(--offers-ink);
+  --ink-soft: #393631;
+  --ink-muted: var(--offers-muted);
+  --accent: var(--offers-blue);
+  --accent-deep: #0d36cf;
+  --accent-soft: #e8ebff;
+  --signal: #e2c86d;
+  --signal-ink: #28210a;
+  --radius-xl: 28px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 12px;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(7, 7, 7, 0.035) 1px, transparent 0) 0 0 / 24px 24px,
+    var(--offers-paper);
 }
 
-.scope :global(.mt-explore-copy),
-.scope :global(.mt-explore-side) {
-  gap: 0.7rem;
-  padding: clamp(1.35rem, 3vw, 2.4rem);
+.scope :global(.marketplace-product-shell .mt-beta-strip) {
+  min-height: 2rem;
+  border: 0;
+  background: #11120f;
+  color: #f4f0e8;
+  font-size: 0.66rem;
+  letter-spacing: 0.055em;
 }
 
-.scope :global(.mt-explore-copy h1) {
-  max-width: 19ch;
-  font-size: clamp(2.65rem, 4.5vw, 4.6rem);
-  line-height: 0.94;
+.scope :global(.marketplace-product-shell .mt-site-topbar) {
+  width: min(calc(100% - 2rem), 1180px);
+  min-height: 4.5rem;
+  border-bottom-color: rgba(7, 7, 7, 0.28);
+  background: rgba(247, 243, 235, 0.9);
+  backdrop-filter: blur(12px);
 }
 
-.scope :global(.mt-explore-copy > p:not(.mt-product-kicker)) {
-  display: -webkit-box;
-  max-width: 54ch;
+.scope :global(.marketplace-product-shell .mt-product-main) {
+  width: min(calc(100% - 2rem), 1180px);
+}
+
+.scope :global(.marketplace-product-shell .mt-explore-hero) {
+  grid-template-columns: minmax(0, 1.35fr) minmax(240px, 0.55fr);
+  min-height: 29rem;
+  margin-top: 1rem;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  border: 1px solid var(--offers-ink);
+  border-radius: 28px;
+  background: var(--offers-paper-2);
+  box-shadow: 0 24px 60px rgba(26, 22, 17, 0.08);
 }
 
-.scope :global(.mt-explore-side) {
-  align-content: center;
-}
-
-.scope :global(.mt-explore-side .mt-product-kicker),
-.scope :global(.mt-explore-side p:last-child) {
-  display: none;
-}
-
-.scope :global(.mt-explore-side strong) {
-  font-family: var(--font-body);
-  font-size: 0.98rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  line-height: 1.25;
-}
-
-.scope :global(.mt-product-section) {
+.scope :global(.marketplace-product-shell .mt-explore-copy),
+.scope :global(.marketplace-product-shell .mt-explore-side) {
   gap: 1.25rem;
-  padding: clamp(2rem, 4vw, 3.4rem) clamp(0.85rem, 2vw, 1.5rem);
+  padding: clamp(2.4rem, 6vw, 5.1rem);
 }
 
-.scope :global(.mt-product-section-head) {
-  gap: 1rem;
+.scope :global(.marketplace-product-shell .mt-explore-copy) {
+  border-right-color: var(--offers-rule);
+  background:
+    radial-gradient(circle at 1px 1px, rgba(22, 72, 255, 0.08) 1px, transparent 0) 0 0 / 22px 22px,
+    var(--offers-paper-2);
 }
 
-.scope :global(.mt-product-section-head h2) {
-  max-width: 20ch;
-  font-size: clamp(2.15rem, 3.7vw, 3.6rem);
+.scope :global(.marketplace-product-shell .mt-product-kicker) {
+  color: var(--offers-violet);
+  font-size: 0.64rem;
+  letter-spacing: 0.12em;
 }
 
-.scope :global(.mt-product-section-head > p) {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.scope :global(.marketplace-product-shell .mt-product-kicker::before) {
+  width: 1.8rem;
+  height: 1px;
+  background: currentColor;
 }
 
-.scope :global(.mt-directory-toolbar) {
-  margin-top: 0;
+.scope :global(.marketplace-product-shell .mt-explore-copy h1) {
+  max-width: 13ch;
+  font-size: clamp(3.35rem, 6.4vw, 5.8rem);
+  font-weight: 400;
+  letter-spacing: -0.06em;
+  line-height: 0.92;
 }
 
-/* The interactive plane already supplies the live-offer filters. Keep the
-   server-rendered panel as a no-JavaScript fallback, but remove the duplicate
-   panel after the plane mounts. */
-.scope :global(#ordinary-offer-plane-host) + form[role="search"] {
-  display: none;
+.scope :global(.marketplace-product-shell .mt-explore-copy > p:not(.mt-product-kicker)) {
+  max-width: 60ch;
+  color: var(--ink-soft);
+  font-family: var(--font-heading);
+  font-size: clamp(1.08rem, 1.6vw, 1.3rem);
+  line-height: 1.45;
 }
 
-.scope :global(.mt-directory-view) {
-  gap: 0.85rem;
-  padding-top: 1.15rem;
-}
-
-.scope :global(.mt-directory-view-head) {
-  align-items: center;
-  gap: 0.5rem 1rem;
-}
-
-.scope :global(.mt-directory-view-head h2) {
-  font-size: clamp(2rem, 3vw, 2.9rem);
-  line-height: 0.98;
-}
-
-.scope :global(.mt-directory-view-head > p) {
-  display: none;
-}
-
-.scope :global(.mt-market-grid) {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.scope :global(.mt-market-card) {
-  min-height: 0;
-  align-content: start;
+.scope :global(.marketplace-product-shell .mt-product-actions) {
   gap: 0.8rem;
-  padding: 1rem;
 }
 
-.scope :global(.mt-market-card-head) {
-  gap: 0.4rem;
+.scope :global(.marketplace-product-shell .mt-explore-copy .button) {
+  min-height: 3.15rem;
+  padding-inline: 1.2rem;
+  border-radius: 999px;
+  font-size: 0.88rem;
 }
 
-.scope :global(.mt-market-state) {
-  min-height: 1.45rem;
-  padding: 0.16rem 0.36rem;
-  font-size: 0.58rem;
+.scope :global(.marketplace-product-shell .mt-explore-copy .button-secondary) {
+  min-height: auto;
+  border-color: transparent;
+  padding-inline: 0.35rem;
+  background: transparent;
+  color: var(--offers-blue);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.28em;
 }
 
-.scope :global(.mt-market-card h3) {
-  max-height: 3.15em;
-  overflow: hidden;
-  font-size: clamp(1.45rem, 1.9vw, 1.95rem);
+.scope :global(.marketplace-product-shell .mt-explore-copy .button-secondary:hover) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.scope :global(.marketplace-product-shell .mt-explore-side) {
+  align-content: end;
+  border: 0;
+  background: #e8e4f3;
+}
+
+.scope :global(.marketplace-product-shell .mt-explore-side strong) {
+  font-family: var(--font-heading);
+  font-size: clamp(1.55rem, 2.4vw, 2.05rem);
+  font-weight: 400;
+  letter-spacing: -0.045em;
   line-height: 1.03;
 }
 
-.scope :global(.mt-market-card h3 span) {
-  display: inline;
-  margin: 0 0.36rem;
-  font-size: 0.7rem;
-  vertical-align: 0.18em;
+.scope :global(.marketplace-product-shell .mt-explore-side p:last-child) {
+  font-size: 0.88rem;
+  line-height: 1.55;
 }
 
-.scope :global(.mt-market-card .listing-alias) {
-  margin: -0.18rem 0 0;
-  color: var(--ink-muted);
-  font-size: 0.8rem;
-  line-height: 1.3;
+.scope :global(.marketplace-product-shell .status-banner) {
+  margin-top: 1rem;
+  border-radius: 16px;
 }
 
-.scope :global(.mt-market-card .tag-row) {
-  gap: 0.35rem;
-  margin: 0;
-}
-
-.scope :global(.mt-market-card .tag-row .badge) {
-  display: none;
-}
-
-.scope :global(.mt-market-card .tag-row .source-pill) {
-  min-height: 1.65rem;
-  padding: 0.25rem 0.48rem;
-  font-size: 0.62rem;
-  white-space: nowrap;
-}
-
-.scope :global(.mt-market-card .tag-row .text-button) {
-  font-size: 0.76rem;
-}
-
-.scope :global(.mt-market-card dl) {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.55rem;
-  border-top: 0;
-}
-
-.scope :global(.mt-market-card dl div) {
-  grid-template-columns: 1fr;
-  align-content: start;
-  gap: 0.25rem;
-  min-width: 0;
-  padding: 0.62rem;
-  border: 1px solid var(--line);
-  background: color-mix(in srgb, var(--surface-muted) 48%, transparent);
-}
-
-.scope :global(.mt-market-card dl div:nth-child(3)) {
-  grid-column: 1 / -1;
-  grid-template-columns: auto minmax(0, 1fr);
-  align-items: baseline;
-  gap: 0.6rem;
-  padding-block: 0.48rem;
-}
-
-.scope :global(.mt-market-card dt) {
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.035em;
-}
-
-.scope :global(.mt-market-card dd) {
-  display: -webkit-box;
-  min-width: 0;
+.scope :global(.marketplace-product-shell .mt-product-section) {
+  gap: 2rem;
+  margin-top: 1rem;
+  padding: clamp(2.3rem, 5vw, 4.7rem);
   overflow: hidden;
-  font-size: 0.8rem;
-  line-height: 1.35;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  border: 1px solid var(--offers-ink);
+  border-radius: 28px;
+  background: var(--offers-paper);
 }
 
-.scope :global(.mt-market-card dl div:nth-child(3) dd) {
-  -webkit-line-clamp: 1;
+.scope :global(.marketplace-product-shell .mt-product-section.is-white) {
+  background: var(--offers-paper-2);
 }
 
-.scope :global(.mt-market-card-foot) {
-  margin-top: auto;
-  padding-top: 0.1rem;
-  font-size: 0.6rem;
+.scope :global(.marketplace-product-shell .mt-product-section-head) {
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 0.42fr);
+  gap: clamp(1.2rem, 4vw, 3rem);
+  align-items: end;
 }
 
-.scope :global(.mt-market-card-foot a) {
-  font-size: 0.8rem;
+.scope :global(.marketplace-product-shell .mt-product-section-head h2) {
+  max-width: 18ch;
+  font-size: clamp(2.55rem, 5vw, 4.65rem);
+  font-weight: 400;
+  letter-spacing: -0.055em;
+  line-height: 0.96;
 }
 
-/* The plane is the primary visual control. Keep its copy short and use the
-   full offer page for detailed terms. */
-.scope :global(#challenge-return-explorer) {
+.scope :global(.marketplace-product-shell .mt-product-section-head > p) {
+  color: var(--offers-muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"]) {
+  display: grid;
   gap: 1rem;
-  padding-block: clamp(1rem, 2vw, 1.5rem);
+  width: 100%;
+  padding: 1.25rem 0;
+  border: 0;
+  border-top: 1px solid var(--offers-ink);
+  border-bottom: 1px solid var(--offers-rule);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
-.scope :global(#challenge-return-explorer > header) {
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:first-of-type) {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.7fr) minmax(150px, 0.55fr) minmax(150px, 0.55fr);
   gap: 0.75rem;
+  align-items: end;
 }
 
-.scope :global(#challenge-return-explorer > header h2) {
-  font-size: clamp(1.9rem, 3vw, 2.8rem);
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] label) {
+  gap: 0.42rem;
+  color: var(--offers-muted);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
 }
 
-.scope :global(#challenge-return-explorer > header p:last-child) {
-  display: -webkit-box;
-  max-width: 62ch;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] input),
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] select) {
+  min-height: 3.15rem;
+  border: 1px solid rgba(7, 7, 7, 0.32);
+  border-radius: 14px;
+  background: var(--offers-paper-2);
+  color: var(--offers-ink);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  font-weight: 500;
+  text-transform: none;
 }
 
-.scope :global(#challenge-return-explorer [role="note"] span) {
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] input:focus-visible),
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] select:focus-visible) {
+  border-color: var(--offers-blue);
+  outline: 3px solid rgba(22, 72, 255, 0.16);
+  outline-offset: 1px;
+}
+
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:nth-of-type(2)) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:nth-of-type(2) .button) {
+  min-height: 2.85rem;
+  border-radius: 999px;
+}
+
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:nth-of-type(3)) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.8rem;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0;
+  border-top: 0;
+  color: var(--offers-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+}
+
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:nth-of-type(3) > p) {
   display: none;
 }
 
-.scope :global(#challenge-return-explorer article > p) {
-  display: none;
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:nth-of-type(3) strong) {
+  color: var(--offers-ink);
+  font-weight: 600;
 }
 
-.scope :global(#challenge-return-explorer article h4) {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+.scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:nth-of-type(3) span) {
+  min-height: 1.8rem;
+  border-color: rgba(7, 7, 7, 0.2);
+  border-radius: 999px;
+  background: #eee8de;
+  color: #4f4a43;
+  font-size: 0.64rem;
 }
 
-.scope :global(#challenge-return-explorer aside h3) {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+.scope :global(.marketplace-product-shell #ordinary-offer-plane-host) {
+  margin-top: 0.15rem;
 }
 
-.scope :global(#challenge-return-explorer aside dd) {
-  display: -webkit-box;
+.scope :global(.marketplace-product-shell #challenge-return-explorer) {
+  gap: 1.25rem;
+  margin: 0;
+  padding: clamp(1.4rem, 3vw, 2.2rem);
+  border: 1px solid var(--offers-rule);
+  border-radius: 20px;
+  background: var(--offers-paper-2);
+  box-shadow: none;
+}
+
+.scope :global(.marketplace-product-shell #challenge-return-explorer > header h2) {
+  max-width: 18ch;
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 4vw, 3.35rem);
+  font-weight: 400;
+  letter-spacing: -0.05em;
+  line-height: 0.98;
+}
+
+.scope :global(.marketplace-product-shell .mt-directory-view) {
+  gap: 1.2rem;
+  padding-top: 0.4rem;
+}
+
+.scope :global(.marketplace-product-shell .mt-market-grid) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  border: 0;
+}
+
+.scope :global(.marketplace-product-shell .mt-market-card) {
+  min-height: 0;
+  gap: 1rem;
+  padding: 1.35rem;
+  border: 1px solid var(--offers-ink);
+  border-radius: 18px;
+  background: var(--offers-paper-2);
+}
+
+.scope :global(.marketplace-product-shell .mt-market-card:hover) {
+  background: #ffffff;
+  box-shadow: 0 14px 32px rgba(26, 22, 17, 0.07);
+}
+
+.scope :global(.marketplace-product-shell .mt-market-card h3) {
+  font-size: clamp(1.75rem, 3vw, 2.45rem);
+  font-weight: 400;
+}
+
+.scope :global(.marketplace-product-shell .mt-market-card dl div) {
+  grid-template-columns: 5rem minmax(0, 1fr);
+}
+
+.scope :global(.marketplace-product-shell .pagination) {
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--offers-rule);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.scope :global(.marketplace-product-shell .pagination .button) {
+  border-radius: 999px;
+}
+
+.scope :global(.marketplace-product-shell .empty-state) {
+  padding: clamp(2rem, 5vw, 4rem);
+  border: 1px solid var(--offers-rule);
+  border-radius: 20px;
+  background: var(--offers-paper);
+  text-align: left;
+}
+
+.scope :global(.marketplace-product-shell .mt-pool-link-grid) {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  border: 1px solid var(--offers-ink);
+  border-radius: 18px;
+}
+
+.scope :global(.marketplace-product-shell .mt-pool-link-card) {
+  min-height: 0;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border: 0;
+  border-right: 1px solid var(--offers-rule);
+  background: var(--offers-paper-2);
+}
+
+.scope :global(.marketplace-product-shell .mt-pool-link-card:last-child) {
+  border-right: 0;
+}
+
+.scope :global(.marketplace-product-shell .mt-pool-link-card:hover) {
+  background: #eee9fb;
+}
+
+.scope :global(.marketplace-product-shell .mt-pool-link-card h3) {
+  font-size: 1.65rem;
+  font-weight: 400;
+}
+
+.scope :global(.marketplace-product-shell .mt-pool-link-card p) {
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.scope :global(.marketplace-product-shell .mt-pool-link-card > span) {
+  color: var(--offers-blue);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.scope :global(.marketplace-product-shell + .mt-site-footer),
+.scope :global(.marketplace-product-shell .mt-site-footer) {
+  margin-top: 2rem;
 }
 
 @media (max-width: 980px) {
-  .scope :global(.mt-explore-hero) {
+  .scope :global(.marketplace-product-shell .mt-explore-hero) {
     grid-template-columns: 1fr;
   }
 
-  .scope :global(.mt-explore-copy) {
+  .scope :global(.marketplace-product-shell .mt-explore-copy) {
     border-right: 0;
+    border-bottom: 1px solid var(--offers-rule);
   }
 
-  .scope :global(.mt-explore-side) {
-    display: none;
+  .scope :global(.marketplace-product-shell .mt-explore-side) {
+    align-content: start;
+    padding-block: 2rem;
   }
 
-  .scope :global(.mt-market-grid) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .scope :global(.marketplace-product-shell .mt-product-section-head) {
+    grid-template-columns: 1fr;
+  }
+
+  .scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:first-of-type) {
+    grid-template-columns: minmax(0, 1fr) minmax(145px, 0.45fr);
+  }
+
+  .scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:first-of-type label:first-child) {
+    grid-column: 1 / -1;
   }
 }
 
-@media (max-width: 680px) {
-  .scope :global(.mt-product-section) {
-    padding-inline: 0.65rem;
+@media (max-width: 760px) {
+  .scope :global(.marketplace-product-shell .mt-beta-strip span:nth-child(2)) {
+    display: none;
   }
 
-  .scope :global(.mt-product-section-head) {
+  .scope :global(.marketplace-product-shell .mt-product-main),
+  .scope :global(.marketplace-product-shell .mt-site-topbar) {
+    width: min(calc(100% - 1rem), 1180px);
+  }
+
+  .scope :global(.marketplace-product-shell .mt-explore-hero),
+  .scope :global(.marketplace-product-shell .mt-product-section) {
+    border-radius: 20px;
+  }
+
+  .scope :global(.marketplace-product-shell .mt-explore-copy),
+  .scope :global(.marketplace-product-shell .mt-explore-side),
+  .scope :global(.marketplace-product-shell .mt-product-section) {
+    padding: 1.6rem;
+  }
+
+  .scope :global(.marketplace-product-shell .mt-explore-copy h1) {
+    font-size: clamp(2.8rem, 14vw, 4rem);
+  }
+
+  .scope :global(.marketplace-product-shell .mt-product-actions) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:first-of-type),
+  .scope :global(.marketplace-product-shell .mt-market-grid),
+  .scope :global(.marketplace-product-shell .mt-pool-link-grid) {
     grid-template-columns: 1fr;
   }
 
-  .scope :global(.mt-market-grid) {
-    grid-template-columns: 1fr;
-  }
-
-  .scope :global(.mt-market-card dl) {
-    grid-template-columns: 1fr;
-  }
-
-  .scope :global(.mt-market-card dl div:nth-child(3)) {
+  .scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:first-of-type label:first-child) {
     grid-column: auto;
+  }
+
+  .scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:nth-of-type(2)) {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .scope :global(.marketplace-product-shell form[data-smart-query-surface="offers"] > div:nth-of-type(2) > *) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .scope :global(.marketplace-product-shell .mt-pool-link-card) {
+    border-right: 0;
+    border-bottom: 1px solid var(--offers-rule);
+  }
+
+  .scope :global(.marketplace-product-shell .mt-pool-link-card:last-child) {
+    border-bottom: 0;
   }
 }
