@@ -1,0 +1,55 @@
+name: Align Home truth-boundary test one-shot
+
+on:
+  push:
+    branches:
+      - fix/home-now-truth-boundary-20260813
+    paths:
+      - .github/workflows/sync-home-now-heading-test-one-shot.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-home-now-truth-test
+  cancel-in-progress: false
+
+jobs:
+  align:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the exact feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/home-now-truth-boundary-20260813
+          fetch-depth: 0
+
+      - name: Align the rendered heading assertion and verify the focused contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("tests/returning-homepage.spec.ts")
+          source = path.read_text()
+          old = '      "Your best match right now",'
+          new = '      "Current opportunities and next actions",'
+          if source.count(old) != 1:
+              raise SystemExit("Expected exactly one stale Home heading assertion")
+          path.write_text(source.replace(old, new))
+          PY
+
+          node --check public/moral-trade-live-local-time.js
+          npm ci --ignore-scripts
+          node --import tsx --test src/live-now-truth-boundary.test.ts
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/sync-home-now-heading-test-one-shot.yml
+          git add tests/returning-homepage.spec.ts
+          git diff --cached --check
+          git commit -m "Align the rendered Home heading contract"
+          git push origin HEAD:fix/home-now-truth-boundary-20260813
