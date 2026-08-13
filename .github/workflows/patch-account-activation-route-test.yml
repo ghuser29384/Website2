@@ -1,0 +1,64 @@
+name: Patch account activation route contract test
+
+on:
+  push:
+    branches:
+      - codex/account-activation-routing-contract
+
+permissions:
+  contents: write
+
+jobs:
+  patch-stale-contract:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/account-activation-routing-contract
+          fetch-depth: 0
+
+      - name: Replace the retired homepage assertion
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/lib/public-route-smoke.test.ts")
+          source = path.read_text()
+          start_marker = 'test("returning home page matches the recommended-trade decision screen", () => {'
+          end_marker = '\ntest("visitor router exposes four live action paths before deeper marketplace mechanics", () => {'
+
+          start = source.find(start_marker)
+          end = source.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit("Could not find the exact stale homepage test block.")
+
+          replacement = '''test("root landing follows the account activation contract instead of a hard-coded trade card", () => {
+            const pageSource = readRepoFile("src/app/page.tsx");
+            const activationSource = readRepoFile("src/lib/account-activation.ts");
+
+            assert.match(pageSource, /getAccountLandingPath/);
+            assert.match(pageSource, /authenticated: Boolean\\(viewer\\)/);
+            assert.match(pageSource, /hasWalkthroughProfileDraft: Boolean\\(profileDraft\\)/);
+            assert.match(pageSource, /redirect\\(/);
+            assert.doesNotMatch(pageSource, /<HomePage/);
+            assert.match(activationSource, /return "\\/discover"/);
+            assert.match(activationSource, /return "\\/walkthrough"/);
+            assert.match(activationSource, /return "\\/complete-profile"/);
+            assert.match(activationSource, /return "\\/feed"/);
+          });
+          '''
+
+          path.write_text(source[:start] + replacement + source[end:])
+          PY
+
+      - name: Commit the focused test repair
+        shell: bash
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/public-route-smoke.test.ts
+          git commit -m "Align public route smoke test with activation routing"
+          git push origin HEAD:codex/account-activation-routing-contract
