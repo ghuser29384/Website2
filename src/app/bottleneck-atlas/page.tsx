@@ -44,11 +44,8 @@ export default async function BottleneckAtlasPage() {
       <main className={styles.page} id="main-content" tabIndex={-1}>
         <section className={styles.hero} aria-labelledby="atlas-title">
           <p className={styles.kicker}>Bottleneck Atlas</p>
-          <h1 id="atlas-title">Find a cross-cause trade.</h1>
-          <p>
-            Choose what you can offer and what you need. The MVP returns the strongest current
-            trade pattern, then lets you inspect the underlying evidence only when useful.
-          </p>
+          <h1 id="atlas-title">Find a trade.</h1>
+          <p>Offer one resource. Request another. Get a reviewed pattern.</p>
         </section>
 
         <AtlasMvp
@@ -58,11 +55,8 @@ export default async function BottleneckAtlasPage() {
         />
 
         <aside className={styles.boundary} aria-label="Atlas evidence boundary">
-          <strong>Field evidence is a search prior, not a live claim.</strong>
-          <span>
-            No public organization-specific weakness profiles. A suggested match does not confirm
-            a counterparty, capacity, consent, or agreement.
-          </span>
+          <strong>Evidence is a search prior, not a live claim.</strong>
+          <span>No counterparty, capacity, consent, or agreement is confirmed here.</span>
         </aside>
       </main>
       <SiteFooter />
