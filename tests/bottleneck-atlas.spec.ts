@@ -109,29 +109,38 @@ const feedFixture = {
 };
 
 test.describe("Bottleneck Atlas and generated feed", () => {
-  test("uses progressive disclosure without hiding the complete public atlas", async ({ page }) => {
+  test("presents a task-oriented Atlas workspace without horizontal overflow", async ({ page }) => {
     await page.goto("/bottleneck-atlas", { waitUntil: "domcontentloaded" });
 
     await expect(page.getByRole("heading", { level: 1, name: "Bottleneck Atlas" })).toBeVisible();
-    await expect(page.locator("[data-atlas-field]")).toHaveCount(18);
+    await expect(page.getByRole("tab", { name: "Trade map" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
     await expect(page.locator("[data-synthesis-template]")).toHaveCount(9);
-    await expect(page.getByText(/field evidence is a search prior/i).first()).toBeVisible();
+    await expect(page.getByText(/research signal, not a live claim/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Not a live offer" })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
 
-    await expect(page.locator("details[data-synthesis-template][open]")).toHaveCount(1);
-    await expect(page.locator("details[data-atlas-cluster][open]")).toHaveCount(1);
-    await expect(page.locator("details[data-atlas-field][open]")).toHaveCount(0);
+    const tradeItems = page.locator("[data-synthesis-template]");
+    const secondTradeTitle = await tradeItems.nth(1).locator("strong").innerText();
+    await tradeItems.nth(1).click();
+    await expect(page.getByRole("heading", { level: 2, name: secondTradeTitle })).toBeVisible();
 
-    const firstField = page.locator("details[data-atlas-field]").first();
-    await firstField.locator(":scope > summary").click();
-    await expect(firstField).toHaveJSProperty("open", true);
-    await expect(firstField.getByRole("heading", { name: "Trade implication" })).toBeVisible();
+    await page.getByRole("tab", { name: "Field bottlenecks" }).click();
+    await expect(page.locator("[data-atlas-field]")).toHaveCount(18);
+    const fieldItems = page.locator("[data-atlas-field]");
+    const secondFieldTitle = await fieldItems.nth(1).locator("strong").innerText();
+    await fieldItems.nth(1).click();
+    await expect(page.getByRole("heading", { level: 2, name: secondFieldTitle })).toBeVisible();
+    await expect(page.getByText("What blocks progress")).toBeVisible();
+    await expect(page.getByText("What this field can offer")).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.locator("[data-atlas-field]")).toHaveCount(18);
-    await expect(page.locator("details[data-synthesis-template][open]")).toHaveCount(1);
-    await expect(page.locator("details[data-atlas-cluster][open]")).toHaveCount(1);
+    await expect(page.getByRole("tab", { name: "Trade map" })).toBeVisible();
+    await expect(page.getByLabel("Choose a potential trade pattern")).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 
