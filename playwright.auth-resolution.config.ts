@@ -12,7 +12,9 @@ export default {
   fullyParallel: false,
   outputDir: "test-results/auth-resolution",
   preserveOutput: "always",
-  testMatch: /auth-resolution-delayed\.spec\.ts/,
+  // Keep this fixture-backed security suite out of the repository's generic
+  // release matcher; it owns a separate mock Auth server and lifecycle.
+  testMatch: /auth-resolution-delayed\.auth\.ts/,
   workers: 1,
   webServer: hostedBaseURL
     ? undefined
