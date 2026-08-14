@@ -1,0 +1,209 @@
+name: MPGF public-goods compacts QA
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mpgf-public-goods-compacts-qa.yml"
+      - "docs/mpgf/public-goods-compacts.md"
+      - "src/app/api/mpgf/compacts/**"
+      - "src/app/mpgf/compacts/**"
+      - "src/components/mpgf/mpgf-public-goods-compacts*"
+      - "src/lib/mpgf/public-goods-compacts*"
+      - "src/lib/supabase/database.types.ts"
+      - "supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql"
+      - "supabase/migrations/20260814023000_mpgf_public_goods_compacts_state_hardening.sql"
+      - "supabase/tests/mpgf_public_goods_compacts_lifecycle.sql"
+      - "tests/mpgf-public-goods-compacts.spec.ts"
+  workflow_dispatch:
+    inputs:
+      confirm_target:
+        description: "Enter hvmxfjjbdcgjjudmthdz to confirm the isolated QA target"
+        required: true
+        default: hvmxfjjbdcgjjudmthdz
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mpgf-public-goods-compacts-qa-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rollback-database-lifecycle:
+    if: >-
+      github.event_name == 'workflow_dispatch'
+        ? inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz'
+        : github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact candidate and isolated QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit(
+                  "Refusing a database URL outside the exact TLS-only MoralTrade QA target."
+              )
+          PY
+
+      - name: Install dependencies and PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Run focused source, type, and diff gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/public-goods-compacts.test.ts \
+            src/lib/mpgf/public-goods-compacts-state.test.ts \
+            src/lib/mpgf/public-goods-compacts-contract.test.ts \
+            src/lib/mpgf/public-goods-compacts-hardening-contract.test.ts \
+            | tee mpgf-compacts-focused.log
+          npx tsc --noEmit | tee mpgf-compacts-typescript.log
+          git diff --check
+
+      - name: Prepare rollback-only migration inputs
+        id: prepare
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mpgf-compacts-qa
+          python3 - <<'PY'
+          from pathlib import Path
+
+          sources = [
+              Path("supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql"),
+              Path("supabase/migrations/20260814023000_mpgf_public_goods_compacts_state_hardening.sql"),
+          ]
+          output = Path("mpgf-compacts-qa")
+          for source in sources:
+              lines = source.read_text().splitlines()
+              stripped = [
+                  line
+                  for line in lines
+                  if line.strip().lower() not in {"begin;", "commit;"}
+              ]
+              target = output / source.name
+              target.write_text("\n".join(stripped) + "\n")
+          PY
+          sha256sum \
+            supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql \
+            supabase/migrations/20260814023000_mpgf_public_goods_compacts_state_hardening.sql \
+            supabase/tests/mpgf_public_goods_compacts_lifecycle.sql \
+            | tee mpgf-compacts-qa/source.sha256
+
+      - name: Prove QA starts without persisted compact schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL'
+          select count(*)
+          from unnest(array[
+            'mpgf_public_goods_compacts',
+            'mpgf_public_goods_compact_memberships',
+            'mpgf_public_goods_compact_delegations',
+            'mpgf_public_goods_compact_idempotency_keys'
+          ]) as relation_name
+          where to_regclass('public.' || relation_name) is not null;
+          SQL
+          )"
+          test "$count" = "0"
+          printf 'relations_before=%s\n' "$count" | tee mpgf-compacts-qa/schema-absence-before.txt
+
+      - name: Compile migrations and run full lifecycle inside rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 <<SQL \
+            | tee mpgf-compacts-qa/rollback-lifecycle.log
+          begin;
+          \i mpgf-compacts-qa/20260813163052_mpgf_public_goods_compacts.sql
+          \i mpgf-compacts-qa/20260814023000_mpgf_public_goods_compacts_state_hardening.sql
+          \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          rollback;
+          SQL
+
+      - name: Prove rollback left no compact schema or fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL'
+          select count(*)
+          from unnest(array[
+            'mpgf_public_goods_compacts',
+            'mpgf_public_goods_compact_memberships',
+            'mpgf_public_goods_compact_delegations',
+            'mpgf_public_goods_compact_idempotency_keys'
+          ]) as relation_name
+          where to_regclass('public.' || relation_name) is not null;
+          SQL
+          )"
+          test "$count" = "0"
+          users="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL'
+          select count(*) from auth.users where email like 'compact-%@example.test';
+          SQL
+          )"
+          test "$users" = "0"
+          {
+            printf 'relations_after=%s\n' "$count"
+            printf 'fixture_users_after=%s\n' "$users"
+          } | tee mpgf-compacts-qa/schema-absence-after.txt
+
+      - name: Upload rollback-only QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-public-goods-compacts-qa-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            mpgf-compacts-focused.log
+            mpgf-compacts-typescript.log
+            mpgf-compacts-qa
