@@ -1,0 +1,87 @@
+name: Repair MPGF compact QA clean-tree evidence
+
+on:
+  push:
+    branches:
+      - agent/mpgf-public-goods-compacts
+    paths:
+      - .github/workflows/repair-mpgf-compact-qa-clean-tree.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-mpgf-compact-qa-clean-tree-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Preserve tracked-tree integrity while allowing recorded QA outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/mpgf-public-goods-compacts-qa.yml')
+          source = path.read_text(encoding='utf-8')
+          old = '''      - name: Prove clean exact-head source state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -z "$(git status --short)"
+          git rev-parse HEAD > mpgf-compacts-head-sha.txt
+'''
+          new = '''      - name: Prove clean exact-head tracked source state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --exit-code
+          git diff --cached --exit-code
+          test -z "$(git status --short --untracked-files=no)"
+          git status --short > mpgf-compacts-working-tree-status.txt
+          git rev-parse HEAD > mpgf-compacts-head-sha.txt
+'''
+          if source.count(old) != 1:
+              raise SystemExit('Expected exactly one clean-tree evidence block.')
+          source = source.replace(old, new, 1)
+
+          old_artifact = '''            mpgf-compacts-head-sha.txt
+            mpgf-compacts-repository-tests.log
+'''
+          new_artifact = '''            mpgf-compacts-head-sha.txt
+            mpgf-compacts-working-tree-status.txt
+            mpgf-compacts-repository-tests.log
+'''
+          if source.count(old_artifact) != 1:
+              raise SystemExit('Expected exactly one source evidence artifact block.')
+          source = source.replace(old_artifact, new_artifact, 1)
+          path.write_text(source, encoding='utf-8')
+          PY
+          git diff --check
+          grep -q 'git diff --cached --exit-code' .github/workflows/mpgf-public-goods-compacts-qa.yml
+          grep -q 'mpgf-compacts-working-tree-status.txt' .github/workflows/mpgf-public-goods-compacts-qa.yml
+
+      - name: Commit durable repair and remove controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/mpgf-public-goods-compacts-qa.yml
+          git rm .github/workflows/repair-mpgf-compact-qa-clean-tree.yml
+          git commit -m "ci: distinguish compact QA outputs from tracked changes"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
