@@ -349,13 +349,21 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
 
     try {
       await gotoReady(anonymousPage, "/offers?mode=pledge&view=live");
+      const evaluatorOfferCard = anonymousPage.getByRole("article", {
+        exact: true,
+        name: "QA Core Loop Owner",
+      });
       await expect(
-        anonymousPage.getByText("Evaluator core-loop verification", { exact: true }),
-      ).toBeVisible();
+        evaluatorOfferCard.getByRole("heading", { level: 4 }),
+      ).toHaveText(
+        /Evaluator core-loop verification\s*↔\s*Private QA response verification/,
+      );
       await expectHealthyPage(anonymousPage);
       await screenshot(anonymousPage, testInfo, "01-anonymous-directory-desktop");
 
-      await anonymousPage.locator(`a[href="/offers/${IDS.offer}"]`).first().click();
+      await evaluatorOfferCard
+        .getByRole("link", { exact: true, name: "Open full terms ↗" })
+        .click();
       await anonymousPage.waitForLoadState("networkidle");
       await expect(
         anonymousPage.getByText(

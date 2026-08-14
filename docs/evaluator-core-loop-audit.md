@@ -75,6 +75,30 @@ obligation, uses no production data, and has a maximum financial amount of
 zero. The evidence path uses a private synthetic attestation with no file or
 external URL.
 
+## Isolated-QA execution evidence
+
+Draft PR #687 triggered workflow run `31767787556` on exact candidate
+`440aef5ebaa7dfe321368eee1b0f2713b53f2c11` with base
+`79ca382c3bdc325dfc5a28e2cbbafc1b95640386`. The exact QA target, source/type
+gates, build, fixture creation, and four synthetic Auth identities passed.
+
+The unmodified browser run stopped at the anonymous directory assertion before
+any response or agreement write. The real QA-backed offer card was present,
+but its accessible level-four heading correctly combined both cause terms as
+`Evaluator core-loop verification Private QA response verification`; the test
+incorrectly searched for the first term as a standalone exact text node. This
+is classified as a broken harness assertion, not a demonstrated product
+defect. Artifact `9207025134` preserves the trace, rendered error context,
+browser log, and machine-readable summary.
+
+The same failed run independently proved zero financial rows
+(`performanceBonds=0`, `externalPaymentReceipts=0`) and completed cleanup with
+zero residue across offers, interests, agreements, threads, notifications,
+events, review roles, profiles, Auth users/identities/sessions/refresh
+tokens/MFA factors, private accounts, and email outbox rows. The minimal harness
+repair scopes the assertion and full-terms click to the exact
+`QA Core Loop Owner` article and asserts the complete cause-pair heading.
+
 ## Pre-runtime verification completed
 
 At the pre-reconciliation candidate base
