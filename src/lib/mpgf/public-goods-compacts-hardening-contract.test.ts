@@ -52,6 +52,24 @@ test("all product routes use the complete validated compact service", () => {
   assert.match(service, /assertMpgfPublicGoodsCompactMutationSafety/);
 });
 
+test("mutation service requires explicit false payment and transfer flags", () => {
+  for (const required of [
+    "moneyMoved",
+    "paymentMandateCreated",
+    "paymentMandateChanged",
+    "automaticCollectionEnabled",
+    "membershipTransferred",
+    "moneyTransferred",
+    "reputationTransferred",
+    "result[flag] !== false",
+  ]) {
+    assert.ok(
+      service.includes(required),
+      `missing explicit mutation safety field: ${required}`,
+    );
+  }
+});
+
 test("state validation covers activation, electorate, delegation, exit, and mutation boundaries", () => {
   for (const required of [
     "value.summary !== foundingCharter.summary",
@@ -69,4 +87,10 @@ test("state validation covers activation, electorate, delegation, exit, and muta
       `missing complete state-validation boundary: ${required}`,
     );
   }
+});
+
+test("late active-compact acceptance is disclosed as immediately binding", () => {
+  assert.match(page, /Joining after activation:/);
+  assert.match(page, /makes the membership binding immediately/);
+  assert.match(page, /Exit remains[\s\S]*prospective/);
 });
