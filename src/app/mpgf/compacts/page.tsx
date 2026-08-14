@@ -4,7 +4,7 @@ import Link from "next/link";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { MpgfPublicGoodsCompacts } from "@/components/mpgf/mpgf-public-goods-compacts";
 import { getViewer } from "@/lib/app-data";
-import { loadMpgfPublicGoodsCompactsState } from "@/lib/mpgf/public-goods-compacts-server";
+import { loadMpgfPublicGoodsCompactsState } from "@/lib/mpgf/public-goods-compacts-service";
 import { getAbsoluteUrl } from "@/lib/seo";
 
 export const metadata: Metadata = {
