@@ -367,7 +367,7 @@
     { "testId": "atomic-acceptance-sql-contract", "path": "supabase/tests/marketplace_atomic_acceptance_current_core.sql", "gitBlobSha1": "70ebaf8562b5c9371adab7bebac65c3fe895afea", "rawSha256": "0e2913eae7e3444146376bda3bb2cfdf46dc605c19dfce3f5d3d168b7b3da840" },
     { "testId": "atomic-acceptance-typescript-contract", "path": "src/lib/marketplace-delta-contract.test.ts", "gitBlobSha1": "13d90bd78c7ebdb873c131930061ae0a1b5b3424", "rawSha256": "b65858dab510e3c2835f2c6035467092dda6e101a6fbd2a215f9c6de67709b34" },
     { "testId": "account-bound-directory-sql-contract", "path": "supabase/tests/account_bound_participant_directory_v2.sql", "gitBlobSha1": "4eb66a99cc13904bd1a2dba71354eb85d4e82812", "rawSha256": "ef139cffde77dbb3cb55990cdf911664ed88836f7db687ed46b658845280dd70" },
-    { "testId": "feed-create-private-delivery-sql-contract", "path": "supabase/tests/feed_create_phase1.sql", "gitBlobSha1": "7c3ae158a4a6b4c392f99cc3b8c851f1611a0e0f", "rawSha256": "4097da2eb132f1d12b3d936a5a368e95e7310619c74872d065cc36717c543983" },
+    { "testId": "feed-create-phase1-delivery-denial-sql-contract", "path": "supabase/tests/feed_create_phase1.sql", "gitBlobSha1": "7c3ae158a4a6b4c392f99cc3b8c851f1611a0e0f", "rawSha256": "4097da2eb132f1d12b3d936a5a368e95e7310619c74872d065cc36717c543983" },
     { "testId": "feed-create-review-wiring-contract", "path": "src/feed-unified-marketplace-wiring.test.ts", "gitBlobSha1": "11098ae172a626ec2dda3dc05dac03918d78fc03", "rawSha256": "c5ea73638d845d178214b14e6fc6b4fbd190ab257867ff2784e22e397f214a74" },
     { "testId": "credibility-restriction-contract", "path": "src/lib/credibility.test.ts", "gitBlobSha1": "716b4f5f6355bd4e0705118c895f3f591c1f67d9", "rawSha256": "396dfe1e6aad2fcc449c2d362425387a001f789b279ba487a4c40a4a9911ea3e" },
     { "testId": "structured-moderation-contract", "path": "src/lib/moral-trade/user-safety-content-moderation.test.ts", "gitBlobSha1": "542cefd21cf34d76fdb406c480797037691707fa", "rawSha256": "3b6a68a03506a4faa31adb9ead1d80f25721ca83eb5414aaf3b95467e2c907ac" },
@@ -410,7 +410,7 @@
       "failClosed": "Only a structured cleared, current, bound record is eligible; human review, missing evidence, empty prose, or free-text inference is not clearance.",
       "effectiveTimeSemantics": "reviewedAt must not be after effectiveAt and expiresAt must be after effectiveAt.",
       "tests": ["structured moderation, offer-validity, and baseline-integrity contract tests plus synthetic cleared/blocked/review/unknown/stale/contradictory fixtures"],
-      "testIds": ["structured-moderation-contract", "structured-noncompensable-blocker-contract", "structured-validity-contract", "structured-baseline-contract", "feed-create-review-wiring-contract", "feed-create-private-delivery-sql-contract", "free-text-review-descriptive-contract"]
+      "testIds": ["structured-moderation-contract", "structured-noncompensable-blocker-contract", "structured-validity-contract", "structured-baseline-contract", "feed-create-review-wiring-contract", "feed-create-phase1-delivery-denial-sql-contract", "free-text-review-descriptive-contract"]
     },
     {
       "gateId": "legality_policy_participant",
@@ -454,7 +454,7 @@
       "failClosed": "Any active/current engagement conflict or unknown historical-interference capture is ineligible.",
       "effectiveTimeSemantics": "All conflict states are frozen at effectiveAt; history is retained as a covariate rather than silently dropped.",
       "tests": ["atomic-acceptance and agreement contract tests plus active-thread/agreement/duplicate and historical-interference fixtures"],
-      "testIds": ["atomic-acceptance-sql-contract", "atomic-acceptance-typescript-contract", "trade-invitation-contract", "feed-create-review-wiring-contract", "feed-create-private-delivery-sql-contract"]
+      "testIds": ["atomic-acceptance-sql-contract", "atomic-acceptance-typescript-contract", "trade-invitation-contract", "feed-create-review-wiring-contract", "feed-create-phase1-delivery-denial-sql-contract"]
     },
     {
       "gateId": "study_provenance_integrity",

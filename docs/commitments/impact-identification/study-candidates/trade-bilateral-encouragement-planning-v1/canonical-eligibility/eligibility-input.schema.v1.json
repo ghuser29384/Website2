@@ -8,7 +8,7 @@
   "properties": {
     "schemaVersion": { "const": "reciprocal-trade-research-eligibility-input-v1.0.0" },
     "evaluatorVersion": { "const": "reciprocal-trade-research-eligibility-v1.0.0" },
-    "policySourceManifestHash": { "const": "sha256:19423f7be11351846c4dfc3036e8ca730ea9a2083fab495979290913287ed2b8" },
+    "policySourceManifestHash": { "const": "sha256:cf24c66a5a33ec3716ee378a6d839f0284e3dbe01ecf46f2687b747b4cd58c3b" },
     "effectiveAt": { "$ref": "#/$defs/requiredTimestamp" },
     "subjectMode": { "enum": ["synthetic", "protected"] },
     "studyAuthorization": { "$ref": "#/$defs/studyAuthorization" },
@@ -67,7 +67,7 @@
       "properties": {
         "status": { "enum": ["cleared", "blocked", "review_required", "unknown", "stale", "contradictory"] },
         "sourceStatus": { "enum": ["current", "stale", "unknown", "unbound", "contradictory"] },
-        "sourceHash": { "const": "sha256:19423f7be11351846c4dfc3036e8ca730ea9a2083fab495979290913287ed2b8" },
+        "sourceHash": { "const": "sha256:cf24c66a5a33ec3716ee378a6d839f0284e3dbe01ecf46f2687b747b4cd58c3b" },
         "reviewedAt": { "$ref": "#/$defs/requiredTimestamp" },
         "expiresAt": { "$ref": "#/$defs/timestamp" }
       }

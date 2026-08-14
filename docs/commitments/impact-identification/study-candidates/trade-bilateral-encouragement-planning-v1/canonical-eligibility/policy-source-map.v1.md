@@ -2,7 +2,7 @@
 
 - **Bound base:** `79ca382c3bdc325dfc5a28e2cbbafc1b95640386`
 - **Evaluator:** `reciprocal-trade-research-eligibility-v1.0.0`
-- **Policy-source manifest:** `sha256:19423f7be11351846c4dfc3036e8ca730ea9a2083fab495979290913287ed2b8`
+- **Policy-source manifest:** `sha256:cf24c66a5a33ec3716ee378a6d839f0284e3dbe01ecf46f2687b747b4cd58c3b`
 - **Status:** `blocked_source_conflict`
 
 `policy-source-manifest.v1.json` is the machine-readable authority for every exact path, symbol, Git blob SHA-1, raw SHA-256, input field, fail-closed rule, gate level, time rule, and test interpretation below. This map explains the conclusions without replacing those bindings.

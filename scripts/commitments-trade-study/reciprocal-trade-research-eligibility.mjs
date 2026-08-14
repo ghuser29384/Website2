@@ -1,7 +1,7 @@
 export const EVALUATOR_VERSION = "reciprocal-trade-research-eligibility-v1.0.0";
 export const INPUT_SCHEMA_VERSION = "reciprocal-trade-research-eligibility-input-v1.0.0";
 export const DECISION_SCHEMA_VERSION = "reciprocal-trade-research-eligibility-decision-v1.0.0";
-export const POLICY_SOURCE_MANIFEST_HASH = "sha256:19423f7be11351846c4dfc3036e8ca730ea9a2083fab495979290913287ed2b8";
+export const POLICY_SOURCE_MANIFEST_HASH = "sha256:cf24c66a5a33ec3716ee378a6d839f0284e3dbe01ecf46f2687b747b4cd58c3b";
 export const BOUND_BASE_COMMIT = "79ca382c3bdc325dfc5a28e2cbbafc1b95640386";
 
 export const REASON_CODES = Object.freeze([
