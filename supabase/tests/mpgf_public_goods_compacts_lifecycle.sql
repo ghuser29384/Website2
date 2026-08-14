@@ -638,7 +638,10 @@ insert into public.mpgf_public_goods_settled_contribution_snapshots (
 )
 select membership.participant_id, to_char(timezone('UTC', now()), 'YYYY-MM'), membership.id,
   membership.compact_id, contribution.net_cents, contribution.net_cents, 'complete',
-  'sha256:' || public.mpgf_public_goods_hash_v2(jsonb_build_object('settlement', membership.participant_id, contribution.net_cents))
+  'sha256:' || public.mpgf_public_goods_hash_v2(jsonb_build_object(
+    'settlement', membership.participant_id,
+    'netCents', contribution.net_cents
+  ))
 from (values ('compact-v2-1',100::bigint),('compact-v2-2',400::bigint),('compact-v2-3',900::bigint)) as contribution(username,net_cents)
 join public.profiles as profile on profile.username = contribution.username
 join public.mpgf_public_goods_compact_memberships as membership on membership.participant_id = profile.id and membership.compact_id = '10000000-0000-4000-8000-000000000001';
