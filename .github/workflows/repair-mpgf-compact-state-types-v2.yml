@@ -1,0 +1,118 @@
+name: Repair MPGF compact state TypeScript narrowing v2
+
+on:
+  push:
+    branches:
+      - agent/mpgf-public-goods-compacts
+    paths:
+      - .github/workflows/repair-mpgf-compact-state-types-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-mpgf-compact-state-types-v2-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out the current feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Narrow compact state types
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/lib/mpgf/public-goods-compacts-state.ts")
+          lines = path.read_text(encoding="utf-8").splitlines()
+
+          context_start = [
+              index for index, line in enumerate(lines)
+              if line == "  const compactContext = {"
+          ]
+          if len(context_start) != 1:
+              raise SystemExit(
+                  f"Expected exactly one compactContext declaration, found {len(context_start)}."
+              )
+
+          start = context_start[0]
+          boundary = next(
+              (
+                  index for index in range(start + 1, len(lines))
+                  if lines[index].startswith("  if (!hasSafeMembership(")
+              ),
+              None,
+          )
+          if boundary is None:
+              raise SystemExit("Could not find the compactContext membership boundary.")
+
+          closing = [
+              index for index in range(start + 1, boundary)
+              if lines[index] in {"  };", "  } as const;"}
+          ]
+          if len(closing) != 1:
+              raise SystemExit(
+                  f"Expected one compactContext closing line, found {len(closing)}."
+              )
+          lines[closing[0]] = "  } as const;"
+
+          set_lines = [
+              index for index, line in enumerate(lines)
+              if line in {
+                  "  const expectedKeys = new Set(",
+                  "  const expectedKeys = new Set<string>(",
+              }
+          ]
+          if len(set_lines) != 1:
+              raise SystemExit(
+                  f"Expected one expectedKeys Set declaration, found {len(set_lines)}."
+              )
+          lines[set_lines[0]] = "  const expectedKeys = new Set<string>("
+
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+          git diff --check
+          grep -q '^  } as const;$' src/lib/mpgf/public-goods-compacts-state.ts
+          grep -q '^  const expectedKeys = new Set<string>($' src/lib/mpgf/public-goods-compacts-state.ts
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Verify strict TypeScript and focused compact state tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit
+          node --import tsx --test \
+            src/lib/mpgf/public-goods-compacts-state.test.ts \
+            src/lib/mpgf/public-goods-compacts-contract.test.ts
+
+      - name: Commit the durable repair and remove one-use controllers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/mpgf/public-goods-compacts-state.ts
+          for controller in \
+            .github/workflows/repair-mpgf-compact-state-types.yml \
+            .github/workflows/repair-mpgf-compact-state-types-v2.yml; do
+            test ! -e "$controller" || git rm "$controller"
+          done
+          git commit -m "fix: narrow MPGF compact state validation types"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
