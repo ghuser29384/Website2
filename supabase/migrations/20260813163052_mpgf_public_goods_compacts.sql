@@ -659,15 +659,21 @@ begin
     set accepted_member_count = accepted_member_count + 1
     where id = compact_record.id
     returning accepted_member_count into accepted_count;
-  elsif membership_record.status = 'revoked' and compact_record.status = 'recruiting' then
+  elsif membership_record.status = 'revoked' then
     update public.mpgf_public_goods_compact_memberships
     set constitution_version_accepted = p_constitution_version,
         acknowledgements = p_acknowledgements,
         declared_eligible_monthly_spending_cents = p_declared_eligible_monthly_spending_cents,
         scheduled_monthly_contribution_cents = contribution_cents,
-        status = 'pending_activation',
+        status = case
+          when compact_record.status = 'active' then 'active'
+          else 'pending_activation'
+        end,
         accepted_at = action_at,
-        activated_at = null,
+        activated_at = case
+          when compact_record.status = 'active' then action_at
+          else null
+        end,
         revoked_at = null,
         exit_requested_at = null,
         exit_effective_at = null

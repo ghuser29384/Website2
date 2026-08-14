@@ -241,7 +241,6 @@ function hasSafeMembership(
 
   if (value.status === "revoked") {
     return (
-      compact.status === "recruiting" &&
       value.activatedAt === null &&
       isValidDate(value.revokedAt) &&
       value.exitRequestedAt === null &&

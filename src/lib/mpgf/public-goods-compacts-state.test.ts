@@ -157,6 +157,34 @@ test("state validation rejects stale delegation and unsafe membership arithmetic
   );
 });
 
+test("a revoked recruiting acceptance remains safe after later compact activation", () => {
+  const state = buildRecruitingDatabaseState();
+  const compact = state.compacts[0];
+
+  compact.membership = {
+    id: "20000000-0000-4000-8000-000000000001",
+    compactId: compact.id as string,
+    compactPublicKey: compact.publicKey,
+    constitutionVersionAccepted: compact.constitutionVersion,
+    acknowledgements: MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
+    declaredEligibleMonthlySpendingCents: 12_345,
+    scheduledMonthlyContributionCents: 123,
+    status: "revoked",
+    acceptedAt: "2026-01-01T00:00:00.000Z",
+    activatedAt: null,
+    revokedAt: "2026-01-15T00:00:00.000Z",
+    exitRequestedAt: null,
+    exitEffectiveAt: null,
+  };
+  activateFutureFlourishing(state);
+
+  const normalized =
+    validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW);
+
+  assert.ok(normalized);
+  assert.equal(normalized.compacts[0].membership?.status, "revoked");
+});
+
 test("an effective prospective exit is rendered as exited rather than still binding", () => {
   const state = buildRecruitingDatabaseState();
   activateFutureFlourishing(state);

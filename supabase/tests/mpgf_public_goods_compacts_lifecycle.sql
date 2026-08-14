@@ -284,7 +284,40 @@ begin
 end;
 $test$;
 
--- Activate Animal Welfare in-fixture, then prove late joins bind immediately without moving money.
+-- C accepts and revokes Animal Welfare while it is still recruiting.
+set local role authenticated;
+select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000003',true);
+select set_config('request.jwt.claim.role','authenticated',true);
+do $test$
+declare
+  response jsonb;
+begin
+  response := public.join_mpgf_public_goods_compact(
+    'animal-welfare',
+    'mpgf-public-goods-compact/founding-v1',
+    50000,
+    '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}'::jsonb,
+    'qa.join.c.pre.0001'
+  );
+  if response->>'membershipStatus' <> 'pending_activation' then
+    raise exception 'Pre-activation acceptance did not remain pending.';
+  end if;
+
+  response := public.request_mpgf_public_goods_compact_exit(
+    'animal-welfare',
+    'qa.exit.c.pre.0001'
+  );
+  if response->>'membershipStatus' <> 'revoked'
+    or not (response->>'revokedImmediately')::boolean
+    or (response->>'moneyMoved')::boolean
+  then
+    raise exception 'Pre-activation revocation was not immediate and no-money.';
+  end if;
+end;
+$test$;
+reset role;
+
+-- Activate Animal Welfare in-fixture, then prove the revoked recruiting acceptance can rejoin and bind immediately without moving money.
 update public.mpgf_public_goods_compacts
 set accepted_member_count = 5000,
     status = 'active',
