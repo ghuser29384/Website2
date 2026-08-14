@@ -6,6 +6,7 @@ on:
       - ops/repair-mpgf-dac-workflow-contract-test-20260812
     paths:
       - ".github/workflows/repair-mpgf-dac-workflow-contract-test-20260812.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -24,73 +25,41 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Check out the exact consolidated candidate
+      - name: Check out repair controller
+        uses: actions/checkout@v4
+        with:
+          ref: ops/repair-mpgf-dac-workflow-contract-test-20260812
+          fetch-depth: 1
+
+      - name: Preserve and validate deterministic repair script
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp scripts/repair-mpgf-dac-workflow-contract-test-20260814.py /tmp/repair-mpgf-dac-workflow-contract-test.py
+          python3 -m py_compile /tmp/repair-mpgf-dac-workflow-contract-test.py
+
+      - name: Check out exact PR 640 candidate
         uses: actions/checkout@v4
         with:
           ref: ${{ env.TARGET_BRANCH }}
           fetch-depth: 0
+          clean: true
+
+      - name: Apply only the stale workflow-contract repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          python3 /tmp/repair-mpgf-dac-workflow-contract-test.py
+          git diff --check
+          test "$(git diff --name-only)" = "src/lib/mpgf/dac-product-lifecycle.test.ts"
+          git diff -- src/lib/mpgf/dac-product-lifecycle.test.ts
 
       - name: Use Node 24
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-
-      - name: Align the focused test with serialized shared-QA execution
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("src/lib/mpgf/dac-product-lifecycle.test.ts")
-          source = path.read_text()
-          old = r'''  assert.match(
-    workflow,
-    /group: mpgf-dac-product-lifecycle-\$\{\{ github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
-  );
-  assert.doesNotMatch(
-    workflow,
-    /github\.event\.pull_request\.number \|\| github\.ref/,
-  );
-  assert.match(workflow, /cancel-in-progress: true/);
-'''
-          new = r'''  assert.match(workflow, /group: mpgf-dac-product-lifecycle-shared-qa/);
-  assert.match(workflow, /cancel-in-progress: false/);
-  assert.doesNotMatch(
-    workflow,
-    /group: mpgf-dac-product-lifecycle-\$\{\{ github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
-  );
-  assert.doesNotMatch(
-    workflow,
-    /github\.event\.pull_request\.number \|\| github\.ref/,
-  );
-  assert.equal(
-    countOccurrences(
-      workflow,
-      "supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql",
-    ),
-    5,
-  );
-  assert.match(
-    workflow,
-    /Reconcile exact terminal DAC schema immediately before fixtures/,
-  );
-  assert.match(workflow, /proposal_lock=true/);
-'''
-          if source.count(old) != 1:
-              raise SystemExit(
-                  f"Expected exactly one obsolete concurrency assertion block, found {source.count(old)}."
-              )
-          repaired = source.replace(old, new, 1)
-          if "cancel-in-progress: true" in repaired:
-              raise SystemExit("An obsolete shared-QA cancellation assertion remains.")
-          path.write_text(repaired)
-          PY
-
-          git diff --check
-          git diff -- src/lib/mpgf/dac-product-lifecycle.test.ts
 
       - name: Install exact dependencies
         run: npm ci
@@ -106,12 +75,13 @@ jobs:
             src/lib/mpgf/dac-terminal-schema-reconciliation-migration.test.ts \
             src/lib/mpgf/dac-product-lifecycle.test.ts
 
-      - name: Commit and publish the narrowly scoped test repair
+      - name: Commit and publish the narrowly scoped repair
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
           git diff --check
+          test "$(git diff --name-only)" = "src/lib/mpgf/dac-product-lifecycle.test.ts"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/lib/mpgf/dac-product-lifecycle.test.ts
