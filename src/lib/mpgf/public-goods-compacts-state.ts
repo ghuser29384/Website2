@@ -366,7 +366,7 @@ function hasSafeCompactState(value: unknown, nowMs: number) {
       typeof activation.activatedAt === "string"
         ? activation.activatedAt
         : null,
-  };
+  } as const;
 
   if (!hasSafeMembership(value.membership, compactContext, nowMs)) {
     return false;
@@ -434,7 +434,7 @@ export function validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(
   const compactKeys = value.compacts.map(
     (compact) => (compact as Record<string, unknown>).publicKey,
   );
-  const expectedKeys = new Set(
+  const expectedKeys = new Set<string>(
     MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.map(
       (charter) => charter.publicKey,
     ),
