@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS,
   MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS,
+  MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE,
   MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
   calculateMpgfPublicGoodsCompactActivationProgress,
   calculateMpgfPublicGoodsCompactContributionCents,
@@ -79,6 +80,13 @@ test("compact invariants prohibit assignment, marketplace tax, project opt-out, 
     moneyMovesOnJoin: false,
     automaticCollectionEnabled: false,
   });
+});
+
+test("automatic activation is explicitly blocked pending person-unique eligibility", () => {
+  assert.equal(
+    MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE,
+    "blocked_pending_person_unique_eligibility_policy",
+  );
 });
 
 test("compact acceptance requires every explicit acknowledgement", () => {

@@ -42,6 +42,21 @@ test("electorates require active compacts and stale delegations are revoked", ()
   );
 });
 
+test("activation remains fail-closed until the person-unique identity gate is verified", () => {
+  assert.match(
+    hardeningMigration,
+    /blocked_pending_person_unique_eligibility_policy[\s\S]*accepted_member_count <= activation_threshold_members/,
+  );
+  assert.match(
+    hardeningMigration,
+    /status = 'active'[\s\S]*verified_person_unique_eligibility_policy[\s\S]*accepted_member_count >= activation_threshold_members/,
+  );
+  assert.match(
+    hardeningMigration,
+    /new\.activation_identity_gate_state is distinct from old\.activation_identity_gate_state/,
+  );
+});
+
 test("accepted compact constitutions remain frozen even after recruiting revocation", () => {
   assert.match(hardeningMigration, /historically_accepted boolean/);
   assert.match(
@@ -87,6 +102,7 @@ test("state validation covers activation, electorate, delegation, exit, and muta
     "value.summary !== foundingCharter.summary",
     "acceptedMemberCount <",
     "hasSafeActivation",
+    "hasSafeIdentityIntegrityGate",
     "hasSafeElectorate",
     "hasSafeMembership",
     "hasSafeDelegation",
@@ -105,4 +121,6 @@ test("late active-compact acceptance is disclosed as immediately binding", () =>
   assert.match(page, /Joining after activation:/);
   assert.match(page, /makes the membership binding immediately/);
   assert.match(page, /Exit remains[\s\S]*prospective/);
+  assert.match(page, /legally enforceable debt/);
+  assert.match(page, /Sybil-resistance policy/);
 });

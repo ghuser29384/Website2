@@ -7851,6 +7851,9 @@ export interface Database {
           collection_state: string;
           status: "recruiting" | "active";
           accepted_member_count: number;
+          activation_identity_gate_state:
+            | "blocked_pending_person_unique_eligibility_policy"
+            | "verified_person_unique_eligibility_policy";
           activated_at: string | null;
           constitution_frozen_at: string | null;
           frozen_constitution_version: string | null;
@@ -7886,6 +7889,9 @@ export interface Database {
           collection_state?: string;
           status?: "recruiting" | "active";
           accepted_member_count?: number;
+          activation_identity_gate_state?:
+            | "blocked_pending_person_unique_eligibility_policy"
+            | "verified_person_unique_eligibility_policy";
           activated_at?: string | null;
           constitution_frozen_at?: string | null;
           frozen_constitution_version?: string | null;

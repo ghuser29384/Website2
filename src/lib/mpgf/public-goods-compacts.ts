@@ -29,6 +29,12 @@ export const MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS = {
 export const MPGF_PUBLIC_GOODS_COMPACT_COLLECTION_GATE =
   "disabled_pending_legal_fiscal_sponsor_provider_donor_of_record_receipt_custody_sanctions_and_production_release_gates" as const;
 
+export const MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE =
+  "blocked_pending_person_unique_eligibility_policy" as const;
+
+export const MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE =
+  "verified_person_unique_eligibility_policy" as const;
+
 export const MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS = {
   voluntaryChoice: true,
   exactConstitution: true,
@@ -55,6 +61,7 @@ export type MpgfPublicGoodsCompactMembershipStatus =
 
 export type MpgfPublicGoodsCompactActivationState =
   | "recruiting"
+  | "threshold_reached_identity_gate_blocked"
   | "threshold_reached_constitution_frozen";
 
 export type MpgfPublicGoodsCompactDelegationState =
@@ -120,6 +127,13 @@ export interface MpgfPublicGoodsCompactState extends MpgfPublicGoodsCompactChart
   status: MpgfPublicGoodsCompactStatus;
   acceptedMemberCount: number | null;
   memberCountAvailable: boolean;
+  identityIntegrityGate: {
+    state:
+      | typeof MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE
+      | typeof MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE;
+    countUniqueness: "account_and_profile_only";
+    productionActivationReady: boolean;
+  };
   activation: MpgfPublicGoodsCompactActivation;
   allocationElectorate: {
     active: boolean;
@@ -314,6 +328,11 @@ export function buildMpgfPublicGoodsCompactPublishedExamplesState(): MpgfPublicG
       status: "recruiting",
       acceptedMemberCount: null,
       memberCountAvailable: false,
+      identityIntegrityGate: {
+        state: MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE,
+        countUniqueness: "account_and_profile_only",
+        productionActivationReady: false,
+      },
       activation: {
         state: "recruiting",
         activatedAt: null,

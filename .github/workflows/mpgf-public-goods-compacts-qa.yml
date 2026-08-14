@@ -20,6 +20,9 @@ on:
       - "supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql"
       - "supabase/tests/mpgf_public_goods_compacts_lifecycle.sql"
       - "supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql"
+      - "scripts/apply-supabase-migrations-in-order.sh"
+      - "scripts/test-mpgf-public-goods-compacts-concurrency.sh"
+      - "scripts/verify-mpgf-public-goods-compacts-generated-types.mjs"
       - "tests/mpgf-public-goods-compacts.spec.ts"
       - "tests/public-routes.spec.ts"
   workflow_dispatch:
@@ -38,6 +41,144 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  clean-ephemeral-full-chain:
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      LOCAL_SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: 2.114.0
+
+      - name: Install PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Verify exact candidate and migration identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p mpgf-compacts-clean-qa
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+          compact_version_count="$(find supabase/migrations -maxdepth 1 -type f -name '20260813163052_*.sql' | wc -l | tr -d ' ')"
+          test "$compact_version_count" = "1"
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -print \
+            | LC_ALL=C sort \
+            | xargs sha256sum \
+            > mpgf-compacts-clean-qa/migration-source.sha256
+          find supabase/migrations -maxdepth 1 -type f -name '*.sql' -print \
+            | sed -E 's#^.*/([0-9]+)_.*#\1#' \
+            | LC_ALL=C sort \
+            | uniq -d \
+            > mpgf-compacts-clean-qa/duplicate-migration-versions.txt
+          if grep -qx '20260813163052' mpgf-compacts-clean-qa/duplicate-migration-versions.txt; then
+            echo "The compact migration version collides with another repository migration." >&2
+            exit 1
+          fi
+          git rev-parse HEAD > mpgf-compacts-clean-qa/head-sha.txt
+
+      - name: Start a clean ephemeral PostgreSQL 17 Supabase runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mv supabase/migrations "$RUNNER_TEMP/repository-migrations"
+          mkdir supabase/migrations
+          supabase init --force
+          sed -i 's/major_version = 15/major_version = 17/' supabase/config.toml
+          supabase start \
+            --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor \
+            --log-level error \
+            --yes > /dev/null
+          rmdir supabase/migrations
+          mv "$RUNNER_TEMP/repository-migrations" supabase/migrations
+
+      - name: Apply every repository migration in chronological filename order
+        shell: bash
+        run: |
+          set -o pipefail
+          SUPABASE_MIGRATION_TEST_DB_URL="$LOCAL_SUPABASE_DB_URL" \
+            bash scripts/apply-supabase-migrations-in-order.sh \
+            2>&1 | tee mpgf-compacts-clean-qa/full-migration-chain.log
+
+      - name: Generate and compare exact runtime database types
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase gen types typescript \
+            --db-url "$LOCAL_SUPABASE_DB_URL" \
+            --schema public \
+            > mpgf-compacts-clean-qa/generated-database.types.ts
+          test -s mpgf-compacts-clean-qa/generated-database.types.ts
+          node scripts/verify-mpgf-public-goods-compacts-generated-types.mjs \
+            mpgf-compacts-clean-qa/generated-database.types.ts \
+            src/lib/supabase/database.types.ts \
+            | tee mpgf-compacts-clean-qa/generated-type-comparison.json
+
+      - name: Run Supabase database lint
+        shell: bash
+        run: |
+          set -o pipefail
+          supabase db lint \
+            --db-url "$LOCAL_SUPABASE_DB_URL" \
+            --schema public \
+            --level warning \
+            --fail-on error \
+            2>&1 | tee mpgf-compacts-clean-qa/supabase-db-lint.log
+
+      - name: Run role, lifecycle, privacy, and no-money database tests
+        shell: bash
+        run: |
+          set -o pipefail
+          psql "$LOCAL_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 <<'SQL' \
+            | tee mpgf-compacts-clean-qa/database-lifecycle.log
+          begin;
+          \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
+          rollback;
+          SQL
+
+      - name: Run genuinely concurrent threshold activation test
+        shell: bash
+        run: |
+          set -o pipefail
+          MPGF_COMPACT_TEST_DB_URL="$LOCAL_SUPABASE_DB_URL" \
+            bash scripts/test-mpgf-public-goods-compacts-concurrency.sh \
+            2>&1 | tee mpgf-compacts-clean-qa/database-concurrency.log
+
+      - name: Stop and erase the ephemeral Supabase runtime
+        if: always()
+        shell: bash
+        run: |
+          supabase stop --no-backup --yes > /dev/null 2>&1 || true
+
+      - name: Upload clean-chain database evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-public-goods-compacts-clean-chain-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: mpgf-compacts-clean-qa
+
   source-and-rendered:
     if: >-
       github.event_name == 'workflow_dispatch'

@@ -33,6 +33,8 @@ for (const viewport of viewports) {
     await expect(
       page.getByText("No action on this page moves money or creates a payment mandate."),
     ).toBeVisible();
+    await expect(page.getByText(/legally enforceable debt/).first()).toBeVisible();
+    await expect(page.getByText(/one-person-one-account/).first()).toBeVisible();
     await expect(page.getByTestId("compact-future-flourishing")).toBeVisible();
     await expect(page.getByTestId("compact-animal-welfare")).toBeVisible();
     await expect(page.getByTestId("compact-global-health")).toBeVisible();

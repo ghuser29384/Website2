@@ -3,7 +3,9 @@ import test from "node:test";
 
 import {
   MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS,
+  MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE,
   MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
+  MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE,
   calculateMpgfPublicGoodsCompactProspectiveExitDate,
   type MpgfPublicGoodsCompactsState,
 } from "./public-goods-compacts";
@@ -27,6 +29,11 @@ function buildRecruitingDatabaseState(): MpgfPublicGoodsCompactsState {
         status: "recruiting",
         acceptedMemberCount: 0,
         memberCountAvailable: true,
+        identityIntegrityGate: {
+          state: MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE,
+          countUniqueness: "account_and_profile_only",
+          productionActivationReady: false,
+        },
         activation: {
           state: "recruiting",
           activatedAt: null,
@@ -57,6 +64,11 @@ function activateFutureFlourishing(state: MpgfPublicGoodsCompactsState) {
 
   compact.status = "active";
   compact.acceptedMemberCount = 5_000;
+  compact.identityIntegrityGate = {
+    state: MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE,
+    countUniqueness: "account_and_profile_only",
+    productionActivationReady: true,
+  };
   compact.activation = {
     state: "threshold_reached_constitution_frozen",
     activatedAt: ACTIVATED_AT,
@@ -107,6 +119,24 @@ test("state validation rejects charter drift, impossible activation, and recruit
       recruitingElectorate,
       NOW,
     ),
+    null,
+  );
+});
+
+test("threshold state remains recruiting while the person-unique identity gate is blocked", () => {
+  const state = buildRecruitingDatabaseState();
+  state.compacts[0].acceptedMemberCount = 5_000;
+  state.compacts[0].activation.state =
+    "threshold_reached_identity_gate_blocked";
+
+  assert.deepEqual(
+    validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW),
+    state,
+  );
+
+  state.compacts[0].identityIntegrityGate.productionActivationReady = true;
+  assert.equal(
+    validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW),
     null,
   );
 });

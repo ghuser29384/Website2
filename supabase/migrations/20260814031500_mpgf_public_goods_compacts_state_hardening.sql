@@ -4,9 +4,15 @@ alter table public.mpgf_public_goods_compacts
   add constraint mpgf_public_goods_compacts_activation_count_consistency
   check (
     (status = 'recruiting'
-      and accepted_member_count <= activation_threshold_members)
+      and (
+        activation_identity_gate_state =
+          'blocked_pending_person_unique_eligibility_policy'
+        or accepted_member_count <= activation_threshold_members
+      ))
     or
     (status = 'active'
+      and activation_identity_gate_state =
+        'verified_person_unique_eligibility_policy'
       and accepted_member_count >= activation_threshold_members)
   );
 
@@ -43,6 +49,7 @@ begin
     'display_order',
     'status',
     'accepted_member_count',
+    'activation_identity_gate_state',
     'activated_at',
     'constitution_frozen_at',
     'frozen_constitution_version',
@@ -54,6 +61,7 @@ begin
     'display_order',
     'status',
     'accepted_member_count',
+    'activation_identity_gate_state',
     'activated_at',
     'constitution_frozen_at',
     'frozen_constitution_version',
@@ -74,6 +82,7 @@ begin
     new.activated_at is distinct from old.activated_at
     or new.constitution_frozen_at is distinct from old.constitution_frozen_at
     or new.frozen_constitution_version is distinct from old.frozen_constitution_version
+    or new.activation_identity_gate_state is distinct from old.activation_identity_gate_state
   ) then
     raise exception using
       errcode = '23514',

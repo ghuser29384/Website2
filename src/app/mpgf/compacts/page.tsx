@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Voluntary Public-Goods Compacts | Moral Trade",
     description:
-      "Cause-specific constitutional compacts that become binding only after their accepted-member threshold is reached.",
+      "Cause-specific constitutional compacts with a qualifying-acceptance threshold, a separate identity-integrity gate, and no automatic collection.",
     url: getAbsoluteUrl("/mpgf/compacts"),
     type: "website",
   },
@@ -43,11 +43,11 @@ export default async function MpgfCompactsPage() {
           </Link>
         </>
       }
-      description="Choose a cause-specific constitution voluntarily. Acceptance stays revocable while recruiting and becomes binding only if 5,000 accepted members activate and freeze the charter. No action here moves money."
+      description="Choose a cause-specific constitution voluntarily. Acceptance stays revocable while recruiting and can become binding only after 5,000 qualifying acceptances and a separately verified person-unique identity gate. No action here moves money."
       eyebrow="Opt-in public-goods compacts"
       modeItems={[
         "Voluntary cause selection",
-        "5,000-member activation",
+        "5,000 qualifying acceptances plus identity gate",
         "Constitution frozen at activation",
         "Automatic collection disabled",
       ]}
@@ -65,7 +65,7 @@ export default async function MpgfCompactsPage() {
             </div>
             <div>
               <dt>3. Activate at threshold</dt>
-              <dd>Freeze the charter and start the 12-month term</dd>
+              <dd>First verify the person-unique identity release gate</dd>
             </div>
             <div>
               <dt>Collection state</dt>
@@ -105,6 +105,12 @@ export default async function MpgfCompactsPage() {
             frozen constitution makes the membership binding immediately. Exit remains
             prospective under the published minimum-term and notice rules.
           </p>
+          <p>
+            <strong>Legal and identity boundary:</strong> joining alone is not represented as a
+            legally enforceable debt or provider payment mandate. Counts are currently unique by
+            account/profile, not verified person, so automatic activation remains blocked until a
+            separately approved one-person-one-account and Sybil-resistance policy is integrated.
+          </p>
         </div>
         <MpgfPublicGoodsCompacts state={state} viewerPresent={Boolean(viewer)} />
       </section>
@@ -118,11 +124,13 @@ export default async function MpgfCompactsPage() {
           <p className="eyebrow">Lifecycle in plain language</p>
           <h2 id="compact-lifecycle-heading">Recruit, activate once, govern, then report.</h2>
           <p>
-            Recruiting acceptances are durable but immediately revocable. Reaching 5,000 accepted
-            members atomically freezes the founding constitution and starts the 12-month minimum
-            term. One-member-one-credit allocation, revocable delegation, independent review,
-            additionality checks, recusals, minority protections, and public post-round reporting
-            then govern project selection.
+            Recruiting acceptances are durable but immediately revocable. A zero-dollar schedule
+            cannot join or count toward the threshold. Reaching 5,000 qualifying acceptances does
+            not activate while the person-unique identity gate is blocked; after that gate is
+            separately verified, activation atomically freezes the founding constitution and
+            starts the 12-month minimum term. One-member-one-credit allocation, revocable
+            delegation, independent review, additionality checks, recusals, minority protections,
+            and public post-round reporting then govern project selection.
           </p>
         </div>
         <div className="section-actions">

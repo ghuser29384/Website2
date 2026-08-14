@@ -46,6 +46,12 @@ create table public.mpgf_public_goods_compacts (
     ),
   status text not null default 'recruiting' check (status in ('recruiting', 'active')),
   accepted_member_count bigint not null default 0 check (accepted_member_count >= 0),
+  activation_identity_gate_state text not null default
+    'blocked_pending_person_unique_eligibility_policy'
+    check (activation_identity_gate_state in (
+      'blocked_pending_person_unique_eligibility_policy',
+      'verified_person_unique_eligibility_policy'
+    )),
   activated_at timestamptz,
   constitution_frozen_at timestamptz,
   frozen_constitution_version text,
@@ -60,6 +66,7 @@ create table public.mpgf_public_goods_compacts (
       and frozen_constitution_version is null)
     or
     (status = 'active'
+      and activation_identity_gate_state = 'verified_person_unique_eligibility_policy'
       and activated_at is not null
       and constitution_frozen_at is not null
       and frozen_constitution_version = constitution_version)
@@ -93,7 +100,7 @@ create table public.mpgf_public_goods_compact_memberships (
     declared_eligible_monthly_spending_cents between 0 and 100000000000
   ),
   scheduled_monthly_contribution_cents bigint not null check (
-    scheduled_monthly_contribution_cents between 0 and 1000
+    scheduled_monthly_contribution_cents between 1 and 1000
   ),
   status text not null check (status in (
     'pending_activation',
@@ -312,19 +319,12 @@ revoke all on table public.mpgf_public_goods_compact_memberships from public, an
 revoke all on table public.mpgf_public_goods_compact_delegations from public, anon, authenticated;
 revoke all on table public.mpgf_public_goods_compact_idempotency_keys from public, anon, authenticated;
 
-grant select on table public.mpgf_public_goods_compacts to anon, authenticated;
 grant select on table public.mpgf_public_goods_compact_memberships to authenticated;
 grant select on table public.mpgf_public_goods_compact_delegations to authenticated;
 grant all on table public.mpgf_public_goods_compacts to service_role;
 grant all on table public.mpgf_public_goods_compact_memberships to service_role;
 grant all on table public.mpgf_public_goods_compact_delegations to service_role;
 grant all on table public.mpgf_public_goods_compact_idempotency_keys to service_role;
-
-create policy mpgf_public_goods_compacts_published_select
-on public.mpgf_public_goods_compacts
-for select
-to anon, authenticated
-using (true);
 
 create policy mpgf_public_goods_compact_memberships_owner_select
 on public.mpgf_public_goods_compact_memberships
@@ -459,9 +459,18 @@ begin
         'status', compact.status,
         'acceptedMemberCount', compact.accepted_member_count,
         'memberCountAvailable', true,
+        'identityIntegrityGate', pg_catalog.jsonb_build_object(
+          'state', compact.activation_identity_gate_state,
+          'countUniqueness', 'account_and_profile_only',
+          'productionActivationReady',
+            compact.activation_identity_gate_state =
+              'verified_person_unique_eligibility_policy'
+        ),
         'activation', pg_catalog.jsonb_build_object(
           'state', case
             when compact.status = 'active' then 'threshold_reached_constitution_frozen'
+            when compact.accepted_member_count >= compact.activation_threshold_members
+              then 'threshold_reached_identity_gate_blocked'
             else 'recruiting'
           end,
           'activatedAt', compact.activated_at,
@@ -624,6 +633,11 @@ begin
     p_declared_eligible_monthly_spending_cents / 100,
     compact_record.monthly_contribution_cap_cents
   );
+  if contribution_cents = 0 then
+    raise exception using
+      errcode = '22023',
+      message = 'A compact acceptance must schedule at least one cent and cannot count toward activation at zero cents.';
+  end if;
 
   select * into membership_record
   from public.mpgf_public_goods_compact_memberships
@@ -690,6 +704,8 @@ begin
 
   if compact_record.status = 'recruiting'
     and accepted_count >= compact_record.activation_threshold_members
+    and compact_record.activation_identity_gate_state =
+      'verified_person_unique_eligibility_policy'
   then
     update public.mpgf_public_goods_compacts
     set status = 'active',
@@ -716,6 +732,7 @@ begin
     'acknowledgementsRecorded', membership_record.acknowledgements = p_acknowledgements,
     'scheduledMonthlyContributionCents', membership_record.scheduled_monthly_contribution_cents,
     'acceptedMemberCount', accepted_count,
+    'identityIntegrityGateState', compact_record.activation_identity_gate_state,
     'activatedNow', activated_now,
     'bindingNow', membership_record.status = 'active',
     'moneyMoved', false,

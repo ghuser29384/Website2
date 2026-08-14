@@ -111,7 +111,10 @@ function CharterTerms({ compact }: { compact: MpgfPublicGoodsCompactState }) {
       </div>
       <div>
         <dt>Activation</dt>
-        <dd>{compact.terms.activationThresholdMembers.toLocaleString()} accepted members</dd>
+        <dd>
+          {compact.terms.activationThresholdMembers.toLocaleString()} qualifying acceptances,
+          after the person-unique identity gate is verified
+        </dd>
       </div>
       <div>
         <dt>Minimum term</dt>
@@ -141,7 +144,7 @@ function ActivationProgress({ compact }: { compact: MpgfPublicGoodsCompactState 
   if (!compact.memberCountAvailable || compact.acceptedMemberCount === null) {
     return (
       <p className={styles.muted} data-testid={`member-count-${compact.publicKey}`}>
-        Durable accepted-member count unavailable
+        Durable qualifying-acceptance count unavailable
       </p>
     );
   }
@@ -154,7 +157,7 @@ function ActivationProgress({ compact }: { compact: MpgfPublicGoodsCompactState 
   return (
     <div className={styles.progress} data-testid={`member-count-${compact.publicKey}`}>
       <div className={styles.progressLabel}>
-        <span>{progress.acceptedMemberCount.toLocaleString()} accepted members</span>
+        <span>{progress.acceptedMemberCount.toLocaleString()} qualifying acceptances</span>
         <span>{(progress.progressBps / 100).toFixed(1)}%</span>
       </div>
       <div
@@ -167,6 +170,13 @@ function ActivationProgress({ compact }: { compact: MpgfPublicGoodsCompactState 
       >
         <span style={{ width: `${progress.progressBps / 100}%` }} />
       </div>
+      {!compact.identityIntegrityGate.productionActivationReady ? (
+        <p className={styles.muted} data-testid={`identity-gate-${compact.publicKey}`}>
+          Automatic activation is blocked: counts are unique only by account/profile, not yet by
+          verified person. Moral Trade&apos;s one-person-one-account and Sybil-resistance policy is
+          not integrated.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -249,6 +259,13 @@ export function MpgfPublicGoodsCompacts({
     if (!selectedCompact || contributionPreview.error || !spendingDollars.trim()) {
       setStatusMessage(
         contributionPreview.error ?? "Enter self-declared eligible monthly spending.",
+      );
+      return;
+    }
+
+    if (contributionPreview.cents === 0) {
+      setStatusMessage(
+        "A qualifying compact acceptance must schedule at least $0.01 and cannot count toward activation at $0.00.",
       );
       return;
     }
@@ -359,6 +376,8 @@ export function MpgfPublicGoodsCompacts({
           <strong>No payment mandate</strong>
           <span>
             Joining, voting, delegating, or requesting exit never moves money or creates a charge.
+            Moral Trade does not represent that joining alone creates a legally enforceable debt
+            or provider payment mandate.
           </span>
         </div>
       </div>
@@ -530,7 +549,8 @@ export function MpgfPublicGoodsCompacts({
                       disabled={!viewerPresent || !state.available}
                     />
                     I accept constitution version {selectedCompact.constitutionVersion} and its
-                    published 1%, $10 cap, 5,000-member threshold, term, exit, voting, audit, and
+                    published 1%, $10 cap, 5,000 qualifying-acceptance threshold, term, exit,
+                    voting, audit, and
                     minority-protection rules.
                   </label>
                   <label>
@@ -575,6 +595,7 @@ export function MpgfPublicGoodsCompacts({
                         pendingAction !== null ||
                         !allAcknowledged ||
                         !spendingDollars.trim() ||
+                        contributionPreview.cents === 0 ||
                         Boolean(contributionPreview.error)
                       }
                     >
@@ -606,8 +627,10 @@ export function MpgfPublicGoodsCompacts({
                 binding.
               </li>
               <li>
-                <strong>At 5,000 acceptances:</strong> activation freezes the constitutional
-                version and starts the 12-month term atomically.
+                <strong>At 5,000 qualifying acceptances:</strong> activation remains fail-closed
+                until a separately approved person-unique identity policy is verified. Only then
+                may activation freeze the constitutional version and start the 12-month term
+                atomically.
               </li>
               <li>
                 <strong>After activation:</strong> exit is prospective after the later of term end

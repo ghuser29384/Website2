@@ -43,6 +43,10 @@ test("compact tables use RLS and deny direct client writes", () => {
     migration,
     /grant (insert|update|delete|all) on table public\.mpgf_public_goods_compact_(memberships|delegations|idempotency_keys) to authenticated/i,
   );
+  assert.doesNotMatch(
+    migration,
+    /grant select on table public\.mpgf_public_goods_compacts to (anon|authenticated)/i,
+  );
   assert.match(migration, /memberships_owner_select[\s\S]*auth\.uid\(\)[\s\S]*user_id/);
 });
 
@@ -71,6 +75,19 @@ test("authenticated security-definer RPCs are versioned, idempotent, and search-
   assert.match(migration, /acknowledgements = '\{[\s\S]*"voluntaryChoice": true[\s\S]*"noPaymentMandate": true/);
   assert.match(migration, /mpgf_public_goods_compact_idempotency_lookup/);
   assert.match(migration, /different request/);
+  assert.match(migration, /must schedule at least one cent/);
+  assert.match(
+    migration,
+    /scheduled_monthly_contribution_cents between 1 and 1000/,
+  );
+  assert.match(
+    migration,
+    /activation_identity_gate_state[\s\S]*blocked_pending_person_unique_eligibility_policy/,
+  );
+  assert.match(
+    migration,
+    /accepted_count >= compact_record\.activation_threshold_members[\s\S]*verified_person_unique_eligibility_policy/,
+  );
 });
 
 test("constitutional database checks prohibit assignment, marketplace tax, project refusal, and collection", () => {
@@ -158,6 +175,8 @@ test("new compact sources contain no payment capture or fake-success path", () =
   assert.match(component, /status !== "revoked"/);
   assert.match(component, /Revoked before activation; not binding/);
   assert.match(component, /explicitly accept the current constitution again/);
+  assert.match(component, /legally enforceable debt/);
+  assert.match(component, /one-person-one-account/);
 });
 
 test("database state is deeply validated before the server trusts live compact data", () => {

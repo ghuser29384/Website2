@@ -2,10 +2,12 @@ import {
   MPGF_PUBLIC_GOODS_COMPACT_COLLECTION_GATE,
   MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION,
   MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS,
+  MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE,
   MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS,
   MPGF_PUBLIC_GOODS_COMPACT_MAX_DECLARED_SPENDING_CENTS,
   MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
   MPGF_PUBLIC_GOODS_COMPACT_TERMS,
+  MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE,
   calculateMpgfPublicGoodsCompactContributionCents,
   calculateMpgfPublicGoodsCompactProspectiveExitDate,
   type MpgfPublicGoodsCompactMembership,
@@ -113,16 +115,23 @@ function hasSafeActivation(
   value: unknown,
   compactStatus: "recruiting" | "active",
   acceptedMemberCount: number,
+  identityGateReady: boolean,
 ) {
   if (!isRecord(value)) {
     return false;
   }
 
   if (compactStatus === "recruiting") {
+    const thresholdReached =
+      acceptedMemberCount >=
+      MPGF_PUBLIC_GOODS_COMPACT_TERMS.activationThresholdMembers;
+
     return (
-      acceptedMemberCount <
-        MPGF_PUBLIC_GOODS_COMPACT_TERMS.activationThresholdMembers &&
-      value.state === "recruiting" &&
+      (!thresholdReached || !identityGateReady) &&
+      value.state ===
+        (thresholdReached
+          ? "threshold_reached_identity_gate_blocked"
+          : "recruiting") &&
       value.activatedAt === null &&
       value.constitutionFrozenAt === null &&
       value.frozenConstitutionVersion === null &&
@@ -131,6 +140,7 @@ function hasSafeActivation(
   }
 
   if (
+    !identityGateReady ||
     acceptedMemberCount <
       MPGF_PUBLIC_GOODS_COMPACT_TERMS.activationThresholdMembers ||
     value.state !== "threshold_reached_constitution_frozen" ||
@@ -157,6 +167,21 @@ function hasSafeActivation(
   } catch {
     return false;
   }
+}
+
+function hasSafeIdentityIntegrityGate(value: unknown) {
+  if (!isRecord(value) || value.countUniqueness !== "account_and_profile_only") {
+    return false;
+  }
+
+  if (value.state === MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE) {
+    return value.productionActivationReady === false;
+  }
+
+  return (
+    value.state === MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE &&
+    value.productionActivationReady === true
+  );
 }
 
 function hasSafeElectorate(
@@ -334,6 +359,11 @@ function hasSafeCompactState(value: unknown, nowMs: number) {
   const acceptedMemberCount = Number.isSafeInteger(value.acceptedMemberCount)
     ? (value.acceptedMemberCount as number)
     : null;
+  const identityGateReady =
+    isRecord(value.identityIntegrityGate) &&
+    value.identityIntegrityGate.state ===
+      MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE &&
+    value.identityIntegrityGate.productionActivationReady === true;
 
   if (
     !foundingCharter ||
@@ -349,7 +379,13 @@ function hasSafeCompactState(value: unknown, nowMs: number) {
     value.memberCountAvailable !== true ||
     !hasExactTerms(value.terms) ||
     !hasExactInvariants(value.invariants) ||
-    !hasSafeActivation(value.activation, status, acceptedMemberCount) ||
+    !hasSafeIdentityIntegrityGate(value.identityIntegrityGate) ||
+    !hasSafeActivation(
+      value.activation,
+      status,
+      acceptedMemberCount,
+      identityGateReady,
+    ) ||
     !hasSafeElectorate(value.allocationElectorate, status)
   ) {
     return false;
