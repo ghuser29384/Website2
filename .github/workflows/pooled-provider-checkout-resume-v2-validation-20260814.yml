@@ -1,0 +1,89 @@
+name: Pooled provider checkout resume v2 validation 20260814
+
+on:
+  push:
+    branches:
+      - qa/pooled-provider-checkout-resume-v2-20260814
+    paths:
+      - .github/workflows/pooled-provider-checkout-resume-v2-validation-20260814.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pooled-provider-checkout-resume-v2-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      EXPECTED_CANDIDATE_SHA: 6b6dbe0653f3709e6142c05f6b459926ca7b151a
+      WORKFLOW_PATH: .github/workflows/pooled-provider-checkout-resume-v2-validation-20260814.yml
+      NEXT_TELEMETRY_DISABLED: "1"
+      TRADE_DONATION_POOL_ENABLED: "false"
+      TRADE_DONATION_POOL_MODE: disabled
+      CONDITIONAL_PAYMENTS_MODE: disabled
+    steps:
+      - name: Check out exact validation revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 4
+
+      - name: Verify exact candidate and workflow-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$EXPECTED_CANDIDATE_SHA" HEAD
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE_SHA" HEAD)" = "$WORKFLOW_PATH"
+
+      - name: Verify production defaults remain fail-closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fx 'TRADE_DONATION_POOL_ENABLED=false' .env.example
+          grep -Fx 'TRADE_DONATION_POOL_MODE=disabled # disabled | test | live' .env.example
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run pooled-settlement provider-resume and security tests
+        run: >-
+          node --import tsx --test
+          src/lib/trade-donation-pool.test.ts
+          src/lib/trade-donation-pool-source-contract.test.ts
+          src/lib/trade-donation-pool-environment-source-contract.test.ts
+          src/lib/trade-donation-pool-provider-resume-source-contract.test.ts
+          src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+
+      - name: Run conditional-payment regression tests
+        run: >-
+          node --import tsx --test
+          src/lib/payments/conditional-state.test.ts
+          src/lib/payments/checkout-payment-methods.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint -- --quiet
+
+      - name: Build production application with pooled settlement disabled
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: production
+        run: npm run build
