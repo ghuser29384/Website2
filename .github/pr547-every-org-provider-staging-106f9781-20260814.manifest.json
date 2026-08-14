@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "moral-trade-pr547-every-org-staging-controller-v1",
+  "candidateSha": "106f9781cf13f75af31594ed79deef89318a87b7",
+  "candidateTree": "01324563478ff792576d45966d5ba6f35490a4fb",
+  "baseSha": "79ca382c3bdc325dfc5a28e2cbbafc1b95640386",
+  "controllerBranch": "ops/pr547-every-org-provider-staging-106f9781-20260814",
+  "workflowPath": ".github/workflows/pr547-every-org-provider-staging-106f9781-20260814.yml",
+  "workflowBlobSha": "ffad399382a0f71e84d60d0ebe2765db51803018",
+  "bootstrapCommit": "21c7bf8cf44cbcf215a21b50be03c872d4583d3b"
+}
