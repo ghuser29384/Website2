@@ -338,6 +338,7 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       qaProject: "hvmxfjjbdcgjjudmthdz",
       transitions: [],
     };
+    let testFailure: unknown = null;
 
     const anonymous = await browser.newContext({
       baseURL: BASE_URL,
@@ -703,6 +704,38 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       await gotoReady(responderPage, `/trade-agreements/${agreementId}`);
       await nominateReviewer(responderPage);
 
+      const { data: reviewerBundles, error: reviewerBundlesError } =
+        await reviewerAuth.client
+          .from("trade_evidence_bundles")
+          .select("id,status")
+          .eq("milestone_id", milestone?.id);
+      expect(reviewerBundlesError).toBeNull();
+      expect(reviewerBundles).toHaveLength(1);
+      expect(reviewerBundles?.[0]?.status).toBe("submitted");
+      const reviewerBundleId = reviewerBundles?.[0]?.id;
+      const { data: reviewerItems, error: reviewerItemsError } = await reviewerAuth.client
+        .from("trade_evidence_bundle_items")
+        .select("attestation,evidence_type")
+        .eq("bundle_id", reviewerBundleId);
+      expect(reviewerItemsError).toBeNull();
+      expect(reviewerItems).toEqual([
+        { attestation: COPY.evidence, evidence_type: "attestation" },
+      ]);
+      const { data: outsiderBundles, error: outsiderBundlesError } =
+        await outsiderAuth.client
+          .from("trade_evidence_bundles")
+          .select("id")
+          .eq("milestone_id", milestone?.id);
+      expect(outsiderBundlesError).toBeNull();
+      expect(outsiderBundles).toEqual([]);
+      const { data: outsiderItems, error: outsiderItemsError } = await outsiderAuth.client
+        .from("trade_evidence_bundle_items")
+        .select("id")
+        .eq("bundle_id", reviewerBundleId);
+      expect(outsiderItemsError).toBeNull();
+      expect(outsiderItems).toEqual([]);
+      qaCheckpoint("proved assigned-reviewer evidence access and outsider evidence denial");
+
       await gotoReady(reviewerPage, `/trade-review/${milestone?.id}`);
       await expect(
         reviewerPage.getByRole("heading", {
@@ -886,6 +919,9 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
 
       expect(consoleFailures).toEqual([]);
       qaCheckpoint("proved retained audit records, clean console, and no money-moving path");
+    } catch (error) {
+      testFailure = error;
+      throw error;
     } finally {
       await Promise.allSettled(contexts.map((context) => context.close()));
       let cleanupFailure: unknown = null;
@@ -904,7 +940,7 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         contentType: "application/json",
         path: summaryPath,
       });
-      if (cleanupFailure) throw cleanupFailure;
+      if (cleanupFailure && !testFailure) throw cleanupFailure;
     }
   });
 });
