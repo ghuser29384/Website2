@@ -100,6 +100,11 @@ export default async function MpgfCompactsPage() {
             and the ordinary marketplace remains untaxed. A member chooses one cause-specific
             compact and accepts its published constitution before any obligation can arise.
           </p>
+          <p>
+            <strong>Joining after activation:</strong> if a compact is already active, accepting its
+            frozen constitution makes the membership binding immediately. Exit remains
+            prospective under the published minimum-term and notice rules.
+          </p>
         </div>
         <MpgfPublicGoodsCompacts state={state} viewerPresent={Boolean(viewer)} />
       </section>
