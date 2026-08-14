@@ -70,8 +70,11 @@ while IFS=$'\t' read -r migration_version introduced_at_epoch migration_path int
     "$migration_version" \
     "$introduced_at_epoch" \
     "$introduced_commit"
+  # Supabase applies one migration file atomically. Preserve that boundary so
+  # historical ON COMMIT DROP fixtures remain available for the whole file.
   psql "$SUPABASE_MIGRATION_TEST_DB_URL" \
     --no-psqlrc \
+    --single-transaction \
     --set ON_ERROR_STOP=1 \
     --file "$migration_path"
 done < <(
