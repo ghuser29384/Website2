@@ -8,6 +8,10 @@ const tradeDraftWorkbenchSource = readFileSync(
   "src/components/core-trade/trade-draft-workbench.tsx",
   "utf8",
 );
+const marketplaceComponentsSource = readFileSync(
+  "src/components/marketplace/marketplace-components.tsx",
+  "utf8",
+);
 
 test("getViewer request-scopes one lazy bounded verifier", () => {
   assert.match(
@@ -67,6 +71,23 @@ test("signed-out trade exit cannot prefetch the document-backed Discover route",
         "        >",
         "          Exit",
         "        </Link>",
+      ].join("\n"),
+    ),
+  );
+});
+
+test("Dashboard bottom navigation cannot prefetch the Offers compatibility redirect", () => {
+  const bottomNavStart = marketplaceComponentsSource.indexOf(
+    "export function MarketplaceBottomNav({",
+  );
+  assert.ok(bottomNavStart >= 0);
+  const bottomNavSource = marketplaceComponentsSource.slice(bottomNavStart);
+  assert.ok(
+    bottomNavSource.includes(
+      [
+        "          href={item.href}",
+        '          prefetch={item.href === "/offers" ? false : undefined}',
+        "          key={item.key}",
       ].join("\n"),
     ),
   );

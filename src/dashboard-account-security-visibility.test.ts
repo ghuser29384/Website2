@@ -15,10 +15,6 @@ const accountSecurityPanel = readFileSync(
 );
 const siteTopbar = readFileSync("src/components/layout/site-topbar.tsx", "utf8");
 const siteFooter = readFileSync("src/components/layout/site-footer.tsx", "utf8");
-const marketplaceComponents = readFileSync(
-  "src/components/marketplace/marketplace-components.tsx",
-  "utf8",
-);
 
 test("the dashboard loads the route-scoped Account security visibility repair", () => {
   assert.match(layout, /import\s+["']\.\/dashboard-account-security\.css["']/);
@@ -115,20 +111,5 @@ test("shared navigation cannot prefetch document-backed routes as missing RSC pa
   assert.equal(
     (siteFooter.match(/<Link prefetch=\{false\}/g) ?? []).length,
     footerLinks.length,
-  );
-});
-
-test("shared Dashboard bottom navigation cannot prefetch the Offers compatibility redirect", () => {
-  const bottomNavStart = marketplaceComponents.indexOf("export function MarketplaceBottomNav({");
-  assert.ok(bottomNavStart >= 0);
-  const bottomNav = marketplaceComponents.slice(bottomNavStart);
-  assert.ok(
-    bottomNav.includes(
-      [
-        "          href={item.href}",
-        '          prefetch={item.href === "/offers" ? false : undefined}',
-        "          key={item.key}",
-      ].join("\n"),
-    ),
   );
 });
