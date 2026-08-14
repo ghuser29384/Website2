@@ -80,7 +80,7 @@ limit 1;
 do $$
 begin
   if not exists (select 1 from moral_trade_offer_bank_operator) then
-    raise exception 'The Moral Trade operator profile could not be resolved.';
+    raise notice 'The Moral Trade operator profile could not be resolved; offer-bank seed rows are skipped.';
   end if;
 end;
 $$;
