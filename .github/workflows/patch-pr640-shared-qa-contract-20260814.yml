@@ -1,0 +1,109 @@
+name: Patch PR 640 shared-QA lifecycle contract
+
+on:
+  push:
+    branches:
+      - ops/patch-mpgf-dac-permanent-gate-20260812
+    paths:
+      - ".github/workflows/patch-pr640-shared-qa-contract-20260814.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: patch-pr640-shared-qa-contract-20260814
+  cancel-in-progress: false
+
+env:
+  EXPECTED_TARGET_SHA: 0222c4e89800086d13c55395c8f6ac3df9a42a59
+  TARGET_BRANCH: integration/mpgf-dac-lifecycle-current-main-20260812
+
+jobs:
+  patch-test-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+
+    steps:
+      - name: Check out controller branch
+        uses: actions/checkout@v4
+        with:
+          ref: ops/patch-mpgf-dac-permanent-gate-20260812
+          fetch-depth: 1
+
+      - name: Check out exact PR 640 head branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_BRANCH }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Verify exact target and patch only the stale concurrency assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_SHA"
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/lib/mpgf/dac-product-lifecycle.test.ts")
+          source = path.read_text(encoding="utf-8")
+          old = r'''  assert.match(
+            workflow,
+            /group: mpgf-dac-product-lifecycle-\$\{\{ github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
+          );
+          assert.doesNotMatch(
+            workflow,
+            /github\.event\.pull_request\.number \|\| github\.ref/,
+          );
+          assert.match(workflow, /cancel-in-progress: true/);
+          '''
+          new = r'''  assert.match(workflow, /group: mpgf-dac-product-lifecycle-shared-qa/);
+          assert.doesNotMatch(
+            workflow,
+            /group: mpgf-dac-product-lifecycle-\$\{\{/,
+          );
+          assert.match(workflow, /cancel-in-progress: false/);
+          '''
+
+          occurrences = source.count(old)
+          if occurrences != 1:
+              raise SystemExit(
+                  f"Refusing to patch: expected exactly one stale concurrency block, found {occurrences}."
+              )
+
+          path.write_text(source.replace(old, new), encoding="utf-8")
+          PY
+          git diff --check
+          git diff -- src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Prove the focused DAC source contracts before publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/dac-lifecycle-model.test.ts \
+            src/lib/mpgf/dac-public-terms-migration.test.ts \
+            src/lib/mpgf/dac-terminal-event-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-terminal-schema-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts
+
+      - name: Commit and push the minimal repair to PR 640
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_TARGET_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/mpgf/dac-product-lifecycle.test.ts
+          git commit -m "test(mpgf): align lifecycle contract with shared QA serialization"
+          git push origin "HEAD:${TARGET_BRANCH}"
