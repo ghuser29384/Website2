@@ -8,7 +8,6 @@ import {
   parseMpgfPublicGoodsCompactConstitutionVersion,
   parseMpgfPublicGoodsCompactIdempotencyKey,
   parseMpgfPublicGoodsCompactPublicKey,
-  parseMpgfPublicGoodsCompactSpendingCents,
 } from "@/lib/mpgf/public-goods-compacts-input";
 import {
   joinMpgfPublicGoodsCompact,
@@ -46,10 +45,6 @@ export async function POST(request: Request) {
       acknowledgements: parseMpgfPublicGoodsCompactAcknowledgements(
         record.acknowledgements,
       ),
-      declaredEligibleMonthlySpendingCents:
-        parseMpgfPublicGoodsCompactSpendingCents(
-          record.declaredEligibleMonthlySpendingCents,
-        ),
       idempotencyKey: parseMpgfPublicGoodsCompactIdempotencyKey(
         record.idempotencyKey,
       ),

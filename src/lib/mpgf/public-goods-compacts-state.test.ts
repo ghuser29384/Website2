@@ -3,10 +3,10 @@ import test from "node:test";
 
 import {
   MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS,
-  MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE,
   MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
-  MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE,
   calculateMpgfPublicGoodsCompactProspectiveExitDate,
+  calculateMpgfPublicGoodsCompactReadiness,
+  type MpgfPublicGoodsCompactMembership,
   type MpgfPublicGoodsCompactsState,
 } from "./public-goods-compacts";
 import {
@@ -15,6 +15,7 @@ import {
 } from "./public-goods-compacts-state";
 
 const NOW = new Date("2027-03-15T00:00:00.000Z");
+const CYCLE_KEY = "2027-03";
 const ACTIVATED_AT = "2026-01-31T12:00:00.000Z";
 
 function buildRecruitingDatabaseState(): MpgfPublicGoodsCompactsState {
@@ -22,6 +23,24 @@ function buildRecruitingDatabaseState(): MpgfPublicGoodsCompactsState {
     available: true,
     source: "database",
     unavailableReason: null,
+    obligation: {
+      cycleKey: CYCLE_KEY,
+      priorMonthStart: "2027-02-01T00:00:00.000Z",
+      priorMonthEndExclusive: "2027-03-01T00:00:00.000Z",
+      coverage: "unavailable",
+      coverageReason: "Authoritative complete ledger coverage is unavailable.",
+      eligibleNetSettledOutflowCents: null,
+      obligationCents: null,
+      sourceObservationCount: 0,
+    },
+    allocation: {
+      cycleKey: CYCLE_KEY,
+      instructionValid: false,
+      schedulingReady: false,
+      reason: "Join a Compact before allocating.",
+      allocations: [],
+      scheduledTotalCents: null,
+    },
     compacts: MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.map(
       (charter, index) => ({
         ...charter,
@@ -29,11 +48,6 @@ function buildRecruitingDatabaseState(): MpgfPublicGoodsCompactsState {
         status: "recruiting",
         acceptedMemberCount: 0,
         memberCountAvailable: true,
-        identityIntegrityGate: {
-          state: MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE,
-          countUniqueness: "account_and_profile_only",
-          productionActivationReady: false,
-        },
         activation: {
           state: "recruiting",
           activatedAt: null,
@@ -41,10 +55,11 @@ function buildRecruitingDatabaseState(): MpgfPublicGoodsCompactsState {
           frozenConstitutionVersion: null,
           minimumTermEndsAt: null,
         },
-        allocationElectorate: {
-          active: false,
-          key: null,
-        },
+        readiness: calculateMpgfPublicGoodsCompactReadiness({
+          cycleKey: CYCLE_KEY,
+          members: [],
+        }),
+        allocationElectorate: { active: false, key: null },
         membership: null,
         delegation: null,
       }),
@@ -54,65 +69,104 @@ function buildRecruitingDatabaseState(): MpgfPublicGoodsCompactsState {
   };
 }
 
-function activateFutureFlourishing(state: MpgfPublicGoodsCompactsState) {
-  const compact = state.compacts[0];
-  const minimumTermEndsAt =
-    calculateMpgfPublicGoodsCompactProspectiveExitDate(
-      ACTIVATED_AT,
-      ACTIVATED_AT,
-    ).minimumTermEndsAt;
-
-  compact.status = "active";
-  compact.acceptedMemberCount = 5_000;
-  compact.identityIntegrityGate = {
-    state: MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE,
-    countUniqueness: "account_and_profile_only",
-    productionActivationReady: true,
-  };
-  compact.activation = {
-    state: "threshold_reached_constitution_frozen",
+function activeMembership(
+  compact: MpgfPublicGoodsCompactsState["compacts"][number],
+): MpgfPublicGoodsCompactMembership {
+  return {
+    id: "20000000-0000-4000-8000-000000000001",
+    compactId: compact.id as string,
+    compactPublicKey: compact.publicKey,
+    constitutionVersionAccepted: compact.constitutionVersion,
+    acknowledgements: MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
+    status: "active",
+    acceptedAt: ACTIVATED_AT,
     activatedAt: ACTIVATED_AT,
-    constitutionFrozenAt: ACTIVATED_AT,
-    frozenConstitutionVersion: compact.constitutionVersion,
-    minimumTermEndsAt,
+    revokedAt: null,
+    exitRequestedAt: null,
+    exitEffectiveAt: null,
+    allocationBps: 10_000,
+    scheduledContributionCents: null,
+    netSettledContributionCents: null,
+    fundingQualificationState: "unqualified",
+    fundingQualified: false,
+    identityQualified: false,
   };
 }
 
-test("complete recruiting database state is accepted", () => {
-  const state = buildRecruitingDatabaseState();
+function activateFutureFlourishing(state: MpgfPublicGoodsCompactsState) {
+  const compact = state.compacts[0];
+  compact.status = "active";
+  compact.acceptedMemberCount = 100;
+  compact.activation = {
+    state: "active",
+    activatedAt: ACTIVATED_AT,
+    constitutionFrozenAt: ACTIVATED_AT,
+    frozenConstitutionVersion: compact.constitutionVersion,
+    minimumTermEndsAt: calculateMpgfPublicGoodsCompactProspectiveExitDate(
+      ACTIVATED_AT,
+      ACTIVATED_AT,
+    ).minimumTermEndsAt,
+  };
+}
 
+function setSingleAllocation(
+  state: MpgfPublicGoodsCompactsState,
+  membership: MpgfPublicGoodsCompactMembership,
+) {
+  state.allocation = {
+    cycleKey: CYCLE_KEY,
+    instructionValid: true,
+    schedulingReady: false,
+    reason:
+      "Authoritative prior-month coverage and dormant authorization are unavailable.",
+    allocations: [
+      {
+        compactPublicKey: membership.compactPublicKey,
+        allocationBps: 10_000,
+        scheduledContributionCents: null,
+      },
+    ],
+    scheduledTotalCents: null,
+  };
+}
+
+test("complete fail-closed recruiting database state is accepted", () => {
+  const state = buildRecruitingDatabaseState();
   assert.deepEqual(
     validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW),
     state,
   );
 });
 
-test("state validation rejects charter drift, impossible activation, and recruiting electorates", () => {
+test("state validation accepts threshold-ready while still activation-blocked", () => {
+  const state = buildRecruitingDatabaseState();
+  const compact = state.compacts[0];
+  compact.readiness = {
+    ...compact.readiness,
+    fundingQualifiedUniquePersonCount: 100,
+    scheduledContributionCents: 50_000,
+    memberThresholdMet: true,
+    fundingThresholdMet: true,
+    thresholdReady: true,
+    frozenAt: "2027-03-01T00:00:00.000Z",
+  };
+  compact.activation.state = "threshold_ready_activation_blocked";
+  assert.ok(validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW));
+  assert.equal(compact.status, "recruiting");
+});
+
+test("state validation rejects charter drift and recruiting electorates", () => {
   const summaryDrift = buildRecruitingDatabaseState();
   summaryDrift.compacts[0].summary = "Unaccepted replacement summary.";
   assert.equal(
-    validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(
-      summaryDrift,
-      NOW,
-    ),
-    null,
-  );
-
-  const activeBelowThreshold = buildRecruitingDatabaseState();
-  activateFutureFlourishing(activeBelowThreshold);
-  activeBelowThreshold.compacts[0].acceptedMemberCount = 4_999;
-  assert.equal(
-    validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(
-      activeBelowThreshold,
-      NOW,
-    ),
+    validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(summaryDrift, NOW),
     null,
   );
 
   const recruitingElectorate = buildRecruitingDatabaseState();
   recruitingElectorate.compacts[0].allocationElectorate = {
     active: true,
-    key: "round:compact-qa",
+    key: CYCLE_KEY,
   };
   assert.equal(
     validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(
@@ -123,145 +177,80 @@ test("state validation rejects charter drift, impossible activation, and recruit
   );
 });
 
-test("threshold state remains recruiting while the person-unique identity gate is blocked", () => {
-  const state = buildRecruitingDatabaseState();
-  state.compacts[0].acceptedMemberCount = 5_000;
-  state.compacts[0].activation.state =
-    "threshold_reached_identity_gate_blocked";
-
-  assert.deepEqual(
-    validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW),
-    state,
-  );
-
-  state.compacts[0].identityIntegrityGate.productionActivationReady = true;
-  assert.equal(
-    validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW),
-    null,
-  );
-});
-
-test("state validation rejects stale delegation and unsafe membership arithmetic", () => {
+test("state validation rejects allocation drift and unsafe funding qualification", () => {
   const state = buildRecruitingDatabaseState();
   activateFutureFlourishing(state);
   const compact = state.compacts[0];
-
-  compact.allocationElectorate = {
-    active: true,
-    key: "round:compact-qa",
-  };
-  compact.membership = {
-    id: "20000000-0000-4000-8000-000000000001",
-    compactId: compact.id as string,
-    compactPublicKey: compact.publicKey,
-    constitutionVersionAccepted: compact.constitutionVersion,
-    acknowledgements: MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
-    declaredEligibleMonthlySpendingCents: 12_345,
-    scheduledMonthlyContributionCents: 124,
-    status: "active",
-    acceptedAt: ACTIVATED_AT,
-    activatedAt: ACTIVATED_AT,
-    revokedAt: null,
-    exitRequestedAt: null,
-    exitEffectiveAt: null,
-  };
+  compact.membership = activeMembership(compact);
+  setSingleAllocation(state, compact.membership);
+  compact.membership.fundingQualified = true;
   assert.equal(
     validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW),
     null,
   );
 
-  compact.membership.scheduledMonthlyContributionCents = 123;
-  compact.delegation = {
-    id: "30000000-0000-4000-8000-000000000001",
-    compactId: compact.id as string,
-    electorateKey: "round:stale-qa",
-    delegatorMembershipId: compact.membership.id,
-    delegateeMembershipId: "20000000-0000-4000-8000-000000000002",
-    state: "active",
-    createdAt: "2026-02-01T00:00:00.000Z",
-    revokedAt: null,
-  };
+  compact.membership.fundingQualified = false;
+  compact.membership.allocationBps = 5_000;
   assert.equal(
     validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW),
     null,
   );
 });
 
-test("a revoked recruiting acceptance remains safe after later compact activation", () => {
+test("a revoked recruiting membership remains safe after later activation", () => {
   const state = buildRecruitingDatabaseState();
   const compact = state.compacts[0];
-
   compact.membership = {
-    id: "20000000-0000-4000-8000-000000000001",
-    compactId: compact.id as string,
-    compactPublicKey: compact.publicKey,
-    constitutionVersionAccepted: compact.constitutionVersion,
-    acknowledgements: MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
-    declaredEligibleMonthlySpendingCents: 12_345,
-    scheduledMonthlyContributionCents: 123,
+    ...activeMembership(compact),
     status: "revoked",
     acceptedAt: "2026-01-01T00:00:00.000Z",
     activatedAt: null,
     revokedAt: "2026-01-15T00:00:00.000Z",
-    exitRequestedAt: null,
-    exitEffectiveAt: null,
+    allocationBps: null,
   };
   activateFutureFlourishing(state);
-
-  const normalized =
-    validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW);
-
+  const normalized = validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(
+    state,
+    NOW,
+  );
   assert.ok(normalized);
   assert.equal(normalized.compacts[0].membership?.status, "revoked");
 });
 
-test("an effective prospective exit is rendered as exited rather than still binding", () => {
+test("an effective prospective exit is rendered as exited", () => {
   const state = buildRecruitingDatabaseState();
   activateFutureFlourishing(state);
   const compact = state.compacts[0];
   const exitRequestedAt = "2027-02-01T12:00:00.000Z";
-  const exitEffectiveAt =
-    calculateMpgfPublicGoodsCompactProspectiveExitDate(
-      ACTIVATED_AT,
-      exitRequestedAt,
-    ).effectiveAt;
-
+  const exitEffectiveAt = calculateMpgfPublicGoodsCompactProspectiveExitDate(
+    ACTIVATED_AT,
+    exitRequestedAt,
+  ).effectiveAt;
   compact.membership = {
-    id: "20000000-0000-4000-8000-000000000001",
-    compactId: compact.id as string,
-    compactPublicKey: compact.publicKey,
-    constitutionVersionAccepted: compact.constitutionVersion,
-    acknowledgements: MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
-    declaredEligibleMonthlySpendingCents: 12_345,
-    scheduledMonthlyContributionCents: 123,
+    ...activeMembership(compact),
     status: "exit_notice",
-    acceptedAt: ACTIVATED_AT,
-    activatedAt: ACTIVATED_AT,
-    revokedAt: null,
     exitRequestedAt,
     exitEffectiveAt,
   };
+  setSingleAllocation(state, compact.membership);
 
-  const normalized =
-    validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW);
-
+  const normalized = validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(
+    state,
+    NOW,
+  );
   assert.ok(normalized);
   assert.equal(normalized.compacts[0].membership?.status, "exited");
   assert.equal(normalized.compacts[0].delegation, null);
 });
 
-test("mutation responses fail closed on any money, mandate, membership, or reputation movement", () => {
+test("mutation responses fail closed on money, mandate, membership, or reputation movement", () => {
   assert.deepEqual(
     assertMpgfPublicGoodsCompactMutationSafety({
       ok: true,
       moneyMoved: false,
       automaticCollectionEnabled: false,
     }),
-    {
-      ok: true,
-      moneyMoved: false,
-      automaticCollectionEnabled: false,
-    },
+    { ok: true, moneyMoved: false, automaticCollectionEnabled: false },
   );
 
   for (const unsafe of [
@@ -273,8 +262,7 @@ test("mutation responses fail closed on any money, mandate, membership, or reput
     { reputationTransferred: true },
   ]) {
     assert.throws(
-      () =>
-        assertMpgfPublicGoodsCompactMutationSafety({ ok: true, ...unsafe }),
+      () => assertMpgfPublicGoodsCompactMutationSafety({ ok: true, ...unsafe }),
       /no-money safety boundary/,
     );
   }

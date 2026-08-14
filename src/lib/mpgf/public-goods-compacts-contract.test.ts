@@ -4,191 +4,148 @@ import test from "node:test";
 
 const root = new URL("../../../", import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), "utf8");
-
-const migration = read(
-  "supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql",
-);
+const base = read("supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql");
+const hardening = read("supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql");
+const migration = `${base}\n${hardening}`;
 const model = read("src/lib/mpgf/public-goods-compacts.ts");
-const server = read("src/lib/mpgf/public-goods-compacts-server.ts");
-const getRoute = read("src/app/api/mpgf/compacts/route.ts");
-const membershipRoute = read(
-  "src/app/api/mpgf/compacts/membership/route.ts",
-);
-const delegationRoute = read(
-  "src/app/api/mpgf/compacts/delegation/route.ts",
-);
-const component = read(
-  "src/components/mpgf/mpgf-public-goods-compacts.tsx",
-);
+const state = read("src/lib/mpgf/public-goods-compacts-state.ts");
+const service = read("src/lib/mpgf/public-goods-compacts-service.ts");
+const membershipRoute = read("src/app/api/mpgf/compacts/membership/route.ts");
+const allocationRoute = read("src/app/api/mpgf/compacts/allocation/route.ts");
+const delegationRoute = read("src/app/api/mpgf/compacts/delegation/route.ts");
+const component = read("src/components/mpgf/mpgf-public-goods-compacts.tsx");
+const hub = read("src/app/mpgf/page.tsx");
+const databaseTypes = read("src/lib/supabase/database.types.ts");
 
-test("compact tables use RLS and deny direct client writes", () => {
-  for (const table of [
-    "mpgf_public_goods_compacts",
-    "mpgf_public_goods_compact_memberships",
-    "mpgf_public_goods_compact_delegations",
-    "mpgf_public_goods_compact_idempotency_keys",
-  ]) {
-    assert.match(
-      migration,
-      new RegExp(`alter table public\\.${table} enable row level security`),
-    );
-    assert.match(
-      migration,
-      new RegExp(
-        `revoke all on table public\\.${table} from public, anon, authenticated`,
-      ),
-    );
+const tables = [
+  "compacts", "compact_memberships", "dormant_authorization_snapshots",
+  "outflow_coverage_snapshots", "outflow_observations", "obligation_snapshots",
+  "allocation_instructions", "allocation_instruction_lines", "scheduled_amount_snapshots",
+  "settled_contribution_snapshots", "funding_qualification_snapshots", "readiness_snapshots",
+  "voting_snapshots", "voting_weight_snapshots", "delegation_events",
+  "delegation_snapshots", "delegation_weight_snapshots", "compact_idempotency_keys",
+];
+
+test("every Compact v2 relation has RLS and direct client writes are revoked", () => {
+  for (const suffix of tables) {
+    assert.match(base, new RegExp(`alter table public\\.mpgf_public_goods_${suffix} enable row level security`));
   }
-  assert.doesNotMatch(
-    migration,
-    /grant (insert|update|delete|all) on table public\.mpgf_public_goods_compact_(memberships|delegations|idempotency_keys) to authenticated/i,
-  );
-  assert.doesNotMatch(
-    migration,
-    /grant select on table public\.mpgf_public_goods_compacts to (anon|authenticated)/i,
-  );
-  assert.match(migration, /memberships_owner_select[\s\S]*auth\.uid\(\)[\s\S]*user_id/);
+  assert.match(base, /revoke all on table public\.mpgf_public_goods_compacts,[\s\S]*from public, anon, authenticated/);
+  assert.doesNotMatch(base, /grant (?:insert|update|delete|all) on table public\.mpgf_public_goods_[^;]+ to authenticated/i);
 });
 
-test("authenticated security-definer RPCs are versioned, idempotent, and search-path safe", () => {
+test("the frozen v2 constitution is encoded without a cap or self-reported spending", () => {
+  for (const invariant of [
+    "obligation_divisor integer not null default 10",
+    "funding_qualification_minimum_cents bigint not null default 100",
+    "readiness_threshold_members integer not null default 100",
+    "readiness_threshold_scheduled_cents bigint not null default 50000",
+    "voting_equal_share_bps integer not null default 7000",
+    "voting_sqrt_contribution_share_bps integer not null default 3000",
+    "delegate_control_cap_bps integer not null default 1000",
+    "allocation_total_bps integer not null default 10000",
+  ]) assert.ok(base.includes(invariant), `missing frozen invariant: ${invariant}`);
+  assert.match(base, /constitution_version = 'mpgf-public-goods-compact\/transaction-v2'/);
+  assert.doesNotMatch(migration, /declared_eligible|self[-_ ]declared|monthly_contribution_cap/i);
+});
+
+test("coverage, allocation, qualification, readiness, voting, and delegation are separate immutable concepts", () => {
+  for (const suffix of [
+    "outflow_coverage_snapshots", "obligation_snapshots", "allocation_instructions",
+    "scheduled_amount_snapshots", "settled_contribution_snapshots",
+    "funding_qualification_snapshots", "readiness_snapshots", "voting_snapshots",
+    "delegation_events", "delegation_snapshots",
+  ]) assert.match(base, new RegExp(`create table public\\.mpgf_public_goods_${suffix}`));
+  assert.match(hardening, /Compact v2 snapshots and events are append-only/);
+  assert.match(hardening, /mpgf_public_goods_validate_qualification_snapshot_v2/);
+});
+
+test("authenticated RPCs are idempotent, fixed-search-path, and explicitly no-money", () => {
   for (const rpc of [
-    "join_mpgf_public_goods_compact",
-    "request_mpgf_public_goods_compact_exit",
-    "set_mpgf_public_goods_compact_delegation",
-    "clear_mpgf_public_goods_compact_delegation",
+    "join_mpgf_public_goods_compact_v2", "set_mpgf_public_goods_compact_allocation_v2",
+    "request_mpgf_public_goods_compact_exit_v2", "set_mpgf_public_goods_compact_delegation_v2",
+    "clear_mpgf_public_goods_compact_delegation_v2",
   ]) {
-    assert.match(
-      migration,
-      new RegExp(
-        `function public\\.${rpc}[\\s\\S]*security definer[\\s\\S]*set search_path = ''`,
-      ),
-    );
-    assert.match(
-      migration,
-      new RegExp(`grant execute on function public\\.${rpc}`),
-    );
+    assert.match(hardening, new RegExp(`function public\\.${rpc}[\\s\\S]*security definer[\\s\\S]*set search_path = ''`));
+    assert.match(hardening, new RegExp(`grant execute on function public\\.${rpc}`));
   }
-  assert.match(migration, /auth\.uid\(\)/);
-  assert.match(migration, /A Moral Trade profile is required/);
-  assert.match(migration, /exact current constitution version/);
-  assert.match(migration, /Every required compact acknowledgement must be explicit/);
-  assert.match(migration, /acknowledgements = '\{[\s\S]*"voluntaryChoice": true[\s\S]*"noPaymentMandate": true/);
-  assert.match(migration, /mpgf_public_goods_compact_idempotency_lookup/);
-  assert.match(migration, /different request/);
-  assert.match(migration, /must schedule at least one cent/);
-  assert.match(
-    migration,
-    /scheduled_monthly_contribution_cents between 1 and 1000/,
-  );
-  assert.match(
-    migration,
-    /activation_identity_gate_state[\s\S]*blocked_pending_person_unique_eligibility_policy/,
-  );
-  assert.match(
-    migration,
-    /accepted_count >= compact_record\.activation_threshold_members[\s\S]*verified_person_unique_eligibility_policy/,
-  );
+  assert.match(hardening, /pg_advisory_xact_lock/);
+  assert.match(hardening, /already used for a different request/);
+  assert.match(hardening, /'moneyMoved', false/);
+  assert.match(hardening, /'automaticCollectionEnabled', false/);
 });
 
-test("constitutional database checks prohibit assignment, marketplace tax, project refusal, and collection", () => {
-  for (const required of [
-    "opt_in_only boolean not null default true check (opt_in_only)",
-    "random_assignment_allowed boolean not null default false check (not random_assignment_allowed)",
-    "core_marketplace_taxed boolean not null default false check (not core_marketplace_taxed)",
-    "binding_only_after_activation boolean not null default true check (binding_only_after_activation)",
-    "not per_project_refusal_allowed_after_activation",
-    "exit_prospective_only_after_activation",
-    "money_moves_on_join boolean not null default false check (not money_moves_on_join)",
-    "automatic_collection_enabled boolean not null default false check (not automatic_collection_enabled)",
-  ]) {
-    assert.ok(migration.includes(required), `missing database invariant: ${required}`);
+test("financial-cycle freezing is complete-coverage-only, net-settled, uncapped, and cent exact", () => {
+  assert.match(hardening, /if coverage_record\.coverage_status = 'complete'/);
+  assert.match(hardening, /direction = 'outgoing'/);
+  assert.match(hardening, /payment_kind = 'moral_trade_payment'/);
+  assert.match(hardening, /settlement_status = 'settled'/);
+  assert.match(hardening, /gross_settled_cents[\s\S]{0,120}- observation\.refunded_cents[\s\S]{0,120}- observation\.reversed_cents[\s\S]{0,120}- observation\.chargeback_cents/);
+  assert.match(hardening, /eligible_total_bigint \/ 10/);
+  assert.match(hardening, /row_number\(\) over \([\s\S]*remainder_numerator desc, stable_compact_key asc/);
+  assert.doesNotMatch(hardening, /least\([^\n]*obligation|monthly_contribution_cap/i);
+});
+
+test("readiness, voting, and direct delegation encode the frozen numeric rules", () => {
+  assert.match(hardening, /partition by latest\.unique_person_key_hash/);
+  assert.match(hardening, /unique_person_count >= 100 and scheduled_total >= 50000/);
+  assert.match(hardening, /activation_blocked/);
+  assert.match(hardening, /sqrt\(net_settled_contribution_cents::numeric\)/);
+  assert.match(hardening, /700000000000/);
+  assert.match(hardening, /300000000000/);
+  assert.match(hardening, /total_inserted <> 1000000000000/);
+  assert.match(hardening, /controlled_weight_units > 100000000000/);
+  assert.match(hardening, /directOnly', true/);
+  assert.match(hardening, /incomingWeightRedelegated', false/);
+});
+
+test("activation is hard-disabled even when a readiness snapshot is threshold-ready", () => {
+  assert.match(base, /constraint mpgf_public_goods_compacts_activation_execution_disabled/);
+  assert.match(base, /constraint mpgf_public_goods_compacts_active_requires_execution_gate/);
+  assert.match(hardening, /Compact activation remains hard-disabled in transaction-v2/);
+  assert.doesNotMatch(hardening, /update public\.mpgf_public_goods_compacts[\s\S]{0,200}set status = 'active'/i);
+});
+
+test("application routes validate v2 state and expose no capture path", () => {
+  for (const route of [membershipRoute, allocationRoute, delegationRoute]) {
+    assert.match(route, /getViewer/);
+    assert.match(route, /public-goods-compacts-service/);
   }
-  assert.match(migration, /accepted_count >= compact_record\.activation_threshold_members/);
-  assert.match(migration, /frozen_constitution_version = constitution_version/);
-  assert.match(migration, /set status = 'active', activated_at = action_at/);
-  assert.match(migration, /greatest\([\s\S]*make_interval\(months[\s\S]*make_interval\(days/);
-  assert.match(
-    migration,
-    /old\.accepted_member_count > 0[\s\S]*Published compact terms are immutable after the first current acceptance/,
-  );
+  assert.match(service, /validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState/);
+  assert.match(service, /assertMpgfPublicGoodsCompactMutationSafety/);
+  assert.match(state, /hasSafeObligation/);
+  assert.match(state, /hasSafeAllocation/);
+  const sources = [model, state, service, membershipRoute, allocationRoute, delegationRoute, component, migration].join("\n");
+  assert.doesNotMatch(sources, /PaymentIntent|payment_intent|checkout\.sessions|createCheckoutSession|stripe\./i);
 });
 
-test("delegation is same-compact, active-only, non-self, and revocable", () => {
-  assert.match(migration, /compact_record\.status <> 'active'/);
-  assert.match(migration, /allocation_electorate_active/);
-  assert.match(migration, /delegatee_record[\s\S]*compact_id = compact_record\.id[\s\S]*status = 'active'/);
-  assert.match(migration, /Self-delegation is not allowed/);
-  assert.match(
-    migration,
-    /set status = 'exit_notice'[\s\S]*delegator_membership_id = membership_record\.id[\s\S]*delegatee_membership_id = membership_record\.id[\s\S]*get diagnostics delegations_revoked = row_count/,
-  );
-  assert.match(migration, /membershipTransferred', false/);
-  assert.match(migration, /moneyTransferred', false/);
-  assert.match(migration, /reputationTransferred', false/);
+test("generated database types expose every v2 table and current RPC names", () => {
+  for (const suffix of tables) {
+    assert.match(databaseTypes, new RegExp(`mpgf_public_goods_${suffix}: \\{`));
+  }
+  for (const rpc of [
+    "get_mpgf_public_goods_compacts_v2_state",
+    "join_mpgf_public_goods_compact_v2",
+    "set_mpgf_public_goods_compact_allocation_v2",
+    "freeze_mpgf_public_goods_financial_cycle_v2",
+    "freeze_mpgf_public_goods_readiness_v2",
+    "freeze_mpgf_public_goods_voting_v2",
+    "freeze_mpgf_public_goods_delegations_v2",
+  ]) assert.match(databaseTypes, new RegExp(`${rpc}: \\{`));
+  assert.doesNotMatch(databaseTypes, /p_declared_eligible_monthly_spending_cents/);
 });
 
-test("seeds contain exactly the three published charters and no members or activity", () => {
-  const insertTail = migration.slice(
-    migration.indexOf("insert into public.mpgf_public_goods_compacts"),
-  );
+test("seeds publish exactly three current charters and no participant or financial facts", () => {
+  const seed = base.slice(base.indexOf("insert into public.mpgf_public_goods_compacts"));
   for (const title of ["Future Flourishing", "Animal Welfare", "Global Health"]) {
-    assert.equal(insertTail.split(`'${title}'`).length - 1, 1);
+    assert.equal(seed.split(`'${title}'`).length - 1, 1);
   }
-  assert.doesNotMatch(
-    insertTail,
-    /insert into public\.mpgf_public_goods_compact_(memberships|delegations|idempotency_keys)/i,
-  );
+  assert.doesNotMatch(seed, /insert into public\.mpgf_public_goods_(?:compact_memberships|outflow_|obligation_|scheduled_|settled_|funding_|readiness_|voting_|delegation_)/i);
 });
 
-test("server and APIs fail closed and reuse authenticated MPGF no-store patterns", () => {
-  assert.match(server, /hasSupabaseEnv/);
-  assert.match(server, /buildMpgfPublicGoodsCompactPublishedExamplesState/);
-  assert.match(server, /moneyMovesOnPageAction !== false/);
-  assert.match(server, /automaticCollectionEnabled !== false/);
-  assert.match(getRoute, /MPGF_PUBLIC_GOODS_API_HEADERS/);
-  assert.match(membershipRoute, /getViewer/);
-  assert.match(membershipRoute, /parseMpgfPublicGoodsCompactConstitutionVersion/);
-  assert.match(membershipRoute, /parseMpgfPublicGoodsCompactAcknowledgements/);
-  assert.match(delegationRoute, /getViewer/);
-  assert.match(delegationRoute, /parseMpgfPublicGoodsCompactMembershipId/);
-});
-
-test("new compact sources contain no payment capture or fake-success path", () => {
-  const newSources = [
-    model,
-    server,
-    getRoute,
-    membershipRoute,
-    delegationRoute,
-    component,
-    migration,
-  ].join("\n");
-
-  assert.doesNotMatch(
-    newSources,
-    /PaymentIntent|payment_intent|stripe|capture_method|checkout\.sessions|createCheckoutSession/i,
-  );
-  assert.match(newSources, /moneyMoved/);
-  assert.match(newSources, /automaticCollectionEnabled/);
-  assert.match(component, /No compact allocation electorate is active/);
-  assert.match(component, /activationAndNoProjectOptOut: acknowledgements\.binding/);
-  assert.match(component, /status !== "revoked"/);
-  assert.match(component, /Revoked before activation; not binding/);
-  assert.match(component, /explicitly accept the current constitution again/);
-  assert.match(component, /legally enforceable debt/);
-  assert.match(component, /one-person-one-account/);
-});
-
-test("database state is deeply validated before the server trusts live compact data", () => {
-  assert.match(server, /isSafeDatabaseState/);
-  assert.match(server, /hasExactTerms/);
-  assert.match(server, /hasExactInvariants/);
-  assert.match(server, /hasExactAcknowledgements/);
-  assert.match(server, /calculateMpgfPublicGoodsCompactContributionCents/);
-});
-
-test("the public compact route is included in the canonical sitemap", () => {
-  const sitemapSource = read("src/app/sitemap.ts");
-
-  assert.match(sitemapSource, /getAbsoluteUrl\("\/mpgf\/compacts"\)/);
+test("the public Compact route remains in the canonical sitemap", () => {
+  assert.match(read("src/app/sitemap.ts"), /getAbsoluteUrl\("\/mpgf\/compacts"\)/);
+  assert.match(hub, /transaction-based obligation/);
+  assert.match(hub, /100-person \+ \$500 readiness/);
+  assert.doesNotMatch(hub, /1% contribution rule|\$10 monthly cap|5,000-member/);
 });

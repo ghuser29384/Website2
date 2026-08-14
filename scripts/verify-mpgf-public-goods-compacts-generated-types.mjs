@@ -98,16 +98,38 @@ function returnContract(source, functionName) {
 const tables = [
   "mpgf_public_goods_compacts",
   "mpgf_public_goods_compact_memberships",
-  "mpgf_public_goods_compact_delegations",
+  "mpgf_public_goods_dormant_authorization_snapshots",
+  "mpgf_public_goods_outflow_coverage_snapshots",
+  "mpgf_public_goods_outflow_observations",
+  "mpgf_public_goods_obligation_snapshots",
+  "mpgf_public_goods_allocation_instructions",
+  "mpgf_public_goods_allocation_instruction_lines",
+  "mpgf_public_goods_scheduled_amount_snapshots",
+  "mpgf_public_goods_settled_contribution_snapshots",
+  "mpgf_public_goods_funding_qualification_snapshots",
+  "mpgf_public_goods_readiness_snapshots",
+  "mpgf_public_goods_voting_snapshots",
+  "mpgf_public_goods_voting_weight_snapshots",
+  "mpgf_public_goods_delegation_events",
+  "mpgf_public_goods_delegation_snapshots",
+  "mpgf_public_goods_delegation_weight_snapshots",
   "mpgf_public_goods_compact_idempotency_keys",
 ];
 
 const functions = [
-  "get_mpgf_public_goods_compacts_state",
-  "join_mpgf_public_goods_compact",
-  "request_mpgf_public_goods_compact_exit",
-  "set_mpgf_public_goods_compact_delegation",
-  "clear_mpgf_public_goods_compact_delegation",
+  "get_mpgf_public_goods_compacts_v2_state",
+  "join_mpgf_public_goods_compact_v2",
+  "set_mpgf_public_goods_compact_allocation_v2",
+  "request_mpgf_public_goods_compact_exit_v2",
+  "set_mpgf_public_goods_compact_delegation_v2",
+  "clear_mpgf_public_goods_compact_delegation_v2",
+  "freeze_mpgf_public_goods_financial_cycle_v2",
+  "freeze_mpgf_public_goods_readiness_v2",
+  "freeze_mpgf_public_goods_voting_v2",
+  "freeze_mpgf_public_goods_delegations_v2",
+  "mpgf_public_goods_cycle_bounds_v2",
+  "mpgf_public_goods_hash_v2",
+  "mpgf_public_goods_idempotency_replay_v2",
 ];
 
 const report = {
@@ -175,10 +197,16 @@ for (const functionName of functions) {
 }
 
 assert.ok(
-  report.tables.mpgf_public_goods_compacts.row.includes(
-    "activation_identity_gate_state",
+  report.tables.mpgf_public_goods_funding_qualification_snapshots.row.includes(
+    "unique_person_key_hash",
   ),
-  "Generated compact types omitted the fail-closed identity gate.",
+  "Generated Compact v2 types omitted the stable unique-person qualification key.",
+);
+assert.ok(
+  report.tables.mpgf_public_goods_readiness_snapshots.row.includes(
+    "activation_blocked",
+  ),
+  "Generated Compact v2 types omitted the hard activation boundary.",
 );
 
 console.log(JSON.stringify(report, null, 2));

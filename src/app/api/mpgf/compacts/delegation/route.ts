@@ -4,7 +4,7 @@ import { getViewer } from "@/lib/app-data";
 import { MPGF_PUBLIC_GOODS_API_HEADERS } from "@/lib/mpgf/public-goods-api";
 import {
   asMpgfPublicGoodsCompactRecord,
-  parseMpgfPublicGoodsCompactElectorateKey,
+  parseMpgfPublicGoodsCompactCycleKey,
   parseMpgfPublicGoodsCompactIdempotencyKey,
   parseMpgfPublicGoodsCompactMembershipId,
   parseMpgfPublicGoodsCompactPublicKey,
@@ -39,8 +39,8 @@ export async function PUT(request: Request) {
       compactPublicKey: parseMpgfPublicGoodsCompactPublicKey(
         record.compactPublicKey,
       ),
-      electorateKey: parseMpgfPublicGoodsCompactElectorateKey(
-        record.electorateKey,
+      cycleKey: parseMpgfPublicGoodsCompactCycleKey(
+        record.cycleKey,
       ),
       delegateeMembershipId: parseMpgfPublicGoodsCompactMembershipId(
         record.delegateeMembershipId,
@@ -79,8 +79,8 @@ export async function DELETE(request: Request) {
       compactPublicKey: parseMpgfPublicGoodsCompactPublicKey(
         record.compactPublicKey,
       ),
-      electorateKey: parseMpgfPublicGoodsCompactElectorateKey(
-        record.electorateKey,
+      cycleKey: parseMpgfPublicGoodsCompactCycleKey(
+        record.cycleKey,
       ),
       idempotencyKey: parseMpgfPublicGoodsCompactIdempotencyKey(
         record.idempotencyKey,

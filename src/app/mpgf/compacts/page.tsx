@@ -10,14 +10,14 @@ import { getAbsoluteUrl } from "@/lib/seo";
 export const metadata: Metadata = {
   title: "Voluntary Public-Goods Compacts | Moral Trade",
   description:
-    "Review and voluntarily accept a cause-specific public-goods compact with a frozen constitution, activation threshold, capped contribution rule, and no automatic collection.",
+    "Review transaction-based Compact v2: one aggregate uncapped obligation, exact cause allocation, settlement-based qualification, and no automatic collection.",
   alternates: {
     canonical: "/mpgf/compacts",
   },
   openGraph: {
     title: "Voluntary Public-Goods Compacts | Moral Trade",
     description:
-      "Cause-specific constitutional compacts with a qualifying-acceptance threshold, a separate identity-integrity gate, and no automatic collection.",
+      "Cause-specific Compact v2 constitutions with transaction-based qualification and fail-closed activation gates.",
     url: getAbsoluteUrl("/mpgf/compacts"),
     type: "website",
   },
@@ -43,12 +43,12 @@ export default async function MpgfCompactsPage() {
           </Link>
         </>
       }
-      description="Choose a cause-specific constitution voluntarily. Acceptance stays revocable while recruiting and can become binding only after 5,000 qualifying acceptances and a separately verified person-unique identity gate. No action here moves money."
+      description="Join one or more cause-specific constitutions voluntarily. Compact v2 derives one uncapped obligation from authoritative prior-month net-settled outflow, requires an exact allocation, and remains activation-blocked. No action here moves money."
       eyebrow="Opt-in public-goods compacts"
       modeItems={[
         "Voluntary cause selection",
-        "5,000 qualifying acceptances plus identity gate",
-        "Constitution frozen at activation",
+        "100 people + $500 numerical readiness",
+        "Activation blocked by operational gates",
         "Automatic collection disabled",
       ]}
       participationPanel={
@@ -64,8 +64,8 @@ export default async function MpgfCompactsPage() {
               <dd>Immediately revocable and not yet binding</dd>
             </div>
             <div>
-              <dt>3. Activate at threshold</dt>
-              <dd>First verify the person-unique identity release gate</dd>
+              <dt>3. Reach numerical readiness</dt>
+              <dd>100 verified people and $500 planned in one frozen snapshot</dd>
             </div>
             <div>
               <dt>Collection state</dt>
@@ -97,19 +97,13 @@ export default async function MpgfCompactsPage() {
           </h2>
           <p>
             Moral Trade has no government taxing authority. Users are never randomly assigned,
-            and the ordinary marketplace remains untaxed. A member chooses one cause-specific
-            compact and accepts its published constitution before any obligation can arise.
+            and the ordinary marketplace remains untaxed. A member may choose multiple
+            cause-specific Compacts while all of them share one aggregate monthly obligation.
           </p>
           <p>
             <strong>Joining after activation:</strong> if a compact is already active, accepting its
             frozen constitution makes the membership binding immediately. Exit remains
             prospective under the published minimum-term and notice rules.
-          </p>
-          <p>
-            <strong>Legal and identity boundary:</strong> joining alone is not represented as a
-            legally enforceable debt or provider payment mandate. Counts are currently unique by
-            account/profile, not verified person, so automatic activation remains blocked until a
-            separately approved one-person-one-account and Sybil-resistance policy is integrated.
           </p>
         </div>
         <MpgfPublicGoodsCompacts state={state} viewerPresent={Boolean(viewer)} />
@@ -124,13 +118,11 @@ export default async function MpgfCompactsPage() {
           <p className="eyebrow">Lifecycle in plain language</p>
           <h2 id="compact-lifecycle-heading">Recruit, activate once, govern, then report.</h2>
           <p>
-            Recruiting acceptances are durable but immediately revocable. A zero-dollar schedule
-            cannot join or count toward the threshold. Reaching 5,000 qualifying acceptances does
-            not activate while the person-unique identity gate is blocked; after that gate is
-            separately verified, activation atomically freezes the founding constitution and
-            starts the 12-month minimum term. One-member-one-credit allocation, revocable
-            delegation, independent review, additionality checks, recusals, minority protections,
-            and public post-round reporting then govern project selection.
+            Recruiting memberships are durable but immediately revocable. Numerical readiness
+            requires 100 funding-qualified verified people and $500 planned in the same frozen
+            snapshot, but cannot activate while identity, legal, payment, provider, and production
+            release gates remain unmet. A frozen voting cycle uses 70% equal weight and 30%
+            square-root net-settled contribution weight, with direct-only delegation capped at 10%.
           </p>
         </div>
         <div className="section-actions">

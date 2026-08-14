@@ -57,7 +57,7 @@ const serviceRoutes = [
   {
     title: "Voluntary public-goods compacts",
     detail:
-      "Choose a cause-specific constitution with a 1% contribution rule, $10 monthly cap, 5,000-member activation threshold, and automatic collection disabled.",
+      "Choose one or more cause-specific Compact v2 constitutions with one uncapped transaction-based obligation, exact allocation, 100-person + $500 readiness, and automatic collection disabled.",
     href: "/mpgf/compacts",
     action: "Review founding compacts",
   },

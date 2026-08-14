@@ -2,13 +2,9 @@ import {
   MPGF_PUBLIC_GOODS_COMPACT_COLLECTION_GATE,
   MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION,
   MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS,
-  MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE,
   MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS,
-  MPGF_PUBLIC_GOODS_COMPACT_MAX_DECLARED_SPENDING_CENTS,
   MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
   MPGF_PUBLIC_GOODS_COMPACT_TERMS,
-  MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE,
-  calculateMpgfPublicGoodsCompactContributionCents,
   calculateMpgfPublicGoodsCompactProspectiveExitDate,
   type MpgfPublicGoodsCompactMembership,
   type MpgfPublicGoodsCompactState,
@@ -17,8 +13,7 @@ import {
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ELECTORATE_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,159}$/;
-
+const CYCLE_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])$/;
 const membershipStatuses = new Set([
   "pending_activation",
   "active",
@@ -26,7 +21,6 @@ const membershipStatuses = new Set([
   "revoked",
   "exited",
 ]);
-
 const unsafeMutationFlags = [
   "moneyMoved",
   "automaticCollectionEnabled",
@@ -45,161 +39,193 @@ function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_PATTERN.test(value);
 }
 
-function isValidDate(value: unknown): value is string {
+function isDate(value: unknown): value is string {
   return typeof value === "string" && Number.isFinite(Date.parse(value));
 }
 
-function isNullOrValidDate(value: unknown): value is string | null {
-  return value === null || isValidDate(value);
+function isNullDate(value: unknown): value is string | null {
+  return value === null || isDate(value);
 }
 
-function hasExactAcknowledgements(value: unknown) {
-  if (!isRecord(value)) {
+function isSafeNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+function hasExactObject(value: unknown, expected: Record<string, unknown>) {
+  if (!isRecord(value) || Object.keys(value).length !== Object.keys(expected).length) {
     return false;
   }
-
-  const requiredKeys = Object.keys(
-    MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
-  );
-
-  return (
-    Object.keys(value).length === requiredKeys.length &&
-    requiredKeys.every((key) => value[key] === true)
+  return Object.entries(expected).every(
+    ([key, expectedValue]) => value[key] === expectedValue,
   );
 }
 
 function hasExactTerms(value: unknown) {
-  return (
-    isRecord(value) &&
-    value.contributionRateBps ===
-      MPGF_PUBLIC_GOODS_COMPACT_TERMS.contributionRateBps &&
-    value.monthlyContributionCapCents ===
-      MPGF_PUBLIC_GOODS_COMPACT_TERMS.monthlyContributionCapCents &&
-    value.activationThresholdMembers ===
-      MPGF_PUBLIC_GOODS_COMPACT_TERMS.activationThresholdMembers &&
-    value.minimumTermMonths ===
-      MPGF_PUBLIC_GOODS_COMPACT_TERMS.minimumTermMonths &&
-    value.exitNoticeDays === MPGF_PUBLIC_GOODS_COMPACT_TERMS.exitNoticeDays &&
-    value.projectSelectionRule ===
-      MPGF_PUBLIC_GOODS_COMPACT_TERMS.projectSelectionRule &&
-    value.auditRule === MPGF_PUBLIC_GOODS_COMPACT_TERMS.auditRule &&
-    value.noProjectOptOutRule ===
-      MPGF_PUBLIC_GOODS_COMPACT_TERMS.noProjectOptOutRule
-  );
+  return hasExactObject(value, MPGF_PUBLIC_GOODS_COMPACT_TERMS);
 }
 
 function hasExactInvariants(value: unknown) {
-  return (
-    isRecord(value) &&
-    value.optInOnly === MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.optInOnly &&
-    value.randomAssignmentAllowed ===
-      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.randomAssignmentAllowed &&
-    value.coreMarketplaceTaxed ===
-      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.coreMarketplaceTaxed &&
-    value.bindingOnlyAfterActivation ===
-      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.bindingOnlyAfterActivation &&
-    value.perProjectRefusalAllowedAfterActivation ===
-      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS
-        .perProjectRefusalAllowedAfterActivation &&
-    value.exitProspectiveOnlyAfterActivation ===
-      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS
-        .exitProspectiveOnlyAfterActivation &&
-    value.moneyMovesOnJoin ===
-      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.moneyMovesOnJoin &&
-    value.automaticCollectionEnabled ===
-      MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.automaticCollectionEnabled
+  return hasExactObject(value, MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS);
+}
+
+function hasExactAcknowledgements(value: unknown) {
+  return hasExactObject(
+    value,
+    MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
   );
 }
 
-function hasSafeActivation(
-  value: unknown,
-  compactStatus: "recruiting" | "active",
-  acceptedMemberCount: number,
-  identityGateReady: boolean,
-) {
-  if (!isRecord(value)) {
-    return false;
-  }
-
-  if (compactStatus === "recruiting") {
-    const thresholdReached =
-      acceptedMemberCount >=
-      MPGF_PUBLIC_GOODS_COMPACT_TERMS.activationThresholdMembers;
-
-    return (
-      (!thresholdReached || !identityGateReady) &&
-      value.state ===
-        (thresholdReached
-          ? "threshold_reached_identity_gate_blocked"
-          : "recruiting") &&
-      value.activatedAt === null &&
-      value.constitutionFrozenAt === null &&
-      value.frozenConstitutionVersion === null &&
-      value.minimumTermEndsAt === null
-    );
-  }
-
+function hasSafeObligation(value: unknown) {
   if (
-    !identityGateReady ||
-    acceptedMemberCount <
-      MPGF_PUBLIC_GOODS_COMPACT_TERMS.activationThresholdMembers ||
-    value.state !== "threshold_reached_constitution_frozen" ||
-    !isValidDate(value.activatedAt) ||
-    !isValidDate(value.constitutionFrozenAt) ||
-    value.frozenConstitutionVersion !==
-      MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION ||
-    !isValidDate(value.minimumTermEndsAt) ||
-    Date.parse(value.constitutionFrozenAt) !== Date.parse(value.activatedAt)
+    !isRecord(value) ||
+    typeof value.cycleKey !== "string" ||
+    !CYCLE_PATTERN.test(value.cycleKey) ||
+    !isDate(value.priorMonthStart) ||
+    !isDate(value.priorMonthEndExclusive) ||
+    !["unavailable", "partial", "complete"].includes(String(value.coverage)) ||
+    typeof value.coverageReason !== "string" ||
+    value.coverageReason.length === 0 ||
+    !isSafeNonNegativeInteger(value.sourceObservationCount)
   ) {
     return false;
   }
 
-  try {
-    const expectedMinimumTermEnd =
-      calculateMpgfPublicGoodsCompactProspectiveExitDate(
-        value.activatedAt,
-        value.activatedAt,
-      ).minimumTermEndsAt;
+  const cycleStart = Date.parse(`${value.cycleKey}-01T00:00:00.000Z`);
+  const priorStart = new Date(cycleStart);
+  priorStart.setUTCMonth(priorStart.getUTCMonth() - 1);
+  if (
+    Date.parse(value.priorMonthStart) !== priorStart.getTime() ||
+    Date.parse(value.priorMonthEndExclusive) !== cycleStart
+  ) {
+    return false;
+  }
 
+  if (value.coverage !== "complete") {
     return (
-      Date.parse(value.minimumTermEndsAt) === Date.parse(expectedMinimumTermEnd)
+      value.eligibleNetSettledOutflowCents === null &&
+      value.obligationCents === null &&
+      value.sourceObservationCount === 0
     );
-  } catch {
-    return false;
-  }
-}
-
-function hasSafeIdentityIntegrityGate(value: unknown) {
-  if (!isRecord(value) || value.countUniqueness !== "account_and_profile_only") {
-    return false;
-  }
-
-  if (value.state === MPGF_PUBLIC_GOODS_COMPACT_IDENTITY_GATE) {
-    return value.productionActivationReady === false;
   }
 
   return (
-    value.state === MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE &&
-    value.productionActivationReady === true
+    isSafeNonNegativeInteger(value.eligibleNetSettledOutflowCents) &&
+    isSafeNonNegativeInteger(value.obligationCents) &&
+    value.obligationCents ===
+      Math.floor(
+        value.eligibleNetSettledOutflowCents /
+          MPGF_PUBLIC_GOODS_COMPACT_TERMS.obligationDivisor,
+      )
   );
 }
 
-function hasSafeElectorate(
+function hasSafeAllocation(
   value: unknown,
-  compactStatus: "recruiting" | "active",
+  obligation: Record<string, unknown>,
 ) {
-  if (!isRecord(value) || typeof value.active !== "boolean") {
+  if (
+    !isRecord(value) ||
+    value.cycleKey !== obligation.cycleKey ||
+    typeof value.instructionValid !== "boolean" ||
+    typeof value.schedulingReady !== "boolean" ||
+    !Array.isArray(value.allocations)
+  ) {
     return false;
   }
 
-  if (!value.active) {
-    return value.key === null;
+  if (!value.instructionValid) {
+    return (
+      value.schedulingReady === false &&
+      typeof value.reason === "string" &&
+      value.reason.length > 0 &&
+      value.scheduledTotalCents === null &&
+      value.allocations.length === 0
+    );
   }
 
+  if (
+    value.allocations.length === 0 ||
+    (value.schedulingReady ? value.reason !== null : typeof value.reason !== "string")
+  ) {
+    return false;
+  }
+
+  const keys = new Set<string>();
+  let allocationTotalBps = 0;
+  let scheduledTotalCents = 0;
+  for (const row of value.allocations) {
+    if (
+      !isRecord(row) ||
+      typeof row.compactPublicKey !== "string" ||
+      keys.has(row.compactPublicKey) ||
+      !isSafeNonNegativeInteger(row.allocationBps) ||
+      row.allocationBps > MPGF_PUBLIC_GOODS_COMPACT_TERMS.allocationTotalBps ||
+      !(
+        row.scheduledContributionCents === null ||
+        isSafeNonNegativeInteger(row.scheduledContributionCents)
+      )
+    ) {
+      return false;
+    }
+    keys.add(row.compactPublicKey);
+    allocationTotalBps += row.allocationBps;
+    if (row.scheduledContributionCents !== null) {
+      scheduledTotalCents += row.scheduledContributionCents;
+    }
+  }
+
+  if (
+    allocationTotalBps !== MPGF_PUBLIC_GOODS_COMPACT_TERMS.allocationTotalBps
+  ) {
+    return false;
+  }
+  if (!value.schedulingReady) {
+    return (
+      value.scheduledTotalCents === null &&
+      value.allocations.every(
+        (row) =>
+          (row as Record<string, unknown>).scheduledContributionCents === null,
+      )
+    );
+  }
   return (
-    compactStatus === "active" &&
-    typeof value.key === "string" &&
-    ELECTORATE_KEY_PATTERN.test(value.key)
+    value.reason === null &&
+    isSafeNonNegativeInteger(value.scheduledTotalCents) &&
+    value.scheduledTotalCents === obligation.obligationCents &&
+    scheduledTotalCents === value.scheduledTotalCents
+  );
+}
+
+function hasSafeReadiness(value: unknown, cycleKey: string) {
+  if (
+    !isRecord(value) ||
+    value.cycleKey !== cycleKey ||
+    !isNullDate(value.frozenAt) ||
+    !isSafeNonNegativeInteger(value.fundingQualifiedUniquePersonCount) ||
+    !isSafeNonNegativeInteger(value.scheduledContributionCents) ||
+    typeof value.memberThresholdMet !== "boolean" ||
+    typeof value.fundingThresholdMet !== "boolean" ||
+    typeof value.thresholdReady !== "boolean" ||
+    value.activationBlocked !== true ||
+    !Array.isArray(value.blockers) ||
+    value.blockers.length === 0 ||
+    !value.blockers.every(
+      (blocker) => typeof blocker === "string" && blocker.length > 0,
+    )
+  ) {
+    return false;
+  }
+
+  const memberThresholdMet =
+    value.fundingQualifiedUniquePersonCount >=
+    MPGF_PUBLIC_GOODS_COMPACT_TERMS.readinessThresholdMembers;
+  const fundingThresholdMet =
+    value.scheduledContributionCents >=
+    MPGF_PUBLIC_GOODS_COMPACT_TERMS.readinessThresholdScheduledCents;
+  return (
+    value.memberThresholdMet === memberThresholdMet &&
+    value.fundingThresholdMet === fundingThresholdMet &&
+    value.thresholdReady === (memberThresholdMet && fundingThresholdMet)
   );
 }
 
@@ -211,12 +237,8 @@ function hasSafeMembership(
     status: "recruiting" | "active";
     activatedAt: string | null;
   },
-  nowMs: number,
 ): value is MpgfPublicGoodsCompactMembership | null {
-  if (value === null) {
-    return true;
-  }
-
+  if (value === null) return true;
   if (
     !isRecord(value) ||
     !isUuid(value.id) ||
@@ -225,281 +247,292 @@ function hasSafeMembership(
     value.constitutionVersionAccepted !==
       MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION ||
     !hasExactAcknowledgements(value.acknowledgements) ||
-    !Number.isSafeInteger(value.declaredEligibleMonthlySpendingCents) ||
-    (value.declaredEligibleMonthlySpendingCents as number) < 0 ||
-    (value.declaredEligibleMonthlySpendingCents as number) >
-      MPGF_PUBLIC_GOODS_COMPACT_MAX_DECLARED_SPENDING_CENTS ||
-    !Number.isSafeInteger(value.scheduledMonthlyContributionCents) ||
     typeof value.status !== "string" ||
     !membershipStatuses.has(value.status) ||
-    !isValidDate(value.acceptedAt) ||
-    !isNullOrValidDate(value.activatedAt) ||
-    !isNullOrValidDate(value.revokedAt) ||
-    !isNullOrValidDate(value.exitRequestedAt) ||
-    !isNullOrValidDate(value.exitEffectiveAt)
+    !isDate(value.acceptedAt) ||
+    !isNullDate(value.activatedAt) ||
+    !isNullDate(value.revokedAt) ||
+    !isNullDate(value.exitRequestedAt) ||
+    !isNullDate(value.exitEffectiveAt) ||
+    !(
+      value.allocationBps === null ||
+      (isSafeNonNegativeInteger(value.allocationBps) &&
+        value.allocationBps <=
+          MPGF_PUBLIC_GOODS_COMPACT_TERMS.allocationTotalBps)
+    ) ||
+    !(
+      value.scheduledContributionCents === null ||
+      isSafeNonNegativeInteger(value.scheduledContributionCents)
+    ) ||
+    !(
+      value.netSettledContributionCents === null ||
+      isSafeNonNegativeInteger(value.netSettledContributionCents)
+    ) ||
+    !["unqualified", "scheduled_qualified", "settled_qualified"].includes(
+      String(value.fundingQualificationState),
+    ) ||
+    typeof value.fundingQualified !== "boolean" ||
+    typeof value.identityQualified !== "boolean"
   ) {
     return false;
   }
 
-  try {
+  if (value.fundingQualified !== (value.fundingQualificationState !== "unqualified")) {
+    return false;
+  }
+  if (value.fundingQualificationState === "scheduled_qualified" && (
+    compact.status !== "recruiting" ||
+    !value.identityQualified ||
+    value.scheduledContributionCents === null ||
+    value.scheduledContributionCents <
+      MPGF_PUBLIC_GOODS_COMPACT_TERMS.fundingQualificationMinimumCents
+  )) return false;
+  if (value.fundingQualificationState === "settled_qualified" && (
+    compact.status !== "active" ||
+    !value.identityQualified ||
+    value.netSettledContributionCents === null ||
+    value.netSettledContributionCents <
+      MPGF_PUBLIC_GOODS_COMPACT_TERMS.fundingQualificationMinimumCents
+  )) return false;
+  if (value.status === "pending_activation" && compact.status !== "recruiting") {
+    return false;
+  }
+  if (
+    value.status === "active" &&
+    (compact.status !== "active" || value.activatedAt !== compact.activatedAt)
+  ) {
+    return false;
+  }
+  if (value.status === "revoked" && (!value.revokedAt || value.activatedAt !== null)) {
+    return false;
+  }
+  if (
+    value.status === "exit_notice" &&
+    (!value.exitRequestedAt || !value.exitEffectiveAt || !compact.activatedAt)
+  ) {
+    return false;
+  }
+  if (value.status === "exit_notice" && compact.activatedAt) {
+    try {
+      if (
+        Date.parse(value.exitEffectiveAt as string) !==
+        Date.parse(
+          calculateMpgfPublicGoodsCompactProspectiveExitDate(
+            compact.activatedAt,
+            value.exitRequestedAt as string,
+          ).effectiveAt,
+        )
+      ) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+function hasSafeCompact(
+  value: unknown,
+  cycleKey: string,
+): value is MpgfPublicGoodsCompactState {
+  if (!isRecord(value)) return false;
+  const charter = MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.find(
+    (candidate) => candidate.publicKey === value.publicKey,
+  );
+  if (
+    !charter ||
+    !isUuid(value.id) ||
+    value.causeKey !== charter.causeKey ||
+    value.title !== charter.title ||
+    value.summary !== charter.summary ||
+    value.constitutionVersion !== MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION ||
+    !hasExactTerms(value.terms) ||
+    !hasExactInvariants(value.invariants) ||
+    value.collectionState !== MPGF_PUBLIC_GOODS_COMPACT_COLLECTION_GATE ||
+    !["recruiting", "active"].includes(String(value.status)) ||
+    !isSafeNonNegativeInteger(value.acceptedMemberCount) ||
+    value.memberCountAvailable !== true ||
+    !hasSafeReadiness(value.readiness, cycleKey) ||
+    !isRecord(value.activation) ||
+    !isRecord(value.allocationElectorate) ||
+    typeof value.allocationElectorate.active !== "boolean"
+  ) {
+    return false;
+  }
+
+  const status = value.status as "recruiting" | "active";
+  const activation = value.activation;
+  if (status === "recruiting") {
+    const expectedState = (value.readiness as Record<string, unknown>)
+      .thresholdReady
+      ? "threshold_ready_activation_blocked"
+      : "recruiting";
     if (
-      value.scheduledMonthlyContributionCents !==
-      calculateMpgfPublicGoodsCompactContributionCents(
-        value.declaredEligibleMonthlySpendingCents as number,
-      )
+      activation.state !== expectedState ||
+      activation.activatedAt !== null ||
+      activation.constitutionFrozenAt !== null ||
+      activation.frozenConstitutionVersion !== null ||
+      activation.minimumTermEndsAt !== null ||
+      value.allocationElectorate.active !== false ||
+      value.allocationElectorate.key !== null
     ) {
       return false;
     }
-  } catch {
-    return false;
-  }
-
-  if (value.status === "pending_activation") {
-    return (
-      compact.status === "recruiting" &&
-      value.activatedAt === null &&
-      value.revokedAt === null &&
-      value.exitRequestedAt === null &&
-      value.exitEffectiveAt === null
-    );
-  }
-
-  if (value.status === "revoked") {
-    return (
-      value.activatedAt === null &&
-      isValidDate(value.revokedAt) &&
-      value.exitRequestedAt === null &&
-      value.exitEffectiveAt === null
-    );
-  }
-
-  if (
-    compact.status !== "active" ||
-    !isValidDate(compact.activatedAt) ||
-    !isValidDate(value.activatedAt) ||
-    Date.parse(value.activatedAt) < Date.parse(compact.activatedAt) ||
-    value.revokedAt !== null
+  } else if (
+    activation.state !== "active" ||
+    !isDate(activation.activatedAt) ||
+    activation.constitutionFrozenAt !== activation.activatedAt ||
+    activation.frozenConstitutionVersion !==
+      MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION ||
+    !isDate(activation.minimumTermEndsAt) ||
+    !(
+      (value.allocationElectorate.active === false &&
+        value.allocationElectorate.key === null) ||
+      (value.allocationElectorate.active === true &&
+        value.allocationElectorate.key === cycleKey)
+    )
   ) {
     return false;
   }
 
-  if (value.status === "active") {
-    return value.exitRequestedAt === null && value.exitEffectiveAt === null;
-  }
-
   if (
-    !isValidDate(value.exitRequestedAt) ||
-    !isValidDate(value.exitEffectiveAt)
+    !hasSafeMembership(value.membership, {
+      id: value.id as string,
+      publicKey: value.publicKey as string,
+      status,
+      activatedAt: activation.activatedAt as string | null,
+    })
   ) {
     return false;
   }
 
-  try {
-    const expectedExit = calculateMpgfPublicGoodsCompactProspectiveExitDate(
-      compact.activatedAt,
-      value.exitRequestedAt,
-    ).effectiveAt;
-
-    if (Date.parse(value.exitEffectiveAt) !== Date.parse(expectedExit)) {
+  if (value.delegation !== null) {
+    const membership = value.membership as MpgfPublicGoodsCompactMembership | null;
+    if (
+      !isRecord(value.delegation) ||
+      !membership?.fundingQualified ||
+      membership.fundingQualificationState !== "settled_qualified" ||
+      !value.allocationElectorate.active ||
+      !isUuid(value.delegation.id) ||
+      value.delegation.compactId !== value.id ||
+      value.delegation.cycleKey !== cycleKey ||
+      value.delegation.delegatorMembershipId !== membership.id ||
+      !isUuid(value.delegation.delegateeMembershipId) ||
+      value.delegation.delegateeMembershipId === membership.id ||
+      !["active", "revoked"].includes(String(value.delegation.state)) ||
+      !isDate(value.delegation.createdAt) ||
+      !isNullDate(value.delegation.revokedAt)
+    ) {
       return false;
     }
-  } catch {
-    return false;
   }
-
-  return value.status === "exit_notice"
-    ? true
-    : value.status === "exited" && Date.parse(value.exitEffectiveAt) <= nowMs;
+  return true;
 }
 
-function hasSafeDelegation(
-  value: unknown,
-  compact: {
-    id: string;
-    status: "recruiting" | "active";
-    electorateActive: boolean;
-    electorateKey: string | null;
-    membership: MpgfPublicGoodsCompactMembership | null;
-  },
+function allocationMatchesMemberships(
+  state: MpgfPublicGoodsCompactsState,
 ) {
-  if (value === null) {
-    return true;
-  }
-
-  return Boolean(
-    compact.status === "active" &&
-      compact.electorateActive &&
-      compact.electorateKey &&
-      compact.membership?.status === "active" &&
-      isRecord(value) &&
-      isUuid(value.id) &&
-      value.compactId === compact.id &&
-      value.electorateKey === compact.electorateKey &&
-      value.delegatorMembershipId === compact.membership.id &&
-      isUuid(value.delegateeMembershipId) &&
-      value.delegateeMembershipId !== compact.membership.id &&
-      value.state === "active" &&
-      isValidDate(value.createdAt) &&
-      value.revokedAt === null,
+  const joined = state.compacts.filter(
+    (compact) =>
+      compact.membership &&
+      !["revoked", "exited"].includes(compact.membership.status),
   );
-}
+  if (!state.allocation.instructionValid) return true;
 
-function hasSafeCompactState(value: unknown, nowMs: number) {
-  if (!isRecord(value) || !isUuid(value.id)) {
-    return false;
-  }
-
-  const foundingCharter = MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.find(
-    (charter) => charter.publicKey === value.publicKey,
+  const allocations = new Map(
+    state.allocation.allocations.map((row) => [row.compactPublicKey, row]),
   );
-  const status =
-    value.status === "recruiting" || value.status === "active"
-      ? value.status
-      : null;
-  const acceptedMemberCount = Number.isSafeInteger(value.acceptedMemberCount)
-    ? (value.acceptedMemberCount as number)
-    : null;
-  const identityGateReady =
-    isRecord(value.identityIntegrityGate) &&
-    value.identityIntegrityGate.state ===
-      MPGF_PUBLIC_GOODS_COMPACT_VERIFIED_IDENTITY_GATE &&
-    value.identityIntegrityGate.productionActivationReady === true;
-
   if (
-    !foundingCharter ||
-    !status ||
-    acceptedMemberCount === null ||
-    acceptedMemberCount < 0 ||
-    value.causeKey !== foundingCharter.causeKey ||
-    value.title !== foundingCharter.title ||
-    value.summary !== foundingCharter.summary ||
-    value.constitutionVersion !==
-      MPGF_PUBLIC_GOODS_COMPACT_CONSTITUTION_VERSION ||
-    value.collectionState !== MPGF_PUBLIC_GOODS_COMPACT_COLLECTION_GATE ||
-    value.memberCountAvailable !== true ||
-    !hasExactTerms(value.terms) ||
-    !hasExactInvariants(value.invariants) ||
-    !hasSafeIdentityIntegrityGate(value.identityIntegrityGate) ||
-    !hasSafeActivation(
-      value.activation,
-      status,
-      acceptedMemberCount,
-      identityGateReady,
-    ) ||
-    !hasSafeElectorate(value.allocationElectorate, status)
+    allocations.size !== joined.length ||
+    joined.some((compact) => !allocations.has(compact.publicKey))
   ) {
     return false;
   }
-
-  const activation = value.activation as Record<string, unknown>;
-  const electorate = value.allocationElectorate as Record<string, unknown>;
-  const compactContext = {
-    id: value.id,
-    publicKey: foundingCharter.publicKey,
-    status,
-    activatedAt:
-      typeof activation.activatedAt === "string"
-        ? activation.activatedAt
-        : null,
-  } as const;
-
-  if (!hasSafeMembership(value.membership, compactContext, nowMs)) {
-    return false;
-  }
-
-  return hasSafeDelegation(value.delegation, {
-    id: value.id,
-    status,
-    electorateActive: electorate.active === true,
-    electorateKey:
-      typeof electorate.key === "string" ? electorate.key : null,
-    membership: value.membership,
+  return joined.every((compact) => {
+    const allocation = allocations.get(compact.publicKey);
+    const membership = compact.membership;
+    return (
+      membership &&
+      allocation &&
+      membership.allocationBps === allocation.allocationBps &&
+      membership.scheduledContributionCents ===
+        allocation.scheduledContributionCents
+    );
   });
 }
 
-function normalizeEffectiveExits(
-  state: MpgfPublicGoodsCompactsState,
-  nowMs: number,
-): MpgfPublicGoodsCompactsState {
-  return {
-    ...state,
-    compacts: state.compacts.map((compact) => {
-      const membership = compact.membership;
+export function validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(
+  value: unknown,
+  now: Date | string = new Date(),
+): MpgfPublicGoodsCompactsState | null {
+  if (
+    !isRecord(value) ||
+    value.available !== true ||
+    value.source !== "database" ||
+    value.unavailableReason !== null ||
+    value.moneyMovesOnPageAction !== false ||
+    value.automaticCollectionEnabled !== false ||
+    !hasSafeObligation(value.obligation) ||
+    !isRecord(value.obligation) ||
+    !hasSafeAllocation(value.allocation, value.obligation) ||
+    !isRecord(value.allocation) ||
+    !Array.isArray(value.compacts) ||
+    value.compacts.length !== MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.length
+  ) {
+    return null;
+  }
 
+  const obligationCycleKey = value.obligation.cycleKey;
+  if (
+    typeof obligationCycleKey !== "string" ||
+    !value.compacts.every((compact) =>
+      hasSafeCompact(compact, obligationCycleKey),
+    )
+  ) {
+    return null;
+  }
+
+  const typed = value as unknown as MpgfPublicGoodsCompactsState;
+  if (
+    new Set(typed.compacts.map((compact) => compact.publicKey)).size !==
+      typed.compacts.length ||
+    !allocationMatchesMemberships(typed)
+  ) {
+    return null;
+  }
+
+  const nowMs = new Date(now).getTime();
+  if (!Number.isFinite(nowMs)) return null;
+  return {
+    ...typed,
+    compacts: typed.compacts.map((compact) => {
       if (
-        membership?.status !== "exit_notice" ||
-        !membership.exitEffectiveAt ||
-        Date.parse(membership.exitEffectiveAt) > nowMs
+        compact.membership?.status !== "exit_notice" ||
+        !compact.membership.exitEffectiveAt ||
+        Date.parse(compact.membership.exitEffectiveAt) > nowMs
       ) {
         return compact;
       }
-
       return {
         ...compact,
-        membership: {
-          ...membership,
-          status: "exited",
-        },
+        membership: { ...compact.membership, status: "exited" },
+        delegation: null,
       };
     }),
   };
 }
 
-export function validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(
-  value: unknown,
-  now: Date = new Date(),
-): MpgfPublicGoodsCompactsState | null {
-  const nowMs = now.getTime();
-
-  if (
-    !Number.isFinite(nowMs) ||
-    !isRecord(value) ||
-    value.available !== true ||
-    value.source !== "database" ||
-    value.unavailableReason !== null ||
-    !Array.isArray(value.compacts) ||
-    value.compacts.length !== MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.length ||
-    value.moneyMovesOnPageAction !== false ||
-    value.automaticCollectionEnabled !== false ||
-    !value.compacts.every((compact) => hasSafeCompactState(compact, nowMs))
-  ) {
-    return null;
-  }
-
-  const compactKeys = value.compacts.map(
-    (compact) => (compact as Record<string, unknown>).publicKey,
-  );
-  const expectedKeys = new Set<string>(
-    MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.map(
-      (charter) => charter.publicKey,
-    ),
-  );
-
-  if (
-    new Set(compactKeys).size !== expectedKeys.size ||
-    compactKeys.some((key) => !expectedKeys.has(key as string))
-  ) {
-    return null;
-  }
-
-  return normalizeEffectiveExits(
-    value as unknown as MpgfPublicGoodsCompactsState,
-    nowMs,
-  );
-}
-
 export function assertMpgfPublicGoodsCompactMutationSafety(value: unknown) {
   if (!isRecord(value) || value.ok !== true) {
-    throw new Error("The public-goods compact mutation returned an invalid response.");
+    throw new Error("The Compact v2 mutation returned an invalid response.");
   }
-
   for (const flag of unsafeMutationFlags) {
-    if (value[flag] === true) {
+    if (flag in value && value[flag] !== false) {
       throw new Error(
-        "The public-goods compact mutation violated the no-money safety boundary.",
+        `Compact no-money safety boundary failed: ${flag} must be false.`,
       );
     }
   }
-
   return value;
 }

@@ -29,13 +29,21 @@ migration_rows=()
 while IFS= read -r migration_path; do
   migration_name="$(basename "$migration_path")"
   migration_version="${migration_name%%_*}"
+  history_path="$migration_path"
+  if ! git ls-files --error-unmatch "$history_path" > /dev/null 2>&1; then
+    history_path="supabase/migrations/$migration_name"
+  fi
+  if ! git ls-files --error-unmatch "$history_path" > /dev/null 2>&1; then
+    echo "Migration lacks a canonical tracked source path: $migration_path" >&2
+    exit 1
+  fi
   if [[ ! "$migration_version" =~ ^[0-9]{8,14}$ ]]; then
     echo "Migration name does not start with an 8-14 digit version: $migration_name" >&2
     exit 1
   fi
 
   introduction="$(
-    git log --follow --diff-filter=A --format='%ct %H' -- "$migration_path" \
+    git log --follow --diff-filter=A --format='%ct %H' -- "$history_path" \
       | tail -n 1
   )"
   if [[ -z "$introduction" ]]; then

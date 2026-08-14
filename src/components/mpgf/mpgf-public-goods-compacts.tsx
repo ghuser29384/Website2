@@ -5,417 +5,152 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import {
-  calculateMpgfPublicGoodsCompactActivationProgress,
-  calculateMpgfPublicGoodsCompactContributionCents,
-  parseMpgfPublicGoodsCompactSpendingToCents,
+  MPGF_PUBLIC_GOODS_COMPACT_TERMS,
   type MpgfPublicGoodsCompactState,
   type MpgfPublicGoodsCompactsState,
 } from "@/lib/mpgf/public-goods-compacts";
-
 import styles from "./mpgf-public-goods-compacts.module.css";
 
-interface MpgfPublicGoodsCompactsProps {
-  state: MpgfPublicGoodsCompactsState;
-  viewerPresent: boolean;
-}
-
-interface MutationResponse {
-  ok?: boolean;
-  error?: string;
-  membershipStatus?: string;
-  scheduledMonthlyContributionCents?: number;
-  revokedImmediately?: boolean;
-  exitEffectiveAt?: string | null;
-}
-
-const usdFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-});
-
-function formatUsd(cents: number) {
-  return usdFormatter.format(cents / 100);
-}
-
+interface Props { state: MpgfPublicGoodsCompactsState; viewerPresent: boolean }
+interface MutationResponse { ok?: boolean; error?: string; revokedImmediately?: boolean; exitEffectiveAt?: string | null }
+const usdFormatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+function formatUsd(cents: number | null) { return cents === null ? "Unavailable" : usdFormatter.format(cents / 100); }
 function formatDate(value: string | null) {
-  if (!value) {
-    return "Not scheduled";
-  }
-
+  if (!value) return "Not scheduled";
   const date = new Date(value);
-
-  if (!Number.isFinite(date.getTime())) {
-    return "Unavailable";
-  }
-
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "long",
-    timeZone: "UTC",
-  }).format(date);
+  return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat("en-US", { dateStyle: "long", timeZone: "UTC" }).format(date) : "Unavailable";
 }
-
-function statusLabel(value: string) {
-  return value.replaceAll("_", " ");
-}
-
-function bindingStatusLabel(status: string) {
-  switch (status) {
-    case "pending_activation":
-      return "Not binding while recruiting";
-    case "active":
-      return "Bound after activation under frozen terms";
-    case "exit_notice":
-      return "Bound until the prospective exit takes effect";
-    case "revoked":
-      return "Revoked before activation; not binding";
-    case "exited":
-      return "Prospective exit effective; no longer binding";
-    default:
-      return "Binding state unavailable";
-  }
-}
-
-function idempotencyKey(scope: string) {
-  return `mpgf.compact.${scope}.${crypto.randomUUID()}`;
-}
-
-async function mutationRequest(
-  path: string,
-  method: "POST" | "PUT" | "DELETE",
-  body: Record<string, unknown>,
-) {
-  const response = await fetch(path, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+function statusLabel(value: string) { return value.replaceAll("_", " "); }
+function idempotencyKey(scope: string) { return `mpgf.compact.v2.${scope}.${crypto.randomUUID()}`; }
+async function mutationRequest(path: string, method: "POST" | "PUT" | "DELETE", body: Record<string, unknown>) {
+  const response = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const result = (await response.json().catch(() => ({}))) as MutationResponse;
-
-  if (!response.ok || !result.ok) {
-    throw new Error(result.error ?? "The compact request could not be completed.");
-  }
-
+  if (!response.ok || !result.ok) throw new Error(result.error ?? "The Compact request could not be completed.");
   return result;
 }
 
 function CharterTerms({ compact }: { compact: MpgfPublicGoodsCompactState }) {
   return (
     <dl className={styles.terms}>
-      <div>
-        <dt>Contribution</dt>
-        <dd>1% of self-declared eligible monthly spending</dd>
-      </div>
-      <div>
-        <dt>Monthly cap</dt>
-        <dd>$10</dd>
-      </div>
-      <div>
-        <dt>Activation</dt>
-        <dd>
-          {compact.terms.activationThresholdMembers.toLocaleString()} qualifying acceptances,
-          after the person-unique identity gate is verified
-        </dd>
-      </div>
-      <div>
-        <dt>Minimum term</dt>
-        <dd>{compact.terms.minimumTermMonths} months after activation</dd>
-      </div>
-      <div>
-        <dt>Exit notice</dt>
-        <dd>{compact.terms.exitNoticeDays} days, no earlier than term end</dd>
-      </div>
-      <div>
-        <dt>Project selection</dt>
-        <dd>{compact.terms.projectSelectionRule}</dd>
-      </div>
-      <div>
-        <dt>Audit rule</dt>
-        <dd>{compact.terms.auditRule}</dd>
-      </div>
-      <div>
-        <dt>Project opt-out</dt>
-        <dd>{compact.terms.noProjectOptOutRule}</dd>
-      </div>
+      <div><dt>Aggregate obligation</dt><dd>10% of the prior complete UTC month&apos;s eligible net-settled outgoing Moral Trade payments; no cap</dd></div>
+      <div><dt>Monthly qualification</dt><dd>At least $1 actually net settled to this Compact</dd></div>
+      <div><dt>Numerical readiness</dt><dd>100 verified unique people and $500 planned in the same frozen snapshot</dd></div>
+      <div><dt>Voting weight</dt><dd>70% equal + 30% square-root net-settled contribution</dd></div>
+      <div><dt>Delegation</dt><dd>Direct only; incoming weight cannot be re-delegated; 10% proxy cap</dd></div>
+      <div><dt>Exit</dt><dd>{compact.terms.minimumTermMonths}-month minimum after activation, then {compact.terms.exitNoticeDays} days&apos; notice</dd></div>
     </dl>
   );
 }
 
-function ActivationProgress({ compact }: { compact: MpgfPublicGoodsCompactState }) {
-  if (!compact.memberCountAvailable || compact.acceptedMemberCount === null) {
-    return (
-      <p className={styles.muted} data-testid={`member-count-${compact.publicKey}`}>
-        Durable qualifying-acceptance count unavailable
-      </p>
-    );
-  }
-
-  const progress = calculateMpgfPublicGoodsCompactActivationProgress(
-    compact.acceptedMemberCount,
-    compact.terms.activationThresholdMembers,
-  );
-
+function Readiness({ compact }: { compact: MpgfPublicGoodsCompactState }) {
+  const readiness = compact.readiness;
+  const peopleBps = Math.min(10_000, Math.floor(readiness.fundingQualifiedUniquePersonCount * 10_000 / MPGF_PUBLIC_GOODS_COMPACT_TERMS.readinessThresholdMembers));
+  const fundingBps = Math.min(10_000, Math.floor(readiness.scheduledContributionCents * 10_000 / MPGF_PUBLIC_GOODS_COMPACT_TERMS.readinessThresholdScheduledCents));
+  const progressBps = Math.min(peopleBps, fundingBps);
   return (
-    <div className={styles.progress} data-testid={`member-count-${compact.publicKey}`}>
+    <div className={styles.progress} data-testid={`readiness-${compact.publicKey}`}>
       <div className={styles.progressLabel}>
-        <span>{progress.acceptedMemberCount.toLocaleString()} qualifying acceptances</span>
-        <span>{(progress.progressBps / 100).toFixed(1)}%</span>
+        <span>{readiness.fundingQualifiedUniquePersonCount}/100 people · {formatUsd(readiness.scheduledContributionCents)}/$500 planned</span>
+        <span>{readiness.thresholdReady ? "Threshold ready; activation blocked" : "Recruiting"}</span>
       </div>
-      <div
-        className={styles.progressTrack}
-        role="progressbar"
-        aria-label={`${compact.title} activation progress`}
-        aria-valuemin={0}
-        aria-valuemax={progress.activationThreshold}
-        aria-valuenow={Math.min(progress.acceptedMemberCount, progress.activationThreshold)}
-      >
-        <span style={{ width: `${progress.progressBps / 100}%` }} />
+      <div className={styles.progressTrack} role="progressbar" aria-label={`${compact.title} numerical readiness`} aria-valuemin={0} aria-valuemax={10_000} aria-valuenow={progressBps}>
+        <span style={{ width: `${progressBps / 100}%` }} />
       </div>
-      {!compact.identityIntegrityGate.productionActivationReady ? (
-        <p className={styles.muted} data-testid={`identity-gate-${compact.publicKey}`}>
-          Automatic activation is blocked: counts are unique only by account/profile, not yet by
-          verified person. Moral Trade&apos;s one-person-one-account and Sybil-resistance policy is
-          not integrated.
-        </p>
-      ) : null}
     </div>
   );
 }
 
-export function MpgfPublicGoodsCompacts({
-  state,
-  viewerPresent,
-}: MpgfPublicGoodsCompactsProps) {
+export function MpgfPublicGoodsCompacts({ state, viewerPresent }: Props) {
   const router = useRouter();
-  const [selectedPublicKey, setSelectedPublicKey] = useState(
-    state.compacts.find((compact) => compact.membership)?.publicKey ??
-      state.compacts[0]?.publicKey ??
-      "",
-  );
-  const [spendingDollars, setSpendingDollars] = useState("");
-  const [acknowledgements, setAcknowledgements] = useState({
-    voluntary: false,
-    constitution: false,
-    binding: false,
-    noPayment: false,
-  });
+  const [selectedPublicKey, setSelectedPublicKey] = useState(state.compacts.find((compact) => compact.membership)?.publicKey ?? state.compacts[0]?.publicKey ?? "");
+  const [acknowledgements, setAcknowledgements] = useState({ voluntary: false, constitution: false, binding: false, noPayment: false });
+  const joined = useMemo(() => state.compacts.filter((compact) => compact.membership && !["revoked", "exited"].includes(compact.membership.status)), [state.compacts]);
+  const [allocationPercent, setAllocationPercent] = useState<Record<string, string>>(() => Object.fromEntries(joined.map((compact) => {
+    const row = state.allocation.allocations.find((allocation) => allocation.compactPublicKey === compact.publicKey);
+    return [compact.publicKey, row ? String(row.allocationBps / 100) : ""];
+  })));
   const [delegateeMembershipId, setDelegateeMembershipId] = useState("");
   const [pendingAction, setPendingAction] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState(
-    "No action on this page moves money or creates a payment mandate.",
-  );
-
-  const selectedCompact =
-    state.compacts.find((compact) => compact.publicKey === selectedPublicKey) ??
-    state.compacts[0] ??
-    null;
-
-  const contributionPreview = useMemo(() => {
-    if (!spendingDollars.trim()) {
-      return { cents: 0, error: null };
-    }
-
-    try {
-      const spendingCents =
-        parseMpgfPublicGoodsCompactSpendingToCents(spendingDollars);
-      return {
-        cents:
-          calculateMpgfPublicGoodsCompactContributionCents(spendingCents),
-        error: null,
-      };
-    } catch (error) {
-      return {
-        cents: 0,
-        error: error instanceof Error ? error.message : "Enter a valid amount.",
-      };
-    }
-  }, [spendingDollars]);
-
+  const [statusMessage, setStatusMessage] = useState("No action on this page moves money, creates a payment mandate, or records a payment receipt.");
+  const selectedCompact = state.compacts.find((compact) => compact.publicKey === selectedPublicKey) ?? state.compacts[0] ?? null;
   const allAcknowledged = Object.values(acknowledgements).every(Boolean);
 
-  async function runAction(
-    action: string,
-    callback: () => Promise<MutationResponse>,
-    success: (result: MutationResponse) => string,
-  ) {
+  async function runAction(action: string, callback: () => Promise<MutationResponse>, success: (result: MutationResponse) => string) {
     setPendingAction(action);
-    setStatusMessage("Saving the durable compact record. No money is moving.");
-
-    try {
-      const result = await callback();
-      setStatusMessage(success(result));
-      router.refresh();
-    } catch (error) {
-      setStatusMessage(
-        error instanceof Error
-          ? error.message
-          : "The compact request could not be completed.",
-      );
-    } finally {
-      setPendingAction(null);
-    }
+    setStatusMessage("Saving a private Compact instruction. No money is moving.");
+    try { const result = await callback(); setStatusMessage(success(result)); router.refresh(); }
+    catch (error) { setStatusMessage(error instanceof Error ? error.message : "The Compact request could not be completed."); }
+    finally { setPendingAction(null); }
   }
 
-  async function acceptCompact() {
-    if (!selectedCompact || contributionPreview.error || !spendingDollars.trim()) {
-      setStatusMessage(
-        contributionPreview.error ?? "Enter self-declared eligible monthly spending.",
-      );
-      return;
+  async function joinCompact() {
+    if (!selectedCompact || !allAcknowledged) { setStatusMessage("Complete every constitutional acknowledgement before joining."); return; }
+    await runAction("join", () => mutationRequest("/api/mpgf/compacts/membership", "POST", {
+      compactPublicKey: selectedCompact.publicKey,
+      constitutionVersion: selectedCompact.constitutionVersion,
+      acknowledgements: { voluntaryChoice: acknowledgements.voluntary, exactConstitution: acknowledgements.constitution, activationAndNoProjectOptOut: acknowledgements.binding, noPaymentMandate: acknowledgements.noPayment },
+      idempotencyKey: idempotencyKey("join"),
+    }), () => `Joined ${selectedCompact.title} under Compact v2. This is membership, not a charge, payment schedule, mandate, receipt, or tax-deductibility claim.`);
+  }
+
+  async function saveAllocation() {
+    const allocationBps: Record<string, number> = {};
+    for (const compact of joined) {
+      const raw = allocationPercent[compact.publicKey]?.trim() ?? "";
+      if (!/^\d+(?:\.\d{1,2})?$/.test(raw)) { setStatusMessage("Enter every allocation percentage with at most two decimal places."); return; }
+      const bps = Math.round(Number(raw) * 100);
+      if (!Number.isInteger(bps) || bps < 0 || bps > 10_000) { setStatusMessage("Every allocation must be between 0% and 100%."); return; }
+      allocationBps[compact.publicKey] = bps;
     }
-
-    if (contributionPreview.cents === 0) {
-      setStatusMessage(
-        "A qualifying compact acceptance must schedule at least $0.01 and cannot count toward activation at $0.00.",
-      );
-      return;
-    }
-
-    if (!allAcknowledged) {
-      setStatusMessage("Complete every constitutional acknowledgement before accepting.");
-      return;
-    }
-
-    const spendingCents =
-      parseMpgfPublicGoodsCompactSpendingToCents(spendingDollars);
-
-    await runAction(
-      "accept",
-      () =>
-        mutationRequest("/api/mpgf/compacts/membership", "POST", {
-          compactPublicKey: selectedCompact.publicKey,
-          constitutionVersion: selectedCompact.constitutionVersion,
-          acknowledgements: {
-            voluntaryChoice: acknowledgements.voluntary,
-            exactConstitution: acknowledgements.constitution,
-            activationAndNoProjectOptOut: acknowledgements.binding,
-            noPaymentMandate: acknowledgements.noPayment,
-          },
-          declaredEligibleMonthlySpendingCents: spendingCents,
-          idempotencyKey: idempotencyKey("join"),
-        }),
-      (result) =>
-        `Accepted ${selectedCompact.title}. Scheduled amount ${formatUsd(
-          result.scheduledMonthlyContributionCents ?? contributionPreview.cents,
-        )}; no money moved and no payment mandate was created.`,
-    );
+    if (Object.values(allocationBps).reduce((sum, value) => sum + value, 0) !== 10_000) { setStatusMessage("Allocations must total exactly 100.00%."); return; }
+    await runAction("allocate", () => mutationRequest("/api/mpgf/compacts/allocation", "PUT", { allocationBps, idempotencyKey: idempotencyKey("allocation") }), () => "Saved the complete 100% allocation instruction. It is not a charge or payment authorization; planned cents remain unavailable until authoritative outflow coverage exists.");
   }
 
   async function requestExit() {
-    if (!selectedCompact) {
-      return;
-    }
-
-    await runAction(
-      "exit",
-      () =>
-        mutationRequest("/api/mpgf/compacts/membership", "DELETE", {
-          compactPublicKey: selectedCompact.publicKey,
-          idempotencyKey: idempotencyKey("exit"),
-        }),
-      (result) =>
-        result.revokedImmediately
-          ? `Revoked ${selectedCompact.title} acceptance while it is recruiting. No money moved.`
-          : `Recorded prospective exit from ${selectedCompact.title}, effective ${formatDate(
-              result.exitEffectiveAt ?? null,
-            )}. No money moved.`,
-    );
+    if (!selectedCompact) return;
+    await runAction("exit", () => mutationRequest("/api/mpgf/compacts/membership", "DELETE", { compactPublicKey: selectedCompact.publicKey, idempotencyKey: idempotencyKey("exit") }), (result) => result.revokedImmediately ? `Revoked ${selectedCompact.title} acceptance while recruiting. No money moved.` : `Recorded prospective exit effective ${formatDate(result.exitEffectiveAt ?? null)}. No money moved.`);
   }
 
   async function setDelegation() {
-    if (!selectedCompact?.allocationElectorate.key) {
-      return;
-    }
-
-    await runAction(
-      "delegate",
-      () =>
-        mutationRequest("/api/mpgf/compacts/delegation", "PUT", {
-          compactPublicKey: selectedCompact.publicKey,
-          electorateKey: selectedCompact.allocationElectorate.key,
-          delegateeMembershipId,
-          idempotencyKey: idempotencyKey("delegate"),
-        }),
-      () =>
-        "Saved the revocable voting-credit delegation. Membership, money, and reputation did not transfer.",
-    );
+    if (!selectedCompact) return;
+    await runAction("delegate", () => mutationRequest("/api/mpgf/compacts/delegation", "PUT", { compactPublicKey: selectedCompact.publicKey, cycleKey: state.obligation.cycleKey, delegateeMembershipId, idempotencyKey: idempotencyKey("delegate") }), () => "Saved one direct delegation for this frozen cycle. Incoming delegated weight will not follow it, and no money or membership moved.");
   }
 
   async function clearDelegation() {
-    if (!selectedCompact?.allocationElectorate.key) {
-      return;
-    }
-
-    await runAction(
-      "clear-delegation",
-      () =>
-        mutationRequest("/api/mpgf/compacts/delegation", "DELETE", {
-          compactPublicKey: selectedCompact.publicKey,
-          electorateKey: selectedCompact.allocationElectorate.key,
-          idempotencyKey: idempotencyKey("clear-delegation"),
-        }),
-      () => "Revoked the voting-credit delegation. No money or membership moved.",
-    );
+    if (!selectedCompact) return;
+    await runAction("clear-delegation", () => mutationRequest("/api/mpgf/compacts/delegation", "DELETE", { compactPublicKey: selectedCompact.publicKey, cycleKey: state.obligation.cycleKey, idempotencyKey: idempotencyKey("clear-delegation") }), () => "Revoked the direct delegation. No money or membership moved.");
   }
 
   return (
     <>
       <div className={styles.boundaryStrip} aria-label="Compact boundaries">
-        <div className={styles.boundaryItem}>
-          <strong>Voluntary, not government taxation</strong>
-          <span>
-            Moral Trade has no government taxing authority. Nobody is randomly assigned.
-          </span>
-        </div>
-        <div className={styles.boundaryItem}>
-          <strong>Marketplace stays untaxed</strong>
-          <span>
-            The ordinary Moral Trade marketplace is outside every compact contribution base.
-          </span>
-        </div>
-        <div className={styles.boundaryItem}>
-          <strong>No payment mandate</strong>
-          <span>
-            Joining, voting, delegating, or requesting exit never moves money or creates a charge.
-            Moral Trade does not represent that joining alone creates a legally enforceable debt
-            or provider payment mandate.
-          </span>
-        </div>
+        <div className={styles.boundaryItem}><strong>One aggregate obligation</strong><span>Exactly 10% of eligible net-settled prior-month Moral Trade outflow, divided across every joined Compact; no cap.</span></div>
+        <div className={styles.boundaryItem}><strong>Actual settlement governs</strong><span>Plans are never presented as payments. Refunds, reversals, and chargebacks reduce qualification and voting weight.</span></div>
+        <div className={styles.boundaryItem}><strong>No collection rail</strong><span>Joining or allocating creates no charge, mandate, receipt, custody, donation, or tax deduction.</span></div>
       </div>
 
-      {!state.available ? (
-        <p className={styles.unavailable} role="status" data-testid="compact-unavailable">
-          <strong>Live membership state unavailable.</strong> {state.unavailableReason}
-        </p>
-      ) : null}
+      <section className={styles.workspace} aria-labelledby="obligation-heading">
+        <p className="eyebrow">Frozen cycle {state.obligation.cycleKey}</p>
+        <h3 id="obligation-heading">Prior-month transaction coverage</h3>
+        <div className={styles.statusGrid}>
+          <div><span>Coverage</span><strong>{statusLabel(state.obligation.coverage)}</strong></div>
+          <div><span>Eligible net-settled outflow</span><strong>{formatUsd(state.obligation.eligibleNetSettledOutflowCents)}</strong></div>
+          <div><span>Aggregate 10% obligation</span><strong>{formatUsd(state.obligation.obligationCents)}</strong></div>
+          <div><span>Allocation state</span><strong>{state.allocation.schedulingReady ? "Complete and cent-exact" : state.allocation.instructionValid ? "Percentages saved; cents blocked" : "Incomplete; fail closed"}</strong></div>
+        </div>
+        <p className={styles.statusMessage}>{state.obligation.coverageReason} No amount is inferred from self-reporting or partial payment tables.</p>
+      </section>
+
+      {!state.available ? <p className={styles.unavailable} role="status" data-testid="compact-unavailable"><strong>Live Compact v2 state unavailable.</strong> Published constitution examples are shown without fabricated activity. {state.unavailableReason}</p> : null}
 
       <div className={styles.charterGrid}>
         {state.compacts.map((compact) => (
-          <article
-            className={`${styles.charterCard} ${
-              compact.publicKey === selectedCompact?.publicKey
-                ? styles.charterCardSelected
-                : ""
-            }`}
-            key={compact.publicKey}
-            data-testid={`compact-${compact.publicKey}`}
-          >
-            <div className={styles.charterHeader}>
-              <h3>{compact.title}</h3>
-              <span>{statusLabel(compact.status)}</span>
-            </div>
+          <article className={`${styles.charterCard} ${compact.publicKey === selectedCompact?.publicKey ? styles.charterCardSelected : ""}`} key={compact.publicKey} data-testid={`compact-${compact.publicKey}`}>
+            <div className={styles.charterHeader}><h3>{compact.title}</h3><span>{compact.membership && !["revoked", "exited"].includes(compact.membership.status) ? "charter member" : statusLabel(compact.status)}</span></div>
             <p>{compact.summary}</p>
-            <ActivationProgress compact={compact} />
+            <Readiness compact={compact} />
             <CharterTerms compact={compact} />
-            <button
-              className="button button-secondary"
-              type="button"
-              onClick={() => setSelectedPublicKey(compact.publicKey)}
-              aria-pressed={compact.publicKey === selectedCompact?.publicKey}
-            >
-              {compact.publicKey === selectedCompact?.publicKey
-                ? "Selected compact"
-                : `Select ${compact.title}`}
-            </button>
+            <button className="button button-secondary" type="button" onClick={() => setSelectedPublicKey(compact.publicKey)} aria-pressed={compact.publicKey === selectedCompact?.publicKey}>{compact.publicKey === selectedCompact?.publicKey ? "Selected Compact" : `Select ${compact.title}`}</button>
           </article>
         ))}
       </div>
@@ -423,272 +158,57 @@ export function MpgfPublicGoodsCompacts({
       {selectedCompact ? (
         <div className={styles.workspaceGrid}>
           <section className={styles.workspace} aria-labelledby="compact-workspace-heading">
-            <p className="eyebrow">Your voluntary acceptance</p>
+            <p className="eyebrow">Membership is distinct from monthly qualification</p>
             <h3 id="compact-workspace-heading">{selectedCompact.title}</h3>
-
-            {selectedCompact.membership &&
-            selectedCompact.membership.status !== "revoked" ? (
+            {selectedCompact.membership && !["revoked", "exited"].includes(selectedCompact.membership.status) ? (
               <div className={styles.membershipSummary}>
-                <div className={styles.charterHeader}>
-                  <h4>Durable membership state</h4>
-                  <span className={styles.statusBadge}>
-                    {statusLabel(selectedCompact.membership.status)}
-                  </span>
-                </div>
+                <div className={styles.charterHeader}><h4>Private membership state</h4><span className={styles.statusBadge}>{statusLabel(selectedCompact.membership.status)}</span></div>
                 <div className={styles.statusGrid}>
-                  <div>
-                    <span>Accepted constitution</span>
-                    <strong>{selectedCompact.membership.constitutionVersionAccepted}</strong>
-                  </div>
-                  <div>
-                    <span>Scheduled monthly amount</span>
-                    <strong>
-                      {formatUsd(
-                        selectedCompact.membership.scheduledMonthlyContributionCents,
-                      )}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Binding status</span>
-                    <strong>
-                      {bindingStatusLabel(selectedCompact.membership.status)}
-                    </strong>
-                  </div>
-                  <div>
-                    <span>Effective exit</span>
-                    <strong>
-                      {formatDate(selectedCompact.membership.exitEffectiveAt)}
-                    </strong>
-                  </div>
+                  <div><span>Allocation</span><strong>{selectedCompact.membership.allocationBps === null ? "Incomplete" : `${(selectedCompact.membership.allocationBps / 100).toFixed(2)}%`}</strong></div>
+                  <div><span>Planned amount</span><strong>{formatUsd(selectedCompact.membership.scheduledContributionCents)}</strong></div>
+                  <div><span>Net settled amount</span><strong>{formatUsd(selectedCompact.membership.netSettledContributionCents)}</strong></div>
+                  <div><span>Funding qualification</span><strong>{selectedCompact.membership.fundingQualificationState === "scheduled_qualified" ? "Planned only (recruiting)" : selectedCompact.membership.fundingQualificationState === "settled_qualified" ? "Actual net settlement" : "Not qualified this cycle"}</strong></div>
                 </div>
-                <p>
-                  This record is not a charge, payment mandate, receipt, escrow balance, or
-                  tax-deductibility claim.
-                </p>
-                {selectedCompact.membership.status === "pending_activation" ? (
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={requestExit}
-                    disabled={pendingAction !== null}
-                  >
-                    Revoke acceptance now
-                  </button>
-                ) : null}
-                {selectedCompact.membership.status === "active" ? (
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={requestExit}
-                    disabled={pendingAction !== null}
-                  >
-                    Request prospective exit
-                  </button>
-                ) : null}
+                <p>Below $1, incomplete allocation, missing identity verification, or insufficient net settlement removes monthly voting/delegation qualification but does not erase charter membership.</p>
+                <button className="button button-secondary" type="button" onClick={requestExit} disabled={pendingAction !== null}>{selectedCompact.membership.status === "pending_activation" ? "Revoke recruiting acceptance" : "Request prospective exit"}</button>
               </div>
             ) : (
               <>
-                {selectedCompact.membership?.status === "revoked" ? (
-                  <p className={styles.statusMessage}>
-                    Your earlier recruiting acceptance was revoked and is not binding. You may
-                    explicitly accept the current constitution again.
-                  </p>
-                ) : null}
-                <div className={styles.field}>
-                  <label htmlFor="eligible-spending">
-                    Self-declared eligible monthly spending (USD)
-                  </label>
-                  <input
-                    id="eligible-spending"
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    placeholder="0.00"
-                    value={spendingDollars}
-                    onChange={(event) => setSpendingDollars(event.target.value)}
-                    disabled={!viewerPresent || !state.available}
-                  />
-                  <span className={styles.fieldHint}>
-                    Private after acceptance. It never includes ordinary Moral Trade marketplace
-                    transactions automatically.
-                  </span>
-                </div>
-                <div className={styles.preview} data-testid="compact-contribution-preview">
-                  <span>1% preview, capped at $10 per month</span>
-                  <strong>{formatUsd(contributionPreview.cents)}</strong>
-                </div>
-                {contributionPreview.error ? (
-                  <p className={styles.statusMessage}>{contributionPreview.error}</p>
-                ) : null}
                 <fieldset className={styles.acknowledgements}>
-                  <legend>Explicit constitutional acknowledgements</legend>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={acknowledgements.voluntary}
-                      onChange={(event) =>
-                        setAcknowledgements((current) => ({
-                          ...current,
-                          voluntary: event.target.checked,
-                        }))
-                      }
-                      disabled={!viewerPresent || !state.available}
-                    />
-                    I voluntarily choose this cause-specific compact; I was not assigned to it.
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={acknowledgements.constitution}
-                      onChange={(event) =>
-                        setAcknowledgements((current) => ({
-                          ...current,
-                          constitution: event.target.checked,
-                        }))
-                      }
-                      disabled={!viewerPresent || !state.available}
-                    />
-                    I accept constitution version {selectedCompact.constitutionVersion} and its
-                    published 1%, $10 cap, 5,000 qualifying-acceptance threshold, term, exit,
-                    voting, audit, and
-                    minority-protection rules.
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={acknowledgements.binding}
-                      onChange={(event) =>
-                        setAcknowledgements((current) => ({
-                          ...current,
-                          binding: event.target.checked,
-                        }))
-                      }
-                      disabled={!viewerPresent || !state.available}
-                    />
-                    I understand acceptance is revocable while recruiting, becomes binding only
-                    after activation, and then permits no project-by-project refusal.
-                  </label>
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={acknowledgements.noPayment}
-                      onChange={(event) =>
-                        setAcknowledgements((current) => ({
-                          ...current,
-                          noPayment: event.target.checked,
-                        }))
-                      }
-                      disabled={!viewerPresent || !state.available}
-                    />
-                    I understand this acceptance does not move money or create a payment mandate,
-                    and automatic collection is disabled.
-                  </label>
+                  <legend>Explicit Compact v2 acknowledgements</legend>
+                  <label><input type="checkbox" checked={acknowledgements.voluntary} onChange={(event) => setAcknowledgements((current) => ({ ...current, voluntary: event.target.checked }))} disabled={!viewerPresent || !state.available} />I voluntarily choose this cause-specific Compact; I was not assigned to it.</label>
+                  <label><input type="checkbox" checked={acknowledgements.constitution} onChange={(event) => setAcknowledgements((current) => ({ ...current, constitution: event.target.checked }))} disabled={!viewerPresent || !state.available} />I accept {selectedCompact.constitutionVersion}: one aggregate uncapped 10% obligation, exact allocation, $1 Compact-local qualification, 100 + $500 readiness, 70/30 voting, and direct delegation with a 10% cap.</label>
+                  <label><input type="checkbox" checked={acknowledgements.binding} onChange={(event) => setAcknowledgements((current) => ({ ...current, binding: event.target.checked }))} disabled={!viewerPresent || !state.available} />I understand numerical readiness cannot activate the Compact while identity, legal, payment, provider, and release gates remain blocked.</label>
+                  <label><input type="checkbox" checked={acknowledgements.noPayment} onChange={(event) => setAcknowledgements((current) => ({ ...current, noPayment: event.target.checked }))} disabled={!viewerPresent || !state.available} />I understand joining is not a contribution, charge, payment authorization, receipt, custody claim, or tax deduction.</label>
                 </fieldset>
-                <div className={styles.actions}>
-                  {viewerPresent ? (
-                    <button
-                      className="button button-primary"
-                      type="button"
-                      onClick={acceptCompact}
-                      disabled={
-                        !state.available ||
-                        pendingAction !== null ||
-                        !allAcknowledged ||
-                        !spendingDollars.trim() ||
-                        contributionPreview.cents === 0 ||
-                        Boolean(contributionPreview.error)
-                      }
-                    >
-                      Accept constitution and join
-                    </button>
-                  ) : (
-                    <Link
-                      className="button button-primary"
-                      href="/login?returnTo=/mpgf/compacts"
-                    >
-                      Sign in to accept
-                    </Link>
-                  )}
-                </div>
+                <div className={styles.actions}>{viewerPresent ? <button className="button button-primary" type="button" onClick={joinCompact} disabled={!state.available || pendingAction !== null || !allAcknowledged}>Accept v2 constitution and join</button> : <Link className="button button-primary" href="/login?returnTo=/mpgf/compacts">Sign in to join</Link>}</div>
               </>
             )}
-
-            <p className={styles.statusMessage} role="status" aria-live="polite">
-              {statusMessage}
-            </p>
+            <p className={styles.statusMessage} role="status" aria-live="polite">{statusMessage}</p>
           </section>
 
-          <aside className={styles.safetyPanel} aria-labelledby="compact-safety-heading">
-            <p className="eyebrow">Collection and governance state</p>
-            <h3 id="compact-safety-heading">Constitutional duties, no collection rail</h3>
-            <ul className={styles.safetyList}>
-              <li>
-                <strong>Before activation:</strong> acceptance is immediately revocable and not
-                binding.
-              </li>
-              <li>
-                <strong>At 5,000 qualifying acceptances:</strong> activation remains fail-closed
-                until a separately approved person-unique identity policy is verified. Only then
-                may activation freeze the constitutional version and start the 12-month term
-                atomically.
-              </li>
-              <li>
-                <strong>After activation:</strong> exit is prospective after the later of term end
-                or 30 days&apos; notice. Individual project refusal is unavailable.
-              </li>
-              <li>
-                <strong>Automatic collection:</strong> disabled pending legal, fiscal-sponsor or
-                provider, donor-of-record, receipt, custody, sanctions, and production-release
-                gates.
-              </li>
-            </ul>
-
-            {selectedCompact.membership?.status === "active" &&
-            selectedCompact.allocationElectorate.active &&
-            selectedCompact.allocationElectorate.key ? (
-              <div className={styles.workspace}>
-                <h4>Active allocation electorate</h4>
-                <p>
-                  Delegate one voting credit to another active member of this compact. Delegation
-                  is revocable and transfers no membership, money, or reputation.
-                </p>
-                <div className={styles.field}>
-                  <label htmlFor="delegatee-membership-id">Delegate membership ID</label>
-                  <input
-                    id="delegatee-membership-id"
-                    type="text"
-                    value={delegateeMembershipId}
-                    onChange={(event) => setDelegateeMembershipId(event.target.value)}
-                    placeholder="00000000-0000-4000-8000-000000000000"
-                  />
-                </div>
-                <div className={styles.actions}>
-                  <button
-                    className="button button-secondary"
-                    type="button"
-                    onClick={setDelegation}
-                    disabled={!delegateeMembershipId || pendingAction !== null}
-                  >
-                    Set revocable delegation
-                  </button>
-                  {selectedCompact.delegation ? (
-                    <button
-                      className="button button-secondary"
-                      type="button"
-                      onClick={clearDelegation}
-                      disabled={pendingAction !== null}
-                    >
-                      Revoke delegation
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            ) : (
-              <p data-testid="no-active-compact-ballot">
-                No compact allocation electorate is active. No ballot or delegation target is
-                being fabricated.
-              </p>
+          <aside className={styles.safetyPanel} aria-labelledby="allocation-heading">
+            <p className="eyebrow">One allocation across all joined Compacts</p>
+            <h3 id="allocation-heading">Percentages must total exactly 100.00%</h3>
+            {joined.length === 0 ? <p>Join at least one Compact before allocating.</p> : joined.length === 1 ? <p>The sole joined Compact defaults to 100%. This is an allocation instruction only; no planned cents exist until authoritative prior-month coverage is complete.</p> : (
+              <>
+                {joined.map((compact) => <div className={styles.field} key={compact.publicKey}><label htmlFor={`allocation-${compact.publicKey}`}>{compact.title} (%)</label><input id={`allocation-${compact.publicKey}`} type="text" inputMode="decimal" value={allocationPercent[compact.publicKey] ?? ""} onChange={(event) => setAllocationPercent((current) => ({ ...current, [compact.publicKey]: event.target.value }))} disabled={!state.available || pendingAction !== null} /><span className={styles.fieldHint}>0.00% is allowed and preserves membership, but cannot qualify this Compact for the month.</span></div>)}
+                <button className="button button-primary" type="button" onClick={saveAllocation} disabled={!state.available || pendingAction !== null}>Save complete allocation</button>
+              </>
             )}
+            <ul className={styles.safetyList}>
+              <li><strong>Largest remainder:</strong> fractional cents are assigned deterministically by remainder, then stable Compact key, so scheduled cents equal the obligation exactly.</li>
+              <li><strong>Readiness:</strong> threshold-ready still means activation-blocked while every operational gate remains unmet.</li>
+              <li><strong>Voting:</strong> only actual net settlement in the frozen cycle can produce weight; plans never do.</li>
+            </ul>
+            {selectedCompact.membership?.fundingQualified && selectedCompact.allocationElectorate.active ? (
+              <div className={styles.workspace}>
+                <h4>Direct delegation for {state.obligation.cycleKey}</h4>
+                <p>Only a funding-qualified member of this Compact can receive it. Incoming weight stays here even if the proxy delegates their own weight.</p>
+                <div className={styles.field}><label htmlFor="delegatee-membership-id">Qualified membership ID</label><input id="delegatee-membership-id" type="text" value={delegateeMembershipId} onChange={(event) => setDelegateeMembershipId(event.target.value)} /></div>
+                <div className={styles.actions}><button className="button button-secondary" type="button" onClick={setDelegation} disabled={!delegateeMembershipId || pendingAction !== null}>Set direct delegation</button>{selectedCompact.delegation ? <button className="button button-secondary" type="button" onClick={clearDelegation} disabled={pendingAction !== null}>Revoke delegation</button> : null}</div>
+              </div>
+            ) : <p data-testid="no-active-compact-ballot">No funding-qualified voting snapshot is active. No vote or delegation target is fabricated.</p>}
           </aside>
         </div>
       ) : null}

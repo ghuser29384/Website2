@@ -100,6 +100,18 @@ jobs:
             > mpgf-compacts-clean-qa/historical-baseline.sql
           test "$(sha256sum mpgf-compacts-clean-qa/historical-baseline.sql | cut -d ' ' -f 1)" \
             = "$HISTORICAL_BASELINE_SHA256"
+          mkdir -p mpgf-compacts-clean-qa/post-baseline-migrations
+          git diff --name-only --diff-filter=AM \
+            "$HISTORICAL_BASELINE_COMMIT"..HEAD \
+            -- 'supabase/migrations/*.sql' \
+            | LC_ALL=C sort \
+            | tee mpgf-compacts-clean-qa/post-baseline-migrations.txt
+          while IFS= read -r migration_path; do
+            test -f "$migration_path"
+            cp "$migration_path" mpgf-compacts-clean-qa/post-baseline-migrations/
+          done < mpgf-compacts-clean-qa/post-baseline-migrations.txt
+          test -f mpgf-compacts-clean-qa/post-baseline-migrations/20260813163052_mpgf_public_goods_compacts.sql
+          test -f mpgf-compacts-clean-qa/post-baseline-migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
           git rev-parse HEAD > mpgf-compacts-clean-qa/head-sha.txt
 
       - name: Start a clean ephemeral PostgreSQL 17 Supabase runtime
@@ -117,13 +129,14 @@ jobs:
           rmdir supabase/migrations
           mv "$RUNNER_TEMP/repository-migrations" supabase/migrations
 
-      - name: Apply the historical baseline and every repository migration in order
+      - name: Apply the historical baseline and every post-baseline migration in order
         shell: bash
         run: |
           set -o pipefail
           SUPABASE_MIGRATION_TEST_DB_URL="$LOCAL_SUPABASE_DB_URL" \
           SUPABASE_MIGRATION_BASELINE_SQL=mpgf-compacts-clean-qa/historical-baseline.sql \
             bash scripts/apply-supabase-migrations-in-order.sh \
+              mpgf-compacts-clean-qa/post-baseline-migrations \
             2>&1 | tee mpgf-compacts-clean-qa/full-migration-chain.log
 
       - name: Generate and compare exact runtime database types
@@ -165,7 +178,7 @@ jobs:
           rollback;
           SQL
 
-      - name: Run genuinely concurrent threshold activation test
+      - name: Run genuinely concurrent readiness freeze test
         shell: bash
         run: |
           set -o pipefail
@@ -247,7 +260,7 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
-      - name: Run desktop and mobile rendered compact QA
+      - name: Run desktop, tablet, and mobile rendered Compact v2 QA
         shell: bash
         run: |
           set -o pipefail
@@ -398,7 +411,21 @@ jobs:
           from unnest(array[
             'mpgf_public_goods_compacts',
             'mpgf_public_goods_compact_memberships',
-            'mpgf_public_goods_compact_delegations',
+            'mpgf_public_goods_dormant_authorization_snapshots',
+            'mpgf_public_goods_outflow_coverage_snapshots',
+            'mpgf_public_goods_outflow_observations',
+            'mpgf_public_goods_obligation_snapshots',
+            'mpgf_public_goods_allocation_instructions',
+            'mpgf_public_goods_allocation_instruction_lines',
+            'mpgf_public_goods_scheduled_amount_snapshots',
+            'mpgf_public_goods_settled_contribution_snapshots',
+            'mpgf_public_goods_funding_qualification_snapshots',
+            'mpgf_public_goods_readiness_snapshots',
+            'mpgf_public_goods_voting_snapshots',
+            'mpgf_public_goods_voting_weight_snapshots',
+            'mpgf_public_goods_delegation_events',
+            'mpgf_public_goods_delegation_snapshots',
+            'mpgf_public_goods_delegation_weight_snapshots',
             'mpgf_public_goods_compact_idempotency_keys'
           ]) as relation_name
           where to_regclass('public.' || relation_name) is not null;
@@ -433,7 +460,21 @@ jobs:
           from unnest(array[
             'mpgf_public_goods_compacts',
             'mpgf_public_goods_compact_memberships',
-            'mpgf_public_goods_compact_delegations',
+            'mpgf_public_goods_dormant_authorization_snapshots',
+            'mpgf_public_goods_outflow_coverage_snapshots',
+            'mpgf_public_goods_outflow_observations',
+            'mpgf_public_goods_obligation_snapshots',
+            'mpgf_public_goods_allocation_instructions',
+            'mpgf_public_goods_allocation_instruction_lines',
+            'mpgf_public_goods_scheduled_amount_snapshots',
+            'mpgf_public_goods_settled_contribution_snapshots',
+            'mpgf_public_goods_funding_qualification_snapshots',
+            'mpgf_public_goods_readiness_snapshots',
+            'mpgf_public_goods_voting_snapshots',
+            'mpgf_public_goods_voting_weight_snapshots',
+            'mpgf_public_goods_delegation_events',
+            'mpgf_public_goods_delegation_snapshots',
+            'mpgf_public_goods_delegation_weight_snapshots',
             'mpgf_public_goods_compact_idempotency_keys'
           ]) as relation_name
           where to_regclass('public.' || relation_name) is not null;
