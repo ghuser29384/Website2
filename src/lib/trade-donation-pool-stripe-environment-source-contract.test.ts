@@ -42,6 +42,25 @@ test("signed Stripe failure events cannot mutate an obligation in the opposite e
   );
 });
 
+test("refund and dispute lookups bind a PaymentIntent to the signed event environment", () => {
+  assert.match(
+    webhook,
+    /async function obligationIdFromPaymentIntent\(paymentIntentId: string, livemode: boolean\)/,
+  );
+  assert.match(
+    webhook,
+    /\.eq\("stripe_payment_intent_id", paymentIntentId\)[\s\S]*?\.eq\("stripe_livemode", livemode\)/,
+  );
+  assert.equal(
+    webhook.match(/obligationIdFromPaymentIntent\(paymentIntentId, event\.livemode\)/g)?.length,
+    2,
+  );
+  assert.match(
+    webhook,
+    /obligationIdFromPaymentIntent\([\s\S]*?input\.paymentIntentId,[\s\S]*?input\.event\.livemode/,
+  );
+});
+
 test("mismatched pooled Stripe outcomes cannot pass the signed-webhook readiness gate", () => {
   assert.match(
     webhook,
