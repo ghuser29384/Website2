@@ -92,11 +92,14 @@ async function recordSuccess(input: {
     p_condition_hash: conditionHash,
   });
   if (error) throw new Error(error.message);
-  await passSignedWebhookGate(input.event.livemode);
   const result = Array.isArray(data) ? data[0] : data;
+  const status = String(result?.status ?? "processed");
+  if (["funded", "bundled", "already_funded"].includes(status)) {
+    await passSignedWebhookGate(input.event.livemode);
+  }
   return {
-    status: String(result?.status ?? "processed"),
-    duplicate: String(result?.status ?? "") === "duplicate",
+    status,
+    duplicate: status === "duplicate",
   };
 }
 
@@ -122,11 +125,14 @@ async function recordFailure(input: {
     p_failure_message: input.message,
   });
   if (error) throw new Error(error.message);
-  await passSignedWebhookGate(input.event.livemode);
   const result = Array.isArray(data) ? data[0] : data;
+  const status = String(result?.status ?? "processed");
+  if (["checkout_abandoned", "payment_failed"].includes(status)) {
+    await passSignedWebhookGate(input.event.livemode);
+  }
   return {
-    status: String(result?.status ?? "processed"),
-    duplicate: String(result?.status ?? "") === "duplicate",
+    status,
+    duplicate: status === "duplicate",
   };
 }
 
@@ -154,11 +160,14 @@ async function recordRefundOrDispute(input: {
     p_failure_message: input.message,
   });
   if (error) throw new Error(error.message);
-  await passSignedWebhookGate(input.event.livemode);
   const result = Array.isArray(data) ? data[0] : data;
+  const status = String(result?.status ?? "processed");
+  if (["refunded", "disputed", "needs_review"].includes(status)) {
+    await passSignedWebhookGate(input.event.livemode);
+  }
   return {
-    status: String(result?.status ?? "processed"),
-    duplicate: String(result?.status ?? "") === "duplicate",
+    status,
+    duplicate: status === "duplicate",
   };
 }
 
