@@ -365,10 +365,13 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       await evaluatorOfferCard
         .getByRole("link", { exact: true, name: "Open full terms ↗" })
         .click();
-      await anonymousPage.waitForLoadState("networkidle");
+      const evaluatorOfferUrl = new URL(`/offers/${IDS.offer}`, BASE_URL).toString();
+      await anonymousPage.waitForURL(evaluatorOfferUrl);
+      await expect(anonymousPage).toHaveURL(evaluatorOfferUrl);
       const evaluatorTerms = anonymousPage.getByRole("article", {
         name: /Evaluator core-loop verification/i,
       });
+      await expect(evaluatorTerms).toBeVisible();
       await expect(evaluatorTerms).toHaveCount(1);
       await expect(
         evaluatorTerms.getByText(

@@ -8,6 +8,7 @@ on:
       - ".github/workflows/evidence-payment-release-qa.yml"
       - "src/app/admin/trade-review/**"
       - "src/app/actions.ts"
+      - "src/app/api/live-now/feedback/**"
       - "src/app/trade-agreements/**"
       - "src/app/trade-review/**"
       - "src/app/trade-milestone-actions.ts"
@@ -466,10 +467,13 @@ jobs:
         run: |
           set -euo pipefail
           node --import tsx --test \
+            src/app/api/live-now/feedback/route.test.ts \
             src/lib/marketplace-delta-contract.test.ts \
             src/lib/trade-evidence-reviewer-rls-contract.test.ts \
             | tee evaluator-core-loop-source.log
           npx eslint \
+            src/app/api/live-now/feedback/route.ts \
+            src/app/api/live-now/feedback/route.test.ts \
             src/lib/trade-evidence-reviewer-rls-contract.test.ts \
             tests/evaluator-core-loop-authenticated.spec.ts \
             | tee evaluator-core-loop-eslint.log
