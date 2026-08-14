@@ -1,0 +1,94 @@
+name: Repair MPGF compact state TypeScript narrowing
+
+on:
+  push:
+    branches:
+      - agent/mpgf-public-goods-compacts
+    paths:
+      - .github/workflows/repair-mpgf-compact-state-types.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-mpgf-compact-state-types-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the current feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Narrow compact state types
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("src/lib/mpgf/public-goods-compacts-state.ts")
+          source = path.read_text(encoding="utf-8")
+
+          old_context = """  const compactContext = {
+            id: value.id,
+            publicKey: foundingCharter.publicKey,
+            status,
+            activatedAt:
+              typeof activation.activatedAt === \"string\"
+                ? activation.activatedAt
+                : null,
+          };
+          """
+          new_context = """  const compactContext = {
+            id: value.id,
+            publicKey: foundingCharter.publicKey,
+            status,
+            activatedAt:
+              typeof activation.activatedAt === \"string\"
+                ? activation.activatedAt
+                : null,
+          } as const;
+          """
+          if source.count(old_context) != 1:
+              raise SystemExit("Expected exactly one compact-context narrowing site.")
+          source = source.replace(old_context, new_context)
+
+          old_set = """  const expectedKeys = new Set(
+            MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.map(
+          """
+          new_set = """  const expectedKeys = new Set<string>(
+            MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.map(
+          """
+          if source.count(old_set) != 1:
+              raise SystemExit("Expected exactly one founding-key Set construction.")
+          source = source.replace(old_set, new_set)
+
+          path.write_text(source, encoding="utf-8")
+          PY
+          git diff --check
+          grep -q '} as const;' src/lib/mpgf/public-goods-compacts-state.ts
+          grep -q 'const expectedKeys = new Set<string>(' src/lib/mpgf/public-goods-compacts-state.ts
+
+      - name: Verify strict TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npx tsc --noEmit
+
+      - name: Commit the durable repair and remove this controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/mpgf/public-goods-compacts-state.ts
+          git rm .github/workflows/repair-mpgf-compact-state-types.yml
+          git commit -m "fix: narrow MPGF compact state validation types"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
