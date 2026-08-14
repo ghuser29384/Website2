@@ -6,7 +6,7 @@ const root = new URL("../../../", import.meta.url);
 const read = (path: string) => readFileSync(new URL(path, root), "utf8");
 
 const hardeningMigration = read(
-  "supabase/migrations/20260814023000_mpgf_public_goods_compacts_state_hardening.sql",
+  "supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql",
 );
 const service = read("src/lib/mpgf/public-goods-compacts-service.ts");
 const stateValidation = read("src/lib/mpgf/public-goods-compacts-state.ts");
@@ -39,6 +39,18 @@ test("electorates require active compacts and stale delegations are revoked", ()
   assert.match(
     hardeningMigration,
     /revoke all on function public\.mpgf_public_goods_compact_revoke_stale_delegations/,
+  );
+});
+
+test("accepted compact constitutions remain frozen even after recruiting revocation", () => {
+  assert.match(hardeningMigration, /historically_accepted boolean/);
+  assert.match(
+    hardeningMigration,
+    /select exists \([\s\S]*mpgf_public_goods_compact_memberships[\s\S]*historically_accepted/,
+  );
+  assert.match(
+    hardeningMigration,
+    /old\.status = 'active' or historically_accepted[\s\S]*Published compact terms are immutable after the first acceptance/,
   );
 });
 
