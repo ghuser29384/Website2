@@ -12,7 +12,7 @@ import {
 import {
   clearMpgfPublicGoodsCompactDelegation,
   setMpgfPublicGoodsCompactDelegation,
-} from "@/lib/mpgf/public-goods-compacts-server";
+} from "@/lib/mpgf/public-goods-compacts-service";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
