@@ -387,6 +387,10 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         `/login?returnTo=${encodeURIComponent(`/offers/${IDS.offer}#respond`)}`,
       );
       await signInLink.click();
+      await expect(anonymousPage).toHaveURL((url) =>
+        url.pathname === "/login" &&
+        url.searchParams.get("returnTo") === `/offers/${IDS.offer}#respond`,
+      );
       const loginUrl = new URL(anonymousPage.url());
       expect(loginUrl.pathname).toBe("/login");
       expect(loginUrl.searchParams.get("returnTo")).toBe(`/offers/${IDS.offer}#respond`);

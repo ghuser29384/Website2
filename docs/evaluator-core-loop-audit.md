@@ -113,6 +113,18 @@ preserves the trace and rendered error context. Its no-money proof again records
 zero for every enumerated application, Auth, and private row class. The minimal
 repair scopes that exact sentence to the one labeled evaluator terms article.
 
+Run `31768631060` exercised the scoped terms assertion on exact candidate
+`9fc0344d32ff42a1cf233be9c5d9b179e7d03da9`. Anonymous directory and offer
+screenshots passed, as did the exact sign-in link `href`. The test then read
+`page.url()` immediately after the Next.js client-side click and observed the
+pre-navigation offer URL. This is a harness synchronization defect: the
+rendered control already carried the required encoded `/login` return path.
+Artifact `9207343761` (digest
+`sha256:1f55ae1d100daad4ef4e56f8898373705137c4724e3c4ccac47bbe271b8c9323`)
+again records zero performance-bond and external-payment-receipt rows and zero
+cleanup residue. The minimal repair adds a web-first URL assertion before
+reading the navigated URL.
+
 ## Pre-runtime verification completed
 
 At the pre-reconciliation candidate base
