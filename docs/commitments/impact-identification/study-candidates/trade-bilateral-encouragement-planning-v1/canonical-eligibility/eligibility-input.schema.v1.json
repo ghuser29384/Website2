@@ -8,7 +8,7 @@
   "properties": {
     "schemaVersion": { "const": "reciprocal-trade-research-eligibility-input-v1.0.0" },
     "evaluatorVersion": { "const": "reciprocal-trade-research-eligibility-v1.0.0" },
-    "policySourceManifestHash": { "const": "sha256:7ab1d8d53c9b761ea93c4ab324c11c388316591bf90f5a21222f5fbb44de2606" },
+    "policySourceManifestHash": { "const": "sha256:19423f7be11351846c4dfc3036e8ca730ea9a2083fab495979290913287ed2b8" },
     "effectiveAt": { "$ref": "#/$defs/requiredTimestamp" },
     "subjectMode": { "enum": ["synthetic", "protected"] },
     "studyAuthorization": { "$ref": "#/$defs/studyAuthorization" },
@@ -67,7 +67,7 @@
       "properties": {
         "status": { "enum": ["cleared", "blocked", "review_required", "unknown", "stale", "contradictory"] },
         "sourceStatus": { "enum": ["current", "stale", "unknown", "unbound", "contradictory"] },
-        "sourceHash": { "$ref": "#/$defs/sha256" },
+        "sourceHash": { "const": "sha256:19423f7be11351846c4dfc3036e8ca730ea9a2083fab495979290913287ed2b8" },
         "reviewedAt": { "$ref": "#/$defs/requiredTimestamp" },
         "expiresAt": { "$ref": "#/$defs/timestamp" }
       }
@@ -75,17 +75,18 @@
     "offer": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["offerKey", "ownerKey", "mode", "offeredCause", "requestedCause", "causeCollation", "workflowStatus", "status", "operability", "gates"],
+      "required": ["offerKey", "ownerKey", "mode", "offeredCause", "requestedCause", "causeCollation", "workflowStatus", "status", "operability", "invitationCompatibility", "gates"],
       "properties": {
         "offerKey": { "$ref": "#/$defs/safeKey" },
         "ownerKey": { "$ref": "#/$defs/safeKey" },
         "mode": { "enum": ["pledge", "offset", "payment"] },
-        "offeredCause": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[\\u0020-\\u007e]+$" },
-        "requestedCause": { "type": "string", "minLength": 1, "maxLength": 160, "pattern": "^[\\u0020-\\u007e]+$" },
-        "causeCollation": { "const": "postgres-ilike-printable-ascii-v1" },
+        "offeredCause": { "type": "string", "minLength": 1, "maxLength": 180, "pattern": "^[\\u0020-\\u007e]+$" },
+        "requestedCause": { "type": "string", "minLength": 1, "maxLength": 180, "pattern": "^[\\u0020-\\u007e]+$" },
+        "causeCollation": { "enum": ["postgres-ilike-printable-ascii-v1", "unbound", "unknown", "contradictory"] },
         "workflowStatus": { "enum": ["draft", "pending_review", "published", "changes_requested", "rejected", "paused", "closed", "deleted"] },
         "status": { "enum": ["open", "paused", "matched", "closed"] },
         "operability": { "enum": ["operative", "expired", "superseded", "withdrawn", "blocked", "unknown", "stale", "contradictory"] },
+        "invitationCompatibility": { "enum": ["compatible", "payment_schedule_present", "donation_offset_attachment_present", "active_performance_bond_present", "unknown", "stale", "contradictory"] },
         "gates": {
           "type": "object",
           "additionalProperties": false,

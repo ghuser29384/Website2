@@ -2,7 +2,7 @@
 
 - **Bound base:** `79ca382c3bdc325dfc5a28e2cbbafc1b95640386`
 - **Evaluator:** `reciprocal-trade-research-eligibility-v1.0.0`
-- **Policy-source manifest:** `sha256:7ab1d8d53c9b761ea93c4ab324c11c388316591bf90f5a21222f5fbb44de2606`
+- **Policy-source manifest:** `sha256:19423f7be11351846c4dfc3036e8ca730ea9a2083fab495979290913287ed2b8`
 - **Status:** `blocked_source_conflict`
 
 `policy-source-manifest.v1.json` is the machine-readable authority for every exact path, symbol, Git blob SHA-1, raw SHA-256, input field, fail-closed rule, gate level, time rule, and test interpretation below. This map explains the conclusions without replacing those bindings.
@@ -17,10 +17,11 @@ All source hashes were calculated over the exact Git blob and raw bytes at the b
 
 ### 1. Offer identity and lifecycle — directed-edge level
 
-- **Active authorities:** `src/lib/core-trade-base.ts::listReciprocalMatches`; `supabase/migrations/20260716080505_core_trade_loop.sql` workflow/block/thread/agreement state machines; current `supabase/schema.sql` offer mode/status constraints.
+- **Active authorities:** `src/lib/core-trade-base.ts::listReciprocalMatches` and its sole bound application call site in `src/app/trades/[offerId]/manage/page.tsx`; `supabase/migrations/20260716080505_core_trade_loop.sql` workflow/block/thread/agreement state machines; current `supabase/schema.sql` offer mode/status constraints.
 - **Unresolved structured source:** `src/lib/moral-trade/offer-validity.ts::evaluateMoralTradeOfferValidity` defines expired, withdrawn, superseded, stale, and blocked states but is not wired into the core matcher.
-- **Inputs:** both pseudonymous offer and owner keys, mode, workflow status, offer status, and structured operability.
-- **Candidate rule:** distinct offers and owners; equal pledge mode; both published/open/operative. Deleted, paused, closed, rejected, pending-review, changes-requested, expired, superseded, withdrawn, unknown, stale, and contradictory states fail closed.
+- **Additional active authority:** `supabase/migrations/20260722223000_harden_trade_invitations.sql::offer_is_invitable` excludes payment schedules, donation-offset attachments, and enabled active performance bonds.
+- **Inputs:** both pseudonymous offer and owner keys, mode, workflow status, offer status, structured operability, and normalized invitation compatibility.
+- **Candidate rule:** distinct offers and owners; equal pledge mode; both published/open/operative/invitation-compatible. Deleted, paused, closed, rejected, pending-review, changes-requested, expired, superseded, withdrawn, payment-scheduled, donation-offset-attached, active-performance-bond, unknown, stale, and contradictory states fail closed.
 - **Time:** every state must be frozen at the supplied `effectiveAt`.
 - **Tests:** lifecycle fixtures plus existing core trade and offer-validity contract tests.
 - **Conflict:** `listReciprocalMatches` permits any equal mode; `offer_is_invitable` in `20260722223000_harden_trade_invitations.sql` permits only nonfinancial pledge offers. The synthetic candidate narrows to pledge but cannot call that choice canonical.
@@ -29,18 +30,18 @@ All source hashes were calculated over the exact Git blob and raw bytes at the b
 
 - **Active authority:** `src/lib/core-trade-base.ts::listReciprocalMatches` applies `target.offered_cause ILIKE source.requested_cause` and `target.requested_cause ILIKE source.offered_cause` after publication/open/mode/identity filters.
 - **Inputs:** both offered/requested causes and the explicit collation label.
-- **Candidate rule:** reproduce both directed predicates for printable ASCII, including live `%`, `_`, and backslash pattern semantics. This intentionally does not silently replace the runtime's wildcard behavior with equality.
+- **Candidate rule:** reproduce both directed predicates for printable ASCII, including live `%`, `_`, and backslash pattern semantics. A trailing unmatched backslash fails closed as an invalid PostgreSQL LIKE pattern. This intentionally does not silently replace the runtime's wildcard behavior with equality.
 - **Time:** cause values must belong to the same frozen snapshot as `effectiveAt`.
 - **Tests:** one- and two-sided mismatch, ASCII case folding, wildcard behavior, pair symmetry, and directed-role tests.
 - **Gap:** deployed PostgreSQL locale/collation is not frozen by a repository contract. Non-ASCII or an unknown collation fails closed.
 
 ### 3. Moderation, harmful-offer safety, and baseline integrity — offer level
 
-- **Active but incomplete authority:** `src/app/core-trade-actions-base.ts::reviewCoreOfferAction` controls core publication and clears `moderation_reason`; that does not prove structured clearance.
-- **Unresolved structured sources:** `src/lib/moral-trade/user-safety-content-moderation.ts::evaluateMoralTradeUserSafetyContentModeration` and `src/lib/moral-trade/baseline-integrity.ts::evaluateMoralTradeBaselineIntegrity`, with their bound migrations and tests.
+- **Active but incomplete authority:** the routed review action in `src/app/core-trade-actions.ts` sends ordinary offers through `src/app/core-trade-actions-base.ts::reviewCoreOfferAction` and Feed-derived offers through `src/app/feed-create-review-actions.ts` plus the service-only private-delivery RPC. These paths enforce different lifecycle/delivery checks; neither proves structured research clearance.
+- **Unresolved structured sources:** `src/lib/moral-trade/user-safety-content-moderation.ts::evaluateMoralTradeUserSafetyContentModeration`, `src/lib/moral-trade/noncompensable-blockers.ts::evaluateMoralTradeNoncompensableBlocker`, and `src/lib/moral-trade/baseline-integrity.ts::evaluateMoralTradeBaselineIntegrity`, with their bound migrations, non-authorizing enforcement receipts, and tests. The noncompensable contract expressly covers `match_candidate_generation`, safety, legal/regulatory, privacy, third-party rights, anti-threat, and process integrity, but the core matcher does not import it.
 - **Descriptive only:** `src/lib/proposal-review.ts::reviewProposalText`; free-text threat/prohibited-pattern heuristics are not imported by the matcher and cannot infer safety or legality.
 - **Inputs:** structured moderation, harmful-offer, and baseline-integrity evidence for each offer, each with status, source status/hash, review time, and expiry.
-- **Candidate rule:** only `cleared` + `current` + time-valid + hash-bound evidence passes. Blocked, review-required, unknown, stale, contradictory, unbound, expired, or future-reviewed evidence fails closed. Empty prose never passes a gate.
+- **Candidate rule:** only `cleared` + `current` + time-valid evidence carrying the exact policy-manifest hash as its normalization receipt passes. Blocked, review-required, unknown, stale, contradictory, unbound, expired, future-reviewed, or hash-mismatched evidence fails closed. Empty prose never passes a gate.
 - **Tests:** synthetic clear/blocked/review/unknown/stale/contradictory cases and existing structured moderation/baseline contracts.
 
 ### 4. Legality and participant policy eligibility — participant level
@@ -72,7 +73,7 @@ All source hashes were calculated over the exact Git blob and raw bytes at the b
 
 ### 7. Agreement and engagement conflicts — pair level
 
-- **Active authorities:** core loop thread/agreement state; current-lifecycle uniqueness in `20260721153000_offer_bank_contracts.sql`; atomic accept/confirm checks in `20260729170000_marketplace_atomic_acceptance_current_core.sql`.
+- **Active authorities:** core loop thread/agreement state; current-lifecycle uniqueness in `20260721153000_offer_bank_contracts.sql`; atomic accept/confirm checks in `20260729170000_marketplace_atomic_acceptance_current_core.sql`; and the source-bound Feed private-delivery RPC.
 - **Inputs:** accepted interest, invitation, thread, agreement, duplicate-pair, and historical-interference state.
 - **Candidate rule:** any active/current conflict is ineligible. Unknown/contradictory states fail. Terminal history is not silently erased; historical interference must be explicitly captured or explicitly absent.
 - **Time:** the whole relationship projection must be frozen at `effectiveAt`.
@@ -90,9 +91,10 @@ All source hashes were calculated over the exact Git blob and raw bytes at the b
 ## Active conflicts and stop result
 
 1. Mode authority differs between suggestion and invitation paths.
-2. `startSuggestedMatchAction` does not re-run the suggestion or invitation gate set.
-3. Core publication does not bind the available structured safety, validity, baseline, participant-policy, or research-consent records.
-4. Full PostgreSQL `ILIKE` collation semantics are not frozen.
-5. No study-specific privacy, ethics, consent/waiver, or protected projection authority exists.
+2. `startSuggestedMatchAction` does not re-run the suggestion or invitation gate set. New active-thread insertion is pair-block-triggered, but the action selects any non-closed thread and can proceed into counterproposal creation from blocked thread state.
+3. Ordinary review and Feed-derived private delivery enforce different lifecycle/delivery contracts, and neither binds all research gates.
+4. Core publication does not bind the available structured moderation, noncompensable-blocker, validity, baseline, participant-policy, or research-consent records.
+5. Full PostgreSQL `ILIKE` collation semantics are not frozen.
+6. No study-specific privacy, ethics, consent/waiver, or protected projection authority exists.
 
 These are issue-defined stop conditions. They are recorded, not guessed around. The source is therefore a validated synthetic candidate with `canonicalEligibilitySourceStatus = blocked_source_conflict`, never `complete`, `authorized`, or `ready_for_real_diagnostic`.

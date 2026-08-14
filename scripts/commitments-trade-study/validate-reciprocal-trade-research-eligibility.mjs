@@ -11,6 +11,7 @@ import {
   EVALUATOR_VERSION,
   INPUT_SCHEMA_VERSION,
   POLICY_SOURCE_MANIFEST_HASH,
+  REASON_CODES,
   evaluateReciprocalTradeResearchEligibility
 } from "./reciprocal-trade-research-eligibility.mjs";
 
@@ -70,6 +71,13 @@ function assertUnique(values, label) {
   assert.equal(new Set(values).size, values.length, `${label} must be unique`);
 }
 
+function assertSourceIncludes(sourceById, sourceId, patterns) {
+  const source = sourceById.get(sourceId);
+  assert.ok(source, `missing source binding: ${sourceId}`);
+  const body = read(source.path);
+  for (const pattern of patterns) assert.match(body, pattern, `${sourceId}: ${pattern}`);
+}
+
 const policy = load(PATHS.policy);
 const inputSchema = load(PATHS.inputSchema);
 const decisionSchema = load(PATHS.decisionSchema);
@@ -86,12 +94,16 @@ assert.equal(policy.canonicalEligibilitySourceStatus, "blocked_source_conflict")
 assert.equal(policy.authorization.protectedDataExportAuthorized, false);
 assert.equal(policy.authorization.realRowsMayBeRead, false);
 assert.equal(policy.authorization.realGraphMayBeBuilt, false);
+assert.equal(policy.authorization.realGraphDiagnosticsStatus, "blocked_not_run");
 assert.equal(policy.authorization.runtimeWiringAuthorized, false);
 assert.equal(policy.authorization.assignmentAuthorized, false);
+assert.equal(policy.authorization.assignmentGenerated, false);
+assert.equal(policy.authorization.assignmentSeedGenerated, false);
 assert.equal(policy.authorization.executionDecision, "no_launch");
 assert.ok(policy.activeConflicts.length >= 4);
 assertUnique(policy.sources.map((source) => source.sourceId), "source IDs");
 assertUnique(policy.testBindings.map((binding) => binding.testId), "test IDs");
+const sourceById = new Map(policy.sources.map((source) => [source.sourceId, source]));
 
 for (const binding of [...policy.sources, ...policy.testBindings]) {
   assert.match(binding.path, /^(src|supabase|scripts|docs)\//, binding.path);
@@ -100,6 +112,58 @@ for (const binding of [...policy.sources, ...policy.testBindings]) {
   assert.equal(gitBlobSha1(binding.path), binding.gitBlobSha1, `${binding.path}: Git blob`);
   assert.equal(rawSha256(binding.path), binding.rawSha256, `${binding.path}: raw SHA-256`);
 }
+
+assertSourceIncludes(sourceById, "runtime-reciprocal-matcher", [
+  /\.eq\("workflow_status",\s*"published"\)/,
+  /\.eq\("status",\s*"open"\)/,
+  /\.eq\("mode",\s*offer\.mode\)/,
+  /\.neq\("owner_id",\s*offer\.owner_id\)/,
+  /\.neq\("id",\s*offer\.id\)/,
+  /\.ilike\("offered_cause",\s*offer\.requested_cause\)/,
+  /\.ilike\("requested_cause",\s*offer\.offered_cause\)/
+]);
+assertSourceIncludes(sourceById, "runtime-reciprocal-matcher-call-site", [/listReciprocalMatches\(offer\)/]);
+assertSourceIncludes(sourceById, "runtime-core-trade-actions", [
+  /export async function startSuggestedMatchAction/,
+  /\.neq\("status",\s*"closed"\)/,
+  /\.from\("trade_counterproposals"\)[\s\S]*?\.insert/
+]);
+assertSourceIncludes(sourceById, "database-invitation-hardening", [
+  /offer_is_invitable/,
+  /payment_interval_value is null/,
+  /from public\.donation_offset_offers/,
+  /from public\.performance_bonds/,
+  /pair_is_blocked/,
+  /enforce_global_pair_block_on_thread/
+]);
+assertSourceIncludes(sourceById, "database-feed-create-private-delivery", [
+  /moral_trade_feed_create_deliver_service/,
+  /auth\.role\(\) <> 'service_role'/,
+  /source_row\.terms_version <> link_row\.source_terms_version/,
+  /pair_is_blocked/
+]);
+assertSourceIncludes(sourceById, "database-atomic-acceptance", [
+  /accept_marketplace_interest_v1/,
+  /accept_marketplace_guest_interest_v1/,
+  /confirm_agreement_version_v2_unbound_legacy/
+]);
+assertSourceIncludes(sourceById, "database-account-bound-directory", [
+  /search_create_participants_v2/,
+  /resolve_create_participants_v2/,
+  /accepts_group_invitations/,
+  /from public\.trade_blocks/
+]);
+assertSourceIncludes(sourceById, "structured-noncompensable-blockers", [
+  /"match_candidate_generation"/,
+  /"legal_or_regulatory"/,
+  /"public_safety"/,
+  /"confidentiality_or_privacy"/,
+  /"anti_threat"/
+]);
+assertSourceIncludes(sourceById, "database-noncompensable-blocker-enforcement", [
+  /match_candidate_generation_allowed_bool boolean not null default false/,
+  /check \(match_candidate_generation_allowed_bool = false\)/
+]);
 
 const expectedGateIds = [
   "offer_identity_lifecycle",
@@ -123,6 +187,9 @@ for (const gate of policy.gates) {
   for (const sourceId of gate.sourceIds) assert.ok(policy.sources.some((source) => source.sourceId === sourceId), `${gate.gateId}: ${sourceId}`);
   for (const testId of gate.testIds) assert.ok(policy.testBindings.some((binding) => binding.testId === testId), `${gate.gateId}: ${testId}`);
 }
+const manifestReasonCodes = policy.gates.flatMap((gate) => gate.reasonCodes);
+assertUnique(manifestReasonCodes, "manifest reason codes");
+assert.deepEqual([...manifestReasonCodes].sort(), [...REASON_CODES].sort());
 
 assert.equal(inputSchema.additionalProperties, false);
 assert.equal(inputSchema.properties.schemaVersion.const, INPUT_SCHEMA_VERSION);
@@ -133,7 +200,10 @@ for (const definition of ["studyAuthorization", "provenance", "gateEvidence", "o
   assert.equal(inputSchema.$defs[definition].additionalProperties, false, definition);
 }
 assert.equal(inputSchema.$defs.provenance.properties.boundBaseCommit.const, BOUND_BASE_COMMIT);
-assert.equal(inputSchema.$defs.offer.properties.causeCollation.const, "postgres-ilike-printable-ascii-v1");
+assert.ok(inputSchema.$defs.offer.properties.causeCollation.enum.includes("postgres-ilike-printable-ascii-v1"));
+assert.equal(inputSchema.$defs.offer.properties.offeredCause.maxLength, 180);
+assert.ok(inputSchema.$defs.offer.properties.invitationCompatibility.enum.includes("active_performance_bond_present"));
+assert.equal(inputSchema.$defs.gateEvidence.properties.sourceHash.const, POLICY_SOURCE_MANIFEST_HASH);
 assert.equal(inputSchema.$defs.consent.properties.purposeCode.const, "reciprocal_trade_research_eligibility_v1");
 assert.equal(inputSchema.$defs.consent.properties.privacyScope.const, "research_eligibility_normalized_pair_only");
 
@@ -143,10 +213,12 @@ assert.equal(decisionSchema.properties.evaluatorVersion.const, EVALUATOR_VERSION
 assert.equal(decisionSchema.properties.policySourceManifestHash.const, POLICY_SOURCE_MANIFEST_HASH);
 assert.equal(decisionSchema.properties.canonicalEligibilitySourceStatus.const, "blocked_source_conflict");
 assert.equal(decisionSchema.properties.realGraphDiagnosticsStatus.const, "blocked_not_run");
+assert.equal(decisionSchema.properties.protectedDataExportAuthorized.const, false);
 assert.equal(decisionSchema.properties.executionDecision.const, "no_launch");
 assert.equal(decisionSchema.properties.assignmentGenerated.const, false);
 assert.equal(decisionSchema.properties.assignmentSeedGenerated.const, false);
 assert.deepEqual(decisionSchema.properties.participantLevelCausalClaim, { type: "null" });
+assert.deepEqual(decisionSchema.$defs.reasonCode.enum, REASON_CODES);
 
 assert.equal(gaps.boundBaseCommit, BOUND_BASE_COMMIT);
 assert.equal(gaps.canonicalEligibilitySourceStatus, "blocked_source_conflict");
@@ -157,14 +229,24 @@ for (const gap of gaps.gaps) {
   assert.match(gap.status, /^open_/);
   assert.equal(gap.protectedEvaluationAuthorized, false);
   assert.ok(gap.requiredResolution.length > 0);
+  for (const gateId of gap.gateIds) assert.ok(expectedGateIds.includes(gateId), `${gap.gapId}: ${gateId}`);
+  for (const sourceId of gap.sourceIds) assert.ok(sourceById.has(sourceId), `${gap.gapId}: ${sourceId}`);
 }
 
 assert.equal(fixtures.syntheticOnly, true);
 assert.equal(fixtures.nonExecuting, true);
 assert.equal(fixtures.containsProductionOrQaRows, false);
-assert.ok(fixtures.cases.length >= 50);
+assert.ok(fixtures.cases.length >= 80);
 assert.ok(fixtures.cases.some((entry) => entry.id === "fully-eligible-reciprocal-pair" && entry.expectedEligible));
 assert.ok(fixtures.cases.some((entry) => entry.id === "synthetic-3200-cluster-control"));
+assert.deepEqual(
+  [...new Set(fixtures.cases.flatMap((entry) => entry.expectedReasonCodes))].sort(),
+  [...REASON_CODES].sort()
+);
+for (const offer of [fixtures.baseInput.sourceOffer, fixtures.baseInput.targetOffer]) {
+  assert.equal(offer.invitationCompatibility, "compatible");
+  for (const evidence of Object.values(offer.gates)) assert.equal(evidence.sourceHash, POLICY_SOURCE_MANIFEST_HASH);
+}
 for (const fixtureCase of fixtures.cases) {
   const input = applyOperations(fixtures.baseInput, fixtureCase.operations);
   const first = evaluateReciprocalTradeResearchEligibility(input);
@@ -174,6 +256,7 @@ for (const fixtureCase of fixtures.cases) {
   assert.deepEqual(first.reasonCodes, fixtureCase.expectedReasonCodes, fixtureCase.id);
   assert.deepEqual(first.unknownBlockers, fixtureCase.expectedUnknownBlockers ?? [], `${fixtureCase.id}: unknown`);
   assert.deepEqual(first.staleSourceBlockers, fixtureCase.expectedStaleSourceBlockers ?? [], `${fixtureCase.id}: stale`);
+  assert.equal(first.protectedDataExportAuthorized, false, fixtureCase.id);
   const serialized = JSON.stringify(first);
   for (const canary of fixtureCase.decisionMustExclude ?? []) assert.equal(serialized.includes(canary), false, `${fixtureCase.id}: ${canary}`);
   if (!first.eligible && input.pair && typeof input.pair === "object") {
@@ -205,6 +288,7 @@ const forbiddenEvaluatorPatterns = [
 for (const [pattern, label] of forbiddenEvaluatorPatterns) assert.doesNotMatch(evaluatorSource, pattern, label);
 assert.match(evaluatorSource, /export function evaluateReciprocalTradeResearchEligibility/);
 assert.match(evaluatorSource, /participantLevelCausalClaim: null/);
+assert.match(evaluatorSource, /protectedDataExportAuthorized: false/);
 assert.match(evaluatorSource, /assignmentGenerated: false/);
 assert.match(evaluatorSource, /assignmentSeedGenerated: false/);
 
@@ -217,6 +301,7 @@ assert.equal(canonical.canonicalEligibilitySourceStatus, "blocked_source_conflic
 assert.equal(canonical.realGraphDiagnosticsStatus, "blocked_not_run");
 assert.equal(canonical.executionDecision, "no_launch");
 assert.equal(canonical.releaseClassification, "research_validation_only_no_runtime_effect");
+assert.equal(canonical.protectedDataExportAuthorized, false);
 assert.equal(canonical.realDataAccessed, false);
 assert.equal(canonical.databaseActionOccurred, false);
 assert.equal(canonical.deploymentOccurred, false);
@@ -241,6 +326,9 @@ assert.deepEqual([...canonical.expectedChangedFiles].sort(), [
   PATHS.evaluatorTest,
   PATHS.validator
 ].sort());
+const workflowSource = read(PATHS.workflow);
+assert.match(workflowSource, /src\/lib\/moral-trade\/noncompensable-blockers\.test\.ts/);
+assert.match(workflowSource, /src\/feed-unified-marketplace-wiring\.test\.ts/);
 
 const aggregateText = [read(PATHS.readme), read(PATHS.sourceMap), read(PATHS.canonical)].join("\n");
 for (const required of [

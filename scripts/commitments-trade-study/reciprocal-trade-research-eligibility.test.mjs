@@ -6,6 +6,7 @@ import {
   DECISION_SCHEMA_VERSION,
   EVALUATOR_VERSION,
   POLICY_SOURCE_MANIFEST_HASH,
+  REASON_CODES,
   evaluateReciprocalTradeResearchEligibility
 } from "./reciprocal-trade-research-eligibility.mjs";
 
@@ -57,6 +58,7 @@ test("all documented synthetic and adversarial fixtures have exact stable decisi
     assert.equal(first.policySourceManifestHash, POLICY_SOURCE_MANIFEST_HASH);
     assert.equal(first.canonicalEligibilitySourceStatus, "blocked_source_conflict");
     assert.equal(first.realGraphDiagnosticsStatus, "blocked_not_run");
+    assert.equal(first.protectedDataExportAuthorized, false);
     assert.equal(first.executionDecision, "no_launch");
     assert.equal(first.assignmentGenerated, false);
     assert.equal(first.assignmentSeedGenerated, false);
@@ -128,6 +130,7 @@ test("decisions are aggregate-safe and contain no input keys, causes, or causal 
     "executionDecision",
     "participantLevelCausalClaim",
     "policySourceManifestHash",
+    "protectedDataExportAuthorized",
     "realGraphDiagnosticsStatus",
     "reasonCodes",
     "schemaVersion",
@@ -135,4 +138,10 @@ test("decisions are aggregate-safe and contain no input keys, causes, or causal 
     "subjectMode",
     "unknownBlockers"
   ]);
+});
+
+test("reason codes are frozen, unique, and all exercised by synthetic fixtures", () => {
+  assert.equal(new Set(REASON_CODES).size, REASON_CODES.length);
+  const exercised = new Set(fixtures.cases.flatMap((fixtureCase) => fixtureCase.expectedReasonCodes));
+  assert.deepEqual([...exercised].sort(), [...REASON_CODES].sort());
 });

@@ -10,10 +10,13 @@
     "protectedDataExportAuthorized": false,
     "realRowsMayBeRead": false,
     "realGraphMayBeBuilt": false,
+    "realGraphDiagnosticsStatus": "blocked_not_run",
     "runtimeWiringAuthorized": false,
     "migrationAuthorized": false,
     "studyRegistrationAuthorized": false,
     "assignmentAuthorized": false,
+    "assignmentGenerated": false,
+    "assignmentSeedGenerated": false,
     "participantContactAuthorized": false,
     "participantCausalOutputAuthorized": false,
     "executionDecision": "no_launch"
@@ -34,13 +37,49 @@
       "finding": "The live suggestion query requires published/open offers, equal mode, distinct offer and owner, and reciprocal PostgreSQL ILIKE cause predicates; it does not apply the complete research gate set."
     },
     {
+      "sourceId": "runtime-reciprocal-matcher-call-site",
+      "path": "src/app/trades/[offerId]/manage/page.tsx",
+      "symbol": "listReciprocalMatches invocation",
+      "gitBlobSha1": "ec35fd465fb61a3e35e40627c6993ced59d72d8e",
+      "rawSha256": "d9c7e0073351ec510595430b69d84f8ef9447273bd67d3ce7bab04c1f21c156d",
+      "authority": "authoritative",
+      "finding": "The management page is the only bound application call site for listReciprocalMatches and invokes it only for a published source offer; it adds no research gate."
+    },
+    {
       "sourceId": "runtime-core-trade-actions",
       "path": "src/app/core-trade-actions-base.ts",
       "symbol": "startSuggestedMatchAction; reviewCoreOfferAction; createTradeInvitationAction",
       "gitBlobSha1": "21a53e04fe86799028475c8b6c57062ddfa25082",
       "rawSha256": "ceab7886e632e9b3fa2b63df75a5c39223fe147119fb73e026bad6163a2243f9",
       "authority": "authoritative",
-      "finding": "The standalone suggested-match action checks ownership, distinct actors, and target publication but does not re-run the matcher or structured safety, validity, block, consent, or agreement gates."
+      "finding": "The standalone suggested-match action checks source ownership, distinct actors, and target publication but does not re-run reciprocal cause, open-state, same-mode, invitation-compatibility, or structured safety/validity/consent/agreement gates. New active-thread insertion is pair-block-triggered, but the action can select any non-closed thread, including blocked state, before inserting a counterproposal."
+    },
+    {
+      "sourceId": "runtime-core-trade-action-router",
+      "path": "src/app/core-trade-actions.ts",
+      "symbol": "reviewFeedCreateAwareCoreOfferAction as reviewCoreOfferAction",
+      "gitBlobSha1": "5da2ef2436ed6aea1704fb1ea422fe36a7226378",
+      "rawSha256": "db91b53e28ac649962a7362b766e4b9d6e10dcf72a8efe252226517504640b0c",
+      "authority": "authoritative",
+      "finding": "The exported review action routes ordinary offers to the base review path and Feed-derived offers to a separate private-delivery path."
+    },
+    {
+      "sourceId": "runtime-feed-create-review",
+      "path": "src/app/feed-create-review-actions.ts",
+      "symbol": "reviewFeedCreateAwareCoreOfferAction",
+      "gitBlobSha1": "717b8955ea472305cd514a924b40ec84b5add006",
+      "rawSha256": "2e64184d83608569d5adde2754ae6667bce024eaff1027356b9a98a0284117f8",
+      "authority": "authoritative",
+      "finding": "Feed-derived approval invokes a service-only delivery RPC instead of publishing a normal offer; the wrapper does not bind the structured research gate set."
+    },
+    {
+      "sourceId": "database-feed-create-private-delivery",
+      "path": "supabase/migrations/20260808110500_feed_create_private_delivery_v1.sql",
+      "symbol": "moral_trade_feed_create_deliver_service",
+      "gitBlobSha1": "c3ee7dd6bd1052f08aa377abcb4071a612703eb8",
+      "rawSha256": "8ff85b984b42922d20e86ccd85f906fcded23e1af43d4c101f171a5a231fd9b5",
+      "authority": "authoritative",
+      "finding": "The service RPC transactionally revalidates exact source revision, published/open pledge state, distinct owners, and either-direction pair blocks before private delivery, but does not bind the full structured research gate set."
     },
     {
       "sourceId": "database-core-trade-loop",
@@ -54,7 +93,7 @@
     {
       "sourceId": "database-current-offer-schema",
       "path": "supabase/schema.sql",
-      "symbol": "offers mode/status constraints and offers_select_public policy",
+      "symbol": "offers mode/status constraints and offers_public_read policy",
       "gitBlobSha1": "7ee52b84fcc628f35c621662ff1143f3f8863231",
       "rawSha256": "f93fe4157eef2ffc6422055be2ff202e1e1b3df817621d3e46468ab04d14287e",
       "authority": "authoritative",
@@ -90,7 +129,7 @@
     {
       "sourceId": "database-atomic-acceptance",
       "path": "supabase/migrations/20260729170000_marketplace_atomic_acceptance_current_core.sql",
-      "symbol": "accept_offer_interest; confirm_trade_agreement",
+      "symbol": "accept_marketplace_interest_v1; accept_marketplace_guest_interest_v1; confirm_agreement_version_v2_unbound_legacy",
       "gitBlobSha1": "d44334cc78f92d6d549392d0fa766eb854220e05",
       "rawSha256": "1f677eedc2e4eb49e857610f6b31d42548636f55ca6d0e349e1c523209c11dae",
       "authority": "authoritative",
@@ -99,7 +138,7 @@
     {
       "sourceId": "database-account-bound-directory",
       "path": "supabase/migrations/20260805152000_account_bound_participant_directory_v2.sql",
-      "symbol": "search_account_bound_participants_v2; resolve_account_bound_participant_v2",
+      "symbol": "search_create_participants_v2; resolve_create_participants_v2",
       "gitBlobSha1": "cf99e6f5d1cf09559cd221669bae5080204506ca",
       "rawSha256": "a6fff8b2603e6a05add7afaae71a2c3bd5849da5200341ff050bf2fc871cccdf",
       "authority": "authoritative",
@@ -124,6 +163,42 @@
       "finding": "Persists structured content-moderation and user-safety policy records, but no core matcher binding selects a current record."
     },
     {
+      "sourceId": "database-content-moderation-enforcement",
+      "path": "supabase/migrations/20260613_moral_trade_user_safety_content_moderation_enforcement_records.sql",
+      "symbol": "moral_trade_user_safety_content_moderation_enforcement_records",
+      "gitBlobSha1": "a439fd97a5fcfe8bb99f290bb5e1e049a7d26600",
+      "rawSha256": "3bef388179922b8c4b63c37fc2eab995d1e36367732c71bdca3db5c4df4f9711",
+      "authority": "unresolved",
+      "finding": "Append-only enforcement receipts cannot authorize matching and are not read by the core Reciprocal Trade matcher."
+    },
+    {
+      "sourceId": "structured-noncompensable-blockers",
+      "path": "src/lib/moral-trade/noncompensable-blockers.ts",
+      "symbol": "evaluateMoralTradeNoncompensableBlocker; match_candidate_generation",
+      "gitBlobSha1": "5e5c07641ee52fa92abf55cf28917bf309af866f",
+      "rawSha256": "ec48a6ae5cea40998d27af474025c4af46592fafa8f2dc59ca9566179c6d38d8",
+      "authority": "unresolved",
+      "finding": "Defines the repository's explicit match-candidate safety, legal, privacy, rights, anti-threat, and process-integrity blocker contract, including nonwaivable interests and compensation-attempt blockers; it is not imported by the core matcher."
+    },
+    {
+      "sourceId": "database-noncompensable-blocker-assessments",
+      "path": "supabase/migrations/20260612_z_moral_trade_noncompensable_blocker_assessments.sql",
+      "symbol": "moral_trade_noncompensable_blocker_assessments",
+      "gitBlobSha1": "00ca6390c9a6dfb50d11260c10d3425e7fd82e1e",
+      "rawSha256": "6e236a4491968b2f7b24e1177c3501921587e2dd37bc090be0e5a06ad2905c54",
+      "authority": "unresolved",
+      "finding": "Persists immutable-policy, protected-interest, waiver, review, and freshness fields with RLS, but no core matcher query binds an applicable current assessment."
+    },
+    {
+      "sourceId": "database-noncompensable-blocker-enforcement",
+      "path": "supabase/migrations/20260613_moral_trade_noncompensable_blocker_enforcement_records.sql",
+      "symbol": "moral_trade_noncompensable_blocker_enforcement_records; match_candidate_generation_allowed_bool",
+      "gitBlobSha1": "112d293b6669eebb69f86af332f04566926d70f3",
+      "rawSha256": "b6c6052f4ef6768d986dc434569deaa356c4fd673dc8d05ac2f769b1303068bf",
+      "authority": "unresolved",
+      "finding": "Enforcement records are user-owned receipts whose database constraint fixes match_candidate_generation_allowed_bool to false; they cannot authorize matching and are not consumed by listReciprocalMatches."
+    },
+    {
       "sourceId": "structured-offer-validity",
       "path": "src/lib/moral-trade/offer-validity.ts",
       "symbol": "evaluateMoralTradeOfferValidity",
@@ -140,6 +215,15 @@
       "rawSha256": "4ebd1468f19fabd6456d01785bfa561c2e52096e084e1deca70e298d8e5ee833",
       "authority": "unresolved",
       "finding": "Persists structured offer validity and freshness records, but core Reciprocal Trade matchability does not bind them."
+    },
+    {
+      "sourceId": "database-offer-validity-enforcement",
+      "path": "supabase/migrations/20260613_moral_trade_offer_validity_enforcement_records.sql",
+      "symbol": "moral_trade_offer_validity_enforcement_records",
+      "gitBlobSha1": "5ee1ef86dbd5c3c7932124837008ed683a90ca98",
+      "rawSha256": "9fa3e474cd8cf52944abc09f36fa003538d558a457caa7deec6ce3d6d6fe7450",
+      "authority": "unresolved",
+      "finding": "Stores non-authorizing offer-validity enforcement receipts and is not read by the core matcher."
     },
     {
       "sourceId": "structured-baseline-integrity",
@@ -160,6 +244,15 @@
       "finding": "Persists structured baseline-manufacture, additionality, and externality assessments, but the core matcher does not bind them."
     },
     {
+      "sourceId": "database-baseline-integrity-enforcement",
+      "path": "supabase/migrations/20260608_moral_trade_baseline_integrity_enforcement_records.sql",
+      "symbol": "moral_trade_baseline_integrity_enforcement_records",
+      "gitBlobSha1": "fa8166496818ad4f927a854a59b0826e51663b54",
+      "rawSha256": "ba8237724e9aa25a8484ee24f83b6da3342c0e1c8d878ddda666afee92f133a5",
+      "authority": "unresolved",
+      "finding": "Stores baseline-integrity enforcement receipts but supplies no matcher-bound authorization."
+    },
+    {
       "sourceId": "structured-participant-eligibility",
       "path": "src/lib/moral-trade/participant-eligibility.ts",
       "symbol": "evaluateMoralTradeParticipantEligibility",
@@ -176,6 +269,15 @@
       "rawSha256": "aa09dd1a5a3d930ade592d8c97f7e781c1cdda119b321704075d586c99a5b2af",
       "authority": "unresolved",
       "finding": "Persists structured participant eligibility and review state, but the core matcher does not bind a current record."
+    },
+    {
+      "sourceId": "database-participant-eligibility-enforcement",
+      "path": "supabase/migrations/20260613_moral_trade_participant_eligibility_enforcement_records.sql",
+      "symbol": "moral_trade_participant_eligibility_enforcement_records",
+      "gitBlobSha1": "698d789335ab52a371e871b390612db17e9fcf2c",
+      "rawSha256": "bf02acbf19cbf2898129a2868f382bf62475aed7659ec520d20dcaaa1ccb2951",
+      "authority": "unresolved",
+      "finding": "Stores participant-eligibility enforcement receipts but is not an input to core matchability."
     },
     {
       "sourceId": "structured-privacy-governance",
@@ -265,8 +367,11 @@
     { "testId": "atomic-acceptance-sql-contract", "path": "supabase/tests/marketplace_atomic_acceptance_current_core.sql", "gitBlobSha1": "70ebaf8562b5c9371adab7bebac65c3fe895afea", "rawSha256": "0e2913eae7e3444146376bda3bb2cfdf46dc605c19dfce3f5d3d168b7b3da840" },
     { "testId": "atomic-acceptance-typescript-contract", "path": "src/lib/marketplace-delta-contract.test.ts", "gitBlobSha1": "13d90bd78c7ebdb873c131930061ae0a1b5b3424", "rawSha256": "b65858dab510e3c2835f2c6035467092dda6e101a6fbd2a215f9c6de67709b34" },
     { "testId": "account-bound-directory-sql-contract", "path": "supabase/tests/account_bound_participant_directory_v2.sql", "gitBlobSha1": "4eb66a99cc13904bd1a2dba71354eb85d4e82812", "rawSha256": "ef139cffde77dbb3cb55990cdf911664ed88836f7db687ed46b658845280dd70" },
+    { "testId": "feed-create-private-delivery-sql-contract", "path": "supabase/tests/feed_create_phase1.sql", "gitBlobSha1": "7c3ae158a4a6b4c392f99cc3b8c851f1611a0e0f", "rawSha256": "4097da2eb132f1d12b3d936a5a368e95e7310619c74872d065cc36717c543983" },
+    { "testId": "feed-create-review-wiring-contract", "path": "src/feed-unified-marketplace-wiring.test.ts", "gitBlobSha1": "11098ae172a626ec2dda3dc05dac03918d78fc03", "rawSha256": "c5ea73638d845d178214b14e6fc6b4fbd190ab257867ff2784e22e397f214a74" },
     { "testId": "credibility-restriction-contract", "path": "src/lib/credibility.test.ts", "gitBlobSha1": "716b4f5f6355bd4e0705118c895f3f591c1f67d9", "rawSha256": "396dfe1e6aad2fcc449c2d362425387a001f789b279ba487a4c40a4a9911ea3e" },
     { "testId": "structured-moderation-contract", "path": "src/lib/moral-trade/user-safety-content-moderation.test.ts", "gitBlobSha1": "542cefd21cf34d76fdb406c480797037691707fa", "rawSha256": "3b6a68a03506a4faa31adb9ead1d80f25721ca83eb5414aaf3b95467e2c907ac" },
+    { "testId": "structured-noncompensable-blocker-contract", "path": "src/lib/moral-trade/noncompensable-blockers.test.ts", "gitBlobSha1": "dc5336697a759c2690e539a8364f33a99cd12624", "rawSha256": "a108418f08d3999bbc9f6eeebbe91482434176a9ed0f3d765a9af9cb082f7348" },
     { "testId": "structured-validity-contract", "path": "src/lib/moral-trade/offer-validity.test.ts", "gitBlobSha1": "5f26e4472ef46a11eb226efa8388c0fa1dca03de", "rawSha256": "3a31da0c39def4a445d27ef55ba3564d7e508910a166e04e66c4cdd900b1f18f" },
     { "testId": "structured-baseline-contract", "path": "src/lib/moral-trade/baseline-integrity.test.ts", "gitBlobSha1": "02d318ada8d26bee22033d3d7da3156f3661c25c", "rawSha256": "c19a5c52b7928c2f51bef7f897d8ee4cd711054feaf3c292f3103edfccae3fc4" },
     { "testId": "structured-participant-eligibility-contract", "path": "src/lib/moral-trade/participant-eligibility.test.ts", "gitBlobSha1": "4d203d32bbfb02071d71219e95e78832bb739fc7", "rawSha256": "a2dd9c54704ae87703f88f521ffe100b2d05a1372d9c221355e6e3b05f3c309d" },
@@ -277,10 +382,10 @@
     {
       "gateId": "offer_identity_lifecycle",
       "level": "directed-edge",
-      "reasonCodes": ["SAME_OFFER", "SAME_OWNER", "UNSUPPORTED_MODE", "MODE_MISMATCH", "SOURCE_NOT_PUBLISHED", "TARGET_NOT_PUBLISHED", "SOURCE_NOT_OPEN", "TARGET_NOT_OPEN", "SOURCE_NOT_OPERATIVE", "TARGET_NOT_OPERATIVE"],
-      "sourceIds": ["runtime-reciprocal-matcher", "database-core-trade-loop", "database-current-offer-schema", "structured-offer-validity", "database-offer-validity"],
-      "inputFields": ["sourceOffer.offerKey", "targetOffer.offerKey", "sourceOffer.ownerKey", "targetOffer.ownerKey", "sourceOffer.mode", "targetOffer.mode", "sourceOffer.workflowStatus", "targetOffer.workflowStatus", "sourceOffer.status", "targetOffer.status", "sourceOffer.operability", "targetOffer.operability"],
-      "failClosed": "Any missing, unsupported, non-current, unknown, stale, contradictory, or terminal value is ineligible.",
+      "reasonCodes": ["SAME_OFFER", "SAME_OWNER", "UNSUPPORTED_MODE", "MODE_MISMATCH", "SOURCE_NOT_PUBLISHED", "TARGET_NOT_PUBLISHED", "SOURCE_NOT_OPEN", "TARGET_NOT_OPEN", "SOURCE_NOT_OPERATIVE", "TARGET_NOT_OPERATIVE", "SOURCE_INVITATION_INCOMPATIBLE", "TARGET_INVITATION_INCOMPATIBLE"],
+      "sourceIds": ["runtime-reciprocal-matcher", "runtime-reciprocal-matcher-call-site", "database-core-trade-loop", "database-current-offer-schema", "database-invitation-hardening", "structured-offer-validity", "database-offer-validity", "database-offer-validity-enforcement"],
+      "inputFields": ["sourceOffer.offerKey", "targetOffer.offerKey", "sourceOffer.ownerKey", "targetOffer.ownerKey", "sourceOffer.mode", "targetOffer.mode", "sourceOffer.workflowStatus", "targetOffer.workflowStatus", "sourceOffer.status", "targetOffer.status", "sourceOffer.operability", "targetOffer.operability", "sourceOffer.invitationCompatibility", "targetOffer.invitationCompatibility"],
+      "failClosed": "Any missing, unsupported, non-current, unknown, stale, contradictory, terminal, payment-scheduled, donation-offset-attached, or active-performance-bond value is ineligible.",
       "effectiveTimeSemantics": "All lifecycle and operability evidence must be current at input effectiveAt.",
       "tests": ["synthetic fixtures: same-offer, same-owner, mode mismatch, publication/open failures, deleted, paused, closed, rejected, pending-review, changes-requested, expired, superseded"],
       "testIds": ["real-readiness-source-contract", "trade-invitation-contract", "structured-validity-contract"]
@@ -288,10 +393,10 @@
     {
       "gateId": "reciprocal_matching",
       "level": "directed-edge",
-      "reasonCodes": ["SOURCE_REQUEST_NOT_OFFERED_BY_TARGET", "TARGET_REQUEST_NOT_OFFERED_BY_SOURCE", "CAUSE_COLLATION_UNBOUND", "CAUSE_VALUE_UNSAFE"],
+      "reasonCodes": ["SOURCE_REQUEST_NOT_OFFERED_BY_TARGET", "TARGET_REQUEST_NOT_OFFERED_BY_SOURCE", "CAUSE_COLLATION_UNBOUND", "CAUSE_VALUE_UNSAFE", "CAUSE_PATTERN_INVALID"],
       "sourceIds": ["runtime-reciprocal-matcher"],
       "inputFields": ["sourceOffer.offeredCause", "sourceOffer.requestedCause", "targetOffer.offeredCause", "targetOffer.requestedCause", "sourceOffer.causeCollation", "targetOffer.causeCollation"],
-      "failClosed": "Both directed PostgreSQL ILIKE predicates must match under the frozen printable-ASCII emulation; non-ASCII or unbound collation is ineligible.",
+      "failClosed": "Both directed PostgreSQL ILIKE predicates must match under the frozen printable-ASCII emulation; non-ASCII, malformed trailing escape, or unbound collation is ineligible.",
       "effectiveTimeSemantics": "Cause values belong to the same normalized snapshot as effectiveAt.",
       "tests": ["synthetic fixtures: one-sided mismatch, two-sided mismatch, case boundary, percent/underscore/backslash pattern behavior, pair symmetry"],
       "testIds": ["real-readiness-source-contract"]
@@ -300,18 +405,18 @@
       "gateId": "moderation_harm_baseline",
       "level": "offer",
       "reasonCodes": ["SOURCE_MODERATION_NOT_CLEARED", "TARGET_MODERATION_NOT_CLEARED", "SOURCE_HARM_NOT_CLEARED", "TARGET_HARM_NOT_CLEARED", "SOURCE_BASELINE_NOT_CLEARED", "TARGET_BASELINE_NOT_CLEARED"],
-      "sourceIds": ["runtime-core-trade-actions", "structured-content-moderation", "database-content-moderation", "structured-baseline-integrity", "database-baseline-integrity", "free-text-proposal-review"],
+      "sourceIds": ["runtime-core-trade-actions", "runtime-core-trade-action-router", "runtime-feed-create-review", "database-feed-create-private-delivery", "structured-content-moderation", "database-content-moderation", "database-content-moderation-enforcement", "structured-noncompensable-blockers", "database-noncompensable-blocker-assessments", "database-noncompensable-blocker-enforcement", "structured-baseline-integrity", "database-baseline-integrity", "database-baseline-integrity-enforcement", "free-text-proposal-review"],
       "inputFields": ["sourceOffer.gates.moderation", "targetOffer.gates.moderation", "sourceOffer.gates.harmfulOffer", "targetOffer.gates.harmfulOffer", "sourceOffer.gates.baselineIntegrity", "targetOffer.gates.baselineIntegrity"],
       "failClosed": "Only a structured cleared, current, bound record is eligible; human review, missing evidence, empty prose, or free-text inference is not clearance.",
       "effectiveTimeSemantics": "reviewedAt must not be after effectiveAt and expiresAt must be after effectiveAt.",
       "tests": ["structured moderation, offer-validity, and baseline-integrity contract tests plus synthetic cleared/blocked/review/unknown/stale/contradictory fixtures"],
-      "testIds": ["structured-moderation-contract", "structured-validity-contract", "structured-baseline-contract", "free-text-review-descriptive-contract"]
+      "testIds": ["structured-moderation-contract", "structured-noncompensable-blocker-contract", "structured-validity-contract", "structured-baseline-contract", "feed-create-review-wiring-contract", "feed-create-private-delivery-sql-contract", "free-text-review-descriptive-contract"]
     },
     {
       "gateId": "legality_policy_participant",
       "level": "participant",
       "reasonCodes": ["SOURCE_LEGALITY_NOT_CLEARED", "TARGET_LEGALITY_NOT_CLEARED", "SOURCE_PARTICIPANT_NOT_ELIGIBLE", "TARGET_PARTICIPANT_NOT_ELIGIBLE"],
-      "sourceIds": ["structured-participant-eligibility", "database-participant-eligibility", "database-credibility-restrictions"],
+      "sourceIds": ["structured-participant-eligibility", "database-participant-eligibility", "database-participant-eligibility-enforcement", "structured-noncompensable-blockers", "database-credibility-restrictions"],
       "inputFields": ["sourceOffer.gates.legality", "targetOffer.gates.legality", "sourceOffer.gates.participantEligibility", "targetOffer.gates.participantEligibility"],
       "failClosed": "Unknown jurisdiction, legal capacity, sanctions, policy review, or human-review state is ineligible; the evaluator never makes a legal conclusion.",
       "effectiveTimeSemantics": "Structured records and restrictions must be valid at effectiveAt.",
@@ -332,7 +437,7 @@
     {
       "gateId": "blocks_restrictions",
       "level": "pair",
-      "reasonCodes": ["PAIR_BLOCKED", "BLOCK_STATUS_UNKNOWN", "SOURCE_RESTRICTED", "TARGET_RESTRICTED", "PAIR_RESTRICTED", "RESTRICTION_STATUS_UNKNOWN"],
+      "reasonCodes": ["PAIR_BLOCKED", "BLOCK_STATUS_UNKNOWN", "SOURCE_RESTRICTED", "TARGET_RESTRICTED", "PAIR_RESTRICTED", "RESTRICTION_STATUS_UNKNOWN", "RESTRICTION_STATUS_CONTRADICTORY"],
       "sourceIds": ["database-invitation-hardening", "database-account-bound-rpc-wrappers", "database-account-bound-directory", "database-credibility-restrictions"],
       "inputFields": ["pair.blockStatus", "pair.sourceRestriction", "pair.targetRestriction", "pair.pairRestriction"],
       "failClosed": "Either-direction block, active/reviewing restriction, or unknown/contradictory restriction evidence is ineligible.",
@@ -344,17 +449,17 @@
       "gateId": "agreement_engagement_conflicts",
       "level": "pair",
       "reasonCodes": ["ACCEPTED_INTEREST_CONFLICT", "INVITATION_CONFLICT", "ACTIVE_THREAD_CONFLICT", "ACTIVE_AGREEMENT_CONFLICT", "DUPLICATE_PAIR_CONFLICT", "HISTORICAL_INTERFERENCE_UNKNOWN"],
-      "sourceIds": ["database-core-trade-loop", "database-offer-bank-agreements", "database-atomic-acceptance"],
+      "sourceIds": ["runtime-core-trade-actions", "runtime-feed-create-review", "database-feed-create-private-delivery", "database-core-trade-loop", "database-offer-bank-agreements", "database-atomic-acceptance"],
       "inputFields": ["pair.engagement"],
       "failClosed": "Any active/current engagement conflict or unknown historical-interference capture is ineligible.",
       "effectiveTimeSemantics": "All conflict states are frozen at effectiveAt; history is retained as a covariate rather than silently dropped.",
       "tests": ["atomic-acceptance and agreement contract tests plus active-thread/agreement/duplicate and historical-interference fixtures"],
-      "testIds": ["atomic-acceptance-sql-contract", "atomic-acceptance-typescript-contract", "trade-invitation-contract"]
+      "testIds": ["atomic-acceptance-sql-contract", "atomic-acceptance-typescript-contract", "trade-invitation-contract", "feed-create-review-wiring-contract", "feed-create-private-delivery-sql-contract"]
     },
     {
       "gateId": "study_provenance_integrity",
       "level": "study",
-      "reasonCodes": ["INPUT_SCHEMA_INVALID", "EVALUATOR_VERSION_MISMATCH", "POLICY_MANIFEST_HASH_MISMATCH", "BASE_COMMIT_MISMATCH", "EFFECTIVE_TIME_INVALID", "PROVENANCE_NOT_SYNTHETIC", "PROTECTED_DATA_NOT_AUTHORIZED", "RECOMMENDATION_EVIDENCE_PROHIBITED", "PARTICIPANT_CAUSAL_OUTPUT_PROHIBITED"],
+      "reasonCodes": ["INPUT_SCHEMA_INVALID", "INPUT_SCHEMA_VERSION_MISMATCH", "EVALUATOR_VERSION_MISMATCH", "POLICY_MANIFEST_HASH_MISMATCH", "BASE_COMMIT_MISMATCH", "EFFECTIVE_TIME_INVALID", "PROVENANCE_NOT_SYNTHETIC", "REAL_ROWS_PROHIBITED", "PROTECTED_DATA_NOT_AUTHORIZED", "STUDY_AUTHORIZATION_PROHIBITED", "RECOMMENDATION_EVIDENCE_PROHIBITED", "PARTICIPANT_CAUSAL_OUTPUT_PROHIBITED", "ASSIGNMENT_MATERIAL_PROHIBITED"],
       "sourceIds": ["bound-study-instance", "bound-real-graph-readiness", "recommendation-learning", "database-recommendation-learning"],
       "inputFields": ["schemaVersion", "evaluatorVersion", "policySourceManifestHash", "effectiveAt", "subjectMode", "provenance", "studyAuthorization"],
       "failClosed": "Only schema-valid synthetic inputs are permitted in this tranche. Protected inputs remain ineligible regardless of asserted authorization fields.",
@@ -365,8 +470,9 @@
   ],
   "activeConflicts": [
     "listReciprocalMatches accepts any equal supported mode while offer_is_invitable narrows invitations to nonfinancial pledge offers.",
-    "startSuggestedMatchAction does not re-run listReciprocalMatches or the invitation RPC gate set before creating a thread.",
-    "Core publication clears moderation_reason but does not bind structured moderation, offer-validity, baseline-integrity, participant-eligibility, or research-consent records.",
+    "startSuggestedMatchAction does not re-run listReciprocalMatches or the invitation RPC gate set; although new active-thread insertion is pair-block-triggered, it selects any non-closed thread and can continue through blocked thread state.",
+    "The normal review path and Feed-derived private-delivery path enforce different lifecycle and delivery checks, and neither binds the full structured research gate set.",
+    "Core publication clears moderation_reason but does not bind structured moderation, noncompensable-blocker, offer-validity, baseline-integrity, participant-eligibility, or research-consent records.",
     "The database collation governing PostgreSQL ILIKE is not frozen in a repository contract, so the candidate supports only explicitly labeled printable-ASCII emulation and fails closed otherwise."
   ],
   "conceptualSourcesAreNotEvidence": true

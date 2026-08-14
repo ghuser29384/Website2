@@ -5,7 +5,7 @@
   "evaluatorVersion": "reciprocal-trade-research-eligibility-v1.0.0",
   "inputSchemaVersion": "reciprocal-trade-research-eligibility-input-v1.0.0",
   "decisionSchemaVersion": "reciprocal-trade-research-eligibility-decision-v1.0.0",
-  "policySourceManifestHash": "sha256:7ab1d8d53c9b761ea93c4ab324c11c388316591bf90f5a21222f5fbb44de2606",
+  "policySourceManifestHash": "sha256:19423f7be11351846c4dfc3036e8ca730ea9a2083fab495979290913287ed2b8",
   "canonicalEligibilitySourceStatus": "blocked_source_conflict",
   "realGraphDiagnosticsStatus": "blocked_not_run",
   "executionDecision": "no_launch",
@@ -14,6 +14,7 @@
   "productionOrQaRowsCopied": false,
   "realGraphConstructed": false,
   "nodeOrEdgeListConstructed": false,
+  "protectedDataExportAuthorized": false,
   "databaseActionOccurred": false,
   "migrationApplied": false,
   "deploymentOccurred": false,
@@ -40,58 +41,58 @@
   "artifacts": [
     {
       "path": ".github/workflows/commitments-trade-canonical-eligibility-gates.yml",
-      "gitBlobSha1": "c6e3e273cf55ce7869ac0badb3e2dd696a45c45c",
-      "rawSha256": "a052113bc976de48ca60dd8f28d077efdeca9c266f0508137edb5b86cb7c638e"
+      "gitBlobSha1": "7447f1747b30d797fcc0f696c40cf703d4096fbb",
+      "rawSha256": "1bde54cc7114bf91e5dfe076323c8f747726fd139416d53d28c8324e577fbcf0"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/README.md",
-      "gitBlobSha1": "121a54964be16d25b92b315f5196b0d371efb2f7",
-      "rawSha256": "bfc82f77c2ba5f2439c775a80b7db0cb927b0d5744ca17e87cfcb063df0968bf"
+      "gitBlobSha1": "341ecffa0512cc986ca24c2d3b65b9e53d3d55fd",
+      "rawSha256": "ee41679d6b4e7ab197ba157ae3bef7c32cfac16bba8a0ab46e7d0e0993da76e4"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/policy-source-map.v1.md",
-      "gitBlobSha1": "e1b51daefd46b781cbd193d4a344241d71503f77",
-      "rawSha256": "9b7afe1055b6c0f15dd3f8b9e1cc316d6caf15bf0d4a2554f61a15f281edacec"
+      "gitBlobSha1": "1c77621696828cd3eb69b2e9d5cdc7e407094cc3",
+      "rawSha256": "d1113e1cead792b46a0d53a4145b441fdde001b6b6b86eb67cab7a65b88873e5"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/policy-source-manifest.v1.json",
-      "gitBlobSha1": "0c73954d248a1c512943567a3d8c9361683d9ab4",
-      "rawSha256": "7ab1d8d53c9b761ea93c4ab324c11c388316591bf90f5a21222f5fbb44de2606"
+      "gitBlobSha1": "d2f20b04371e9e5d115611706d6e95d06c1317e9",
+      "rawSha256": "19423f7be11351846c4dfc3036e8ca730ea9a2083fab495979290913287ed2b8"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-input.schema.v1.json",
-      "gitBlobSha1": "000f7ab650265052ca7aa54944cf1f3dae8ad572",
-      "rawSha256": "33e655c2de49efc58f0c521f41e3470961e3099b28f2ca60faab829910d722c8"
+      "gitBlobSha1": "829124960302ccd5673e5114d397b7994f570ea5",
+      "rawSha256": "fdc8f2540e5b3959bcee19b7422dc2dcfe7cf2495e4a1118d730d902063a2343"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-decision.schema.v1.json",
-      "gitBlobSha1": "a951ee163ac5acf89f17acd00a045beb4c994e17",
-      "rawSha256": "1b9ff00cfbf216142653e0cd57862c1bc94b8bddfde0b8792a67035b1363a937"
+      "gitBlobSha1": "d82a51361dcc441f6356a5a42e2715cc8ec8ac59",
+      "rawSha256": "534539073069d9e2e0db2ecbd8f2e52914327bec39435868a3918a005c10f679"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-gap-register.v1.json",
-      "gitBlobSha1": "f4a1dff277be5acecd3576d6ab6365d3ab81e3f1",
-      "rawSha256": "16eea80fa67be71cec53fe13076237542f7ec8476a8d24ce9fd9b5f02f750f83"
+      "gitBlobSha1": "cd91b4d55756049dce7b576fdce82da86c9f4dd3",
+      "rawSha256": "d2a95ed7b59b6903a63f5706be3b0abb58d97bed9c14fee064927ab1d5e21906"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/synthetic-eligibility-fixtures.v1.json",
-      "gitBlobSha1": "127e5c701bb674d840e06699615b4b4c26e2d418",
-      "rawSha256": "a4f15efcc760a3796188e0fe32d2bd73251ebde1801f8b348c8c14a03fdd0aea"
+      "gitBlobSha1": "7722917030a3b4661c27c4b8e6b2912a3baf6433",
+      "rawSha256": "364d157c28c211b73e94eda757cf6cf8c5da25c87d5b518283b2c70984484205"
     },
     {
       "path": "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs",
-      "gitBlobSha1": "e30db80b4cb9fc910be1b709846712c24a771010",
-      "rawSha256": "e78061a37574c7cf30f687481030dd9a004dbf0255950a1caebe41cbc916ddbf"
+      "gitBlobSha1": "738d56e177180ae5e3b9e610588a9ba3c85c30f6",
+      "rawSha256": "79538e13e838d9b19fba004996058272fafc1a770d23e2311e875be4af51047d"
     },
     {
       "path": "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs",
-      "gitBlobSha1": "43fccb647b310f074f695632541c3e76130fe22f",
-      "rawSha256": "2800127dc5a359a6afa2b497a6d64eeff6ccac6c89c5de0ca8440b364be34c83"
+      "gitBlobSha1": "ed05c61f331c32ada0872f01e5477cf14627d60e",
+      "rawSha256": "fb55b522c88f389ed66c9f55472819f5846828bb8865cb28cddbc56f010b9dfa"
     },
     {
       "path": "scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs",
-      "gitBlobSha1": "c3aecf95a97b60231b19adff36e6abcad823a6b2",
-      "rawSha256": "3b34b2fb015344cd2cac43dff5e8e884261cab6302db54124629b2479c0c5fc6"
+      "gitBlobSha1": "d0bff4d6888d4fd1ccb3e6b5684a512d43faa93f",
+      "rawSha256": "dd0e32cd62c9c8c7cd8aaddc683b826b05f256cd2ddf978165b7d3b1f8d7a033"
     }
   ],
   "expectedChangedFiles": [

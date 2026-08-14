@@ -1,10 +1,10 @@
 export const EVALUATOR_VERSION = "reciprocal-trade-research-eligibility-v1.0.0";
 export const INPUT_SCHEMA_VERSION = "reciprocal-trade-research-eligibility-input-v1.0.0";
 export const DECISION_SCHEMA_VERSION = "reciprocal-trade-research-eligibility-decision-v1.0.0";
-export const POLICY_SOURCE_MANIFEST_HASH = "sha256:7ab1d8d53c9b761ea93c4ab324c11c388316591bf90f5a21222f5fbb44de2606";
+export const POLICY_SOURCE_MANIFEST_HASH = "sha256:19423f7be11351846c4dfc3036e8ca730ea9a2083fab495979290913287ed2b8";
 export const BOUND_BASE_COMMIT = "79ca382c3bdc325dfc5a28e2cbbafc1b95640386";
 
-const REASON_ORDER = [
+export const REASON_CODES = Object.freeze([
   "INPUT_SCHEMA_INVALID",
   "INPUT_SCHEMA_VERSION_MISMATCH",
   "EVALUATOR_VERSION_MISMATCH",
@@ -28,8 +28,11 @@ const REASON_ORDER = [
   "TARGET_NOT_OPEN",
   "SOURCE_NOT_OPERATIVE",
   "TARGET_NOT_OPERATIVE",
+  "SOURCE_INVITATION_INCOMPATIBLE",
+  "TARGET_INVITATION_INCOMPATIBLE",
   "CAUSE_COLLATION_UNBOUND",
   "CAUSE_VALUE_UNSAFE",
+  "CAUSE_PATTERN_INVALID",
   "SOURCE_REQUEST_NOT_OFFERED_BY_TARGET",
   "TARGET_REQUEST_NOT_OFFERED_BY_SOURCE",
   "SOURCE_MODERATION_NOT_CLEARED",
@@ -60,9 +63,9 @@ const REASON_ORDER = [
   "ACTIVE_AGREEMENT_CONFLICT",
   "DUPLICATE_PAIR_CONFLICT",
   "HISTORICAL_INTERFERENCE_UNKNOWN"
-];
+]);
 
-const REASON_RANK = Object.freeze(Object.fromEntries(REASON_ORDER.map((code, index) => [code, index])));
+const REASON_RANK = Object.freeze(Object.fromEntries(REASON_CODES.map((code, index) => [code, index])));
 const GATE_STATUSES = ["cleared", "blocked", "review_required", "unknown", "stale", "contradictory"];
 const SOURCE_STATUSES = ["current", "stale", "unknown", "unbound", "contradictory"];
 const WORKFLOW_STATUSES = ["draft", "pending_review", "published", "changes_requested", "rejected", "paused", "closed", "deleted"];
@@ -119,13 +122,14 @@ function validGateEvidence(value) {
 }
 
 function validOffer(value) {
-  if (!exactKeys(value, ["offerKey", "ownerKey", "mode", "offeredCause", "requestedCause", "causeCollation", "workflowStatus", "status", "operability", "gates"])) return false;
+  if (!exactKeys(value, ["offerKey", "ownerKey", "mode", "offeredCause", "requestedCause", "causeCollation", "workflowStatus", "status", "operability", "invitationCompatibility", "gates"])) return false;
   if (!isSafeKey(value.offerKey) || !isSafeKey(value.ownerKey)) return false;
   if (!oneOf(value.mode, ["pledge", "offset", "payment"])) return false;
   if (typeof value.offeredCause !== "string" || typeof value.requestedCause !== "string") return false;
-  if (value.offeredCause.length < 1 || value.offeredCause.length > 160 || value.requestedCause.length < 1 || value.requestedCause.length > 160) return false;
-  if (value.causeCollation !== "postgres-ilike-printable-ascii-v1") return false;
+  if (value.offeredCause.length < 1 || value.offeredCause.length > 180 || value.requestedCause.length < 1 || value.requestedCause.length > 180) return false;
+  if (typeof value.causeCollation !== "string" || value.causeCollation.length < 1 || value.causeCollation.length > 80) return false;
   if (!oneOf(value.workflowStatus, WORKFLOW_STATUSES) || !oneOf(value.status, OFFER_STATUSES) || !oneOf(value.operability, OPERABILITY_STATUSES)) return false;
+  if (!oneOf(value.invitationCompatibility, ["compatible", "payment_schedule_present", "donation_offset_attachment_present", "active_performance_bond_present", "unknown", "stale", "contradictory"])) return false;
   if (!exactKeys(value.gates, ["moderation", "harmfulOffer", "baselineIntegrity", "legality", "participantEligibility"])) return false;
   return Object.values(value.gates).every(validGateEvidence);
 }
@@ -189,7 +193,16 @@ function validInputShape(input) {
 }
 
 function isPrintableAscii(value) {
-  return typeof value === "string" && value.length >= 1 && value.length <= 160 && /^[\x20-\x7e]+$/.test(value);
+  return typeof value === "string" && value.length >= 1 && value.length <= 180 && /^[\x20-\x7e]+$/.test(value);
+}
+
+function isValidPostgresLikePattern(pattern) {
+  for (let index = 0; index < pattern.length; index += 1) {
+    if (pattern[index] !== "\\") continue;
+    if (index + 1 >= pattern.length) return false;
+    index += 1;
+  }
+  return true;
 }
 
 function escapeRegexCharacter(character) {
@@ -240,6 +253,7 @@ function makeDecision(input, reasons, unknown, stale) {
     staleSourceBlockers: uniqueOrdered(stale),
     canonicalEligibilitySourceStatus: "blocked_source_conflict",
     realGraphDiagnosticsStatus: "blocked_not_run",
+    protectedDataExportAuthorized: false,
     executionDecision: "no_launch",
     assignmentGenerated: false,
     assignmentSeedGenerated: false,
@@ -248,10 +262,10 @@ function makeDecision(input, reasons, unknown, stale) {
 }
 
 function pushEvidenceResult(evidence, reason, effectiveAt, reasons, unknown, stale) {
-  if (evidence.status === "cleared" && evidence.sourceStatus === "current" && evidence.reviewedAt <= effectiveAt && (evidence.expiresAt === null || evidence.expiresAt > effectiveAt)) return;
+  if (evidence.status === "cleared" && evidence.sourceStatus === "current" && evidence.sourceHash === POLICY_SOURCE_MANIFEST_HASH && evidence.reviewedAt <= effectiveAt && (evidence.expiresAt === null || evidence.expiresAt > effectiveAt)) return;
   reasons.push(reason);
   if (evidence.status === "stale" || evidence.sourceStatus === "stale" || evidence.expiresAt !== null && evidence.expiresAt <= effectiveAt) stale.push(reason);
-  if (["unknown", "contradictory"].includes(evidence.status) || ["unknown", "unbound", "contradictory"].includes(evidence.sourceStatus) || evidence.reviewedAt > effectiveAt) unknown.push(reason);
+  if (["unknown", "contradictory"].includes(evidence.status) || ["unknown", "unbound", "contradictory"].includes(evidence.sourceStatus) || evidence.sourceHash !== POLICY_SOURCE_MANIFEST_HASH || evidence.reviewedAt > effectiveAt) unknown.push(reason);
 }
 
 function pushConsentResult(consent, role, reason, roleReason, effectiveAt, reasons, unknown, stale) {
@@ -282,22 +296,20 @@ function pushRestrictionResult(restriction, reason, effectiveAt, reasons, unknow
     stale.push("RESTRICTION_STATUS_UNKNOWN");
     return;
   }
-  if (["active", "reviewing"].includes(restriction.status)) {
-    reasons.push(reason);
+  const timestampsContradict = restriction.startsAt > effectiveAt
+    || restriction.expiresAt !== null && restriction.expiresAt < restriction.startsAt
+    || restriction.revokedAt !== null && restriction.revokedAt < restriction.startsAt
+    || restriction.expiresAt !== null && restriction.revokedAt !== null;
+  const statusContradicts = restriction.status === "clear" && (restriction.expiresAt !== null || restriction.revokedAt !== null)
+    || ["active", "reviewing"].includes(restriction.status) && (restriction.expiresAt !== null && restriction.expiresAt <= effectiveAt || restriction.revokedAt !== null && restriction.revokedAt <= effectiveAt)
+    || restriction.status === "expired" && (restriction.expiresAt === null || restriction.expiresAt > effectiveAt || restriction.revokedAt !== null)
+    || restriction.status === "revoked" && (restriction.revokedAt === null || restriction.revokedAt > effectiveAt);
+  if (timestampsContradict || statusContradicts) {
+    reasons.push("RESTRICTION_STATUS_CONTRADICTORY");
+    unknown.push("RESTRICTION_STATUS_CONTRADICTORY");
     return;
   }
-  if (restriction.status === "expired" && (restriction.expiresAt === null || restriction.expiresAt > effectiveAt)) {
-    reasons.push("RESTRICTION_STATUS_CONTRADICTORY");
-    unknown.push("RESTRICTION_STATUS_CONTRADICTORY");
-  }
-  if (restriction.status === "revoked" && (restriction.revokedAt === null || restriction.revokedAt > effectiveAt)) {
-    reasons.push("RESTRICTION_STATUS_CONTRADICTORY");
-    unknown.push("RESTRICTION_STATUS_CONTRADICTORY");
-  }
-  if (restriction.status === "clear" && (restriction.startsAt > effectiveAt || restriction.expiresAt !== null && restriction.expiresAt <= effectiveAt || restriction.revokedAt !== null && restriction.revokedAt <= effectiveAt)) {
-    reasons.push("RESTRICTION_STATUS_CONTRADICTORY");
-    unknown.push("RESTRICTION_STATUS_CONTRADICTORY");
-  }
+  if (["active", "reviewing"].includes(restriction.status)) reasons.push(reason);
 }
 
 function pushEngagement(value, reason, reasons, unknown) {
@@ -353,10 +365,22 @@ export function evaluateReciprocalTradeResearchEligibility(input) {
     if (target.operability === "stale") stale.push("TARGET_NOT_OPERATIVE");
     if (["unknown", "contradictory"].includes(target.operability)) unknown.push("TARGET_NOT_OPERATIVE");
   }
+  if (source.invitationCompatibility !== "compatible") {
+    reasons.push("SOURCE_INVITATION_INCOMPATIBLE");
+    if (source.invitationCompatibility === "stale") stale.push("SOURCE_INVITATION_INCOMPATIBLE");
+    if (["unknown", "contradictory"].includes(source.invitationCompatibility)) unknown.push("SOURCE_INVITATION_INCOMPATIBLE");
+  }
+  if (target.invitationCompatibility !== "compatible") {
+    reasons.push("TARGET_INVITATION_INCOMPATIBLE");
+    if (target.invitationCompatibility === "stale") stale.push("TARGET_INVITATION_INCOMPATIBLE");
+    if (["unknown", "contradictory"].includes(target.invitationCompatibility)) unknown.push("TARGET_INVITATION_INCOMPATIBLE");
+  }
   if (source.causeCollation !== "postgres-ilike-printable-ascii-v1" || target.causeCollation !== "postgres-ilike-printable-ascii-v1") reasons.push("CAUSE_COLLATION_UNBOUND");
   const causes = [source.offeredCause, source.requestedCause, target.offeredCause, target.requestedCause];
   if (!causes.every(isPrintableAscii)) reasons.push("CAUSE_VALUE_UNSAFE");
-  if (causes.every(isPrintableAscii)) {
+  const patternsAreValid = isValidPostgresLikePattern(source.requestedCause) && isValidPostgresLikePattern(source.offeredCause);
+  if (causes.every(isPrintableAscii) && !patternsAreValid) reasons.push("CAUSE_PATTERN_INVALID");
+  if (causes.every(isPrintableAscii) && patternsAreValid) {
     if (!postgresIlikePrintableAscii(target.offeredCause, source.requestedCause)) reasons.push("SOURCE_REQUEST_NOT_OFFERED_BY_TARGET");
     if (!postgresIlikePrintableAscii(target.requestedCause, source.offeredCause)) reasons.push("TARGET_REQUEST_NOT_OFFERED_BY_SOURCE");
   }

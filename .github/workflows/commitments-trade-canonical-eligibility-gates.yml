@@ -98,9 +98,11 @@ jobs:
           node --import tsx --test \
             src/lib/trade-invitations.test.ts \
             src/lib/marketplace-delta-contract.test.ts \
+            src/feed-unified-marketplace-wiring.test.ts \
             src/lib/credibility.test.ts \
             src/lib/proposal-review.test.ts \
             src/lib/moral-trade/user-safety-content-moderation.test.ts \
+            src/lib/moral-trade/noncompensable-blockers.test.ts \
             src/lib/moral-trade/offer-validity.test.ts \
             src/lib/moral-trade/baseline-integrity.test.ts \
             src/lib/moral-trade/participant-eligibility.test.ts \
