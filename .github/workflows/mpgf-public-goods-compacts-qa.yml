@@ -13,7 +13,7 @@ on:
       - "src/lib/mpgf/public-goods-compacts*"
       - "src/lib/supabase/database.types.ts"
       - "supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql"
-      - "supabase/migrations/20260814023000_mpgf_public_goods_compacts_state_hardening.sql"
+      - "supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql"
       - "supabase/tests/mpgf_public_goods_compacts_lifecycle.sql"
       - "supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql"
       - "tests/mpgf-public-goods-compacts.spec.ts"
@@ -117,7 +117,7 @@ jobs:
 
           sources = [
               Path("supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql"),
-              Path("supabase/migrations/20260814023000_mpgf_public_goods_compacts_state_hardening.sql"),
+              Path("supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql"),
           ]
           output = Path("mpgf-compacts-qa")
           for source in sources:
@@ -132,7 +132,7 @@ jobs:
           PY
           sha256sum \
             supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql \
-            supabase/migrations/20260814023000_mpgf_public_goods_compacts_state_hardening.sql \
+            supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql \
             supabase/tests/mpgf_public_goods_compacts_lifecycle.sql \
             supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql \
             | tee mpgf-compacts-qa/source.sha256
@@ -165,7 +165,7 @@ jobs:
             | tee mpgf-compacts-qa/rollback-lifecycle.log
           begin;
           \i mpgf-compacts-qa/20260813163052_mpgf_public_goods_compacts.sql
-          \i mpgf-compacts-qa/20260814023000_mpgf_public_goods_compacts_state_hardening.sql
+          \i mpgf-compacts-qa/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
           \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
           \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
           rollback;
