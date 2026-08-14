@@ -34,9 +34,8 @@ concurrency:
 jobs:
   rollback-database-lifecycle:
     if: >-
-      github.event_name == 'workflow_dispatch'
-        ? inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz'
-        : github.event.pull_request.head.repo.full_name == github.repository
+      (github.event_name == 'workflow_dispatch' && inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz')
+      || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -108,7 +107,6 @@ jobs:
           git diff --check
 
       - name: Prepare rollback-only migration inputs
-        id: prepare
         shell: bash
         run: |
           set -euo pipefail
