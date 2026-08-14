@@ -33,8 +33,9 @@ begin
         status = 'needs_review',
         failure_code = 'provider_checkout_identity_missing',
         failure_message = 'The started provider checkout is missing its immutable partner donation ID.'
-      where id = bundle_row.id;
-      raise exception 'The started provider checkout is missing its immutable partner donation ID.';
+      where id = bundle_row.id
+      returning * into bundle_row;
+      return to_jsonb(bundle_row);
     end if;
     return to_jsonb(bundle_row);
   end if;
@@ -67,8 +68,9 @@ begin
     update public.trade_donation_pool_bundles
     set status = 'needs_review', failure_code = 'component_invalid_before_checkout',
         failure_message = 'One or more component obligations changed before provider checkout.'
-    where id = bundle_row.id;
-    raise exception 'The bundle contains a stale or invalid component.';
+    where id = bundle_row.id
+    returning * into bundle_row;
+    return to_jsonb(bundle_row);
   end if;
 
   update public.trade_donation_pool_bundles
