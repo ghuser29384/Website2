@@ -39,7 +39,7 @@ communication, public evidence, or money movement.
 | Response privacy | Executable but uncovered | Offer-owner-only `listOfferResponses`; interests RLS limits selection to the respondent or offer owner | Three-role browser/RLS assertion pending |
 | Response bridge and audit | Executable but uncovered | `bridge_core_interest_to_thread` creates a private thread/counterproposal/system message, `response_sent` event, owner notification, and email-outbox row | Domain/event query pending |
 | Atomic acceptance | Executable and source/SQL covered | `accept_marketplace_interest_v1` locks the offer and response, checks actor/binding/state, creates at most one proposed agreement, declines competing responses, and closes the offer | Existing source test passes; live database assertion pending |
-| Acceptance next action | Ambiguous pending rendered reproduction | `acceptInterestAction` receives `agreement.id` but currently redirects to the source offer; database notifications link to `/trade-agreements/<id>` | The new browser spec deliberately requires the canonical agreement URL and should reproduce the defect before repair |
+| Acceptance next action | Reproduced and minimally repaired | `acceptInterestAction` receives `agreement.id`; run `31769407634` proved the pre-repair action redirected to the matched source offer | Member and eligible claimed-guest success now redirect to `/trade-agreements/<agreement.id>`; exact-head rerun pending |
 | Claimed-guest acceptance | Executable for eligible legacy records, unavailable for new signed-out writes | `accept_marketplace_guest_interest_v1` is atomic; new public contact writes require sign-in | If member acceptance proves the redirect defect, the same minimal canonical redirect invariant must cover eligible claimed guests |
 | Frozen agreement creation | Executable but uncovered end to end | `bridge_core_agreement_version` creates one immutable version, sets `current_version_id`, retains proposed status, and records private system messages/notifications | Runtime exact ID/hash assertion pending |
 | Canonical participant route | Executable and downstream covered | `/trade-agreements/[agreementId]` requires authentication and `getCoreAgreementForUser` restricts data to proposer/responder | Existing downstream authenticated test covers denial; full-loop assertion pending |
@@ -136,6 +136,22 @@ written. Artifact `9207482912` (digest
 again proves zero financial rows and complete zero-residue cleanup. The helper
 now requires a successful document response and leaves readiness to the
 route-specific web-first assertions already present in the test.
+
+Run `31769407634` exercised the corrected readiness contract on exact candidate
+`fcca331f86865aac3bfbd59f84ed7a8fd447a382` and reached the owner acceptance
+gate. It proved anonymous discovery, exact terms, return-path preservation,
+four-role authentication, two private responses, outsider non-disclosure, and
+atomic acceptance. The selected response became `accepted`, the competing
+response became `declined`, the offer became `matched`, and the success receipt
+rendered. The owner nevertheless remained on
+`/offers/82000000-0000-4000-8000-000000000001?message=...` instead of the
+created canonical agreement. This is a reproduced product navigation defect.
+Artifact `9207632571` (digest
+`sha256:6a182bed3ed9de19eb54ffd64482e9c88f1b5177a287d58ce74e591455a7e9fb`)
+again proves zero performance-bond/external-payment-receipt rows and complete
+zero-residue cleanup. The repair changes only successful member and eligible
+claimed-guest destinations to their returned `agreement.id`; the atomic RPCs,
+authorization, frozen terms, privacy, and money behavior are unchanged.
 
 ## Pre-runtime verification completed
 
