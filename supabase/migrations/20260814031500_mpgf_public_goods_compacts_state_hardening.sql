@@ -250,8 +250,8 @@ begin
   if cycle_key !~ '^\d{4}-(0[1-9]|1[0-2])$' then
     raise exception using errcode = '22023', message = 'A valid UTC Compact cycle key is required.';
   end if;
-  year_value := pg_catalog.substring(cycle_key from 1 for 4)::integer;
-  month_value := pg_catalog.substring(cycle_key from 6 for 2)::integer;
+  year_value := pg_catalog.substr(cycle_key, 1, 4)::integer;
+  month_value := pg_catalog.substr(cycle_key, 6, 2)::integer;
   period_start := pg_catalog.make_timestamptz(year_value, month_value, 1, 0, 0, 0, 'UTC') - interval '1 month';
   period_end_exclusive := pg_catalog.make_timestamptz(year_value, month_value, 1, 0, 0, 0, 'UTC');
   return next;
