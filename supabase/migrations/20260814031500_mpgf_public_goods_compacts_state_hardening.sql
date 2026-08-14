@@ -33,7 +33,7 @@ begin
 
   if historically_accepted and new_constitution is distinct from old_constitution then
     raise exception using
-      errcode = '23514',
+      errcode = '55000',
       message = 'Published Compact v2 terms are immutable after the first acceptance.';
   end if;
 
