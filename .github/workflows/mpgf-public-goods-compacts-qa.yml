@@ -106,13 +106,16 @@ jobs:
             --workers=1 \
             --reporter=line 2>&1 | tee mpgf-compacts-playwright.log
 
-      - name: Prove clean exact-head source state
+      - name: Prove clean exact-head tracked source state
         if: always()
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
-          test -z "$(git status --short)"
+          git diff --exit-code
+          git diff --cached --exit-code
+          test -z "$(git status --short --untracked-files=no)"
+          git status --short > mpgf-compacts-working-tree-status.txt
           git rev-parse HEAD > mpgf-compacts-head-sha.txt
 
       - name: Upload exact-head source and rendered evidence
@@ -124,6 +127,7 @@ jobs:
           retention-days: 30
           path: |
             mpgf-compacts-head-sha.txt
+            mpgf-compacts-working-tree-status.txt
             mpgf-compacts-repository-tests.log
             mpgf-compacts-eslint.log
             mpgf-compacts-typescript-full.log
