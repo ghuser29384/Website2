@@ -434,7 +434,20 @@ jobs:
           SQL
           )"
           test "$count" = "0"
-          printf 'relations_before=%s\n' "$count" | tee mpgf-compacts-qa/schema-absence-before.txt
+          prerequisite_count="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL'
+          select count(*)
+          from unnest(array[
+            'moral_trade_identity_artifact_references',
+            'moral_trade_participant_eligibility_records',
+            'moral_trade_participant_eligibility_reviews'
+          ]) as relation_name
+          where to_regclass('public.' || relation_name) is not null;
+          SQL
+          )"
+          {
+            printf 'relations_before=%s\n' "$count"
+            printf 'eligibility_prerequisite_relations_before=%s\n' "$prerequisite_count"
+          } | tee mpgf-compacts-qa/schema-absence-before.txt
 
       - name: Compile migrations and run full lifecycle inside rollback
         shell: bash
@@ -485,6 +498,18 @@ jobs:
           SQL
           )"
           test "$count" = "0"
+          prerequisite_count="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL'
+          select count(*)
+          from unnest(array[
+            'moral_trade_identity_artifact_references',
+            'moral_trade_participant_eligibility_records',
+            'moral_trade_participant_eligibility_reviews'
+          ]) as relation_name
+          where to_regclass('public.' || relation_name) is not null;
+          SQL
+          )"
+          prerequisite_count_before="$(sed -n 's/^eligibility_prerequisite_relations_before=//p' mpgf-compacts-qa/schema-absence-before.txt)"
+          test "$prerequisite_count" = "$prerequisite_count_before"
           users="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL'
           select count(*) from auth.users where email like 'compact-%@example.test';
           SQL
@@ -492,6 +517,7 @@ jobs:
           test "$users" = "0"
           {
             printf 'relations_after=%s\n' "$count"
+            printf 'eligibility_prerequisite_relations_after=%s\n' "$prerequisite_count"
             printf 'fixture_users_after=%s\n' "$users"
           } | tee mpgf-compacts-qa/schema-absence-after.txt
 

@@ -43,7 +43,7 @@ while IFS= read -r migration_path; do
   fi
 
   introduction="$(
-    git log --follow --diff-filter=A --format='%ct %H' -- "$history_path" \
+    git log --all --follow --diff-filter=A --format='%ct %H' -- "$history_path" \
       | tail -n 1
   )"
   if [[ -z "$introduction" ]]; then
