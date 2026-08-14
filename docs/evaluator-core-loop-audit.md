@@ -125,6 +125,18 @@ again records zero performance-bond and external-payment-receipt rows and zero
 cleanup residue. The minimal repair adds a web-first URL assertion before
 reading the navigated URL.
 
+Run `31769003080` exercised that synchronization on exact candidate
+`f9d6d9ae8b3a1d855d96d7875ec4c429e0ecbdca`. It proved the anonymous sign-in
+return path and authenticated all four isolated-QA roles, including an AAL2
+reviewer. The first authenticated `gotoReady` then reached its healthy route but
+timed out waiting for global `networkidle`, which is not a valid readiness
+contract for this Next.js page's ongoing requests. No response or agreement was
+written. Artifact `9207482912` (digest
+`sha256:dc814f771642194495826054f1c9efb0e9ee0f7b548a109e60c2daad8793397e`)
+again proves zero financial rows and complete zero-residue cleanup. The helper
+now requires a successful document response and leaves readiness to the
+route-specific web-first assertions already present in the test.
+
 ## Pre-runtime verification completed
 
 At the pre-reconciliation candidate base

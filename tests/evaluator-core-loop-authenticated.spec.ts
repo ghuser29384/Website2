@@ -198,8 +198,8 @@ function qaCheckpoint(message: string) {
 }
 
 async function gotoReady(page: Page, path: string) {
-  await page.goto(path);
-  await page.waitForLoadState("networkidle");
+  const response = await page.goto(path, { waitUntil: "domcontentloaded" });
+  expect(response?.ok()).toBe(true);
 }
 
 async function expectSuccess(page: Page, message: string) {
