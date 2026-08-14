@@ -1,0 +1,164 @@
+name: PR 547 Every.org provider-staging readiness (current head)
+
+on:
+  push:
+    branches:
+      - ops/pr547-provider-staging-readiness-current-head-20260814
+    paths:
+      - .github/workflows/pr547-provider-staging-readiness-current-head-20260814.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr547-provider-staging-readiness-current-head-20260814
+  cancel-in-progress: false
+
+jobs:
+  readiness:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_SHA: b82e7f05c139fdb3c583f7f0c9a5475491bc827e
+      EXPECTED_PR_BRANCH: integration/direct-donation-upgrade-current-main-20260807
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+      EVERY_ORG_STAGING_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_WEBHOOK_TOKEN }}
+      EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET: ${{ secrets.EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET }}
+      EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - name: Check out exact PR 547 candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_SHA }}
+          fetch-depth: 0
+
+      - name: Verify immutable current candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          git fetch --no-tags origin "$EXPECTED_PR_BRANCH"
+          remote_head="$(git rev-parse FETCH_HEAD)"
+          if [[ "$remote_head" != "$EXPECTED_SHA" ]]; then
+            echo "PR 547 moved from $EXPECTED_SHA to $remote_head; refusing stale provider staging." >&2
+            exit 1
+          fi
+
+      - name: Inspect provider-staging prerequisites without exposing values
+        id: readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          missing=()
+          invalid=()
+
+          for name in \
+            VERCEL_TOKEN \
+            QA_SUPABASE_PUBLISHABLE_KEY \
+            QA_SUPABASE_SERVICE_ROLE_KEY \
+            EVERY_ORG_STAGING_PUBLIC_API_KEY \
+            EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET \
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
+            VERCEL_AUTOMATION_BYPASS_SECRET; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          for name in \
+            EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET \
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
+            VERCEL_AUTOMATION_BYPASS_SECRET; do
+            if [[ -n "${!name:-}" && "${#!name}" -lt 32 ]]; then
+              invalid+=("$name:must_be_at_least_32_characters")
+            fi
+          done
+
+          if [[ -n "${EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET:-}" \
+             && -n "${EVERY_ORG_STAGING_PARTNER_METADATA_SECRET:-}" \
+             && "$EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET" == "$EVERY_ORG_STAGING_PARTNER_METADATA_SECRET" ]]; then
+            invalid+=("EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET:must_differ_from_partner_metadata_secret")
+          fi
+
+          {
+            printf 'candidate=%s\n' "$EXPECTED_SHA"
+            printf 'pr_branch=%s\n' "$EXPECTED_PR_BRANCH"
+            if ((${#missing[@]})); then
+              printf 'missing=%s\n' "$(IFS=,; echo "${missing[*]}")"
+            else
+              printf 'missing=none\n'
+            fi
+            if ((${#invalid[@]})); then
+              printf 'invalid=%s\n' "$(IFS=,; echo "${invalid[*]}")"
+            else
+              printf 'invalid=none\n'
+            fi
+            if [[ -n "${EVERY_ORG_STAGING_WEBHOOK_TOKEN:-}" ]]; then
+              printf 'webhook_token=present\n'
+            else
+              printf 'webhook_token=not_yet_issued_or_not_configured\n'
+            fi
+          } | tee evidence/readiness.txt
+
+          if ((${#missing[@]} || ${#invalid[@]})); then
+            echo 'ready=false' >> "$GITHUB_OUTPUT"
+            {
+              echo '## PR #547 provider-staging readiness: blocked'
+              echo
+              echo "Exact candidate: \`$EXPECTED_SHA\`"
+              if ((${#missing[@]})); then
+                echo
+                echo 'Missing repository secrets:'
+                printf -- '- `%s`\n' "${missing[@]}"
+              fi
+              if ((${#invalid[@]})); then
+                echo
+                echo 'Invalid prerequisites:'
+                printf -- '- `%s`\n' "${invalid[@]}"
+              fi
+              echo
+              echo 'No deployment, checkout, donation, webhook mutation, or production change was attempted.'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo 'ready=true' >> "$GITHUB_OUTPUT"
+          {
+            echo '## PR #547 provider-staging readiness: bootstrap-ready'
+            echo
+            echo "Exact candidate: \`$EXPECTED_SHA\`"
+            if [[ -n "${EVERY_ORG_STAGING_WEBHOOK_TOKEN:-}" ]]; then
+              echo 'The full provider-staging credential set is present.'
+            else
+              echo 'Bootstrap prerequisites are present; the Every.org webhook token may be added after registering the exact preview URL.'
+            fi
+            echo
+            echo 'This probe deliberately performs no deployment or provider transaction.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record next controlled action
+        shell: bash
+        env:
+          READY: ${{ steps.readiness.outputs.ready }}
+        run: |
+          set -euo pipefail
+          if [[ "$READY" == true ]]; then
+            printf '%s\n' 'Refresh the gated provider-staging deployment controller to this exact candidate, create the protected Preview, and register its exact webhook URL in staging.every.org.' | tee evidence/next-action.txt
+          else
+            printf '%s\n' 'Create the separate staging.every.org account/API key and configure the missing GitHub/Vercel prerequisites before any provider-staging deployment.' | tee evidence/next-action.txt
+          fi
+
+      - name: Upload sanitized readiness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr547-provider-staging-readiness-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
