@@ -308,7 +308,7 @@ as $function$
 declare
   participant uuid := (select auth.uid());
   action_at timestamptz := pg_catalog.now();
-  cycle_key text := pg_catalog.to_char(pg_catalog.timezone('UTC', action_at), 'YYYY-MM');
+  cycle_key_value text := pg_catalog.to_char(pg_catalog.timezone('UTC', action_at), 'YYYY-MM');
   compact_record public.mpgf_public_goods_compacts%rowtype;
   membership_record public.mpgf_public_goods_compact_memberships%rowtype;
   instruction_id uuid;
@@ -390,18 +390,18 @@ begin
     select instruction.id into instruction_id
     from public.mpgf_public_goods_allocation_instructions as instruction
     where instruction.participant_id = participant
-      and instruction.cycle_key = cycle_key
+      and instruction.cycle_key = cycle_key_value
       and instruction.instruction_hash = public.mpgf_public_goods_hash_v2(
-        pg_catalog.jsonb_build_object('cycleKey', cycle_key, 'allocationBps', pg_catalog.jsonb_build_object(p_compact_public_key, 10000))
+        pg_catalog.jsonb_build_object('cycleKey', cycle_key_value, 'allocationBps', pg_catalog.jsonb_build_object(p_compact_public_key, 10000))
       );
     if instruction_id is null then
       insert into public.mpgf_public_goods_allocation_instructions (
         participant_id, cycle_key, constitution_version, basis_points_total,
         instruction_hash, submitted_at
       ) values (
-        participant, cycle_key, p_constitution_version, 10000,
+        participant, cycle_key_value, p_constitution_version, 10000,
         public.mpgf_public_goods_hash_v2(
-          pg_catalog.jsonb_build_object('cycleKey', cycle_key, 'allocationBps', pg_catalog.jsonb_build_object(p_compact_public_key, 10000))
+          pg_catalog.jsonb_build_object('cycleKey', cycle_key_value, 'allocationBps', pg_catalog.jsonb_build_object(p_compact_public_key, 10000))
         ),
         action_at
       ) returning id into instruction_id;
@@ -445,7 +445,7 @@ as $function$
 declare
   participant uuid := (select auth.uid());
   action_at timestamptz := pg_catalog.now();
-  cycle_key text := pg_catalog.to_char(pg_catalog.timezone('UTC', action_at), 'YYYY-MM');
+  cycle_key_value text := pg_catalog.to_char(pg_catalog.timezone('UTC', action_at), 'YYYY-MM');
   joined_count integer;
   supplied_count integer;
   supplied_total integer;
@@ -463,7 +463,7 @@ begin
     raise exception using errcode = '22023', message = 'Submit a complete Compact allocation map.';
   end if;
 
-  request_hash_value := public.mpgf_public_goods_hash_v2(pg_catalog.jsonb_build_object('cycleKey', cycle_key, 'allocationBps', p_allocation_bps));
+  request_hash_value := public.mpgf_public_goods_hash_v2(pg_catalog.jsonb_build_object('cycleKey', cycle_key_value, 'allocationBps', p_allocation_bps));
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(participant::text || ':set_allocation_v2:' || p_idempotency_key, 0));
   replay := public.mpgf_public_goods_idempotency_replay_v2(participant, 'set_allocation_v2', p_idempotency_key, request_hash_value);
   if replay is not null then return replay; end if;
@@ -502,7 +502,7 @@ begin
   select instruction.id into instruction_id
   from public.mpgf_public_goods_allocation_instructions as instruction
   where instruction.participant_id = participant
-    and instruction.cycle_key = cycle_key
+    and instruction.cycle_key = cycle_key_value
     and instruction.instruction_hash = request_hash_value;
 
   if instruction_id is null then
@@ -510,7 +510,7 @@ begin
       participant_id, cycle_key, constitution_version, basis_points_total,
       instruction_hash, submitted_at
     ) values (
-      participant, cycle_key, 'mpgf-public-goods-compact/transaction-v2',
+      participant, cycle_key_value, 'mpgf-public-goods-compact/transaction-v2',
       10000, request_hash_value, action_at
     ) returning id into instruction_id;
 
@@ -531,7 +531,7 @@ begin
 
   response := pg_catalog.jsonb_build_object(
     'ok', true,
-    'cycleKey', cycle_key,
+    'cycleKey', cycle_key_value,
     'instructionId', instruction_id,
     'basisPointsTotal', 10000,
     'schedulingReady', false,
