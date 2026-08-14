@@ -295,7 +295,7 @@ jobs:
     timeout-minutes: 60
     env:
       EVALUATOR_CORE_LOOP_BASE_URL: http://127.0.0.1:3211
-      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || '04fd14fc9e86b79d82619bea97997da0b7a2deca' }}
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || '85279bb2332f83dec7389d54ca3261a5dbd075cd' }}
       EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz

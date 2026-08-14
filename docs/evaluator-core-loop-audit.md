@@ -16,6 +16,10 @@ communication, public evidence, or money movement.
   The user explicitly authorized merging exact `origin/main`
   `04fd14fc9e86b79d82619bea97997da0b7a2deca`; the task branch now contains it
   through merge commit `5ede5c7b74301c7f098c2704cc7730e87c9e18ee`.
+- `main` then advanced through the production-aligned pooled-trigger migration
+  version at `85279bb2332f83dec7389d54ca3261a5dbd075cd`. The user explicitly
+  authorized merging that exact `origin/main`; the task branch contains it
+  through merge commit `d03493ecf5cd0e996322edc3fb58a12046110859`.
 - Work is performed in an isolated worktree. The noisy iCloud checkout is not
   modified.
 
