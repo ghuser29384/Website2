@@ -17,8 +17,10 @@ test("an already-started Every.org bundle reuses its immutable partner donation 
     migration,
     /length\(trim\(coalesce\(bundle_row\.partner_donation_id, ''\)\)\) = 0/,
   );
-  assert.match(migration, /failure_code = 'provider_checkout_identity_missing'/);
-  assert.match(migration, /return to_jsonb\(bundle_row\)/);
+  assert.match(
+    migration,
+    /failure_code = 'provider_checkout_identity_missing'[\s\S]*?returning \* into bundle_row;[\s\S]*?return to_jsonb\(bundle_row\);/,
+  );
 
   const resumeBranch = migration.indexOf("bundle_row.status = 'checkout_started'");
   const callerIdValidation = migration.indexOf(
@@ -37,6 +39,25 @@ test("an already-started Every.org bundle reuses its immutable partner donation 
     migration,
     /grant execute on function public\.start_trade_donation_pool_bundle_checkout\(uuid, uuid, text\)[\s\S]*?to service_role/,
   );
+});
+
+test("provider-integrity failures persist needs-review state instead of rolling it back", () => {
+  assert.match(
+    migration,
+    /if invalid_component_count > 0 then[\s\S]*?status = 'needs_review'[\s\S]*?returning \* into bundle_row;[\s\S]*?return to_jsonb\(bundle_row\);/,
+  );
+
+  for (const branchStart of [
+    migration.indexOf("failure_code = 'provider_checkout_identity_missing'"),
+    migration.indexOf("failure_code = 'component_invalid_before_checkout'"),
+  ]) {
+    const branchReturn = migration.indexOf("return to_jsonb(bundle_row);", branchStart);
+    assert.ok(branchStart >= 0 && branchReturn > branchStart);
+    assert.equal(
+      migration.slice(branchStart, branchReturn).includes("raise exception"),
+      false,
+    );
+  }
 });
 
 test("the operator screen exposes both initial and resumed provider checkout", () => {
