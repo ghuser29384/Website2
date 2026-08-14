@@ -1,0 +1,78 @@
+name: Pooled trigger migration version validation 20260814
+
+on:
+  push:
+    branches:
+      - qa/align-pooled-trigger-migration-version-20260814
+    paths:
+      - .github/workflows/pooled-trigger-migration-version-validation-20260814.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pooled-trigger-migration-version-${{ github.ref }}-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      EXPECTED_CANDIDATE_SHA: 3ef8a9ffcd894a6a5b2ff76af06ef969d8b918d1
+      WORKFLOW_PATH: .github/workflows/pooled-trigger-migration-version-validation-20260814.yml
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Check out exact validation revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 4
+
+      - name: Verify exact candidate and workflow-only delta
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$EXPECTED_CANDIDATE_SHA" HEAD
+          test "$(git diff --name-only "$EXPECTED_CANDIDATE_SHA" HEAD)" = "$WORKFLOW_PATH"
+
+      - name: Verify migration-history alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f supabase/migrations/20260814024354_harden_trade_donation_pool_component_trigger_rpc.sql
+          test ! -e supabase/migrations/20260814023000_harden_trade_donation_pool_component_trigger_rpc.sql
+          grep -F '20260814024354_harden_trade_donation_pool_component_trigger_rpc.sql' \
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run focused migration contract
+        run: >-
+          node --import tsx --test
+          src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+
+      - name: Run complete repository tests
+        run: npm test
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint -- --quiet
+
+      - name: Build production application
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: production
+        run: npm run build
