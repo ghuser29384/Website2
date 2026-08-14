@@ -1,0 +1,281 @@
+name: Repair MPGF compact reacceptance semantics v2
+
+on:
+  push:
+    branches:
+      - agent/mpgf-public-goods-compacts
+    paths:
+      - .github/workflows/repair-mpgf-compact-reacceptance-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-mpgf-compact-reacceptance-v2-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Repair revoked-before-activation state and reacceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration_path = Path(
+              "supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql"
+          )
+          lines = migration_path.read_text(encoding="utf-8").splitlines()
+
+          revoked_branch_matches = [
+              index
+              for index, line in enumerate(lines)
+              if "elsif membership_record.status = 'revoked'" in line
+          ]
+          if len(revoked_branch_matches) != 1:
+              raise SystemExit(
+                  f"Expected one revoked reacceptance branch, found {len(revoked_branch_matches)}."
+              )
+          branch_start = revoked_branch_matches[0]
+          lines[branch_start] = "  elsif membership_record.status = 'revoked' then"
+
+          branch_end = next(
+              (
+                  index
+                  for index in range(branch_start + 1, len(lines))
+                  if lines[index].strip() == "else"
+              ),
+              None,
+          )
+          if branch_end is None:
+              raise SystemExit("Could not find the end of the revoked reacceptance branch.")
+
+          status_matches = [
+              index
+              for index in range(branch_start + 1, branch_end)
+              if lines[index].strip() == "status = 'pending_activation',"
+          ]
+          activated_matches = [
+              index
+              for index in range(branch_start + 1, branch_end)
+              if lines[index].strip() == "activated_at = null,"
+          ]
+          if len(status_matches) != 1 or len(activated_matches) != 1:
+              raise SystemExit(
+                  "Expected one revoked-branch status and activated_at assignment."
+              )
+
+          status_index = status_matches[0]
+          status_indent = lines[status_index][: len(lines[status_index]) - len(lines[status_index].lstrip())]
+          status_replacement = [
+              f"{status_indent}status = case",
+              f"{status_indent}  when compact_record.status = 'active' then 'active'",
+              f"{status_indent}  else 'pending_activation'",
+              f"{status_indent}end,",
+          ]
+          lines[status_index : status_index + 1] = status_replacement
+
+          # Locate activated_at again after the status replacement shifted line numbers.
+          branch_end = next(
+              index
+              for index in range(branch_start + 1, len(lines))
+              if lines[index].strip() == "else"
+          )
+          activated_matches = [
+              index
+              for index in range(branch_start + 1, branch_end)
+              if lines[index].strip() == "activated_at = null,"
+          ]
+          if len(activated_matches) != 1:
+              raise SystemExit("Expected one shifted revoked-branch activated_at assignment.")
+          activated_index = activated_matches[0]
+          activated_indent = lines[activated_index][
+              : len(lines[activated_index]) - len(lines[activated_index].lstrip())
+          ]
+          activated_replacement = [
+              f"{activated_indent}activated_at = case",
+              f"{activated_indent}  when compact_record.status = 'active' then action_at",
+              f"{activated_indent}  else null",
+              f"{activated_indent}end,",
+          ]
+          lines[activated_index : activated_index + 1] = activated_replacement
+          migration_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+          state_path = Path("src/lib/mpgf/public-goods-compacts-state.ts")
+          state_lines = state_path.read_text(encoding="utf-8").splitlines()
+          revoked_state = next(
+              (
+                  index
+                  for index, line in enumerate(state_lines)
+                  if line.strip() == 'if (value.status === "revoked") {'
+              ),
+              None,
+          )
+          if revoked_state is None:
+              raise SystemExit("Could not find revoked membership validation.")
+          next_status_branch = next(
+              index
+              for index in range(revoked_state + 1, len(state_lines))
+              if state_lines[index].strip().startswith("if (")
+              and index > revoked_state + 1
+          )
+          recruiting_lines = [
+              index
+              for index in range(revoked_state + 1, next_status_branch)
+              if state_lines[index].strip() == 'compact.status === "recruiting" &&'
+          ]
+          if len(recruiting_lines) != 1:
+              raise SystemExit(
+                  f"Expected one revoked-membership recruiting guard, found {len(recruiting_lines)}."
+              )
+          del state_lines[recruiting_lines[0]]
+          state_path.write_text("\n".join(state_lines) + "\n", encoding="utf-8")
+
+          state_test_path = Path("src/lib/mpgf/public-goods-compacts-state.test.ts")
+          state_test = state_test_path.read_text(encoding="utf-8")
+          marker = 'test("an effective prospective exit is rendered as exited rather than still binding", () => {'
+          if state_test.count(marker) != 1:
+              raise SystemExit("Expected one prospective-exit test marker.")
+          new_test = '''test("a revoked recruiting acceptance remains safe after later compact activation", () => {
+            const state = buildRecruitingDatabaseState();
+            const compact = state.compacts[0];
+
+            compact.membership = {
+              id: "20000000-0000-4000-8000-000000000001",
+              compactId: compact.id as string,
+              compactPublicKey: compact.publicKey,
+              constitutionVersionAccepted: compact.constitutionVersion,
+              acknowledgements: MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS,
+              declaredEligibleMonthlySpendingCents: 12_345,
+              scheduledMonthlyContributionCents: 123,
+              status: "revoked",
+              acceptedAt: "2026-01-01T00:00:00.000Z",
+              activatedAt: null,
+              revokedAt: "2026-01-15T00:00:00.000Z",
+              exitRequestedAt: null,
+              exitEffectiveAt: null,
+            };
+            activateFutureFlourishing(state);
+
+            const normalized =
+              validateAndNormalizeMpgfPublicGoodsCompactsDatabaseState(state, NOW);
+
+            assert.ok(normalized);
+            assert.equal(normalized.compacts[0].membership?.status, "revoked");
+          });
+
+          '''
+          state_test_path.write_text(
+              state_test.replace(marker, new_test + marker, 1),
+              encoding="utf-8",
+          )
+
+          lifecycle_path = Path("supabase/tests/mpgf_public_goods_compacts_lifecycle.sql")
+          lifecycle = lifecycle_path.read_text(encoding="utf-8")
+          marker = (
+              "-- Activate Animal Welfare in-fixture, then prove late joins bind "
+              "immediately without moving money."
+          )
+          if lifecycle.count(marker) != 1:
+              raise SystemExit("Expected one Animal Welfare activation marker.")
+          preactivation = r'''-- C accepts and revokes Animal Welfare while it is still recruiting.
+          set local role authenticated;
+          select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000003',true);
+          select set_config('request.jwt.claim.role','authenticated',true);
+          do $test$
+          declare
+            response jsonb;
+          begin
+            response := public.join_mpgf_public_goods_compact(
+              'animal-welfare',
+              'mpgf-public-goods-compact/founding-v1',
+              50000,
+              '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}'::jsonb,
+              'qa.join.c.pre.0001'
+            );
+            if response->>'membershipStatus' <> 'pending_activation' then
+              raise exception 'Pre-activation acceptance did not remain pending.';
+            end if;
+
+            response := public.request_mpgf_public_goods_compact_exit(
+              'animal-welfare',
+              'qa.exit.c.pre.0001'
+            );
+            if response->>'membershipStatus' <> 'revoked'
+              or not (response->>'revokedImmediately')::boolean
+              or (response->>'moneyMoved')::boolean
+            then
+              raise exception 'Pre-activation revocation was not immediate and no-money.';
+            end if;
+          end;
+          $test$;
+          reset role;
+
+          '''
+          lifecycle = lifecycle.replace(
+              marker,
+              preactivation
+              + "-- Activate Animal Welfare in-fixture, then prove the revoked recruiting acceptance can rejoin and bind immediately without moving money.",
+              1,
+          )
+          lifecycle_path.write_text(lifecycle, encoding="utf-8")
+          PY
+
+          git diff --check
+          grep -q "membership_record.status = 'revoked' then" \
+            supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql
+          grep -q "when compact_record.status = 'active' then 'active'" \
+            supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql
+          grep -q "a revoked recruiting acceptance remains safe" \
+            src/lib/mpgf/public-goods-compacts-state.test.ts
+          grep -q "qa.join.c.pre.0001" \
+            supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused contracts and strict TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/public-goods-compacts.test.ts \
+            src/lib/mpgf/public-goods-compacts-state.test.ts \
+            src/lib/mpgf/public-goods-compacts-contract.test.ts \
+            src/lib/mpgf/public-goods-compacts-hardening-contract.test.ts
+          npx tsc --noEmit
+
+      - name: Commit durable repair and remove controllers
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            src/lib/mpgf/public-goods-compacts-state.ts \
+            src/lib/mpgf/public-goods-compacts-state.test.ts \
+            supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql \
+            supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          for controller in \
+            .github/workflows/repair-mpgf-compact-reacceptance.yml \
+            .github/workflows/repair-mpgf-compact-reacceptance-v2.yml; do
+            test ! -e "$controller" || git rm "$controller"
+          done
+          git commit -m "fix: allow revoked compact acceptances to rejoin after activation"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
