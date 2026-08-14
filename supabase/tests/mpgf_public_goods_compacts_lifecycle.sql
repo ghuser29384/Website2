@@ -564,7 +564,7 @@ insert into public.mpgf_public_goods_funding_qualification_snapshots (
   qualification_state, snapshot_hash
 )
 select membership.participant_id, schedule.cycle_key, membership.id, membership.compact_id,
-  eligibility.id, instruction.id, schedule.id, authorization.id, true,'verified_unique_person',
+  eligibility.id, instruction.id, schedule.id, dormant_auth.id, true,'verified_unique_person',
   'sha256:' || public.mpgf_public_goods_hash_v2(jsonb_build_object('person', membership.participant_id)),
   true,500,'scheduled_qualified',
   'sha256:' || public.mpgf_public_goods_hash_v2(jsonb_build_object('scheduled-qualified', membership.participant_id))
@@ -573,7 +573,7 @@ join public.profiles as profile on profile.id = membership.participant_id and pr
 join public.moral_trade_participant_eligibility_records as eligibility on eligibility.participant_id = membership.participant_id
 join public.mpgf_public_goods_allocation_instructions as instruction on instruction.participant_id = membership.participant_id
 join public.mpgf_public_goods_scheduled_amount_snapshots as schedule on schedule.membership_id = membership.id
-join public.mpgf_public_goods_dormant_authorization_snapshots as authorization on authorization.participant_id = membership.participant_id
+join public.mpgf_public_goods_dormant_authorization_snapshots as dormant_auth on dormant_auth.participant_id = membership.participant_id
 where profile.username <> 'compact-v2-100';
 
 do $test$
@@ -601,7 +601,7 @@ insert into public.mpgf_public_goods_funding_qualification_snapshots (
   qualification_state, snapshot_hash
 )
 select membership.participant_id, schedule.cycle_key, membership.id, membership.compact_id,
-  eligibility.id, instruction.id, schedule.id, authorization.id, true,'verified_unique_person',
+  eligibility.id, instruction.id, schedule.id, dormant_auth.id, true,'verified_unique_person',
   'sha256:' || public.mpgf_public_goods_hash_v2(jsonb_build_object('person', membership.participant_id)),
   true,500,'scheduled_qualified',
   'sha256:' || public.mpgf_public_goods_hash_v2(jsonb_build_object('scheduled-qualified', membership.participant_id))
@@ -610,7 +610,7 @@ join public.profiles as profile on profile.id = membership.participant_id and pr
 join public.moral_trade_participant_eligibility_records as eligibility on eligibility.participant_id = membership.participant_id
 join public.mpgf_public_goods_allocation_instructions as instruction on instruction.participant_id = membership.participant_id
 join public.mpgf_public_goods_scheduled_amount_snapshots as schedule on schedule.membership_id = membership.id
-join public.mpgf_public_goods_dormant_authorization_snapshots as authorization on authorization.participant_id = membership.participant_id;
+join public.mpgf_public_goods_dormant_authorization_snapshots as dormant_auth on dormant_auth.participant_id = membership.participant_id;
 
 do $test$
 declare readiness jsonb;
