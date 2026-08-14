@@ -31,7 +31,7 @@ NEW = r'''  assert.match(workflow, /group: mpgf-dac-product-lifecycle-shared-qa/
       workflow,
       "supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql",
     ),
-    5,
+    6,
   );
   assert.match(
     workflow,
