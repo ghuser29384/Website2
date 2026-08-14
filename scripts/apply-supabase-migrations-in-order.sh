@@ -13,6 +13,18 @@ if [[ ! -d "$migration_dir" ]]; then
   exit 1
 fi
 
+if [[ -n "${SUPABASE_MIGRATION_BASELINE_SQL:-}" ]]; then
+  if [[ ! -f "$SUPABASE_MIGRATION_BASELINE_SQL" ]]; then
+    echo "Migration baseline does not exist: $SUPABASE_MIGRATION_BASELINE_SQL" >&2
+    exit 1
+  fi
+  printf 'applying_pre_migration_baseline=%s\n' "$SUPABASE_MIGRATION_BASELINE_SQL"
+  psql "$SUPABASE_MIGRATION_TEST_DB_URL" \
+    --no-psqlrc \
+    --set ON_ERROR_STOP=1 \
+    --file "$SUPABASE_MIGRATION_BASELINE_SQL"
+fi
+
 migration_count=0
 while IFS= read -r migration_path; do
   migration_count=$((migration_count + 1))

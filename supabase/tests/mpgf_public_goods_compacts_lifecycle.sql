@@ -886,7 +886,7 @@ do $test$
 declare
   response jsonb;
   membership_record public.mpgf_public_goods_compact_memberships%rowtype;
-  compact_record public.mpgf_public_goods_compacts%rowtype;
+  public_state jsonb;
 begin
   response := public.request_mpgf_public_goods_compact_exit(
     'future-flourishing',
@@ -895,14 +895,14 @@ begin
   select * into membership_record
   from public.mpgf_public_goods_compact_memberships
   where id = current_setting('qa.a_membership_id')::uuid;
-  select * into compact_record
-  from public.mpgf_public_goods_compacts
-  where id = membership_record.compact_id;
+  public_state := public.get_mpgf_public_goods_compacts_state();
 
   if membership_record.status <> 'exit_notice'
     or membership_record.exit_effective_at is distinct from greatest(
-      compact_record.activated_at + make_interval(months => compact_record.minimum_term_months),
-      membership_record.exit_requested_at + make_interval(days => compact_record.exit_notice_days)
+      (public_state #>> '{compacts,0,activation,minimumTermEndsAt}')::timestamptz,
+      membership_record.exit_requested_at + make_interval(
+        days => (public_state #>> '{compacts,0,terms,exitNoticeDays}')::integer
+      )
     )
     or (response->>'delegationsRevoked')::integer <> 2
     or (response->>'moneyMoved')::boolean
