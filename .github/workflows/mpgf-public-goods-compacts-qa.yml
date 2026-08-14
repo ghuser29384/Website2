@@ -396,6 +396,8 @@ jobs:
               target.write_text("\n".join(stripped) + "\n")
           PY
           sha256sum \
+            supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql \
+            supabase/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql \
             supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql \
             supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql \
             supabase/tests/mpgf_public_goods_compacts_lifecycle.sql \
@@ -443,6 +445,8 @@ jobs:
             --set ON_ERROR_STOP=1 <<SQL \
             | tee mpgf-compacts-qa/rollback-lifecycle.log
           begin;
+          \i supabase/migrations/20260607_moral_trade_release_gate_policy_snapshots.sql
+          \i supabase/migrations/20260607_zzzzz_moral_trade_participant_eligibility_records.sql
           \i mpgf-compacts-qa/20260813163052_mpgf_public_goods_compacts.sql
           \i mpgf-compacts-qa/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
           \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
