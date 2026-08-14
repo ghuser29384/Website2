@@ -6,6 +6,10 @@ const migration = readFileSync(
   "supabase/migrations/20260725152000_cross_user_pooled_trade_donations.sql",
   "utf8",
 );
+const hardeningMigration = readFileSync(
+  "supabase/migrations/20260813170151_harden_trade_donation_pool_component_trigger_rpc.sql",
+  "utf8",
+);
 const poolLibrary = readFileSync("src/lib/trade-donation-pool.ts", "utf8");
 const poolActions = readFileSync("src/app/trade-donation-pool-actions.ts", "utf8");
 const poolStripeWebhook = readFileSync(
@@ -22,6 +26,39 @@ const poolStage = readFileSync(
   "utf8",
 );
 const runbook = readFileSync("docs/trade-donation-pooled-settlement-runbook.md", "utf8");
+
+const normalizeSql = (sql: string) =>
+  sql
+    .replace(/--.*$/gm, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+test("the agreement-change trigger helper is callable only by service_role", () => {
+  const hardeningSql = normalizeSql(hardeningMigration);
+  const originalSql = normalizeSql(migration);
+
+  assert.match(
+    hardeningSql,
+    /revoke all on function public\.mark_trade_donation_pool_component_stale\(\) from public\s*,\s*anon\s*,\s*authenticated\s*;/i,
+  );
+  assert.match(
+    hardeningSql,
+    /grant execute on function public\.mark_trade_donation_pool_component_stale\(\) to service_role\s*;/i,
+  );
+  assert.doesNotMatch(
+    hardeningSql,
+    /grant execute on function public\.mark_trade_donation_pool_component_stale\(\) to [^;]*\b(?:public|anon|authenticated)\b[^;]*;/i,
+  );
+  assert.match(
+    originalSql,
+    /create or replace function public\.mark_trade_donation_pool_component_stale\(\) returns trigger language plpgsql security definer set search_path = pg_catalog as \$\$/i,
+  );
+  assert.match(
+    originalSql,
+    /create trigger mark_trade_donation_pool_component_stale_trigger after update of current_version_id\s*,\s*lifecycle_status on public\.agreements for each row execute function public\.mark_trade_donation_pool_component_stale\(\)\s*;/i,
+  );
+});
 
 test("pooled settlement persistence is private and privileged writes are service-role only", () => {
   for (const table of [
