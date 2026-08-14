@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import math
@@ -44,6 +45,12 @@ def metric_index(rows: list[dict[str, str]], dimensions: tuple[str, ...], value_
 
 
 def main() -> None:
+    global OUTPUT
+    parser = argparse.ArgumentParser(description="Independently validate generated model artifacts")
+    parser.add_argument("--output-dir", type=Path, default=OUTPUT)
+    parser.add_argument("--expected-draws", type=int, default=200_000)
+    args = parser.parse_args()
+    OUTPUT = args.output_dir if args.output_dir.is_absolute() else ROOT / args.output_dir
     checks: list[dict[str, Any]] = []
     required = [
         "frozen_input_snapshot.json", "first_complete_run.json", "deterministic_reference.json",
@@ -52,6 +59,7 @@ def main() -> None:
         "dac_reserve_diagnostics.csv", "model_invariants.csv", "general_sensitivity.csv",
         "dac_policy_sensitivity.csv", "monte_carlo_convergence.csv", "parameter_correlations.csv",
         "variance_drivers.csv", "research_dossier.json", "model_v1_comparison.json",
+        "resolved_latent_state_credits.csv", "structural_diagnostics.csv", "parameter_archetype_summary.json",
     ]
     for name in required:
         require((OUTPUT / name).is_file(), f"required artifact exists: {name}", checks)
@@ -63,11 +71,48 @@ def main() -> None:
         row = by_month[month]
         require(float(row["target_active"]) == expected, f"month {month} exact active milestone", checks)
         require(close(float(row["ea_active"]), expected * 0.40), f"month {month} EA reconciliation", checks)
+        require(close(float(row["non_ea_active"]), expected * 0.60), f"month {month} non-EA reconciliation", checks)
         require(close(float(row["support_only_active"]), expected * 0.15), f"month {month} support-only reconciliation", checks)
+        require(close(float(row["transaction_active"]), expected * 0.85), f"month {month} transaction-active reconciliation", checks)
+        require(close(float(row["activated_active"]), float(row["new_active"])), f"month {month} activated/new reconciliation", checks)
+
+    archetypes = read_csv("archetype_summary.csv")
+    require(len(archetypes) == 10, "exactly ten archetype output rows", checks)
+    require(close(sum(float(row["eoy5_active"]) for row in archetypes), 250_000.0), "EOY5 archetype counts sum to active users", checks)
+
+    requested_percentiles = {"p05", "p10", "p25", "p75", "p90", "p95"}
+    for name in ("portfolio_summary.csv", "mechanism_summary.csv", "field_appendix.csv", "dac_reserve_diagnostics.csv", "structural_diagnostics.csv"):
+        with (OUTPUT / name).open(newline="", encoding="utf-8") as handle:
+            columns = set(next(csv.reader(handle)))
+        require(requested_percentiles <= columns, f"full requested percentile grid exists: {name}", checks)
+
+    latent = read_csv("resolved_latent_state_credits.csv")
+    require(len(latent) == 40, "all 40 archetype/mechanism/resource latent-state rows exist", checks)
+    for row in latent:
+        state_sum = sum(float(row[key]) for key in (
+            "would_anyway", "might_without_platform", "only_because_platform", "increases_amount_or_duration",
+        ))
+        expected_credit = (
+            0.25 * float(row["might_without_platform"])
+            + float(row["only_because_platform"])
+            + 0.50 * float(row["increases_amount_or_duration"])
+        )
+        label = f"{row['archetype_id']}/{row['mechanism']}/{row['resource']}"
+        require(close(state_sum, 1.0, absolute=1e-12), f"latent-state probabilities sum to one: {label}", checks)
+        require(close(float(row["causal_credit"]), expected_credit, absolute=1e-12), f"latent-state credit arithmetic: {label}", checks)
+
+    parameter_archetype_summary = json.loads((OUTPUT / "parameter_archetype_summary.json").read_text(encoding="utf-8"))
+    joint_factors = parameter_archetype_summary["relative_joint_archetype_mechanism_factors"]
+    require(len(joint_factors) == 12, "all mechanism-specific joint-archetype factors reported", checks)
+    require(all(float(value) > 0.0 for value in joint_factors.values()), "joint-archetype factors are positive", checks)
 
     invariants = read_csv("model_invariants.csv")
     require(invariants and all(row["passed"].lower() == "true" for row in invariants), "all draw-level accounting invariants pass", checks)
-    require({row["draws"] for row in invariants} == {"200000"}, "full artifacts use 200000 draws", checks)
+    require(
+        {row["draws"] for row in invariants} == {str(args.expected_draws)},
+        f"artifacts use expected {args.expected_draws} draws",
+        checks,
+    )
 
     portfolio = read_csv("portfolio_summary.csv")
     pindex = metric_index(portfolio, ("scenario", "forecast_basis", "horizon", "metric"))
@@ -94,7 +139,10 @@ def main() -> None:
     mindex = metric_index(mechanism, ("scenario", "forecast_basis", "horizon", "mechanism", "metric"))
     mechanism_names = ("redirect", "direct", "dac", "platform_shared")
     for group in groups:
-        for metric in ("new_cash", "rescued_cash", "cause_directed_cash", "personal_income_transfers", "cash_operating_costs", "net_causal_cash"):
+        for metric in (
+            "new_cash", "rescued_cash", "cause_directed_cash", "personal_income_transfers",
+            "donation_displacement", "timing_only_shifts", "cash_operating_costs", "net_causal_cash",
+        ):
             total = sum(mindex.get((*group, mechanism_name, metric), 0.0) for mechanism_name in mechanism_names)
             require(close(total, pindex[(*group, metric)]), f"mechanism means reconcile: {'/'.join((*group, metric))}", checks)
 
@@ -114,6 +162,17 @@ def main() -> None:
     require(close(highest_net, highest_expected), f"independent highest-impact mechanism reconciliation: {highest}", checks)
 
     deterministic = json.loads((OUTPUT / "deterministic_reference.json").read_text(encoding="utf-8"))
+    direct_structure = deterministic["structural_diagnostics"]
+    payer_wtp = float(direct_structure["direct_payer_wtp_usd_per_hour"])
+    supplier_wta = float(direct_structure["direct_supplier_wta_usd_per_hour"])
+    accepted_price = float(direct_structure["direct_accepted_price_usd_per_hour"])
+    compatible = bool(direct_structure["direct_price_compatible"])
+    require(compatible == (payer_wtp >= supplier_wta), "deterministic direct price compatibility is WTP >= WTA", checks)
+    if compatible:
+        require(supplier_wta <= accepted_price <= payer_wtp, "deterministic accepted price lies inside WTA/WTP", checks)
+        require(close(accepted_price, math.sqrt(payer_wtp * supplier_wta), absolute=1e-9), "deterministic accepted price is formed from WTP/WTA", checks)
+    parameter_ids = {row["parameter_id"] for row in csv.DictReader((ROOT / "PARAMETER_LEDGER.csv").open(newline="", encoding="utf-8"))}
+    require("direct_mean_price" not in parameter_ids, "aggregate direct forecast has no inserted mean-price parameter", checks)
     for horizon, mechanisms in deterministic["mechanisms"].items():
         redirect = mechanisms["redirect"]
         require(close(redirect["gross_planned_principal"], redirect["redirect_cleared_principal"] + redirect["unmatched_fallback_cash"], absolute=1e-7), f"deterministic redirect principal: {horizon}", checks)
@@ -141,6 +200,11 @@ def main() -> None:
         require(scalar("dac_bonus_liability_locked") <= prior_reserve + 1e-7, f"year {year_index} exact 100% reserve coverage", checks)
         prior_reserve = reserve
 
+    dac_diagnostics = read_csv("dac_reserve_diagnostics.csv")
+    diagnostic_metrics = {row["metric"] for row in dac_diagnostics}
+    for metric in ("_potential_contributors", "_potential_pledge_principal", "_contributor_choice_principal", "_mean_pledge"):
+        require(metric in diagnostic_metrics, f"explicit DAC contributor diagnostic reported: {metric}", checks)
+
     # A separate cent arithmetic fixture, intentionally not importing the DAC implementation.
     target_cents, surcharge_bps = 10_000, 500
     gross_cents = target_cents + target_cents * surcharge_bps // 10_000
@@ -149,14 +213,25 @@ def main() -> None:
     require(gross_cents == 10_500 and early_liability + late_liability == 610, "independent exact-cent DAC fixture", checks)
 
     convergence = read_csv("monte_carlo_convergence.csv")
-    require({int(row["draws"]) for row in convergence} == {2_000, 20_000, 200_000}, "multi-draw convergence grid complete", checks)
+    expected_convergence = {2_000, 20_000, args.expected_draws}
+    require(
+        {int(row["draws"]) for row in convergence} == expected_convergence,
+        "multi-draw convergence grid complete",
+        checks,
+    )
     policies = read_csv("dac_policy_sensitivity.csv")
     fixed = {row["sensitivity"] for row in policies if row["sensitivity_group"] == "dac_surcharge_policy" and row["sensitivity"].startswith("fixed_")}
     require(fixed == {f"fixed_{rate / 100:.2f}" for rate in range(2, 16)}, "fixed surcharge grid covers 2%-15%", checks)
     schedules = {row["sensitivity"] for row in policies if row["sensitivity_group"] == "dac_bonus_schedule"}
     require(schedules == {"linear_5_to_1", "linear_10_to_2", "linear_15_to_2", "front_loaded_nonlinear"}, "all bonus schedules reported", checks)
 
-    output_hashes = file_hashes(OUTPUT, exclude_names={"independent_validation.json", "reproducibility_manifest.json"})
+    output_hashes = file_hashes(
+        OUTPUT,
+        exclude_names={
+            "fast_gate.json", "independent_validation.json",
+            "reproducibility_manifest.json", "reproducibility_check.json",
+        },
+    )
     report = {
         "schema_version": 1,
         "status": "passed",
@@ -173,4 +248,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -2,14 +2,15 @@
   "anti_tuning_rule": "No prior or scenario changes after inspecting output without preserving the first complete run and logging before/after results.",
   "files": {
     "ARCHETYPE_LEDGER.csv": "a011d0fcd6c633c9fc5a18341411ad9a833cbaf114cac45a5dd47ffd16ede7d7",
-    "MODEL_SPEC.md": "dfb11464f4411384e1960a354c64be03d85e55568e8faf6beb574e3c2b070ea8",
-    "PARAMETER_LEDGER.csv": "7c3b5a679ca9de8aa5f9a93f21203ff840d057c1e0c918b436a3183dacc0b628",
-    "PARAMETER_LEDGER.json": "1a2b923c57a8955b52b8be8e8d845bd0114cfb4fa16489a4a1b78e97f6963895",
+    "LATENT_STATE_LEDGER.csv": "c5679becd5bd3563a479b4b2fcbde65622d8542b9c59c65e907f3a382de381bd",
+    "MODEL_SPEC.md": "e6db58d78e1484434dc4273efb3d6889310c793cffcd533ddae1b1c964ecd767",
+    "PARAMETER_LEDGER.csv": "f5f0ec7f2d21e28c51899a2c059c4881ceafa3e53e030dc47bdd96cd306b1bef",
+    "PARAMETER_LEDGER.json": "0bbd3f8265161a6722d36a39a26472c5bab18f8efe5e490baa32daaf7c9981c7",
     "RESOURCE_PROFILES.json": "7944a842cf9ed8fc849bb189c0b8a99b04a5744a1fe59478c31199446f5800d2",
     "SCENARIOS.json": "11056a028230c954caa366a941011a44a0b5935d54098a64a0f55e39da2efa7e",
-    "SENSITIVITY_AND_CRUX.md": "a1936135dfadd9baa3780cb02bfaaeb807c387a23d3080700d2d79011f4777a8"
+    "SENSITIVITY_AND_CRUX.md": "cdf640bbc02cc6692cc2bad7d62585d4a1bb90565328723238a4ee708b3b3078"
   },
-  "input_set_hash": "f855e4ed730f554e5a2572c21e6dc950896ce6aee2f3e9fd7729235720ada02f",
+  "input_set_hash": "4af76469f2f1efc8444c1d5702a99e5df4d404110c04b3380ff451579098caac",
   "schema_version": 1,
   "status": "frozen_before_results"
 }

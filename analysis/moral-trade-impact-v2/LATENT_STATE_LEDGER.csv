@@ -1,0 +1,41 @@
+archetype_id,mechanism,resource,would_anyway,might_without_platform,only_because_platform,increases_amount_or_duration,provenance,dominant_crux,update_observable
+EA1,redirect,cash,0.50,0.25,0.15,0.10,AI-proposed after preserved first run; frozen before revised results,counterfactual planned giving,prospective fallback and 12-month follow-up
+EA1,direct,cash,0.48,0.25,0.16,0.11,AI-proposed after preserved first run; frozen before revised results,payer counterfactual,prospective payment plan and randomized exposure
+EA1,dac,cash,0.42,0.28,0.18,0.12,AI-proposed after preserved first run; frozen before revised results,pool contribution counterfactual,prospective public-good budget and randomized exposure
+EA1,direct,labor,0.42,0.27,0.19,0.12,AI-proposed after preserved first run; frozen before revised results,action duration counterfactual,prospective time plan and randomized exposure
+EA2,redirect,cash,0.48,0.26,0.16,0.10,AI-proposed after preserved first run; frozen before revised results,counterfactual planned giving,prospective fallback and 12-month follow-up
+EA2,direct,cash,0.44,0.27,0.18,0.11,AI-proposed after preserved first run; frozen before revised results,payer counterfactual,prospective payment plan and randomized exposure
+EA2,dac,cash,0.35,0.30,0.22,0.13,AI-proposed after preserved first run; frozen before revised results,pool contribution counterfactual,prospective public-good budget and randomized exposure
+EA2,direct,labor,0.38,0.27,0.22,0.13,AI-proposed after preserved first run; frozen before revised results,organizing/action counterfactual,prospective time plan and randomized exposure
+EA3,redirect,cash,0.55,0.25,0.12,0.08,AI-proposed after preserved first run; frozen before revised results,counterfactual planned giving,prospective fallback and 12-month follow-up
+EA3,direct,cash,0.35,0.28,0.24,0.13,AI-proposed after preserved first run; frozen before revised results,payer counterfactual,prospective payment plan and randomized exposure
+EA3,dac,cash,0.50,0.28,0.14,0.08,AI-proposed after preserved first run; frozen before revised results,pool contribution counterfactual,prospective public-good budget and randomized exposure
+EA3,direct,labor,0.30,0.27,0.28,0.15,AI-proposed after preserved first run; frozen before revised results,behavior counterfactual,prospective time plan and randomized exposure
+EA4,redirect,cash,0.55,0.25,0.12,0.08,AI-proposed after preserved first run; frozen before revised results,counterfactual planned giving,prospective fallback and 12-month follow-up
+EA4,direct,cash,0.30,0.25,0.27,0.18,AI-proposed after preserved first run; frozen before revised results,payer counterfactual,prospective payment plan and randomized exposure
+EA4,dac,cash,0.48,0.28,0.15,0.09,AI-proposed after preserved first run; frozen before revised results,pool contribution counterfactual,prospective public-good budget and randomized exposure
+EA4,direct,labor,0.25,0.25,0.30,0.20,AI-proposed after preserved first run; frozen before revised results,skilled-work counterfactual,prospective time plan and randomized exposure
+EA5,redirect,cash,0.60,0.23,0.10,0.07,AI-proposed after preserved first run; frozen before revised results,counterfactual planned giving,prospective fallback and 12-month follow-up
+EA5,direct,cash,0.45,0.28,0.18,0.09,AI-proposed after preserved first run; frozen before revised results,payer counterfactual,prospective payment plan and randomized exposure
+EA5,dac,cash,0.42,0.30,0.18,0.10,AI-proposed after preserved first run; frozen before revised results,pool contribution counterfactual,prospective public-good budget and randomized exposure
+EA5,direct,labor,0.38,0.29,0.21,0.12,AI-proposed after preserved first run; frozen before revised results,review/action counterfactual,prospective time plan and randomized exposure
+NE1,redirect,cash,0.62,0.22,0.10,0.06,AI-proposed after preserved first run; frozen before revised results,counterfactual opposed giving,prospective fallback and 12-month follow-up
+NE1,direct,cash,0.60,0.22,0.10,0.08,AI-proposed after preserved first run; frozen before revised results,payer counterfactual,prospective payment plan and randomized exposure
+NE1,dac,cash,0.65,0.20,0.09,0.06,AI-proposed after preserved first run; frozen before revised results,pool contribution counterfactual,prospective public-good budget and randomized exposure
+NE1,direct,labor,0.58,0.23,0.11,0.08,AI-proposed after preserved first run; frozen before revised results,action counterfactual,prospective time plan and randomized exposure
+NE2,redirect,cash,0.58,0.24,0.11,0.07,AI-proposed after preserved first run; frozen before revised results,counterfactual ordinary giving,prospective fallback and 12-month follow-up
+NE2,direct,cash,0.55,0.24,0.13,0.08,AI-proposed after preserved first run; frozen before revised results,payer counterfactual,prospective payment plan and randomized exposure
+NE2,dac,cash,0.55,0.25,0.12,0.08,AI-proposed after preserved first run; frozen before revised results,pool contribution counterfactual,prospective public-good budget and randomized exposure
+NE2,direct,labor,0.50,0.25,0.15,0.10,AI-proposed after preserved first run; frozen before revised results,action counterfactual,prospective time plan and randomized exposure
+NE3,redirect,cash,0.55,0.25,0.12,0.08,AI-proposed after preserved first run; frozen before revised results,counterfactual planned giving,prospective fallback and 12-month follow-up
+NE3,direct,cash,0.38,0.28,0.22,0.12,AI-proposed after preserved first run; frozen before revised results,payer counterfactual,prospective payment plan and randomized exposure
+NE3,dac,cash,0.55,0.25,0.12,0.08,AI-proposed after preserved first run; frozen before revised results,pool contribution counterfactual,prospective public-good budget and randomized exposure
+NE3,direct,labor,0.42,0.27,0.20,0.11,AI-proposed after preserved first run; frozen before revised results,action counterfactual,prospective time plan and randomized exposure
+NE4,redirect,cash,0.65,0.20,0.09,0.06,AI-proposed after preserved first run; frozen before revised results,counterfactual planned giving,prospective fallback and 12-month follow-up
+NE4,direct,cash,0.40,0.28,0.21,0.11,AI-proposed after preserved first run; frozen before revised results,payer counterfactual,prospective payment plan and randomized exposure
+NE4,dac,cash,0.62,0.22,0.10,0.06,AI-proposed after preserved first run; frozen before revised results,pool contribution counterfactual,prospective public-good budget and randomized exposure
+NE4,direct,labor,0.34,0.28,0.24,0.14,AI-proposed after preserved first run; frozen before revised results,behavior counterfactual,prospective time plan and randomized exposure
+NE5,redirect,cash,0.60,0.23,0.10,0.07,AI-proposed after preserved first run; frozen before revised results,counterfactual planned giving,prospective fallback and 12-month follow-up
+NE5,direct,cash,0.52,0.25,0.14,0.09,AI-proposed after preserved first run; frozen before revised results,payer counterfactual,prospective payment plan and randomized exposure
+NE5,dac,cash,0.45,0.29,0.17,0.09,AI-proposed after preserved first run; frozen before revised results,pool contribution counterfactual,prospective public-good budget and randomized exposure
+NE5,direct,labor,0.45,0.27,0.18,0.10,AI-proposed after preserved first run; frozen before revised results,review/action counterfactual,prospective time plan and randomized exposure

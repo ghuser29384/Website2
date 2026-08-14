@@ -172,10 +172,16 @@ def coverage_controller_rate(previous_rate: float, free_reserve_ratio: float, ta
     return min(0.15, max(0.02, previous_rate + 0.04 * (target_free_ratio - free_reserve_ratio)))
 
 
-def stress_percentile_rate(projected_liability: float, reserve_cash: float, stress_percentile: float = 0.95) -> float:
-    if reserve_cash <= 0:
-        return 0.15
-    stress_multiplier = 1.0 + (stress_percentile - 0.5)
-    coverage_gap = max(projected_liability * stress_multiplier / reserve_cash - 1.0, 0.0)
-    return min(0.15, max(0.02, 0.02 + 0.13 * min(coverage_gap, 1.0)))
-
+def stress_percentile_rate(
+    stressed_projected_liability: float,
+    reserve_cash: float,
+    projected_successful_target: float,
+) -> float:
+    """Lowest integer-percent rate in 2%-15% satisfying the stress-solvency inequality."""
+    if min(stressed_projected_liability, reserve_cash, projected_successful_target) < 0:
+        raise ValueError("stress-policy inputs cannot be negative")
+    for percentage in range(2, 16):
+        rate = percentage / 100.0
+        if reserve_cash + projected_successful_target * rate >= stressed_projected_liability:
+            return rate
+    return 0.15

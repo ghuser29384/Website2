@@ -23,4 +23,3 @@ The current-main study candidate's 3,200-cluster figure is a synthetic planning 
 - DACs: begin with a no-money/shadow or explicitly authorized pledge-only pilot. Later, if separately approved, randomize published bonus curves or exploit preregistered surcharge-policy discontinuities; measure arrival, free-riding, success, reserve waiting, and user retention. Never expose an uncovered bonus promise.
 
 Update the ledger from blinded or preregistered estimates. Preserve the frozen first run and log every post-result change with before/after output.
-

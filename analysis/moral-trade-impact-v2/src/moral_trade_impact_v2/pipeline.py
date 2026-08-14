@@ -17,7 +17,11 @@ from .config import (
     PACKAGE_ROOT,
     RESOURCE_TYPES,
     Scenario,
+    aggregate_latent_credits,
+    archetype_mechanism_factors,
+    latent_state_credit,
     load_archetypes,
+    load_latent_states,
     load_parameters,
     load_profiles,
     load_scenarios,
@@ -39,6 +43,7 @@ FROZEN_INPUT_FILES = (
     "PARAMETER_LEDGER.csv",
     "PARAMETER_LEDGER.json",
     "ARCHETYPE_LEDGER.csv",
+    "LATENT_STATE_LEDGER.csv",
     "RESOURCE_PROFILES.json",
     "SCENARIOS.json",
     "MODEL_SPEC.md",
@@ -71,7 +76,8 @@ def _write_cohort_artifacts(output_dir: Path, root: Path) -> None:
     rows = build_cohort_rows(archetypes, targets)
     write_csv(output_dir / "cohort_summary.csv", rows, [
         "month", "year", "target_active", "ea_active", "non_ea_active", "support_only_active",
-        "transaction_active", "retained_active", "new_active", "activation_prospects", "churned_active", "repeat_active",
+        "transaction_active", "retained_active", "new_active", "activated_active", "activation_prospects",
+        "churned_active", "repeat_active",
     ])
     archetype_rows = archetype_summary(archetypes, targets)
     write_csv(output_dir / "archetype_summary.csv", archetype_rows, list(archetype_rows[0].keys()))
@@ -93,6 +99,29 @@ def _write_cohort_artifacts(output_dir: Path, root: Path) -> None:
     write_csv(output_dir / "resolved_resource_profiles.csv", profile_rows, [
         "archetype_id", "resource", "inherits_general", *FIELDS, "total_sparks", "evidence_status",
     ])
+
+
+def _write_latent_state_artifact(output_dir: Path, root: Path) -> dict[tuple[str, str], float]:
+    parameters = load_parameters(root)
+    archetypes = load_archetypes(root)
+    states = load_latent_states(root)
+    aggregate = aggregate_latent_credits(archetypes, parameters, states)
+    rows = [
+        {
+            **asdict(state),
+            "causal_credit": latent_state_credit(state, parameters),
+            "aggregate_mechanism_resource_credit": aggregate[(state.mechanism, state.resource)],
+            "evidence_status": "AI_proposed_after_preserved_first_run_frozen_before_revised_results_not_empirical",
+        }
+        for state in states
+    ]
+    write_csv(output_dir / "resolved_latent_state_credits.csv", rows, [
+        "archetype_id", "mechanism", "resource", "would_anyway", "might_without_platform",
+        "only_because_platform", "increases_amount_or_duration", "causal_credit",
+        "aggregate_mechanism_resource_credit", "provenance", "dominant_crux", "update_observable",
+        "evidence_status",
+    ])
+    return aggregate
 
 
 def _fixed_parameters(root: Path):
@@ -154,6 +183,7 @@ def run_pipeline(output_dir: Path, draws: int, freeze_first_run: bool, root: Pat
         raise RuntimeError("first complete run already exists; reproduce into a separate output directory")
     frozen = freeze_inputs(output_dir, root)
     _write_cohort_artifacts(output_dir, root)
+    latent_credits = _write_latent_state_artifact(output_dir, root)
     parameters = load_parameters(root)
     scenarios = load_scenarios(root)
     base_seed = int(parameters["simulation_seed"].central)
@@ -222,6 +252,14 @@ def run_pipeline(output_dir: Path, draws: int, freeze_first_run: bool, root: Pat
             for provenance in sorted({parameter.provenance for parameter in parameters.values()})
         },
         "archetypes": [asdict(archetype) for archetype in load_archetypes(root)],
+        "aggregate_latent_state_causal_credits": {
+            f"{mechanism}_{resource}": credit
+            for (mechanism, resource), credit in sorted(latent_credits.items())
+        },
+        "relative_joint_archetype_mechanism_factors": {
+            f"{mechanism}_{attribute}": factor
+            for (mechanism, attribute), factor in sorted(archetype_mechanism_factors(load_archetypes(root)).items())
+        },
         "owner_reconciliations": {"EA_share": 0.40, "non_EA_share": 0.60, "support_only_share": 0.15, "EA_cash_mean": 100, "non_EA_cash_mean": 50},
     })
     v1 = 580_000.0
@@ -243,13 +281,14 @@ def run_pipeline(output_dir: Path, draws: int, freeze_first_run: bool, root: Pat
     completed_hashes = file_hashes(output_dir, exclude_names={"reproducibility_manifest.json", "first_complete_run.json", "independent_validation.json"})
     marker = {
         "schema_version": 1,
-        "status": "first_complete_frozen_parameter_run",
+        "status": "complete_corrected_frozen_parameter_run",
+        "original_first_complete_run_commit": "2b3a2c2d",
         "base_sha": baseline["base_sha"],
         "draws_per_scenario_and_basis": draws,
         "base_seed": base_seed,
         "frozen_input_set_hash": frozen["input_set_hash"],
         "output_set_hash": tree_hash(completed_hashes),
-        "preservation_rule": "Do not overwrite. Revisions must use a separate output directory and REVISION_LOG.md.",
+        "preservation_rule": "The literal first complete run remains at Git commit 2b3a2c2d; preserve it and REVISION_LOG.md.",
     }
     write_json(marker_path, marker)
 

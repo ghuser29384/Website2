@@ -1,5 +1,5 @@
 {
-  "check_count": 1148,
+  "check_count": 1440,
   "checks": [
     {
       "check": "required artifact exists: frozen_input_snapshot.json",
@@ -74,6 +74,18 @@
       "passed": true
     },
     {
+      "check": "required artifact exists: resolved_latent_state_credits.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: structural_diagnostics.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: parameter_archetype_summary.json",
+      "passed": true
+    },
+    {
       "check": "month 12 exact active milestone",
       "passed": true
     },
@@ -82,7 +94,19 @@
       "passed": true
     },
     {
+      "check": "month 12 non-EA reconciliation",
+      "passed": true
+    },
+    {
       "check": "month 12 support-only reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 12 transaction-active reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 12 activated/new reconciliation",
       "passed": true
     },
     {
@@ -94,7 +118,19 @@
       "passed": true
     },
     {
+      "check": "month 24 non-EA reconciliation",
+      "passed": true
+    },
+    {
       "check": "month 24 support-only reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 24 transaction-active reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 24 activated/new reconciliation",
       "passed": true
     },
     {
@@ -106,7 +142,19 @@
       "passed": true
     },
     {
+      "check": "month 36 non-EA reconciliation",
+      "passed": true
+    },
+    {
       "check": "month 36 support-only reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 36 transaction-active reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 36 activated/new reconciliation",
       "passed": true
     },
     {
@@ -118,7 +166,19 @@
       "passed": true
     },
     {
+      "check": "month 48 non-EA reconciliation",
+      "passed": true
+    },
+    {
       "check": "month 48 support-only reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 48 transaction-active reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 48 activated/new reconciliation",
       "passed": true
     },
     {
@@ -130,7 +190,379 @@
       "passed": true
     },
     {
+      "check": "month 60 non-EA reconciliation",
+      "passed": true
+    },
+    {
       "check": "month 60 support-only reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 60 transaction-active reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 60 activated/new reconciliation",
+      "passed": true
+    },
+    {
+      "check": "exactly ten archetype output rows",
+      "passed": true
+    },
+    {
+      "check": "EOY5 archetype counts sum to active users",
+      "passed": true
+    },
+    {
+      "check": "full requested percentile grid exists: portfolio_summary.csv",
+      "passed": true
+    },
+    {
+      "check": "full requested percentile grid exists: mechanism_summary.csv",
+      "passed": true
+    },
+    {
+      "check": "full requested percentile grid exists: field_appendix.csv",
+      "passed": true
+    },
+    {
+      "check": "full requested percentile grid exists: dac_reserve_diagnostics.csv",
+      "passed": true
+    },
+    {
+      "check": "full requested percentile grid exists: structural_diagnostics.csv",
+      "passed": true
+    },
+    {
+      "check": "all 40 archetype/mechanism/resource latent-state rows exist",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA1/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA1/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA1/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA1/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA1/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA1/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA1/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA1/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA2/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA2/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA2/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA2/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA2/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA2/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA2/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA2/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA3/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA3/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA3/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA3/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA3/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA3/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA3/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA3/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA4/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA4/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA4/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA4/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA4/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA4/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA4/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA4/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA5/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA5/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA5/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA5/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA5/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA5/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: EA5/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: EA5/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE1/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE1/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE1/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE1/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE1/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE1/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE1/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE1/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE2/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE2/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE2/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE2/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE2/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE2/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE2/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE2/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE3/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE3/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE3/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE3/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE3/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE3/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE3/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE3/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE4/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE4/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE4/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE4/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE4/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE4/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE4/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE4/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE5/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE5/redirect/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE5/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE5/direct/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE5/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE5/dac/cash",
+      "passed": true
+    },
+    {
+      "check": "latent-state probabilities sum to one: NE5/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "latent-state credit arithmetic: NE5/direct/labor",
+      "passed": true
+    },
+    {
+      "check": "all mechanism-specific joint-archetype factors reported",
+      "passed": true
+    },
+    {
+      "check": "joint-archetype factors are positive",
       "passed": true
     },
     {
@@ -138,7 +570,7 @@
       "passed": true
     },
     {
-      "check": "full artifacts use 200000 draws",
+      "check": "artifacts use expected 200000 draws",
       "passed": true
     },
     {
@@ -2270,6 +2702,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: central/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: central/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -2291,6 +2731,14 @@
     },
     {
       "check": "mechanism means reconcile: central/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -2318,6 +2766,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: central/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: central/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -2339,6 +2795,14 @@
     },
     {
       "check": "mechanism means reconcile: central/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -2366,6 +2830,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: central/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: central/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -2387,6 +2859,14 @@
     },
     {
       "check": "mechanism means reconcile: central/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -2414,6 +2894,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: central/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: central/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -2435,6 +2923,14 @@
     },
     {
       "check": "mechanism means reconcile: central/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -2462,6 +2958,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -2483,6 +2987,14 @@
     },
     {
       "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -2510,6 +3022,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -2531,6 +3051,14 @@
     },
     {
       "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -2558,6 +3086,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -2579,6 +3115,14 @@
     },
     {
       "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -2606,6 +3150,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -2627,6 +3179,14 @@
     },
     {
       "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -2654,6 +3214,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -2675,6 +3243,14 @@
     },
     {
       "check": "mechanism means reconcile: direct_trade_underperformance/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -2702,6 +3278,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -2723,6 +3307,14 @@
     },
     {
       "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -2750,6 +3342,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -2771,6 +3371,14 @@
     },
     {
       "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -2798,6 +3406,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -2819,6 +3435,14 @@
     },
     {
       "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -2846,6 +3470,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -2867,6 +3499,14 @@
     },
     {
       "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -2894,6 +3534,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -2915,6 +3563,14 @@
     },
     {
       "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -2942,6 +3598,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -2963,6 +3627,14 @@
     },
     {
       "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -2990,6 +3662,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3011,6 +3691,14 @@
     },
     {
       "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3038,6 +3726,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: near_zero_additionality/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -3059,6 +3755,14 @@
     },
     {
       "check": "mechanism means reconcile: near_zero_additionality/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -3086,6 +3790,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: near_zero_additionality/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3107,6 +3819,14 @@
     },
     {
       "check": "mechanism means reconcile: near_zero_additionality/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3134,6 +3854,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -3155,6 +3883,14 @@
     },
     {
       "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -3182,6 +3918,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3203,6 +3947,14 @@
     },
     {
       "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3230,6 +3982,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: redirect_dominant/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -3251,6 +4011,14 @@
     },
     {
       "check": "mechanism means reconcile: redirect_dominant/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -3278,6 +4046,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: redirect_dominant/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3299,6 +4075,14 @@
     },
     {
       "check": "mechanism means reconcile: redirect_dominant/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3326,6 +4110,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -3347,6 +4139,14 @@
     },
     {
       "check": "mechanism means reconcile: redirect_dominant/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -3374,6 +4174,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3395,6 +4203,14 @@
     },
     {
       "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3422,6 +4238,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -3443,6 +4267,14 @@
     },
     {
       "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -3470,6 +4302,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3491,6 +4331,14 @@
     },
     {
       "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3518,6 +4366,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -3539,6 +4395,14 @@
     },
     {
       "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -3566,6 +4430,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3587,6 +4459,14 @@
     },
     {
       "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3614,6 +4494,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: strong_network_repeat/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -3635,6 +4523,14 @@
     },
     {
       "check": "mechanism means reconcile: strong_network_repeat/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -3662,6 +4558,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: strong_network_repeat/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3683,6 +4587,14 @@
     },
     {
       "check": "mechanism means reconcile: strong_network_repeat/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3710,6 +4622,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -3731,6 +4651,14 @@
     },
     {
       "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -3758,6 +4686,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3779,6 +4715,14 @@
     },
     {
       "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3806,6 +4750,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: thin_market/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: thin_market/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -3827,6 +4779,14 @@
     },
     {
       "check": "mechanism means reconcile: thin_market/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -3854,6 +4814,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: thin_market/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: thin_market/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3875,6 +4843,14 @@
     },
     {
       "check": "mechanism means reconcile: thin_market/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3902,6 +4878,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: thin_market/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -3923,6 +4907,14 @@
     },
     {
       "check": "mechanism means reconcile: thin_market/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -3950,6 +4942,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: thin_market/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -3971,6 +4971,14 @@
     },
     {
       "check": "mechanism means reconcile: thin_market/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -3998,6 +5006,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: trust_evidence_failure/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -4019,6 +5035,14 @@
     },
     {
       "check": "mechanism means reconcile: trust_evidence_failure/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -4046,6 +5070,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -4067,6 +5099,14 @@
     },
     {
       "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -4094,6 +5134,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -4115,6 +5163,14 @@
     },
     {
       "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -4142,6 +5198,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -4163,6 +5227,14 @@
     },
     {
       "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -4190,6 +5262,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: voluntary_pools/conditional/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -4211,6 +5291,14 @@
     },
     {
       "check": "mechanism means reconcile: voluntary_pools/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -4238,6 +5326,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: voluntary_pools/conditional/year_1/cash_operating_costs",
       "passed": true
     },
@@ -4259,6 +5355,14 @@
     },
     {
       "check": "mechanism means reconcile: voluntary_pools/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_5_annual/timing_only_shifts",
       "passed": true
     },
     {
@@ -4286,6 +5390,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
       "passed": true
     },
@@ -4307,6 +5419,14 @@
     },
     {
       "check": "mechanism means reconcile: voluntary_pools/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/five_year_cumulative/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/five_year_cumulative/timing_only_shifts",
       "passed": true
     },
     {
@@ -4334,6 +5454,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_1/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_1/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_1/cash_operating_costs",
       "passed": true
     },
@@ -4358,6 +5486,14 @@
       "passed": true
     },
     {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_5_annual/donation_displacement",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_5_annual/timing_only_shifts",
+      "passed": true
+    },
+    {
       "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_5_annual/cash_operating_costs",
       "passed": true
     },
@@ -4367,6 +5503,22 @@
     },
     {
       "check": "independent highest-impact mechanism reconciliation: redirect",
+      "passed": true
+    },
+    {
+      "check": "deterministic direct price compatibility is WTP >= WTA",
+      "passed": true
+    },
+    {
+      "check": "deterministic accepted price lies inside WTA/WTP",
+      "passed": true
+    },
+    {
+      "check": "deterministic accepted price is formed from WTP/WTA",
+      "passed": true
+    },
+    {
+      "check": "aggregate direct forecast has no inserted mean-price parameter",
       "passed": true
     },
     {
@@ -4578,6 +5730,22 @@
       "passed": true
     },
     {
+      "check": "explicit DAC contributor diagnostic reported: _potential_contributors",
+      "passed": true
+    },
+    {
+      "check": "explicit DAC contributor diagnostic reported: _potential_pledge_principal",
+      "passed": true
+    },
+    {
+      "check": "explicit DAC contributor diagnostic reported: _contributor_choice_principal",
+      "passed": true
+    },
+    {
+      "check": "explicit DAC contributor diagnostic reported: _mean_pledge",
+      "passed": true
+    },
+    {
       "check": "independent exact-cent DAC fixture",
       "passed": true
     },
@@ -4598,5 +5766,5 @@
   "method": "independent CSV/JSON arithmetic and exact-cent fixture; no production data",
   "schema_version": 1,
   "status": "passed",
-  "validated_output_set_hash": "d16be958748a00ab91aa38bc4436ef577fb88446e02c6740c3d697f0c69fc932"
+  "validated_output_set_hash": "c1874b804a29e486b3f3fc79dcec622d2d158795d06617f48b7b5bdff9545857"
 }

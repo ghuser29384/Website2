@@ -4,6 +4,8 @@ This directory is a repository-only research package for issue #695. It estimate
 
 The model is AI-assisted and prior-driven. Its draws are synthetic uncertainty propagation, not Moral Trade transaction evidence. A larger draw count reduces Monte Carlo noise; it does not validate weak priors. Exact field estimates are especially prior-driven and belong in the appendix. Model v1 remains a superseded preliminary scenario until the owner reviews the ledgers, the independent audit gate passes, and the owner explicitly approves a report cutover.
 
+The first complete run is preserved at Git commit `2b3a2c2d`. A post-run completion audit found five literal specification gaps in that aggregate implementation. The current revision corrects structure rather than tuning results; `FIRST_RUN_PRESERVATION.md` and `REVISION_LOG.md` provide the before/after chain.
+
 ## Frozen forecast bases
 
 - `conditional`: the owner-stipulated meaningful-active stocks are reached exactly.
@@ -45,12 +47,14 @@ PYTHONPATH=src /Users/HenryZhu/.cache/codex-runtimes/codex-primary-runtime/depen
 - `MODEL_SPEC.md`: frozen estimands, state transitions, accounting, and exclusions.
 - `SOURCE_EVIDENCE_INVENTORY.csv`: sources and their permitted evidentiary role.
 - `ARCHETYPE_LEDGER.csv`: ten owner-approved dominant-behavior archetypes and AI-proposed priors.
+- `LATENT_STATE_LEDGER.csv`: explicit archetype/mechanism counterfactual states for cash and labor.
 - `RESOURCE_PROFILES.json`: general 100-Sparks profiles and explicit resource overrides with inheritance.
 - `PARAMETER_LEDGER.csv` / `.json`: complete input ledger and machine mirror.
 - `SCENARIOS.json`: pre-results structural definitions.
 - `src/`: deterministic and probabilistic implementation.
 - `tests/`: unit, hand-fixture, accounting, and reproducibility checks.
-- `outputs/`: first complete frozen-parameter run and machine-readable audit artifacts.
+- `outputs/`: complete structurally corrected frozen-parameter run and machine-readable audit artifacts; the literal first complete run remains recoverable at `2b3a2c2d`.
+- `FIRST_RUN_PRESERVATION.md` and `REVISION_LOG.md`: anti-tuning preservation and before/after correction record.
 - `SENSITIVITY_AND_CRUX.md`, `RED_TEAM_CRITIQUE.md`, `EMPIRICAL_VALIDATION_PLAN.md`, and `MODEL_V1_COMPARISON.md`: interpretation boundaries and next evidence.
 
 ## Hard boundaries

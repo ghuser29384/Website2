@@ -46,7 +46,18 @@ class ModelReconciliationTests(unittest.TestCase):
         direct_ratio = np.divide(weighted_values["completed_direct_trades"], conditional_values["completed_direct_trades"], out=np.zeros(256), where=conditional_values["completed_direct_trades"] > 0)
         self.assertFalse(np.allclose(redirect_ratio, direct_ratio))
 
+    def test_aggregate_direct_prices_are_formed_from_wtp_and_wta(self) -> None:
+        result = run_simulation(self.central, "conditional", 512, 1776)
+        diagnostics = result.structural_diagnostics
+        wtp = diagnostics["direct_payer_wtp_usd_per_hour"]
+        wta = diagnostics["direct_supplier_wta_usd_per_hour"]
+        price = diagnostics["direct_accepted_price_usd_per_hour"]
+        compatible = diagnostics["direct_price_compatible"].astype(bool)
+        self.assertTrue(np.all(price[~compatible] == 0.0))
+        self.assertTrue(np.all(price[compatible] >= wta[compatible] - 1e-12))
+        self.assertTrue(np.all(price[compatible] <= wtp[compatible] + 1e-12))
+        self.assertTrue(np.allclose(price[compatible], np.sqrt(wtp[compatible] * wta[compatible])))
+
 
 if __name__ == "__main__":
     unittest.main()
-

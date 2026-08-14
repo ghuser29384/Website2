@@ -1,11 +1,15 @@
 {
   "base_seed": 69520260814,
   "base_sha": "79ca382c3bdc325dfc5a28e2cbbafc1b95640386",
+  "central_conditional_five_year_median_net_causal_cash_usd": 124003.637604,
   "draws_per_scenario_and_basis": 2000,
   "failed_invariant_rows": 0,
-  "frozen_input_set_hash": "f855e4ed730f554e5a2572c21e6dc950896ce6aee2f3e9fd7729235720ada02f",
-  "invariant_rows": 462,
-  "output_set_hash": "7233fd3c7cd2fe79434d349cffd79acf4f0bacf5e472552b43ffe6c7410e93db",
+  "frozen_input_set_hash": "4af76469f2f1efc8444c1d5702a99e5df4d404110c04b3380ff451579098caac",
+  "independent_check_count": 1440,
+  "invariant_rows": 550,
+  "output_set_hash_before_post_validation_records": "0be35068b61f10ced2736011b6d23f4e303110893a2483b2264e2e09a6cd3c1b",
   "schema_version": 1,
-  "status": "passed_lower_draw_fast_gate"
+  "status": "passed_superseding_lower_draw_fast_gate",
+  "validated_output_set_hash": "16889fd826f7bc941856fa1132921eaae1b175017c5cb2a398816bd4688e7b84",
+  "warning": "Fast-gate results are numerical checks only; they are not empirical validation or the release result."
 }

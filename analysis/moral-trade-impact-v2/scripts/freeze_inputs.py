@@ -13,4 +13,3 @@ from moral_trade_impact_v2.pipeline import freeze_inputs
 if __name__ == "__main__":
     snapshot = freeze_inputs(ROOT / "outputs", ROOT)
     print(snapshot["input_set_hash"])
-

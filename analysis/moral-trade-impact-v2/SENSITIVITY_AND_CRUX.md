@@ -1,6 +1,6 @@
 # Sensitivity and Crux Protocol
 
-This protocol was fixed before results. It does not assign probabilities across structurally different scenarios.
+The original protocol was fixed before the preserved first complete run. The completion-audit correction added explicit WTP/WTA, latent-state, contributor-set, and stress-solvency structure before any revised result was generated. `REVISION_LOG.md` separates those stages. The protocol does not assign probabilities across structurally different scenarios.
 
 ## Required comparisons
 
@@ -19,10 +19,9 @@ This protocol was fixed before results. It does not assign probabilities across 
 1. Adoption and operational availability: probability-weighted market thickness changes matching before activity occurs.
 2. Causal additionality and 12-month displacement: completed transfers/actions do not identify the no-platform counterfactual.
 3. Structured redirect compatibility: labels alone cannot establish opposition or acceptable destinations.
-4. Direct supply-demand-price overlap under evidence burden: the minimum side and nonlinear compatibility jointly bind.
-5. Voluntary DAC free-riding, bonus response, surcharge sensitivity, and reserve capacity: these can move in opposite directions.
+4. Direct supply-demand overlap across explicit cause, category, timing, WTP/WTA price, evidence, and trust terms: the minimum side and nonlinear compatibility jointly bind.
+5. Voluntary DAC contributor-set size, pledge size, free-riding, deadline loss, bonus response, surcharge sensitivity, and reserve capacity: these can move in opposite directions.
 6. Trust, evidence tolerance, reliability, retention, and repeat use: these correlated platform factors affect several mechanisms together.
 7. Field allocation: field profiles and transaction-specific choices are weaker priors than portfolio accounting.
 
 The 200,000-draw result is a numerical integration of these priors, not validation of them. A narrow Monte Carlo interval can coexist with severe model uncertainty.
-

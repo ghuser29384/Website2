@@ -2,7 +2,18 @@ from __future__ import annotations
 
 import unittest
 
-from moral_trade_impact_v2.dac import DACPool, PledgeRequest, ReserveLedger, bonus_rate_bps, gross_threshold_cents
+import numpy as np
+
+from moral_trade_impact_v2.config import load_scenarios
+from moral_trade_impact_v2.dac import (
+    DACPool,
+    PledgeRequest,
+    ReserveLedger,
+    bonus_rate_bps,
+    gross_threshold_cents,
+    stress_percentile_rate,
+)
+from moral_trade_impact_v2.model import _choose_surcharge
 
 
 class DACAccountingTests(unittest.TestCase):
@@ -51,7 +62,28 @@ class DACAccountingTests(unittest.TestCase):
         self.assertFalse(pool.authorize(PledgeRequest("bad", "u", 1_000, 1, valid=False), reserve))
         self.assertEqual(reserve.locked_liability_cents, 0)
 
+    def test_stress_policy_selects_lowest_solvent_grid_rate(self) -> None:
+        scenario = next(item for item in load_scenarios() if item.dac_policy == "stress_percentile")
+        samples = {
+            "dac_surcharge_min": np.asarray([0.02]),
+            "dac_surcharge_max": np.asarray([0.15]),
+            "dac_stress_percentile": np.asarray([0.50]),
+            "dac_controller_free_target": np.asarray([0.45]),
+            "dac_controller_gain": np.asarray([0.04]),
+        }
+        selected = _choose_surcharge(
+            np.asarray([0.05]),
+            np.asarray([100.0]),
+            np.asarray([150.0]),
+            np.asarray([1_000.0]),
+            samples,
+            scenario,
+        )
+        self.assertAlmostEqual(float(selected[0]), 0.05)
+        self.assertEqual(stress_percentile_rate(150.0, 100.0, 1_000.0), 0.05)
+        self.assertLess(100.0 + 1_000.0 * 0.04, 150.0)
+        self.assertGreaterEqual(100.0 + 1_000.0 * float(selected[0]), 150.0)
+
 
 if __name__ == "__main__":
     unittest.main()
-

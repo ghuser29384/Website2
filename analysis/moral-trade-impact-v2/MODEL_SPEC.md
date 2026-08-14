@@ -1,6 +1,6 @@
 # Frozen Model Specification
 
-Status: pre-results specification for issue #695. Owner-selected values are fixed; other numeric choices are AI-proposed modeling priors. Parameters are not chosen to reproduce Model v1.
+Status: structurally corrected revision for issue #695. The original pre-results specification and complete output are preserved at Git commit `2b3a2c2d`. This revision was made because a completion audit found that the first aggregate implementation did not literally form direct-trade prices from WTP/WTA, expose every required matching dimension and latent counterfactual state, construct DAC demand from contributor sets and pledge sizes, or implement the stated lowest-solvent stress-rate rule. The initial correction was frozen before its revised fast gate; a second literal audit then added joint-archetype funnel factors and the complete requested percentile columns before the final run. `REVISION_LOG.md` records both gates. No change was chosen to improve or reproduce an observed result or Model v1.
 
 ## Population and cohorts
 
@@ -8,7 +8,7 @@ The model has 60 monthly states. Meaningful-active stocks interpolate linearly b
 
 `retained[a,m] = active[a,m-1] * monthly_retention[a]`
 
-`new_active[a,m] = active[a,m] - retained[a,m]`
+`new_active[a,m] = activated_active[a,m] = active[a,m] - retained[a,m]`
 
 `acquisition_prospects[a,m] = new_active[a,m] / activation_rate[a]`
 
@@ -16,9 +16,9 @@ The central shares reconcile to 40% EA-identifying/sympathetic, 60% non-EA, and 
 
 ## Joint heterogeneity and budgets
 
-The ten archetypes carry joint cash/time budgets, resource profiles, mechanism propensities, WTP/WTA, action cost, trust/evidence tolerance, reliability, retention, and repeat priors. Archetype identity and correlated latent factors preserve dependence. The model does not draw every variable independently.
+The ten archetypes carry joint cash/time budgets, resource profiles, mechanism propensities, WTP/WTA, action cost, trust/evidence tolerance, reliability, retention, and repeat priors. Archetype identity and correlated latent factors preserve dependence. For each mechanism, propensity-weighted archetype trust, evidence tolerance, reliability, and repeat-use density enter its market funnel as factors relative to the full transaction-active mixture; pricing and profiles use their own joint archetype weights. The model does not draw every variable independently.
 
-Annual cash budgets average exactly $100 within EA actives and $50 within non-EA actives, including modeled zero-spend users. Cash and time capacity is allocated once across mechanisms before matching. Every mechanism receives a disjoint slice; unused capacity remains unused. Participant time is never monetized in the central net result.
+Annual cash budgets average exactly $100 within EA actives and $50 within non-EA actives, including modeled zero-spend users. Archetype cash means are unconditional means that already integrate each row's zero-cash mass; the zero-cash probability is retained for interpretation and future micro-simulation and is not applied again to the aggregate capacity. Cash and time capacity is allocated once across mechanisms before matching. Every mechanism receives a disjoint slice; unused capacity remains unused. Participant time is never monetized in the central net result. `LATENT_STATE_LEDGER.csv` contains every archetype's explicit cash states for Redirects, direct trade, and DACs and labor states for direct trade: would act anyway, might act without the platform, act only because of the platform, and increase amount or duration.
 
 ## Resource-specific cause profiles
 
@@ -34,7 +34,9 @@ The aggregate forecast separately reports planned principal, additional matcher 
 
 The five action categories are dietary/animal-product commitments, consumption changes, transport/carbon behavior, skilled work, and learning/forecasting/strategic-reasoning practice. Donation transfers are not a direct-action category.
 
-Compatible quantity is a nonlinear function of supply, demand, cause fit, category fit, timing, WTP/WTA price overlap, evidence burden, and trust. Price lies between accepted WTA and WTP. Supply/demand, payment, and hours are conserved. Cause-directed payment reaches a frozen project/charity; personal-income payment goes to the actor and is not field cash.
+The aggregate forecast forms separate schedules from archetype joint states rather than inserting a mean price. Payer WTP weights archetype WTP by cash capacity and direct propensity. Supplier WTA weights WTA times action-cost index by ordinary/skilled capacity and direct propensity. For each draw, a trade is price-compatible only when `payer_WTP >= supplier_WTA`; its accepted price is `sqrt(WTP * WTA)`, which is bounded by those endpoints. Incompatible draws have zero accepted price and zero matched quantity.
+
+Compatible quantity is a nonlinear function of the explicit product of liquidity, cause fit, category fit, timing fit, WTP/WTA price overlap, evidence acceptance, trust, and residual match efficiency. Price overlap is zero when WTP is below WTA. Supply/demand, payment, and hours are conserved. Cause-directed payment reaches a frozen project/charity; personal-income payment goes to the actor and is not field cash. `structural_diagnostics.csv` reports WTP, WTA, accepted price, overlap, compatibility, and latent causal-credit summaries.
 
 Same-action and complementary-role Co-Acts are distinct. Group sizes use a fixed mixture: mostly 2-20, some 20-100, and rare standardized groups above 100. Completion includes attrition, coordination cost, evidence, and role bottlenecks; complementary completion is zero if any required role fails.
 
@@ -44,11 +46,13 @@ Central DACs are open, voluntary, and single-threshold. For project target `T` a
 
 The initial $2,500 is centrally zero-interest, subordinated, conditionally recoverable founder reserve capital with no five-year withdrawal. A separate sensitivity treats it as permanent cost. Each authorization freezes its own time-decreasing rate. Central is linear 10% to 2%; sensitivities are 5% to 1%, 15% to 2%, and front-loaded nonlinear. Locked maximum liability must be at most reserve cash exactly. Otherwise the pledge waits/rejects and cannot count as funded. No accepted promise is prorated.
 
-Pool success is generated from potential contributors, target, pledge size, arrival, valuation, strategic delay/free-riding, bonus response, social proof, trust/evidence, and the surcharge-raised gross threshold. It is not an inserted success-rate parameter. The central published-rate policy is a transparent controller bounded at 2%-15% and frozen per pool. Fixed-rate and stress-percentile policies are separate sensitivities.
+Potential contributor sets equal potential pools times a contributor-set-size draw, with explicit market/trust exposure. Potential pledge principal equals contributors times a separate mean-pledge draw. Individual choice then applies interest, moral valuation, free-riding, bonus response, social proof, surcharge sensitivity, deadline loss, trust/evidence, and liquidity. Willing principal is bounded separately by the disjoint cash budget, a gross-threshold demand-ratio cap, and contributor-generated principal before reliability/eligibility and reserve coverage. These contributor, pledge-size, and choice quantities are reported in `dac_reserve_diagnostics.csv`.
+
+Pool success is generated from those potential contributors, target, pledge choices, arrival, valuation, strategic delay/free-riding, bonus response, social proof, trust/evidence, and the surcharge-raised gross threshold. It is not an inserted success-rate parameter. The central published-rate policy is a transparent controller bounded at 2%-15% and frozen per pool. The stress-percentile sensitivity evaluates integer percentage rates from 2% through 15% in ascending order and selects the first rate satisfying `reserve + projected_successful_target * rate >= stressed_projected_liability`; it uses 15% if none qualifies. Fixed-rate policies remain separate sensitivities.
 
 ## Additionality and displacement
 
-Latent states distinguish would-do-anyway, might-act, Moral-Trade-caused, and duration/amount-increased behavior. Cash and labor receive probability-weighted causal credit. Donation displacement is bounded by gross caused giving; 12 months is central and 90 days is a sensitivity. Timing-only shifts are separate. Exact individual counterfactuals are not claimed.
+For each latent-state row, causal credit is `0 * would_anyway + 0.25 * might_without_platform + 1 * only_because_platform + 0.50 * increases_amount_or_duration`. Mechanism/resource credits are exposure-weighted over archetypes. Sampled cash and labor additionality scale around their original central priors to those distinct credits; each disjoint mechanism budget is credited once. Donation displacement is bounded by gross caused giving; 12 months is central and 90 days is a sensitivity. Timing-only shifts are separately reported. Following the later pre-results freeze comment's explicit estimand, timing-only shifts do not receive a second subtraction in net causal cash. Exact individual counterfactuals are not claimed.
 
 ## Forecasts and uncertainty
 
@@ -67,4 +71,3 @@ The portfolio summary reports mean, median, p5/p10/p25/p75/p90/p95, zero/negligi
 ## Exclusions
 
 Donation Upgrades, career/salary-gap pools, institutional trades, and Threshold Sign-Ons are excluded from central totals. Compulsory 5% governance is noncentral. There are no runtime imports, migrations, payments, production data, or deployments.
-

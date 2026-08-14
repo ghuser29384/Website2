@@ -1,4 +1,10 @@
 {
+  "aggregate_latent_state_causal_credits": {
+    "dac_cash": 0.32416606053146135,
+    "direct_cash": 0.3347296656609481,
+    "direct_labor": 0.3964841113798851,
+    "redirect_cash": 0.23251550204296612
+  },
   "archetypes": [
     {
       "action_cost_index": 1.1,
@@ -278,13 +284,24 @@
     "non_EA_share": 0.6,
     "support_only_share": 0.15
   },
-  "parameter_count": 98,
+  "parameter_count": 137,
   "parameter_provenance_counts": {
-    "AI-proposed": 79,
-    "AI-proposed 12-month modeling decision": 1,
-    "AI-proposed 90-day sensitivity": 1,
-    "AI-proposed owner-directed decreasing schedule": 2,
-    "AI-proposed reference-class envelope not vendor quote": 1,
+    "AI-proposed": 121,
+    "AI-proposed after preserved first run": 2,
     "owner-selected": 14
+  },
+  "relative_joint_archetype_mechanism_factors": {
+    "dac_evidence_tolerance": 1.1637175958220134,
+    "dac_reliability": 1.0167237976721601,
+    "dac_repeat_use": 1.1180355465221474,
+    "dac_trust": 1.0972614715527291,
+    "direct_evidence_tolerance": 0.9930718092057184,
+    "direct_reliability": 0.977168372810141,
+    "direct_repeat_use": 0.9783340162571564,
+    "direct_trust": 1.0026214344876603,
+    "redirect_evidence_tolerance": 0.9180067690319769,
+    "redirect_reliability": 1.0300205606903223,
+    "redirect_repeat_use": 1.018277471072343,
+    "redirect_trust": 0.975524277178766
   }
 }

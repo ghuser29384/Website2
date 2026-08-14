@@ -86,4 +86,3 @@ def file_hashes(root: Path, *, exclude_names: set[str] | None = None) -> dict[st
             continue
         result[path.relative_to(root).as_posix()] = sha256_file(path)
     return result
-

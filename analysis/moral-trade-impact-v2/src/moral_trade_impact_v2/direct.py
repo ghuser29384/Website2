@@ -122,4 +122,3 @@ def same_action_group_completion(member_completion: tuple[bool, ...], minimum_co
         raise ValueError("invalid same-action minimum")
     completed = sum(member_completion)
     return completed >= minimum_completed, completed / len(member_completion)
-

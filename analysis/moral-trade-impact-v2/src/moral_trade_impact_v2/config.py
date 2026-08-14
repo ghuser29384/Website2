@@ -83,6 +83,20 @@ class Scenario:
     compulsory_governance_share: float
 
 
+@dataclass(frozen=True)
+class LatentState:
+    archetype_id: str
+    mechanism: str
+    resource: str
+    would_anyway: float
+    might_without_platform: float
+    only_because_platform: float
+    increases_amount_or_duration: float
+    provenance: str
+    dominant_crux: str
+    update_observable: str
+
+
 # Quantitative factor loadings are AI-proposed dependence assumptions. Each row's
 # remaining variance is idiosyncratic. Signs encode directional dependence.
 FACTOR_LOADINGS: dict[str, dict[str, float]] = {
@@ -108,10 +122,15 @@ FACTOR_LOADINGS: dict[str, dict[str, float]] = {
     "direct_supply_fraction": {"market": 0.45, "trust": 0.25},
     "direct_demand_fraction": {"market": 0.45, "trust": 0.28},
     "direct_price_fit": {"price": 0.68, "market": 0.22},
-    "direct_mean_price": {"price": 0.55},
+    "direct_price_reference_scale": {"price": 0.45},
+    "direct_wtp_multiplier": {"price": 0.60, "market": 0.15},
+    "direct_wta_multiplier": {"price": -0.35, "market": -0.15},
     "cause_directed_payment_share": {"causal": 0.20},
     "direct_skilled_category_share": {"market": 0.12},
     "direct_match_efficiency": {"market": 0.50, "trust": 0.28, "evidence": 0.20},
+    "direct_cause_fit": {"market": 0.38, "trust": 0.22},
+    "direct_category_fit": {"market": 0.30},
+    "direct_timing_fit": {"market": 0.32, "operations": 0.20},
     "coact_activity_share": {"market": 0.25, "trust": 0.20},
     "coact_same_action_share": {"market": 0.10},
     "coact_attrition": {"operations": -0.35, "trust": -0.20},
@@ -120,6 +139,9 @@ FACTOR_LOADINGS: dict[str, dict[str, float]] = {
     "coordination_hours_per_completion": {"evidence": -0.25, "cost": 0.20},
     "dac_pool_target": {"dac": 0.25, "price": 0.15},
     "dac_pools_per_10000_user_years": {"adoption": 0.30, "dac": 0.45},
+    "dac_potential_contributors_per_pool": {"adoption": 0.25, "dac": 0.35, "market": 0.20},
+    "dac_mean_pledge": {"dac": 0.30, "price": 0.25},
+    "dac_contributor_interest": {"dac": 0.45, "trust": 0.25},
     "dac_willing_pledge_ratio": {"dac": 0.55, "trust": 0.20},
     "dac_moral_valuation": {"dac": 0.65},
     "dac_free_riding": {"dac": -0.30, "market": -0.18},
@@ -127,6 +149,7 @@ FACTOR_LOADINGS: dict[str, dict[str, float]] = {
     "dac_bonus_response": {"dac": 0.40, "causal": 0.18},
     "dac_social_proof": {"dac": 0.35, "market": 0.20},
     "dac_surcharge_sensitivity": {"price": 0.58, "dac": -0.20},
+    "dac_deadline_miss_rate": {"dac": -0.25, "operations": -0.18},
     "dac_bonus_transfer_fee": {"cost": 0.58},
     "dac_invalid_pledge_share": {"operations": -0.50},
     "processor_fee_rate": {"cost": 0.45},
@@ -174,6 +197,13 @@ def load_parameters(root: Path = PACKAGE_ROOT) -> dict[str, Parameter]:
         )
         if parameter.parameter_id in result:
             raise ValueError(f"duplicate parameter: {parameter.parameter_id}")
+        for field_name in (
+            "parameter_id", "target_quantity", "mechanism", "unit", "distribution",
+            "parameterization", "dependence_structure", "provenance", "evidence_or_derivation",
+            "dominant_crux", "update_observable",
+        ):
+            if not getattr(parameter, field_name).strip():
+                raise ValueError(f"empty parameter-ledger field {field_name}: {parameter.parameter_id}")
         if not parameter.low <= parameter.central <= parameter.high:
             raise ValueError(f"invalid low/central/high: {parameter.parameter_id}")
         result[parameter.parameter_id] = parameter
@@ -228,12 +258,99 @@ def load_scenarios(root: Path = PACKAGE_ROOT) -> list[Scenario]:
     ) for row in data["scenarios"]]
 
 
+def load_latent_states(root: Path = PACKAGE_ROOT) -> list[LatentState]:
+    result: list[LatentState] = []
+    for row in _read_csv(root / "LATENT_STATE_LEDGER.csv"):
+        result.append(LatentState(
+            archetype_id=row["archetype_id"], mechanism=row["mechanism"], resource=row["resource"],
+            would_anyway=float(row["would_anyway"]),
+            might_without_platform=float(row["might_without_platform"]),
+            only_because_platform=float(row["only_because_platform"]),
+            increases_amount_or_duration=float(row["increases_amount_or_duration"]),
+            provenance=row["provenance"], dominant_crux=row["dominant_crux"],
+            update_observable=row["update_observable"],
+        ))
+    return result
+
+
 def central_values(parameters: dict[str, Parameter]) -> dict[str, float]:
     return {key: value.central for key, value in parameters.items()}
 
 
+def latent_state_credit(state: LatentState, parameters: dict[str, Parameter]) -> float:
+    """Probability-weighted causal credit for one explicit latent-state row."""
+    return (
+        state.might_without_platform * parameters["latent_might_credit"].central
+        + state.only_because_platform
+        + state.increases_amount_or_duration * parameters["latent_increase_credit"].central
+    )
+
+
+def aggregate_latent_credits(
+    archetypes: list[Archetype],
+    parameters: dict[str, Parameter],
+    states: list[LatentState],
+) -> dict[tuple[str, str], float]:
+    """Aggregate state credits with mechanism-specific cash or labor exposure weights."""
+    archetype_by_id = {archetype.archetype_id: archetype for archetype in archetypes}
+    weighted_credit: dict[tuple[str, str], float] = {}
+    for mechanism, resource in (("redirect", "cash"), ("direct", "cash"), ("dac", "cash"), ("direct", "labor")):
+        numerator = 0.0
+        denominator = 0.0
+        for state in states:
+            if (state.mechanism, state.resource) != (mechanism, resource):
+                continue
+            archetype = archetype_by_id[state.archetype_id]
+            propensity = getattr(archetype, f"{mechanism}_propensity")
+            capacity = (
+                archetype.annual_cash_mean_usd
+                if resource == "cash"
+                else archetype.annual_ordinary_hours + archetype.annual_skilled_hours
+            )
+            weight = archetype.active_share * (1.0 - archetype.support_only_probability) * propensity * capacity
+            numerator += weight * latent_state_credit(state, parameters)
+            denominator += weight
+        if denominator <= 0.0:
+            raise ValueError(f"non-positive latent-state weight: {mechanism}/{resource}")
+        weighted_credit[(mechanism, resource)] = numerator / denominator
+    return weighted_credit
+
+
+def archetype_mechanism_factors(archetypes: list[Archetype]) -> dict[tuple[str, str], float]:
+    """Relative joint-archetype factors used by each mechanism's market funnel."""
+    attributes = ("trust", "evidence_tolerance", "reliability", "repeat_use")
+    overall_weights = np.asarray([
+        archetype.active_share * (1.0 - archetype.support_only_probability)
+        for archetype in archetypes
+    ])
+    result: dict[tuple[str, str], float] = {}
+    for attribute in attributes:
+        values = np.asarray([getattr(archetype, attribute) for archetype in archetypes], dtype=float)
+        overall = float(np.average(values, weights=overall_weights))
+        if overall <= 0.0:
+            raise ValueError(f"non-positive overall archetype {attribute}")
+        for mechanism in ("redirect", "direct", "dac"):
+            weights = np.asarray([
+                archetype.active_share
+                * (1.0 - archetype.support_only_probability)
+                * getattr(archetype, f"{mechanism}_propensity")
+                for archetype in archetypes
+            ])
+            if weights.sum() <= 0.0:
+                raise ValueError(f"non-positive archetype propensity weight: {mechanism}")
+            result[(mechanism, attribute)] = float(np.average(values, weights=weights)) / overall
+    return result
+
+
 def validate_inputs(root: Path = PACKAGE_ROOT) -> None:
     params = load_parameters(root)
+    unknown_loadings = set(FACTOR_LOADINGS) - set(params)
+    if unknown_loadings:
+        raise ValueError(f"factor loadings reference unknown parameters: {sorted(unknown_loadings)}")
+    if params["horizon_months"].central != 60.0:
+        raise ValueError("the fixed cohort implementation requires a 60-month horizon")
+    if params["full_draws"].central < 200_000:
+        raise ValueError("the full-run draw gate must be at least 200000")
     archetypes = load_archetypes(root)
     if len(archetypes) != 10 or len({a.archetype_id for a in archetypes}) != 10:
         raise ValueError("exactly ten unique archetypes are required")
@@ -264,6 +381,19 @@ def validate_inputs(root: Path = PACKAGE_ROOT) -> None:
     group_mix = sum(params[key].central for key in ("coact_small_group_share", "coact_medium_group_share", "coact_large_group_share"))
     if not math.isclose(group_mix, 1.0, abs_tol=1e-12):
         raise ValueError("Co-Act group-size shares must sum to one")
+    direct_category_mix = sum(params[key].central for key in (
+        "direct_category_dietary_share", "direct_category_consumption_share",
+        "direct_category_transport_share", "direct_category_learning_share",
+    ))
+    if not math.isclose(direct_category_mix, 1.0, abs_tol=1e-12):
+        raise ValueError("non-skilled direct category shares must sum to one")
+    for label, keys in (
+        ("trust network", ("trust_network_base", "trust_network_weight")),
+        ("activity repeat", ("activity_base_weight", "activity_repeat_weight")),
+        ("DAC liquidity", ("dac_liquidity_base", "dac_liquidity_weight")),
+    ):
+        if not math.isclose(sum(params[key].central for key in keys), 1.0, abs_tol=1e-12):
+            raise ValueError(f"{label} weights must sum to one")
     scenarios = load_scenarios(root)
     expected = {
         "central", "thin_market", "trust_evidence_failure", "redirect_dominant",
@@ -273,6 +403,27 @@ def validate_inputs(root: Path = PACKAGE_ROOT) -> None:
     }
     if {s.scenario_id for s in scenarios} != expected:
         raise ValueError("structural scenario set mismatch")
+    latent_states = load_latent_states(root)
+    required_states = {
+        (archetype.archetype_id, mechanism, resource)
+        for archetype in archetypes
+        for mechanism, resource in (("redirect", "cash"), ("direct", "cash"), ("dac", "cash"), ("direct", "labor"))
+    }
+    observed_states = {(row.archetype_id, row.mechanism, row.resource) for row in latent_states}
+    if observed_states != required_states or len(latent_states) != len(required_states):
+        raise ValueError("latent-state ledger coverage mismatch")
+    for row in latent_states:
+        total = row.would_anyway + row.might_without_platform + row.only_because_platform + row.increases_amount_or_duration
+        if not math.isclose(total, 1.0, abs_tol=1e-12):
+            raise ValueError(f"latent states do not sum to one: {row.archetype_id}/{row.mechanism}/{row.resource}")
+        if min(row.would_anyway, row.might_without_platform, row.only_because_platform, row.increases_amount_or_duration) < 0.0:
+            raise ValueError(f"negative latent-state probability: {row.archetype_id}/{row.mechanism}/{row.resource}")
+    credits = aggregate_latent_credits(archetypes, params, latent_states)
+    if any(not 0.0 <= credit <= 1.0 for credit in credits.values()):
+        raise ValueError("latent-state causal credit outside [0, 1]")
+    factors = archetype_mechanism_factors(archetypes)
+    if any(not math.isfinite(value) or value <= 0.0 for value in factors.values()):
+        raise ValueError("invalid archetype/mechanism joint factor")
 
 
 def _normal_cdf(values: np.ndarray) -> np.ndarray:

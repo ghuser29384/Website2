@@ -72,6 +72,26 @@ UNITS: dict[str, str] = {
     "_surcharge_rate": "proportion",
     "_reserve_capacity_probability": "indicator",
     "_reserve_exhaustion_probability": "indicator",
+    "_reserve_before": "USD_reserve_state",
+    "_willing_pledge": "USD_pledge_principal",
+    "_potential_contributors": "contributors",
+    "_potential_pledge_principal": "USD_pledge_principal",
+    "_contributor_choice_principal": "USD_pledge_principal",
+    "_mean_pledge": "USD_per_contributor",
+    "_stress_projected_liability": "USD_internal_liability",
+    "_stress_projected_successful_target": "USD",
+}
+
+STRUCTURAL_DIAGNOSTIC_UNITS = {
+    "direct_payer_wtp_usd_per_hour": "USD_per_hour",
+    "direct_supplier_wta_usd_per_hour": "USD_per_hour",
+    "direct_accepted_price_usd_per_hour": "USD_per_hour",
+    "direct_price_overlap": "proportion",
+    "direct_price_compatible": "indicator",
+    "redirect_cash_latent_credit": "causal_credit",
+    "direct_cash_latent_credit": "causal_credit",
+    "dac_cash_latent_credit": "causal_credit",
+    "direct_labor_latent_credit": "causal_credit",
 }
 
 PERCENTILES = (("p05", 0.05), ("p10", 0.10), ("p25", 0.25), ("p75", 0.75), ("p90", 0.90), ("p95", 0.95))
@@ -84,7 +104,11 @@ SUMMARY_FIELDS = [
 ]
 
 
-def summary_statistics(values: np.ndarray, negligible_threshold: float = 0.0) -> dict[str, float]:
+def summary_statistics(
+    values: np.ndarray,
+    negligible_threshold: float = 0.0,
+    exceedance_thresholds: tuple[float, float, float, float] = (100_000.0, 500_000.0, 1_000_000.0, 5_000_000.0),
+) -> dict[str, float]:
     values = np.asarray(values, dtype=float)
     if values.ndim != 1 or values.size == 0 or not np.isfinite(values).all():
         raise ValueError("summary input must be a finite nonempty vector")
@@ -94,10 +118,10 @@ def summary_statistics(values: np.ndarray, negligible_threshold: float = 0.0) ->
         "probability_zero": float(np.mean(np.abs(values) <= 1e-12)),
         "probability_zero_or_negative": float(np.mean(values <= 0.0)),
         "probability_negligible": float(np.mean(values <= negligible_threshold)) if negligible_threshold else float(np.mean(np.abs(values) <= 1e-12)),
-        "probability_gt_100k": float(np.mean(values > 100_000.0)),
-        "probability_gt_500k": float(np.mean(values > 500_000.0)),
-        "probability_gt_1m": float(np.mean(values > 1_000_000.0)),
-        "probability_gt_5m": float(np.mean(values > 5_000_000.0)),
+        "probability_gt_100k": float(np.mean(values > exceedance_thresholds[0])),
+        "probability_gt_500k": float(np.mean(values > exceedance_thresholds[1])),
+        "probability_gt_1m": float(np.mean(values > exceedance_thresholds[2])),
+        "probability_gt_5m": float(np.mean(values > exceedance_thresholds[3])),
     }
     for label, quantile in PERCENTILES:
         result[label] = float(np.quantile(values, quantile, method="linear"))
@@ -129,6 +153,9 @@ def write_parameter_json(root: Path = PACKAGE_ROOT) -> None:
 class ArtifactAccumulator:
     def __init__(self, parameters: dict[str, Parameter]) -> None:
         self.parameters = parameters
+        self.exceedance_thresholds = tuple(
+            parameters[key].central for key in ("exceedance_100k", "exceedance_500k", "exceedance_1m", "exceedance_5m")
+        )
         self.portfolio_rows: list[dict[str, Any]] = []
         self.mechanism_rows: list[dict[str, Any]] = []
         self.field_rows: list[dict[str, Any]] = []
@@ -138,6 +165,7 @@ class ArtifactAccumulator:
         self.variance_driver_rows: list[dict[str, Any]] = []
         self.mechanism_correlation_rows: list[dict[str, Any]] = []
         self.field_correlation_rows: list[dict[str, Any]] = []
+        self.structural_diagnostic_rows: list[dict[str, Any]] = []
         self.central_lookup: dict[tuple[str, str, str], dict[str, float]] = {}
 
     def add(self, result: SimulationResult) -> None:
@@ -147,6 +175,7 @@ class ArtifactAccumulator:
                 stats = summary_statistics(
                     result.metrics[horizon][metric],
                     negligible if metric == "net_causal_cash" else 0.0,
+                    self.exceedance_thresholds,
                 )
                 row = {
                     "scenario": result.scenario,
@@ -172,8 +201,10 @@ class ArtifactAccumulator:
                         "scenario": result.scenario, "forecast_basis": result.forecast_basis,
                         "horizon": horizon, "mechanism": mechanism, "metric": metric,
                         "unit": UNITS[metric], "draws": result.draws, "seed": result.seed,
-                        "mean": stats["mean"], "median": stats["median"], "p10": stats["p10"],
-                        "p90": stats["p90"], "probability_zero": stats["probability_zero"],
+                        "mean": stats["mean"], "median": stats["median"],
+                        "p05": stats["p05"], "p10": stats["p10"], "p25": stats["p25"],
+                        "p75": stats["p75"], "p90": stats["p90"], "p95": stats["p95"],
+                        "probability_zero": stats["probability_zero"],
                         "evidence_status": "prior_driven_synthetic_not_empirical",
                     })
 
@@ -185,7 +216,8 @@ class ArtifactAccumulator:
                         "horizon": horizon, "metric": metric, "field": field,
                         "unit": UNITS[metric], "draws": result.draws, "seed": result.seed,
                         "mean": stats["mean"], "median": stats["median"], "p05": stats["p05"],
-                        "p10": stats["p10"], "p90": stats["p90"], "p95": stats["p95"],
+                        "p10": stats["p10"], "p25": stats["p25"], "p75": stats["p75"],
+                        "p90": stats["p90"], "p95": stats["p95"],
                         "probability_zero": stats["probability_zero"],
                         "evidence_status": "especially_prior_driven_appendix_only",
                     })
@@ -200,9 +232,29 @@ class ArtifactAccumulator:
                     "year": year_index, "metric": metric, "unit": UNITS[metric],
                     "draws": result.draws, "seed": result.seed, "mean": stats["mean"],
                     "median": stats["median"], "p05": stats["p05"], "p10": stats["p10"],
-                    "p90": stats["p90"], "p95": stats["p95"],
+                    "p25": stats["p25"], "p75": stats["p75"], "p90": stats["p90"], "p95": stats["p95"],
                     "probability_positive": float(np.mean(values > 1e-12)),
                 })
+
+        for diagnostic, values in sorted(result.structural_diagnostics.items()):
+            stats = summary_statistics(values)
+            self.structural_diagnostic_rows.append({
+                "scenario": result.scenario,
+                "forecast_basis": result.forecast_basis,
+                "diagnostic": diagnostic,
+                "unit": STRUCTURAL_DIAGNOSTIC_UNITS[diagnostic],
+                "draws": result.draws,
+                "seed": result.seed,
+                "mean": stats["mean"],
+                "median": stats["median"],
+                "p05": stats["p05"],
+                "p10": stats["p10"],
+                "p25": stats["p25"],
+                "p75": stats["p75"],
+                "p90": stats["p90"],
+                "p95": stats["p95"],
+                "evidence_status": "prior_driven_structural_diagnostic_not_empirical",
+            })
 
         for invariant, value in sorted(result.invariants.items()):
             tolerance = 1e-5 if "field" in invariant else 1e-7
@@ -260,15 +312,17 @@ class ArtifactAccumulator:
         write_csv(output_dir / "portfolio_summary.csv", self.portfolio_rows, SUMMARY_FIELDS)
         write_csv(output_dir / "mechanism_summary.csv", self.mechanism_rows, [
             "scenario", "forecast_basis", "horizon", "mechanism", "metric", "unit", "draws", "seed",
-            "mean", "median", "p10", "p90", "probability_zero", "evidence_status",
+            "mean", "median", "p05", "p10", "p25", "p75", "p90", "p95",
+            "probability_zero", "evidence_status",
         ])
         write_csv(output_dir / "field_appendix.csv", self.field_rows, [
             "scenario", "forecast_basis", "horizon", "metric", "field", "unit", "draws", "seed",
-            "mean", "median", "p05", "p10", "p90", "p95", "probability_zero", "evidence_status",
+            "mean", "median", "p05", "p10", "p25", "p75", "p90", "p95",
+            "probability_zero", "evidence_status",
         ])
         write_csv(output_dir / "dac_reserve_diagnostics.csv", self.dac_rows, [
             "scenario", "forecast_basis", "year", "metric", "unit", "draws", "seed", "mean", "median",
-            "p05", "p10", "p90", "p95", "probability_positive",
+            "p05", "p10", "p25", "p75", "p90", "p95", "probability_positive",
         ])
         write_csv(output_dir / "model_invariants.csv", self.invariant_rows, [
             "scenario", "forecast_basis", "draws", "seed", "invariant", "observed_max", "tolerance", "passed",
@@ -284,6 +338,10 @@ class ArtifactAccumulator:
         ])
         write_csv(output_dir / "field_correlations.csv", self.field_correlation_rows, [
             "forecast_basis", "horizon", "field", "field_metric", "portfolio_metric", "pearson_correlation", "evidence_status",
+        ])
+        write_csv(output_dir / "structural_diagnostics.csv", self.structural_diagnostic_rows, [
+            "scenario", "forecast_basis", "diagnostic", "unit", "draws", "seed",
+            "mean", "median", "p05", "p10", "p25", "p75", "p90", "p95", "evidence_status",
         ])
 
 
@@ -310,6 +368,10 @@ def deterministic_payload(result: SimulationResult) -> dict[str, Any]:
             {metric: [float(item) for item in values] for metric, values in sorted(year.items())}
             for year in result.dac_yearly
         ],
+        "structural_diagnostics": {
+            diagnostic: float(values[0])
+            for diagnostic, values in sorted(result.structural_diagnostics.items())
+        },
         "invariants": result.invariants,
     }
 

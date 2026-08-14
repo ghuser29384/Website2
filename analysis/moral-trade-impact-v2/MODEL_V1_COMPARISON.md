@@ -16,3 +16,4 @@ Model v2 is not tuned to reproduce $0.58M. Differences are attributable to speci
 
 `outputs/model_v1_comparison.json` records the frozen-run numerical delta without treating either median as an additive statistic or forcing agreement. Model v1 remains a superseded preliminary scenario until the owner explicitly approves cutover.
 
+In the final corrected 200,000-draw run, Model v2's conditional five-year median net causal cash is $105,603.03, or 0.1821 times the owner-reported $580,000 Model v1 figure, with a nominal difference of -$474,396.97. The preserved first complete Model v2 run was $121,522.19; the post-run structural correction changed that median by -$15,919.16. These are transparent comparisons between different estimands and structures, not evidence that either forecast is calibrated.

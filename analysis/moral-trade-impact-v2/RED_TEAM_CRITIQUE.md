@@ -25,4 +25,3 @@
 ## Failure conditions for use
 
 Do not use the central median as a report headline without owner ledger review, independent accounting audit, appropriate rounding, AI-assistance disclosure, and explicit cutover approval. Do not infer individual causal credit, field-level cost effectiveness, mechanism liveness, legal acceptability, or payment readiness. Do not average structural scenarios without independently justified probabilities.
-

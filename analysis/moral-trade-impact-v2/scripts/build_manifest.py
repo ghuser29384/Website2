@@ -13,4 +13,3 @@ from moral_trade_impact_v2.pipeline import build_manifest
 if __name__ == "__main__":
     manifest = build_manifest(ROOT / "outputs", ROOT)
     print(manifest["package_tree_hash"])
-

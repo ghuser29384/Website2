@@ -7,4 +7,3 @@ dependencies = ["numpy==2.3.5"]
 
 [tool.unittest]
 start-directory = "tests"
-
