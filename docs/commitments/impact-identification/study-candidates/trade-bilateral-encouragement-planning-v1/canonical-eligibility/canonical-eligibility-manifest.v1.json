@@ -1,0 +1,111 @@
+{
+  "artifactKind": "reciprocal_trade_canonical_eligibility_candidate_manifest",
+  "manifestVersion": "1.0.0",
+  "boundBaseCommit": "79ca382c3bdc325dfc5a28e2cbbafc1b95640386",
+  "evaluatorVersion": "reciprocal-trade-research-eligibility-v1.0.0",
+  "inputSchemaVersion": "reciprocal-trade-research-eligibility-input-v1.0.0",
+  "decisionSchemaVersion": "reciprocal-trade-research-eligibility-decision-v1.0.0",
+  "policySourceManifestHash": "sha256:7ab1d8d53c9b761ea93c4ab324c11c388316591bf90f5a21222f5fbb44de2606",
+  "canonicalEligibilitySourceStatus": "blocked_source_conflict",
+  "realGraphDiagnosticsStatus": "blocked_not_run",
+  "executionDecision": "no_launch",
+  "releaseClassification": "research_validation_only_no_runtime_effect",
+  "realDataAccessed": false,
+  "productionOrQaRowsCopied": false,
+  "realGraphConstructed": false,
+  "nodeOrEdgeListConstructed": false,
+  "databaseActionOccurred": false,
+  "migrationApplied": false,
+  "deploymentOccurred": false,
+  "runtimeMatcherChanged": false,
+  "assignmentGenerated": false,
+  "assignmentSeedGenerated": false,
+  "studyRegistered": false,
+  "participantContacted": false,
+  "participantEnrolled": false,
+  "participantCausalOutputGenerated": false,
+  "privacyReviewStatus": "required_not_completed",
+  "ethicsDeterminationStatus": "required_not_completed",
+  "consentOrWaiverStatus": "required_not_completed",
+  "currentGraphReadiness": "insufficient_real_eligible_graph",
+  "softwareValidationIsNot": [
+    "empirical_calibration",
+    "causal_identification",
+    "model_health",
+    "methodology_approval",
+    "privacy_approval",
+    "ethics_approval",
+    "legal_review"
+  ],
+  "artifacts": [
+    {
+      "path": ".github/workflows/commitments-trade-canonical-eligibility-gates.yml",
+      "gitBlobSha1": "c6e3e273cf55ce7869ac0badb3e2dd696a45c45c",
+      "rawSha256": "a052113bc976de48ca60dd8f28d077efdeca9c266f0508137edb5b86cb7c638e"
+    },
+    {
+      "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/README.md",
+      "gitBlobSha1": "121a54964be16d25b92b315f5196b0d371efb2f7",
+      "rawSha256": "bfc82f77c2ba5f2439c775a80b7db0cb927b0d5744ca17e87cfcb063df0968bf"
+    },
+    {
+      "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/policy-source-map.v1.md",
+      "gitBlobSha1": "e1b51daefd46b781cbd193d4a344241d71503f77",
+      "rawSha256": "9b7afe1055b6c0f15dd3f8b9e1cc316d6caf15bf0d4a2554f61a15f281edacec"
+    },
+    {
+      "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/policy-source-manifest.v1.json",
+      "gitBlobSha1": "0c73954d248a1c512943567a3d8c9361683d9ab4",
+      "rawSha256": "7ab1d8d53c9b761ea93c4ab324c11c388316591bf90f5a21222f5fbb44de2606"
+    },
+    {
+      "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-input.schema.v1.json",
+      "gitBlobSha1": "000f7ab650265052ca7aa54944cf1f3dae8ad572",
+      "rawSha256": "33e655c2de49efc58f0c521f41e3470961e3099b28f2ca60faab829910d722c8"
+    },
+    {
+      "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-decision.schema.v1.json",
+      "gitBlobSha1": "a951ee163ac5acf89f17acd00a045beb4c994e17",
+      "rawSha256": "1b9ff00cfbf216142653e0cd57862c1bc94b8bddfde0b8792a67035b1363a937"
+    },
+    {
+      "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-gap-register.v1.json",
+      "gitBlobSha1": "f4a1dff277be5acecd3576d6ab6365d3ab81e3f1",
+      "rawSha256": "16eea80fa67be71cec53fe13076237542f7ec8476a8d24ce9fd9b5f02f750f83"
+    },
+    {
+      "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/synthetic-eligibility-fixtures.v1.json",
+      "gitBlobSha1": "127e5c701bb674d840e06699615b4b4c26e2d418",
+      "rawSha256": "a4f15efcc760a3796188e0fe32d2bd73251ebde1801f8b348c8c14a03fdd0aea"
+    },
+    {
+      "path": "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs",
+      "gitBlobSha1": "e30db80b4cb9fc910be1b709846712c24a771010",
+      "rawSha256": "e78061a37574c7cf30f687481030dd9a004dbf0255950a1caebe41cbc916ddbf"
+    },
+    {
+      "path": "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs",
+      "gitBlobSha1": "43fccb647b310f074f695632541c3e76130fe22f",
+      "rawSha256": "2800127dc5a359a6afa2b497a6d64eeff6ccac6c89c5de0ca8440b364be34c83"
+    },
+    {
+      "path": "scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs",
+      "gitBlobSha1": "c3aecf95a97b60231b19adff36e6abcad823a6b2",
+      "rawSha256": "3b34b2fb015344cd2cac43dff5e8e884261cab6302db54124629b2479c0c5fc6"
+    }
+  ],
+  "expectedChangedFiles": [
+    ".github/workflows/commitments-trade-canonical-eligibility-gates.yml",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/README.md",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/canonical-eligibility-manifest.v1.json",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-decision.schema.v1.json",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-gap-register.v1.json",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-input.schema.v1.json",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/policy-source-manifest.v1.json",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/policy-source-map.v1.md",
+    "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/synthetic-eligibility-fixtures.v1.json",
+    "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs",
+    "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs",
+    "scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs"
+  ]
+}

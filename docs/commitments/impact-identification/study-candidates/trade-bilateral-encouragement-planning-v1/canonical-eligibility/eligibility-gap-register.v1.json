@@ -1,0 +1,90 @@
+{
+  "artifactKind": "reciprocal_trade_research_eligibility_gap_register",
+  "registerVersion": "1.0.0",
+  "boundBaseCommit": "79ca382c3bdc325dfc5a28e2cbbafc1b95640386",
+  "canonicalEligibilitySourceStatus": "blocked_source_conflict",
+  "resolutionRule": "An active conflict or missing applicable structured authority keeps protected evaluation ineligible; this package does not guess or choose an authority.",
+  "gaps": [
+    {
+      "gapId": "CE-GAP-001",
+      "gateIds": ["offer_identity_lifecycle"],
+      "status": "open_active_source_conflict",
+      "sourceIds": ["runtime-reciprocal-matcher", "database-invitation-hardening"],
+      "finding": "The live reciprocal suggestion query accepts any equal offer mode, while the invitation RPC only accepts nonfinancial pledge offers.",
+      "candidateBehavior": "The synthetic candidate narrows to pledge and reports the overall source status as blocked_source_conflict; it does not declare that narrowing canonical.",
+      "requiredResolution": "Product and policy owners must select and enforce one structured matchability contract across suggestion, invitation, and research projection paths.",
+      "protectedEvaluationAuthorized": false
+    },
+    {
+      "gapId": "CE-GAP-002",
+      "gateIds": ["offer_identity_lifecycle", "reciprocal_matching", "blocks_restrictions", "agreement_engagement_conflicts"],
+      "status": "open_active_source_conflict",
+      "sourceIds": ["runtime-reciprocal-matcher", "runtime-core-trade-actions", "database-invitation-hardening"],
+      "finding": "startSuggestedMatchAction can create a thread without re-running reciprocal causes, open state, same mode, pair blocks, or the invitation RPC gate set.",
+      "candidateBehavior": "The pure evaluator requires all normalized gates and remains disconnected from runtime.",
+      "requiredResolution": "Create one transaction-safe runtime authority and prove every call site uses it before any research source can be called canonical.",
+      "protectedEvaluationAuthorized": false
+    },
+    {
+      "gapId": "CE-GAP-003",
+      "gateIds": ["moderation_harm_baseline", "legality_policy_participant"],
+      "status": "open_unbound_structured_sources",
+      "sourceIds": ["runtime-core-trade-actions", "structured-content-moderation", "structured-offer-validity", "structured-baseline-integrity", "structured-participant-eligibility"],
+      "finding": "Structured fail-closed safety, validity, baseline, and participant-policy evaluators exist, but core publication and reciprocal matching do not bind current records from them.",
+      "candidateBehavior": "Only explicitly normalized cleared/current/bound evidence passes synthetic evaluation; empty moderation prose and free-text review are never clearance.",
+      "requiredResolution": "Bind the applicable structured records and effective-time semantics to one enforced core matchability source.",
+      "protectedEvaluationAuthorized": false
+    },
+    {
+      "gapId": "CE-GAP-004",
+      "gateIds": ["reciprocal_matching"],
+      "status": "open_collation_not_frozen",
+      "sourceIds": ["runtime-reciprocal-matcher"],
+      "finding": "listReciprocalMatches delegates matching to PostgreSQL ILIKE, but the repository does not freeze the database locale/collation needed to reproduce every Unicode case-folding result.",
+      "candidateBehavior": "The evaluator exactly labels and implements printable-ASCII PostgreSQL LIKE wildcard and case-insensitive semantics, then fails closed on non-ASCII or unbound collation.",
+      "requiredResolution": "Freeze a database collation contract and add parity tests against the deployed database before protected projection.",
+      "protectedEvaluationAuthorized": false
+    },
+    {
+      "gapId": "CE-GAP-005",
+      "gateIds": ["consent_privacy_directed_roles", "study_provenance_integrity"],
+      "status": "open_missing_study_determination",
+      "sourceIds": ["database-privacy-grants", "structured-privacy-governance", "bound-study-instance", "bound-real-graph-readiness"],
+      "finding": "No approved study-specific privacy purpose, disclosure review, ethics determination, or consent/waiver authority exists for a protected Reciprocal Trade eligibility snapshot.",
+      "candidateBehavior": "Synthetic fixtures carry synthetic consent records only; every protected input is ineligible even if it asserts approval flags.",
+      "requiredResolution": "Obtain and bind explicit privacy, ethics, and consent/waiver determinations without equating account creation with research consent.",
+      "protectedEvaluationAuthorized": false
+    },
+    {
+      "gapId": "CE-GAP-006",
+      "gateIds": ["blocks_restrictions"],
+      "status": "open_projection_contract_missing",
+      "sourceIds": ["database-invitation-hardening", "database-account-bound-directory", "database-credibility-restrictions"],
+      "finding": "Pair blocks and credibility restrictions have different shapes and time semantics, and no approved normalized research projection binds them atomically at one effective time.",
+      "candidateBehavior": "The evaluator requires explicit pair-block and source/target/pair restriction states and fails closed on unknown, stale, or contradictory projections.",
+      "requiredResolution": "Define and test an authorized, transaction-consistent projection with revocation and expiry semantics.",
+      "protectedEvaluationAuthorized": false
+    },
+    {
+      "gapId": "CE-GAP-007",
+      "gateIds": ["agreement_engagement_conflicts", "study_provenance_integrity"],
+      "status": "open_projection_contract_missing",
+      "sourceIds": ["database-core-trade-loop", "database-offer-bank-agreements", "database-atomic-acceptance"],
+      "finding": "No repository source atomically projects accepted interest, invitation, thread, agreement, duplicate-pair, and historical-interference state for a frozen research snapshot.",
+      "candidateBehavior": "Every field is mandatory in normalized synthetic input; active conflicts and unknown history fail closed.",
+      "requiredResolution": "Specify the frozen projection and distinguish current exclusion from retained historical interference covariates.",
+      "protectedEvaluationAuthorized": false
+    },
+    {
+      "gapId": "CE-GAP-008",
+      "gateIds": ["study_provenance_integrity"],
+      "status": "open_insufficient_real_graph",
+      "sourceIds": ["bound-real-graph-readiness"],
+      "finding": "The immutable aggregate evidence records zero eligible directed dyads and insufficient real graph readiness.",
+      "candidateBehavior": "realGraphDiagnosticsStatus remains blocked_not_run and executionDecision remains no_launch.",
+      "requiredResolution": "Only a future separately authorized aggregate re-inspection may determine whether the graph changed; this tranche reads no real rows.",
+      "protectedEvaluationAuthorized": false
+    }
+  ],
+  "allProtectedEvaluationBlocked": true
+}

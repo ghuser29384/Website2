@@ -1,0 +1,165 @@
+name: Commitments Reciprocal Trade canonical eligibility gates
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - ".github/workflows/commitments-trade-canonical-eligibility-gates.yml"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/**"
+      - "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs"
+      - "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs"
+      - "scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs"
+      - "scripts/commitments-trade-study/validate-real-graph-readiness-*.mjs"
+      - "src/lib/core-trade-base.ts"
+      - "src/app/core-trade-actions-base.ts"
+      - "src/lib/proposal-review.ts"
+      - "src/lib/recommendation-training.ts"
+      - "src/lib/moral-trade/**"
+      - "supabase/schema.sql"
+      - "supabase/migrations/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/commitments-trade-canonical-eligibility-gates.yml"
+      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/**"
+      - "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs"
+      - "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs"
+      - "scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs"
+      - "scripts/commitments-trade-study/validate-real-graph-readiness-*.mjs"
+      - "src/lib/core-trade-base.ts"
+      - "src/app/core-trade-actions-base.ts"
+      - "src/lib/proposal-review.ts"
+      - "src/lib/recommendation-training.ts"
+      - "src/lib/moral-trade/**"
+      - "supabase/schema.sql"
+      - "supabase/migrations/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: commitments-trade-canonical-eligibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate fail-closed repository-only eligibility candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Run focused evaluator and adversarial fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs \
+            2>&1 | tee canonical-eligibility-focused-tests.log
+
+      - name: Verify manifests, source bindings, purity, and immutable readiness evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs \
+            2>&1 | tee canonical-eligibility-integrity.log
+
+      - name: Revalidate planning, graph, readiness, and accepted master protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/commitments-trade-study/validate-real-graph-readiness-package.mjs \
+            2>&1 | tee canonical-eligibility-real-readiness-package.log
+          node scripts/commitments-trade-study/validate-real-graph-readiness-integrity.mjs \
+            2>&1 | tee canonical-eligibility-real-readiness-integrity.log
+          node scripts/commitments-trade-study/validate-graph-feasibility-package.mjs \
+            2>&1 | tee canonical-eligibility-graph-feasibility.log
+          node scripts/commitments-trade-study/validate-planning-package.mjs \
+            2>&1 | tee canonical-eligibility-precision-planning.log
+          node scripts/validate-commitments-impact-identification.mjs \
+            2>&1 | tee canonical-eligibility-master-protocol.log
+
+      - name: Install locked test and lint dependencies
+        run: npm ci
+
+      - name: Run relevant existing lifecycle, safety, blocking, restriction, privacy, and agreement contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/trade-invitations.test.ts \
+            src/lib/marketplace-delta-contract.test.ts \
+            src/lib/credibility.test.ts \
+            src/lib/proposal-review.test.ts \
+            src/lib/moral-trade/user-safety-content-moderation.test.ts \
+            src/lib/moral-trade/offer-validity.test.ts \
+            src/lib/moral-trade/baseline-integrity.test.ts \
+            src/lib/moral-trade/participant-eligibility.test.ts \
+            src/lib/moral-trade/privacy-governance.test.ts \
+            2>&1 | tee canonical-eligibility-existing-contracts.log
+
+      - name: Lint repository-only scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx eslint \
+            scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs \
+            scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs \
+            scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs \
+            2>&1 | tee canonical-eligibility-eslint.log
+
+      - name: Enforce exact repository-only file scope and release classification
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          base="$(git merge-base HEAD origin/main)"
+          test "$base" = "79ca382c3bdc325dfc5a28e2cbbafc1b95640386"
+          git diff --check "$base" "$GITHUB_SHA" | tee canonical-eligibility-diff-check.log
+          git diff --name-only "$base" "$GITHUB_SHA" | sort > actual-files.txt
+          cat > expected-files.txt <<'FILES'
+          .github/workflows/commitments-trade-canonical-eligibility-gates.yml
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/README.md
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/canonical-eligibility-manifest.v1.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-decision.schema.v1.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-gap-register.v1.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-input.schema.v1.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/policy-source-manifest.v1.json
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/policy-source-map.v1.md
+          docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/synthetic-eligibility-fixtures.v1.json
+          scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs
+          scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs
+          scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs
+          FILES
+          sort -o expected-files.txt expected-files.txt
+          diff -u expected-files.txt actual-files.txt
+          if grep -Eq '^(src/|public/|supabase/|package(-lock)?\.json$|next\.config|vercel\.json$)' actual-files.txt; then
+            echo "Runtime, public, dependency, database, or deployment file entered a repository-only tranche." >&2
+            exit 1
+          fi
+          node -e 'const m=require("./docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/canonical-eligibility-manifest.v1.json"); if(m.releaseClassification!=="research_validation_only_no_runtime_effect"||m.realDataAccessed||m.databaseActionOccurred||m.deploymentOccurred) process.exit(1)'
+
+      - name: Upload exact candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commitments-trade-canonical-eligibility-${{ github.run_id }}
+          path: |
+            canonical-eligibility-*.log
+            expected-files.txt
+            actual-files.txt
+            docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/**
+            scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs
+            scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs
+            scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs
+          if-no-files-found: warn
