@@ -1,0 +1,1565 @@
+{
+  "dac_yearly": [
+    {
+      "_cash_budget": [
+        137483.09704999998
+      ],
+      "_gross_threshold": [
+        61950.090685392
+      ],
+      "_project_target": [
+        57330.00000000001
+      ],
+      "_required_surcharge": [
+        4620.090685391995
+      ],
+      "_reserve_before": [
+        2500.0
+      ],
+      "_reserve_capacity_probability": [
+        0.0
+      ],
+      "_reserve_exhaustion_probability": [
+        0.0
+      ],
+      "_surcharge_rate": [
+        0.08058766240000001
+      ],
+      "_willing_pledge": [
+        17703.740569159374
+      ],
+      "dac_bonus_liability_locked": [
+        966.6242350761019
+      ],
+      "dac_bonus_liability_released": [
+        73.62621044453248
+      ],
+      "dac_bonus_paid": [
+        892.9980246315694
+      ],
+      "dac_capacity_waiting_pledges": [
+        0.0
+      ],
+      "dac_free_reserve": [
+        1707.5673229203617
+      ],
+      "dac_funding_lost_to_surcharge": [
+        477.6014644134459
+      ],
+      "dac_gross_threshold": [
+        61950.090685392
+      ],
+      "dac_incremental_funding_caused_by_bonus": [
+        26.78839580478757
+      ],
+      "dac_pledge_principal": [
+        17703.740569159374
+      ],
+      "dac_project_funding": [
+        1247.9000452050739
+      ],
+      "dac_project_target": [
+        57330.00000000001
+      ],
+      "dac_required_surcharge": [
+        4620.090685391995
+      ],
+      "dac_reserve_cash": [
+        1707.5673229203617
+      ],
+      "dac_returned_or_cancelled_principal": [
+        16355.275176402369
+      ],
+      "dac_surcharge_inflow": [
+        100.56534755193124
+      ],
+      "lapsed_dac_projects": [
+        18.694033318264978
+      ],
+      "successful_dac_projects": [
+        0.4159666817350246
+      ]
+    },
+    {
+      "_cash_budget": [
+        391298.0454499999
+      ],
+      "_gross_threshold": [
+        187645.5
+      ],
+      "_project_target": [
+        163170.0
+      ],
+      "_required_surcharge": [
+        24475.5
+      ],
+      "_reserve_before": [
+        1707.5673229203617
+      ],
+      "_reserve_capacity_probability": [
+        1.0
+      ],
+      "_reserve_exhaustion_probability": [
+        0.0
+      ],
+      "_surcharge_rate": [
+        0.15
+      ],
+      "_willing_pledge": [
+        46380.71938293557
+      ],
+      "dac_bonus_liability_locked": [
+        1707.5673229203617
+      ],
+      "dac_bonus_liability_released": [
+        110.36073010251383
+      ],
+      "dac_bonus_paid": [
+        1597.2065928178479
+      ],
+      "dac_capacity_waiting_pledges": [
+        15106.592589522352
+      ],
+      "dac_free_reserve": [
+        374.00318137464427
+      ],
+      "dac_funding_lost_to_surcharge": [
+        3228.264912936944
+      ],
+      "dac_gross_threshold": [
+        187645.5
+      ],
+      "dac_incremental_funding_caused_by_bonus": [
+        0.0
+      ],
+      "dac_pledge_principal": [
+        31274.126793413216
+      ],
+      "dac_project_funding": [
+        1757.6163418142032
+      ],
+      "dac_project_target": [
+        163170.0
+      ],
+      "dac_required_surcharge": [
+        24475.5
+      ],
+      "dac_reserve_cash": [
+        374.00318137464427
+      ],
+      "dac_returned_or_cancelled_principal": [
+        29252.868000326882
+      ],
+      "dac_surcharge_inflow": [
+        263.6424512721305
+      ],
+      "lapsed_dac_projects": [
+        53.804127886061934
+      ],
+      "successful_dac_projects": [
+        0.5858721139380677
+      ]
+    },
+    {
+      "_cash_budget": [
+        645112.99385
+      ],
+      "_gross_threshold": [
+        309361.4999999999
+      ],
+      "_project_target": [
+        269009.99999999994
+      ],
+      "_required_surcharge": [
+        40351.49999999994
+      ],
+      "_reserve_before": [
+        374.00318137464427
+      ],
+      "_reserve_capacity_probability": [
+        1.0
+      ],
+      "_reserve_exhaustion_probability": [
+        0.0
+      ],
+      "_surcharge_rate": [
+        0.15
+      ],
+      "_willing_pledge": [
+        76173.46944475659
+      ],
+      "dac_bonus_liability_locked": [
+        374.00318137464427
+      ],
+      "dac_bonus_liability_released": [
+        76.92505762374087
+      ],
+      "dac_bonus_paid": [
+        297.07812375090344
+      ],
+      "dac_capacity_waiting_pledges": [
+        69323.59432800485
+      ],
+      "dac_free_reserve": [
+        260.6925149188695
+      ],
+      "dac_funding_lost_to_surcharge": [
+        6932.2992053423095
+      ],
+      "dac_gross_threshold": [
+        309361.4999999999
+      ],
+      "dac_incremental_funding_caused_by_bonus": [
+        0.0
+      ],
+      "dac_pledge_principal": [
+        6849.875116751727
+      ],
+      "dac_project_funding": [
+        1225.1163819675246
+      ],
+      "dac_project_target": [
+        269009.99999999994
+      ],
+      "dac_required_surcharge": [
+        40351.49999999994
+      ],
+      "dac_reserve_cash": [
+        260.6925149188695
+      ],
+      "dac_returned_or_cancelled_principal": [
+        5440.991277489074
+      ],
+      "dac_surcharge_inflow": [
+        183.76745729512868
+      ],
+      "lapsed_dac_projects": [
+        89.26162787267748
+      ],
+      "successful_dac_projects": [
+        0.4083721273225082
+      ]
+    },
+    {
+      "_cash_budget": [
+        898927.9422499996
+      ],
+      "_gross_threshold": [
+        431077.49999999994
+      ],
+      "_project_target": [
+        374850.0
+      ],
+      "_required_surcharge": [
+        56227.49999999994
+      ],
+      "_reserve_before": [
+        260.6925149188695
+      ],
+      "_reserve_capacity_probability": [
+        1.0
+      ],
+      "_reserve_exhaustion_probability": [
+        0.0
+      ],
+      "_surcharge_rate": [
+        0.15
+      ],
+      "_willing_pledge": [
+        105913.24460348974
+      ],
+      "dac_bonus_liability_locked": [
+        260.6925149188695
+      ],
+      "dac_bonus_liability_released": [
+        100.3340822383986
+      ],
+      "dac_bonus_paid": [
+        160.3584326804709
+      ],
+      "dac_capacity_waiting_pledges": [
+        101138.65641816246
+      ],
+      "dac_free_reserve": [
+        340.0237196927669
+      ],
+      "dac_funding_lost_to_surcharge": [
+        9719.9573101303
+      ],
+      "dac_gross_threshold": [
+        431077.49999999994
+      ],
+      "dac_incremental_funding_caused_by_bonus": [
+        0.0
+      ],
+      "dac_pledge_principal": [
+        4774.58818532728
+      ],
+      "dac_project_funding": [
+        1597.9309163624557
+      ],
+      "dac_project_target": [
+        374850.0
+      ],
+      "dac_required_surcharge": [
+        56227.49999999994
+      ],
+      "dac_reserve_cash": [
+        340.0237196927669
+      ],
+      "dac_returned_or_cancelled_principal": [
+        2936.967631510456
+      ],
+      "dac_surcharge_inflow": [
+        239.68963745436835
+      ],
+      "lapsed_dac_projects": [
+        124.41735636121251
+      ],
+      "successful_dac_projects": [
+        0.5326436387874852
+      ]
+    },
+    {
+      "_cash_budget": [
+        1152742.8906499997
+      ],
+      "_gross_threshold": [
+        552793.5000000001
+      ],
+      "_project_target": [
+        480690.0000000001
+      ],
+      "_required_surcharge": [
+        72103.5
+      ],
+      "_reserve_before": [
+        340.0237196927669
+      ],
+      "_reserve_capacity_probability": [
+        1.0
+      ],
+      "_reserve_exhaustion_probability": [
+        0.0
+      ],
+      "_surcharge_rate": [
+        0.15
+      ],
+      "_willing_pledge": [
+        135804.33483277116
+      ],
+      "dac_bonus_liability_locked": [
+        340.0237196927669
+      ],
+      "dac_bonus_liability_released": [
+        128.80956470609863
+      ],
+      "dac_bonus_paid": [
+        211.2141549866683
+      ],
+      "dac_capacity_waiting_pledges": [
+        129576.79417905748
+      ],
+      "dac_free_reserve": [
+        436.5247216724116
+      ],
+      "dac_funding_lost_to_surcharge": [
+        12459.155128489903
+      ],
+      "dac_gross_threshold": [
+        552793.5000000001
+      ],
+      "dac_incremental_funding_caused_by_bonus": [
+        0.0
+      ],
+      "dac_pledge_principal": [
+        6227.54065371368
+      ],
+      "dac_project_funding": [
+        2051.43437977542
+      ],
+      "dac_project_target": [
+        480690.0000000001
+      ],
+      "dac_required_surcharge": [
+        72103.5
+      ],
+      "dac_reserve_cash": [
+        436.5247216724116
+      ],
+      "dac_returned_or_cancelled_principal": [
+        3868.3911169719468
+      ],
+      "dac_surcharge_inflow": [
+        307.715156966313
+      ],
+      "lapsed_dac_projects": [
+        159.5461885400749
+      ],
+      "successful_dac_projects": [
+        0.68381145992514
+      ]
+    }
+  ],
+  "draws": 1,
+  "forecast_basis": "conditional",
+  "invariants": {
+    "max_cash_budget_overage": -16908.771747220017,
+    "max_dac_accepted_over_willing_pledge": 0.0,
+    "max_dac_funding_over_accepted_principal": -2936.967631510456,
+    "max_dac_liability_over_reserve": 0.0,
+    "max_dac_liability_settlement_error": 5.684341886080802e-14,
+    "max_dac_principal_reconciliation_error": 1.8189894035458565e-12,
+    "max_dac_reserve_reconciliation_error": 1.9895196601282805e-13,
+    "max_dac_threshold_reconciliation_error": 0.0,
+    "max_dac_waiting_reconciliation_error": 0.0,
+    "max_direct_completion_over_match": -12.622067525447747,
+    "max_direct_match_over_supply": -18753.592156152277,
+    "max_direct_payment_over_demand": -33303.63851425355,
+    "max_direct_payment_reconciliation_error": 0.0,
+    "max_displacement_over_new_cash": -2128.483564595089,
+    "max_field_cash_reconciliation_error": 0.0,
+    "max_field_ordinary_reconciliation_error": 2.2737367544323206e-13,
+    "max_field_skilled_reconciliation_error": 1.4210854715202004e-14,
+    "max_net_cash_reconciliation_error": 5.820766091346741e-11,
+    "max_redirect_classification_reconciliation_error": 2.9103830456733704e-11,
+    "max_redirect_principal_reconciliation_error": 0.0,
+    "max_redirect_settlement_reconciliation_error": 1.0913936421275139e-11
+  },
+  "mechanisms": {
+    "eoy5_annualized_run_rate": {
+      "dac": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 3.517459246985295,
+        "cash_operating_costs": 107.09018404836456,
+        "cause_directed_cash": 2283.852807086643,
+        "chargeback_losses": 6.85155842125993,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 436.5247216724116,
+        "dac_bonus_liability_released": 143.40311775697035,
+        "dac_bonus_paid": 293.12160391544126,
+        "dac_capacity_waiting_pledges": 141514.65367999714,
+        "dac_free_reserve": 485.98103881996684,
+        "dac_funding_lost_to_surcharge": 13691.161766587793,
+        "dac_gross_threshold": 608580.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 7994.9582723884905,
+        "dac_project_funding": 2283.852807086643,
+        "dac_project_target": 529200.0,
+        "dac_required_surcharge": 79380.0,
+        "dac_reserve_cash": 485.98103881996684,
+        "dac_returned_or_cancelled_principal": 5368.52754423885,
+        "dac_surcharge_inflow": 342.5779210629965,
+        "donation_displacement": 284.7964450437044,
+        "failed_settlement_losses": 6.85155842125993,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 175.63871573097111,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 590.1700779551877,
+        "new_cash": 982.0567070472566,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 76.16649111633956,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 13.70311684251986,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.7612842690288811,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 432.18000000000006,
+        "timing_only_shifts": 68.74396949330797,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "direct": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 1684.6591151086557,
+        "cause_directed_cash": 25064.44049308,
+        "chargeback_losses": 123.26774012990164,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 1.8232363950499826,
+        "completed_consumption_change": 57.43230254193607,
+        "completed_dietary_animal_product": 71.79037817742008,
+        "completed_direct_trades": 305.2198184022318,
+        "completed_learning_forecasting_strategic_reasoning": 57.43230254193607,
+        "completed_same_action_coacts": 7.827024928244876,
+        "completed_skilled_work": 75.5688191341264,
+        "completed_transport_carbon": 52.64627733010807,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 3125.535729487076,
+        "failed_settlement_losses": 123.26774012990164,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 5967.514567428669,
+        "new_cash": 10777.7094120244,
+        "ordinary_action_hours": 409.37666015296753,
+        "personal_income_transfers": 16024.806216887213,
+        "processor_fees": 1191.5881545890493,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 246.53548025980328,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 88.0194842308461,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 173.1785438490397,
+        "timing_only_shifts": 754.439658841708,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "platform_shared": {
+        "api_costs": 10000.0,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 65000.0,
+        "cause_directed_cash": 0.0,
+        "chargeback_losses": 0.0,
+        "cloud_costs": 10000.0,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 0.0,
+        "failed_settlement_losses": 0.0,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 7500.0,
+        "net_causal_cash": -65000.0,
+        "new_cash": 0.0,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 0.0,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 0.0,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 12500.0,
+        "security_cash_costs": 7500.0,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 17500.0,
+        "support_review_coordination_hours": 300000.0,
+        "timing_only_shifts": 0.0,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "redirect": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 16052.464032815518,
+        "cause_directed_cash": 293780.4304457087,
+        "chargeback_losses": 0.0,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 3463.0871190102666,
+        "failed_settlement_losses": 7532.831549889967,
+        "gross_planned_principal": 1767858.2759869606,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 215980.16129850232,
+        "new_cash": 11941.679720725058,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 8519.632482925552,
+        "redirect_cleared_principal": 272829.8279568985,
+        "redirect_matcher_addon_cash": 28483.434038700198,
+        "redirect_payment_settlement_loss": 7532.831549889967,
+        "redirect_settled_principal": 266009.082257976,
+        "refund_losses": 0.0,
+        "rescued_cash": 223554.03272960306,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 0.0,
+        "timing_only_shifts": 835.9175804507541,
+        "unmatched_fallback_cash": 1495028.448030062,
+        "within_high_impact_reallocation": 42455.049528372976
+      }
+    },
+    "five_year_cumulative": {
+      "dac": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 37.906263946409524,
+        "cash_operating_costs": 392.75220608217757,
+        "cause_directed_cash": 7879.998065124678,
+        "chargeback_losses": 23.639994195374033,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 3648.910973982744,
+        "dac_bonus_liability_released": 490.0556451152844,
+        "dac_bonus_paid": 3158.85532886746,
+        "dac_capacity_waiting_pledges": 315145.63751474716,
+        "dac_free_reserve": 436.5247216724116,
+        "dac_funding_lost_to_surcharge": 32817.2780213129,
+        "dac_gross_threshold": 1542828.0906853918,
+        "dac_incremental_funding_caused_by_bonus": 26.78839580478757,
+        "dac_pledge_principal": 66829.87131836527,
+        "dac_project_funding": 7879.998065124678,
+        "dac_project_target": 1345050.0,
+        "dac_required_surcharge": 197778.0906853919,
+        "dac_reserve_cash": 436.5247216724116,
+        "dac_returned_or_cancelled_principal": 57854.49320270073,
+        "dac_surcharge_inflow": 1095.3800505398717,
+        "donation_displacement": 982.6357587210473,
+        "failed_settlement_losses": 23.639994195374033,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 445.72333397829186,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 2013.0112032003863,
+        "new_cash": 3388.399168003611,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 260.2859653542719,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 47.279988390748066,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 2.626666021708226,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 1098.4575000000002,
+        "timing_only_shifts": 237.18794176025278,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "direct": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 4281.841917567835,
+        "cause_directed_cash": 63705.45291991168,
+        "chargeback_losses": 313.3055061635001,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 4.634059170752041,
+        "completed_consumption_change": 145.9737689607542,
+        "completed_dietary_animal_product": 182.46721120094273,
+        "completed_direct_trades": 775.767038439006,
+        "completed_learning_forecasting_strategic_reasoning": 145.9737689607542,
+        "completed_same_action_coacts": 19.893688359289065,
+        "completed_skilled_work": 192.0707486325713,
+        "completed_transport_carbon": 133.8092882140247,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 7944.0699791129855,
+        "failed_settlement_losses": 313.3055061635001,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 15167.432858881202,
+        "new_cash": 27393.344755562022,
+        "ordinary_action_hours": 1040.4990112221262,
+        "personal_income_transfers": 40729.71580125501,
+        "processor_fees": 3028.6198929138345,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 626.6110123270003,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 223.71618908673383,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 440.16213228297596,
+        "timing_only_shifts": 1917.534132889342,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "platform_shared": {
+        "api_costs": 25416.66666666667,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 165208.33333333334,
+        "cause_directed_cash": 0.0,
+        "chargeback_losses": 0.0,
+        "cloud_costs": 25416.66666666667,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 0.0,
+        "failed_settlement_losses": 0.0,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 19062.5,
+        "net_causal_cash": -165208.33333333334,
+        "new_cash": 0.0,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 0.0,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 0.0,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 31770.833333333336,
+        "security_cash_costs": 19062.5,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 44479.16666666667,
+        "support_review_coordination_hours": 762500.0,
+        "timing_only_shifts": 0.0,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "redirect": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 40800.01275007278,
+        "cause_directed_cash": 746691.9273828429,
+        "chargeback_losses": 0.0,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 8802.013094151094,
+        "failed_settlement_losses": 19145.946855970335,
+        "gross_planned_principal": 4493306.451466858,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 548949.5766336934,
+        "new_cash": 30351.76929017619,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 21654.065894102445,
+        "redirect_cleared_principal": 693442.4793904504,
+        "redirect_matcher_addon_cash": 72395.39484836301,
+        "redirect_payment_settlement_loss": 19145.946855970335,
+        "redirect_settled_principal": 676106.4174056891,
+        "refund_losses": 0.0,
+        "rescued_cash": 568199.833187741,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 0.0,
+        "timing_only_shifts": 2124.6238503123336,
+        "unmatched_fallback_cash": 3799863.9720764086,
+        "within_high_impact_reallocation": 107906.584217948
+      }
+    },
+    "year_1": {
+      "dac": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 10.715976295578832,
+        "cash_operating_costs": 64.79627322799286,
+        "cause_directed_cash": 1247.9000452050739,
+        "chargeback_losses": 3.7437001356152217,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 966.6242350761019,
+        "dac_bonus_liability_released": 73.62621044453248,
+        "dac_bonus_paid": 892.9980246315694,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 1707.5673229203617,
+        "dac_funding_lost_to_surcharge": 477.6014644134459,
+        "dac_gross_threshold": 61950.090685392,
+        "dac_incremental_funding_caused_by_bonus": 26.78839580478757,
+        "dac_pledge_principal": 17703.740569159374,
+        "dac_project_funding": 1247.9000452050739,
+        "dac_project_target": 57330.00000000001,
+        "dac_required_surcharge": 4620.090685391995,
+        "dac_reserve_cash": 1707.5673229203617,
+        "dac_returned_or_cancelled_principal": 16355.275176402369,
+        "dac_surcharge_inflow": 100.56534755193124,
+        "donation_displacement": 155.6131356370727,
+        "failed_settlement_losses": 3.7437001356152217,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 18.694033318264978,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 316.1876105731162,
+        "new_cash": 536.5970194381817,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 39.105496389953146,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 7.4874002712304435,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.4159666817350246,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 46.81950000000001,
+        "timing_only_shifts": 37.56179136067273,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "direct": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 182.50473747010452,
+        "cause_directed_cash": 2715.314386750335,
+        "chargeback_losses": 13.354005180739353,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 0.19751727613041484,
+        "completed_consumption_change": 6.22183277537641,
+        "completed_dietary_animal_product": 7.7772909692205126,
+        "completed_direct_trades": 33.065480326908464,
+        "completed_learning_forecasting_strategic_reasoning": 6.22183277537641,
+        "completed_same_action_coacts": 0.847927700559862,
+        "completed_skilled_work": 8.186622072863697,
+        "completed_transport_carbon": 5.70334671076171,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 338.59970402776673,
+        "failed_settlement_losses": 13.354005180739353,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 646.4807448047727,
+        "new_cash": 1167.585186302644,
+        "ordinary_action_hours": 44.349138183238175,
+        "personal_income_transfers": 1736.0206734961157,
+        "processor_fees": 129.0887167471471,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 26.708010361478706,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 9.53544412500833,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 18.76100891697931,
+        "timing_only_shifts": 81.73096304118508,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "platform_shared": {
+        "api_costs": 1083.3333333333335,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 7041.666666666668,
+        "cause_directed_cash": 0.0,
+        "chargeback_losses": 0.0,
+        "cloud_costs": 1083.3333333333335,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 0.0,
+        "failed_settlement_losses": 0.0,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 812.5,
+        "net_causal_cash": -7041.666666666668,
+        "new_cash": 0.0,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 0.0,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 0.0,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 1354.166666666667,
+        "security_cash_costs": 812.5,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 1895.8333333333337,
+        "support_review_coordination_hours": 32500.0,
+        "timing_only_shifts": 0.0,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "redirect": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 1739.0169368883485,
+        "cause_directed_cash": 31826.213298285118,
+        "chargeback_losses": 0.0,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 375.1677712261123,
+        "failed_settlement_losses": 816.05675123808,
+        "gross_planned_principal": 191517.97989858745,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 23397.85080733776,
+        "new_cash": 1293.681969745215,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 922.9601856502685,
+        "redirect_cleared_principal": 29556.564695330675,
+        "redirect_matcher_addon_cash": 3085.7053541925225,
+        "redirect_payment_settlement_loss": 816.05675123808,
+        "redirect_settled_principal": 28817.650577947406,
+        "refund_losses": 0.0,
+        "rescued_cash": 24218.353545707003,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 0.0,
+        "timing_only_shifts": 90.55773788216506,
+        "unmatched_fallback_cash": 161961.41520325677,
+        "within_high_impact_reallocation": 4599.297032240406
+      }
+    },
+    "year_5_annual": {
+      "dac": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 2.5345698598400195,
+        "cash_operating_costs": 95.56711898265532,
+        "cause_directed_cash": 2051.43437977542,
+        "chargeback_losses": 6.15430313932626,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 340.0237196927669,
+        "dac_bonus_liability_released": 128.80956470609863,
+        "dac_bonus_paid": 211.2141549866683,
+        "dac_capacity_waiting_pledges": 129576.79417905748,
+        "dac_free_reserve": 436.5247216724116,
+        "dac_funding_lost_to_surcharge": 12459.155128489903,
+        "dac_gross_threshold": 552793.5000000001,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 6227.54065371368,
+        "dac_project_funding": 2051.43437977542,
+        "dac_project_target": 480690.0000000001,
+        "dac_required_surcharge": 72103.5,
+        "dac_reserve_cash": 436.5247216724116,
+        "dac_returned_or_cancelled_principal": 3868.3911169719468,
+        "dac_surcharge_inflow": 307.715156966313,
+        "donation_displacement": 255.81386715799485,
+        "failed_settlement_losses": 6.15430313932626,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 159.5461885400749,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 530.7357971627804,
+        "new_cash": 882.1167833034306,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 68.41533656551026,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 12.30860627865252,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.68381145992514,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 392.56350000000015,
+        "timing_only_shifts": 61.74817483124014,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "direct": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 1530.2320295570294,
+        "cause_directed_cash": 22766.86678121434,
+        "chargeback_losses": 111.9681972846607,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 1.6561063921704013,
+        "completed_consumption_change": 52.16767480892527,
+        "completed_dietary_animal_product": 65.20959351115658,
+        "completed_direct_trades": 277.24133504869394,
+        "completed_learning_forecasting_strategic_reasoning": 52.16767480892527,
+        "completed_same_action_coacts": 7.109547643155764,
+        "completed_skilled_work": 68.64167738016482,
+        "completed_transport_carbon": 47.82036857484817,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 2839.028287617428,
+        "failed_settlement_losses": 111.9681972846607,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 5420.492398747709,
+        "new_cash": 9789.752715922166,
+        "ordinary_action_hours": 371.8504663056123,
+        "personal_income_transfers": 14555.865647005892,
+        "processor_fees": 1082.3592404183867,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 223.9363945693214,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 79.95103150968522,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 157.30384399621107,
+        "timing_only_shifts": 685.2826901145517,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "platform_shared": {
+        "api_costs": 9083.333333333336,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 59041.66666666668,
+        "cause_directed_cash": 0.0,
+        "chargeback_losses": 0.0,
+        "cloud_costs": 9083.333333333336,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 0.0,
+        "failed_settlement_losses": 0.0,
+        "gross_planned_principal": 0.0,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 6812.500000000001,
+        "net_causal_cash": -59041.66666666668,
+        "new_cash": 0.0,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 0.0,
+        "redirect_cleared_principal": 0.0,
+        "redirect_matcher_addon_cash": 0.0,
+        "redirect_payment_settlement_loss": 0.0,
+        "redirect_settled_principal": 0.0,
+        "refund_losses": 0.0,
+        "rescued_cash": 0.0,
+        "review_cash_costs": 11354.16666666667,
+        "security_cash_costs": 6812.500000000001,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 15895.833333333338,
+        "support_review_coordination_hours": 272500.0,
+        "timing_only_shifts": 0.0,
+        "unmatched_fallback_cash": 0.0,
+        "within_high_impact_reallocation": 0.0
+      },
+      "redirect": {
+        "api_costs": 0.0,
+        "bonus_transfer_fees": 0.0,
+        "cash_operating_costs": 14580.988163140766,
+        "cause_directed_cash": 266850.5576548521,
+        "chargeback_losses": 0.0,
+        "cloud_costs": 0.0,
+        "completed_complementary_role_coacts": 0.0,
+        "completed_consumption_change": 0.0,
+        "completed_dietary_animal_product": 0.0,
+        "completed_direct_trades": 0.0,
+        "completed_learning_forecasting_strategic_reasoning": 0.0,
+        "completed_same_action_coacts": 0.0,
+        "completed_skilled_work": 0.0,
+        "completed_transport_carbon": 0.0,
+        "dac_bonus_liability_locked": 0.0,
+        "dac_bonus_liability_released": 0.0,
+        "dac_bonus_paid": 0.0,
+        "dac_capacity_waiting_pledges": 0.0,
+        "dac_free_reserve": 0.0,
+        "dac_funding_lost_to_surcharge": 0.0,
+        "dac_gross_threshold": 0.0,
+        "dac_incremental_funding_caused_by_bonus": 0.0,
+        "dac_pledge_principal": 0.0,
+        "dac_project_funding": 0.0,
+        "dac_project_target": 0.0,
+        "dac_required_surcharge": 0.0,
+        "dac_reserve_cash": 0.0,
+        "dac_returned_or_cancelled_principal": 0.0,
+        "dac_surcharge_inflow": 0.0,
+        "donation_displacement": 3145.6374664343257,
+        "failed_settlement_losses": 6842.321991150054,
+        "gross_planned_principal": 1605804.600688156,
+        "lapsed_dac_projects": 0.0,
+        "legal_cash_costs": 0.0,
+        "net_causal_cash": 196181.9798461396,
+        "new_cash": 10847.025746325262,
+        "ordinary_action_hours": 0.0,
+        "personal_income_transfers": 0.0,
+        "processor_fees": 7738.6661719907115,
+        "redirect_cleared_principal": 247820.42706084947,
+        "redirect_matcher_addon_cash": 25872.45258515268,
+        "redirect_payment_settlement_loss": 6842.321991150054,
+        "redirect_settled_principal": 241624.91638432821,
+        "refund_losses": 0.0,
+        "rescued_cash": 203061.57972938946,
+        "review_cash_costs": 0.0,
+        "security_cash_costs": 0.0,
+        "skilled_work_hours": 0.0,
+        "successful_dac_projects": 0.0,
+        "support_cash_costs": 0.0,
+        "support_review_coordination_hours": 0.0,
+        "timing_only_shifts": 759.2918022427684,
+        "unmatched_fallback_cash": 1357984.1736273065,
+        "within_high_impact_reallocation": 38563.33665493879
+      }
+    }
+  },
+  "portfolio": {
+    "eoy5_annualized_run_rate": {
+      "api_costs": 10000.0,
+      "bonus_transfer_fees": 3.517459246985295,
+      "cash_operating_costs": 82844.21333197254,
+      "cause_directed_cash": 321128.72374587535,
+      "chargeback_losses": 130.11929855116156,
+      "cloud_costs": 10000.0,
+      "completed_complementary_role_coacts": 1.8232363950499826,
+      "completed_consumption_change": 57.43230254193607,
+      "completed_dietary_animal_product": 71.79037817742008,
+      "completed_direct_trades": 305.2198184022318,
+      "completed_learning_forecasting_strategic_reasoning": 57.43230254193607,
+      "completed_same_action_coacts": 7.827024928244876,
+      "completed_skilled_work": 75.5688191341264,
+      "completed_transport_carbon": 52.64627733010807,
+      "dac_bonus_liability_locked": 436.5247216724116,
+      "dac_bonus_liability_released": 143.40311775697035,
+      "dac_bonus_paid": 293.12160391544126,
+      "dac_capacity_waiting_pledges": 141514.65367999714,
+      "dac_free_reserve": 485.98103881996684,
+      "dac_funding_lost_to_surcharge": 13691.161766587793,
+      "dac_gross_threshold": 608580.0,
+      "dac_incremental_funding_caused_by_bonus": 0.0,
+      "dac_pledge_principal": 7994.9582723884905,
+      "dac_project_funding": 2283.852807086643,
+      "dac_project_target": 529200.0,
+      "dac_required_surcharge": 79380.0,
+      "dac_reserve_cash": 485.98103881996684,
+      "dac_returned_or_cancelled_principal": 5368.52754423885,
+      "dac_surcharge_inflow": 342.5779210629965,
+      "donation_displacement": 6873.419293541047,
+      "failed_settlement_losses": 7662.950848441129,
+      "gross_planned_principal": 1767858.2759869606,
+      "lapsed_dac_projects": 175.63871573097111,
+      "legal_cash_costs": 7500.0,
+      "net_causal_cash": 157537.84594388618,
+      "new_cash": 23701.445839796714,
+      "ordinary_action_hours": 409.37666015296753,
+      "personal_income_transfers": 16024.806216887213,
+      "processor_fees": 9787.38712863094,
+      "redirect_cleared_principal": 272829.8279568985,
+      "redirect_matcher_addon_cash": 28483.434038700198,
+      "redirect_payment_settlement_loss": 7532.831549889967,
+      "redirect_settled_principal": 266009.082257976,
+      "refund_losses": 260.2385971023231,
+      "rescued_cash": 223554.03272960306,
+      "review_cash_costs": 12500.0,
+      "security_cash_costs": 7500.0,
+      "skilled_work_hours": 88.0194842308461,
+      "successful_dac_projects": 0.7612842690288811,
+      "support_cash_costs": 17500.0,
+      "support_review_coordination_hours": 300605.358543849,
+      "timing_only_shifts": 1659.10120878577,
+      "unmatched_fallback_cash": 1495028.448030062,
+      "within_high_impact_reallocation": 42455.049528372976
+    },
+    "five_year_cumulative": {
+      "api_costs": 25416.66666666667,
+      "bonus_transfer_fees": 37.906263946409524,
+      "cash_operating_costs": 210682.94020705612,
+      "cause_directed_cash": 818277.3783678793,
+      "chargeback_losses": 336.94550035887414,
+      "cloud_costs": 25416.66666666667,
+      "completed_complementary_role_coacts": 4.634059170752041,
+      "completed_consumption_change": 145.9737689607542,
+      "completed_dietary_animal_product": 182.46721120094273,
+      "completed_direct_trades": 775.767038439006,
+      "completed_learning_forecasting_strategic_reasoning": 145.9737689607542,
+      "completed_same_action_coacts": 19.893688359289065,
+      "completed_skilled_work": 192.0707486325713,
+      "completed_transport_carbon": 133.8092882140247,
+      "dac_bonus_liability_locked": 3648.910973982744,
+      "dac_bonus_liability_released": 490.0556451152844,
+      "dac_bonus_paid": 3158.85532886746,
+      "dac_capacity_waiting_pledges": 315145.63751474716,
+      "dac_free_reserve": 436.5247216724116,
+      "dac_funding_lost_to_surcharge": 32817.2780213129,
+      "dac_gross_threshold": 1542828.0906853918,
+      "dac_incremental_funding_caused_by_bonus": 26.78839580478757,
+      "dac_pledge_principal": 66829.87131836527,
+      "dac_project_funding": 7879.998065124678,
+      "dac_project_target": 1345050.0,
+      "dac_required_surcharge": 197778.0906853919,
+      "dac_reserve_cash": 436.5247216724116,
+      "dac_returned_or_cancelled_principal": 57854.49320270073,
+      "dac_surcharge_inflow": 1095.3800505398717,
+      "donation_displacement": 17728.718831985127,
+      "failed_settlement_losses": 19482.89235632921,
+      "gross_planned_principal": 4493306.451466858,
+      "lapsed_dac_projects": 445.72333397829186,
+      "legal_cash_costs": 19062.5,
+      "net_causal_cash": 400921.6873624416,
+      "new_cash": 61133.513213741826,
+      "ordinary_action_hours": 1040.4990112221262,
+      "personal_income_transfers": 40729.71580125501,
+      "processor_fees": 24942.971752370555,
+      "redirect_cleared_principal": 693442.4793904504,
+      "redirect_matcher_addon_cash": 72395.39484836301,
+      "redirect_payment_settlement_loss": 19145.946855970335,
+      "redirect_settled_principal": 676106.4174056891,
+      "refund_losses": 673.8910007177483,
+      "rescued_cash": 568199.833187741,
+      "review_cash_costs": 31770.833333333336,
+      "security_cash_costs": 19062.5,
+      "skilled_work_hours": 223.71618908673383,
+      "successful_dac_projects": 2.626666021708226,
+      "support_cash_costs": 44479.16666666667,
+      "support_review_coordination_hours": 764038.619632283,
+      "timing_only_shifts": 4279.345924961928,
+      "unmatched_fallback_cash": 3799863.9720764086,
+      "within_high_impact_reallocation": 107906.584217948
+    },
+    "year_1": {
+      "api_costs": 1083.3333333333335,
+      "bonus_transfer_fees": 10.715976295578832,
+      "cash_operating_costs": 9027.984614253113,
+      "cause_directed_cash": 35789.42773024053,
+      "chargeback_losses": 17.097705316354574,
+      "cloud_costs": 1083.3333333333335,
+      "completed_complementary_role_coacts": 0.19751727613041484,
+      "completed_consumption_change": 6.22183277537641,
+      "completed_dietary_animal_product": 7.7772909692205126,
+      "completed_direct_trades": 33.065480326908464,
+      "completed_learning_forecasting_strategic_reasoning": 6.22183277537641,
+      "completed_same_action_coacts": 0.847927700559862,
+      "completed_skilled_work": 8.186622072863697,
+      "completed_transport_carbon": 5.70334671076171,
+      "dac_bonus_liability_locked": 966.6242350761019,
+      "dac_bonus_liability_released": 73.62621044453248,
+      "dac_bonus_paid": 892.9980246315694,
+      "dac_capacity_waiting_pledges": 0.0,
+      "dac_free_reserve": 1707.5673229203617,
+      "dac_funding_lost_to_surcharge": 477.6014644134459,
+      "dac_gross_threshold": 61950.090685392,
+      "dac_incremental_funding_caused_by_bonus": 26.78839580478757,
+      "dac_pledge_principal": 17703.740569159374,
+      "dac_project_funding": 1247.9000452050739,
+      "dac_project_target": 57330.00000000001,
+      "dac_required_surcharge": 4620.090685391995,
+      "dac_reserve_cash": 1707.5673229203617,
+      "dac_returned_or_cancelled_principal": 16355.275176402369,
+      "dac_surcharge_inflow": 100.56534755193124,
+      "donation_displacement": 869.3806108909516,
+      "failed_settlement_losses": 833.1544565544345,
+      "gross_planned_principal": 191517.97989858745,
+      "lapsed_dac_projects": 18.694033318264978,
+      "legal_cash_costs": 812.5,
+      "net_causal_cash": 17318.852496048978,
+      "new_cash": 2997.8641754860405,
+      "ordinary_action_hours": 44.349138183238175,
+      "personal_income_transfers": 1736.0206734961157,
+      "processor_fees": 1091.1543987873688,
+      "redirect_cleared_principal": 29556.564695330675,
+      "redirect_matcher_addon_cash": 3085.7053541925225,
+      "redirect_payment_settlement_loss": 816.05675123808,
+      "redirect_settled_principal": 28817.650577947406,
+      "refund_losses": 34.19541063270915,
+      "rescued_cash": 24218.353545707003,
+      "review_cash_costs": 1354.166666666667,
+      "security_cash_costs": 812.5,
+      "skilled_work_hours": 9.53544412500833,
+      "successful_dac_projects": 0.4159666817350246,
+      "support_cash_costs": 1895.8333333333337,
+      "support_review_coordination_hours": 32565.58050891698,
+      "timing_only_shifts": 209.85049228402283,
+      "unmatched_fallback_cash": 161961.41520325677,
+      "within_high_impact_reallocation": 4599.297032240406
+    },
+    "year_5_annual": {
+      "api_costs": 9083.333333333336,
+      "bonus_transfer_fees": 2.5345698598400195,
+      "cash_operating_costs": 75248.45397834714,
+      "cause_directed_cash": 291668.85881584184,
+      "chargeback_losses": 118.12250042398696,
+      "cloud_costs": 9083.333333333336,
+      "completed_complementary_role_coacts": 1.6561063921704013,
+      "completed_consumption_change": 52.16767480892527,
+      "completed_dietary_animal_product": 65.20959351115658,
+      "completed_direct_trades": 277.24133504869394,
+      "completed_learning_forecasting_strategic_reasoning": 52.16767480892527,
+      "completed_same_action_coacts": 7.109547643155764,
+      "completed_skilled_work": 68.64167738016482,
+      "completed_transport_carbon": 47.82036857484817,
+      "dac_bonus_liability_locked": 340.0237196927669,
+      "dac_bonus_liability_released": 128.80956470609863,
+      "dac_bonus_paid": 211.2141549866683,
+      "dac_capacity_waiting_pledges": 129576.79417905748,
+      "dac_free_reserve": 436.5247216724116,
+      "dac_funding_lost_to_surcharge": 12459.155128489903,
+      "dac_gross_threshold": 552793.5000000001,
+      "dac_incremental_funding_caused_by_bonus": 0.0,
+      "dac_pledge_principal": 6227.54065371368,
+      "dac_project_funding": 2051.43437977542,
+      "dac_project_target": 480690.0000000001,
+      "dac_required_surcharge": 72103.5,
+      "dac_reserve_cash": 436.5247216724116,
+      "dac_returned_or_cancelled_principal": 3868.3911169719468,
+      "dac_surcharge_inflow": 307.715156966313,
+      "donation_displacement": 6240.479621209748,
+      "failed_settlement_losses": 6960.444491574041,
+      "gross_planned_principal": 1605804.600688156,
+      "lapsed_dac_projects": 159.5461885400749,
+      "legal_cash_costs": 6812.500000000001,
+      "net_causal_cash": 143091.54137538344,
+      "new_cash": 21518.89524555086,
+      "ordinary_action_hours": 371.8504663056123,
+      "personal_income_transfers": 14555.865647005892,
+      "processor_fees": 8889.44074897461,
+      "redirect_cleared_principal": 247820.42706084947,
+      "redirect_matcher_addon_cash": 25872.45258515268,
+      "redirect_payment_settlement_loss": 6842.321991150054,
+      "redirect_settled_principal": 241624.91638432821,
+      "refund_losses": 236.24500084797393,
+      "rescued_cash": 203061.57972938946,
+      "review_cash_costs": 11354.16666666667,
+      "security_cash_costs": 6812.500000000001,
+      "skilled_work_hours": 79.95103150968522,
+      "successful_dac_projects": 0.68381145992514,
+      "support_cash_costs": 15895.833333333338,
+      "support_review_coordination_hours": 273049.8673439962,
+      "timing_only_shifts": 1506.3226671885604,
+      "unmatched_fallback_cash": 1357984.1736273065,
+      "within_high_impact_reallocation": 38563.33665493879
+    }
+  },
+  "scenario": "central",
+  "schema_version": 1,
+  "seed": 69520260814,
+  "status": "transparent central reference; prior-driven, not empirical"
+}

@@ -1,0 +1,15 @@
+{
+  "candidate_tree_hash": "d16be958748a00ab91aa38bc4436ef577fb88446e02c6740c3d697f0c69fc932",
+  "compared_file_count": 21,
+  "draws_per_scenario_and_basis": 200000,
+  "excluded_self_or_post_validation_files": [
+    "fast_gate.json",
+    "independent_validation.json",
+    "reproducibility_check.json",
+    "reproducibility_manifest.json"
+  ],
+  "reference_tree_hash": "d16be958748a00ab91aa38bc4436ef577fb88446e02c6740c3d697f0c69fc932",
+  "schema_version": 1,
+  "status": "byte_stable",
+  "warning": "Byte stability proves reproducibility of the synthetic computation, not empirical validity."
+}

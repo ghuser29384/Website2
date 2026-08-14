@@ -1,0 +1,8 @@
+{
+  "model_v1_owner_reported_approximate_conditional_five_year_median_usd": 580000.0,
+  "model_v2_conditional_five_year_median_net_causal_cash_usd": 121522.18757554394,
+  "nominal_difference_usd": -458477.81242445606,
+  "ratio_v2_to_v1": 0.20952101306128265,
+  "specific_structural_differences_documented_in": "MODEL_V1_COMPARISON.md",
+  "warning": "Different estimands and structures; not tuned for agreement and not a report cutover."
+}

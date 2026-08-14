@@ -1,0 +1,15 @@
+{
+  "anti_tuning_rule": "No prior or scenario changes after inspecting output without preserving the first complete run and logging before/after results.",
+  "files": {
+    "ARCHETYPE_LEDGER.csv": "a011d0fcd6c633c9fc5a18341411ad9a833cbaf114cac45a5dd47ffd16ede7d7",
+    "MODEL_SPEC.md": "dfb11464f4411384e1960a354c64be03d85e55568e8faf6beb574e3c2b070ea8",
+    "PARAMETER_LEDGER.csv": "7c3b5a679ca9de8aa5f9a93f21203ff840d057c1e0c918b436a3183dacc0b628",
+    "PARAMETER_LEDGER.json": "1a2b923c57a8955b52b8be8e8d845bd0114cfb4fa16489a4a1b78e97f6963895",
+    "RESOURCE_PROFILES.json": "7944a842cf9ed8fc849bb189c0b8a99b04a5744a1fe59478c31199446f5800d2",
+    "SCENARIOS.json": "11056a028230c954caa366a941011a44a0b5935d54098a64a0f55e39da2efa7e",
+    "SENSITIVITY_AND_CRUX.md": "a1936135dfadd9baa3780cb02bfaaeb807c387a23d3080700d2d79011f4777a8"
+  },
+  "input_set_hash": "f855e4ed730f554e5a2572c21e6dc950896ce6aee2f3e9fd7729235720ada02f",
+  "schema_version": 1,
+  "status": "frozen_before_results"
+}

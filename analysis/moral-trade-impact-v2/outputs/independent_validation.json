@@ -1,0 +1,4602 @@
+{
+  "check_count": 1148,
+  "checks": [
+    {
+      "check": "required artifact exists: frozen_input_snapshot.json",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: first_complete_run.json",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: deterministic_reference.json",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: cohort_summary.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: archetype_summary.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: resolved_resource_profiles.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: portfolio_summary.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: mechanism_summary.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: field_appendix.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: dac_reserve_diagnostics.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: model_invariants.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: general_sensitivity.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: dac_policy_sensitivity.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: monte_carlo_convergence.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: parameter_correlations.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: variance_drivers.csv",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: research_dossier.json",
+      "passed": true
+    },
+    {
+      "check": "required artifact exists: model_v1_comparison.json",
+      "passed": true
+    },
+    {
+      "check": "month 12 exact active milestone",
+      "passed": true
+    },
+    {
+      "check": "month 12 EA reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 12 support-only reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 24 exact active milestone",
+      "passed": true
+    },
+    {
+      "check": "month 24 EA reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 24 support-only reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 36 exact active milestone",
+      "passed": true
+    },
+    {
+      "check": "month 36 EA reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 36 support-only reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 48 exact active milestone",
+      "passed": true
+    },
+    {
+      "check": "month 48 EA reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 48 support-only reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 60 exact active milestone",
+      "passed": true
+    },
+    {
+      "check": "month 60 EA reconciliation",
+      "passed": true
+    },
+    {
+      "check": "month 60 support-only reconciliation",
+      "passed": true
+    },
+    {
+      "check": "all draw-level accounting invariants pass",
+      "passed": true
+    },
+    {
+      "check": "full artifacts use 200000 draws",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: central/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: central/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: central/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: central/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: central/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: central/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: central/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: central/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: central/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: central/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: central/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: central/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: central/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: central/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: central/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: central/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: central/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: central/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: central/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: central/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: central/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: central/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: central/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: central/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: compulsory_5pct_governance/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: compulsory_5pct_governance/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: compulsory_5pct_governance/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: compulsory_5pct_governance/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: compulsory_5pct_governance/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: compulsory_5pct_governance/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: compulsory_5pct_governance/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: compulsory_5pct_governance/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: compulsory_5pct_governance/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: compulsory_5pct_governance/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: compulsory_5pct_governance/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: compulsory_5pct_governance/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: compulsory_5pct_governance/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: compulsory_5pct_governance/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: compulsory_5pct_governance/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: compulsory_5pct_governance/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: compulsory_5pct_governance/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: compulsory_5pct_governance/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: direct_trade_underperformance/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: direct_trade_underperformance/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: direct_trade_underperformance/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: direct_trade_underperformance/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: direct_trade_underperformance/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: direct_trade_underperformance/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: direct_trade_underperformance/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: direct_trade_underperformance/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: direct_trade_underperformance/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: direct_trade_underperformance/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: direct_trade_underperformance/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: direct_trade_underperformance/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: direct_trade_underperformance/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: direct_trade_underperformance/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: direct_trade_underperformance/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: direct_trade_underperformance/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: direct_trade_underperformance/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: direct_trade_underperformance/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: direct_trade_underperformance/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: direct_trade_underperformance/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: direct_trade_underperformance/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: high_bonus_surcharge_sensitive/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: high_bonus_surcharge_sensitive/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: high_bonus_surcharge_sensitive/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: high_bonus_surcharge_sensitive/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: high_bonus_surcharge_sensitive/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: high_bonus_surcharge_sensitive/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: high_bonus_surcharge_sensitive/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: high_bonus_surcharge_sensitive/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: high_bonus_surcharge_sensitive/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: high_bonus_surcharge_sensitive/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: high_bonus_surcharge_sensitive/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: near_zero_additionality/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: near_zero_additionality/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: near_zero_additionality/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: near_zero_additionality/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: near_zero_additionality/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: near_zero_additionality/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: near_zero_additionality/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: near_zero_additionality/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: near_zero_additionality/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: near_zero_additionality/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: near_zero_additionality/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: near_zero_additionality/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: near_zero_additionality/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: near_zero_additionality/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: near_zero_additionality/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: near_zero_additionality/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: near_zero_additionality/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: near_zero_additionality/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: near_zero_additionality/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: near_zero_additionality/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: near_zero_additionality/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: redirect_dominant/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: redirect_dominant/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: redirect_dominant/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: redirect_dominant/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: redirect_dominant/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: redirect_dominant/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: redirect_dominant/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: redirect_dominant/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: redirect_dominant/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: redirect_dominant/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: redirect_dominant/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: redirect_dominant/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: redirect_dominant/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: redirect_dominant/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: redirect_dominant/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: redirect_dominant/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: redirect_dominant/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: redirect_dominant/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: redirect_dominant/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: redirect_dominant/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: redirect_dominant/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: redirect_dominant/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: redirect_dominant/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: redirect_dominant/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: reserve_constrained_dacs/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: reserve_constrained_dacs/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: reserve_constrained_dacs/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: reserve_constrained_dacs/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: reserve_constrained_dacs/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: reserve_constrained_dacs/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: reserve_constrained_dacs/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: reserve_constrained_dacs/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: reserve_constrained_dacs/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: reserve_constrained_dacs/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: reserve_constrained_dacs/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: reserve_constrained_dacs/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: reserve_constrained_dacs/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: reserve_constrained_dacs/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: reserve_constrained_dacs/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: reserve_constrained_dacs/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: reserve_constrained_dacs/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: reserve_constrained_dacs/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: strong_network_repeat/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: strong_network_repeat/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: strong_network_repeat/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: strong_network_repeat/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: strong_network_repeat/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: strong_network_repeat/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: strong_network_repeat/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: strong_network_repeat/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: strong_network_repeat/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: strong_network_repeat/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: strong_network_repeat/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: strong_network_repeat/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: strong_network_repeat/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: strong_network_repeat/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: strong_network_repeat/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: strong_network_repeat/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: strong_network_repeat/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: strong_network_repeat/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: strong_network_repeat/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: strong_network_repeat/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: strong_network_repeat/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: thin_market/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: thin_market/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: thin_market/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: thin_market/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: thin_market/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: thin_market/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: thin_market/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: thin_market/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: thin_market/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: thin_market/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: thin_market/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: thin_market/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: thin_market/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: thin_market/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: thin_market/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: thin_market/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: thin_market/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: thin_market/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: thin_market/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: thin_market/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: thin_market/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: thin_market/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: thin_market/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: thin_market/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: trust_evidence_failure/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: trust_evidence_failure/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: trust_evidence_failure/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: trust_evidence_failure/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: trust_evidence_failure/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: trust_evidence_failure/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: trust_evidence_failure/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: trust_evidence_failure/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: trust_evidence_failure/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: trust_evidence_failure/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: trust_evidence_failure/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: trust_evidence_failure/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: trust_evidence_failure/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: trust_evidence_failure/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: trust_evidence_failure/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: trust_evidence_failure/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: trust_evidence_failure/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: trust_evidence_failure/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: trust_evidence_failure/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: trust_evidence_failure/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: trust_evidence_failure/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: voluntary_pools/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: voluntary_pools/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: voluntary_pools/conditional/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: voluntary_pools/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: voluntary_pools/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: voluntary_pools/conditional/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: voluntary_pools/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: voluntary_pools/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: voluntary_pools/conditional/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: voluntary_pools/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: voluntary_pools/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: voluntary_pools/conditional/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: voluntary_pools/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: voluntary_pools/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: voluntary_pools/probability_weighted/eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: voluntary_pools/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: voluntary_pools/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: voluntary_pools/probability_weighted/five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: voluntary_pools/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: voluntary_pools/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: voluntary_pools/probability_weighted/year_1",
+      "passed": true
+    },
+    {
+      "check": "portfolio mean net cash reconciles: voluntary_pools/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "cash cost categories reconcile: voluntary_pools/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "mean displacement bounded: voluntary_pools/probability_weighted/year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: central/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: thin_market/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/year_1/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/year_1/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/year_5_annual/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/year_5_annual/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/five_year_cumulative/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/five_year_cumulative/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/ordinary_action_hours",
+      "passed": true
+    },
+    {
+      "check": "field means reconcile to portfolio: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/skilled_work_hours",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: central/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: compulsory_5pct_governance/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: direct_trade_underperformance/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: high_bonus_surcharge_sensitive/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: near_zero_additionality/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: redirect_dominant/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: reserve_constrained_dacs/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: strong_network_repeat/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: thin_market/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: trust_evidence_failure/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/conditional/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/eoy5_annualized_run_rate/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/five_year_cumulative/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/five_year_cumulative/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/five_year_cumulative/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/five_year_cumulative/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/five_year_cumulative/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/five_year_cumulative/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_1/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_1/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_1/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_1/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_1/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_1/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_5_annual/new_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_5_annual/rescued_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_5_annual/cause_directed_cash",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_5_annual/personal_income_transfers",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_5_annual/cash_operating_costs",
+      "passed": true
+    },
+    {
+      "check": "mechanism means reconcile: voluntary_pools/probability_weighted/year_5_annual/net_causal_cash",
+      "passed": true
+    },
+    {
+      "check": "independent highest-impact mechanism reconciliation: redirect",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect principal: eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect settlement: eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect classification: eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "deterministic direct payment: eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC gross threshold: eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC liability settlement: eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC principal: eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "DAC internal transfers excluded from impact: eoy5_annualized_run_rate",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect principal: five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect settlement: five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect classification: five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "deterministic direct payment: five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC gross threshold: five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC liability settlement: five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC principal: five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "DAC internal transfers excluded from impact: five_year_cumulative",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect principal: year_1",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect settlement: year_1",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect classification: year_1",
+      "passed": true
+    },
+    {
+      "check": "deterministic direct payment: year_1",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC gross threshold: year_1",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC liability settlement: year_1",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC principal: year_1",
+      "passed": true
+    },
+    {
+      "check": "DAC internal transfers excluded from impact: year_1",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect principal: year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect settlement: year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "deterministic redirect classification: year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "deterministic direct payment: year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC gross threshold: year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC liability settlement: year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "deterministic DAC principal: year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "DAC internal transfers excluded from impact: year_5_annual",
+      "passed": true
+    },
+    {
+      "check": "year 1 DAC threshold independent arithmetic",
+      "passed": true
+    },
+    {
+      "check": "year 1 DAC liability independent arithmetic",
+      "passed": true
+    },
+    {
+      "check": "year 1 DAC reserve recurrence",
+      "passed": true
+    },
+    {
+      "check": "year 1 exact 100% reserve coverage",
+      "passed": true
+    },
+    {
+      "check": "year 2 DAC threshold independent arithmetic",
+      "passed": true
+    },
+    {
+      "check": "year 2 DAC liability independent arithmetic",
+      "passed": true
+    },
+    {
+      "check": "year 2 DAC reserve recurrence",
+      "passed": true
+    },
+    {
+      "check": "year 2 exact 100% reserve coverage",
+      "passed": true
+    },
+    {
+      "check": "year 3 DAC threshold independent arithmetic",
+      "passed": true
+    },
+    {
+      "check": "year 3 DAC liability independent arithmetic",
+      "passed": true
+    },
+    {
+      "check": "year 3 DAC reserve recurrence",
+      "passed": true
+    },
+    {
+      "check": "year 3 exact 100% reserve coverage",
+      "passed": true
+    },
+    {
+      "check": "year 4 DAC threshold independent arithmetic",
+      "passed": true
+    },
+    {
+      "check": "year 4 DAC liability independent arithmetic",
+      "passed": true
+    },
+    {
+      "check": "year 4 DAC reserve recurrence",
+      "passed": true
+    },
+    {
+      "check": "year 4 exact 100% reserve coverage",
+      "passed": true
+    },
+    {
+      "check": "year 5 DAC threshold independent arithmetic",
+      "passed": true
+    },
+    {
+      "check": "year 5 DAC liability independent arithmetic",
+      "passed": true
+    },
+    {
+      "check": "year 5 DAC reserve recurrence",
+      "passed": true
+    },
+    {
+      "check": "year 5 exact 100% reserve coverage",
+      "passed": true
+    },
+    {
+      "check": "independent exact-cent DAC fixture",
+      "passed": true
+    },
+    {
+      "check": "multi-draw convergence grid complete",
+      "passed": true
+    },
+    {
+      "check": "fixed surcharge grid covers 2%-15%",
+      "passed": true
+    },
+    {
+      "check": "all bonus schedules reported",
+      "passed": true
+    }
+  ],
+  "highest_absolute_median_net_mechanism": "redirect",
+  "method": "independent CSV/JSON arithmetic and exact-cent fixture; no production data",
+  "schema_version": 1,
+  "status": "passed",
+  "validated_output_set_hash": "d16be958748a00ab91aa38bc4436ef577fb88446e02c6740c3d697f0c69fc932"
+}
