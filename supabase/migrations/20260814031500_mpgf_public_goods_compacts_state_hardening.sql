@@ -471,7 +471,8 @@ begin
   select count(*)::integer into joined_count
   from public.mpgf_public_goods_compact_memberships
   where participant_id = participant and status in ('pending_activation', 'active', 'exit_notice');
-  supplied_count := pg_catalog.jsonb_object_length(p_allocation_bps);
+  select count(*)::integer into supplied_count
+  from pg_catalog.jsonb_each(p_allocation_bps);
   select
     coalesce(sum(case when value ~ '^\d{1,5}$' then value::integer else 0 end), 0)::integer,
     count(*) filter (
