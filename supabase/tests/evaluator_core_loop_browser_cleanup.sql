@@ -56,6 +56,15 @@ where review.milestone_id = milestone.id
   and milestone.agreement_id = agreement.id
   and agreement.offer_id = '82000000-0000-4000-8000-000000000001';
 
+delete from public.trade_evidence_bundle_items item
+using public.trade_evidence_bundles bundle,
+      public.trade_agreement_milestones milestone,
+      public.agreements agreement
+where item.bundle_id = bundle.id
+  and bundle.milestone_id = milestone.id
+  and milestone.agreement_id = agreement.id
+  and agreement.offer_id = '82000000-0000-4000-8000-000000000001';
+
 delete from public.trade_evidence_bundles bundle
 using public.trade_agreement_milestones milestone, public.agreements agreement
 where bundle.milestone_id = milestone.id
