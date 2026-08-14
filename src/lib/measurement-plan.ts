@@ -582,16 +582,19 @@ export const MEASUREMENT_GUARDRAILS: MeasurementGuardrail[] = [
 
 const REQUIRED_BASELINE_ROUTES = [
   "/",
-  "/what-is-moral-trade",
-  "/offers",
-  "/worked-examples",
-  "/cohort",
+  "/start",
+  "/donate",
+  "/offers?view=live",
+  "/create",
+  "/offsets",
+  "/pools",
+  "/safety",
+  "/evidence",
   "/signup",
   "/login",
   "/background-networking",
-  "/wish-registry",
   "/mpgf",
-  "/measurement",
+  "/status",
 ] as const;
 
 const REQUIRED_BASELINE_CHECKS = [

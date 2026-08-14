@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "commitments-trade-synthetic-graph-spec-v1",
+  "fixtureKey": "synthetic:trade-graph-feasibility-fixture-v1",
+  "subjectMode": "synthetic_only",
+  "instrumentationEnvironment": "qa",
+  "eligibilityFrozen": false,
+  "containsRealUserData": false,
+  "identifierPolicy": {
+    "scheme": "synthetic_prefixed",
+    "reversibleMappingPresent": false,
+    "rawIdentifierFieldsPresent": false
+  },
+  "strata": [
+    {
+      "stratumFixtureKey": "small_low_action",
+      "componentCount": 800,
+      "dyadsPerComponent": 4,
+      "baselineCompletionRiskBand": "low",
+      "opportunityTypeBand": "action_for_action"
+    },
+    {
+      "stratumFixtureKey": "medium_low_funding_action",
+      "componentCount": 800,
+      "dyadsPerComponent": 6,
+      "baselineCompletionRiskBand": "low",
+      "opportunityTypeBand": "funding_for_action"
+    },
+    {
+      "stratumFixtureKey": "medium_medium_funding",
+      "componentCount": 800,
+      "dyadsPerComponent": 10,
+      "baselineCompletionRiskBand": "medium",
+      "opportunityTypeBand": "funding_for_funding"
+    },
+    {
+      "stratumFixtureKey": "large_high_mixed",
+      "componentCount": 800,
+      "dyadsPerComponent": 12,
+      "baselineCompletionRiskBand": "high",
+      "opportunityTypeBand": "mixed_resources"
+    }
+  ],
+  "planningEnvelope": {
+    "minimumIndependentClusters": 3200,
+    "frozenMeanEligibleDyadsPerCluster": 8,
+    "maximumClusterSizeCoefficientOfVariation": 0.75,
+    "maximumEligibleDyadsPerCluster": 40,
+    "requiredArmCount": 4
+  },
+  "executionAuthorized": false,
+  "realUserAssignmentAllowed": false,
+  "specPayloadHash": "sha256:b75aebdcf7272baa07ba8616693170ec07e05594aced78771c9cb2b40d0d54a8"
+}

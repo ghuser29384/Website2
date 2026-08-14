@@ -383,6 +383,7 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     await page.goto("/feed", { waitUntil: "domcontentloaded" });
     const feed = page.locator('[data-mt-live-now="adaptive"]');
+    await expect(feed).toHaveAttribute("data-bound", "true");
     const card = feed.locator('[data-opportunity-id="rollback-offer"]');
     const save = card.getByRole("button", { name: "Save opportunity" });
 
@@ -602,6 +603,12 @@ test.describe("adaptive moral-opportunity Now feed", () => {
 
     await evidence.click();
     await expect(page).toHaveURL(/\/evidence$/);
-    await expect(page.getByRole("heading", { name: "Evidence", exact: true })).toBeVisible();
+    await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Verified outcomes, without public evidence dossiers.",
+      exact: true,
+    }),
+  ).toBeVisible();
   });
 });

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
+import { LocalDateTime } from "@/components/ui/local-date-time";
 import {
   combinedEffectiveLifeYears,
   formatPublicReceiptImpact,
@@ -57,13 +58,6 @@ function noticeClass(status: PublicDonationRedirectReceiptStatus) {
   if (status === "reversed") return styles.statusNoticeReversed;
   if (status === "disputed") return styles.statusNoticeDisputed;
   return "";
-}
-
-function formatReceiptDate(value: string) {
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "long",
-    timeZone: "UTC",
-  }).format(new Date(value));
 }
 
 function effectiveLifeYears(party: PublicDonationRedirectParty, claimIsCurrent: boolean) {
@@ -175,7 +169,7 @@ export default async function PublicDonationRedirectReceiptPage({
         {...getTopbarActions(false)}
         showSearch={false}
       />
-      <main className={styles.page} id="main-content" tabIndex={-1}>
+      <main className={styles.page} data-mt-surface="public-receipt" id="main-content" tabIndex={-1}>
         <article className={styles.receipt}>
           <header className={styles.hero}>
             <div>
@@ -259,7 +253,7 @@ export default async function PublicDonationRedirectReceiptPage({
                 settlement and are not guarantees or tax receipts.
               </p>
               <p className={styles.date}>
-                Record date <time dateTime={receipt.completedAtIso}>{formatReceiptDate(receipt.completedAtIso)}</time>
+                Record date <LocalDateTime dateOnly fallback="Date unavailable" value={receipt.completedAtIso} />
                 <br />
                 <Link href="/donation-offsets">How Donation Redirect works</Link>
               </p>

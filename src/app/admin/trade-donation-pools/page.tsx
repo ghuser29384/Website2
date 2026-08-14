@@ -145,7 +145,7 @@ export default async function TradeDonationPoolsAdminPage({ searchParams }: Page
                 <p className="eyebrow">Provider bundles</p>
                 <h2>One Every.org payment, exact component allocation.</h2>
                 <p>
-                  The operator action is available only for a frozen, internally consistent bundle in a ready environment. The participant identities stay out of Every.org metadata.
+                  The operator action is available only for a frozen or already-started, internally consistent bundle in a ready environment. Resuming reuses the bundle&apos;s immutable partner donation ID. Participant identities stay out of Every.org metadata.
                 </p>
               </div>
               <div className="data-grid">
@@ -173,15 +173,21 @@ export default async function TradeDonationPoolsAdminPage({ searchParams }: Page
                           <p>{bundle.failure_message}</p>
                         </div>
                       ) : null}
-                      {bundle.status === "frozen" ? (
+                      {["frozen", "checkout_started"].includes(bundle.status) ? (
                         <form action={startTradeDonationPoolBundleCheckoutAction}>
                           <input name="bundle_id" type="hidden" value={bundle.id} />
                           <PendingSubmitButton
                             className="button button-primary"
-                            pendingLabel="Opening Every.org..."
+                            pendingLabel={
+                              bundle.status === "checkout_started"
+                                ? "Resuming Every.org..."
+                                : "Opening Every.org..."
+                            }
                             disabled={!snapshot.config.readyForProviderCheckout}
                           >
-                            Pay consolidated bundle through Every.org
+                            {bundle.status === "checkout_started"
+                              ? "Resume Every.org checkout"
+                              : "Pay consolidated bundle through Every.org"}
                           </PendingSubmitButton>
                         </form>
                       ) : null}

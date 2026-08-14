@@ -128,6 +128,15 @@ export async function POST(
   }
   if (bundleData) {
     const bundle = bundleData as TradeDonationPoolBundleRow;
+    const expectedBundleEnvironment = config.environment === "live" ? "live" : "test";
+    if (bundle.environment !== expectedBundleEnvironment) {
+      console.error("[every-org-webhook] pooled bundle environment mismatch", {
+        bundleId: bundle.id,
+        bundleEnvironment: bundle.environment,
+        providerEnvironment: config.environment,
+      });
+      return Response.json({ ok: false, error: "environment_mismatch" }, { status: 409 });
+    }
     const evaluated = evaluateEveryOrgTradeDonationPoolWebhook({
       payload,
       rawBody,

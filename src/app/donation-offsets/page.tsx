@@ -167,7 +167,10 @@ export default async function DonationOffsetsPage() {
               <Link className="button button-secondary" href="/offers?mode=offset">
                 View offset examples
               </Link>
-              <Link className="button button-secondary" href="/donation-offsets/conditional">
+              <Link
+                className="button button-secondary"
+                href="/trades/new?structure=conditional-donation"
+              >
                 Create a conditional donation
               </Link>
             </>

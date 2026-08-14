@@ -59,6 +59,13 @@ test("the exact live shell loads structured offer types and cause or organizatio
   assert.match(adapter, /Cause areas and organizations/);
   assert.match(adapter, /data-mt-suggestion-kind/);
   assert.match(adapter, /return "commitments"/);
+  assert.match(adapter, /contextOptionsForElement/);
+  assert.match(adapter, /scheduleTokenCorrection/);
+  assert.match(adapter, /correctElement/);
+  assert.match(adapter, /createTokenResolver/);
+  assert.match(adapter, /resolveElement: createTokenResolver\(token\)/);
+  assert.match(adapter, /compositionstart/);
+  assert.match(adapter, /compositionend/);
   assert.match(adapter, /\["proof", "verification"\]/);
   assert.match(adapter, /return "evidence"/);
   assert.match(adapter, /label === "if it fails"/);
