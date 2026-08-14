@@ -1,0 +1,150 @@
+name: Integrate PR 640 with current main
+
+on:
+  push:
+    branches:
+      - ops/integrate-pr640-current-main-20260814
+    paths:
+      - ".github/workflows/integrate-pr640-current-main-20260814.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: integrate-pr640-current-main-20260814
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: 79ca382c3bdc325dfc5a28e2cbbafc1b95640386
+  EXPECTED_DAC_SHA: 82448a45f51a789424f1d3509f696c02371d5f7f
+  TARGET_BRANCH: integration/mpgf-dac-lifecycle-current-main-20260814
+
+jobs:
+  integrate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out exact current main
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_MAIN_SHA }}
+          fetch-depth: 0
+          clean: true
+
+      - name: Verify exact inputs and create a fresh integration merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          git fetch --no-tags origin "$EXPECTED_DAC_SHA"
+          git cat-file -e "$EXPECTED_DAC_SHA^{commit}"
+          test "$(git merge-base "$EXPECTED_MAIN_SHA" "$EXPECTED_DAC_SHA")" = "8ee3e14b340fdb486c211d86703e02f9226811ab"
+
+          if git ls-remote --exit-code --heads origin "$TARGET_BRANCH" >/dev/null 2>&1; then
+            echo "Refusing to overwrite existing target branch: $TARGET_BRANCH" >&2
+            exit 1
+          fi
+
+          git checkout -B "$TARGET_BRANCH" "$EXPECTED_MAIN_SHA"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git merge --no-ff --no-edit "$EXPECTED_DAC_SHA"
+
+          read -r first_parent second_parent extra_parent < <(git show -s --format='%P' HEAD)
+          test "$first_parent" = "$EXPECTED_MAIN_SHA"
+          test "$second_parent" = "$EXPECTED_DAC_SHA"
+          test -z "${extra_parent:-}"
+
+          if git grep -n -E '^(<<<<<<<|>>>>>>>)' -- .; then
+            echo "Conflict markers remain after merge." >&2
+            exit 1
+          fi
+
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+          git merge-base --is-ancestor "$EXPECTED_MAIN_SHA" HEAD
+          git merge-base --is-ancestor "$EXPECTED_DAC_SHA" HEAD
+          {
+            printf 'main=%s\n' "$EXPECTED_MAIN_SHA"
+            printf 'dac=%s\n' "$EXPECTED_DAC_SHA"
+            printf 'candidate=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'parents=%s\n' "$(git show -s --format='%P' HEAD)"
+          } | tee mpgf-dac-current-main-integration.txt
+          git diff --name-only "$EXPECTED_MAIN_SHA" HEAD | sort | tee mpgf-dac-current-main-files.txt
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused DAC lifecycle contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/mpgf/dac-lifecycle-model.test.ts \
+            src/lib/mpgf/dac-public-terms-migration.test.ts \
+            src/lib/mpgf/dac-terminal-event-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-terminal-schema-reconciliation-migration.test.ts \
+            src/lib/mpgf/dac-product-lifecycle.test.ts \
+            | tee mpgf-dac-current-main-focused.log
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test | tee mpgf-dac-current-main-tests.log
+
+      - name: Run repository lint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet | tee mpgf-dac-current-main-lint.log
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit | tee mpgf-dac-current-main-typecheck.log
+
+      - name: Build production application
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: "1"
+          VERCEL_ENV: preview
+          CONDITIONAL_PAYMENTS_MODE: disabled
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          DIRECT_DONATION_UPGRADES_ENABLED: "false"
+          DIRECT_DONATION_UPGRADE_MODE: disabled
+        run: |
+          set -euo pipefail
+          npm run build | tee mpgf-dac-current-main-build.log
+
+      - name: Push the fresh, tested integration branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^1)" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD^2)" = "$EXPECTED_DAC_SHA"
+          git diff --check "$EXPECTED_MAIN_SHA" HEAD
+          git push origin "HEAD:refs/heads/${TARGET_BRANCH}"
+
+      - name: Upload integration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-dac-current-main-integration-${{ github.run_id }}
+          path: |
+            mpgf-dac-current-main-*.txt
+            mpgf-dac-current-main-*.log
+          if-no-files-found: warn
+          retention-days: 30
