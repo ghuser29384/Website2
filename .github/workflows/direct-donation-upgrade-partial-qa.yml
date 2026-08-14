@@ -527,8 +527,12 @@ jobs:
           set -euo pipefail
           export BARRIER_HELD="$RUNNER_TEMP/direct-upgrade-concurrent-${GITHUB_RUN_ID}.held"
           export BARRIER_RELEASE="$RUNNER_TEMP/direct-upgrade-concurrent-${GITHUB_RUN_ID}.release"
+          export ACCEPT_A_READY="$RUNNER_TEMP/direct-upgrade-concurrent-${GITHUB_RUN_ID}.accept-a-ready"
+          export ACCEPT_B_READY="$RUNNER_TEMP/direct-upgrade-concurrent-${GITHUB_RUN_ID}.accept-b-ready"
           test ! -e "$BARRIER_HELD"
           test ! -e "$BARRIER_RELEASE"
+          test ! -e "$ACCEPT_A_READY"
+          test ! -e "$ACCEPT_B_READY"
 
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<'SQL' \
             | tee donation-upgrade-partial-concurrent-setup.log
@@ -703,7 +707,7 @@ jobs:
             if [[ -n "${accept_b_pid:-}" ]]; then
               wait "$accept_b_pid" 2>/dev/null || true
             fi
-            rm -f "$BARRIER_HELD" "$BARRIER_RELEASE"
+            rm -f "$BARRIER_HELD" "$BARRIER_RELEASE" "$ACCEPT_A_READY" "$ACCEPT_B_READY"
           }
           trap concurrent_cleanup EXIT
 
@@ -744,6 +748,7 @@ jobs:
           where proposal.proposer_profile_id = 'dc110000-0000-4000-8000-000000000002'::uuid
             and proposal.status = 'pending'
           \gset
+          \! touch "$ACCEPT_A_READY"
           select pg_advisory_xact_lock_shared(
             hashtextextended('moraltrade:direct-donation-upgrade-concurrent-acceptance-qa', 0)
           );
@@ -781,6 +786,7 @@ jobs:
           where proposal.proposer_profile_id = 'dc110000-0000-4000-8000-000000000003'::uuid
             and proposal.status = 'pending'
           \gset
+          \! touch "$ACCEPT_B_READY"
           select pg_advisory_xact_lock_shared(
             hashtextextended('moraltrade:direct-donation-upgrade-concurrent-acceptance-qa', 0)
           );
@@ -794,14 +800,12 @@ jobs:
           SQL
           accept_b_pid=$!
 
-          observed_two_waiters=false
+          both_acceptors_ready=false
           for attempt in $(seq 1 100); do
-            waiters="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
-              --set ON_ERROR_STOP=1 \
-              --command "select count(*) from pg_stat_activity where application_name in ('direct-upgrade-concurrent-accept-a','direct-upgrade-concurrent-accept-b') and wait_event_type='Lock' and wait_event='advisory';" \
-              | tr -d '[:space:]')"
-            if [[ "$waiters" == "2" ]]; then
-              observed_two_waiters=true
+            if [[ -f "$ACCEPT_A_READY" && -f "$ACCEPT_B_READY" ]] \
+              && kill -0 "$accept_a_pid" 2>/dev/null \
+              && kill -0 "$accept_b_pid" 2>/dev/null; then
+              both_acceptors_ready=true
               break
             fi
             sleep 0.1
@@ -816,17 +820,17 @@ jobs:
           wait "$accept_b_pid"
           accept_b_status=$?
           set -e
-          rm -f "$BARRIER_HELD" "$BARRIER_RELEASE"
+          rm -f "$BARRIER_HELD" "$BARRIER_RELEASE" "$ACCEPT_A_READY" "$ACCEPT_B_READY"
           trap - EXIT
 
-          printf 'barrier=%s\naccept_a=%s\naccept_b=%s\ntwo_waiters=%s\n' \
-            "$barrier_status" "$accept_a_status" "$accept_b_status" "$observed_two_waiters" \
+          printf 'barrier=%s\naccept_a=%s\naccept_b=%s\nboth_acceptors_ready=%s\n' \
+            "$barrier_status" "$accept_a_status" "$accept_b_status" "$both_acceptors_ready" \
             | tee donation-upgrade-partial-concurrent-status.txt
           success_count=$(( (accept_a_status == 0 ? 1 : 0) + (accept_b_status == 0 ? 1 : 0) ))
-          if [[ "$barrier_status" -ne 0 || "$observed_two_waiters" != true || "$success_count" -ne 1 ]]; then
+          if [[ "$barrier_status" -ne 0 || "$both_acceptors_ready" != true || "$success_count" -ne 1 ]]; then
             tail -n 200 donation-upgrade-partial-concurrent-a.log || true
             tail -n 200 donation-upgrade-partial-concurrent-b.log || true
-            echo 'Expected two blocked sessions and exactly one successful acceptance.' >&2
+            echo 'Expected two staged acceptance sessions and exactly one successful acceptance.' >&2
             exit 1
           fi
 
@@ -906,7 +910,7 @@ jobs:
           SQL
 
       - name: Always remove the concurrent acceptance fixture
-        if: ${{ always() && steps.concurrent-acceptance.outputs.fixture_created == 'true' }}
+        if: ${{ always() && steps.verify-target.outputs.verified == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -991,12 +995,6 @@ jobs:
           set winning_candidate_id = null
           where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid;
           delete from public.direct_donation_upgrade_candidates
-          where offer_id in (
-            select id from public.direct_donation_upgrade_offers
-            where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid
-          );
-          update public.direct_donation_upgrade_proposals
-          set accepted_offer_id = null
           where offer_id in (
             select id from public.direct_donation_upgrade_offers
             where creator_profile_id = 'dc110000-0000-4000-8000-000000000001'::uuid
