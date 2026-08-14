@@ -31,13 +31,14 @@ function validUuid(value: string) {
   );
 }
 
-async function obligationIdFromPaymentIntent(paymentIntentId: string) {
+async function obligationIdFromPaymentIntent(paymentIntentId: string, livemode: boolean) {
   if (!paymentIntentId) return "";
   const supabase = createServiceClient() as any;
   const { data } = await supabase
     .from("trade_donation_pool_obligations")
     .select("id")
     .eq("stripe_payment_intent_id", paymentIntentId)
+    .eq("stripe_livemode", livemode)
     .maybeSingle();
   return String(data?.id ?? "");
 }
@@ -92,11 +93,14 @@ async function recordSuccess(input: {
     p_condition_hash: conditionHash,
   });
   if (error) throw new Error(error.message);
-  await passSignedWebhookGate(input.event.livemode);
   const result = Array.isArray(data) ? data[0] : data;
+  const status = String(result?.status ?? "processed");
+  if (["funded", "bundled", "already_funded"].includes(status)) {
+    await passSignedWebhookGate(input.event.livemode);
+  }
   return {
-    status: String(result?.status ?? "processed"),
-    duplicate: String(result?.status ?? "") === "duplicate",
+    status,
+    duplicate: status === "duplicate",
   };
 }
 
@@ -122,11 +126,14 @@ async function recordFailure(input: {
     p_failure_message: input.message,
   });
   if (error) throw new Error(error.message);
-  await passSignedWebhookGate(input.event.livemode);
   const result = Array.isArray(data) ? data[0] : data;
+  const status = String(result?.status ?? "processed");
+  if (["checkout_abandoned", "payment_failed"].includes(status)) {
+    await passSignedWebhookGate(input.event.livemode);
+  }
   return {
-    status: String(result?.status ?? "processed"),
-    duplicate: String(result?.status ?? "") === "duplicate",
+    status,
+    duplicate: status === "duplicate",
   };
 }
 
@@ -139,7 +146,10 @@ async function recordRefundOrDispute(input: {
   isDispute: boolean;
   message: string;
 }) {
-  const obligationId = await obligationIdFromPaymentIntent(input.paymentIntentId);
+  const obligationId = await obligationIdFromPaymentIntent(
+    input.paymentIntentId,
+    input.event.livemode,
+  );
   if (!validUuid(obligationId)) return { status: "unmatched_payment_intent", duplicate: false };
   const supabase = createServiceClient() as any;
   const { data, error } = await supabase.rpc("record_trade_donation_pool_refund_or_dispute", {
@@ -154,11 +164,14 @@ async function recordRefundOrDispute(input: {
     p_failure_message: input.message,
   });
   if (error) throw new Error(error.message);
-  await passSignedWebhookGate(input.event.livemode);
   const result = Array.isArray(data) ? data[0] : data;
+  const status = String(result?.status ?? "processed");
+  if (["refunded", "disputed", "needs_review"].includes(status)) {
+    await passSignedWebhookGate(input.event.livemode);
+  }
   return {
-    status: String(result?.status ?? "processed"),
-    duplicate: String(result?.status ?? "") === "duplicate",
+    status,
+    duplicate: status === "duplicate",
   };
 }
 
@@ -239,7 +252,7 @@ export async function handleTradeDonationPoolStripeWebhookEvent(input: {
     const paymentIntentId =
       typeof paymentIntent === "string" ? paymentIntent : String(paymentIntent?.id ?? "");
     if (!paymentIntentId) return { handled: false, status: "not_pooled", duplicate: false };
-    const obligationId = await obligationIdFromPaymentIntent(paymentIntentId);
+    const obligationId = await obligationIdFromPaymentIntent(paymentIntentId, event.livemode);
     if (!obligationId) return { handled: false, status: "not_pooled", duplicate: false };
     const result = await recordRefundOrDispute({
       event,
@@ -259,7 +272,7 @@ export async function handleTradeDonationPoolStripeWebhookEvent(input: {
     const paymentIntentId =
       typeof paymentIntent === "string" ? paymentIntent : String(paymentIntent?.id ?? "");
     if (!paymentIntentId) return { handled: false, status: "not_pooled", duplicate: false };
-    const obligationId = await obligationIdFromPaymentIntent(paymentIntentId);
+    const obligationId = await obligationIdFromPaymentIntent(paymentIntentId, event.livemode);
     if (!obligationId) return { handled: false, status: "not_pooled", duplicate: false };
     const result = await recordRefundOrDispute({
       event,
