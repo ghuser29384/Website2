@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/evidence-payment-release-qa.yml"
       - "src/app/admin/trade-review/**"
+      - "src/app/actions.ts"
       - "src/app/trade-agreements/**"
       - "src/app/trade-review/**"
       - "src/app/trade-milestone-actions.ts"
@@ -17,8 +18,16 @@ on:
       - "supabase/migrations/2026072916552*.sql"
       - "supabase/migrations/2026072916553*.sql"
       - "supabase/tests/evidence_weighted_payment*.sql"
+      - "supabase/tests/evaluator_core_loop_browser_*.sql"
       - "tests/evidence-weighted-payment-authenticated.spec.ts"
+      - "tests/evaluator-core-loop-authenticated.spec.ts"
   workflow_dispatch:
+    inputs:
+      evaluator_confirm_target:
+        description: "Enter hvmxfjjbdcgjjudmthdz to authorize the evaluator isolated-QA job"
+        required: true
+        default: hvmxfjjbdcgjjudmthdz
+        type: string
 
 concurrency:
   group: evidence-payment-release-qa-${{ github.event.pull_request.number || github.ref }}
@@ -271,5 +280,273 @@ jobs:
           path: |
             evidence-payment-*.log
             evidence-payment-exact-head.txt
+            playwright-report
+            test-results
+
+  evaluator-core-loop-gate:
+    if: >-
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/codex/evaluator-core-loop-authenticated-20260813' &&
+       inputs.evaluator_confirm_target == 'hvmxfjjbdcgjjudmthdz') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.head.ref == 'codex/evaluator-core-loop-authenticated-20260813')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EVALUATOR_CORE_LOOP_BASE_URL: http://127.0.0.1:3211
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || '04fd14fc9e86b79d82619bea97997da0b7a2deca' }}
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3211
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      PGSSLMODE: require
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Check out the exact evaluator candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify the exact TLS-only isolated-QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in QA_SUPABASE_DB_URL SUPABASE_SERVICE_ROLE_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required isolated-QA secret: $name" >&2
+              exit 1
+            fi
+          done
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+              and os.environ["NEXT_PUBLIC_SUPABASE_URL"]
+                  == "https://hvmxfjjbdcgjjudmthdz.supabase.co"
+          )
+          if not valid:
+              raise SystemExit(
+                  "Refusing credentials outside the exact TLS-only MoralTrade isolated-QA target."
+              )
+          PY
+
+      - name: Install dependencies and PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Record and verify the exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" HEAD
+          git diff --check "$EXPECTED_BASE_SHA" HEAD
+          {
+            printf 'base=%s\n' "$EXPECTED_BASE_SHA"
+            printf 'commit=%s\n' "$(git rev-parse HEAD)"
+            printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
+          } | tee evaluator-core-loop-exact-head.txt
+
+      - name: Run focused source and type gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/lib/marketplace-delta-contract.test.ts \
+            | tee evaluator-core-loop-source.log
+          npx eslint tests/evaluator-core-loop-authenticated.spec.ts \
+            | tee evaluator-core-loop-eslint.log
+          npx tsc --noEmit --pretty false \
+            | tee evaluator-core-loop-types.log
+
+      - name: Build the exact evaluator candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build | tee evaluator-core-loop-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Create exact ephemeral evaluator identities and offer
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export EVALUATOR_CORE_LOOP_QA_PASSWORD="$qa_password"
+          printf 'EVALUATOR_CORE_LOOP_QA_PASSWORD=%s\n' "$qa_password" >> "$GITHUB_ENV"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evaluator_core_loop_browser_fixture.sql \
+            | tee evaluator-core-loop-fixture.log
+
+      - name: Verify the four synthetic Auth identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' | tee evaluator-core-loop-auth.log
+          import { createClient } from "@supabase/supabase-js";
+
+          const emails = [
+            "evaluator-core-loop-owner@qa.invalid",
+            "evaluator-core-loop-responder@qa.invalid",
+            "evaluator-core-loop-outsider@qa.invalid",
+            "evaluator-core-loop-reviewer@qa.invalid",
+          ];
+
+          for (const email of emails) {
+            const client = createClient(
+              process.env.NEXT_PUBLIC_SUPABASE_URL,
+              process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
+              {
+                auth: {
+                  autoRefreshToken: false,
+                  detectSessionInUrl: false,
+                  persistSession: false,
+                },
+              },
+            );
+            const { error } = await client.auth.signInWithPassword({
+              email,
+              password: process.env.EVALUATOR_CORE_LOOP_QA_PASSWORD,
+            });
+            if (error) {
+              throw new Error(`Synthetic Auth sign-in failed for ${email}: ${error.message}`);
+            }
+            await client.auth.signOut({ scope: "local" });
+          }
+
+          console.log(`Verified ${emails.length} isolated-QA synthetic Auth identities.`);
+          NODE
+
+      - name: Start the exact production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3211 > evaluator-core-loop-server.log 2>&1 &
+          echo "$!" > evaluator-core-loop-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:3211/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 200 evaluator-core-loop-server.log
+          exit 1
+
+      - name: Run the evaluator-facing desktop, mobile, and authorization loop
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            tests/evaluator-core-loop-authenticated.spec.ts \
+            --reporter=line \
+            --trace=retain-on-failure \
+            --workers=1 \
+            | tee evaluator-core-loop-browser.log
+
+      - name: Capture the exact no-money database boundary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee evaluator-core-loop-no-money.json
+          select json_build_object(
+            'performanceBonds', (
+              select count(*) from public.performance_bonds
+              where offer_id = '82000000-0000-4000-8000-000000000001'
+            ),
+            'externalPaymentReceipts', (
+              select count(*)
+              from public.trade_external_payment_receipts receipt
+              join public.trade_milestone_payouts payout on payout.id = receipt.payout_id
+              join public.trade_agreement_milestones milestone on milestone.id = payout.milestone_id
+              join public.agreements agreement on agreement.id = milestone.agreement_id
+              where agreement.offer_id = '82000000-0000-4000-8000-000000000001'
+            )
+          );
+          SQL
+
+      - name: Stop the evaluator server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f evaluator-core-loop-server.pid ]]; then
+            kill "$(cat evaluator-core-loop-server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Remove every evaluator fixture and invalidate its credentials
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evaluator_core_loop_browser_cleanup.sql \
+            | tee evaluator-core-loop-cleanup.log
+
+      - name: Assert zero isolated-QA residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+
+          const text = await readFile("evaluator-core-loop-cleanup.log", "utf8");
+          const payloads = text.match(/\{[^\n]+\}/g) ?? [];
+          if (!payloads.length) throw new Error("Cleanup returned no residue object.");
+          const residue = JSON.parse(payloads.at(-1));
+          const nonzero = Object.entries(residue).filter(([, value]) => Number(value) !== 0);
+          if (nonzero.length) {
+            throw new Error(`Isolated-QA cleanup left residue: ${JSON.stringify(residue)}`);
+          }
+          console.log(`Verified zero residue: ${JSON.stringify(residue)}`);
+          NODE
+
+      - name: Upload evaluator core-loop evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluator-core-loop-qa-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            evaluator-core-loop-*.json
+            evaluator-core-loop-*.log
+            evaluator-core-loop-exact-head.txt
             playwright-report
             test-results
