@@ -596,7 +596,7 @@ function ReviewerNominationForm({
     : candidates;
 
   return (
-    <form action={action} className="panel stack-form">
+    <FullNavigationActionForm action={action} className="panel stack-form">
       {hiddenWorkflowFields({
         agreementId,
         milestoneId: milestone.id,
@@ -656,7 +656,7 @@ function ReviewerNominationForm({
           </p>
         </div>
       )}
-    </form>
+    </FullNavigationActionForm>
   );
 }
 

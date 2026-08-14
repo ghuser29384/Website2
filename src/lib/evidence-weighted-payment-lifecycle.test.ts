@@ -237,6 +237,22 @@ test("participant, reviewer, and administrator surfaces expose every payment tra
   );
 });
 
+test("reviewer nomination uses full navigation when matching nominations remove the form", () => {
+  const workflow = source(
+    "src/components/core-trade/trade-milestone-workflow.tsx",
+  );
+  const reviewerNominationForm = workflow.match(
+    /function ReviewerNominationForm\([\s\S]*?(?=\nfunction NeutralReviewForm\()/,
+  )?.[0];
+
+  assert.ok(reviewerNominationForm);
+  assert.match(
+    reviewerNominationForm,
+    /<FullNavigationActionForm action=\{action\} className="panel stack-form">/,
+  );
+  assert.match(reviewerNominationForm, /<\/FullNavigationActionForm>/);
+});
+
 test("authenticated workflow and authorization states remain visibly rendered", () => {
   const agreementPage = source(
     "src/app/trade-agreements/[agreementId]/page.tsx",

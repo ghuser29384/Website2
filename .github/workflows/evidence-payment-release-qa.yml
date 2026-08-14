@@ -468,12 +468,15 @@ jobs:
           set -euo pipefail
           node --import tsx --test \
             src/app/api/live-now/feedback/route.test.ts \
+            src/lib/evidence-weighted-payment-lifecycle.test.ts \
             src/lib/marketplace-delta-contract.test.ts \
             src/lib/trade-evidence-reviewer-rls-contract.test.ts \
             | tee evaluator-core-loop-source.log
           npx eslint \
             src/app/api/live-now/feedback/route.ts \
             src/app/api/live-now/feedback/route.test.ts \
+            src/components/core-trade/trade-milestone-workflow.tsx \
+            src/lib/evidence-weighted-payment-lifecycle.test.ts \
             src/lib/trade-evidence-reviewer-rls-contract.test.ts \
             tests/evaluator-core-loop-authenticated.spec.ts \
             | tee evaluator-core-loop-eslint.log
