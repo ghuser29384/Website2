@@ -360,6 +360,29 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install --yes postgresql-client > /dev/null
 
+      - name: Remove stale exact evaluator fixture before source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evaluator_core_loop_browser_cleanup.sql \
+            | tee evaluator-core-loop-preflight-cleanup.log
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+
+          const text = await readFile("evaluator-core-loop-preflight-cleanup.log", "utf8");
+          const payloads = text.match(/\{[^\n]+\}/g) ?? [];
+          if (!payloads.length) throw new Error("Preflight cleanup returned no residue object.");
+          const residue = JSON.parse(payloads.at(-1));
+          const nonzero = Object.entries(residue).filter(([, value]) => Number(value) !== 0);
+          if (nonzero.length) {
+            throw new Error(`Preflight cleanup left isolated-QA residue: ${JSON.stringify(residue)}`);
+          }
+          console.log(`Verified preflight zero residue: ${JSON.stringify(residue)}`);
+          NODE
+
       - name: Record and verify the exact candidate
         shell: bash
         run: |

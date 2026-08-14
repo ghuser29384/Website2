@@ -34,6 +34,38 @@ where version.agreement_id = agreement.id
   and agreement.offer_id = '82000000-0000-4000-8000-000000000001'
   and version.milestone_manifest_hash is not null;
 
+update public.trade_evidence_bundles bundle
+set status = 'draft'
+from public.trade_agreement_milestones milestone, public.agreements agreement
+where bundle.milestone_id = milestone.id
+  and milestone.agreement_id = agreement.id
+  and agreement.offer_id = '82000000-0000-4000-8000-000000000001'
+  and bundle.status <> 'draft';
+
+delete from public.trade_milestone_payouts payout
+using public.trade_agreement_milestones milestone, public.agreements agreement
+where payout.milestone_id = milestone.id
+  and milestone.agreement_id = agreement.id
+  and agreement.offer_id = '82000000-0000-4000-8000-000000000001';
+
+delete from public.trade_milestone_appeals appeal
+using public.trade_agreement_milestones milestone, public.agreements agreement
+where appeal.milestone_id = milestone.id
+  and milestone.agreement_id = agreement.id
+  and agreement.offer_id = '82000000-0000-4000-8000-000000000001';
+
+delete from public.trade_milestone_reviews review
+using public.trade_agreement_milestones milestone, public.agreements agreement
+where review.milestone_id = milestone.id
+  and milestone.agreement_id = agreement.id
+  and agreement.offer_id = '82000000-0000-4000-8000-000000000001';
+
+delete from public.trade_evidence_bundles bundle
+using public.trade_agreement_milestones milestone, public.agreements agreement
+where bundle.milestone_id = milestone.id
+  and milestone.agreement_id = agreement.id
+  and agreement.offer_id = '82000000-0000-4000-8000-000000000001';
+
 delete from public.offers
 where id = '82000000-0000-4000-8000-000000000001';
 
