@@ -6,6 +6,10 @@
 do $test$
 declare
   relation_name text;
+  function_signature text;
+  function_definition text;
+  function_is_security_definer boolean;
+  function_config text[];
 begin
   if (select count(*) from public.mpgf_public_goods_compacts) <> 3 then
     raise exception 'Expected exactly three Compact v2 constitutions.';
@@ -33,17 +37,124 @@ begin
       join pg_catalog.pg_namespace as namespace on namespace.oid = relation.relnamespace
       where namespace.nspname = 'public' and relation.relname = relation_name and relation.relrowsecurity
     ) then raise exception 'RLS is not enabled for %.', relation_name; end if;
+
+    if has_table_privilege('anon', pg_catalog.format('public.%I', relation_name), 'insert')
+      or has_table_privilege('anon', pg_catalog.format('public.%I', relation_name), 'update')
+      or has_table_privilege('anon', pg_catalog.format('public.%I', relation_name), 'delete')
+      or has_table_privilege('authenticated', pg_catalog.format('public.%I', relation_name), 'insert')
+      or has_table_privilege('authenticated', pg_catalog.format('public.%I', relation_name), 'update')
+      or has_table_privilege('authenticated', pg_catalog.format('public.%I', relation_name), 'delete')
+    then raise exception 'A browser role can directly mutate %.', relation_name; end if;
   end loop;
 
-  if has_table_privilege('authenticated', 'public.mpgf_public_goods_compact_memberships', 'insert')
-    or has_table_privilege('authenticated', 'public.mpgf_public_goods_outflow_observations', 'insert')
-    or has_table_privilege('authenticated', 'public.mpgf_public_goods_funding_qualification_snapshots', 'insert')
+  if has_table_privilege('anon', 'public.mpgf_public_goods_compacts', 'select')
+    or has_table_privilege('authenticated', 'public.mpgf_public_goods_compacts', 'select')
+    or has_table_privilege('anon', 'public.mpgf_public_goods_readiness_snapshots', 'select')
+    or has_table_privilege('authenticated', 'public.mpgf_public_goods_readiness_snapshots', 'select')
+    or has_table_privilege('anon', 'public.mpgf_public_goods_compact_idempotency_keys', 'select')
+    or has_table_privilege('authenticated', 'public.mpgf_public_goods_compact_idempotency_keys', 'select')
+  then raise exception 'A browser role can bypass the public state RPC or read idempotency records.'; end if;
+
+  foreach function_signature in array array[
+    'public.join_mpgf_public_goods_compact_v2(text,text,jsonb,text)',
+    'public.set_mpgf_public_goods_compact_allocation_v2(jsonb,text)',
+    'public.request_mpgf_public_goods_compact_exit_v2(text,text)',
+    'public.set_mpgf_public_goods_compact_delegation_v2(text,text,uuid,text)',
+    'public.clear_mpgf_public_goods_compact_delegation_v2(text,text,text)',
+    'public.get_mpgf_public_goods_compacts_v2_state()'
+  ] loop
+    select procedure.prosecdef, procedure.proconfig,
+      pg_catalog.pg_get_functiondef(procedure.oid)
+    into function_is_security_definer, function_config, function_definition
+    from pg_catalog.pg_proc as procedure
+    where procedure.oid = function_signature::regprocedure;
+    if not function_is_security_definer
+      or not ('search_path=""' = any(function_config))
+      or function_definition ~* '(from|join|update|into|delete[[:space:]]+from)[[:space:]]+mpgf_public_goods_'
+    then raise exception 'Security-definer hardening failed for %.', function_signature; end if;
+  end loop;
+
+  if has_function_privilege('anon', 'public.join_mpgf_public_goods_compact_v2(text,text,jsonb,text)', 'execute')
+    or has_function_privilege('anon', 'public.set_mpgf_public_goods_compact_allocation_v2(jsonb,text)', 'execute')
+    or has_function_privilege('anon', 'public.request_mpgf_public_goods_compact_exit_v2(text,text)', 'execute')
+    or has_function_privilege('anon', 'public.set_mpgf_public_goods_compact_delegation_v2(text,text,uuid,text)', 'execute')
+    or has_function_privilege('anon', 'public.clear_mpgf_public_goods_compact_delegation_v2(text,text,text)', 'execute')
+    or not has_function_privilege('authenticated', 'public.join_mpgf_public_goods_compact_v2(text,text,jsonb,text)', 'execute')
+    or not has_function_privilege('authenticated', 'public.set_mpgf_public_goods_compact_allocation_v2(jsonb,text)', 'execute')
+    or not has_function_privilege('authenticated', 'public.request_mpgf_public_goods_compact_exit_v2(text,text)', 'execute')
+    or not has_function_privilege('authenticated', 'public.set_mpgf_public_goods_compact_delegation_v2(text,text,uuid,text)', 'execute')
+    or not has_function_privilege('authenticated', 'public.clear_mpgf_public_goods_compact_delegation_v2(text,text,text)', 'execute')
+    or not has_function_privilege('anon', 'public.get_mpgf_public_goods_compacts_v2_state()', 'execute')
+    or not has_function_privilege('authenticated', 'public.get_mpgf_public_goods_compacts_v2_state()', 'execute')
     or has_function_privilege('authenticated', 'public.freeze_mpgf_public_goods_financial_cycle_v2(uuid,text)', 'execute')
     or has_function_privilege('authenticated', 'public.freeze_mpgf_public_goods_readiness_v2(uuid,text)', 'execute')
     or has_function_privilege('authenticated', 'public.freeze_mpgf_public_goods_voting_v2(uuid,text)', 'execute')
-  then raise exception 'A browser role received a prohibited evidence writer or freeze capability.'; end if;
+    or has_function_privilege('authenticated', 'public.freeze_mpgf_public_goods_delegations_v2(uuid)', 'execute')
+  then raise exception 'Compact function execution privileges do not match the intended role matrix.'; end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_attribute as attribute
+    join pg_catalog.pg_class as relation on relation.oid = attribute.attrelid
+    join pg_catalog.pg_namespace as namespace on namespace.oid = relation.relnamespace
+    where namespace.nspname = 'public'
+      and relation.relname like 'mpgf_public_goods_%'
+      and relation.relname <> 'mpgf_public_goods_compacts'
+      and not attribute.attisdropped
+      and attribute.attname ~* '(project.*opt|opt.*project)'
+  ) then raise exception 'A project-by-project opt-out state exists outside the frozen constitution.'; end if;
 end;
 $test$;
+
+create temporary table mpgf_public_goods_money_baseline (
+  relation_name text primary key,
+  row_count bigint not null
+) on commit drop;
+
+do $test$
+declare
+  relation_name text;
+  observed_count bigint;
+begin
+  foreach relation_name in array array[
+    'conditional_payment_mandates', 'conditional_payment_attempts',
+    'trade_donation_intents', 'agreement_payments', 'mpgf_payment_intents',
+    'mpgf_payment_authorizations', 'mpgf_provider_payment_events',
+    'mpgf_external_payment_evidence', 'mpgf_manual_external_payment_evidence',
+    'mpgf_receipts', 'mpgf_custody_holds', 'mpgf_phase_one_checkout_handoffs'
+  ] loop
+    if pg_catalog.to_regclass('public.' || relation_name) is not null then
+      execute pg_catalog.format('select count(*) from public.%I', relation_name)
+        into observed_count;
+      insert into mpgf_public_goods_money_baseline values (relation_name, observed_count);
+    end if;
+  end loop;
+end;
+$test$;
+
+set local role anon;
+do $test$
+begin
+  begin
+    perform count(*) from public.mpgf_public_goods_compacts;
+    raise exception 'Anonymous direct Compact reads bypassed the public state RPC.';
+  exception when insufficient_privilege then null;
+  end;
+  if (public.get_mpgf_public_goods_compacts_v2_state()->>'available')::boolean is distinct from true
+    or public.get_mpgf_public_goods_compacts_v2_state()::text ~ 'acknowledgements|request_hash|unique_person_key_hash'
+  then raise exception 'Anonymous public state is unavailable or exposes private fields.'; end if;
+  begin
+    perform public.join_mpgf_public_goods_compact_v2(
+      'future-flourishing', 'mpgf-public-goods-compact/transaction-v2',
+      '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}',
+      'qa.anon.join.denied'
+    );
+    raise exception 'Anonymous join execution was accepted.';
+  exception when insufficient_privilege then null;
+  end;
+end;
+$test$;
+reset role;
 
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -53,13 +164,39 @@ insert into auth.users (
 ) values (
   '6a000000-0000-4000-8000-000000000001','00000000-0000-0000-0000-000000000000',
   'authenticated','authenticated','compact-a@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()
+), (
+  '6a000000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000000',
+  'authenticated','authenticated','compact-no-profile@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()
+), (
+  '6a000000-0000-4000-8000-000000000003','00000000-0000-0000-0000-000000000000',
+  'authenticated','authenticated','compact-nonmember@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()
 );
 insert into public.profiles (
   id, email, display_name, bio, affiliation, username, account_kind,
   accepts_group_invitations, public_invitation_mentions_enabled
 ) values (
   '6a000000-0000-4000-8000-000000000001','compact-a@example.test','Compact A','','','compact-a','individual',true,true
+), (
+  '6a000000-0000-4000-8000-000000000003','compact-nonmember@example.test','Compact Nonmember','','','compact-nonmember','individual',true,true
 );
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000002',true);
+select set_config('request.jwt.claim.role','authenticated',true);
+do $test$
+begin
+  begin
+    perform public.join_mpgf_public_goods_compact_v2(
+      'future-flourishing', 'mpgf-public-goods-compact/transaction-v2',
+      '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}',
+      'qa.no-profile.join.denied'
+    );
+    raise exception 'An authenticated account without a profile joined a Compact.';
+  exception when insufficient_privilege then null;
+  end;
+end;
+$test$;
+reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000001',true);
@@ -70,6 +207,10 @@ declare
   response jsonb;
   replay jsonb;
   first_instruction uuid;
+  acknowledgement_key text;
+  membership_id uuid;
+  reaccepted_id uuid;
+  exit_response jsonb;
 begin
   begin
     perform public.join_mpgf_public_goods_compact_v2(
@@ -80,6 +221,21 @@ begin
     raise exception 'A stale constitution version was accepted.';
   exception when check_violation then null;
   end;
+
+  foreach acknowledgement_key in array array[
+    'voluntaryChoice', 'exactConstitution',
+    'activationAndNoProjectOptOut', 'noPaymentMandate'
+  ] loop
+    begin
+      perform public.join_mpgf_public_goods_compact_v2(
+        'future-flourishing', 'mpgf-public-goods-compact/transaction-v2',
+        '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}'::jsonb - acknowledgement_key,
+        'qa.join.missing-' || acknowledgement_key
+      );
+      raise exception 'Join accepted without acknowledgement %.', acknowledgement_key;
+    exception when invalid_parameter_value then null;
+    end;
+  end loop;
 
   response := public.join_mpgf_public_goods_compact_v2(
     'future-flourishing', 'mpgf-public-goods-compact/transaction-v2',
@@ -98,6 +254,21 @@ begin
     or (response->>'moneyMoved')::boolean
     or (response->>'paymentMandateCreated')::boolean
   then raise exception 'Single-Compact join violated idempotency, default allocation, or no-money boundaries: %', response; end if;
+  membership_id := (response->>'membershipId')::uuid;
+  if (select acknowledgements from public.mpgf_public_goods_compact_memberships where id = membership_id)
+      is distinct from '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}'::jsonb
+    or (select count(*) from public.mpgf_public_goods_compact_memberships
+        where participant_id = auth.uid() and compact_id = '10000000-0000-4000-8000-000000000001') <> 1
+  then raise exception 'Acknowledgements or membership were not durably stored exactly once.'; end if;
+  begin
+    perform public.join_mpgf_public_goods_compact_v2(
+      'animal-welfare', 'mpgf-public-goods-compact/transaction-v2',
+      '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}',
+      'qa.join.future.0001'
+    );
+    raise exception 'A materially different join reused an idempotency key.';
+  exception when unique_violation then null;
+  end;
 
   select instruction.id into first_instruction
   from public.mpgf_public_goods_allocation_instructions as instruction
@@ -128,6 +299,70 @@ begin
     or (response->>'moneyMoved')::boolean
     or (response->>'paymentMandateCreated')::boolean
   then raise exception 'Equivalent complete allocations were not semantically idempotent and no-money: %, %', response, replay; end if;
+
+  select id into reaccepted_id
+  from public.mpgf_public_goods_compact_memberships
+  where participant_id = auth.uid()
+    and compact_id = '10000000-0000-4000-8000-000000000002';
+  exit_response := public.request_mpgf_public_goods_compact_exit_v2(
+    'animal-welfare', 'qa.exit.recruiting.0001'
+  );
+  if exit_response->>'membershipStatus' <> 'revoked'
+    or not (exit_response->>'revokedImmediately')::boolean
+    or (exit_response->>'exitEffectiveAt') is not null
+    or (exit_response->>'delegationsRevoked')::integer <> 0
+  then raise exception 'Recruiting revocation was not immediate and non-binding: %', exit_response; end if;
+  response := public.join_mpgf_public_goods_compact_v2(
+    'animal-welfare', 'mpgf-public-goods-compact/transaction-v2',
+    '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}',
+    'qa.join.animal.reaccept.0001'
+  );
+  if (response->>'membershipId')::uuid <> reaccepted_id
+    or response->>'membershipStatus' <> 'pending_activation'
+  then raise exception 'Explicit recruiting reacceptance duplicated or failed to restore membership: %', response; end if;
+
+end;
+$test$;
+reset role;
+
+do $test$
+begin
+  if (select count(*) from public.mpgf_public_goods_compact_idempotency_keys
+      where participant_id = '6a000000-0000-4000-8000-000000000001'
+        and action = 'join_v2' and idempotency_key = 'qa.join.future.0001') <> 1
+  then raise exception 'Join idempotency was not durably stored exactly once.'; end if;
+  begin
+    update public.mpgf_public_goods_compacts
+    set summary = summary || ' changed'
+    where public_key = 'future-flourishing';
+    raise exception 'Accepted constitutional terms were mutable.';
+  exception when object_not_in_prerequisite_state then null;
+  end;
+end;
+$test$;
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000003',true);
+select set_config('request.jwt.claim.role','authenticated',true);
+do $test$
+declare state jsonb;
+begin
+  if exists (select 1 from public.mpgf_public_goods_compact_memberships) then
+    raise exception 'One participant read another participant membership through RLS.';
+  end if;
+  begin
+    perform count(*) from public.mpgf_public_goods_compact_idempotency_keys;
+    raise exception 'Authenticated direct idempotency reads bypassed the state RPC.';
+  exception when insufficient_privilege then null;
+  end;
+  state := public.get_mpgf_public_goods_compacts_v2_state();
+  if state::text like '%6a000000-0000-4000-8000-000000000001%'
+    or exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(state->'compacts') as compact(value)
+      where compact.value->'membership' <> 'null'::jsonb
+    )
+  then raise exception 'Public state exposed another participant private Compact state.'; end if;
 end;
 $test$;
 reset role;
@@ -533,26 +768,112 @@ select public.freeze_mpgf_public_goods_voting_v2(
   '10000000-0000-4000-8000-000000000002', to_char(timezone('UTC', now()), 'YYYY-MM')
 );
 
+alter table public.mpgf_public_goods_compacts disable trigger mpgf_public_goods_compacts_constitution_freeze_v2;
+update public.mpgf_public_goods_compacts
+set status = 'active', activated_at = now(), constitution_frozen_at = now(),
+    frozen_constitution_version = constitution_version
+where id = '10000000-0000-4000-8000-000000000003';
+alter table public.mpgf_public_goods_compacts enable trigger mpgf_public_goods_compacts_constitution_freeze_v2;
+
 set local role authenticated;
 do $test$
-declare membership_a uuid; membership_b uuid; membership_c uuid; membership_d uuid;
+declare
+  membership_a uuid;
+  membership_b uuid;
+  membership_b_other_compact uuid;
+  membership_c uuid;
+  membership_d uuid;
+  clear_response jsonb;
+  clear_replay jsonb;
+  exit_response jsonb;
+  exit_replay jsonb;
+  repeated_exit jsonb;
+  first_effective timestamptz;
+  requested_at timestamptz;
+  activated_at timestamptz;
 begin
+  perform set_config('request.jwt.claim.sub','6b000000-0000-4000-8000-000000000001',true);
   select membership.id into membership_a from public.mpgf_public_goods_compact_memberships as membership join public.profiles as profile on profile.id = membership.participant_id where profile.username = 'compact-v2-1' and membership.compact_id = '10000000-0000-4000-8000-000000000002';
+  perform set_config('request.jwt.claim.sub','6b000000-0000-4000-8000-000000000002',true);
   select membership.id into membership_b from public.mpgf_public_goods_compact_memberships as membership join public.profiles as profile on profile.id = membership.participant_id where profile.username = 'compact-v2-2' and membership.compact_id = '10000000-0000-4000-8000-000000000002';
+  select membership.id into membership_b_other_compact from public.mpgf_public_goods_compact_memberships as membership join public.profiles as profile on profile.id = membership.participant_id where profile.username = 'compact-v2-2' and membership.compact_id = '10000000-0000-4000-8000-000000000001';
+  perform set_config('request.jwt.claim.sub','6b000000-0000-4000-8000-000000000003',true);
   select membership.id into membership_c from public.mpgf_public_goods_compact_memberships as membership join public.profiles as profile on profile.id = membership.participant_id where profile.username = 'compact-v2-3' and membership.compact_id = '10000000-0000-4000-8000-000000000002';
+  perform set_config('request.jwt.claim.sub','6b000000-0000-4000-8000-000000000004',true);
   select membership.id into membership_d from public.mpgf_public_goods_compact_memberships as membership join public.profiles as profile on profile.id = membership.participant_id where profile.username = 'compact-v2-4' and membership.compact_id = '10000000-0000-4000-8000-000000000002';
 
   perform set_config('request.jwt.claim.sub','6b000000-0000-4000-8000-000000000001',true);
+  begin
+    perform public.set_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_a,'qa.delegation.self-denied');
+    raise exception 'Self-delegation was accepted.';
+  exception when check_violation then null;
+  end;
+  begin
+    perform public.set_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_b_other_compact,'qa.delegation.cross-compact-denied');
+    raise exception 'Cross-Compact delegation was accepted.';
+  exception when foreign_key_violation then null;
+  end;
+  begin
+    perform public.set_mpgf_public_goods_compact_delegation_v2('global-health',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_b,'qa.delegation.no-electorate-denied');
+    raise exception 'An active Compact without a frozen electorate accepted delegation.';
+  exception when object_not_in_prerequisite_state then null;
+  end;
   perform public.set_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_b,'qa.delegation.a-to-b');
   perform set_config('request.jwt.claim.sub','6b000000-0000-4000-8000-000000000002',true);
   perform public.set_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_a,'qa.delegation.b-to-a');
   perform set_config('request.jwt.claim.sub','6b000000-0000-4000-8000-000000000003',true);
   perform public.set_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_b,'qa.delegation.c-to-b');
+  clear_response := public.clear_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),'qa.delegation.c-clear');
+  clear_replay := public.clear_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),'qa.delegation.c-clear');
+  if clear_response <> clear_replay
+    or clear_response->>'delegationState' <> 'revoked'
+    or (clear_response->>'membershipTransferred')::boolean
+    or (clear_response->>'moneyTransferred')::boolean
+    or (clear_response->>'reputationTransferred')::boolean
+  then raise exception 'Delegation clear was not replay-safe and transfer-free: %, %', clear_response, clear_replay; end if;
+  perform public.set_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_b,'qa.delegation.c-to-b-again');
   perform set_config('request.jwt.claim.sub','6b000000-0000-4000-8000-000000000004',true);
   begin
     perform public.set_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_b,'qa.delegation.d-to-b');
     raise exception 'A delegation exceeding 10 percent was accepted.';
   exception when check_violation then null;
+  end;
+
+  perform set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000003',true);
+  begin
+    perform public.set_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_b,'qa.delegation.nonmember-denied');
+    raise exception 'A nonmember delegated frozen electorate weight.';
+  exception when insufficient_privilege then null;
+  end;
+
+  perform set_config('request.jwt.claim.sub','6b000000-0000-4000-8000-000000000001',true);
+  exit_response := public.request_mpgf_public_goods_compact_exit_v2('animal-welfare','qa.exit.active.0001');
+  exit_replay := public.request_mpgf_public_goods_compact_exit_v2('animal-welfare','qa.exit.active.0001');
+  first_effective := (exit_response->>'exitEffectiveAt')::timestamptz;
+  select membership.exit_requested_at, membership.activated_at
+  into requested_at, activated_at
+  from public.mpgf_public_goods_compact_memberships as membership
+  where membership.id = membership_a;
+  if exit_response <> exit_replay
+    or exit_response->>'membershipStatus' <> 'exit_notice'
+    or (exit_response->>'delegationsRevoked')::integer <> 2
+    or first_effective < activated_at + interval '12 months'
+    or first_effective < requested_at + interval '30 days'
+  then raise exception 'Active exit was not prospective, replay-safe, or atomic: %, %', exit_response, exit_replay; end if;
+  repeated_exit := public.request_mpgf_public_goods_compact_exit_v2('animal-welfare','qa.exit.active.0002');
+  if (repeated_exit->>'exitEffectiveAt')::timestamptz <> first_effective
+    or (repeated_exit->>'delegationsRevoked')::integer <> 0
+  then raise exception 'Repeated exit shortened the date or duplicated revocations: %', repeated_exit; end if;
+  begin
+    perform public.set_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_b,'qa.delegation.inactive-delegator-denied');
+    raise exception 'An inactive member delegated.';
+  exception when insufficient_privilege then null;
+  end;
+  perform set_config('request.jwt.claim.sub','6b000000-0000-4000-8000-000000000002',true);
+  begin
+    perform public.set_mpgf_public_goods_compact_delegation_v2('animal-welfare',to_char(timezone('UTC', now()), 'YYYY-MM'),membership_a,'qa.delegation.inactive-delegatee-denied');
+    raise exception 'An inactive member received delegation.';
+  exception when foreign_key_violation then null;
   end;
 end;
 $test$;
@@ -567,17 +888,42 @@ begin
   delegation := public.freeze_mpgf_public_goods_delegations_v2(voting_id);
   if (select sum(controlled_weight_units) from public.mpgf_public_goods_delegation_weight_snapshots where delegation_snapshot_id = (delegation->>'delegationSnapshotId')::uuid) <> 1000000000000
   then raise exception 'Delegation snapshot lost or double-counted electorate weight.'; end if;
-  if not exists (
+  if exists (
     select 1 from public.mpgf_public_goods_delegation_weight_snapshots as weight
     join public.profiles as profile on profile.id = weight.participant_id
     where weight.delegation_snapshot_id = (delegation->>'delegationSnapshotId')::uuid
       and profile.username = 'compact-v2-1' and weight.delegated_to_membership_id is not null
-  ) or not exists (
+  ) or exists (
     select 1 from public.mpgf_public_goods_delegation_weight_snapshots as weight
     join public.profiles as profile on profile.id = weight.participant_id
     where weight.delegation_snapshot_id = (delegation->>'delegationSnapshotId')::uuid
       and profile.username = 'compact-v2-2' and weight.delegated_to_membership_id is not null
-  ) then raise exception 'Two-way direct delegation was not preserved.'; end if;
+  ) or not exists (
+    select 1 from public.mpgf_public_goods_delegation_weight_snapshots as weight
+    join public.profiles as profile on profile.id = weight.participant_id
+    where weight.delegation_snapshot_id = (delegation->>'delegationSnapshotId')::uuid
+      and profile.username = 'compact-v2-3' and weight.delegated_to_membership_id is not null
+  ) then raise exception 'Exit revocations or the remaining direct delegation were not preserved.'; end if;
+end;
+$test$;
+
+do $test$
+declare
+  relation_name text;
+  baseline_count bigint;
+  observed_count bigint;
+begin
+  for relation_name, baseline_count in
+    select baseline.relation_name, baseline.row_count
+    from mpgf_public_goods_money_baseline as baseline
+  loop
+    execute pg_catalog.format('select count(*) from public.%I', relation_name)
+      into observed_count;
+    if observed_count <> baseline_count then
+      raise exception 'Compact lifecycle changed payment-adjacent table % from % rows to % rows.',
+        relation_name, baseline_count, observed_count;
+    end if;
+  end loop;
 end;
 $test$;
 

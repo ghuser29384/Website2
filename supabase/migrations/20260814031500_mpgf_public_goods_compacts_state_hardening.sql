@@ -565,6 +565,7 @@ declare
   replay jsonb;
   response jsonb;
   exit_effective timestamptz;
+  delegations_revoked integer := 0;
 begin
   if participant is null then raise exception using errcode = '42501', message = 'Authentication is required.'; end if;
   if p_idempotency_key !~ '^[A-Za-z0-9][A-Za-z0-9._:-]{7,199}$' then
@@ -590,9 +591,48 @@ begin
     response := pg_catalog.jsonb_build_object(
       'ok', true, 'membershipStatus', 'revoked', 'revokedImmediately', true,
       'exitEffectiveAt', null, 'moneyMoved', false,
-      'paymentMandateChanged', false, 'automaticCollectionEnabled', false
+      'paymentMandateChanged', false, 'automaticCollectionEnabled', false,
+      'delegationsRevoked', 0
     );
   elsif membership_record.status in ('active', 'exit_notice') then
+    perform pg_catalog.pg_advisory_xact_lock(
+      pg_catalog.hashtextextended(compact_record.id::text || ':delegation-mutations', 0)
+    );
+    with latest_events as (
+      select event.*
+      from public.mpgf_public_goods_delegation_events as event
+      join public.mpgf_public_goods_voting_snapshots as voting
+        on voting.id = event.voting_snapshot_id
+       and voting.compact_id = compact_record.id
+      left join public.mpgf_public_goods_delegation_snapshots as frozen
+        on frozen.voting_snapshot_id = event.voting_snapshot_id
+      where event.compact_id = compact_record.id
+        and frozen.id is null
+        and not exists (
+          select 1
+          from public.mpgf_public_goods_delegation_events as successor
+          where successor.supersedes_event_id = event.id
+        )
+    ), effective_delegations as (
+      select latest.*
+      from latest_events as latest
+      where latest.event_kind = 'set'
+        and (
+          latest.delegator_membership_id = membership_record.id
+          or latest.delegatee_membership_id = membership_record.id
+        )
+    )
+    insert into public.mpgf_public_goods_delegation_events (
+      voting_snapshot_id, compact_id, cycle_key, delegator_membership_id,
+      delegatee_membership_id, event_kind, controlled_weight_units_after,
+      supersedes_event_id, created_by
+    )
+    select effective.voting_snapshot_id, effective.compact_id,
+      effective.cycle_key, effective.delegator_membership_id,
+      null, 'revoke', null, effective.id, participant
+    from effective_delegations as effective;
+    get diagnostics delegations_revoked = row_count;
+
     exit_effective := greatest(
       compact_record.activated_at + pg_catalog.make_interval(months => compact_record.minimum_term_months),
       action_at + pg_catalog.make_interval(days => compact_record.exit_notice_days)
@@ -604,7 +644,8 @@ begin
     response := pg_catalog.jsonb_build_object(
       'ok', true, 'membershipStatus', 'exit_notice', 'revokedImmediately', false,
       'exitEffectiveAt', membership_record.exit_effective_at, 'moneyMoved', false,
-      'paymentMandateChanged', false, 'automaticCollectionEnabled', false
+      'paymentMandateChanged', false, 'automaticCollectionEnabled', false,
+      'delegationsRevoked', delegations_revoked
     );
   else
     response := pg_catalog.jsonb_build_object(
@@ -612,7 +653,7 @@ begin
       'revokedImmediately', membership_record.status = 'revoked',
       'exitEffectiveAt', membership_record.exit_effective_at,
       'moneyMoved', false, 'paymentMandateChanged', false,
-      'automaticCollectionEnabled', false
+      'automaticCollectionEnabled', false, 'delegationsRevoked', 0
     );
   end if;
 
@@ -1240,28 +1281,47 @@ begin
   if exists (select 1 from public.mpgf_public_goods_delegation_snapshots where voting_snapshot_id = voting_record.id) then
     raise exception using errcode = '55000', message = 'Delegations are frozen with the ballot snapshot.';
   end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(compact_record.id::text || ':delegation-mutations', 0)
+  );
+  if exists (select 1 from public.mpgf_public_goods_delegation_snapshots where voting_snapshot_id = voting_record.id) then
+    raise exception using errcode = '55000', message = 'Delegations are frozen with the ballot snapshot.';
+  end if;
 
   select weight.membership_id into delegator_id_value
   from public.mpgf_public_goods_voting_weight_snapshots as weight
+  join public.mpgf_public_goods_compact_memberships as membership
+    on membership.id = weight.membership_id
+   and membership.compact_id = weight.compact_id
+   and membership.status = 'active'
   where weight.voting_snapshot_id = voting_record.id
     and weight.participant_id = participant;
   if delegator_id_value is null then raise exception using errcode = '42501', message = 'Only a funding-qualified member may delegate her own cycle weight.'; end if;
   if p_delegatee_membership_id = delegator_id_value then raise exception using errcode = '23514', message = 'Self-delegation is not allowed.'; end if;
   if not exists (
-    select 1 from public.mpgf_public_goods_voting_weight_snapshots
-    where voting_snapshot_id = voting_record.id
-      and membership_id = p_delegatee_membership_id
-      and compact_id = compact_record.id
+    select 1
+    from public.mpgf_public_goods_voting_weight_snapshots as weight
+    join public.mpgf_public_goods_compact_memberships as membership
+      on membership.id = weight.membership_id
+     and membership.compact_id = weight.compact_id
+     and membership.status = 'active'
+    where weight.voting_snapshot_id = voting_record.id
+      and weight.membership_id = p_delegatee_membership_id
+      and weight.compact_id = compact_record.id
   ) then
     raise exception using errcode = '23503', message = 'The delegatee must be funding-qualified in the same frozen Compact cycle.';
   end if;
 
   with latest_events as (
-    select distinct on (event.delegator_membership_id)
+    select
       event.delegator_membership_id, event.delegatee_membership_id, event.event_kind
     from public.mpgf_public_goods_delegation_events as event
     where event.voting_snapshot_id = voting_record.id
-    order by event.delegator_membership_id, event.created_at desc, event.id desc
+      and not exists (
+        select 1
+        from public.mpgf_public_goods_delegation_events as successor
+        where successor.supersedes_event_id = event.id
+      )
   ), effective_delegations as (
     select latest.delegator_membership_id, latest.delegatee_membership_id
     from latest_events as latest
@@ -1297,7 +1357,11 @@ begin
   from public.mpgf_public_goods_delegation_events as event
   where event.voting_snapshot_id = voting_record.id
     and event.delegator_membership_id = delegator_id_value
-  order by event.created_at desc, event.id desc limit 1;
+    and not exists (
+      select 1
+      from public.mpgf_public_goods_delegation_events as successor
+      where successor.supersedes_event_id = event.id
+    );
   insert into public.mpgf_public_goods_delegation_events (
     voting_snapshot_id, compact_id, cycle_key, delegator_membership_id,
     delegatee_membership_id, event_kind, controlled_weight_units_after,
@@ -1363,6 +1427,12 @@ begin
   if exists (select 1 from public.mpgf_public_goods_delegation_snapshots where voting_snapshot_id = voting_record.id) then
     raise exception using errcode = '55000', message = 'Delegations are frozen with the ballot snapshot.';
   end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(compact_record.id::text || ':delegation-mutations', 0)
+  );
+  if exists (select 1 from public.mpgf_public_goods_delegation_snapshots where voting_snapshot_id = voting_record.id) then
+    raise exception using errcode = '55000', message = 'Delegations are frozen with the ballot snapshot.';
+  end if;
   select membership_id into delegator_membership_id
   from public.mpgf_public_goods_voting_weight_snapshots
   where voting_snapshot_id = voting_record.id and participant_id = participant;
@@ -1370,7 +1440,11 @@ begin
   from public.mpgf_public_goods_delegation_events as event
   where event.voting_snapshot_id = voting_record.id
     and event.delegator_membership_id = delegator_membership_id
-  order by event.created_at desc, event.id desc limit 1;
+    and not exists (
+      select 1
+      from public.mpgf_public_goods_delegation_events as successor
+      where successor.supersedes_event_id = event.id
+    );
   if previous_event.id is not null and previous_event.event_kind = 'set' then
     insert into public.mpgf_public_goods_delegation_events (
       voting_snapshot_id, compact_id, cycle_key, delegator_membership_id,
@@ -1403,17 +1477,18 @@ as $function$
 declare
   voting_record public.mpgf_public_goods_voting_snapshots%rowtype;
   delegation_record public.mpgf_public_goods_delegation_snapshots%rowtype;
-  cutoff_at timestamptz := pg_catalog.now();
+  cutoff_at timestamptz;
   source_hash_value text;
   cap_violation boolean;
   total_controlled bigint;
 begin
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(p_voting_snapshot_id::text || ':delegation-freeze', 0)
-  );
   select * into voting_record
   from public.mpgf_public_goods_voting_snapshots where id = p_voting_snapshot_id;
   if voting_record.id is null then raise exception using errcode = 'P0002', message = 'Voting snapshot not found.'; end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(voting_record.compact_id::text || ':delegation-mutations', 0)
+  );
+  cutoff_at := pg_catalog.clock_timestamp();
   select * into delegation_record
   from public.mpgf_public_goods_delegation_snapshots
   where voting_snapshot_id = voting_record.id;
@@ -1422,12 +1497,17 @@ begin
   end if;
 
   with latest_events as (
-    select distinct on (event.delegator_membership_id)
+    select
       event.delegator_membership_id, event.delegatee_membership_id, event.event_kind
     from public.mpgf_public_goods_delegation_events as event
     where event.voting_snapshot_id = voting_record.id
       and event.created_at <= cutoff_at
-    order by event.delegator_membership_id, event.created_at desc, event.id desc
+      and not exists (
+        select 1
+        from public.mpgf_public_goods_delegation_events as successor
+        where successor.supersedes_event_id = event.id
+          and successor.created_at <= cutoff_at
+      )
   ), effective as (
     select delegator_membership_id, delegatee_membership_id
     from latest_events where event_kind = 'set'
@@ -1450,11 +1530,16 @@ begin
   if cap_violation then raise exception using errcode = '23514', message = 'Delegation freeze rejected a proxy above the 10 percent cap.'; end if;
 
   with latest_events as (
-    select distinct on (event.delegator_membership_id)
+    select
       event.delegator_membership_id, event.delegatee_membership_id, event.event_kind
     from public.mpgf_public_goods_delegation_events as event
     where event.voting_snapshot_id = voting_record.id and event.created_at <= cutoff_at
-    order by event.delegator_membership_id, event.created_at desc, event.id desc
+      and not exists (
+        select 1
+        from public.mpgf_public_goods_delegation_events as successor
+        where successor.supersedes_event_id = event.id
+          and successor.created_at <= cutoff_at
+      )
   )
   select 'sha256:' || public.mpgf_public_goods_hash_v2(
     pg_catalog.jsonb_build_object(
@@ -1479,11 +1564,16 @@ begin
   ) returning * into delegation_record;
 
   with latest_events as (
-    select distinct on (event.delegator_membership_id)
+    select
       event.delegator_membership_id, event.delegatee_membership_id, event.event_kind
     from public.mpgf_public_goods_delegation_events as event
     where event.voting_snapshot_id = voting_record.id and event.created_at <= cutoff_at
-    order by event.delegator_membership_id, event.created_at desc, event.id desc
+      and not exists (
+        select 1
+        from public.mpgf_public_goods_delegation_events as successor
+        where successor.supersedes_event_id = event.id
+          and successor.created_at <= cutoff_at
+      )
   ), effective as (
     select delegator_membership_id, delegatee_membership_id
     from latest_events where event_kind = 'set'
@@ -1807,7 +1897,11 @@ begin
       from public.mpgf_public_goods_delegation_events as event
       where event.voting_snapshot_id = voting_record.id
         and event.delegator_membership_id = membership_record.id
-      order by event.created_at desc, event.id desc limit 1;
+        and not exists (
+          select 1
+          from public.mpgf_public_goods_delegation_events as successor
+          where successor.supersedes_event_id = event.id
+        );
       if delegation_event_record.event_kind = 'set' then
         delegation_json := pg_catalog.jsonb_build_object(
           'id', delegation_event_record.id,

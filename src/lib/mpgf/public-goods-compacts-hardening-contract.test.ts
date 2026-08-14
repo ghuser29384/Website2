@@ -52,6 +52,19 @@ test("delegation rejects cap violations instead of truncating them and freezes e
   assert.doesNotMatch(hardening, /least\([^\n]*controlled_weight/i);
 });
 
+test("public reads stay behind the state RPC and delegation lifecycles are linear", () => {
+  assert.doesNotMatch(
+    base,
+    /grant select on table public\.mpgf_public_goods_compacts[^;]*to anon|grant select on table[^;]*public\.mpgf_public_goods_readiness_snapshots[^;]*to anon/i,
+  );
+  assert.match(base, /mpgf_delegation_one_root_idx/);
+  assert.match(base, /mpgf_delegation_one_successor_idx/);
+  assert.match(hardening, /compact_record\.id::text \|\| ':delegation-mutations'/);
+  assert.match(hardening, /membership\.status = 'active'/);
+  assert.match(hardening, /'delegationsRevoked', delegations_revoked/);
+  assert.match(hardening, /successor\.supersedes_event_id = event\.id/);
+});
+
 test("deep validation fails closed on arithmetic, charter, activation, and payment drift", () => {
   for (const marker of [
     "value.summary !== charter.summary", "hasExactTerms", "hasExactInvariants",
