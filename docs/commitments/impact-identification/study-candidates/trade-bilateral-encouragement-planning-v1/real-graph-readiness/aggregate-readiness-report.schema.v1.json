@@ -1,0 +1,233 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "moral-trade://schemas/commitments/trade-aggregate-readiness-report-v1",
+  "title": "Reciprocal Trade aggregate real-graph readiness report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "observedAtUtc",
+    "repository",
+    "evidenceMethod",
+    "environments",
+    "sourceBoundary",
+    "authoritativeResult",
+    "evidenceLimitations",
+    "evidencePayloadHash"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "commitments-trade-aggregate-readiness-report-v1"
+    },
+    "observedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fullName",
+        "mainCommit"
+      ],
+      "properties": {
+        "fullName": {
+          "const": "ghuser29384/Website2"
+        },
+        "mainCommit": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        }
+      }
+    },
+    "evidenceMethod": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "rowLevelQueryPerformed",
+        "rowLevelExportPerformed",
+        "offerContentsInspected",
+        "participantIdentifiersInspected"
+      ],
+      "properties": {
+        "kind": {
+          "const": "supabase_table_metadata_only"
+        },
+        "rowLevelQueryPerformed": {
+          "const": false
+        },
+        "rowLevelExportPerformed": {
+          "const": false
+        },
+        "offerContentsInspected": {
+          "const": false
+        },
+        "participantIdentifiersInspected": {
+          "const": false
+        }
+      }
+    },
+    "environments": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "environmentKey",
+          "projectRef",
+          "profileCount",
+          "offerCount",
+          "tradeInvitationCount",
+          "tradeThreadCount",
+          "agreementCount",
+          "privacyGrantCount",
+          "recommendationGraphEdgeCount",
+          "eligibleDirectedDyadCount",
+          "eligibilityDerivation"
+        ],
+        "properties": {
+          "environmentKey": {
+            "enum": [
+              "production",
+              "qa"
+            ]
+          },
+          "projectRef": {
+            "type": "string",
+            "pattern": "^[a-z]{20}$"
+          },
+          "profileCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "offerCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tradeInvitationCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tradeThreadCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "agreementCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "privacyGrantCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "recommendationGraphEdgeCount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "eligibleDirectedDyadCount": {
+            "const": 0
+          },
+          "eligibilityDerivation": {
+            "enum": [
+              "zero_offer_rows",
+              "fewer_than_two_offer_rows"
+            ]
+          }
+        }
+      }
+    },
+    "sourceBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeMatcherPath",
+        "runtimeMatcherBlobSha",
+        "runtimeMatcherFunction",
+        "canonicalEligibilitySourceStatus",
+        "recommendationGraphEdgesCanonical",
+        "protectedDataExportAuthorized"
+      ],
+      "properties": {
+        "runtimeMatcherPath": {
+          "const": "src/lib/core-trade-base.ts"
+        },
+        "runtimeMatcherBlobSha": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "runtimeMatcherFunction": {
+          "const": "listReciprocalMatches"
+        },
+        "canonicalEligibilitySourceStatus": {
+          "const": "required_not_completed"
+        },
+        "recommendationGraphEdgesCanonical": {
+          "const": false
+        },
+        "protectedDataExportAuthorized": {
+          "const": false
+        }
+      }
+    },
+    "authoritativeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dataReadiness",
+        "eligibleDirectedDyadCount",
+        "realGraphDiagnosticsStatus",
+        "privacyReviewStatus",
+        "ethicsDeterminationStatus",
+        "assignmentGenerated",
+        "assignmentSeedGenerated",
+        "executionDecision"
+      ],
+      "properties": {
+        "dataReadiness": {
+          "const": "insufficient_real_eligible_graph"
+        },
+        "eligibleDirectedDyadCount": {
+          "const": 0
+        },
+        "realGraphDiagnosticsStatus": {
+          "const": "blocked_not_run"
+        },
+        "privacyReviewStatus": {
+          "const": "required_not_completed"
+        },
+        "ethicsDeterminationStatus": {
+          "const": "required_not_completed"
+        },
+        "assignmentGenerated": {
+          "const": false
+        },
+        "assignmentSeedGenerated": {
+          "const": false
+        },
+        "executionDecision": {
+          "const": "no_launch"
+        }
+      }
+    },
+    "evidenceLimitations": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "metadata_counts_are_not_row_level_graph_evidence",
+          "current_user_count_is_not_study_sample_size",
+          "canonical_research_eligibility_source_is_not_complete",
+          "recommendation_graph_edges_are_excluded",
+          "no_inference_about_real_user_preferences_or_consent"
+        ]
+      }
+    },
+    "evidencePayloadHash": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    }
+  }
+}
