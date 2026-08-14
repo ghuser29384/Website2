@@ -478,12 +478,17 @@ test("global search and offers search expose real marketplace discovery", () => 
   assert.ok(validationResults.some((result) => result.href === "/validation"));
 });
 
-test("returning home page matches the recommended-trade decision screen", () => {
+test("the activated Feed retains the recommended-trade decision screen", () => {
   const homeSource = readRepoFile("src/components/home/home-page.tsx");
   const greetingSource = readRepoFile("src/components/home/local-date-greeting.tsx");
   const pageSource = readRepoFile("src/app/page.tsx");
+  const nextConfigSource = readRepoFile("next.config.ts");
 
-  assert.match(pageSource, /<HomePage displayName=\{viewer\?\.displayName \?\? null\} \/>/);
+  assert.match(pageSource, /getRootActivationDestination/);
+  assert.match(
+    nextConfigSource,
+    /source: "\/feed",\s*destination: "\/moral-trade-live\.html"/,
+  );
   assert.match(homeSource, /Your best match right now, based on your commitments and priorities\./);
   assert.match(greetingSource, /Good afternoon/);
   assert.match(homeSource, /Replace eight/);

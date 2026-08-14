@@ -1,12 +1,10 @@
 import type { NextRequest } from "next/server";
-import { NextResponse, userAgent } from "next/server";
+import { NextResponse } from "next/server";
 
+import { getPrivateNoStoreHeaders } from "@/lib/background-privacy-controls";
+import { updateSession } from "@/lib/supabase/proxy";
 import { isPostgresUuid } from "@/lib/uuid";
-import { WALKTHROUGH_SEEN_COOKIE_NAME } from "@/lib/walkthrough-state";
 
-export const WALKTHROUGH_SEEN_COOKIE = WALKTHROUGH_SEEN_COOKIE_NAME;
-
-const WALKTHROUGH_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 const STATIC_OFFER_SEGMENTS = new Set(["examples", "new", "plane"]);
 
 function isPrefetch(request: NextRequest) {
@@ -19,32 +17,6 @@ function isPrefetch(request: NextRequest) {
     .toLowerCase();
 
   return request.headers.has("next-router-prefetch") || purpose.includes("prefetch");
-}
-
-function isHumanNavigation(request: NextRequest) {
-  return request.method === "GET" && !isPrefetch(request) && !userAgent(request).isBot;
-}
-
-function markWalkthroughSeen(response: NextResponse, request: NextRequest) {
-  response.cookies.set({
-    name: WALKTHROUGH_SEEN_COOKIE,
-    value: "1",
-    httpOnly: true,
-    maxAge: WALKTHROUGH_COOKIE_MAX_AGE,
-    path: "/",
-    sameSite: "lax",
-    secure: request.nextUrl.protocol === "https:",
-  });
-  response.headers.set("Cache-Control", "private, no-store");
-
-  return response;
-}
-
-function rewriteToLiveHome(request: NextRequest) {
-  const liveUrl = request.nextUrl.clone();
-  liveUrl.pathname = "/moral-trade-live.html";
-
-  return NextResponse.rewrite(liveUrl);
 }
 
 function rewriteToUnifiedCreate(request: NextRequest) {
@@ -87,30 +59,12 @@ function rewriteToInvalidOfferRecord(request: NextRequest) {
   });
 }
 
-export function proxy(request: NextRequest) {
+export function createCompatibilityResponse(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const shouldRecordVisit =
-    isHumanNavigation(request) && !request.cookies.has(WALKTHROUGH_SEEN_COOKIE);
-
-  if (pathname === "/") {
-    if (shouldRecordVisit) {
-      const walkthroughUrl = request.nextUrl.clone();
-      walkthroughUrl.pathname = "/walkthrough";
-
-      return markWalkthroughSeen(NextResponse.redirect(walkthroughUrl), request);
-    }
-
-    return rewriteToLiveHome(request);
-  }
-
-  if (pathname === "/walkthrough") {
-    const response = NextResponse.next();
-    return shouldRecordVisit ? markWalkthroughSeen(response, request) : response;
-  }
 
   if (pathname === "/create") {
     if (request.nextUrl.searchParams.get("mode") === "back") {
-      return NextResponse.next();
+      return NextResponse.next({ request });
     }
 
     return rewriteToUnifiedCreate(request);
@@ -121,12 +75,12 @@ export function proxy(request: NextRequest) {
   }
 
   if (pathname !== "/offers") {
-    return NextResponse.next();
+    return NextResponse.next({ request });
   }
 
   if (request.nextUrl.searchParams.size === 0) {
     if (isPrefetch(request)) {
-      return NextResponse.next();
+      return NextResponse.next({ request });
     }
 
     const discoverUrl = request.nextUrl.clone();
@@ -145,7 +99,7 @@ export function proxy(request: NextRequest) {
   }
 
   if (request.nextUrl.searchParams.has("view")) {
-    return NextResponse.next();
+    return NextResponse.next({ request });
   }
 
   const liveDirectoryUrl = request.nextUrl.clone();
@@ -154,6 +108,23 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(liveDirectoryUrl);
 }
 
+export async function proxy(request: NextRequest) {
+  const response = await updateSession(request, {
+    responseFactory: createCompatibilityResponse,
+  });
+  const privateHeaders = getPrivateNoStoreHeaders(request.nextUrl.pathname);
+
+  if (privateHeaders) {
+    for (const [name, value] of Object.entries(privateHeaders)) {
+      response.headers.set(name, value);
+    }
+  }
+
+  return response;
+}
+
 export const config = {
-  matcher: ["/", "/walkthrough", "/create", "/offers", "/offers/:path*"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

@@ -162,17 +162,7 @@ async function authenticatedContext(
   });
   context.setDefaultTimeout(10_000);
   context.setDefaultNavigationTimeout(20_000);
-  await context.addCookies([
-    ...(await sessionCookies(session)),
-    {
-      name: "mt_walkthrough_seen",
-      value: "1",
-      url: BASE_URL,
-      httpOnly: true,
-      secure: BASE_URL.startsWith("https://"),
-      sameSite: "Lax",
-    },
-  ]);
+  await context.addCookies(await sessionCookies(session));
   return context;
 }
 

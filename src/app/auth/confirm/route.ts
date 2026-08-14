@@ -2,11 +2,22 @@ import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { ensureAccountRowsForUser, getViewer } from "@/lib/app-data";
+import {
+  getAccountActivationState,
+  getPostAuthActivationDestination,
+} from "@/lib/account-activation";
 import { buildAuthPath, normalizeAuthMode } from "@/lib/auth-routes";
 import { getSafeInternalPath } from "@/lib/paths";
 import { buildUsernameCompletionPath, profileNeedsUsername } from "@/lib/profile-username";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import { createClient } from "@/lib/supabase/server";
+
+function getCompletedAccountDestination(
+  profile: Parameters<typeof profileNeedsUsername>[0],
+  next: string,
+) {
+  return profileNeedsUsername(profile) ? buildUsernameCompletionPath(next) : next;
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -14,7 +25,10 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get("type") as EmailOtpType | null;
   const code = searchParams.get("code");
   const mode = normalizeAuthMode(searchParams.get("mode"));
-  const next = getSafeInternalPath(searchParams.get("next"), "/dashboard");
+  const next = getSafeInternalPath(
+    searchParams.get("next"),
+    mode === "signup" ? "/walkthrough" : "/feed",
+  );
   const authPath = buildAuthPath({
     mode,
     returnTo: next,
@@ -44,17 +58,26 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      let destination = next;
+      let destination = "/walkthrough";
       if (data.user) {
-        const { profile } = await ensureAccountRowsForUser(data.user, supabase);
-        if (profileNeedsUsername(profile)) {
-          destination = buildUsernameCompletionPath(next);
-        }
+        const { profile, profileResult } = await ensureAccountRowsForUser(data.user, supabase);
+        destination = getPostAuthActivationDestination(
+          getAccountActivationState({
+            authenticated: true,
+            viewer: {
+              profile,
+              profileStatus: profileResult.profileStatus,
+              profileSyncError: profileResult.profileSyncError,
+            },
+          }),
+          getCompletedAccountDestination(profile, next),
+        );
       } else {
         const viewer = await getViewer();
-        if (viewer && profileNeedsUsername(viewer.profile)) {
-          destination = buildUsernameCompletionPath(next);
-        }
+        destination = getPostAuthActivationDestination(
+          getAccountActivationState({ authenticated: Boolean(viewer), viewer }),
+          viewer ? getCompletedAccountDestination(viewer.profile, next) : next,
+        );
       }
       return NextResponse.redirect(new URL(destination, origin));
     }
@@ -75,17 +98,26 @@ export async function GET(request: NextRequest) {
     });
 
     if (!error) {
-      let destination = next;
+      let destination = "/walkthrough";
       if (data.user) {
-        const { profile } = await ensureAccountRowsForUser(data.user, supabase);
-        if (profileNeedsUsername(profile)) {
-          destination = buildUsernameCompletionPath(next);
-        }
+        const { profile, profileResult } = await ensureAccountRowsForUser(data.user, supabase);
+        destination = getPostAuthActivationDestination(
+          getAccountActivationState({
+            authenticated: true,
+            viewer: {
+              profile,
+              profileStatus: profileResult.profileStatus,
+              profileSyncError: profileResult.profileSyncError,
+            },
+          }),
+          getCompletedAccountDestination(profile, next),
+        );
       } else {
         const viewer = await getViewer();
-        if (viewer && profileNeedsUsername(viewer.profile)) {
-          destination = buildUsernameCompletionPath(next);
-        }
+        destination = getPostAuthActivationDestination(
+          getAccountActivationState({ authenticated: Boolean(viewer), viewer }),
+          viewer ? getCompletedAccountDestination(viewer.profile, next) : next,
+        );
       }
       return NextResponse.redirect(new URL(destination, origin));
     }

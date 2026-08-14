@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const fixedInstant = new Date("2026-07-17T01:30:00.000Z");
 
 async function openHome(page: Page) {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/feed", { waitUntil: "domcontentloaded" });
   await expect(page.locator("main#app")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator(".head .date")).toBeVisible({ timeout: 30_000 });
 }
@@ -23,7 +23,7 @@ async function expectLocalGreeting(
   await expect(greeting).toHaveText(expected.greeting);
 }
 
-test.describe("Adaptive homepage in America/Los_Angeles", () => {
+test.describe("Adaptive Feed in America/Los_Angeles", () => {
   test.use({ timezoneId: "America/Los_Angeles" });
 
   test("uses the visitor's previous local date and evening greeting", async ({ page }) => {
@@ -38,7 +38,7 @@ test.describe("Adaptive homepage in America/Los_Angeles", () => {
   });
 });
 
-test.describe("Adaptive homepage in Asia/Tokyo", () => {
+test.describe("Adaptive Feed in Asia/Tokyo", () => {
   test.use({ timezoneId: "Asia/Tokyo" });
 
   test("uses the visitor's next local date and morning greeting", async ({ page }) => {
@@ -53,7 +53,7 @@ test.describe("Adaptive homepage in Asia/Tokyo", () => {
   });
 });
 
-test.describe("Adaptive homepage local-time refresh", () => {
+test.describe("Adaptive Feed local-time refresh", () => {
   test.use({ timezoneId: "UTC" });
 
   test("refreshes after the local date and greeting period change", async ({ page }) => {

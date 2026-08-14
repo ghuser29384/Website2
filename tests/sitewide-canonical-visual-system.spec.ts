@@ -148,7 +148,7 @@ async function waitForMeaningfulSurface(page: Page, route: string) {
     await expect(page.getByRole("heading", { exact: true, level: 1, name: "What do you value?" })).toBeVisible({
       timeout: 45_000,
     });
-    await expect(page.getByRole("button", { exact: true, name: "Restart this concept" })).toBeVisible({
+    await expect(page.getByRole("button", { exact: true, name: "Restart this experience" })).toBeVisible({
       timeout: 45_000,
     });
     await waitForTextLength(page, 100);
@@ -313,23 +313,21 @@ for (const route of accountAndStandaloneRoutes) {
   });
 }
 
-test("preserves the canonical Home and Walkthrough references", async ({ page }, testInfo) => {
+test("preserves the canonical signed-out root and Walkthrough references", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/", { timeout: 60_000, waitUntil: "domcontentloaded" });
-  await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole("banner")).toBeVisible({ timeout: 45_000 });
-  await expect(page.getByRole("banner")).toHaveCSS("background-color", BLACK);
-  await expect(page.getByRole("link", { exact: true, name: "Moral Trade, home" })).toBeVisible();
-  await expect(page.getByRole("heading", { exact: true, level: 1, name: "What needs you now." })).toBeVisible();
-  await expect(page.getByRole("button", { exact: true, name: "Focus" })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).pathname, { timeout: 45_000 }).toBe("/discover");
+  await expect(
+    page.getByRole("heading", { exact: true, level: 1, name: "Discover where value can move." }),
+  ).toBeVisible({ timeout: 45_000 });
   await waitForTextLength(page, 160);
   await expectNoFrameworkOverlay(page, "/");
-  await page.screenshot({ path: testInfo.outputPath("reference-home.png"), fullPage: false });
+  await page.screenshot({ path: testInfo.outputPath("reference-signed-out-root.png"), fullPage: false });
 
   await page.goto("/walkthrough", { timeout: 60_000, waitUntil: "domcontentloaded" });
   await waitForMeaningfulSurface(page, "/walkthrough");
   await expectNoFrameworkOverlay(page, "/walkthrough");
-  await expect(page.locator("body")).toHaveCSS("background-color", "rgb(17, 18, 15)");
+  await expect(page.locator("body")).toHaveCSS("background-color", BLACK);
   await page.screenshot({ path: testInfo.outputPath("reference-walkthrough.png"), fullPage: false });
 });
 

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 test.describe("Retired explainer navigation", () => {
   test("omits How It Works and Trust from primary and footer navigation", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/what-is-moral-trade");
 
     const primary = page.getByRole("navigation", { name: "Primary" });
     await expect(primary.getByRole("link", { name: /how it works/i })).toHaveCount(0);

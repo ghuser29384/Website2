@@ -23,8 +23,8 @@ test("auth route helpers render login and signup modes", () => {
 test("auth redirect preservation accepts only internal next or returnTo paths", () => {
   assert.equal(getAuthReturnTo({ returnTo: "/offers/new" }, "login"), "/offers/new");
   assert.equal(getAuthReturnTo({ next: "/dashboard?tab=settings" }, "login"), "/dashboard?tab=settings");
-  assert.equal(getAuthReturnTo({ returnTo: "https://evil.example" }, "login"), "/dashboard");
-  assert.equal(getAuthReturnTo({ next: "//evil.example/path" }, "signup"), "/onboarding");
+  assert.equal(getAuthReturnTo({ returnTo: "https://evil.example" }, "login"), "/feed");
+  assert.equal(getAuthReturnTo({ next: "//evil.example/path" }, "signup"), "/walkthrough");
 });
 
 test("auth paths preserve mode, method, and return target", () => {
@@ -40,7 +40,7 @@ test("auth paths preserve mode, method, and return target", () => {
   assert.equal(
     buildAuthPath({
       mode: "login",
-      returnTo: "/dashboard",
+      returnTo: "/feed",
       route: "/login",
     }),
     "/login?mode=login",
@@ -78,11 +78,11 @@ test("oauth callback URL preserves safe return target", () => {
     "https://www.moraltrade.org/auth/confirm?next=%2Foffers%2Fnew",
   );
   assert.equal(
-    buildSupabaseAuthCallbackUrl("https://www.moraltrade.org", "/onboarding", "signup"),
-    "https://www.moraltrade.org/auth/confirm?next=%2Fonboarding&mode=signup",
+    buildSupabaseAuthCallbackUrl("https://www.moraltrade.org", "/walkthrough", "signup"),
+    "https://www.moraltrade.org/auth/confirm?next=%2Fwalkthrough&mode=signup",
   );
   assert.equal(
     buildSupabaseAuthCallbackUrl("https://www.moraltrade.org", "https://evil.example"),
-    "https://www.moraltrade.org/auth/confirm?next=%2Fdashboard",
+    "https://www.moraltrade.org/auth/confirm?next=%2Ffeed",
   );
 });

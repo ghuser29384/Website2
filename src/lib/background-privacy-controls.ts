@@ -216,6 +216,12 @@ export const PRIVATE_NO_STORE_ROUTE_PREFIXES = [
   "/api/wish-registry/search",
 ] as const;
 
+export const ACTIVATION_NO_STORE_ROUTES = new Set([
+  "/",
+  "/walkthrough",
+  "/complete-profile",
+]);
+
 const EVENT_KIND_VALUES = new Set(
   BACKGROUND_NOTIFICATION_EVENT_KIND_OPTIONS.map((option) => option.value),
 );
@@ -424,7 +430,7 @@ export function getPrivateNoStoreHeaders(pathname: string) {
       normalizedPathname.startsWith(`${prefix}/`),
   );
 
-  if (!isPrivateRoute) {
+  if (!isPrivateRoute && !ACTIVATION_NO_STORE_ROUTES.has(normalizedPathname)) {
     return null;
   }
 

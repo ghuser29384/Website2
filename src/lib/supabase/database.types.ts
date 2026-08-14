@@ -29,6 +29,7 @@ export interface Database {
         Row: {
           id: string;
           email: string;
+          activation_stage: "walkthrough_required" | "sparks_required" | "setup_complete";
           display_name: string | null;
           username: string | null;
           public_invitation_mentions_enabled: boolean;
@@ -54,6 +55,7 @@ export interface Database {
         Insert: {
           id: string;
           email: string;
+          activation_stage?: "walkthrough_required" | "sparks_required" | "setup_complete";
           display_name?: string | null;
           username?: string | null;
           public_invitation_mentions_enabled?: boolean;
@@ -78,6 +80,7 @@ export interface Database {
         };
         Update: {
           email?: string;
+          activation_stage?: "walkthrough_required" | "sparks_required" | "setup_complete";
           display_name?: string | null;
           username?: string | null;
           public_invitation_mentions_enabled?: boolean;
@@ -11140,6 +11143,14 @@ export interface Database {
       };
     };
     Functions: {
+      complete_profile_activation_v1: {
+        Args: { p_actor_profile_id: string; p_profile_id: string };
+        Returns: string;
+      };
+      complete_walkthrough_activation_v1: {
+        Args: { p_actor_profile_id: string; p_profile_id: string };
+        Returns: string;
+      };
       normalize_profile_username_v1: {
         Args: { p_username: string };
         Returns: string;

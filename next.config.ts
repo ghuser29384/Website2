@@ -90,10 +90,6 @@ const nextConfig: NextConfig = {
           destination: "/moral-trade-live.html",
         },
         {
-          source: "/walkthrough",
-          destination: "/moral-trade-production.html",
-        },
-        {
           source: "/discover",
           destination: "/moral-trade-discover.html",
         },

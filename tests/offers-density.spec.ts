@@ -114,21 +114,6 @@ test.describe("Offers directory density", () => {
   test.beforeAll(async ({ browser, baseURL }) => {
     context = await browser.newContext({
       baseURL,
-      storageState: {
-        cookies: [
-          {
-            domain: "127.0.0.1",
-            expires: -1,
-            httpOnly: true,
-            name: "mt_walkthrough_seen",
-            path: "/",
-            sameSite: "Lax",
-            secure: false,
-            value: "1",
-          },
-        ],
-        origins: [],
-      },
     });
     page = await context.newPage();
     await stubFunnelEvents(page);

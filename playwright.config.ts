@@ -23,21 +23,6 @@ export default defineConfig({
   },
   use: {
     baseURL: "http://127.0.0.1:3210",
-    storageState: {
-      cookies: [
-        {
-          domain: "127.0.0.1",
-          expires: -1,
-          httpOnly: true,
-          name: "mt_walkthrough_seen",
-          path: "/",
-          sameSite: "Lax",
-          secure: false,
-          value: "1",
-        },
-      ],
-      origins: [],
-    },
     trace: "retain-on-failure",
   },
 });

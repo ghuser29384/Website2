@@ -318,17 +318,7 @@ async function authenticatedContext(
   const context = await browser.newContext({ baseURL: BASE_URL, viewport });
   context.setDefaultTimeout(12_000);
   context.setDefaultNavigationTimeout(25_000);
-  await context.addCookies([
-    ...(await sessionCookies(session)),
-    {
-      name: "mt_walkthrough_seen",
-      value: "1",
-      url: BASE_URL,
-      httpOnly: true,
-      secure: BASE_URL.startsWith("https://"),
-      sameSite: "Lax",
-    },
-  ]);
+  await context.addCookies(await sessionCookies(session));
   return context;
 }
 

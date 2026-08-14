@@ -225,3 +225,17 @@ export function buildWalkthroughOnboardingPath(draft: WalkthroughProfileDraft) {
 
   return `/onboarding?${query.toString()}`;
 }
+
+export function buildWalkthroughCompleteProfilePath(draft: WalkthroughProfileDraft) {
+  const query = new URLSearchParams({
+    source: "walkthrough",
+    cause_area: draft.causeArea,
+    walkthrough_cause: draft.originalCause,
+    offer_type: draft.offerType,
+    match_name: draft.matchName,
+    match_get: draft.matchGet,
+    match_give: draft.matchGive,
+  });
+
+  return `/complete-profile?${query.toString()}`;
+}

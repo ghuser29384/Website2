@@ -315,13 +315,13 @@ jobs:
               detail_ready=true
             fi
 
-            : > "$CANARY_OUTPUT_DIR/www-returning.headers"
+            : > "$CANARY_OUTPUT_DIR/www-legacy-cookie.headers"
             : > "$CANARY_OUTPUT_DIR/apex.headers"
             set +e
             www_status="$(curl -sS --max-time 60 \
               --cookie 'mt_walkthrough_seen=1' \
-              -D "$CANARY_OUTPUT_DIR/www-returning.headers" \
-              -o "$CANARY_OUTPUT_DIR/www-returning.html" \
+              -D "$CANARY_OUTPUT_DIR/www-legacy-cookie.headers" \
+              -o "$CANARY_OUTPUT_DIR/www-legacy-cookie.html" \
               -w '%{http_code}' \
               "$CANONICAL_ORIGIN/complete-profile")"
             www_curl_status=$?
@@ -333,8 +333,8 @@ jobs:
             apex_curl_status=$?
             set -e
 
-            tr -d '\r' < "$CANARY_OUTPUT_DIR/www-returning.headers" \
-              > "$CANARY_OUTPUT_DIR/www-returning.normalized.headers"
+            tr -d '\r' < "$CANARY_OUTPUT_DIR/www-legacy-cookie.headers" \
+              > "$CANARY_OUTPUT_DIR/www-legacy-cookie.normalized.headers"
             tr -d '\r' < "$CANARY_OUTPUT_DIR/apex.headers" \
               > "$CANARY_OUTPUT_DIR/apex.normalized.headers"
 
@@ -342,9 +342,9 @@ jobs:
               && [[ "$detail_ready" == 'true' ]] \
               && [[ "$www_curl_status" -eq 0 ]] \
               && [[ "$apex_curl_status" -eq 0 ]] \
-              && [[ "$www_status" == '200' ]] \
-              && grep -Fq 'Spend 100 sparks of attention.' "$CANARY_OUTPUT_DIR/www-returning.html" \
-              && grep -Fqx 'x-matched-path: /complete-profile' "$CANARY_OUTPUT_DIR/www-returning.normalized.headers" \
+              && [[ "$www_status" == '307' ]] \
+              && grep -Fqx 'location: /walkthrough' "$CANARY_OUTPUT_DIR/www-legacy-cookie.normalized.headers" \
+              && grep -Fqx 'x-matched-path: /complete-profile' "$CANARY_OUTPUT_DIR/www-legacy-cookie.normalized.headers" \
               && [[ "$apex_status" == '308' ]] \
               && grep -Eq '^location: https://www\.moraltrade\.org/complete-profile([?].*)?$' "$CANARY_OUTPUT_DIR/apex.normalized.headers"; then
               verified=true
@@ -377,7 +377,7 @@ jobs:
               }
             ' > "$CANARY_OUTPUT_DIR/domain-verification.json"
 
-      - name: Run the rendered first-time and returning-user canary
+      - name: Run the rendered first-time and legacy-cookie canary
         env:
           EXPECTED_SHA: ${{ steps.deployment.outputs.expected_sha }}
           EXPECTED_DEPLOYMENT_ID: ${{ steps.deployment.outputs.deployment_id }}

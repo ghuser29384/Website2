@@ -111,21 +111,57 @@ function attachDataPlaneHeaders(response: NextResponse, hostname: string) {
   return response;
 }
 
-export async function updateSession(request: NextRequest) {
-  let response = NextResponse.next({
-    request,
-  });
-  const requestHostname = request.headers.get("host") ?? request.nextUrl.hostname;
+type SessionCookie = {
+  name: string;
+  value: string;
+  options?: Parameters<NextResponse["cookies"]["set"]>[2];
+};
 
-  if (!hasSupabaseEnv(requestHostname)) {
+type SessionClientFactory = (
+  url: string,
+  publishableKey: string,
+  options: {
+    cookies: {
+      getAll: () => ReturnType<NextRequest["cookies"]["getAll"]>;
+      setAll: (cookies: SessionCookie[]) => void;
+    };
+  },
+) => { auth: { getClaims: () => Promise<unknown> } };
+
+interface UpdateSessionOptions {
+  createSessionClient?: SessionClientFactory;
+  environment?: { publishableKey: string; url: string } | null;
+  refreshTimeoutMs?: number;
+  responseFactory?: (request: NextRequest) => NextResponse;
+}
+
+export async function updateSession(
+  request: NextRequest,
+  options: UpdateSessionOptions = {},
+) {
+  const responseFactory =
+    options.responseFactory ?? ((currentRequest) => NextResponse.next({ request: currentRequest }));
+  let response = responseFactory(request);
+  const requestHostname = request.headers.get("host") ?? request.nextUrl.hostname;
+  const environment =
+    options.environment === undefined
+      ? hasSupabaseEnv(requestHostname)
+        ? getSupabaseEnv(requestHostname)
+        : null
+      : options.environment;
+
+  if (!environment) {
     return attachDataPlaneHeaders(
       attachAttributionCookie(request, response),
       requestHostname,
     );
   }
 
-  const { url, publishableKey } = getSupabaseEnv(requestHostname);
-  const supabase = createServerClient<Database>(
+  const { url, publishableKey } = environment;
+  const createSessionClient =
+    options.createSessionClient ??
+    (createServerClient<Database> as unknown as SessionClientFactory);
+  const supabase = createSessionClient(
     url,
     publishableKey,
     {
@@ -138,9 +174,7 @@ export async function updateSession(request: NextRequest) {
             request.cookies.set(name, value);
           });
 
-          response = NextResponse.next({
-            request,
-          });
+          response = responseFactory(request);
 
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
@@ -150,12 +184,18 @@ export async function updateSession(request: NextRequest) {
     },
   );
 
-  await Promise.race([
-    supabase.auth.getClaims(),
-    new Promise((resolve) => {
-      setTimeout(resolve, SESSION_REFRESH_TIMEOUT_MS);
-    }),
-  ]);
+  try {
+    await Promise.race([
+      supabase.auth.getClaims(),
+      new Promise((resolve) => {
+        setTimeout(resolve, options.refreshTimeoutMs ?? SESSION_REFRESH_TIMEOUT_MS);
+      }),
+    ]);
+  } catch (error) {
+    console.warn("[supabase] Proxy session refresh failed; downstream auth remains authoritative.", {
+      message: error instanceof Error ? error.message : "Unknown session refresh error",
+    });
+  }
 
   return attachDataPlaneHeaders(
     attachAttributionCookie(request, response),

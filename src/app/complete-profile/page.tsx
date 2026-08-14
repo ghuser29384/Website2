@@ -7,11 +7,14 @@ import {
   type CompleteProfileXConnectionSummary,
 } from "@/components/profile/complete-profile-connections";
 import { CompleteProfileReview } from "@/components/profile/complete-profile-review";
+import {
+  getAccountActivationState,
+  getCompleteProfileActivationDestination,
+} from "@/lib/account-activation";
 import { getViewer } from "@/lib/app-data";
 import { getFormMessage } from "@/lib/form-state";
-import { getSafeInternalPath } from "@/lib/paths";
+import { hasSupabaseAuthCookie } from "@/lib/supabase/auth-cookie";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
-import { WALKTHROUGH_SEEN_COOKIE_NAME } from "@/lib/walkthrough-state";
 import {
   getDisconnectedXProfileConnectorStatus,
   getXProfileConnectorStatus,
@@ -54,12 +57,6 @@ function buildCompleteProfilePath(draft: WalkthroughProfileDraft) {
   return `/complete-profile?${query.toString()}`;
 }
 
-function hasSupabaseAuthCookie(cookieStore: Awaited<ReturnType<typeof cookies>>) {
-  return cookieStore
-    .getAll()
-    .some(({ name }) => /^sb-.+-auth-token(?:\.\d+)?$/.test(name));
-}
-
 function readSearchParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] ?? "" : value ?? "";
 }
@@ -69,10 +66,19 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
   const cookieStore = await cookies();
   const usernamePromptRequested =
     readSearchParam(resolvedSearchParams.username_required) === "1";
+  const supabaseReady = hasSupabaseEnv();
+  const authenticated =
+    supabaseReady && hasSupabaseAuthCookie(cookieStore.getAll());
+  const viewer = authenticated ? await getViewer() : null;
+  const activationState = getAccountActivationState({ authenticated, viewer });
+  const activationDestination = getCompleteProfileActivationDestination(activationState);
+
+  if (activationDestination) {
+    redirect(activationDestination);
+  }
+
   const profileDraft = getCompleteProfileDraft({
-    allowDirect:
-      usernamePromptRequested ||
-      cookieStore.get(WALKTHROUGH_SEEN_COOKIE_NAME)?.value === "1",
+    allowDirect: activationState.kind === "available",
     cookieValue: cookieStore.get(WALKTHROUGH_PROFILE_COOKIE_NAME)?.value,
     searchParams: resolvedSearchParams,
   });
@@ -81,9 +87,6 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
     redirect("/walkthrough");
   }
 
-  const supabaseReady = hasSupabaseEnv();
-  const viewer =
-    supabaseReady && hasSupabaseAuthCookie(cookieStore) ? await getViewer() : null;
   const initialUsername = viewer?.profile.username ?? "";
   const initialPublicInvitationMentionsEnabled =
     viewer?.profile.public_invitation_mentions_enabled ?? true;
@@ -100,10 +103,7 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
     retentionExpiresAt: xConnectorStatus.retentionExpiresAt,
     username: xConnectorStatus.username,
   };
-  const requestedSuccessTo = getSafeInternalPath(
-    readSearchParam(resolvedSearchParams.next),
-    "/discover?source=profile-complete&domain=offers&view=constellation",
-  );
+  const requestedSuccessTo = "/feed";
   const baseReturnTo = buildCompleteProfilePath(profileDraft);
   const returnTo = usernamePromptRequested
     ? `${baseReturnTo}${baseReturnTo.includes("?") ? "&" : "?"}${new URLSearchParams({
@@ -167,7 +167,6 @@ export default async function CompleteProfilePage({ searchParams }: CompleteProf
           loginHref={loginHref}
           returnTo={returnTo}
           signupHref={signupHref}
-          successTo={requestedSuccessTo}
         />
       </main>
     </div>

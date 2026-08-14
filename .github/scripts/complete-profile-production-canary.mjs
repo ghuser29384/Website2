@@ -130,7 +130,7 @@ function assertNoFatalDiagnostics(state) {
   );
 }
 
-async function addReturningCookie(context) {
+async function addLegacyWalkthroughCookie(context) {
   await context.addCookies([
     {
       name: "mt_walkthrough_seen",
@@ -180,18 +180,13 @@ async function runFirstTime(entry) {
   assert.ok(response && response.status() < 500, "First-time route returned no usable response");
   await page.waitForURL((url) => url.pathname === "/walkthrough", { timeout: 60_000 });
   await page
-    .getByText("Welcome to Moral Trade", { exact: true })
-    .first()
+    .getByRole("heading", { name: "What do you value?" })
     .waitFor({ state: "visible", timeout: 60_000 });
   assertCanonicalFinalHost(page);
   assert.equal(await page.getByLabel("Profile setup: priorities").count(), 0);
 
   const cookies = await context.cookies(canonicalOrigin);
-  assert.equal(
-    cookies.find((cookie) => cookie.name === "mt_walkthrough_seen")?.value,
-    "1",
-    "First-time flow did not persist the Walkthrough-seen signal",
-  );
+  assert.equal(cookies.find((cookie) => cookie.name === "mt_walkthrough_seen"), undefined);
 
   await settleDiagnostics(page);
   await page.screenshot({
@@ -205,10 +200,10 @@ async function runFirstTime(entry) {
   await context.close();
 }
 
-async function runReturningDesktop(entry) {
-  const state = makeState(entry.id, "returning-desktop");
+async function runLegacyCookieDesktop(entry) {
+  const state = makeState(entry.id, "legacy-cookie-desktop");
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-  await addReturningCookie(context);
+  await addLegacyWalkthroughCookie(context);
   const page = await context.newPage();
   attachDiagnostics(page, state);
 
@@ -216,35 +211,20 @@ async function runReturningDesktop(entry) {
     waitUntil: "domcontentloaded",
     timeout: 120_000,
   });
-  assert.ok(response && response.status() < 500, "Returning route returned no usable response");
-  await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
+  assert.ok(response && response.status() < 500, "Legacy-cookie route returned no usable response");
+  await page.waitForURL((url) => url.pathname === "/walkthrough", { timeout: 60_000 });
   await page
-    .getByRole("heading", { name: "Spend 100 sparks of attention." })
-    .waitFor({ state: "visible", timeout: 60_000 });
-  await page
-    .getByLabel("Profile setup: priorities")
+    .getByRole("heading", { name: "What do you value?" })
     .waitFor({ state: "visible", timeout: 60_000 });
   assertCanonicalFinalHost(page);
-  assert.equal(await page.getByLabel("Walkthrough progress: final step").count(), 0);
+  assert.equal(await page.getByLabel("Profile setup: priorities").count(), 0);
 
   await page.screenshot({
-    path: `${outputDir}/${entry.id}-returning-desktop-page.png`,
+    path: `${outputDir}/${entry.id}-legacy-cookie-desktop.png`,
     fullPage: true,
   });
-
-  await page.getByRole("button", { name: "Save profile" }).click();
-  const dialog = page.getByRole("dialog", { name: "Finish the practical details." });
-  await dialog.waitFor({ state: "visible", timeout: 30_000 });
-  const dialogText = await dialog.textContent();
-  assert.match(dialogText ?? "", /Your 100-spark ranking/);
-  assert.match(dialogText ?? "", /Not set here/);
-  assert.match(dialogText ?? "", /Saving does not create or publish an offer\./);
 
   await settleDiagnostics(page);
-  await page.screenshot({
-    path: `${outputDir}/${entry.id}-returning-desktop-dialog.png`,
-    fullPage: true,
-  });
   assertNoFatalDiagnostics(state);
   state.finalUrl = page.url();
   state.status = "passed";
@@ -252,10 +232,10 @@ async function runReturningDesktop(entry) {
   await context.close();
 }
 
-async function runReturningMobile(entry) {
-  const state = makeState(entry.id, "returning-mobile");
+async function runLegacyCookieMobile(entry) {
+  const state = makeState(entry.id, "legacy-cookie-mobile");
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
-  await addReturningCookie(context);
+  await addLegacyWalkthroughCookie(context);
   const page = await context.newPage();
   attachDiagnostics(page, state);
 
@@ -263,17 +243,12 @@ async function runReturningMobile(entry) {
     waitUntil: "domcontentloaded",
     timeout: 120_000,
   });
-  assert.ok(response && response.status() < 500, "Returning mobile route returned no usable response");
-  await page.waitForURL((url) => url.pathname === "/complete-profile", { timeout: 60_000 });
+  assert.ok(response && response.status() < 500, "Legacy-cookie mobile route returned no usable response");
+  await page.waitForURL((url) => url.pathname === "/walkthrough", { timeout: 60_000 });
   await page
-    .getByLabel("80 of 100 attention points assigned")
+    .getByRole("heading", { name: "What do you value?" })
     .waitFor({ state: "visible", timeout: 60_000 });
   assertCanonicalFinalHost(page);
-
-  await page.getByRole("button", { name: "Assign one spark to Space governance" }).click();
-  await page
-    .getByRole("button", { name: "Decrease Space governance" })
-    .waitFor({ state: "visible", timeout: 30_000 });
 
   const dimensions = await page.evaluate(() => ({
     viewportWidth: window.innerWidth,
@@ -286,7 +261,7 @@ async function runReturningMobile(entry) {
 
   await settleDiagnostics(page);
   await page.screenshot({
-    path: `${outputDir}/${entry.id}-returning-mobile.png`,
+    path: `${outputDir}/${entry.id}-legacy-cookie-mobile.png`,
     fullPage: true,
   });
   assertNoFatalDiagnostics(state);
@@ -300,8 +275,8 @@ async function runReturningMobile(entry) {
 try {
   for (const entry of entries) {
     await runFirstTime(entry);
-    await runReturningDesktop(entry);
-    await runReturningMobile(entry);
+    await runLegacyCookieDesktop(entry);
+    await runLegacyCookieMobile(entry);
   }
   report.status = "passed";
   report.expectedPrefetchAbortCount = report.scenarios.reduce(

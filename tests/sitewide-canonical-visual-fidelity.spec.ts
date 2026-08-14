@@ -72,44 +72,33 @@ test("Start service snapshot renders as distinct non-overlapping rows", async ({
   });
 });
 
-test("Complete Profile header actions remain separated on desktop and mobile", async ({ page }, testInfo) => {
+test("Complete Profile remains private behind the canonical Walkthrough on desktop and mobile", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   let response = await page.goto("/complete-profile", {
     timeout: 60_000,
     waitUntil: "domcontentloaded",
   });
   expect(response?.status() ?? 200).toBeLessThan(400);
-  await expect(page.getByRole("heading", { level: 1, name: "Spend 100 sparks of attention." })).toBeVisible();
-
-  const sources = page.getByRole("button", { name: /^Sources/ });
-  const save = page.getByRole("button", { exact: true, name: "Save profile" });
-  await expect(sources).toBeVisible();
-  await expect(save).toBeVisible();
-
-  const sourcesDesktop = await rect(sources);
-  const saveDesktop = await rect(save);
-  expect(sourcesDesktop.right + 8).toBeLessThanOrEqual(saveDesktop.left);
+  await expect(page).toHaveURL(/\/walkthrough$/);
+  await expect(page.getByRole("heading", { level: 1, name: "What do you value?" })).toBeVisible();
+  await expect(page.getByRole("button", { exact: true, name: "Save profile" })).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
   await page.screenshot({
-    path: testInfo.outputPath("complete-profile-header-1440.png"),
+    path: testInfo.outputPath("complete-profile-gate-1440.png"),
     fullPage: false,
   });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  response = await page.reload({ timeout: 60_000, waitUntil: "domcontentloaded" });
+  response = await page.goto("/complete-profile?next=/feed", {
+    timeout: 60_000,
+    waitUntil: "domcontentloaded",
+  });
   expect(response?.status() ?? 200).toBeLessThan(400);
-  await expect(sources).toBeVisible();
-  await expect(save).toBeVisible();
-
-  const sourcesMobile = await rect(sources);
-  const saveMobile = await rect(save);
-  const separatedHorizontally = sourcesMobile.right + 4 <= saveMobile.left;
-  const separatedVertically =
-    sourcesMobile.bottom + 4 <= saveMobile.top || saveMobile.bottom + 4 <= sourcesMobile.top;
-  expect(separatedHorizontally || separatedVertically).toBe(true);
+  await expect(page).toHaveURL(/\/walkthrough$/);
+  await expect(page.getByRole("heading", { level: 1, name: "What do you value?" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
   await page.screenshot({
-    path: testInfo.outputPath("complete-profile-header-390.png"),
+    path: testInfo.outputPath("complete-profile-gate-390.png"),
     fullPage: false,
   });
 });

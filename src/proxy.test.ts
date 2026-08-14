@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { NextRequest } from "next/server";
 
-import { config, proxy, WALKTHROUGH_SEEN_COOKIE } from "@/proxy";
+import { config, proxy } from "@/proxy";
 
 const desktopUserAgent =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 " +
@@ -18,62 +18,21 @@ function makeRequest(path: string, headers: Record<string, string> = {}) {
   });
 }
 
-test("a first human homepage visit redirects to the mandatory walkthrough", () => {
-  const response = proxy(makeRequest("/?utm_source=invite"));
+test("root and Walkthrough reach their App Router handlers without cookie authority", async () => {
+  for (const path of ["/?utm_source=invite", "/walkthrough"]) {
+    const response = await proxy(makeRequest(path, { cookie: "mt_walkthrough_seen=1" }));
 
-  assert.equal(response.status, 307);
-  assert.equal(
-    response.headers.get("location"),
-    "https://moraltrade.org/walkthrough?utm_source=invite",
-  );
-  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE)?.value, "1");
-  assert.equal(response.headers.get("cache-control"), "private, no-store");
-});
-
-test("a returning visitor receives the live personalized homepage", () => {
-  const response = proxy(
-    makeRequest("/?utm_source=invite", { cookie: `${WALKTHROUGH_SEEN_COOKIE}=1` }),
-  );
-
-  assert.equal(response.status, 200);
-  assert.equal(
-    response.headers.get("x-middleware-rewrite"),
-    "https://moraltrade.org/moral-trade-live.html?utm_source=invite",
-  );
-  assert.equal(response.headers.get("location"), null);
-  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
-});
-
-test("opening the walkthrough directly records the visit without redirecting", () => {
-  const response = proxy(makeRequest("/walkthrough"));
-
-  assert.equal(response.status, 200);
-  assert.equal(response.headers.get("x-middleware-next"), "1");
-  assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE)?.value, "1");
-  assert.equal(response.headers.get("cache-control"), "private, no-store");
-});
-
-test("bots and prefetches receive the live homepage without consuming the walkthrough", () => {
-  const botResponse = proxy(
-    makeRequest("/", { "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)" }),
-  );
-  const prefetchResponse = proxy(
-    makeRequest("/", { "next-router-prefetch": "1", purpose: "prefetch" }),
-  );
-
-  for (const response of [botResponse, prefetchResponse]) {
-    assert.equal(response.status, 200);
-    assert.equal(
-      response.headers.get("x-middleware-rewrite"),
-      "https://moraltrade.org/moral-trade-live.html",
-    );
-    assert.equal(response.headers.get("location"), null);
-    assert.equal(response.cookies.get(WALKTHROUGH_SEEN_COOKIE), undefined);
+    assert.equal(response.status, 200, path);
+    assert.equal(response.headers.get("x-middleware-next"), "1", path);
+    assert.equal(response.headers.get("x-middleware-rewrite"), null, path);
+    assert.equal(response.headers.get("location"), null, path);
+    assert.equal(response.cookies.get("mt_walkthrough_seen"), undefined, path);
+    assert.equal(response.headers.get("cache-control"), "private, no-store, max-age=0", path);
   }
 });
 
-test("the default Create route is replaced by the unified Create interface", () => {
-  const response = proxy(makeRequest("/create?source=topbar&resume=create"));
+test("the default Create route is replaced by the unified Create interface", async () => {
+  const response = await proxy(makeRequest("/create?source=topbar&resume=create"));
 
   assert.equal(response.status, 200);
   assert.equal(
@@ -83,16 +42,16 @@ test("the default Create route is replaced by the unified Create interface", () 
   assert.equal(response.headers.get("location"), null);
 });
 
-test("the reviewed career-backing lane remains available", () => {
-  const response = proxy(makeRequest("/create?source=walkthrough&mode=back"));
+test("the reviewed career-backing lane remains available", async () => {
+  const response = await proxy(makeRequest("/create?source=walkthrough&mode=back"));
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("x-middleware-next"), "1");
   assert.equal(response.headers.get("x-middleware-rewrite"), null);
 });
 
-test("a human queryless offers navigation transfers to Discover", () => {
-  const response = proxy(makeRequest("/offers"));
+test("a human queryless offers navigation transfers to Discover", async () => {
+  const response = await proxy(makeRequest("/offers"));
 
   assert.equal(response.status, 307);
   assert.equal(
@@ -101,8 +60,8 @@ test("a human queryless offers navigation transfers to Discover", () => {
   );
 });
 
-test("a queryless offers prefetch stays on the source route", () => {
-  const response = proxy(
+test("a queryless offers prefetch stays on the source route", async () => {
+  const response = await proxy(
     makeRequest("/offers", { "next-router-prefetch": "1", purpose: "prefetch" }),
   );
 
@@ -112,8 +71,8 @@ test("a queryless offers prefetch stays on the source route", () => {
   assert.equal(response.headers.get("x-middleware-rewrite"), null);
 });
 
-test("query-driven offer searches continue to default to the live list", () => {
-  const response = proxy(makeRequest("/offers?search=Climate"));
+test("query-driven offer searches continue to default to the live list", async () => {
+  const response = await proxy(makeRequest("/offers?search=Climate"));
 
   assert.equal(response.status, 307);
   assert.equal(
@@ -122,8 +81,8 @@ test("query-driven offer searches continue to default to the live list", () => {
   );
 });
 
-test("the Create Offer template page is replaced by the unified Create interface", () => {
-  const response = proxy(makeRequest("/offers?view=templates&utm_source=legacy"));
+test("the Create Offer template page is replaced by the unified Create interface", async () => {
+  const response = await proxy(makeRequest("/offers?view=templates&utm_source=legacy"));
 
   assert.equal(response.status, 200);
   assert.equal(
@@ -133,8 +92,8 @@ test("the Create Offer template page is replaced by the unified Create interface
   assert.equal(response.headers.get("location"), null);
 });
 
-test("legacy template tabs are also replaced by the unified Create interface", () => {
-  const response = proxy(makeRequest("/offers?tab=templates&utm_source=legacy"));
+test("legacy template tabs are also replaced by the unified Create interface", async () => {
+  const response = await proxy(makeRequest("/offers?tab=templates&utm_source=legacy"));
 
   assert.equal(response.status, 200);
   assert.equal(
@@ -144,21 +103,21 @@ test("legacy template tabs are also replaced by the unified Create interface", (
   assert.equal(response.headers.get("location"), null);
 });
 
-test("non-template explicit offer views pass through without redirecting", () => {
-  const response = proxy(makeRequest("/offers?view=live"));
+test("non-template explicit offer views pass through without redirecting", async () => {
+  const response = await proxy(makeRequest("/offers?view=live"));
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("x-middleware-next"), "1");
   assert.equal(response.headers.get("location"), null);
 });
 
-test("invalid offer record identifiers fail closed before the dynamic route", () => {
+test("invalid offer record identifiers fail closed before the dynamic route", async () => {
   for (const path of [
     "/offers/null",
     "/offers/undefined?source=legacy",
     "/offers/not-a-uuid/credibility",
   ]) {
-    const response = proxy(makeRequest(path));
+    const response = await proxy(makeRequest(path));
 
     assert.equal(response.status, 404, path);
     assert.equal(
@@ -171,7 +130,7 @@ test("invalid offer record identifiers fail closed before the dynamic route", ()
   }
 });
 
-test("valid offer record identifiers and static offer routes pass through", () => {
+test("valid offer record identifiers and static offer routes pass through", async () => {
   for (const path of [
     "/offers/1c6b0e57-bfed-3f29-c51f-6f8c23d1960b",
     "/offers/1c6b0e57-bfed-3f29-c51f-6f8c23d1960b/credibility",
@@ -179,7 +138,7 @@ test("valid offer record identifiers and static offer routes pass through", () =
     "/offers/examples",
     "/offers/plane",
   ]) {
-    const response = proxy(makeRequest(path));
+    const response = await proxy(makeRequest(path));
 
     assert.equal(response.status, 200, path);
     assert.equal(response.headers.get("x-middleware-next"), "1", path);
@@ -187,6 +146,8 @@ test("valid offer record identifiers and static offer routes pass through", () =
   }
 });
 
-test("the proxy matcher covers nested offer record paths", () => {
-  assert.ok(config.matcher.includes("/offers/:path*"));
+test("the one proxy matcher covers session refresh and nested route compatibility", () => {
+  assert.deepEqual(config.matcher, [
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ]);
 });

@@ -493,14 +493,15 @@ test("the Complete Profile canary proves current ownership from both alias recor
   assert.doesNotMatch(source, /api\.vercel\.com\/v6\/deployments\?/);
   assert.doesNotMatch(
     source,
-    /grep -Fq "\$EXPECTED_DEPLOYMENT_ID" "\$CANARY_OUTPUT_DIR\/www-returning\.html"/,
+    /grep -Fq "\$EXPECTED_DEPLOYMENT_ID" "\$CANARY_OUTPUT_DIR\/www-legacy-cookie\.html"/,
   );
 });
 
 test("route behavior remains an independent canary gate", async () => {
   const source = await completeProfileCanary();
 
-  assert.match(source, /grep -Fq 'Spend 100 sparks of attention\.'/);
+  assert.match(source, /\[\[ "\$www_status" == '307' \]\]/);
+  assert.match(source, /grep -Fqx 'location: \/walkthrough'/);
   assert.match(source, /grep -Fqx 'x-matched-path: \/complete-profile'/);
   assert.match(source, /\[\[ "\$apex_status" == '308' \]\]/);
   assert.match(
@@ -515,7 +516,7 @@ test("the rendered canary runs between current-alias checks", async () => {
     "- name: Verify current alias ownership and both production routes",
   );
   const browserIndex = source.indexOf(
-    "- name: Run the rendered first-time and returning-user canary",
+    "- name: Run the rendered first-time and legacy-cookie canary",
   );
   const postBrowserIndex = source.indexOf(
     "- name: Reconfirm current alias ownership after the rendered canary",

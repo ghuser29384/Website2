@@ -10,6 +10,7 @@ import {
   getCompleteProfilePrivacyStage,
   normalizeCompleteProfileSubmission,
 } from "@/lib/complete-profile";
+import { getAccountActivationState } from "@/lib/account-activation";
 import { prepareCompleteProfilePrivatePreferences } from "@/lib/complete-profile-private-preferences";
 import { ensureAccountRowsForUser, requireViewer } from "@/lib/app-data";
 import { getSafeInternalPath } from "@/lib/paths";
@@ -19,7 +20,7 @@ import {
   getRankedProfilePriorityLabels,
   normalizeProfilePriorityAllocation,
 } from "@/lib/profile-priorities";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { hasSupabaseEnv } from "@/lib/supabase/config";
 import {
   createWalkthroughProfileDraft,
@@ -39,10 +40,7 @@ function redirectWithMessage(path: string, key: "error" | "message", text: strin
 
 export async function completeWalkthroughProfileAction(formData: FormData) {
   const returnTo = getSafeInternalPath(read(formData, "return_to"), "/complete-profile");
-  const successTo = getSafeInternalPath(
-    read(formData, "success_to"),
-    "/discover?source=profile-complete&domain=offers&view=constellation",
-  );
+  const successTo = "/feed";
 
   if (!hasSupabaseEnv()) {
     redirectWithMessage(
@@ -123,6 +121,20 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
         : [...rankedCauseAreas, profileDraft.causeArea];
 
   const viewer = await requireViewer(returnTo);
+  const activationState = getAccountActivationState({ authenticated: true, viewer });
+
+  if (activationState.kind !== "available") {
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Your persisted setup stage is unavailable. No completion state was changed.",
+    );
+  }
+
+  if (activationState.stage === "walkthrough_required") {
+    redirect("/walkthrough");
+  }
+
   const supabase = await createClient();
   await ensureAccountRowsForUser(viewer.authUser, supabase);
 
@@ -296,6 +308,44 @@ export async function completeWalkthroughProfileAction(formData: FormData) {
 
   if (synthesisError) {
     console.error("Failed to attach ranked priorities to profile synthesis", synthesisError);
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Your ranked priorities could not be saved. Your setup remains incomplete; retry safely.",
+    );
+  }
+
+  let transitionError: { message?: string } | null = null;
+  let transitionedStage: string | null = null;
+
+  try {
+    const serviceSupabase = createServiceClient();
+    const { data, error } = await serviceSupabase.rpc(
+      "complete_profile_activation_v1",
+      {
+        p_actor_profile_id: viewer.authUser.id,
+        p_profile_id: viewer.authUser.id,
+      },
+    );
+    transitionError = error;
+    transitionedStage = data;
+  } catch (error) {
+    transitionError = {
+      message: error instanceof Error ? error.message : "Unknown activation transition error",
+    };
+  }
+
+  if (transitionError || transitionedStage !== "setup_complete") {
+    console.error("Failed to persist completed profile activation", {
+      message: transitionError?.message ?? "Unexpected activation stage",
+      profileId: viewer.authUser.id,
+      transitionedStage,
+    });
+    redirectWithMessage(
+      returnTo,
+      "error",
+      "Your profile data was saved, but setup completion was not. Retry to finish safely.",
+    );
   }
 
   if (profileSource === "walkthrough") {

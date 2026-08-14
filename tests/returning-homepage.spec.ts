@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function openHome(page: Page) {
-  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.goto("/feed", { waitUntil: "domcontentloaded" });
   await expect(page.locator("main#app")).toBeVisible({ timeout: 30_000 });
   await expect(page.locator('[data-mt-live-now="adaptive"]')).toBeVisible({ timeout: 30_000 });
 }
@@ -17,7 +17,7 @@ async function expectNoHorizontalOverflow(page: Page) {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth + 1);
 }
 
-test.describe("Adaptive homepage", () => {
+test.describe("Adaptive Feed", () => {
   test.use({ timezoneId: "UTC" });
 
   test.beforeEach(async ({ page }) => {
@@ -30,7 +30,7 @@ test.describe("Adaptive homepage", () => {
     await page.setViewportSize({ width: 1487, height: 1058 });
     await openHome(page);
 
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/feed$/);
     await expect(page.locator("#mt-live-document-heading")).toHaveText(
       "Your best match right now",
     );
@@ -92,7 +92,7 @@ test.describe("Adaptive homepage", () => {
 
     await expect(feed.getByRole("link", { name: /Sign in/ })).toHaveAttribute(
       "href",
-      "/login?returnTo=%2F",
+      "/login?returnTo=%2Ffeed",
     );
     await expect(feed.getByRole("link", { name: "Browse all live proposals →" })).toHaveAttribute(
       "href",
@@ -113,19 +113,19 @@ test.describe("Adaptive homepage", () => {
     await expectNoHorizontalOverflow(page);
   });
 
-  test("routes the current homepage actions to Create and sign-in safely", async ({ page }) => {
+  test("routes the current Feed actions to Create and sign-in safely", async ({ page }) => {
     await page.setViewportSize({ width: 1487, height: 1058 });
     await openHome(page);
 
     await page.locator('button[data-action="create"]').click();
     await expect(page).toHaveURL(/\/trades\/new(?:[?#]|$)/, { timeout: 30_000 });
 
-    await page.goto("/", { waitUntil: "domcontentloaded" });
+    await page.goto("/feed", { waitUntil: "domcontentloaded" });
     await expect(page.locator('[data-mt-live-now-state="signed_out"]')).toBeVisible({
       timeout: 30_000,
     });
     await page.getByRole("link", { name: /Sign in/ }).click();
-    await expect(page).toHaveURL(/\/login\?returnTo=%2F$/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/login\?returnTo=%2Ffeed$/, { timeout: 30_000 });
   });
 
   test("stacks the adaptive signed-out feed without horizontal overflow on mobile", async ({
