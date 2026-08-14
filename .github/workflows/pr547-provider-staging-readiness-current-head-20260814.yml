@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      EXPECTED_SHA: b82e7f05c139fdb3c583f7f0c9a5475491bc827e
+      EXPECTED_SHA: 106f9781cf13f75af31594ed79deef89318a87b7
       EXPECTED_PR_BRANCH: integration/direct-donation-upgrade-current-main-20260807
       QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
       QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
