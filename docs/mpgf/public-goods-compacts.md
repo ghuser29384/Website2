@@ -35,6 +35,10 @@ The stored scheduled contribution is a constitutional calculation, not proof tha
 
 When Supabase is missing, unreachable, missing the RPC, or returns an invalid safety contract, `/mpgf/compacts` fails closed. It displays the three published founding charter examples, marks member counts and membership activity unavailable, disables acceptance controls, and shows no simulated ballot or payment capability.
 
+## Verification boundary
+
+Repository tests, TypeScript, the production build, and rendered browser checks do not establish that the PostgreSQL authorization and lifecycle rules execute correctly. Before review can advance, an exact-head database gate must apply both compact migrations and the lifecycle and historical-freeze suites inside a transaction against an approved isolated non-production PostgreSQL/Supabase target, roll the transaction back, and prove that no compact schema or synthetic rows remain afterward. That verification does not authorize applying either migration persistently to staging or production.
+
 ## Release boundary
 
-Migration `20260813163052_mpgf_public_goods_compacts.sql` is repository code only until separately reviewed and applied. Creating this feature branch or pull request does not apply the migration, deploy a Preview or Production build, enable collection, or authorize a payment provider.
+Migration `20260813163052_mpgf_public_goods_compacts.sql` and its hardening migration are repository code only until separately reviewed and applied. Creating this feature branch or pull request does not apply either migration, deploy a Preview or Production build, enable collection, or authorize a payment provider.
