@@ -15,6 +15,7 @@ on:
       - "supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql"
       - "supabase/migrations/20260814023000_mpgf_public_goods_compacts_state_hardening.sql"
       - "supabase/tests/mpgf_public_goods_compacts_lifecycle.sql"
+      - "supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql"
       - "tests/mpgf-public-goods-compacts.spec.ts"
   workflow_dispatch:
     inputs:
@@ -133,6 +134,7 @@ jobs:
             supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql \
             supabase/migrations/20260814023000_mpgf_public_goods_compacts_state_hardening.sql \
             supabase/tests/mpgf_public_goods_compacts_lifecycle.sql \
+            supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql \
             | tee mpgf-compacts-qa/source.sha256
 
       - name: Prove QA starts without persisted compact schema
@@ -165,6 +167,7 @@ jobs:
           \i mpgf-compacts-qa/20260813163052_mpgf_public_goods_compacts.sql
           \i mpgf-compacts-qa/20260814023000_mpgf_public_goods_compacts_state_hardening.sql
           \i supabase/tests/mpgf_public_goods_compacts_lifecycle.sql
+          \i supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql
           rollback;
           SQL
 
