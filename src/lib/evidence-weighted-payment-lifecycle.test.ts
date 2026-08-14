@@ -253,6 +253,24 @@ test("reviewer nomination uses full navigation when matching nominations remove 
   assert.match(reviewerNominationForm, /<\/FullNavigationActionForm>/);
 });
 
+test("agreement confirmation uses full navigation when activation changes the rendered stage", () => {
+  const stage = source(
+    "src/components/core-trade/trade-agreement-stage-base.tsx",
+  );
+  const confirmationForm = stage.match(
+    /\{props\.canConfirm \? \([\s\S]*?(?=\) : props\.viewerConfirmed)/,
+  )?.[0];
+
+  assert.ok(confirmationForm);
+  assert.match(
+    confirmationForm,
+    /<FullNavigationActionForm\s+action=\{props\.confirmAction\}/,
+  );
+  assert.match(confirmationForm, /name="terms_reviewed" required type="checkbox"/);
+  assert.match(confirmationForm, /pendingLabel="Recording confirmation\.\.\."/);
+  assert.match(confirmationForm, /<\/FullNavigationActionForm>/);
+});
+
 test("assigned evidence reviewers retain read-only access after recording a review", () => {
   const reviewerPage = source("src/app/trade-review/[milestoneId]/page.tsx");
 
