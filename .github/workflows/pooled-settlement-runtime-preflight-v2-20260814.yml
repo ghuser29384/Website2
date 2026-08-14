@@ -1,0 +1,346 @@
+name: Pooled settlement QA runtime preflight v2 20260814
+
+on:
+  push:
+    branches:
+      - qa/pooled-settlement-runtime-preflight-v2-20260814
+    paths:
+      - ".github/workflows/pooled-settlement-runtime-preflight-v2-20260814.yml"
+  workflow_dispatch:
+    inputs:
+      confirm_target:
+        description: "Enter hvmxfjjbdcgjjudmthdz to confirm the isolated QA target"
+        required: true
+        default: hvmxfjjbdcgjjudmthdz
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pooled-settlement-runtime-preflight-v2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    if: github.event_name == 'push' || inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      EXPECTED_FEATURE_SHA: 9c4363e5e6713163df5b7a8b51981af585d2f0a9
+      EXPECTED_FEATURE_TREE: 84aecf084083b01f4dc93103c45ceae23f9e789c
+      QA_PROJECT_REF: hvmxfjjbdcgjjudmthdz
+      PRODUCTION_PROJECT_REF: jnpoxvalyjtdghnperyu
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      QA_STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      QA_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      QA_STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      QA_STRIPE_PLATFORM_ACCOUNT_ID: ${{ secrets.QA_STRIPE_PLATFORM_ACCOUNT_ID }}
+      QA_EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      QA_EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      QA_EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+
+    steps:
+      - name: Check out exact preflight revision
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify workflow-only delta from validated feature tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          parent="$(git rev-parse HEAD^)"
+          parent_tree="$(git rev-parse "$parent^{tree}")"
+          if [[ "$parent" != "$EXPECTED_FEATURE_SHA" ]]; then
+            echo "Preflight branch parent is not the validated feature head." >&2
+            exit 1
+          fi
+          if [[ "$parent_tree" != "$EXPECTED_FEATURE_TREE" ]]; then
+            echo "Validated feature tree changed before preflight." >&2
+            exit 1
+          fi
+          git diff --check "$EXPECTED_FEATURE_SHA" HEAD
+          git diff --name-only "$EXPECTED_FEATURE_SHA" HEAD | sort > actual-preflight-files.txt
+          printf '%s\n' ".github/workflows/pooled-settlement-runtime-preflight-v2-20260814.yml" > expected-preflight-files.txt
+          diff -u expected-preflight-files.txt actual-preflight-files.txt
+
+      - name: Install read-only database tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client jq
+
+      - name: Classify QA runtime prerequisites without exposing secrets
+        id: classify
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pooled-settlement-preflight-evidence
+          blockers=()
+          unsafe=()
+
+          core_ready=true
+          stripe_ready=true
+          every_org_ready=true
+
+          if [[ -z "${QA_SUPABASE_DB_URL:-}" ]]; then
+            blockers+=("QA_SUPABASE_DB_URL is missing")
+            core_ready=false
+          else
+            if [[ "$QA_SUPABASE_DB_URL" != *"$QA_PROJECT_REF"* ]]; then
+              unsafe+=("QA_SUPABASE_DB_URL does not target the isolated QA project")
+              core_ready=false
+            fi
+            if [[ "$QA_SUPABASE_DB_URL" == *"$PRODUCTION_PROJECT_REF"* ]]; then
+              unsafe+=("Production Supabase project detected")
+              core_ready=false
+            fi
+          fi
+          if [[ -z "${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}" ]]; then
+            blockers+=("QA_SUPABASE_PUBLISHABLE_KEY is missing")
+            core_ready=false
+          fi
+          if [[ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]]; then
+            blockers+=("QA_SUPABASE_SERVICE_ROLE_KEY is missing")
+            core_ready=false
+          fi
+          if [[ -z "${QA_TEST_PASSWORD:-}" ]]; then
+            blockers+=("QA_TEST_PASSWORD is missing")
+            core_ready=false
+          elif (( ${#QA_TEST_PASSWORD} < 14 )); then
+            blockers+=("QA_TEST_PASSWORD is shorter than 14 characters")
+            core_ready=false
+          fi
+
+          if [[ -z "${QA_STRIPE_SECRET_KEY:-}" ]]; then
+            blockers+=("QA_STRIPE_SECRET_KEY is missing")
+            stripe_ready=false
+          elif [[ "$QA_STRIPE_SECRET_KEY" == sk_live_* || "$QA_STRIPE_SECRET_KEY" == rk_live_* ]]; then
+            unsafe+=("A live Stripe secret key was supplied to QA")
+            stripe_ready=false
+          elif [[ "$QA_STRIPE_SECRET_KEY" != sk_test_* && "$QA_STRIPE_SECRET_KEY" != rk_test_* ]]; then
+            unsafe+=("QA Stripe secret key is not recognizably test-mode")
+            stripe_ready=false
+          fi
+          if [[ -z "${QA_STRIPE_PUBLISHABLE_KEY:-}" ]]; then
+            blockers+=("QA_STRIPE_PUBLISHABLE_KEY is missing")
+            stripe_ready=false
+          elif [[ "$QA_STRIPE_PUBLISHABLE_KEY" == pk_live_* ]]; then
+            unsafe+=("A live Stripe publishable key was supplied to QA")
+            stripe_ready=false
+          elif [[ "$QA_STRIPE_PUBLISHABLE_KEY" != pk_test_* ]]; then
+            unsafe+=("QA Stripe publishable key is not recognizably test-mode")
+            stripe_ready=false
+          fi
+          if [[ -z "${QA_STRIPE_WEBHOOK_SECRET:-}" ]]; then
+            blockers+=("QA_STRIPE_WEBHOOK_SECRET is missing")
+            stripe_ready=false
+          elif [[ "$QA_STRIPE_WEBHOOK_SECRET" != whsec_* ]]; then
+            unsafe+=("QA Stripe webhook secret has an unexpected format")
+            stripe_ready=false
+          fi
+          if [[ -n "${QA_STRIPE_PLATFORM_ACCOUNT_ID:-}" && "$QA_STRIPE_PLATFORM_ACCOUNT_ID" != acct_* ]]; then
+            unsafe+=("QA Stripe platform account ID has an unexpected format")
+            stripe_ready=false
+          fi
+
+          if [[ -z "${QA_EVERY_ORG_WEBHOOK_TOKEN:-}" ]]; then
+            blockers+=("QA_EVERY_ORG_WEBHOOK_TOKEN is missing")
+            every_org_ready=false
+          fi
+          if [[ -z "${QA_EVERY_ORG_WEBHOOK_PATH_SECRET:-}" ]]; then
+            blockers+=("QA_EVERY_ORG_WEBHOOK_PATH_SECRET is missing")
+            every_org_ready=false
+          elif (( ${#QA_EVERY_ORG_WEBHOOK_PATH_SECRET} < 32 )); then
+            blockers+=("QA_EVERY_ORG_WEBHOOK_PATH_SECRET is shorter than 32 characters")
+            every_org_ready=false
+          fi
+          if [[ -z "${QA_EVERY_ORG_PARTNER_METADATA_SECRET:-}" ]]; then
+            blockers+=("QA_EVERY_ORG_PARTNER_METADATA_SECRET is missing")
+            every_org_ready=false
+          elif (( ${#QA_EVERY_ORG_PARTNER_METADATA_SECRET} < 32 )); then
+            blockers+=("QA_EVERY_ORG_PARTNER_METADATA_SECRET is shorter than 32 characters")
+            every_org_ready=false
+          fi
+
+          full_ready=false
+          if [[ "$core_ready" == true && "$stripe_ready" == true && "$every_org_ready" == true && ${#unsafe[@]} -eq 0 ]]; then
+            full_ready=true
+          fi
+
+          printf '%s\n' "core_ready=$core_ready" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "stripe_ready=$stripe_ready" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "every_org_ready=$every_org_ready" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "full_ready=$full_ready" >> "$GITHUB_OUTPUT"
+
+          blockers_json="$(printf '%s\n' "${blockers[@]:-}" | sed '/^$/d' | jq -R . | jq -s .)"
+          unsafe_json="$(printf '%s\n' "${unsafe[@]:-}" | sed '/^$/d' | jq -R . | jq -s .)"
+          jq -n \
+            --arg checked_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg feature_sha "$EXPECTED_FEATURE_SHA" \
+            --arg feature_tree "$EXPECTED_FEATURE_TREE" \
+            --arg qa_project_ref "$QA_PROJECT_REF" \
+            --argjson core_ready "$core_ready" \
+            --argjson stripe_ready "$stripe_ready" \
+            --argjson every_org_ready "$every_org_ready" \
+            --argjson full_ready "$full_ready" \
+            --argjson blockers "$blockers_json" \
+            --argjson unsafe "$unsafe_json" \
+            '{
+              checked_at: $checked_at,
+              feature_sha: $feature_sha,
+              feature_tree: $feature_tree,
+              qa_project_ref: $qa_project_ref,
+              production_project_ref_present: false,
+              core_qa_ready: $core_ready,
+              stripe_test_ready: $stripe_ready,
+              every_org_staging_ready: $every_org_ready,
+              ready_for_authenticated_provider_e2e: $full_ready,
+              blockers: $blockers,
+              unsafe_configuration: $unsafe
+            }' | tee pooled-settlement-preflight-evidence/runtime-prerequisites.json
+
+          if (( ${#unsafe[@]} > 0 )); then
+            echo "Unsafe QA configuration detected; refusing further execution." >&2
+            exit 1
+          fi
+
+      - name: Verify canonical pooled-settlement migrations and post-migration privileges
+        if: steps.classify.outputs.core_ready == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -X -qAt <<'SQL' | tee pooled-settlement-preflight-evidence/database-verification.json
+          with expected_migrations(version, name) as (
+            values
+              ('20260725152000'::text, 'cross_user_pooled_trade_donations'::text),
+              ('20260814024354', 'harden_trade_donation_pool_component_trigger_rpc'),
+              ('20260814030000', 'harden_trade_donation_pool_stripe_failure_environment'),
+              ('20260814033000', 'resume_trade_donation_pool_bundle_checkout')
+          ), migration_state as (
+            select e.version, e.name,
+                   exists (
+                     select 1 from supabase_migrations.schema_migrations m
+                     where m.version = e.version and m.name = e.name
+                   ) as present
+            from expected_migrations e
+          ), function_state as (
+            select
+              p.proname,
+              p.prosecdef as security_definer,
+              p.proconfig,
+              has_function_privilege('anon', p.oid, 'execute') as anon_execute,
+              has_function_privilege('authenticated', p.oid, 'execute') as authenticated_execute,
+              has_function_privilege('service_role', p.oid, 'execute') as service_role_execute,
+              case p.proname
+                when 'record_trade_donation_pool_stripe_failure' then
+                  position('stripe_failure_environment_mismatch' in pg_get_functiondef(p.oid)) > 0
+                  and position('obligation_row.stripe_livemode <> p_livemode' in pg_get_functiondef(p.oid)) > 0
+                when 'start_trade_donation_pool_bundle_checkout' then
+                  position('provider_checkout_identity_missing' in pg_get_functiondef(p.oid)) > 0
+                  and position('bundle_row.status = ''checkout_started''' in pg_get_functiondef(p.oid)) > 0
+                  and position('returning * into bundle_row' in pg_get_functiondef(p.oid)) > 0
+                when 'mark_trade_donation_pool_component_stale' then true
+                else false
+              end as expected_definition_present
+            from pg_proc p
+            join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public'
+              and p.proname in (
+                'record_trade_donation_pool_stripe_failure',
+                'start_trade_donation_pool_bundle_checkout',
+                'mark_trade_donation_pool_component_stale'
+              )
+          ), relation_state as (
+            select
+              c.relname,
+              c.relrowsecurity as rls_enabled,
+              has_table_privilege('anon', c.oid, 'select,insert,update,delete') as anon_any_dml,
+              has_table_privilege('authenticated', c.oid, 'select,insert,update,delete') as authenticated_any_dml,
+              has_table_privilege('service_role', c.oid, 'select,insert,update,delete') as service_role_any_dml
+            from pg_class c
+            where c.relnamespace = 'public'::regnamespace
+              and c.relname in (
+                'trade_donation_pool_gate_status',
+                'trade_donation_pool_obligations',
+                'trade_donation_pool_bundles',
+                'trade_donation_pool_bundle_items',
+                'trade_donation_pool_ledger_journals',
+                'trade_donation_pool_ledger_lines',
+                'trade_donation_pool_stripe_events',
+                'trade_donation_pool_audit_events'
+              )
+          ), assertions as (
+            select
+              (select bool_and(present) and count(*) = 4 from migration_state) as migrations_ok,
+              (select bool_and(
+                security_definer
+                and proconfig @> array['search_path=pg_catalog']
+                and not anon_execute
+                and not authenticated_execute
+                and service_role_execute
+                and expected_definition_present
+              ) and count(*) = 3 from function_state) as functions_ok,
+              (select bool_and(
+                rls_enabled
+                and not anon_any_dml
+                and not authenticated_any_dml
+                and service_role_any_dml
+              ) and count(*) = 8 from relation_state) as relations_ok
+          )
+          select jsonb_build_object(
+            'checked_at', timezone('utc', now()),
+            'qa_project_ref', 'hvmxfjjbdcgjjudmthdz',
+            'migrations', (select jsonb_agg(to_jsonb(migration_state) order by version) from migration_state),
+            'functions', (select jsonb_agg(to_jsonb(function_state) order by proname) from function_state),
+            'relations', (select jsonb_agg(to_jsonb(relation_state) order by relname) from relation_state),
+            'row_counts', jsonb_build_object(
+              'obligations', (select count(*) from public.trade_donation_pool_obligations),
+              'bundles', (select count(*) from public.trade_donation_pool_bundles),
+              'stripe_events', (select count(*) from public.trade_donation_pool_stripe_events),
+              'ledger_journals', (select count(*) from public.trade_donation_pool_ledger_journals),
+              'ledger_lines', (select count(*) from public.trade_donation_pool_ledger_lines)
+            ),
+            'migrations_ok', assertions.migrations_ok,
+            'functions_ok', assertions.functions_ok,
+            'relations_ok', assertions.relations_ok
+          )
+          from assertions;
+          SQL
+
+          jq -e '.migrations_ok == true and .functions_ok == true and .relations_ok == true' \
+            pooled-settlement-preflight-evidence/database-verification.json >/dev/null
+
+      - name: Record next authorized action
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ steps.classify.outputs.full_ready }}" == "true" ]]; then
+            cat > pooled-settlement-preflight-evidence/next-action.txt <<'TEXT'
+          READY: build and run the authenticated pooled-settlement QA harness against the isolated QA project, Stripe test mode, and Every.org staging. Keep PR #208 draft. Do not deploy, use live credentials, complete an external donation, or touch production.
+          TEXT
+          else
+            cat > pooled-settlement-preflight-evidence/next-action.txt <<'TEXT'
+          BLOCKED: do not run authenticated provider E2E yet. Configure only the missing QA-specific credentials listed in runtime-prerequisites.json, then rerun this preflight. Keep PR #208 draft. Do not substitute production or generic live credentials.
+          TEXT
+          fi
+          cat pooled-settlement-preflight-evidence/next-action.txt
+
+      - name: Upload sanitized preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-runtime-preflight-v2-${{ github.run_id }}
+          path: |
+            pooled-settlement-preflight-evidence/**
+            actual-preflight-files.txt
+            expected-preflight-files.txt
+          if-no-files-found: warn
+          retention-days: 14
