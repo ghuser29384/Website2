@@ -391,7 +391,7 @@ begin
     from public.mpgf_public_goods_allocation_instructions as instruction
     where instruction.participant_id = participant
       and instruction.cycle_key = cycle_key_value
-      and instruction.instruction_hash = public.mpgf_public_goods_hash_v2(
+      and instruction.instruction_hash = 'sha256:' || public.mpgf_public_goods_hash_v2(
         pg_catalog.jsonb_build_object('cycleKey', cycle_key_value, 'allocationBps', pg_catalog.jsonb_build_object(p_compact_public_key, 10000))
       );
     if instruction_id is null then
@@ -400,7 +400,7 @@ begin
         instruction_hash, submitted_at
       ) values (
         participant, cycle_key_value, p_constitution_version, 10000,
-        public.mpgf_public_goods_hash_v2(
+        'sha256:' || public.mpgf_public_goods_hash_v2(
           pg_catalog.jsonb_build_object('cycleKey', cycle_key_value, 'allocationBps', pg_catalog.jsonb_build_object(p_compact_public_key, 10000))
         ),
         action_at
@@ -503,7 +503,7 @@ begin
   from public.mpgf_public_goods_allocation_instructions as instruction
   where instruction.participant_id = participant
     and instruction.cycle_key = cycle_key_value
-    and instruction.instruction_hash = request_hash_value;
+    and instruction.instruction_hash = 'sha256:' || request_hash_value;
 
   if instruction_id is null then
     insert into public.mpgf_public_goods_allocation_instructions (
@@ -511,7 +511,7 @@ begin
       instruction_hash, submitted_at
     ) values (
       participant, cycle_key_value, 'mpgf-public-goods-compact/transaction-v2',
-      10000, request_hash_value, action_at
+      10000, 'sha256:' || request_hash_value, action_at
     ) returning id into instruction_id;
 
     insert into public.mpgf_public_goods_allocation_instruction_lines (
