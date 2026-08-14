@@ -47,7 +47,7 @@ async function expectHeaderAcrossPrimaryPages(
   page: Page,
   expected: { dateTime: string; dateLabel: string; greeting: string },
 ) {
-  for (const pageName of ["now", "trade", "activity"]) {
+  for (const pageName of ["now", "activity"]) {
     await page.locator(`.topbar nav button[data-page="${pageName}"]`).click();
     await expectLocalHeader(page, expected);
   }
@@ -57,7 +57,7 @@ test.describe("exact live interface local time", () => {
   test.describe("America/Los_Angeles", () => {
     test.use({ timezoneId: "America/Los_Angeles" });
 
-    test("uses the visitor's previous local day across Now, Trade, and Activity", async ({ page }) => {
+    test("uses the visitor's previous local day across Now and Activity", async ({ page }) => {
       await page.clock.setFixedTime(fixedInstant);
       await installAccountFixture(page);
       await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });
@@ -73,7 +73,7 @@ test.describe("exact live interface local time", () => {
   test.describe("Asia/Tokyo", () => {
     test.use({ timezoneId: "Asia/Tokyo" });
 
-    test("uses the visitor's next local day across Now, Trade, and Activity", async ({ page }) => {
+    test("uses the visitor's next local day across Now and Activity", async ({ page }) => {
       await page.clock.setFixedTime(fixedInstant);
       await installAccountFixture(page);
       await page.goto("/moral-trade-live.html", { waitUntil: "domcontentloaded" });

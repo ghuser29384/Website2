@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { MpgfPhaseOneGovernance } from "@/components/mpgf/mpgf-phase-one-governance";
 import { MpgfPageFrame } from "@/components/mpgf/mpgf-page-frame";
 import { LocalDateTime } from "@/components/ui/local-date-time";
 import { getViewer } from "@/lib/app-data";
 import { demoMpgfAssuranceRound } from "@/lib/mpgf/data";
 import { formatUsd } from "@/lib/mpgf/mechanism";
+import {
+  loadMpgfPhaseOneGovernanceState,
+  loadMpgfPhaseOneParticipantState,
+} from "@/lib/mpgf/phase-one-governance";
 import { getMpgfPublicGoodsGovernanceApi } from "@/lib/mpgf/public-goods-governance";
 import { getAbsoluteUrl } from "@/lib/seo";
 
@@ -44,7 +49,24 @@ function formatDate(value: string) {
 }
 
 export default async function MpgfGovernancePage() {
-  const viewer = await getViewer();
+  const [viewer, phaseOneGovernance] = await Promise.all([
+    getViewer(),
+    loadMpgfPhaseOneGovernanceState(),
+  ]);
+  let phaseOneParticipant = null;
+
+  if (viewer && phaseOneGovernance.round) {
+    try {
+      phaseOneParticipant = await loadMpgfPhaseOneParticipantState(
+        phaseOneGovernance.round.id,
+      );
+    } catch (error) {
+      console.error("[mpgf] Could not load private phase-one participant state.", {
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
   const governance = getMpgfPublicGoodsGovernanceApi();
 
   return (
@@ -52,7 +74,7 @@ export default async function MpgfGovernancePage() {
       actions={
         <>
           <Link className="button button-primary" href={`/mpgf/rounds/${demoMpgfAssuranceRound.id}`}>
-            View public round
+            View research example
           </Link>
           <Link className="button button-secondary" href="/mpgf/real-money-terms">
             Refund and payment terms
@@ -67,6 +89,24 @@ export default async function MpgfGovernancePage() {
       title="Publish the public rules before money moves."
       viewerPresent={Boolean(viewer)}
     >
+      <MpgfPhaseOneGovernance
+        governance={phaseOneGovernance}
+        participant={phaseOneParticipant}
+        viewerPresent={Boolean(viewer)}
+      />
+
+      <section className="section-head section-head-compact">
+        <div>
+          <p className="eyebrow">Research and policy reference</p>
+          <h2>Legacy examples below are not live participant activity</h2>
+          <p>
+            The remaining controls document proposed operator, reviewer, funding,
+            and incident rules. Their example amounts and rosters are not
+            production pledges, ballots, liquidity, or payments.
+          </p>
+        </div>
+      </section>
+
       <section className="mpgf-kpi-grid" aria-label="Governance summary">
         <div className="mpgf-kpi">
           <span>Operator roles</span>

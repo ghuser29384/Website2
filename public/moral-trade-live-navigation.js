@@ -19,6 +19,72 @@
       .toLowerCase();
   }
 
+  function createDocumentHeading() {
+    const heading = document.createElement("h1");
+    heading.id = "mt-live-document-heading";
+    heading.dataset.mtDocumentHeading = "true";
+    heading.textContent = "Your best match right now";
+    Object.assign(heading.style, {
+      border: "0",
+      clip: "rect(0 0 0 0)",
+      clipPath: "inset(50%)",
+      height: "1px",
+      margin: "-1px",
+      overflow: "hidden",
+      padding: "0",
+      position: "absolute",
+      whiteSpace: "nowrap",
+      width: "1px",
+    });
+    return heading;
+  }
+
+  function ensureDocumentHeading() {
+    let heading = document.getElementById("mt-live-document-heading");
+    if (!heading) heading = createDocumentHeading();
+
+    const appMain = document.querySelector("main#app");
+    if (appMain) {
+      if (heading.parentElement !== appMain || appMain.firstElementChild !== heading) {
+        appMain.prepend(heading);
+      }
+      return true;
+    }
+
+    if (!heading.isConnected && document.body) document.body.prepend(heading);
+    return false;
+  }
+
+  function normalizeLiveNowMain() {
+    const appMain = document.querySelector("main#app");
+    if (!appMain) return false;
+
+    const nestedMains = [
+      ...appMain.querySelectorAll('[data-mt-live-now="adaptive"] > main'),
+    ];
+
+    for (const nestedMain of nestedMains) {
+      const replacement = document.createElement("div");
+      for (const attribute of [...nestedMain.attributes]) {
+        replacement.setAttribute(attribute.name, attribute.value);
+      }
+      replacement.dataset.mtNestedMainNormalized = "true";
+      replacement.style.minWidth = "0px";
+
+      while (nestedMain.firstChild) {
+        replacement.appendChild(nestedMain.firstChild);
+      }
+      nestedMain.replaceWith(replacement);
+    }
+
+    return nestedMains.length > 0;
+  }
+
+  function normalizeLiveLandmarks() {
+    normalizeLiveNowMain();
+    ensureDocumentHeading();
+  }
+
   function findFeedControl(nav) {
     return Array.from(nav.querySelectorAll("a, button")).find((candidate) => {
       const label = normalizeLabel(candidate);
@@ -159,7 +225,11 @@
   }
 
   function patchNavigation() {
-    const navs = [...new Set(navSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]))];
+    const navs = [
+      ...new Set(
+        navSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]),
+      ),
+    ];
     let patched = false;
 
     for (const nav of navs) {
@@ -192,8 +262,7 @@
           prepareControlsControl(controlsControl);
         }
       } else {
-        const template =
-          findFeedControl(nav) || updatedControls[0];
+        const template = findFeedControl(nav) || updatedControls[0];
         if (template) createControlsControl(nav, template, discoverControl);
       }
 
@@ -221,12 +290,28 @@
     return patched;
   }
 
+  let landmarkNormalizationQueued = false;
+  const landmarkObserver = new MutationObserver(() => {
+    if (landmarkNormalizationQueued) return;
+    landmarkNormalizationQueued = true;
+    queueMicrotask(() => {
+      landmarkNormalizationQueued = false;
+      normalizeLiveLandmarks();
+    });
+  });
+
+  normalizeLiveLandmarks();
+  landmarkObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+
   if (!patchNavigation()) {
-    const observer = new MutationObserver(() => {
-      if (patchNavigation()) observer.disconnect();
+    const navigationObserver = new MutationObserver(() => {
+      if (patchNavigation()) navigationObserver.disconnect();
     });
 
-    observer.observe(document.documentElement, {
+    navigationObserver.observe(document.documentElement, {
       childList: true,
       subtree: true,
     });

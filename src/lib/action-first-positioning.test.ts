@@ -41,16 +41,18 @@ test("primary acquisition routes lead with real actions instead of pilot languag
     /inspect (?:an |the |one )?(?:complete )?(?:worked )?example/i,
   );
   assert.match(site, /href: "\/start",\s*label: "Get started"/);
-  assert.match(site, /href: "\/donate", label: "Fund"/);
-  assert.match(site, /href: "\/offers\?view=live", label: "Explore trades"/);
+  assert.match(site, /href: "\/feed", label: "Feed"/);
+  assert.match(site, /href: "\/discover", label: "Discover"/);
+  assert.match(site, /href: "\/trades\/new", label: "Create"/);
   assert.match(start, /Make a financial contribution/);
   assert.match(legacyPilot, /permanentRedirect\("\/start"\)/);
 });
 
 test("the financial action has a real external payment handoff and explicit boundaries", () => {
   assert.match(donate, /EveryOrgDonateButton/);
-  assert.match(donate, /The payment happens off-site/);
-  assert.match(donate, /Moral Trade does not hold donations, provide escrow/);
+  assert.match(donate, /complete payment on Every\.org/);
+  assert.match(donate, /Moral Trade does not hold funds or decide tax treatment/);
+  assert.match(donate, /No Moral Trade custody/);
   assert.match(donateButton, /getEveryOrgDonationHref\(target\)/);
   assert.match(donateButton, /everyDotOrgDonateButton/);
   assert.match(start, /No platform custody/);

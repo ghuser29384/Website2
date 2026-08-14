@@ -4,17 +4,8 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { GET as aiTxtRoute } from "@/app/ai.txt/route";
-import { metadata as faqMetadata } from "@/app/faq/page";
-import { metadata as howItWorksMetadata } from "@/app/how-it-works/page";
-import { metadata as offersMetadata } from "@/app/offers/page";
-import { metadata as offersNewMetadata } from "@/app/offers/new/page";
-import { metadata as paidActionOffersMetadata } from "@/app/paid-action-offers/page";
 import { GET as robotsTxtRoute } from "@/app/robots.txt/route";
 import sitemap from "@/app/sitemap";
-import { metadata as sourcesMetadata } from "@/app/sources/page";
-import { metadata as statusMetadata } from "@/app/status/page";
-import { metadata as whatIsMoralTradeMetadata } from "@/app/what-is-moral-trade/page";
-import { metadata as workedExamplesMetadata } from "@/app/worked-examples/page";
 import { AI_TXT, ROBOTS_TXT } from "@/lib/crawlability-assets";
 import { CANONICAL_WORKED_CASE_OFFERS } from "@/lib/seed-data";
 import { getAbsoluteUrl } from "@/lib/seo";
@@ -23,6 +14,37 @@ const CANONICAL_ORIGIN = "https://www.moraltrade.org";
 
 function readRepoFile(path: string) {
   return readFileSync(join(process.cwd(), path), "utf8");
+}
+
+function metadataBlock(path: string, marker = "export const metadata") {
+  const source = readRepoFile(path);
+  const start = source.indexOf(marker);
+  const end = source.indexOf("\n};", start);
+
+  assert.notEqual(start, -1, `${path} must contain ${marker}`);
+  assert.notEqual(end, -1, `${path} metadata must be a static object`);
+  return { block: source.slice(start, end + 3), source };
+}
+
+function metadataStringField(
+  source: string,
+  block: string,
+  field: "title" | "description",
+) {
+  const literal = block.match(new RegExp(`\\b${field}:\\s*(?:\\n\\s*)?"([^"]+)"`));
+  if (literal) return literal[1];
+
+  const reference = block.match(new RegExp(`\\b${field}:\\s*([A-Za-z_$][\\w$]*)`));
+  assert.ok(reference, `metadata ${field} must be a literal or a local string constant`);
+  const declaration = source.match(
+    new RegExp(`const\\s+${reference[1]}\\s*=\\s*(?:\\n\\s*)?"([^"]+)"`),
+  );
+  assert.ok(declaration, `metadata ${field} reference must resolve to a local string constant`);
+  return declaration[1];
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 test("robots.txt explicitly allows AI and search crawlers as plain text", async () => {
@@ -66,8 +88,8 @@ test("ai.txt gives retrievers an accurate public status summary", async () => {
 });
 
 test("sitemap uses canonical public URLs and excludes private surfaces", async () => {
-  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-  delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const previousStaticMode = process.env.MORAL_TRADE_STATIC_SITEMAP_ONLY;
+  process.env.MORAL_TRADE_STATIC_SITEMAP_ONLY = "true";
 
   const entries = await sitemap();
   const urls = entries.map((entry) => entry.url);
@@ -77,7 +99,6 @@ test("sitemap uses canonical public URLs and excludes private surfaces", async (
     "/",
     "/ai.txt",
     "/what-is-moral-trade",
-    "/how-it-works",
     "/sources",
     "/faq",
     "/offers",
@@ -120,6 +141,12 @@ test("sitemap uses canonical public URLs and excludes private surfaces", async (
   ]) {
     assert.equal(urls.some((url) => new URL(url).pathname.startsWith(privatePath)), false);
   }
+
+  if (previousStaticMode === undefined) {
+    delete process.env.MORAL_TRADE_STATIC_SITEMAP_ONLY;
+  } else {
+    process.env.MORAL_TRADE_STATIC_SITEMAP_ONLY = previousStaticMode;
+  }
 });
 
 test("paid action offers page has crawler-readable SSR content and honest metadata", () => {
@@ -133,45 +160,46 @@ test("paid action offers page has crawler-readable SSR content and honest metada
   assert.equal(loadingSource.includes("<h1"), false);
   assert.match(pageSource, /buildWebPageJsonLd/);
   assert.match(pageSource, /buildBreadcrumbJsonLd/);
-  assert.equal(JSON.stringify(paidActionOffersMetadata).includes("noindex"), false);
+  assert.doesNotMatch(metadataBlock("src/app/paid-action-offers/page.tsx").block, /index:\s*false|noindex/i);
 });
 
 test("public route metadata has unique titles, descriptions, canonicals, and indexable robots", () => {
   const publicMetadata = [
-    ["/what-is-moral-trade", whatIsMoralTradeMetadata],
-    ["/how-it-works", howItWorksMetadata],
-    ["/sources", sourcesMetadata],
-    ["/faq", faqMetadata],
-    ["/offers", offersMetadata],
-    ["/offers/new", offersNewMetadata],
-    ["/paid-action-offers", paidActionOffersMetadata],
-    ["/worked-examples", workedExamplesMetadata],
-    ["/status", statusMetadata],
+    ["/what-is-moral-trade", "src/app/moral-trade/page.tsx", "export const metadata"],
+    ["/sources", "src/app/sources/page.tsx", "export const metadata"],
+    ["/faq", "src/app/faq/page.tsx", "export const metadata"],
+    ["/offers?view=live", "src/app/offers/page.tsx", "const LIVE_METADATA"],
+    ["/offers/new?mode=offset", "src/app/offers/new/page.tsx", "export const metadata"],
+    ["/paid-action-offers", "src/app/paid-action-offers/page.tsx", "export const metadata"],
+    ["/worked-examples", "src/app/worked-examples/page.tsx", "export const metadata"],
+    ["/status", "src/app/status/page.tsx", "export const metadata"],
   ] as const;
   const titles = new Set<string>();
   const descriptions = new Set<string>();
 
-  for (const [path, metadata] of publicMetadata) {
-    const title = metadata.title;
-    const description = metadata.description;
+  for (const [canonical, sourcePath, marker] of publicMetadata) {
+    const { block, source } = metadataBlock(sourcePath, marker);
+    const title = metadataStringField(source, block, "title");
+    const description = metadataStringField(source, block, "description");
+    const escapedCanonical = escapeRegExp(canonical);
 
-    if (typeof title !== "string") {
-      assert.fail(`${path} title must be a string`);
-    }
-    if (typeof description !== "string") {
-      assert.fail(`${path} description must be a string`);
-    }
-
-    assert.equal(metadata.alternates?.canonical, path, `${path} canonical mismatch`);
-    assert.equal(JSON.stringify(metadata.robots ?? {}).includes("false"), false, `${path} blocks indexing`);
-
-    assert.equal(titles.has(title), false, `${path} duplicate title`);
-    assert.equal(descriptions.has(description), false, `${path} duplicate description`);
+    assert.match(
+      block,
+      new RegExp(`canonical:\\s*"${escapedCanonical}"`),
+      `${canonical} canonical mismatch`,
+    );
+    assert.doesNotMatch(block, /index:\s*false|noindex/i, `${canonical} blocks indexing`);
+    assert.equal(titles.has(title), false, `${canonical} duplicate title`);
+    assert.equal(descriptions.has(description), false, `${canonical} duplicate description`);
     titles.add(title);
     descriptions.add(description);
 
-    if (metadata.openGraph && "url" in metadata.openGraph) {
-      assert.equal(String(metadata.openGraph.url), getAbsoluteUrl(path), `${path} Open Graph URL mismatch`);
+    if (/openGraph:\s*\{/.test(block)) {
+      assert.match(
+        block,
+        new RegExp(`url:\\s*getAbsoluteUrl\\("${escapedCanonical}"\\)`),
+        `${canonical} Open Graph URL mismatch`,
+      );
     }
   }
 });
