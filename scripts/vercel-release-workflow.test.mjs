@@ -31,6 +31,41 @@ async function releaseControls() {
   return readFile(releaseControlsPath, "utf8");
 }
 
+function shellRunBlocks(source) {
+  const lines = source.split("\n");
+  const blocks = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^(\s*)(?:-\s+)?run:\s*(.*)$/.exec(lines[index]);
+    if (!match) continue;
+
+    const value = match[2].trim();
+    if (value && !/^[>|](?:[+-]?[1-9]?|[1-9][+-]?)$/.test(value)) {
+      blocks.push(value);
+      continue;
+    }
+
+    const indentation = lines[index].indexOf("run:");
+    const block = [];
+    for (index += 1; index < lines.length; index += 1) {
+      const line = lines[index];
+      const lineIndentation = line.match(/^\s*/)?.[0].length ?? 0;
+      if (line.trim() && lineIndentation <= indentation) {
+        index -= 1;
+        break;
+      }
+      block.push(line);
+    }
+    blocks.push(block.join("\n"));
+  }
+
+  return blocks;
+}
+
+function dispatchInputReferences(source) {
+  return source.match(/\b(?:inputs|github\.event\.inputs)\s*(?:\.|\[)/g) ?? [];
+}
+
 test("Vercel releases are manual and never run on ordinary pushes or pull requests", async () => {
   const source = await workflow();
   assert.match(source, /on:\n\s+workflow_dispatch:/);
@@ -41,18 +76,129 @@ test("Vercel releases are manual and never run on ordinary pushes or pull reques
 test("only main and the designated release-preview branch can deploy", async () => {
   const source = await workflow();
   assert.match(source, /RELEASE_PREVIEW_BRANCH: release\/vercel-preview/);
-  assert.match(source, /test "\$\{\{ inputs\.ref \}\}" = 'main'/);
+  assert.match(source, /RELEASE_REF: \$\{\{ inputs\.ref \}\}/);
+  assert.match(source, /RELEASE_TARGET: \$\{\{ inputs\.target \}\}/);
+  assert.match(source, /test "\$RELEASE_REF" = 'main'/);
   assert.match(
     source,
-    /test "\$\{\{ inputs\.ref \}\}" = "\$RELEASE_PREVIEW_BRANCH"/,
+    /test "\$RELEASE_REF" = "\$RELEASE_PREVIEW_BRANCH"/,
   );
-  assert.match(source, /test "\$remote_sha" = "\$\{\{ inputs\.expected_sha \}\}"/);
+  assert.match(source, /test "\$remote_sha" = "\$EXPECTED_SHA"/);
+});
+
+test("dispatch inputs never interpolate directly into shell run blocks", async () => {
+  const source = await workflow();
+  const runBlocks = shellRunBlocks(source);
+  assert.ok(runBlocks.length > 0);
+  assert.ok(runBlocks.includes("npm ci"));
+  for (const runBlock of runBlocks) {
+    assert.equal(dispatchInputReferences(runBlock).length, 0);
+  }
+});
+
+test("the shell scanner catches inline, indented, wrapped, and bracketed dispatch inputs", () => {
+  const fixture = [
+    "steps:",
+    `  - run: echo "\${{ format('{0}', inputs.ref) }}"`,
+    "  - run: |2",
+    `      echo "\${{ format('}}{0}', github.event.inputs ['expected_sha']) }}"`,
+  ].join("\n");
+  const runBlocks = shellRunBlocks(fixture);
+  assert.equal(runBlocks.length, 2);
+  assert.equal(dispatchInputReferences(runBlocks.join("\n")).length, 2);
 });
 
 test("the workflow targets only the canonical project", async () => {
   const source = await workflow();
   assert.match(source, /VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7/);
   assert.doesNotMatch(source, /prj_uhfNhPo00nQrcbG0dk2zLWo7UmdK/);
+});
+
+test("preview pulls branch-specific env while production remains unbranched", async () => {
+  const source = await workflow();
+  const start = source.indexOf("- name: Pull exact deployment environment");
+  const end = source.indexOf("- name: Build a clean Vercel artifact", start);
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+  const step = source.slice(start, end);
+  const run = step.slice(step.indexOf("        run: |"));
+
+  assert.match(step, /RELEASE_REF: \$\{\{ inputs\.ref \}\}/);
+  assert.match(step, /RELEASE_TARGET: \$\{\{ inputs\.target \}\}/);
+  assert.doesNotMatch(run, /\$\{\{ inputs\.(?:ref|target) \}\}/);
+  assert.match(run, /^\s*--environment="\$RELEASE_TARGET"\s*$/m);
+  assert.equal((run.match(/--git-branch/g) ?? []).length, 1);
+
+  const previewGuard = run.indexOf(`if [[ "$RELEASE_TARGET" == 'preview' ]]; then`);
+  const branchArg = run.indexOf('pull_args+=(--git-branch="$RELEASE_REF")');
+  const guardEnd = run.indexOf("\n          fi", previewGuard);
+  const pull = run.indexOf('pull "${pull_args[@]}"');
+  for (const index of [previewGuard, branchArg, guardEnd, pull]) {
+    assert.notEqual(index, -1);
+  }
+  assert.ok(previewGuard < branchArg && branchArg < guardEnd && guardEnd < pull);
+});
+
+test("a synthetic Auth origin is narrowly isolated to one guarded Preview deployment", async () => {
+  const source = await workflow();
+  assert.match(source, /VERCEL_CLI_VERSION: 50\.38\.1/);
+  assert.match(source, /synthetic_auth_fixture_url:\n\s+description: Optional synthetic Auth origin for the guarded Preview only/);
+  assert.match(source, /SYNTHETIC_AUTH_PUBLISHABLE_KEY: auth-resolution-public-fixture/);
+  assert.match(source, /SYNTHETIC_AUTH_SERVICE_KEY: auth-resolution-service-fixture/);
+
+  const guardStart = source.indexOf("- name: Guard repository, branch, and immutable candidate");
+  const buildStart = source.indexOf("- name: Build a clean Vercel artifact on GitHub Actions compute");
+  const integrityStart = source.indexOf("- name: Prove every prebuilt public asset matches the checked-in source");
+  const deployStart = source.indexOf("- name: Upload the already-built artifact exactly once");
+  const deploymentGuardStart = source.indexOf("- name: Guard the exact uploaded deployment");
+  for (const index of [guardStart, buildStart, integrityStart, deployStart, deploymentGuardStart]) {
+    assert.notEqual(index, -1);
+  }
+
+  const guardStep = source.slice(guardStart, source.indexOf("- name: Set up Node.js", guardStart));
+  const buildStep = source.slice(buildStart, integrityStart);
+  const deployStep = source.slice(deployStart, deploymentGuardStart);
+  for (const step of [guardStep, buildStep, deployStep]) {
+    assert.match(step, /SYNTHETIC_AUTH_FIXTURE_URL: \$\{\{ inputs\.synthetic_auth_fixture_url \}\}/);
+  }
+
+  assert.match(guardStep, /if \[\[ -n "\$SYNTHETIC_AUTH_FIXTURE_URL" \]\]; then/);
+  assert.match(guardStep, /test "\$RELEASE_TARGET" = 'preview'/);
+  assert.ok(
+    guardStep.includes(
+      '[[ "$SYNTHETIC_AUTH_FIXTURE_URL" =~ ^https://[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\\.trycloudflare\\.com$ ]]',
+    ),
+  );
+
+  const productionBuild = buildStep.slice(
+    buildStep.indexOf("            production)"),
+    buildStep.indexOf("            preview)"),
+  );
+  const previewBuild = buildStep.slice(buildStep.indexOf("            preview)"));
+  assert.match(productionBuild, /test -z "\$SYNTHETIC_AUTH_FIXTURE_URL"/);
+  assert.doesNotMatch(productionBuild, /NEXT_PUBLIC_SUPABASE_URL/);
+  assert.match(previewBuild, /export NEXT_PUBLIC_SUPABASE_URL="\$SYNTHETIC_AUTH_FIXTURE_URL"/);
+  assert.match(previewBuild, /export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="\$SYNTHETIC_AUTH_PUBLISHABLE_KEY"/);
+  assert.match(previewBuild, /export SUPABASE_SERVICE_ROLE_KEY="\$SYNTHETIC_AUTH_SERVICE_KEY"/);
+
+  const productionDeploy = deployStep.slice(
+    deployStep.indexOf("            production)"),
+    deployStep.indexOf("            preview)"),
+  );
+  const previewDeploy = deployStep.slice(deployStep.indexOf("            preview)"));
+  assert.match(productionDeploy, /test -z "\$SYNTHETIC_AUTH_FIXTURE_URL"/);
+  assert.doesNotMatch(productionDeploy, /--env/);
+  assert.equal((previewDeploy.match(/--env /g) ?? []).length, 3);
+  assert.match(previewDeploy, /--env "NEXT_PUBLIC_SUPABASE_URL=\$SYNTHETIC_AUTH_FIXTURE_URL"/);
+  assert.match(previewDeploy, /--env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=\$SYNTHETIC_AUTH_PUBLISHABLE_KEY"/);
+  assert.match(previewDeploy, /--env "SUPABASE_SERVICE_ROLE_KEY=\$SYNTHETIC_AUTH_SERVICE_KEY"/);
+  const deployCommand = previewDeploy.indexOf('"vercel@$VERCEL_CLI_VERSION" deploy');
+  const deployArgs = previewDeploy.indexOf('"${deploy_args[@]}"', deployCommand);
+  assert.notEqual(deployCommand, -1);
+  assert.ok(deployCommand < deployArgs);
+
+  assert.doesNotMatch(source, /vercel@\$VERCEL_CLI_VERSION" env (?:add|rm)/);
+  assert.doesNotMatch(source, /git connect|git disconnect/);
 });
 
 test("quality gates complete before an immutable prebuilt deployment", async () => {
@@ -134,10 +280,11 @@ test("production upload performs one production transition and verifies both can
 
   const deployStep = source.slice(deployIndex, guardIndex);
   const canonicalStep = source.slice(canonicalIndex, evidenceIndex);
-  assert.match(
-    deployStep,
-    /if \[\[ '\$\{\{ inputs\.target \}\}' == 'production' \]\]; then/,
-  );
+  assert.match(deployStep, /RELEASE_TARGET: \$\{\{ inputs\.target \}\}/);
+  assert.match(deployStep, /case "\$RELEASE_TARGET" in/);
+  assert.match(deployStep, /^\s*production\)$/m);
+  assert.match(deployStep, /^\s*preview\)$/m);
+  assert.match(deployStep, /Unsupported release target\./);
   assert.equal(
     (deployStep.match(/"vercel@\$VERCEL_CLI_VERSION" deploy/g) ?? []).length,
     2,
