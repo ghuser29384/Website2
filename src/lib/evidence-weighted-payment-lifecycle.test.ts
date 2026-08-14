@@ -253,6 +253,24 @@ test("reviewer nomination uses full navigation when matching nominations remove 
   assert.match(reviewerNominationForm, /<\/FullNavigationActionForm>/);
 });
 
+test("assigned evidence reviewers retain read-only access after recording a review", () => {
+  const reviewerPage = source("src/app/trade-review/[milestoneId]/page.tsx");
+
+  assert.match(
+    reviewerPage,
+    /const isInitialReviewer =\s*!isAppealViewer &&\s*String\(milestone\.assigned_reviewer_id\) === viewer\.authUser\.id;/,
+  );
+  assert.match(
+    reviewerPage,
+    /!isAppealViewer &&\s*!isInitialReviewer &&\s*!isPaymentAppealViewer/,
+  );
+  assert.match(
+    reviewerPage,
+    /\{isAppealReview \|\| isInitialReview \? \(\s*<form action=\{action\}/,
+  );
+  assert.match(reviewerPage, /This assigned review is recorded\./);
+});
+
 test("authenticated workflow and authorization states remain visibly rendered", () => {
   const agreementPage = source(
     "src/app/trade-agreements/[agreementId]/page.tsx",
