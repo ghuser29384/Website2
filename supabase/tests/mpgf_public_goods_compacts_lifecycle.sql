@@ -1,9 +1,9 @@
--- This file is executed only inside a workflow-owned transaction that is rolled back.
--- It deliberately contains no BEGIN, COMMIT, or ROLLBACK statement of its own.
+-- Executed only inside a workflow-owned transaction that is rolled back.
+-- Deliberately contains no BEGIN, COMMIT, or ROLLBACK of its own.
 
 \set ON_ERROR_STOP on
 
--- The migrations must seed published charters only.
+-- Schema, seed, privilege, and SECURITY DEFINER boundaries.
 do $test$
 declare
   relation_name text;
@@ -44,7 +44,7 @@ begin
     or has_table_privilege('authenticated', 'public.mpgf_public_goods_compact_delegations', 'update')
     or has_table_privilege('authenticated', 'public.mpgf_public_goods_compact_idempotency_keys', 'select')
   then
-    raise exception 'Authenticated clients received a prohibited direct-write or idempotency-ledger grant.';
+    raise exception 'Authenticated clients received a prohibited direct-write or idempotency grant.';
   end if;
 
   foreach function_signature in array array[
@@ -64,7 +64,7 @@ begin
         and p.prosecdef
         and coalesce(p.proconfig::text, '') like '%search_path=%'
     ) then
-      raise exception 'RPC % is not SECURITY DEFINER with a fixed search_path.', function_signature;
+      raise exception 'RPC % lacks SECURITY DEFINER or a fixed search_path.', function_signature;
     end if;
   end loop;
 
@@ -73,12 +73,12 @@ begin
     'public.mpgf_public_goods_compact_revoke_stale_delegations()',
     'execute'
   ) then
-    raise exception 'Authenticated clients can execute the electorate-maintenance trigger directly.';
+    raise exception 'Authenticated clients can execute the electorate trigger function directly.';
   end if;
 end;
 $test$;
 
--- Synthetic users and profiles. The outer workflow transaction rolls all fixtures back.
+-- Synthetic users and profiles. The outer transaction removes every fixture.
 insert into auth.users (
   id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
   raw_app_meta_data, raw_user_meta_data, confirmation_token, recovery_token,
@@ -99,12 +99,16 @@ insert into public.profiles (
   ('6a000000-0000-4000-8000-000000000003','compact-c@example.test','Compact C','','','compact-c','individual',true,true),
   ('6a000000-0000-4000-8000-000000000004','compact-d@example.test','Compact D','','','compact-d','individual',true,true);
 
--- User A: reject incomplete acknowledgements and stale constitution versions.
+-- A: acknowledgement/version rejection, exact arithmetic, idempotency, revocation, reacceptance.
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000001',true);
 select set_config('request.jwt.claim.role','authenticated',true);
 
 do $test$
+declare
+  response jsonb;
+  replay jsonb;
+  membership_id uuid;
 begin
   begin
     perform public.join_mpgf_public_goods_compact(
@@ -129,58 +133,31 @@ begin
     raise exception 'Join accepted a stale constitution version.';
   exception when check_violation then null;
   end;
-end;
-$test$;
 
-select set_config(
-  'qa.a_join_response',
-  public.join_mpgf_public_goods_compact(
+  response := public.join_mpgf_public_goods_compact(
     'future-flourishing',
     'mpgf-public-goods-compact/founding-v1',
     12345,
     '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}'::jsonb,
     'qa.join.a.0001'
-  )::text,
-  true
-);
-select set_config(
-  'qa.a_membership_id',
-  (
-    select id::text
-    from public.mpgf_public_goods_compact_memberships
-    where user_id = '6a000000-0000-4000-8000-000000000001'
-      and compact_id = '10000000-0000-4000-8000-000000000001'
-  ),
-  true
-);
-select set_config(
-  'qa.a_join_replay',
-  public.join_mpgf_public_goods_compact(
+  );
+  replay := public.join_mpgf_public_goods_compact(
     'future-flourishing',
     'mpgf-public-goods-compact/founding-v1',
     12345,
     '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}'::jsonb,
     'qa.join.a.0001'
-  )::text,
-  true
-);
+  );
 
-do $test$
-declare
-  response jsonb := current_setting('qa.a_join_response')::jsonb;
-  replay jsonb := current_setting('qa.a_join_replay')::jsonb;
-begin
-  if response <> replay then
-    raise exception 'Idempotent replay returned a different response.';
-  end if;
-  if response->>'membershipStatus' <> 'pending_activation'
+  if response <> replay
+    or response->>'membershipStatus' <> 'pending_activation'
     or (response->>'scheduledMonthlyContributionCents')::bigint <> 123
     or (response->>'bindingNow')::boolean
     or (response->>'moneyMoved')::boolean
     or (response->>'paymentMandateCreated')::boolean
     or (response->>'automaticCollectionEnabled')::boolean
   then
-    raise exception 'Recruiting join response violated arithmetic, binding, or no-money boundaries: %', response;
+    raise exception 'Recruiting join violated idempotency, arithmetic, binding, or no-money boundaries: %', response;
   end if;
 
   begin
@@ -194,60 +171,49 @@ begin
     raise exception 'Reused idempotency key accepted a changed request.';
   exception when unique_violation then null;
   end;
-end;
-$test$;
 
--- Direct client writes remain unavailable even to the owner.
-do $test$
-begin
+  select id into membership_id
+  from public.mpgf_public_goods_compact_memberships
+  where user_id = '6a000000-0000-4000-8000-000000000001'
+    and compact_id = '10000000-0000-4000-8000-000000000001';
+  perform set_config('qa.a_membership_id', membership_id::text, true);
+
   begin
     update public.mpgf_public_goods_compact_memberships
     set scheduled_monthly_contribution_cents = 999
-    where id = current_setting('qa.a_membership_id')::uuid;
+    where id = membership_id;
     raise exception 'Authenticated owner directly mutated compact membership.';
   exception when insufficient_privilege then null;
   end;
-end;
-$test$;
 
-select set_config(
-  'qa.a_revoke_response',
-  public.request_mpgf_public_goods_compact_exit(
+  response := public.request_mpgf_public_goods_compact_exit(
     'future-flourishing',
     'qa.exit.a.0001'
-  )::text,
-  true
-);
-
-do $test$
-declare
-  response jsonb := current_setting('qa.a_revoke_response')::jsonb;
-begin
+  );
   if not (response->>'revokedImmediately')::boolean
     or response->>'membershipStatus' <> 'revoked'
     or (response->>'moneyMoved')::boolean
     or (response->>'paymentMandateChanged')::boolean
     or (response->>'automaticCollectionEnabled')::boolean
   then
-    raise exception 'Recruiting revocation violated the immediate, non-binding, or no-money contract: %', response;
+    raise exception 'Recruiting revocation violated the immediate or no-money contract: %', response;
   end if;
-end;
-$test$;
 
-select set_config(
-  'qa.a_rejoin_response',
-  public.join_mpgf_public_goods_compact(
+  response := public.join_mpgf_public_goods_compact(
     'future-flourishing',
     'mpgf-public-goods-compact/founding-v1',
     12345,
     '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}'::jsonb,
     'qa.join.a.0002'
-  )::text,
-  true
-);
+  );
+  if response->>'membershipStatus' <> 'pending_activation' then
+    raise exception 'Explicit reacceptance did not restore pending activation.';
+  end if;
+end;
+$test$;
 reset role;
 
--- Simulate 4,999 accepted members. User B's acceptance must atomically activate the compact.
+-- Simulate 4,999 acceptances; B must atomically trigger activation and the $10 cap.
 update public.mpgf_public_goods_compacts
 set accepted_member_count = 4999
 where id = '10000000-0000-4000-8000-000000000001';
@@ -255,43 +221,40 @@ where id = '10000000-0000-4000-8000-000000000001';
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000002',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select set_config(
-  'qa.b_join_response',
-  public.join_mpgf_public_goods_compact(
+
+do $test$
+declare
+  response jsonb;
+  membership_id uuid;
+begin
+  response := public.join_mpgf_public_goods_compact(
     'future-flourishing',
     'mpgf-public-goods-compact/founding-v1',
     100000,
     '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}'::jsonb,
     'qa.join.b.0001'
-  )::text,
-  true
-);
-select set_config(
-  'qa.b_membership_id',
-  (
-    select id::text
-    from public.mpgf_public_goods_compact_memberships
-    where user_id = '6a000000-0000-4000-8000-000000000002'
-      and compact_id = '10000000-0000-4000-8000-000000000001'
-  ),
-  true
-);
-reset role;
+  );
+  if not (response->>'activatedNow')::boolean
+    or not (response->>'bindingNow')::boolean
+    or response->>'membershipStatus' <> 'active'
+    or (response->>'scheduledMonthlyContributionCents')::bigint <> 1000
+    or (response->>'moneyMoved')::boolean
+    or (response->>'paymentMandateCreated')::boolean
+  then
+    raise exception 'Threshold join violated activation, cap, or no-money boundaries: %', response;
+  end if;
 
-select set_config(
-  'qa.a_membership_id',
-  (
-    select id::text
-    from public.mpgf_public_goods_compact_memberships
-    where user_id = '6a000000-0000-4000-8000-000000000001'
-      and compact_id = '10000000-0000-4000-8000-000000000001'
-  ),
-  true
-);
+  select id into membership_id
+  from public.mpgf_public_goods_compact_memberships
+  where user_id = '6a000000-0000-4000-8000-000000000002'
+    and compact_id = '10000000-0000-4000-8000-000000000001';
+  perform set_config('qa.b_membership_id', membership_id::text, true);
+end;
+$test$;
+reset role;
 
 do $test$
 declare
-  response jsonb := current_setting('qa.b_join_response')::jsonb;
   compact_record public.mpgf_public_goods_compacts%rowtype;
 begin
   select * into compact_record
@@ -310,14 +273,6 @@ begin
       where compact_id = compact_record.id and status = 'active') <> 2 then
     raise exception 'Threshold activation did not activate every pending fixture membership.';
   end if;
-  if not (response->>'activatedNow')::boolean
-    or not (response->>'bindingNow')::boolean
-    or (response->>'scheduledMonthlyContributionCents')::bigint <> 1000
-    or (response->>'moneyMoved')::boolean
-    or (response->>'paymentMandateCreated')::boolean
-  then
-    raise exception 'Threshold join response violated activation, cap, or no-money boundaries: %', response;
-  end if;
 
   begin
     update public.mpgf_public_goods_compacts
@@ -329,7 +284,7 @@ begin
 end;
 $test$;
 
--- Activate Animal Welfare in-fixture, then prove late acceptance is immediately active.
+-- Activate Animal Welfare in-fixture, then prove late joins bind immediately without moving money.
 update public.mpgf_public_goods_compacts
 set accepted_member_count = 5000,
     status = 'active',
@@ -341,101 +296,91 @@ where id = '10000000-0000-4000-8000-000000000002';
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000003',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select set_config(
-  'qa.c_join_response',
-  public.join_mpgf_public_goods_compact(
+do $test$
+declare
+  response jsonb;
+  membership_id uuid;
+begin
+  response := public.join_mpgf_public_goods_compact(
     'animal-welfare',
     'mpgf-public-goods-compact/founding-v1',
     50000,
     '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}'::jsonb,
     'qa.join.c.0001'
-  )::text,
-  true
-);
-select set_config(
-  'qa.c_membership_id',
-  (
-    select id::text
-    from public.mpgf_public_goods_compact_memberships
-    where user_id = '6a000000-0000-4000-8000-000000000003'
-      and compact_id = '10000000-0000-4000-8000-000000000002'
-  ),
-  true
-);
+  );
+  if response->>'membershipStatus' <> 'active'
+    or not (response->>'bindingNow')::boolean
+    or (response->>'moneyMoved')::boolean
+    or (response->>'paymentMandateCreated')::boolean
+  then
+    raise exception 'Late active-compact join violated binding or no-money boundaries.';
+  end if;
+  select id into membership_id
+  from public.mpgf_public_goods_compact_memberships
+  where user_id = '6a000000-0000-4000-8000-000000000003'
+    and compact_id = '10000000-0000-4000-8000-000000000002';
+  perform set_config('qa.c_membership_id', membership_id::text, true);
+end;
+$test$;
 reset role;
 
--- User D joins the already-active Future Flourishing compact.
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000004',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select set_config(
-  'qa.d_join_response',
-  public.join_mpgf_public_goods_compact(
+do $test$
+declare
+  response jsonb;
+  membership_id uuid;
+begin
+  response := public.join_mpgf_public_goods_compact(
     'future-flourishing',
     'mpgf-public-goods-compact/founding-v1',
     77777,
     '{"voluntaryChoice":true,"exactConstitution":true,"activationAndNoProjectOptOut":true,"noPaymentMandate":true}'::jsonb,
     'qa.join.d.0001'
-  )::text,
-  true
-);
-select set_config(
-  'qa.d_membership_id',
-  (
-    select id::text
-    from public.mpgf_public_goods_compact_memberships
-    where user_id = '6a000000-0000-4000-8000-000000000004'
-      and compact_id = '10000000-0000-4000-8000-000000000001'
-  ),
-  true
-);
-reset role;
-
-do $test$
-declare
-  c_response jsonb := current_setting('qa.c_join_response')::jsonb;
-  d_response jsonb := current_setting('qa.d_join_response')::jsonb;
-begin
-  if c_response->>'membershipStatus' <> 'active'
-    or not (c_response->>'bindingNow')::boolean
-    or d_response->>'membershipStatus' <> 'active'
-    or not (d_response->>'bindingNow')::boolean
+  );
+  if response->>'membershipStatus' <> 'active'
+    or not (response->>'bindingNow')::boolean
+    or (response->>'moneyMoved')::boolean
+    or (response->>'paymentMandateCreated')::boolean
   then
-    raise exception 'Late acceptance of a frozen active compact was not immediately active.';
+    raise exception 'Second late join violated binding or no-money boundaries.';
   end if;
-  if (c_response->>'moneyMoved')::boolean
-    or (d_response->>'moneyMoved')::boolean
-    or (c_response->>'paymentMandateCreated')::boolean
-    or (d_response->>'paymentMandateCreated')::boolean
-  then
-    raise exception 'Late join response crossed the no-money boundary.';
-  end if;
+  select id into membership_id
+  from public.mpgf_public_goods_compact_memberships
+  where user_id = '6a000000-0000-4000-8000-000000000004'
+    and compact_id = '10000000-0000-4000-8000-000000000001';
+  perform set_config('qa.d_membership_id', membership_id::text, true);
 end;
 $test$;
+reset role;
 
--- Open an allocation electorate only after activation.
+-- Open an electorate, test self/cross-compact rejection, and create incoming/outgoing delegation for A.
 update public.mpgf_public_goods_compacts
 set allocation_electorate_active = true,
     allocation_electorate_key = 'round:future:0001'
 where id = '10000000-0000-4000-8000-000000000001';
 
--- A delegates to B. Self and cross-compact delegation remain prohibited.
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000001',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select set_config(
-  'qa.a_delegation_response',
-  public.set_mpgf_public_goods_compact_delegation(
+do $test$
+declare
+  response jsonb;
+begin
+  response := public.set_mpgf_public_goods_compact_delegation(
     'future-flourishing',
     'round:future:0001',
     current_setting('qa.b_membership_id')::uuid,
     'qa.delegate.a.0001'
-  )::text,
-  true
-);
+  );
+  if (response->>'moneyTransferred')::boolean
+    or (response->>'membershipTransferred')::boolean
+    or (response->>'reputationTransferred')::boolean
+  then
+    raise exception 'Delegation transferred money, membership, or reputation.';
+  end if;
 
-do $test$
-begin
   begin
     perform public.set_mpgf_public_goods_compact_delegation(
       'future-flourishing',
@@ -461,41 +406,31 @@ end;
 $test$;
 reset role;
 
--- B delegates to A so A has both incoming and outgoing delegations before exit.
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000002',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select set_config(
-  'qa.b_delegation_response',
-  public.set_mpgf_public_goods_compact_delegation(
-    'future-flourishing',
-    'round:future:0001',
-    current_setting('qa.a_membership_id')::uuid,
-    'qa.delegate.b.0001'
-  )::text,
-  true
+select public.set_mpgf_public_goods_compact_delegation(
+  'future-flourishing',
+  'round:future:0001',
+  current_setting('qa.a_membership_id')::uuid,
+  'qa.delegate.b.0001'
 );
 reset role;
 
+-- A's active exit must revoke both directions and calculate the exact prospective date.
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000001',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select set_config(
-  'qa.a_active_exit_response',
-  public.request_mpgf_public_goods_compact_exit(
-    'future-flourishing',
-    'qa.exit.a.0002'
-  )::text,
-  true
-);
-reset role;
-
 do $test$
 declare
-  response jsonb := current_setting('qa.a_active_exit_response')::jsonb;
+  response jsonb;
   membership_record public.mpgf_public_goods_compact_memberships%rowtype;
   compact_record public.mpgf_public_goods_compacts%rowtype;
 begin
+  response := public.request_mpgf_public_goods_compact_exit(
+    'future-flourishing',
+    'qa.exit.a.0002'
+  );
   select * into membership_record
   from public.mpgf_public_goods_compact_memberships
   where id = current_setting('qa.a_membership_id')::uuid;
@@ -514,7 +449,6 @@ begin
   then
     raise exception 'Prospective exit violated timing, delegation, or no-money boundaries: %', response;
   end if;
-
   if exists (
     select 1
     from public.mpgf_public_goods_compact_delegations
@@ -528,20 +462,17 @@ begin
   end if;
 end;
 $test$;
+reset role;
 
--- B delegates to D. Changing and then closing the electorate must revoke stale rows.
+-- Electorate changes and closure revoke stale delegations.
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000002',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select set_config(
-  'qa.b_to_d_delegation',
-  public.set_mpgf_public_goods_compact_delegation(
-    'future-flourishing',
-    'round:future:0001',
-    current_setting('qa.d_membership_id')::uuid,
-    'qa.delegate.b.0002'
-  )::text,
-  true
+select public.set_mpgf_public_goods_compact_delegation(
+  'future-flourishing',
+  'round:future:0001',
+  current_setting('qa.d_membership_id')::uuid,
+  'qa.delegate.b.0002'
 );
 reset role;
 
@@ -549,28 +480,28 @@ update public.mpgf_public_goods_compacts
 set allocation_electorate_key = 'round:future:0002'
 where id = '10000000-0000-4000-8000-000000000001';
 
-if exists (
-  select 1
-  from public.mpgf_public_goods_compact_delegations
-  where compact_id = '10000000-0000-4000-8000-000000000001'
-    and status = 'active'
-    and electorate_key = 'round:future:0001'
-) then
-  raise exception 'Electorate change left a stale active delegation.';
-end if;
+do $test$
+begin
+  if exists (
+    select 1
+    from public.mpgf_public_goods_compact_delegations
+    where compact_id = '10000000-0000-4000-8000-000000000001'
+      and status = 'active'
+      and electorate_key = 'round:future:0001'
+  ) then
+    raise exception 'Electorate change left a stale active delegation.';
+  end if;
+end;
+$test$;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000002',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-select set_config(
-  'qa.b_to_d_delegation.2',
-  public.set_mpgf_public_goods_compact_delegation(
-    'future-flourishing',
-    'round:future:0002',
-    current_setting('qa.d_membership_id')::uuid,
-    'qa.delegate.b.0003'
-  )::text,
-  true
+select public.set_mpgf_public_goods_compact_delegation(
+  'future-flourishing',
+  'round:future:0002',
+  current_setting('qa.d_membership_id')::uuid,
+  'qa.delegate.b.0003'
 );
 reset role;
 
@@ -579,20 +510,23 @@ set allocation_electorate_active = false,
     allocation_electorate_key = null
 where id = '10000000-0000-4000-8000-000000000001';
 
-if exists (
-  select 1
-  from public.mpgf_public_goods_compact_delegations
-  where compact_id = '10000000-0000-4000-8000-000000000001'
-    and status = 'active'
-) then
-  raise exception 'Electorate closure left an active delegation.';
-end if;
+do $test$
+begin
+  if exists (
+    select 1
+    from public.mpgf_public_goods_compact_delegations
+    where compact_id = '10000000-0000-4000-8000-000000000001'
+      and status = 'active'
+  ) then
+    raise exception 'Electorate closure left an active delegation.';
+  end if;
+end;
+$test$;
 
--- Owner-only RLS and public aggregate projection.
+-- Owner-only RLS and safe public state projection.
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000001',true);
 select set_config('request.jwt.claim.role','authenticated',true);
-
 do $test$
 declare
   public_state jsonb := public.get_mpgf_public_goods_compacts_state();
@@ -623,7 +557,6 @@ reset role;
 set local role anon;
 select set_config('request.jwt.claim.sub','',true);
 select set_config('request.jwt.claim.role','anon',true);
-
 do $test$
 declare
   public_state jsonb := public.get_mpgf_public_goods_compacts_state();
@@ -635,7 +568,7 @@ begin
     raise exception 'Anonymous public state exposed a private membership.';
   end if;
   if (public_state #>> '{compacts,0,acceptedMemberCount}')::bigint < 5000 then
-    raise exception 'Anonymous state did not expose the durable aggregate count.';
+    raise exception 'Anonymous state omitted the durable aggregate count.';
   end if;
 
   begin
@@ -647,7 +580,7 @@ end;
 $test$;
 reset role;
 
--- A recruiting electorate must be rejected by the hardening constraint.
+-- Recruiting compacts cannot expose an active electorate.
 do $test$
 begin
   begin
