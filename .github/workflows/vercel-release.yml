@@ -19,6 +19,11 @@ on:
         description: Full 40-character commit SHA proved by the repository gates
         required: true
         type: string
+      synthetic_auth_fixture_url:
+        description: Optional synthetic Auth origin for the guarded Preview only
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -36,6 +41,8 @@ env:
   CANONICAL_WWW_DOMAIN: www.moraltrade.org
   RELEASE_EVIDENCE_DIR: vercel-release-evidence
   RELEASE_CRITICAL_ASSET: moral-trade-live-create-router.js
+  SYNTHETIC_AUTH_PUBLISHABLE_KEY: auth-resolution-public-fixture
+  SYNTHETIC_AUTH_SERVICE_KEY: auth-resolution-service-fixture
 
 jobs:
   release:
@@ -51,20 +58,22 @@ jobs:
 
       - name: Guard repository, branch, and immutable candidate
         shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          RELEASE_REF: ${{ inputs.ref }}
+          RELEASE_TARGET: ${{ inputs.target }}
+          SYNTHETIC_AUTH_FIXTURE_URL: ${{ inputs.synthetic_auth_fixture_url }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
-          test "${{ inputs.expected_sha }}" = "$(git rev-parse HEAD)"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
-          remote_sha="$(git ls-remote origin "refs/heads/${{ inputs.ref }}" | awk '{print $1}')"
-          test "$remote_sha" = "${{ inputs.expected_sha }}"
 
-          case "${{ inputs.target }}" in
+          case "$RELEASE_TARGET" in
             production)
-              test "${{ inputs.ref }}" = 'main'
+              test "$RELEASE_REF" = 'main'
               ;;
             preview)
-              test "${{ inputs.ref }}" = "$RELEASE_PREVIEW_BRANCH"
+              test "$RELEASE_REF" = "$RELEASE_PREVIEW_BRANCH"
               ;;
             *)
               echo 'Unsupported release target.' >&2
@@ -72,9 +81,15 @@ jobs:
               ;;
           esac
 
+          if [[ -n "$SYNTHETIC_AUTH_FIXTURE_URL" ]]; then
+            test "$RELEASE_TARGET" = 'preview'
+            [[ "$SYNTHETIC_AUTH_FIXTURE_URL" =~ ^https://[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.trycloudflare\.com$ ]]
+          fi
+
+          test "$EXPECTED_SHA" = "$(git rev-parse HEAD)"
+          remote_sha="$(git ls-remote origin "refs/heads/$RELEASE_REF" | awk '{print $1}')"
+          test "$remote_sha" = "$EXPECTED_SHA"
           git diff --check HEAD^
-        env:
-          EXPECTED_SHA: ${{ inputs.expected_sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -124,31 +139,53 @@ jobs:
       - name: Pull exact deployment environment
         shell: bash
         env:
+          RELEASE_REF: ${{ inputs.ref }}
+          RELEASE_TARGET: ${{ inputs.target }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          npx --yes "vercel@$VERCEL_CLI_VERSION" pull \
-            --yes \
-            --environment="${{ inputs.target }}" \
+          pull_args=(
+            --yes
+            --environment="$RELEASE_TARGET"
             --token="$VERCEL_TOKEN"
+          )
+          if [[ "$RELEASE_TARGET" == 'preview' ]]; then
+            pull_args+=(--git-branch="$RELEASE_REF")
+          fi
+          npx --yes "vercel@$VERCEL_CLI_VERSION" pull "${pull_args[@]}"
 
       - name: Build a clean Vercel artifact on GitHub Actions compute
         shell: bash
         env:
+          RELEASE_TARGET: ${{ inputs.target }}
+          SYNTHETIC_AUTH_FIXTURE_URL: ${{ inputs.synthetic_auth_fixture_url }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
           rm -rf .next .vercel/output
-          if [[ '${{ inputs.target }}' == 'production' ]]; then
-            npx --yes "vercel@$VERCEL_CLI_VERSION" build \
-              --prod \
-              --token="$VERCEL_TOKEN" \
-              | tee "$RELEASE_EVIDENCE_DIR/vercel-build.log"
-          else
-            npx --yes "vercel@$VERCEL_CLI_VERSION" build \
-              --token="$VERCEL_TOKEN" \
-              | tee "$RELEASE_EVIDENCE_DIR/vercel-build.log"
-          fi
+          case "$RELEASE_TARGET" in
+            production)
+              test -z "$SYNTHETIC_AUTH_FIXTURE_URL"
+              npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+                --prod \
+                --token="$VERCEL_TOKEN" \
+                | tee "$RELEASE_EVIDENCE_DIR/vercel-build.log"
+              ;;
+            preview)
+              if [[ -n "$SYNTHETIC_AUTH_FIXTURE_URL" ]]; then
+                export NEXT_PUBLIC_SUPABASE_URL="$SYNTHETIC_AUTH_FIXTURE_URL"
+                export NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="$SYNTHETIC_AUTH_PUBLISHABLE_KEY"
+                export SUPABASE_SERVICE_ROLE_KEY="$SYNTHETIC_AUTH_SERVICE_KEY"
+              fi
+              npx --yes "vercel@$VERCEL_CLI_VERSION" build \
+                --token="$VERCEL_TOKEN" \
+                | tee "$RELEASE_EVIDENCE_DIR/vercel-build.log"
+              ;;
+            *)
+              echo 'Unsupported release target.' >&2
+              exit 1
+              ;;
+          esac
 
       - name: Prove every prebuilt public asset matches the checked-in source
         id: static_integrity
@@ -177,19 +214,39 @@ jobs:
         id: deploy
         shell: bash
         env:
+          RELEASE_TARGET: ${{ inputs.target }}
+          SYNTHETIC_AUTH_FIXTURE_URL: ${{ inputs.synthetic_auth_fixture_url }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
-          if [[ '${{ inputs.target }}' == 'production' ]]; then
-            deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
-              --prebuilt \
-              --prod \
-              --token="$VERCEL_TOKEN")"
-          else
-            deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
-              --prebuilt \
-              --token="$VERCEL_TOKEN")"
-          fi
+          case "$RELEASE_TARGET" in
+            production)
+              test -z "$SYNTHETIC_AUTH_FIXTURE_URL"
+              deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+                --prebuilt \
+                --prod \
+                --token="$VERCEL_TOKEN")"
+              ;;
+            preview)
+              deploy_args=(
+                --prebuilt
+                --token="$VERCEL_TOKEN"
+              )
+              if [[ -n "$SYNTHETIC_AUTH_FIXTURE_URL" ]]; then
+                deploy_args+=(
+                  --env "NEXT_PUBLIC_SUPABASE_URL=$SYNTHETIC_AUTH_FIXTURE_URL"
+                  --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$SYNTHETIC_AUTH_PUBLISHABLE_KEY"
+                  --env "SUPABASE_SERVICE_ROLE_KEY=$SYNTHETIC_AUTH_SERVICE_KEY"
+                )
+              fi
+              deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy \
+                "${deploy_args[@]}")"
+              ;;
+            *)
+              echo 'Unsupported release target.' >&2
+              exit 1
+              ;;
+          esac
           deployment_url="$(printf '%s\n' "$deployment_url" | tr -d '\r' | tail -n 1)"
           [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]
           deployment_host="${deployment_url#https://}"
@@ -355,24 +412,32 @@ jobs:
 
       - name: Record immutable release evidence
         shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          RELEASE_REF: ${{ inputs.ref }}
+          RELEASE_TARGET: ${{ inputs.target }}
+          SYNTHETIC_AUTH_FIXTURE_URL: ${{ inputs.synthetic_auth_fixture_url }}
         run: |
           set -euo pipefail
           {
             echo '### Gated Vercel release'
             echo
-            echo "- Target: \`${{ inputs.target }}\`"
-            echo "- Ref: \`${{ inputs.ref }}\`"
-            echo "- Commit: \`${{ inputs.expected_sha }}\`"
+            printf -- '- Target: `%s`\n' "$RELEASE_TARGET"
+            printf -- '- Ref: `%s`\n' "$RELEASE_REF"
+            printf -- '- Commit: `%s`\n' "$EXPECTED_SHA"
             echo "- Project: \`$VERCEL_PROJECT_ID\`"
             echo "- Deployment ID: \`${{ steps.deployment.outputs.deployment_id }}\`"
             echo "- Deployment: ${{ steps.deploy.outputs.deployment_url }}"
             echo "- Public assets byte-verified: \`${{ steps.static_integrity.outputs.file_count }}\`"
             echo "- Critical asset SHA-256: \`${{ steps.static_integrity.outputs.critical_sha256 }}\`"
             echo '- Build location: GitHub Actions (`vercel build` + `vercel deploy --prebuilt`)'
-            if [[ '${{ inputs.target }}' == 'production' ]]; then
+            if [[ "$RELEASE_TARGET" == 'production' ]]; then
               echo '- Canonical aliases: assigned by the exact production upload and independently verified from both Vercel alias records'
               echo '- Canonical critical asset: byte-identical to the checked-in source'
             else
               echo '- Canonical aliases: unchanged; preview releases never use `--prod`'
+              if [[ -n "$SYNTHETIC_AUTH_FIXTURE_URL" ]]; then
+                echo '- Synthetic Auth fixture: deployment-specific build and runtime overrides applied; project environment records unchanged'
+              fi
             fi
           } >> "$GITHUB_STEP_SUMMARY"
