@@ -50,8 +50,10 @@ jobs:
     env:
       EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       LOCAL_SUPABASE_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
-      PRE_MIGRATION_BASELINE_COMMIT: 93365980d23ae5f6f5bec9d9f8de586bb4e0cdd7
-      PRE_MIGRATION_BASELINE_SHA256: 2bb42f52c30c3a462a37427732381cbe8d4e3d6e9389d77bbcec0c419b9c5b64
+      # The migration directory starts midstream. Its earliest migration assumes
+      # tables introduced by the schema snapshot in the same historical commit.
+      HISTORICAL_BASELINE_COMMIT: 4c95052ff97d55b42486cac47b7430896946f124
+      HISTORICAL_BASELINE_SHA256: 5fa7f1f21f7a8fc5720ca695d9e6d90eef7eefc1dd97632a2b5ff665c321464a
 
     steps:
       - name: Check out the exact candidate
@@ -94,10 +96,10 @@ jobs:
             echo "The compact migration version collides with another repository migration." >&2
             exit 1
           fi
-          git show "$PRE_MIGRATION_BASELINE_COMMIT:supabase/schema.sql" \
-            > mpgf-compacts-clean-qa/pre-migration-baseline.sql
-          test "$(sha256sum mpgf-compacts-clean-qa/pre-migration-baseline.sql | cut -d ' ' -f 1)" \
-            = "$PRE_MIGRATION_BASELINE_SHA256"
+          git show "$HISTORICAL_BASELINE_COMMIT:supabase/schema.sql" \
+            > mpgf-compacts-clean-qa/historical-baseline.sql
+          test "$(sha256sum mpgf-compacts-clean-qa/historical-baseline.sql | cut -d ' ' -f 1)" \
+            = "$HISTORICAL_BASELINE_SHA256"
           git rev-parse HEAD > mpgf-compacts-clean-qa/head-sha.txt
 
       - name: Start a clean ephemeral PostgreSQL 17 Supabase runtime
@@ -120,7 +122,7 @@ jobs:
         run: |
           set -o pipefail
           SUPABASE_MIGRATION_TEST_DB_URL="$LOCAL_SUPABASE_DB_URL" \
-          SUPABASE_MIGRATION_BASELINE_SQL=mpgf-compacts-clean-qa/pre-migration-baseline.sql \
+          SUPABASE_MIGRATION_BASELINE_SQL=mpgf-compacts-clean-qa/historical-baseline.sql \
             bash scripts/apply-supabase-migrations-in-order.sh \
             2>&1 | tee mpgf-compacts-clean-qa/full-migration-chain.log
 
@@ -422,6 +424,7 @@ jobs:
           SQL
 
       - name: Prove rollback left no compact schema or fixtures
+        if: always()
         shell: bash
         run: |
           set -euo pipefail

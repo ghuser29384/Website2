@@ -18,7 +18,7 @@ if [[ -n "${SUPABASE_MIGRATION_BASELINE_SQL:-}" ]]; then
     echo "Migration baseline does not exist: $SUPABASE_MIGRATION_BASELINE_SQL" >&2
     exit 1
   fi
-  printf 'applying_pre_migration_baseline=%s\n' "$SUPABASE_MIGRATION_BASELINE_SQL"
+  printf 'applying_historical_schema_baseline=%s\n' "$SUPABASE_MIGRATION_BASELINE_SQL"
   psql "$SUPABASE_MIGRATION_TEST_DB_URL" \
     --no-psqlrc \
     --set ON_ERROR_STOP=1 \

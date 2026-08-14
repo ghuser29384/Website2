@@ -1152,14 +1152,24 @@ begin
 end;
 $test$;
 
--- The compact schema contains no post-activation project-refusal or opt-out state.
+-- The constitutional no-refusal invariant is immutable, and the schema contains
+-- no separate post-activation project-refusal or opt-out state.
 do $test$
 begin
+  begin
+    update public.mpgf_public_goods_compacts
+    set per_project_refusal_allowed_after_activation = true
+    where id = '10000000-0000-4000-8000-000000000003';
+    raise exception 'Compact accepted post-activation project refusal.';
+  exception when check_violation then null;
+  end;
+
   if exists (
     select 1
     from information_schema.columns
     where table_schema = 'public'
       and table_name like 'mpgf_public_goods_compact%'
+      and column_name <> 'per_project_refusal_allowed_after_activation'
       and (
         column_name like '%project%opt%out%'
         or column_name like '%project%refusal%'
