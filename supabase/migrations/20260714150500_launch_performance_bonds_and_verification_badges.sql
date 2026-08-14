@@ -87,6 +87,7 @@ create policy "performance bond parties can delete drafts"
   to authenticated
   using (auth.uid() = party_id and status in ('not_enabled', 'draft', 'cancelled'));
 
+drop trigger if exists performance_bonds_set_updated_at on public.performance_bonds;
 create trigger performance_bonds_set_updated_at
   before update on public.performance_bonds
   for each row execute function public.set_updated_at();
@@ -132,6 +133,7 @@ create policy "profile owners can inspect badge history"
   to authenticated
   using (auth.uid() = profile_id);
 
+drop trigger if exists profile_verification_badges_set_updated_at on public.profile_verification_badges;
 create trigger profile_verification_badges_set_updated_at
   before update on public.profile_verification_badges
   for each row execute function public.set_updated_at();
