@@ -782,10 +782,10 @@ begin
       and membership.status in ('pending_activation', 'active', 'exit_notice');
   end if;
   select * into authorization_record
-  from public.mpgf_public_goods_dormant_authorization_snapshots as authorization
-  where authorization.participant_id = p_participant_id
-    and authorization.cycle_key = p_cycle_key
-  order by authorization.frozen_at desc, authorization.id desc
+  from public.mpgf_public_goods_dormant_authorization_snapshots as dormant_auth
+  where dormant_auth.participant_id = p_participant_id
+    and dormant_auth.cycle_key = p_cycle_key
+  order by dormant_auth.frozen_at desc, dormant_auth.id desc
   limit 1;
 
   if obligation_record.state = 'calculated'
@@ -1589,10 +1589,10 @@ begin
     order by obligation.frozen_at desc, obligation.id desc
     limit 1;
     select * into authorization_record
-    from public.mpgf_public_goods_dormant_authorization_snapshots as authorization
-    where authorization.participant_id = viewer_id
-      and authorization.cycle_key = cycle_key_value
-    order by authorization.frozen_at desc, authorization.id desc
+    from public.mpgf_public_goods_dormant_authorization_snapshots as dormant_auth
+    where dormant_auth.participant_id = viewer_id
+      and dormant_auth.cycle_key = cycle_key_value
+    order by dormant_auth.frozen_at desc, dormant_auth.id desc
     limit 1;
     select * into allocation_record
     from public.mpgf_public_goods_allocation_instructions as instruction
