@@ -365,8 +365,12 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         .getByRole("link", { exact: true, name: "Open full terms ↗" })
         .click();
       await anonymousPage.waitForLoadState("networkidle");
+      const evaluatorTerms = anonymousPage.getByRole("article", {
+        name: /Evaluator core-loop verification/i,
+      });
+      await expect(evaluatorTerms).toHaveCount(1);
       await expect(
-        anonymousPage.getByText(
+        evaluatorTerms.getByText(
           "Synthetic isolated-QA fixture. Not an offer to transact. No payment, custody, production data, or production deployment.",
           { exact: true },
         ),

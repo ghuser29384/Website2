@@ -99,6 +99,20 @@ tokens/MFA factors, private accounts, and email outbox rows. The minimal harness
 repair scopes the assertion and full-terms click to the exact
 `QA Core Loop Owner` article and asserts the complete cause-pair heading.
 
+Run `31768237517` exercised that correction on exact candidate
+`c4ad1c18587015ffde9866ee26b2e141849fede4`. The directory assertion and exact
+card click passed, exposing the real offer-detail page. The browser then stopped
+before sign-in because the exact QA safety sentence is intentionally rendered
+both in the labeled marketplace terms object and in the offer dossier; the
+test's page-wide exact-text locator therefore violated Playwright strict mode.
+This is a second harness scoping defect, not a product defect. Artifact
+`9207181404` (digest
+`sha256:a8cab2c73697171ca601e9648fc4d0f0998a36901342de8ba9dd07f4729e1133`)
+preserves the trace and rendered error context. Its no-money proof again records
+`performanceBonds=0` and `externalPaymentReceipts=0`, and cleanup again reports
+zero for every enumerated application, Auth, and private row class. The minimal
+repair scopes that exact sentence to the one labeled evaluator terms article.
+
 ## Pre-runtime verification completed
 
 At the pre-reconciliation candidate base
