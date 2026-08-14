@@ -18,6 +18,22 @@ where profile_id in (
 )
 or recipient_email like 'evaluator-core-loop-%@qa.invalid';
 
+-- A prior interrupted browser run may have finalized its milestone manifest.
+-- Thaw only that exact synthetic agreement graph inside this replacement
+-- transaction so the production immutability trigger remains enabled.
+delete from public.trade_agreement_confirmations confirmation
+using public.trade_agreement_versions version, public.agreements agreement
+where confirmation.agreement_version_id = version.id
+  and version.agreement_id = agreement.id
+  and agreement.offer_id = '82000000-0000-4000-8000-000000000001';
+
+update public.trade_agreement_versions version
+set milestone_manifest_hash = null
+from public.agreements agreement
+where version.agreement_id = agreement.id
+  and agreement.offer_id = '82000000-0000-4000-8000-000000000001'
+  and version.milestone_manifest_hash is not null;
+
 delete from public.offers
 where id = '82000000-0000-4000-8000-000000000001';
 

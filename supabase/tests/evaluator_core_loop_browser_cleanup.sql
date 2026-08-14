@@ -11,6 +11,22 @@ where profile_id in (
 )
 or recipient_email like 'evaluator-core-loop-%@qa.invalid';
 
+-- The production immutability guard intentionally prevents a finalized
+-- milestone from being deleted. Thaw only the exact synthetic agreement graph
+-- inside this cleanup transaction, immediately before deleting that graph.
+delete from public.trade_agreement_confirmations confirmation
+using public.trade_agreement_versions version, public.agreements agreement
+where confirmation.agreement_version_id = version.id
+  and version.agreement_id = agreement.id
+  and agreement.offer_id = '82000000-0000-4000-8000-000000000001';
+
+update public.trade_agreement_versions version
+set milestone_manifest_hash = null
+from public.agreements agreement
+where version.agreement_id = agreement.id
+  and agreement.offer_id = '82000000-0000-4000-8000-000000000001'
+  and version.milestone_manifest_hash is not null;
+
 -- The exact offer owns the response, thread, agreement, version, milestone,
 -- evidence, review, payout, and exit graph through foreign-key cascades.
 delete from public.offers
