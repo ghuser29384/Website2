@@ -20,6 +20,11 @@ communication, public evidence, or money movement.
   version at `85279bb2332f83dec7389d54ca3261a5dbd075cd`. The user explicitly
   authorized merging that exact `origin/main`; the task branch contains it
   through merge commit `d03493ecf5cd0e996322edc3fb58a12046110859`.
+- `main` next advanced through the fail-closed Reciprocal Trade real-graph
+  readiness package at `79ca382c3bdc325dfc5a28e2cbbafc1b95640386`. The user
+  explicitly authorized merging that exact `origin/main`; the task branch
+  contains it through merge commit
+  `1759712cb81f7c07b797cef14a3ed2d19edc73ee`.
 - Work is performed in an isolated worktree. The noisy iCloud checkout is not
   modified.
 
