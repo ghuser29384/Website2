@@ -1402,7 +1402,7 @@ declare
   participant uuid := (select auth.uid());
   compact_record public.mpgf_public_goods_compacts%rowtype;
   voting_record public.mpgf_public_goods_voting_snapshots%rowtype;
-  delegator_membership_id uuid;
+  delegator_id_value uuid;
   previous_event public.mpgf_public_goods_delegation_events%rowtype;
   request_hash_value text;
   replay jsonb;
@@ -1434,13 +1434,13 @@ begin
   if exists (select 1 from public.mpgf_public_goods_delegation_snapshots where voting_snapshot_id = voting_record.id) then
     raise exception using errcode = '55000', message = 'Delegations are frozen with the ballot snapshot.';
   end if;
-  select membership_id into delegator_membership_id
+  select membership_id into delegator_id_value
   from public.mpgf_public_goods_voting_weight_snapshots
   where voting_snapshot_id = voting_record.id and participant_id = participant;
   select * into previous_event
   from public.mpgf_public_goods_delegation_events as event
   where event.voting_snapshot_id = voting_record.id
-    and event.delegator_membership_id = delegator_membership_id
+    and event.delegator_membership_id = delegator_id_value
     and not exists (
       select 1
       from public.mpgf_public_goods_delegation_events as successor
@@ -1452,7 +1452,7 @@ begin
       delegatee_membership_id, event_kind, controlled_weight_units_after,
       supersedes_event_id, created_by
     ) values (
-      voting_record.id, compact_record.id, p_cycle_key, delegator_membership_id,
+      voting_record.id, compact_record.id, p_cycle_key, delegator_id_value,
       null, 'revoke', null, previous_event.id, participant
     );
   end if;
