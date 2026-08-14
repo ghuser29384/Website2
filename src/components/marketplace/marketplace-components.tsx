@@ -2653,6 +2653,7 @@ export function MarketplaceBottomNav({
             normalizedActive === item.key && "is-active",
           ])}
           href={item.href}
+          prefetch={item.href === "/offers" ? false : undefined}
           key={item.key}
         >
           <IconMark name={item.icon} />

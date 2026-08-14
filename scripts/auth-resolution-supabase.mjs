@@ -158,7 +158,9 @@ function releaseVerificationGate(gateId) {
 }
 
 function cancelPendingVerificationGates() {
-  for (const gate of pendingVerificationGates.values()) gate.cancel();
+  const gateIds = [...pendingVerificationGates.keys()];
+  for (const gateId of gateIds) pendingVerificationGates.get(gateId)?.cancel();
+  return gateIds;
 }
 
 function emptyPostgrest(response, request) {
@@ -221,11 +223,11 @@ const server = http.createServer((request, response) => {
   }
 
   if (request.method === "POST" && url.pathname === "/__fixture/reset") {
-    cancelPendingVerificationGates();
+    const cancelledVerificationGateIds = cancelPendingVerificationGates();
     attempts.clear();
     verificationEvents.splice(0, verificationEvents.length);
     verificationGateEnabled = false;
-    json(response, 200, { reset: true });
+    json(response, 200, { cancelledVerificationGateIds, reset: true });
     return;
   }
 

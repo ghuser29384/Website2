@@ -39,6 +39,11 @@ interface FixtureSession {
   session: Session;
 }
 
+interface FixtureResetResult {
+  cancelledVerificationGateIds: string[];
+  reset: true;
+}
+
 async function getFixtureSession(request: APIRequestContext, mode: FixtureMode) {
   const response = await request.get(`${MOCK_URL}/__fixture/session?mode=${mode}`, {
     headers: { "x-auth-resolution-fixture-control": FIXTURE_CONTROL_SECRET },
@@ -75,6 +80,10 @@ async function resetFixture(request: APIRequestContext) {
     headers: { "x-auth-resolution-fixture-control": FIXTURE_CONTROL_SECRET },
   });
   expect(response.ok()).toBeTruthy();
+  const result = (await response.json()) as FixtureResetResult;
+  expect(result.reset).toBe(true);
+  expect(Array.isArray(result.cancelledVerificationGateIds)).toBe(true);
+  return result;
 }
 
 async function getFixtureJson(request: APIRequestContext, path: string) {
@@ -679,10 +688,15 @@ test("fixture controls reject credentials and cancel stale verification gates", 
       headers,
       timeout: 15_000,
     })
-    .then(
-      () => false,
-      () => true,
-    );
+    .then(async (response) => ({
+      body: await response.text(),
+      kind: "response" as const,
+      status: response.status(),
+    }))
+    .catch((error: unknown) => ({
+      kind: "error" as const,
+      message: error instanceof Error ? error.message : String(error),
+    }));
   await expect
     .poll(async () => {
       const events = (await getFixtureJson(request, "/__fixture/events")) as {
@@ -693,8 +707,33 @@ test("fixture controls reject credentials and cancel stale verification gates", 
       );
     })
     .toBe(true);
-  await resetFixture(request);
-  expect(await pendingVerification).toBe(true);
+  const beforeReset = (await getFixtureJson(request, "/__fixture/events")) as {
+    verificationEvents: VerificationEvent[];
+  };
+  const pendingEvent = beforeReset.verificationEvents.find(
+    (event) => event.result === "pending_verified_user",
+  );
+  const pendingGateId = pendingEvent?.gateId;
+  expect(pendingGateId).toEqual(expect.any(String));
+  if (!pendingGateId) throw new Error("Expected one pending verification gate before reset.");
+
+  const reset = await resetFixture(request);
+  expect(reset.cancelledVerificationGateIds).toEqual([pendingGateId]);
+
+  const pendingResult = await pendingVerification;
+  if (pendingResult.kind === "response") {
+    expect(pendingResult.status).toBeGreaterThanOrEqual(400);
+    expect(pendingResult.body).not.toContain(USER_ID);
+    expect(pendingResult.body).not.toContain(OTHER_USER_ID);
+  } else {
+    expect(pendingResult.message.length).toBeGreaterThan(0);
+  }
+
+  const staleRelease = await request.post(
+    `${MOCK_URL}/__fixture/verification-gate/release?gateId=${encodeURIComponent(pendingGateId)}`,
+    { headers: { "x-auth-resolution-fixture-control": FIXTURE_CONTROL_SECRET } },
+  );
+  expect(staleRelease.status()).toBe(409);
 });
 
 test("cryptographically verified claims/session mismatch fails closed", async ({ request }) => {

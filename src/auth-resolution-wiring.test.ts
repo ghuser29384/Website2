@@ -4,6 +4,10 @@ import test from "node:test";
 
 const appDataSource = readFileSync("src/lib/app-data.ts", "utf8");
 const serverClientSource = readFileSync("src/lib/supabase/server.ts", "utf8");
+const tradeDraftWorkbenchSource = readFileSync(
+  "src/components/core-trade/trade-draft-workbench.tsx",
+  "utf8",
+);
 
 test("getViewer request-scopes one lazy bounded verifier", () => {
   assert.match(
@@ -50,4 +54,20 @@ test("server auth retries bypass Next.js GET memoization", () => {
   assert.match(serverClientSource, /cache: "no-store"/u);
   assert.match(serverClientSource, /input instanceof Request \? input\.signal : undefined/u);
   assert.match(serverClientSource, /global: \{\s*fetch: createAuthAwareServerFetch\(\),/u);
+});
+
+test("signed-out trade exit cannot prefetch the document-backed Discover route", () => {
+  assert.ok(
+    tradeDraftWorkbenchSource.includes(
+      [
+        "        <Link",
+        '          className={`${styles.button} ${styles.buttonBack}`}',
+        '          href="/discover"',
+        "          prefetch={false}",
+        "        >",
+        "          Exit",
+        "        </Link>",
+      ].join("\n"),
+    ),
+  );
 });
