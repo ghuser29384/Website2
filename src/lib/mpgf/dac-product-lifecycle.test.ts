@@ -225,7 +225,9 @@ test("permanent isolated-QA proof covers open pledge, creator, reviewer, termina
   assert.match(browser, /success-mobile/);
   assert.match(browser, /lapse-mobile/);
 
-  assert.match(
+  assert.match(workflow, /group: mpgf-dac-product-lifecycle-shared-qa/);
+  assert.match(workflow, /cancel-in-progress: false/);
+  assert.doesNotMatch(
     workflow,
     /group: mpgf-dac-product-lifecycle-\$\{\{ github\.event\.pull_request\.head\.ref \|\| github\.ref_name \}\}/,
   );
@@ -233,7 +235,18 @@ test("permanent isolated-QA proof covers open pledge, creator, reviewer, termina
     workflow,
     /github\.event\.pull_request\.number \|\| github\.ref/,
   );
-  assert.match(workflow, /cancel-in-progress: true/);
+  assert.equal(
+    countOccurrences(
+      workflow,
+      "supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql",
+    ),
+    6,
+  );
+  assert.match(
+    workflow,
+    /Reconcile exact terminal DAC schema immediately before fixtures/,
+  );
+  assert.match(workflow, /proposal_lock=true/);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /npm run lint/);
   assert.match(workflow, /npx tsc --noEmit/);
