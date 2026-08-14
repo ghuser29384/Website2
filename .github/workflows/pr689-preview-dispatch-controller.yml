@@ -1,0 +1,95 @@
+name: PR 689 exact protected Preview dispatch controller
+
+on:
+  push:
+    branches:
+      - ops/dispatch-pr689-preview-20260814
+    paths:
+      - ".github/workflows/pr689-preview-dispatch-controller.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: pr689-exact-preview-dispatch
+  cancel-in-progress: false
+
+env:
+  EXPECTED_RELEASE_SHA: 5faef28f76ea20097af18a3d5dab6d1c8dfb116c
+  EXPECTED_BACKUP_SHA: 20a7539b50b8dee9eb3455393634e4db652ddea1
+  RELEASE_BRANCH: release/vercel-preview
+  BACKUP_BRANCH: backup/vercel-preview-before-pr689-20260814
+  RELEASE_WORKFLOW_ID: "325045339"
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out the controller branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify exact release and rollback refs
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_sha="$(git ls-remote origin "refs/heads/$RELEASE_BRANCH" | awk '{print $1}')"
+          backup_sha="$(git ls-remote origin "refs/heads/$BACKUP_BRANCH" | awk '{print $1}')"
+          test "$release_sha" = "$EXPECTED_RELEASE_SHA"
+          test "$backup_sha" = "$EXPECTED_BACKUP_SHA"
+          test "${#EXPECTED_RELEASE_SHA}" -eq 40
+          test "${#EXPECTED_BACKUP_SHA}" -eq 40
+          {
+            printf 'release_branch=%s\n' "$RELEASE_BRANCH"
+            printf 'release_sha=%s\n' "$EXPECTED_RELEASE_SHA"
+            printf 'backup_branch=%s\n' "$BACKUP_BRANCH"
+            printf 'backup_sha=%s\n' "$EXPECTED_BACKUP_SHA"
+          } | tee pr689-preview-dispatch.txt
+
+      - name: Verify no other gated Vercel release is active or queued
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          active="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW_ID/runs?status=in_progress&per_page=20" \
+            --jq '.total_count')"
+          queued="$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW_ID/runs?status=queued&per_page=20" \
+            --jq '.total_count')"
+          test "$active" = "0"
+          test "$queued" = "0"
+
+      - name: Dispatch exact canonical Vercel Preview
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW_ID/dispatches" \
+            -f ref="$RELEASE_BRANCH" \
+            -f 'inputs[target]=preview' \
+            -f "inputs[ref]=$RELEASE_BRANCH" \
+            -f "inputs[expected_sha]=$EXPECTED_RELEASE_SHA"
+
+      - name: Record dispatch boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '### PR 689 protected Preview dispatch'
+            echo
+            printf -- '- Release branch: `%s`\n' "$RELEASE_BRANCH"
+            printf -- '- Exact candidate: `%s`\n' "$EXPECTED_RELEASE_SHA"
+            printf -- '- Rollback branch: `%s`\n' "$BACKUP_BRANCH"
+            echo '- Target: `preview` only'
+            echo '- Production aliases, production migrations, payment enablement, and merge are not authorized.'
+          } >> "$GITHUB_STEP_SUMMARY"
