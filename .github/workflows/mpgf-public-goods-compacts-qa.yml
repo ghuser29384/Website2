@@ -8,7 +8,11 @@ on:
       - ".github/workflows/mpgf-public-goods-compacts-qa.yml"
       - "docs/mpgf/public-goods-compacts.md"
       - "src/app/api/mpgf/compacts/**"
+      - "src/app/globals.css"
       - "src/app/mpgf/compacts/**"
+      - "src/app/mpgf/page.tsx"
+      - "src/app/sitemap.ts"
+      - "src/components/mpgf/mpgf-page-frame.tsx"
       - "src/components/mpgf/mpgf-public-goods-compacts*"
       - "src/lib/mpgf/public-goods-compacts*"
       - "src/lib/supabase/database.types.ts"
@@ -17,6 +21,7 @@ on:
       - "supabase/tests/mpgf_public_goods_compacts_lifecycle.sql"
       - "supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql"
       - "tests/mpgf-public-goods-compacts.spec.ts"
+      - "tests/public-routes.spec.ts"
   workflow_dispatch:
     inputs:
       confirm_target:
@@ -33,6 +38,99 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  source-and-rendered:
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    env:
+      EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Check out the exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          git diff --check
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee mpgf-compacts-repository-tests.log
+
+      - name: Run repository-wide ESLint
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run lint -- --quiet 2>&1 | tee mpgf-compacts-eslint.log
+
+      - name: Run strict TypeScript
+        shell: bash
+        run: |
+          set -o pipefail
+          npx tsc --noEmit 2>&1 | tee mpgf-compacts-typescript-full.log
+
+      - name: Build production application
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee mpgf-compacts-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run desktop and mobile rendered compact QA
+        shell: bash
+        run: |
+          set -o pipefail
+          npx playwright test \
+            tests/mpgf-public-goods-compacts.spec.ts \
+            --workers=1 \
+            --reporter=line 2>&1 | tee mpgf-compacts-playwright.log
+
+      - name: Prove clean exact-head source state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
+          test -z "$(git status --short)"
+          git rev-parse HEAD > mpgf-compacts-head-sha.txt
+
+      - name: Upload exact-head source and rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mpgf-public-goods-compacts-source-rendered-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            mpgf-compacts-head-sha.txt
+            mpgf-compacts-repository-tests.log
+            mpgf-compacts-eslint.log
+            mpgf-compacts-typescript-full.log
+            mpgf-compacts-build.log
+            mpgf-compacts-playwright.log
+            test-results/mpgf-public-goods-compacts*
+
   rollback-database-lifecycle:
     if: >-
       (github.event_name == 'workflow_dispatch' && inputs.confirm_target == 'hvmxfjjbdcgjjudmthdz')
@@ -201,7 +299,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mpgf-public-goods-compacts-qa-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
+          name: mpgf-public-goods-compacts-database-${{ github.run_id }}-${{ github.event.pull_request.head.sha || github.sha }}
           if-no-files-found: warn
           retention-days: 30
           path: |
