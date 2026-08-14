@@ -6,9 +6,9 @@
   "additionalProperties": false,
   "required": ["schemaVersion", "evaluatorVersion", "policySourceManifestHash", "effectiveAt", "subjectMode", "studyAuthorization", "provenance", "sourceOffer", "targetOffer", "pair"],
   "properties": {
-    "schemaVersion": { "const": "reciprocal-trade-research-eligibility-input-v1.0.0" },
-    "evaluatorVersion": { "const": "reciprocal-trade-research-eligibility-v1.0.0" },
-    "policySourceManifestHash": { "const": "sha256:cf24c66a5a33ec3716ee378a6d839f0284e3dbe01ecf46f2687b747b4cd58c3b" },
+    "schemaVersion": { "type": "string", "pattern": "^reciprocal-trade-research-eligibility-input-v[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "Version mismatches are schema-valid diagnostic states and fail in the evaluator." },
+    "evaluatorVersion": { "type": "string", "pattern": "^reciprocal-trade-research-eligibility-v[0-9]+\\.[0-9]+\\.[0-9]+$", "description": "Version mismatches are schema-valid diagnostic states and fail in the evaluator." },
+    "policySourceManifestHash": { "$ref": "#/$defs/sha256", "description": "Manifest-hash mismatches are schema-valid diagnostic states and fail in the evaluator." },
     "effectiveAt": { "$ref": "#/$defs/requiredTimestamp" },
     "subjectMode": { "enum": ["synthetic", "protected"] },
     "studyAuthorization": { "$ref": "#/$defs/studyAuthorization" },
@@ -20,11 +20,11 @@
   "$defs": {
     "timestamp": {
       "type": ["string", "null"],
-      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+      "pattern": "^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
     },
     "requiredTimestamp": {
       "type": "string",
-      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
+      "pattern": "^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
     },
     "sha256": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
     "safeKey": {
@@ -47,13 +47,14 @@
     "provenance": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["boundBaseCommit", "sourceKind", "snapshotKey", "snapshotSha256", "syntheticClusterCount", "containsRealRows", "recommendationEdgeUsed", "participantCausalOutputRequested", "assignmentMaterialPresent"],
+      "required": ["boundBaseCommit", "sourceKind", "snapshotKey", "snapshotSha256", "syntheticClusterCountMetadata", "clusterCountEvidenceKind", "containsRealRows", "recommendationEdgeUsed", "participantCausalOutputRequested", "assignmentMaterialPresent"],
       "properties": {
-        "boundBaseCommit": { "const": "79ca382c3bdc325dfc5a28e2cbbafc1b95640386" },
+        "boundBaseCommit": { "type": "string", "pattern": "^[a-f0-9]{40}$", "description": "Commit mismatches are schema-valid diagnostic states and fail in the evaluator." },
         "sourceKind": { "enum": ["synthetic_fixture", "protected_normalized_snapshot"] },
         "snapshotKey": { "$ref": "#/$defs/safeKey" },
         "snapshotSha256": { "$ref": "#/$defs/sha256" },
-        "syntheticClusterCount": { "type": "integer", "minimum": 0, "maximum": 3200 },
+        "syntheticClusterCountMetadata": { "type": "integer", "minimum": 0, "maximum": 3200, "description": "Caller-supplied metadata only; the eligibility evaluator does not construct or inspect a graph." },
+        "clusterCountEvidenceKind": { "const": "metadata_only_not_graph_evaluated" },
         "containsRealRows": { "type": "boolean" },
         "recommendationEdgeUsed": { "type": "boolean" },
         "participantCausalOutputRequested": { "type": "boolean" },
@@ -63,11 +64,16 @@
     "gateEvidence": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["status", "sourceStatus", "sourceHash", "reviewedAt", "expiresAt"],
+      "required": ["gateId", "status", "sourceStatus", "policyManifestHash", "evidenceProvenanceStatus", "evidenceSourceId", "projectionHash", "attestationHash", "reviewedAt", "expiresAt"],
       "properties": {
+        "gateId": { "enum": ["moderation", "harmful_offer", "baseline_integrity", "legality", "participant_eligibility"] },
         "status": { "enum": ["cleared", "blocked", "review_required", "unknown", "stale", "contradictory"] },
         "sourceStatus": { "enum": ["current", "stale", "unknown", "unbound", "contradictory"] },
-        "sourceHash": { "const": "sha256:cf24c66a5a33ec3716ee378a6d839f0284e3dbe01ecf46f2687b747b4cd58c3b" },
+        "policyManifestHash": { "$ref": "#/$defs/sha256", "description": "Identity of the governing policy package; never represented as an evidence-source hash." },
+        "evidenceProvenanceStatus": { "const": "unresolved_not_bound" },
+        "evidenceSourceId": { "type": "null" },
+        "projectionHash": { "type": "null" },
+        "attestationHash": { "type": "null" },
         "reviewedAt": { "$ref": "#/$defs/requiredTimestamp" },
         "expiresAt": { "$ref": "#/$defs/timestamp" }
       }
@@ -80,8 +86,8 @@
         "offerKey": { "$ref": "#/$defs/safeKey" },
         "ownerKey": { "$ref": "#/$defs/safeKey" },
         "mode": { "enum": ["pledge", "offset", "payment"] },
-        "offeredCause": { "type": "string", "minLength": 1, "maxLength": 180, "pattern": "^[\\u0020-\\u007e]+$" },
-        "requestedCause": { "type": "string", "minLength": 1, "maxLength": 180, "pattern": "^[\\u0020-\\u007e]+$" },
+        "offeredCause": { "type": "string", "minLength": 1, "maxLength": 180, "description": "Non-ASCII values are schema-valid diagnostic states and fail the candidate collation gate." },
+        "requestedCause": { "type": "string", "minLength": 1, "maxLength": 180, "description": "Non-ASCII values are schema-valid diagnostic states and fail the candidate collation gate." },
         "causeCollation": { "enum": ["postgres-ilike-printable-ascii-v1", "unbound", "unknown", "contradictory"] },
         "workflowStatus": { "enum": ["draft", "pending_review", "published", "changes_requested", "rejected", "paused", "closed", "deleted"] },
         "status": { "enum": ["open", "paused", "matched", "closed"] },

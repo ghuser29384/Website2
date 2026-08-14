@@ -5,8 +5,14 @@
   "evaluatorVersion": "reciprocal-trade-research-eligibility-v1.0.0",
   "inputSchemaVersion": "reciprocal-trade-research-eligibility-input-v1.0.0",
   "decisionSchemaVersion": "reciprocal-trade-research-eligibility-decision-v1.0.0",
-  "policySourceManifestHash": "sha256:cf24c66a5a33ec3716ee378a6d839f0284e3dbe01ecf46f2687b747b4cd58c3b",
+  "policySourceManifestHash": "sha256:ba46f72b3676229eb73e653d4b5b370a2145a2998522bf7acb0991d38da42243",
   "canonicalEligibilitySourceStatus": "blocked_source_conflict",
+  "publicEligibilityPossible": false,
+  "candidatePolicySatisfiedSeparatedFromEligibility": true,
+  "gateEvidenceProvenanceStatus": "unresolved_not_bound",
+  "inputAndDecisionSchemaParityValidated": true,
+  "permanentWorkflowTriggerCoverageValidated": true,
+  "clusterCountCanaryKind": "metadata_only_not_graph_evaluated",
   "realGraphDiagnosticsStatus": "blocked_not_run",
   "executionDecision": "no_launch",
   "releaseClassification": "research_validation_only_no_runtime_effect",
@@ -41,58 +47,58 @@
   "artifacts": [
     {
       "path": ".github/workflows/commitments-trade-canonical-eligibility-gates.yml",
-      "gitBlobSha1": "7447f1747b30d797fcc0f696c40cf703d4096fbb",
-      "rawSha256": "1bde54cc7114bf91e5dfe076323c8f747726fd139416d53d28c8324e577fbcf0"
+      "gitBlobSha1": "93ccd5c516fd67f16616083fb7ffb4e04b7a6218",
+      "rawSha256": "cc416ab3202fe5abf8acf90190362bf671759a1cc3788cb0e0e4fd4f20cda8df"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/README.md",
-      "gitBlobSha1": "341ecffa0512cc986ca24c2d3b65b9e53d3d55fd",
-      "rawSha256": "ee41679d6b4e7ab197ba157ae3bef7c32cfac16bba8a0ab46e7d0e0993da76e4"
+      "gitBlobSha1": "d8144efe91ac99f4870b345eec10784bdcb96017",
+      "rawSha256": "399f2a24aba33c20c9b6c77550a465bfd8d208514e8e6e1ff1b000b1a7c0d8bb"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/policy-source-map.v1.md",
-      "gitBlobSha1": "a412d7e6ae8803dd78fa141d3c7f66508b1a7573",
-      "rawSha256": "4228242a3289cfa0379a28e261831a167e7becd795a062604d76e20d93645d58"
+      "gitBlobSha1": "2158a56397941f0b477bd6548b9e4bf83c99dfec",
+      "rawSha256": "50983148669a4c475ab99547687b722eec052558dd1f26b106d75dfba349fb39"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/policy-source-manifest.v1.json",
-      "gitBlobSha1": "3dd5ddd12459077f4c7650c962d08dd5819c0874",
-      "rawSha256": "cf24c66a5a33ec3716ee378a6d839f0284e3dbe01ecf46f2687b747b4cd58c3b"
+      "gitBlobSha1": "cdea2b6182efa13d3a5f68be388bf7fad131f645",
+      "rawSha256": "ba46f72b3676229eb73e653d4b5b370a2145a2998522bf7acb0991d38da42243"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-input.schema.v1.json",
-      "gitBlobSha1": "075f640a4e9755c3c8be544806b60f281b5cf8de",
-      "rawSha256": "d0e0758da07b9af6d270926485af6083e8f805dabdc679f5c51cc7e1b273b021"
+      "gitBlobSha1": "2222fdacc042adc0b7bc42a818525a3e0ad20ef2",
+      "rawSha256": "05de6f52a75401141c63c3a5eca84948246d3514221a1aefd949356efa35abd7"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-decision.schema.v1.json",
-      "gitBlobSha1": "510269db2ae0a845cbcf507f55210e19c7a5af96",
-      "rawSha256": "b7e162443bdd2419d4059c7a0613496fb278fd6077a15da729b080bdbbbe5771"
+      "gitBlobSha1": "c822e94863f5765dc23a1e3a986064d0068aa89f",
+      "rawSha256": "bb86173b41f9a0602c4f71cb3db24aeb0ad99b189ff92e6833b7fa3bb63a1cb8"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-gap-register.v1.json",
-      "gitBlobSha1": "cd91b4d55756049dce7b576fdce82da86c9f4dd3",
-      "rawSha256": "d2a95ed7b59b6903a63f5706be3b0abb58d97bed9c14fee064927ab1d5e21906"
+      "gitBlobSha1": "db9df4b1d1f82a16dc86e608776f2abcd93a1882",
+      "rawSha256": "44e86e1132eb75dc496ae7333cd2954faaf64ee498aa7200e60c6a23e3cfae36"
     },
     {
       "path": "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/synthetic-eligibility-fixtures.v1.json",
-      "gitBlobSha1": "5eb9c0fb0bc7805e1a530df6280198c1485600e0",
-      "rawSha256": "4fa54f94949ac343e7db20d33e4f70416bc2b27fbdf3a90f6e876d45b44906cf"
+      "gitBlobSha1": "235fe94a3954d1acd53576eb238917ae16699713",
+      "rawSha256": "082468f75f5e93f55cb2ce9118d7043ae0bb42cc24644858fe7122a3a2d5786e"
     },
     {
       "path": "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs",
-      "gitBlobSha1": "a7c47dd22fe7c545ef5276db46478cb4968b08ad",
-      "rawSha256": "5a970bad2a032395396c2e7f1998cdb37d390896d3b130d8758784f6b90e01b3"
+      "gitBlobSha1": "ba248868186a778f38c8ae4d52a98238a082c2c1",
+      "rawSha256": "3fc8cedc0b87efc06fb98638290284b9b449baebf7c6e156f200d95a0b664305"
     },
     {
       "path": "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs",
-      "gitBlobSha1": "ed05c61f331c32ada0872f01e5477cf14627d60e",
-      "rawSha256": "fb55b522c88f389ed66c9f55472819f5846828bb8865cb28cddbc56f010b9dfa"
+      "gitBlobSha1": "0238b2f5932c1f5bde09dfc28e9bf1c0b88e5067",
+      "rawSha256": "07ce3e9a01c1ccdef1bf809b1f74a438788a2f4299d42938c9277abe566b3758"
     },
     {
       "path": "scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs",
-      "gitBlobSha1": "d0bff4d6888d4fd1ccb3e6b5684a512d43faa93f",
-      "rawSha256": "dd0e32cd62c9c8c7cd8aaddc683b826b05f256cd2ddf978165b7d3b1f8d7a033"
+      "gitBlobSha1": "c4dc57bb5ddd0ad92599115d76d01e14e98526da",
+      "rawSha256": "e4151f9cdfec30635f9aa6fdad639acea33192cbef73527eff252654c5ba8abf"
     }
   ],
   "expectedChangedFiles": [

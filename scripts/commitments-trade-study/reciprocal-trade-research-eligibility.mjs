@@ -1,10 +1,21 @@
+import inputSchema from "../../docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-input.schema.v1.json" with { type: "json" };
+import decisionSchema from "../../docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/eligibility-decision.schema.v1.json" with { type: "json" };
+
 export const EVALUATOR_VERSION = "reciprocal-trade-research-eligibility-v1.0.0";
 export const INPUT_SCHEMA_VERSION = "reciprocal-trade-research-eligibility-input-v1.0.0";
 export const DECISION_SCHEMA_VERSION = "reciprocal-trade-research-eligibility-decision-v1.0.0";
-export const POLICY_SOURCE_MANIFEST_HASH = "sha256:cf24c66a5a33ec3716ee378a6d839f0284e3dbe01ecf46f2687b747b4cd58c3b";
+export const POLICY_SOURCE_MANIFEST_HASH = "sha256:ba46f72b3676229eb73e653d4b5b370a2145a2998522bf7acb0991d38da42243";
 export const BOUND_BASE_COMMIT = "79ca382c3bdc325dfc5a28e2cbbafc1b95640386";
 
-export const REASON_CODES = Object.freeze([
+export const GLOBAL_BLOCKER_CODES = Object.freeze([
+  "CANONICAL_ELIGIBILITY_SOURCE_CONFLICT",
+  "GATE_EVIDENCE_PROVENANCE_UNRESOLVED",
+  "PRIVACY_REVIEW_NOT_APPROVED",
+  "ETHICS_DETERMINATION_NOT_APPROVED",
+  "CONSENT_OR_WAIVER_NOT_APPROVED"
+]);
+
+export const CANDIDATE_REASON_CODES = Object.freeze([
   "INPUT_SCHEMA_INVALID",
   "INPUT_SCHEMA_VERSION_MISMATCH",
   "EVALUATOR_VERSION_MISMATCH",
@@ -12,6 +23,7 @@ export const REASON_CODES = Object.freeze([
   "BASE_COMMIT_MISMATCH",
   "EFFECTIVE_TIME_INVALID",
   "PROVENANCE_NOT_SYNTHETIC",
+  "SYNTHETIC_IDENTIFIER_NAMESPACE_REQUIRED",
   "REAL_ROWS_PROHIBITED",
   "PROTECTED_DATA_NOT_AUTHORIZED",
   "STUDY_AUTHORIZATION_PROHIBITED",
@@ -65,131 +77,96 @@ export const REASON_CODES = Object.freeze([
   "HISTORICAL_INTERFERENCE_UNKNOWN"
 ]);
 
+export const REASON_CODES = Object.freeze([...GLOBAL_BLOCKER_CODES, ...CANDIDATE_REASON_CODES]);
 const REASON_RANK = Object.freeze(Object.fromEntries(REASON_CODES.map((code, index) => [code, index])));
-const GATE_STATUSES = ["cleared", "blocked", "review_required", "unknown", "stale", "contradictory"];
-const SOURCE_STATUSES = ["current", "stale", "unknown", "unbound", "contradictory"];
-const WORKFLOW_STATUSES = ["draft", "pending_review", "published", "changes_requested", "rejected", "paused", "closed", "deleted"];
-const OFFER_STATUSES = ["open", "paused", "matched", "closed"];
-const OPERABILITY_STATUSES = ["operative", "expired", "superseded", "withdrawn", "blocked", "unknown", "stale", "contradictory"];
-const RESTRICTION_STATUSES = ["clear", "active", "reviewing", "expired", "revoked", "unknown", "contradictory"];
 
 function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
-}
-
-function exactKeys(value, expected) {
-  if (!isRecord(value)) return false;
-  const actual = Object.keys(value).sort();
-  const wanted = [...expected].sort();
-  return actual.length === wanted.length && actual.every((key, index) => key === wanted[index]);
 }
 
 function oneOf(value, values) {
   return typeof value === "string" && values.includes(value);
 }
 
-function isSha256(value) {
-  return typeof value === "string" && /^sha256:[a-f0-9]{64}$/.test(value);
+function resolveLocalRef(root, reference) {
+  if (!reference.startsWith("#/")) return null;
+  return reference.slice(2).split("/").reduce((value, segment) => value?.[segment.replaceAll("~1", "/").replaceAll("~0", "~")], root);
 }
 
-function isSafeKey(value) {
-  return typeof value === "string" && /^(synthetic:[a-z0-9][a-z0-9_-]{0,63}|pseudonym:sha256:[a-f0-9]{64})$/.test(value);
+function matchesType(value, type) {
+  if (type === "null") return value === null;
+  if (type === "array") return Array.isArray(value);
+  if (type === "object") return isRecord(value);
+  if (type === "integer") return Number.isInteger(value);
+  return typeof value === type;
+}
+
+function sameJsonValue(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function schemaMatches(schema, value, root) {
+  if (schema.$ref) {
+    const resolved = resolveLocalRef(root, schema.$ref);
+    return resolved !== null && schemaMatches(resolved, value, root);
+  }
+  if (schema.oneOf) {
+    const matches = schema.oneOf.filter((candidate) => schemaMatches(candidate, value, root)).length;
+    if (matches !== 1) return false;
+  }
+  if (schema.type !== undefined) {
+    const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+    if (!types.some((type) => matchesType(value, type))) return false;
+  }
+  if (Object.hasOwn(schema, "const") && !sameJsonValue(value, schema.const)) return false;
+  if (schema.enum && !schema.enum.some((candidate) => sameJsonValue(value, candidate))) return false;
+  if (typeof value === "string") {
+    if (schema.minLength !== undefined && value.length < schema.minLength) return false;
+    if (schema.maxLength !== undefined && value.length > schema.maxLength) return false;
+    if (schema.pattern !== undefined && !new RegExp(schema.pattern, "u").test(value)) return false;
+  }
+  if (typeof value === "number") {
+    if (schema.minimum !== undefined && value < schema.minimum) return false;
+    if (schema.maximum !== undefined && value > schema.maximum) return false;
+  }
+  if (Array.isArray(value)) {
+    if (schema.minItems !== undefined && value.length < schema.minItems) return false;
+    if (schema.maxItems !== undefined && value.length > schema.maxItems) return false;
+    if (schema.uniqueItems && new Set(value.map((entry) => JSON.stringify(entry))).size !== value.length) return false;
+    if (schema.prefixItems) {
+      for (let index = 0; index < schema.prefixItems.length; index += 1) {
+        if (index >= value.length || !schemaMatches(schema.prefixItems[index], value[index], root)) return false;
+      }
+    }
+    if (schema.items && !value.every((entry) => schemaMatches(schema.items, entry, root))) return false;
+  }
+  if (isRecord(value)) {
+    if (schema.required && !schema.required.every((key) => Object.hasOwn(value, key))) return false;
+    if (schema.additionalProperties === false) {
+      const allowed = new Set(Object.keys(schema.properties ?? {}));
+      if (Object.keys(value).some((key) => !allowed.has(key))) return false;
+    }
+    for (const [key, propertySchema] of Object.entries(schema.properties ?? {})) {
+      if (Object.hasOwn(value, key) && !schemaMatches(propertySchema, value[key], root)) return false;
+    }
+  }
+  return true;
+}
+
+export function validateEligibilityInput(input) {
+  return schemaMatches(inputSchema, input, inputSchema);
+}
+
+export function validateEligibilityDecision(decision) {
+  return schemaMatches(decisionSchema, decision, decisionSchema);
 }
 
 function isTimestamp(value) {
-  if (typeof value !== "string") return false;
-  const match = /^([0-9]{4})-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9])Z$/.exec(value);
-  if (!match) return false;
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-  return day >= 1 && day <= days[month - 1];
+  return typeof value === "string" && /^[0-9]{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12][0-9]|3[01])|(?:0[469]|11)-(?:0[1-9]|[12][0-9]|30)|02-(?:0[1-9]|1[0-9]|2[0-9]))T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$/.test(value);
 }
 
-function isTimestampOrNull(value) {
-  return value === null || isTimestamp(value);
-}
-
-function validGateEvidence(value) {
-  return exactKeys(value, ["status", "sourceStatus", "sourceHash", "reviewedAt", "expiresAt"])
-    && oneOf(value.status, GATE_STATUSES)
-    && oneOf(value.sourceStatus, SOURCE_STATUSES)
-    && isSha256(value.sourceHash)
-    && isTimestamp(value.reviewedAt)
-    && isTimestampOrNull(value.expiresAt);
-}
-
-function validOffer(value) {
-  if (!exactKeys(value, ["offerKey", "ownerKey", "mode", "offeredCause", "requestedCause", "causeCollation", "workflowStatus", "status", "operability", "invitationCompatibility", "gates"])) return false;
-  if (!isSafeKey(value.offerKey) || !isSafeKey(value.ownerKey)) return false;
-  if (!oneOf(value.mode, ["pledge", "offset", "payment"])) return false;
-  if (typeof value.offeredCause !== "string" || typeof value.requestedCause !== "string") return false;
-  if (value.offeredCause.length < 1 || value.offeredCause.length > 180 || value.requestedCause.length < 1 || value.requestedCause.length > 180) return false;
-  if (typeof value.causeCollation !== "string" || value.causeCollation.length < 1 || value.causeCollation.length > 80) return false;
-  if (!oneOf(value.workflowStatus, WORKFLOW_STATUSES) || !oneOf(value.status, OFFER_STATUSES) || !oneOf(value.operability, OPERABILITY_STATUSES)) return false;
-  if (!oneOf(value.invitationCompatibility, ["compatible", "payment_schedule_present", "donation_offset_attachment_present", "active_performance_bond_present", "unknown", "stale", "contradictory"])) return false;
-  if (!exactKeys(value.gates, ["moderation", "harmfulOffer", "baselineIntegrity", "legality", "participantEligibility"])) return false;
-  return Object.values(value.gates).every(validGateEvidence);
-}
-
-function validConsent(value) {
-  return exactKeys(value, ["status", "allowedRole", "purposeCode", "privacyScope", "sourceStatus", "grantHash", "startsAt", "expiresAt", "revokedAt"])
-    && oneOf(value.status, ["current", "absent", "revoked", "stale", "scope_mismatch", "unknown", "contradictory"])
-    && oneOf(value.allowedRole, ["source_only", "target_only", "bidirectional", "none"])
-    && value.purposeCode === "reciprocal_trade_research_eligibility_v1"
-    && value.privacyScope === "research_eligibility_normalized_pair_only"
-    && oneOf(value.sourceStatus, SOURCE_STATUSES)
-    && isSha256(value.grantHash)
-    && isTimestamp(value.startsAt)
-    && isTimestampOrNull(value.expiresAt)
-    && isTimestampOrNull(value.revokedAt);
-}
-
-function validRestriction(value) {
-  return exactKeys(value, ["status", "sourceStatus", "startsAt", "expiresAt", "revokedAt"])
-    && oneOf(value.status, RESTRICTION_STATUSES)
-    && oneOf(value.sourceStatus, SOURCE_STATUSES)
-    && isTimestamp(value.startsAt)
-    && isTimestampOrNull(value.expiresAt)
-    && isTimestampOrNull(value.revokedAt);
-}
-
-function validEngagement(value) {
-  return exactKeys(value, ["acceptedInterest", "invitation", "thread", "agreement", "duplicatePair", "historicalInterference"])
-    && oneOf(value.acceptedInterest, ["none", "active", "terminal", "unknown", "contradictory"])
-    && oneOf(value.invitation, ["none", "active", "terminal", "unknown", "contradictory"])
-    && oneOf(value.thread, ["none", "active", "terminal", "unknown", "contradictory"])
-    && oneOf(value.agreement, ["none", "active", "terminal", "unknown", "contradictory"])
-    && oneOf(value.duplicatePair, ["none", "present", "unknown", "contradictory"])
-    && oneOf(value.historicalInterference, ["captured", "none", "unknown", "contradictory"]);
-}
-
-function validInputShape(input) {
-  if (!exactKeys(input, ["schemaVersion", "evaluatorVersion", "policySourceManifestHash", "effectiveAt", "subjectMode", "studyAuthorization", "provenance", "sourceOffer", "targetOffer", "pair"])) return false;
-  if (typeof input.schemaVersion !== "string" || typeof input.evaluatorVersion !== "string" || !isSha256(input.policySourceManifestHash)) return false;
-  if (typeof input.effectiveAt !== "string" || !oneOf(input.subjectMode, ["synthetic", "protected"])) return false;
-  const authorization = input.studyAuthorization;
-  if (!exactKeys(authorization, ["protectedDataExportAuthorized", "privacyReviewStatus", "ethicsDeterminationStatus", "consentOrWaiverStatus", "assignmentAuthorized", "participantContactAuthorized"])) return false;
-  if (typeof authorization.protectedDataExportAuthorized !== "boolean" || typeof authorization.assignmentAuthorized !== "boolean" || typeof authorization.participantContactAuthorized !== "boolean") return false;
-  const reviewStates = ["approved", "required_not_completed", "rejected", "unknown"];
-  if (!oneOf(authorization.privacyReviewStatus, reviewStates) || !oneOf(authorization.ethicsDeterminationStatus, reviewStates) || !oneOf(authorization.consentOrWaiverStatus, reviewStates)) return false;
-  const provenance = input.provenance;
-  if (!exactKeys(provenance, ["boundBaseCommit", "sourceKind", "snapshotKey", "snapshotSha256", "syntheticClusterCount", "containsRealRows", "recommendationEdgeUsed", "participantCausalOutputRequested", "assignmentMaterialPresent"])) return false;
-  if (typeof provenance.boundBaseCommit !== "string" || !oneOf(provenance.sourceKind, ["synthetic_fixture", "protected_normalized_snapshot"]) || !isSafeKey(provenance.snapshotKey) || !isSha256(provenance.snapshotSha256)) return false;
-  if (!Number.isInteger(provenance.syntheticClusterCount) || provenance.syntheticClusterCount < 0 || provenance.syntheticClusterCount > 3200) return false;
-  if (typeof provenance.containsRealRows !== "boolean" || typeof provenance.recommendationEdgeUsed !== "boolean" || typeof provenance.participantCausalOutputRequested !== "boolean" || typeof provenance.assignmentMaterialPresent !== "boolean") return false;
-  if (!validOffer(input.sourceOffer) || !validOffer(input.targetOffer)) return false;
-  const pair = input.pair;
-  if (!exactKeys(pair, ["blockStatus", "sourceRestriction", "targetRestriction", "pairRestriction", "sourceConsent", "targetConsent", "engagement"])) return false;
-  return oneOf(pair.blockStatus, ["clear", "blocked_source_to_target", "blocked_target_to_source", "blocked_both", "unknown", "contradictory"])
-    && validRestriction(pair.sourceRestriction)
-    && validRestriction(pair.targetRestriction)
-    && validRestriction(pair.pairRestriction)
-    && validConsent(pair.sourceConsent)
-    && validConsent(pair.targetConsent)
-    && validEngagement(pair.engagement);
+function isSyntheticKey(value) {
+  return typeof value === "string" && /^synthetic:[a-z0-9][a-z0-9_-]{0,63}$/.test(value);
 }
 
 function isPrintableAscii(value) {
@@ -239,16 +216,33 @@ function uniqueOrdered(values) {
   });
 }
 
-function makeDecision(input, reasons, unknown, stale) {
-  const orderedReasons = uniqueOrdered(reasons);
-  return {
+function globalBlockersFor(input) {
+  const blockers = [
+    "CANONICAL_ELIGIBILITY_SOURCE_CONFLICT",
+    "GATE_EVIDENCE_PROVENANCE_UNRESOLVED"
+  ];
+  const authorization = isRecord(input) && isRecord(input.studyAuthorization) ? input.studyAuthorization : {};
+  if (authorization.privacyReviewStatus !== "approved") blockers.push("PRIVACY_REVIEW_NOT_APPROVED");
+  if (authorization.ethicsDeterminationStatus !== "approved") blockers.push("ETHICS_DETERMINATION_NOT_APPROVED");
+  if (authorization.consentOrWaiverStatus !== "approved") blockers.push("CONSENT_OR_WAIVER_NOT_APPROVED");
+  return uniqueOrdered(blockers);
+}
+
+function makeDecision(input, candidateReasons, unknown, stale) {
+  const candidateReasonCodes = uniqueOrdered(candidateReasons);
+  const globalBlockerReasons = globalBlockersFor(input);
+  const candidatePolicySatisfied = candidateReasonCodes.length === 0;
+  const decision = {
     schemaVersion: DECISION_SCHEMA_VERSION,
     evaluatorVersion: EVALUATOR_VERSION,
     policySourceManifestHash: POLICY_SOURCE_MANIFEST_HASH,
     effectiveAt: isRecord(input) && isTimestamp(input.effectiveAt) ? input.effectiveAt : null,
     subjectMode: isRecord(input) && oneOf(input.subjectMode, ["synthetic", "protected"]) ? input.subjectMode : "invalid",
-    eligible: orderedReasons.length === 0,
-    reasonCodes: orderedReasons,
+    candidatePolicySatisfied,
+    candidateReasonCodes,
+    globalBlockerReasons,
+    eligible: candidatePolicySatisfied && globalBlockerReasons.length === 0,
+    reasonCodes: uniqueOrdered([...globalBlockerReasons, ...candidateReasonCodes]),
     unknownBlockers: uniqueOrdered(unknown),
     staleSourceBlockers: uniqueOrdered(stale),
     canonicalEligibilitySourceStatus: "blocked_source_conflict",
@@ -259,13 +253,15 @@ function makeDecision(input, reasons, unknown, stale) {
     assignmentSeedGenerated: false,
     participantLevelCausalClaim: null
   };
+  if (!validateEligibilityDecision(decision)) throw new Error("Evaluator emitted a decision outside the frozen decision schema.");
+  return decision;
 }
 
-function pushEvidenceResult(evidence, reason, effectiveAt, reasons, unknown, stale) {
-  if (evidence.status === "cleared" && evidence.sourceStatus === "current" && evidence.sourceHash === POLICY_SOURCE_MANIFEST_HASH && evidence.reviewedAt <= effectiveAt && (evidence.expiresAt === null || evidence.expiresAt > effectiveAt)) return;
+function pushEvidenceResult(evidence, expectedGateId, reason, effectiveAt, reasons, unknown, stale) {
+  if (evidence.gateId === expectedGateId && evidence.status === "cleared" && evidence.sourceStatus === "current" && evidence.policyManifestHash === POLICY_SOURCE_MANIFEST_HASH && evidence.evidenceProvenanceStatus === "unresolved_not_bound" && evidence.evidenceSourceId === null && evidence.projectionHash === null && evidence.attestationHash === null && evidence.reviewedAt <= effectiveAt && (evidence.expiresAt === null || evidence.expiresAt > effectiveAt)) return;
   reasons.push(reason);
   if (evidence.status === "stale" || evidence.sourceStatus === "stale" || evidence.expiresAt !== null && evidence.expiresAt <= effectiveAt) stale.push(reason);
-  if (["unknown", "contradictory"].includes(evidence.status) || ["unknown", "unbound", "contradictory"].includes(evidence.sourceStatus) || evidence.sourceHash !== POLICY_SOURCE_MANIFEST_HASH || evidence.reviewedAt > effectiveAt) unknown.push(reason);
+  if (["unknown", "contradictory"].includes(evidence.status) || ["unknown", "unbound", "contradictory"].includes(evidence.sourceStatus) || evidence.gateId !== expectedGateId || evidence.policyManifestHash !== POLICY_SOURCE_MANIFEST_HASH || evidence.evidenceProvenanceStatus !== "unresolved_not_bound" || evidence.evidenceSourceId !== null || evidence.projectionHash !== null || evidence.attestationHash !== null || evidence.reviewedAt > effectiveAt) unknown.push(reason);
 }
 
 function pushConsentResult(consent, role, reason, roleReason, effectiveAt, reasons, unknown, stale) {
@@ -324,7 +320,7 @@ export function evaluateReciprocalTradeResearchEligibility(input) {
   const reasons = [];
   const unknown = [];
   const stale = [];
-  if (!validInputShape(input)) {
+  if (!validateEligibilityInput(input)) {
     reasons.push("INPUT_SCHEMA_INVALID");
     if (!isRecord(input) || !isTimestamp(input.effectiveAt)) reasons.push("EFFECTIVE_TIME_INVALID");
     return makeDecision(input, reasons, unknown, stale);
@@ -337,6 +333,13 @@ export function evaluateReciprocalTradeResearchEligibility(input) {
   if (reasons.length > 0) return makeDecision(input, reasons, unknown, stale);
 
   if (input.subjectMode !== "synthetic" || input.provenance.sourceKind !== "synthetic_fixture") reasons.push("PROVENANCE_NOT_SYNTHETIC");
+  if ((input.subjectMode === "synthetic" || input.provenance.sourceKind === "synthetic_fixture") && ![
+    input.provenance.snapshotKey,
+    input.sourceOffer.offerKey,
+    input.sourceOffer.ownerKey,
+    input.targetOffer.offerKey,
+    input.targetOffer.ownerKey
+  ].every(isSyntheticKey)) reasons.push("SYNTHETIC_IDENTIFIER_NAMESPACE_REQUIRED");
   if (input.provenance.containsRealRows) reasons.push("REAL_ROWS_PROHIBITED");
   if (input.subjectMode === "protected" || input.studyAuthorization.protectedDataExportAuthorized) reasons.push("PROTECTED_DATA_NOT_AUTHORIZED");
   if (input.studyAuthorization.assignmentAuthorized || input.studyAuthorization.participantContactAuthorized) reasons.push("STUDY_AUTHORIZATION_PROHIBITED");
@@ -385,16 +388,16 @@ export function evaluateReciprocalTradeResearchEligibility(input) {
     if (!postgresIlikePrintableAscii(target.requestedCause, source.offeredCause)) reasons.push("TARGET_REQUEST_NOT_OFFERED_BY_SOURCE");
   }
 
-  pushEvidenceResult(source.gates.moderation, "SOURCE_MODERATION_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
-  pushEvidenceResult(target.gates.moderation, "TARGET_MODERATION_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
-  pushEvidenceResult(source.gates.harmfulOffer, "SOURCE_HARM_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
-  pushEvidenceResult(target.gates.harmfulOffer, "TARGET_HARM_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
-  pushEvidenceResult(source.gates.baselineIntegrity, "SOURCE_BASELINE_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
-  pushEvidenceResult(target.gates.baselineIntegrity, "TARGET_BASELINE_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
-  pushEvidenceResult(source.gates.legality, "SOURCE_LEGALITY_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
-  pushEvidenceResult(target.gates.legality, "TARGET_LEGALITY_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
-  pushEvidenceResult(source.gates.participantEligibility, "SOURCE_PARTICIPANT_NOT_ELIGIBLE", effectiveAt, reasons, unknown, stale);
-  pushEvidenceResult(target.gates.participantEligibility, "TARGET_PARTICIPANT_NOT_ELIGIBLE", effectiveAt, reasons, unknown, stale);
+  pushEvidenceResult(source.gates.moderation, "moderation", "SOURCE_MODERATION_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
+  pushEvidenceResult(target.gates.moderation, "moderation", "TARGET_MODERATION_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
+  pushEvidenceResult(source.gates.harmfulOffer, "harmful_offer", "SOURCE_HARM_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
+  pushEvidenceResult(target.gates.harmfulOffer, "harmful_offer", "TARGET_HARM_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
+  pushEvidenceResult(source.gates.baselineIntegrity, "baseline_integrity", "SOURCE_BASELINE_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
+  pushEvidenceResult(target.gates.baselineIntegrity, "baseline_integrity", "TARGET_BASELINE_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
+  pushEvidenceResult(source.gates.legality, "legality", "SOURCE_LEGALITY_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
+  pushEvidenceResult(target.gates.legality, "legality", "TARGET_LEGALITY_NOT_CLEARED", effectiveAt, reasons, unknown, stale);
+  pushEvidenceResult(source.gates.participantEligibility, "participant_eligibility", "SOURCE_PARTICIPANT_NOT_ELIGIBLE", effectiveAt, reasons, unknown, stale);
+  pushEvidenceResult(target.gates.participantEligibility, "participant_eligibility", "TARGET_PARTICIPANT_NOT_ELIGIBLE", effectiveAt, reasons, unknown, stale);
 
   pushConsentResult(input.pair.sourceConsent, "source_only", "SOURCE_CONSENT_NOT_CURRENT", "SOURCE_ROLE_NOT_AUTHORIZED", effectiveAt, reasons, unknown, stale);
   pushConsentResult(input.pair.targetConsent, "target_only", "TARGET_CONSENT_NOT_CURRENT", "TARGET_ROLE_NOT_AUTHORIZED", effectiveAt, reasons, unknown, stale);

@@ -7,12 +7,16 @@ import { fileURLToPath } from "node:url";
 
 import {
   BOUND_BASE_COMMIT,
+  CANDIDATE_REASON_CODES,
   DECISION_SCHEMA_VERSION,
   EVALUATOR_VERSION,
+  GLOBAL_BLOCKER_CODES,
   INPUT_SCHEMA_VERSION,
   POLICY_SOURCE_MANIFEST_HASH,
   REASON_CODES,
-  evaluateReciprocalTradeResearchEligibility
+  evaluateReciprocalTradeResearchEligibility,
+  validateEligibilityDecision,
+  validateEligibilityInput
 } from "./reciprocal-trade-research-eligibility.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -78,6 +82,40 @@ function assertSourceIncludes(sourceById, sourceId, patterns) {
   for (const pattern of patterns) assert.match(body, pattern, `${sourceId}: ${pattern}`);
 }
 
+function workflowPathsFor(source, eventName) {
+  const match = new RegExp(`^  ${eventName}:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^permissions:)`, "m").exec(source);
+  assert.ok(match, `workflow ${eventName} trigger missing`);
+  return [...match[1].matchAll(/^      - "([^"]+)"$/gm)].map((entry) => entry[1]);
+}
+
+function triggerCoversPath(pattern, path) {
+  if (pattern === path) return true;
+  if (pattern.endsWith("/**")) {
+    const prefix = pattern.slice(0, -3);
+    return path === prefix || path.startsWith(`${prefix}/`);
+  }
+  return false;
+}
+
+function trackedFilesUnder(path) {
+  return execFileSync("git", ["ls-files", path], { cwd: ROOT, encoding: "utf8" }).trim().split("\n").filter(Boolean);
+}
+
+const SUPPORTED_SCHEMA_KEYWORDS = new Set([
+  "$schema", "$id", "$defs", "$ref", "title", "description", "type", "const", "enum", "pattern",
+  "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems", "uniqueItems", "required",
+  "properties", "additionalProperties", "items", "prefixItems", "oneOf"
+]);
+
+function assertSchemaKeywordsSupported(schema, location) {
+  for (const keyword of Object.keys(schema)) assert.ok(SUPPORTED_SCHEMA_KEYWORDS.has(keyword), `${location}: unsupported schema keyword ${keyword}`);
+  for (const [name, definition] of Object.entries(schema.$defs ?? {})) assertSchemaKeywordsSupported(definition, `${location}.$defs.${name}`);
+  for (const [name, property] of Object.entries(schema.properties ?? {})) assertSchemaKeywordsSupported(property, `${location}.properties.${name}`);
+  for (const [index, branch] of (schema.oneOf ?? []).entries()) assertSchemaKeywordsSupported(branch, `${location}.oneOf[${index}]`);
+  for (const [index, item] of (schema.prefixItems ?? []).entries()) assertSchemaKeywordsSupported(item, `${location}.prefixItems[${index}]`);
+  if (schema.items && typeof schema.items === "object") assertSchemaKeywordsSupported(schema.items, `${location}.items`);
+}
+
 const policy = load(PATHS.policy);
 const inputSchema = load(PATHS.inputSchema);
 const decisionSchema = load(PATHS.decisionSchema);
@@ -85,6 +123,8 @@ const gaps = load(PATHS.gaps);
 const fixtures = load(PATHS.fixtures);
 const canonical = load(PATHS.canonical);
 
+assertSchemaKeywordsSupported(inputSchema, "inputSchema");
+assertSchemaKeywordsSupported(decisionSchema, "decisionSchema");
 assert.equal(rawSha256(PATHS.policy), POLICY_SOURCE_MANIFEST_HASH.slice("sha256:".length));
 assert.equal(policy.boundBaseCommit, BOUND_BASE_COMMIT);
 assert.equal(policy.evaluatorVersion, EVALUATOR_VERSION);
@@ -192,18 +232,23 @@ assertUnique(manifestReasonCodes, "manifest reason codes");
 assert.deepEqual([...manifestReasonCodes].sort(), [...REASON_CODES].sort());
 
 assert.equal(inputSchema.additionalProperties, false);
-assert.equal(inputSchema.properties.schemaVersion.const, INPUT_SCHEMA_VERSION);
-assert.equal(inputSchema.properties.evaluatorVersion.const, EVALUATOR_VERSION);
-assert.equal(inputSchema.properties.policySourceManifestHash.const, POLICY_SOURCE_MANIFEST_HASH);
+assert.match(INPUT_SCHEMA_VERSION, new RegExp(inputSchema.properties.schemaVersion.pattern));
+assert.match(EVALUATOR_VERSION, new RegExp(inputSchema.properties.evaluatorVersion.pattern));
+assert.equal(inputSchema.properties.policySourceManifestHash.$ref, "#/$defs/sha256");
 assert.equal(inputSchema.properties.provenance.$ref, "#/$defs/provenance");
 for (const definition of ["studyAuthorization", "provenance", "gateEvidence", "offer", "consent", "restriction", "engagement", "pair"]) {
   assert.equal(inputSchema.$defs[definition].additionalProperties, false, definition);
 }
-assert.equal(inputSchema.$defs.provenance.properties.boundBaseCommit.const, BOUND_BASE_COMMIT);
+assert.match(BOUND_BASE_COMMIT, new RegExp(inputSchema.$defs.provenance.properties.boundBaseCommit.pattern));
+assert.equal(inputSchema.$defs.provenance.properties.clusterCountEvidenceKind.const, "metadata_only_not_graph_evaluated");
 assert.ok(inputSchema.$defs.offer.properties.causeCollation.enum.includes("postgres-ilike-printable-ascii-v1"));
 assert.equal(inputSchema.$defs.offer.properties.offeredCause.maxLength, 180);
 assert.ok(inputSchema.$defs.offer.properties.invitationCompatibility.enum.includes("active_performance_bond_present"));
-assert.equal(inputSchema.$defs.gateEvidence.properties.sourceHash.const, POLICY_SOURCE_MANIFEST_HASH);
+assert.equal(inputSchema.$defs.gateEvidence.properties.policyManifestHash.$ref, "#/$defs/sha256");
+assert.equal(inputSchema.$defs.gateEvidence.properties.evidenceProvenanceStatus.const, "unresolved_not_bound");
+assert.equal(inputSchema.$defs.gateEvidence.properties.evidenceSourceId.type, "null");
+assert.equal(inputSchema.$defs.gateEvidence.properties.projectionHash.type, "null");
+assert.equal(inputSchema.$defs.gateEvidence.properties.attestationHash.type, "null");
 assert.equal(inputSchema.$defs.consent.properties.purposeCode.const, "reciprocal_trade_research_eligibility_v1");
 assert.equal(inputSchema.$defs.consent.properties.privacyScope.const, "research_eligibility_normalized_pair_only");
 
@@ -211,6 +256,10 @@ assert.equal(decisionSchema.additionalProperties, false);
 assert.equal(decisionSchema.properties.schemaVersion.const, DECISION_SCHEMA_VERSION);
 assert.equal(decisionSchema.properties.evaluatorVersion.const, EVALUATOR_VERSION);
 assert.equal(decisionSchema.properties.policySourceManifestHash.const, POLICY_SOURCE_MANIFEST_HASH);
+assert.equal(decisionSchema.properties.eligible.const, false);
+assert.equal(decisionSchema.properties.reasonCodes.minItems, 2);
+assert.equal(decisionSchema.properties.globalBlockerReasons.prefixItems[0].const, "CANONICAL_ELIGIBILITY_SOURCE_CONFLICT");
+assert.equal(decisionSchema.properties.globalBlockerReasons.prefixItems[1].const, "GATE_EVIDENCE_PROVENANCE_UNRESOLVED");
 assert.equal(decisionSchema.properties.canonicalEligibilitySourceStatus.const, "blocked_source_conflict");
 assert.equal(decisionSchema.properties.realGraphDiagnosticsStatus.const, "blocked_not_run");
 assert.equal(decisionSchema.properties.protectedDataExportAuthorized.const, false);
@@ -218,12 +267,18 @@ assert.equal(decisionSchema.properties.executionDecision.const, "no_launch");
 assert.equal(decisionSchema.properties.assignmentGenerated.const, false);
 assert.equal(decisionSchema.properties.assignmentSeedGenerated.const, false);
 assert.deepEqual(decisionSchema.properties.participantLevelCausalClaim, { type: "null" });
+assert.deepEqual(decisionSchema.$defs.globalBlockerReason.enum, GLOBAL_BLOCKER_CODES);
+assert.deepEqual(decisionSchema.$defs.candidateReasonCode.enum, CANDIDATE_REASON_CODES);
 assert.deepEqual(decisionSchema.$defs.reasonCode.enum, REASON_CODES);
 
 assert.equal(gaps.boundBaseCommit, BOUND_BASE_COMMIT);
 assert.equal(gaps.canonicalEligibilitySourceStatus, "blocked_source_conflict");
 assert.equal(gaps.allProtectedEvaluationBlocked, true);
-assert.ok(gaps.gaps.length >= 8);
+assert.equal(gaps.gaps.length, 9);
+for (const retainedGapId of ["CE-GAP-001", "CE-GAP-002", "CE-GAP-003", "CE-GAP-004", "CE-GAP-005", "CE-GAP-006", "CE-GAP-007", "CE-GAP-008"]) {
+  assert.ok(gaps.gaps.some((gap) => gap.gapId === retainedGapId), `missing retained gap ${retainedGapId}`);
+}
+assert.ok(gaps.gaps.some((gap) => gap.gapId === "CE-GAP-009" && gap.status === "open_gate_evidence_provenance_unbound"));
 assertUnique(gaps.gaps.map((gap) => gap.gapId), "gap IDs");
 for (const gap of gaps.gaps) {
   assert.match(gap.status, /^open_/);
@@ -237,23 +292,38 @@ assert.equal(fixtures.syntheticOnly, true);
 assert.equal(fixtures.nonExecuting, true);
 assert.equal(fixtures.containsProductionOrQaRows, false);
 assert.ok(fixtures.cases.length >= 80);
-assert.ok(fixtures.cases.some((entry) => entry.id === "fully-eligible-reciprocal-pair" && entry.expectedEligible));
-assert.ok(fixtures.cases.some((entry) => entry.id === "synthetic-3200-cluster-control"));
+assert.ok(fixtures.cases.some((entry) => entry.id === "fully-eligible-reciprocal-pair" && !entry.expectedEligible && entry.expectedCandidateReasonCodes.length === 0));
+assert.ok(fixtures.cases.some((entry) => entry.id === "synthetic-cluster-count-metadata-canary"));
 assert.deepEqual(
-  [...new Set(fixtures.cases.flatMap((entry) => entry.expectedReasonCodes))].sort(),
-  [...REASON_CODES].sort()
+  [...new Set(fixtures.cases.flatMap((entry) => entry.expectedCandidateReasonCodes))].sort(),
+  [...CANDIDATE_REASON_CODES].sort()
 );
+assert.deepEqual([...new Set(fixtures.expectedGlobalBlockerReasons)].sort(), [...GLOBAL_BLOCKER_CODES].sort());
 for (const offer of [fixtures.baseInput.sourceOffer, fixtures.baseInput.targetOffer]) {
   assert.equal(offer.invitationCompatibility, "compatible");
-  for (const evidence of Object.values(offer.gates)) assert.equal(evidence.sourceHash, POLICY_SOURCE_MANIFEST_HASH);
+  for (const evidence of Object.values(offer.gates)) {
+    assert.equal(evidence.policyManifestHash, POLICY_SOURCE_MANIFEST_HASH);
+    assert.equal(evidence.evidenceProvenanceStatus, "unresolved_not_bound");
+    assert.equal(evidence.evidenceSourceId, null);
+    assert.equal(evidence.projectionHash, null);
+    assert.equal(evidence.attestationHash, null);
+  }
 }
 for (const fixtureCase of fixtures.cases) {
   const input = applyOperations(fixtures.baseInput, fixtureCase.operations);
   const first = evaluateReciprocalTradeResearchEligibility(input);
   const second = evaluateReciprocalTradeResearchEligibility(input);
+  const expectedGlobalBlockers = fixtureCase.expectedGlobalBlockerReasons ?? fixtures.expectedGlobalBlockerReasons;
+  const expectedAllReasons = REASON_CODES.filter((code) => expectedGlobalBlockers.includes(code) || fixtureCase.expectedCandidateReasonCodes.includes(code));
   assert.deepEqual(first, second, `${fixtureCase.id}: deterministic`);
   assert.equal(first.eligible, fixtureCase.expectedEligible, fixtureCase.id);
-  assert.deepEqual(first.reasonCodes, fixtureCase.expectedReasonCodes, fixtureCase.id);
+  assert.equal(first.eligible, false, `${fixtureCase.id}: public fail-closed`);
+  assert.equal(first.candidatePolicySatisfied, fixtureCase.expectedCandidateReasonCodes.length === 0, `${fixtureCase.id}: candidate result`);
+  assert.deepEqual(first.candidateReasonCodes, fixtureCase.expectedCandidateReasonCodes, `${fixtureCase.id}: candidate reasons`);
+  assert.deepEqual(first.globalBlockerReasons, expectedGlobalBlockers, `${fixtureCase.id}: global blockers`);
+  assert.deepEqual(first.reasonCodes, expectedAllReasons, `${fixtureCase.id}: all reasons`);
+  assert.equal(validateEligibilityInput(input), !fixtureCase.expectedCandidateReasonCodes.includes("INPUT_SCHEMA_INVALID"), `${fixtureCase.id}: input schema`);
+  assert.equal(validateEligibilityDecision(first), true, `${fixtureCase.id}: decision schema`);
   assert.deepEqual(first.unknownBlockers, fixtureCase.expectedUnknownBlockers ?? [], `${fixtureCase.id}: unknown`);
   assert.deepEqual(first.staleSourceBlockers, fixtureCase.expectedStaleSourceBlockers ?? [], `${fixtureCase.id}: stale`);
   assert.equal(first.protectedDataExportAuthorized, false, fixtureCase.id);
@@ -265,15 +335,20 @@ for (const fixtureCase of fixtures.cases) {
   }
 }
 
-const clusterControl = applyOperations(fixtures.baseInput, fixtures.cases.find((entry) => entry.id === "synthetic-3200-cluster-control").operations);
-assert.equal(clusterControl.provenance.syntheticClusterCount, 3200);
-assert.equal(clusterControl.provenance.sourceKind, "synthetic_fixture");
-assert.equal(clusterControl.provenance.containsRealRows, false);
-assert.equal(evaluateReciprocalTradeResearchEligibility(clusterControl).eligible, true);
+const clusterMetadataCanary = applyOperations(fixtures.baseInput, fixtures.cases.find((entry) => entry.id === "synthetic-cluster-count-metadata-canary").operations);
+assert.equal(clusterMetadataCanary.provenance.syntheticClusterCountMetadata, 3200);
+assert.equal(clusterMetadataCanary.provenance.clusterCountEvidenceKind, "metadata_only_not_graph_evaluated");
+assert.equal(clusterMetadataCanary.provenance.sourceKind, "synthetic_fixture");
+assert.equal(clusterMetadataCanary.provenance.containsRealRows, false);
+assert.equal(evaluateReciprocalTradeResearchEligibility(clusterMetadataCanary).candidatePolicySatisfied, true);
+assert.equal(evaluateReciprocalTradeResearchEligibility(clusterMetadataCanary).eligible, false);
 
 const evaluatorSource = read(PATHS.evaluator);
+const allowedSchemaImportPattern = /^import (?:inputSchema|decisionSchema) from "\.\.\/\.\.\/docs\/commitments\/impact-identification\/study-candidates\/trade-bilateral-encouragement-planning-v1\/canonical-eligibility\/eligibility-(?:input|decision)\.schema\.v1\.json" with \{ type: "json" \};$/gm;
+assert.equal(evaluatorSource.match(allowedSchemaImportPattern)?.length, 2, "evaluator must import only the two frozen JSON schemas");
+const evaluatorWithoutSchemaImports = evaluatorSource.replace(allowedSchemaImportPattern, "");
+assert.doesNotMatch(evaluatorWithoutSchemaImports, /^\s*import\s/m, "unexpected evaluator import");
 const forbiddenEvaluatorPatterns = [
-  [/^\s*import\s/m, "imports"],
   [/\b(process|Deno|Bun)\b/, "environment/runtime globals"],
   [/\b(fetch|XMLHttpRequest|WebSocket|EventSource)\b/, "network clients"],
   [/(createClient\s*\(|from\s+["'](?:@supabase|pg)[^"']*["']|postgres\s*\()/i, "database clients"],
@@ -298,6 +373,12 @@ assert.equal(rawSha256(PATHS.frozenReadiness), "54e878c35a5bfff2324bdf1a101f4fb6
 assert.equal(canonical.boundBaseCommit, BOUND_BASE_COMMIT);
 assert.equal(canonical.policySourceManifestHash, POLICY_SOURCE_MANIFEST_HASH);
 assert.equal(canonical.canonicalEligibilitySourceStatus, "blocked_source_conflict");
+assert.equal(canonical.publicEligibilityPossible, false);
+assert.equal(canonical.candidatePolicySatisfiedSeparatedFromEligibility, true);
+assert.equal(canonical.gateEvidenceProvenanceStatus, "unresolved_not_bound");
+assert.equal(canonical.inputAndDecisionSchemaParityValidated, true);
+assert.equal(canonical.permanentWorkflowTriggerCoverageValidated, true);
+assert.equal(canonical.clusterCountCanaryKind, "metadata_only_not_graph_evaluated");
 assert.equal(canonical.realGraphDiagnosticsStatus, "blocked_not_run");
 assert.equal(canonical.executionDecision, "no_launch");
 assert.equal(canonical.releaseClassification, "research_validation_only_no_runtime_effect");
@@ -329,6 +410,19 @@ assert.deepEqual([...canonical.expectedChangedFiles].sort(), [
 const workflowSource = read(PATHS.workflow);
 assert.match(workflowSource, /src\/lib\/moral-trade\/noncompensable-blockers\.test\.ts/);
 assert.match(workflowSource, /src\/feed-unified-marketplace-wiring\.test\.ts/);
+const permanentTriggerDependencies = [
+  ...policy.sources.map((source) => source.path),
+  ...policy.testBindings.map((binding) => binding.path),
+  ...trackedFilesUnder("docs/commitments/impact-identification"),
+  ...trackedFilesUnder("scripts/commitments-trade-study"),
+  "scripts/validate-commitments-impact-identification.mjs"
+];
+for (const eventName of ["pull_request", "push"]) {
+  const triggerPaths = workflowPathsFor(workflowSource, eventName);
+  for (const dependency of new Set(permanentTriggerDependencies)) {
+    assert.ok(triggerPaths.some((pattern) => triggerCoversPath(pattern, dependency)), `${eventName} trigger misses ${dependency}`);
+  }
+}
 
 const aggregateText = [read(PATHS.readme), read(PATHS.sourceMap), read(PATHS.canonical)].join("\n");
 for (const required of [

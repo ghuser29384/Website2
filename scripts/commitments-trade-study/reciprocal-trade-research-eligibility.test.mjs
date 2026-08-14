@@ -3,11 +3,15 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  CANDIDATE_REASON_CODES,
   DECISION_SCHEMA_VERSION,
   EVALUATOR_VERSION,
+  GLOBAL_BLOCKER_CODES,
   POLICY_SOURCE_MANIFEST_HASH,
   REASON_CODES,
-  evaluateReciprocalTradeResearchEligibility
+  evaluateReciprocalTradeResearchEligibility,
+  validateEligibilityDecision,
+  validateEligibilityInput
 } from "./reciprocal-trade-research-eligibility.mjs";
 
 const FIXTURE_URL = new URL("../../docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/synthetic-eligibility-fixtures.v1.json", import.meta.url);
@@ -46,9 +50,17 @@ test("all documented synthetic and adversarial fixtures have exact stable decisi
     const before = JSON.stringify(input);
     const first = evaluateReciprocalTradeResearchEligibility(input);
     const second = evaluateReciprocalTradeResearchEligibility(input);
+    const expectedGlobalBlockers = fixtureCase.expectedGlobalBlockerReasons ?? fixtures.expectedGlobalBlockerReasons;
+    const expectedAllReasons = REASON_CODES.filter((code) => expectedGlobalBlockers.includes(code) || fixtureCase.expectedCandidateReasonCodes.includes(code));
 
     assert.equal(first.eligible, fixtureCase.expectedEligible, fixtureCase.id);
-    assert.deepEqual(first.reasonCodes, fixtureCase.expectedReasonCodes, fixtureCase.id);
+    assert.equal(first.eligible, false, `${fixtureCase.id}: public eligibility must remain fail-closed`);
+    assert.equal(first.candidatePolicySatisfied, fixtureCase.expectedCandidateReasonCodes.length === 0, `${fixtureCase.id}: candidate result`);
+    assert.deepEqual(first.candidateReasonCodes, fixtureCase.expectedCandidateReasonCodes, `${fixtureCase.id}: candidate reasons`);
+    assert.deepEqual(first.globalBlockerReasons, expectedGlobalBlockers, `${fixtureCase.id}: global blockers`);
+    assert.deepEqual(first.reasonCodes, expectedAllReasons, `${fixtureCase.id}: all reasons`);
+    assert.equal(validateEligibilityInput(input), !fixtureCase.expectedCandidateReasonCodes.includes("INPUT_SCHEMA_INVALID"), `${fixtureCase.id}: input schema`);
+    assert.equal(validateEligibilityDecision(first), true, `${fixtureCase.id}: decision schema`);
     assert.deepEqual(first.unknownBlockers, fixtureCase.expectedUnknownBlockers ?? [], `${fixtureCase.id}: unknown blockers`);
     assert.deepEqual(first.staleSourceBlockers, fixtureCase.expectedStaleSourceBlockers ?? [], `${fixtureCase.id}: stale blockers`);
     assert.deepEqual(first, second, `${fixtureCase.id}: deterministic output`);
@@ -71,8 +83,32 @@ test("all documented synthetic and adversarial fixtures have exact stable decisi
   }
 });
 
-test("adding a blocker never turns an ineligible fixture eligible", () => {
-  for (const fixtureCase of fixtures.cases.filter((entry) => !entry.expectedEligible)) {
+test("frozen JSON Schemas drive input acceptance and decision fail-closed relationships", () => {
+  const validInput = clone(fixtures.baseInput);
+  assert.equal(validateEligibilityInput(validInput), true);
+
+  const invalidInputs = [
+    Object.assign(clone(validInput), { unexpected: true }),
+    Object.assign(clone(validInput), { subjectMode: "unregistered" }),
+    Object.assign(clone(validInput), { policySourceManifestHash: "not-a-hash" }),
+    (() => { const value = clone(validInput); value.sourceOffer.causeCollation = "not-enumerated"; return value; })(),
+    (() => { const value = clone(validInput); value.sourceOffer.gates.moderation.extra = true; return value; })()
+  ];
+  for (const input of invalidInputs) assert.equal(validateEligibilityInput(input), false);
+
+  const validDecision = evaluateReciprocalTradeResearchEligibility(validInput);
+  assert.equal(validateEligibilityDecision(validDecision), true);
+  const invalidDecisions = [
+    Object.assign(clone(validDecision), { eligible: true }),
+    Object.assign(clone(validDecision), { globalBlockerReasons: [] }),
+    Object.assign(clone(validDecision), { reasonCodes: [] }),
+    Object.assign(clone(validDecision), { candidatePolicySatisfied: false })
+  ];
+  for (const decision of invalidDecisions) assert.equal(validateEligibilityDecision(decision), false);
+});
+
+test("adding a blocker never turns a fixture publicly eligible", () => {
+  for (const fixtureCase of fixtures.cases) {
     const input = inputFor(fixtureCase);
     if (input.pair && typeof input.pair === "object") input.pair.blockStatus = "blocked_both";
     const decision = evaluateReciprocalTradeResearchEligibility(input);
@@ -93,14 +129,15 @@ test("symmetric pair policy survives a source-target swap while roles remain dir
   reverse.pair.targetRestriction = clone(forward.pair.sourceRestriction);
 
   assert.deepEqual(
-    evaluateReciprocalTradeResearchEligibility(reverse).reasonCodes,
-    evaluateReciprocalTradeResearchEligibility(forward).reasonCodes
+    evaluateReciprocalTradeResearchEligibility(reverse).candidateReasonCodes,
+    evaluateReciprocalTradeResearchEligibility(forward).candidateReasonCodes
   );
-  assert.equal(evaluateReciprocalTradeResearchEligibility(reverse).eligible, true);
+  assert.equal(evaluateReciprocalTradeResearchEligibility(reverse).candidatePolicySatisfied, true);
+  assert.equal(evaluateReciprocalTradeResearchEligibility(reverse).eligible, false);
 
   reverse.pair.sourceConsent.allowedRole = "target_only";
   assert.deepEqual(
-    evaluateReciprocalTradeResearchEligibility(reverse).reasonCodes,
+    evaluateReciprocalTradeResearchEligibility(reverse).candidateReasonCodes,
     ["SOURCE_ROLE_NOT_AUTHORIZED"]
   );
 });
@@ -123,11 +160,14 @@ test("decisions are aggregate-safe and contain no input keys, causes, or causal 
   assert.deepEqual(Object.keys(decision).sort(), [
     "assignmentGenerated",
     "assignmentSeedGenerated",
+    "candidatePolicySatisfied",
+    "candidateReasonCodes",
     "canonicalEligibilitySourceStatus",
     "effectiveAt",
     "eligible",
     "evaluatorVersion",
     "executionDecision",
+    "globalBlockerReasons",
     "participantLevelCausalClaim",
     "policySourceManifestHash",
     "protectedDataExportAuthorized",
@@ -142,6 +182,8 @@ test("decisions are aggregate-safe and contain no input keys, causes, or causal 
 
 test("reason codes are frozen, unique, and all exercised by synthetic fixtures", () => {
   assert.equal(new Set(REASON_CODES).size, REASON_CODES.length);
-  const exercised = new Set(fixtures.cases.flatMap((fixtureCase) => fixtureCase.expectedReasonCodes));
-  assert.deepEqual([...exercised].sort(), [...REASON_CODES].sort());
+  const exercisedCandidate = new Set(fixtures.cases.flatMap((fixtureCase) => fixtureCase.expectedCandidateReasonCodes));
+  const exercisedGlobal = new Set(fixtures.cases.flatMap((fixtureCase) => fixtureCase.expectedGlobalBlockerReasons ?? fixtures.expectedGlobalBlockerReasons));
+  assert.deepEqual([...exercisedCandidate].sort(), [...CANDIDATE_REASON_CODES].sort());
+  assert.deepEqual([...exercisedGlobal].sort(), [...GLOBAL_BLOCKER_CODES].sort());
 });

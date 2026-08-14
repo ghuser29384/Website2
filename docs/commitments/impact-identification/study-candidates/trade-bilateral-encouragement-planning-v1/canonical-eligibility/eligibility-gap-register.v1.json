@@ -31,7 +31,7 @@
       "status": "open_unbound_structured_sources",
       "sourceIds": ["runtime-core-trade-actions", "runtime-feed-create-review", "structured-content-moderation", "structured-noncompensable-blockers", "structured-offer-validity", "structured-baseline-integrity", "structured-participant-eligibility"],
       "finding": "Structured fail-closed moderation, noncompensable match-candidate safety, validity, baseline, and participant-policy evaluators exist, but ordinary publication, Feed private delivery, and reciprocal matching do not bind current records from them.",
-      "candidateBehavior": "Only explicitly normalized cleared/current/time-valid evidence carrying the exact policy-manifest hash passes synthetic evaluation; empty moderation prose and free-text review are never clearance.",
+      "candidateBehavior": "Only explicitly normalized cleared/current/time-valid synthetic gate state carrying a governing policyManifestHash passes candidate evaluation. The manifest hash is not represented as evidence-source provenance; evidence source identity and projection/attestation hashes remain explicitly unresolved.",
       "requiredResolution": "Bind the applicable structured records and effective-time semantics to one enforced core matchability source.",
       "protectedEvaluationAuthorized": false
     },
@@ -83,6 +83,16 @@
       "finding": "The immutable aggregate evidence records zero eligible directed dyads and insufficient real graph readiness.",
       "candidateBehavior": "realGraphDiagnosticsStatus remains blocked_not_run and executionDecision remains no_launch.",
       "requiredResolution": "Only a future separately authorized aggregate re-inspection may determine whether the graph changed; this tranche reads no real rows.",
+      "protectedEvaluationAuthorized": false
+    },
+    {
+      "gapId": "CE-GAP-009",
+      "gateIds": ["moderation_harm_baseline", "legality_policy_participant", "consent_privacy_directed_roles", "study_provenance_integrity"],
+      "status": "open_gate_evidence_provenance_unbound",
+      "sourceIds": ["bound-study-instance", "structured-content-moderation", "structured-noncompensable-blockers", "structured-baseline-integrity", "structured-participant-eligibility", "structured-privacy-governance"],
+      "finding": "No gate-specific protected projection or attestation is bound to an immutable evidence-source identity. The policy manifest identifies the governing candidate package but is not originating evidence provenance.",
+      "candidateBehavior": "Each synthetic gate names its gateId and policyManifestHash while evidenceProvenanceStatus is unresolved_not_bound and evidenceSourceId, projectionHash, and attestationHash are null. GATE_EVIDENCE_PROVENANCE_UNRESOLVED remains a global eligibility blocker.",
+      "requiredResolution": "Define each gate projection, bind its authoritative source identity, and require immutable projection and attestation hashes before protected eligibility can become possible.",
       "protectedEvaluationAuthorized": false
     }
   ],

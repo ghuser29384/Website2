@@ -2,7 +2,7 @@
 
 - **Bound base:** `79ca382c3bdc325dfc5a28e2cbbafc1b95640386`
 - **Evaluator:** `reciprocal-trade-research-eligibility-v1.0.0`
-- **Policy-source manifest:** `sha256:cf24c66a5a33ec3716ee378a6d839f0284e3dbe01ecf46f2687b747b4cd58c3b`
+- **Policy-source manifest:** `sha256:ba46f72b3676229eb73e653d4b5b370a2145a2998522bf7acb0991d38da42243`
 - **Status:** `blocked_source_conflict`
 
 `policy-source-manifest.v1.json` is the machine-readable authority for every exact path, symbol, Git blob SHA-1, raw SHA-256, input field, fail-closed rule, gate level, time rule, and test interpretation below. This map explains the conclusions without replacing those bindings.
@@ -20,7 +20,7 @@ All source hashes were calculated over the exact Git blob and raw bytes at the b
 - **Active authorities:** `src/lib/core-trade-base.ts::listReciprocalMatches` and its sole bound application call site in `src/app/trades/[offerId]/manage/page.tsx`; `supabase/migrations/20260716080505_core_trade_loop.sql` workflow/block/thread/agreement state machines; current `supabase/schema.sql` offer mode/status constraints.
 - **Unresolved structured source:** `src/lib/moral-trade/offer-validity.ts::evaluateMoralTradeOfferValidity` defines expired, withdrawn, superseded, stale, and blocked states but is not wired into the core matcher.
 - **Additional active authority:** `supabase/migrations/20260722223000_harden_trade_invitations.sql::offer_is_invitable` excludes payment schedules, donation-offset attachments, and enabled active performance bonds.
-- **Inputs:** both pseudonymous offer and owner keys, mode, workflow status, offer status, structured operability, and normalized invitation compatibility.
+- **Inputs:** synthetic or protected-safe offer and owner keys, mode, workflow status, offer status, structured operability, and normalized invitation compatibility. Synthetic mode requires the `synthetic:` namespace exclusively.
 - **Candidate rule:** distinct offers and owners; equal pledge mode; both published/open/operative/invitation-compatible. Deleted, paused, closed, rejected, pending-review, changes-requested, expired, superseded, withdrawn, payment-scheduled, donation-offset-attached, active-performance-bond, unknown, stale, and contradictory states fail closed.
 - **Time:** every state must be frozen at the supplied `effectiveAt`.
 - **Tests:** lifecycle fixtures plus existing core trade and offer-validity contract tests.
@@ -40,8 +40,8 @@ All source hashes were calculated over the exact Git blob and raw bytes at the b
 - **Active but incomplete authority:** the routed review action in `src/app/core-trade-actions.ts` sends ordinary offers through `src/app/core-trade-actions-base.ts::reviewCoreOfferAction` and Feed-derived offers through `src/app/feed-create-review-actions.ts` plus the service-only private-delivery RPC. These paths enforce different lifecycle/delivery checks; neither proves structured research clearance.
 - **Unresolved structured sources:** `src/lib/moral-trade/user-safety-content-moderation.ts::evaluateMoralTradeUserSafetyContentModeration`, `src/lib/moral-trade/noncompensable-blockers.ts::evaluateMoralTradeNoncompensableBlocker`, and `src/lib/moral-trade/baseline-integrity.ts::evaluateMoralTradeBaselineIntegrity`, with their bound migrations, non-authorizing enforcement receipts, and tests. The noncompensable contract expressly covers `match_candidate_generation`, safety, legal/regulatory, privacy, third-party rights, anti-threat, and process integrity, but the core matcher does not import it.
 - **Descriptive only:** `src/lib/proposal-review.ts::reviewProposalText`; free-text threat/prohibited-pattern heuristics are not imported by the matcher and cannot infer safety or legality.
-- **Inputs:** structured moderation, harmful-offer, and baseline-integrity evidence for each offer, each with status, source status/hash, review time, and expiry.
-- **Candidate rule:** only `cleared` + `current` + time-valid evidence carrying the exact policy-manifest hash as its normalization receipt passes. Blocked, review-required, unknown, stale, contradictory, unbound, expired, future-reviewed, or hash-mismatched evidence fails closed. Empty prose never passes a gate.
+- **Inputs:** structured moderation, harmful-offer, and baseline-integrity state for each offer, each with a gate ID, status, source status, governing policy-manifest hash, explicit provenance status, evidence-source/projection/attestation identity, review time, and expiry.
+- **Candidate rule:** only the expected gate ID plus `cleared` + `current` + time-valid synthetic gate state carrying the governing `policyManifestHash` passes candidate evaluation. The manifest hash is not evidence-source provenance. Evidence source, projection, and attestation identity remain explicitly unresolved and globally block actual eligibility. Blocked, review-required, unknown, stale, contradictory, unbound, expired, future-reviewed, or hash-mismatched state fails closed. Empty prose never passes a gate.
 - **Tests:** synthetic clear/blocked/review/unknown/stale/contradictory cases and existing structured moderation/baseline contracts.
 
 ### 4. Legality and participant policy eligibility — participant level
@@ -84,9 +84,9 @@ All source hashes were calculated over the exact Git blob and raw bytes at the b
 
 - **Authorities:** bound `study-instance.json`; immutable real-readiness contract/evidence; accepted master protocol validator.
 - **Explicit exclusion:** `src/lib/recommendation-training.ts` and `recommendation_graph_edges` are descriptive learning surfaces and are prohibited as eligibility evidence.
-- **Inputs:** exact schema/evaluator/manifest/base versions, supplied effective time, synthetic/protected provenance, snapshot hash, cluster count, real-row flag, and prohibition flags.
-- **Candidate rule:** only synthetic fixtures can pass in this tranche. Any protected provenance, real-row flag, recommendation edge, causal-output request, assignment material, version/hash mismatch, missing time, or extra field fails closed.
-- **Tests:** exact hash/source validator; tamper/version/time/recommendation/leakage fixtures; deterministic/idempotent/monotonic/purity invariants; non-executing synthetic 3,200-cluster control.
+- **Inputs:** exact schema/evaluator/manifest/base versions, supplied effective time, synthetic/protected provenance, snapshot hash, metadata-only cluster-count declaration, real-row flag, study determinations, per-gate provenance status, and prohibition flags.
+- **Candidate rule:** `candidatePolicySatisfied` can be true only for schema-valid synthetic fixtures whose snapshot, offer, and owner keys all use `synthetic:`. Public `eligible` remains false while the canonical source is conflicted, gate evidence provenance is unresolved, or privacy, ethics, or consent/waiver determinations are not approved. Protected provenance, real-row flags, recommendation edges, causal-output requests, assignment material, version/hash mismatches, missing time, and extra fields fail closed.
+- **Tests:** complete input/decision schema validation and parity; exact hash/source and workflow-trigger coverage; tamper/version/time/recommendation/leakage/synthetic-namespace fixtures; deterministic/idempotent/monotonic/purity invariants; a metadata-only 3,200 cluster-count canary that does not evaluate a graph.
 
 ## Active conflicts and stop result
 

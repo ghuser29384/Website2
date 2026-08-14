@@ -5,34 +5,20 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/commitments-trade-canonical-eligibility-gates.yml"
-      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/**"
-      - "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs"
-      - "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs"
-      - "scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs"
-      - "scripts/commitments-trade-study/validate-real-graph-readiness-*.mjs"
-      - "src/lib/core-trade-base.ts"
-      - "src/app/core-trade-actions-base.ts"
-      - "src/lib/proposal-review.ts"
-      - "src/lib/recommendation-training.ts"
-      - "src/lib/moral-trade/**"
-      - "supabase/schema.sql"
-      - "supabase/migrations/**"
+      - "docs/commitments/impact-identification/**"
+      - "scripts/commitments-trade-study/**"
+      - "scripts/validate-commitments-impact-identification.mjs"
+      - "src/**"
+      - "supabase/**"
   push:
     branches: [main]
     paths:
       - ".github/workflows/commitments-trade-canonical-eligibility-gates.yml"
-      - "docs/commitments/impact-identification/study-candidates/trade-bilateral-encouragement-planning-v1/canonical-eligibility/**"
-      - "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.mjs"
-      - "scripts/commitments-trade-study/reciprocal-trade-research-eligibility.test.mjs"
-      - "scripts/commitments-trade-study/validate-reciprocal-trade-research-eligibility.mjs"
-      - "scripts/commitments-trade-study/validate-real-graph-readiness-*.mjs"
-      - "src/lib/core-trade-base.ts"
-      - "src/app/core-trade-actions-base.ts"
-      - "src/lib/proposal-review.ts"
-      - "src/lib/recommendation-training.ts"
-      - "src/lib/moral-trade/**"
-      - "supabase/schema.sql"
-      - "supabase/migrations/**"
+      - "docs/commitments/impact-identification/**"
+      - "scripts/commitments-trade-study/**"
+      - "scripts/validate-commitments-impact-identification.mjs"
+      - "src/**"
+      - "supabase/**"
 
 permissions:
   contents: read

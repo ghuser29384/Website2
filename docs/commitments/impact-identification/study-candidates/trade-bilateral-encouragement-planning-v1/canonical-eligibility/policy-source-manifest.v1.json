@@ -459,12 +459,12 @@
     {
       "gateId": "study_provenance_integrity",
       "level": "study",
-      "reasonCodes": ["INPUT_SCHEMA_INVALID", "INPUT_SCHEMA_VERSION_MISMATCH", "EVALUATOR_VERSION_MISMATCH", "POLICY_MANIFEST_HASH_MISMATCH", "BASE_COMMIT_MISMATCH", "EFFECTIVE_TIME_INVALID", "PROVENANCE_NOT_SYNTHETIC", "REAL_ROWS_PROHIBITED", "PROTECTED_DATA_NOT_AUTHORIZED", "STUDY_AUTHORIZATION_PROHIBITED", "RECOMMENDATION_EVIDENCE_PROHIBITED", "PARTICIPANT_CAUSAL_OUTPUT_PROHIBITED", "ASSIGNMENT_MATERIAL_PROHIBITED"],
+      "reasonCodes": ["CANONICAL_ELIGIBILITY_SOURCE_CONFLICT", "GATE_EVIDENCE_PROVENANCE_UNRESOLVED", "PRIVACY_REVIEW_NOT_APPROVED", "ETHICS_DETERMINATION_NOT_APPROVED", "CONSENT_OR_WAIVER_NOT_APPROVED", "INPUT_SCHEMA_INVALID", "INPUT_SCHEMA_VERSION_MISMATCH", "EVALUATOR_VERSION_MISMATCH", "POLICY_MANIFEST_HASH_MISMATCH", "BASE_COMMIT_MISMATCH", "EFFECTIVE_TIME_INVALID", "PROVENANCE_NOT_SYNTHETIC", "SYNTHETIC_IDENTIFIER_NAMESPACE_REQUIRED", "REAL_ROWS_PROHIBITED", "PROTECTED_DATA_NOT_AUTHORIZED", "STUDY_AUTHORIZATION_PROHIBITED", "RECOMMENDATION_EVIDENCE_PROHIBITED", "PARTICIPANT_CAUSAL_OUTPUT_PROHIBITED", "ASSIGNMENT_MATERIAL_PROHIBITED"],
       "sourceIds": ["bound-study-instance", "bound-real-graph-readiness", "recommendation-learning", "database-recommendation-learning"],
-      "inputFields": ["schemaVersion", "evaluatorVersion", "policySourceManifestHash", "effectiveAt", "subjectMode", "provenance", "studyAuthorization"],
-      "failClosed": "Only schema-valid synthetic inputs are permitted in this tranche. Protected inputs remain ineligible regardless of asserted authorization fields.",
+      "inputFields": ["schemaVersion", "evaluatorVersion", "policySourceManifestHash", "effectiveAt", "subjectMode", "provenance", "studyAuthorization", "sourceOffer.gates", "targetOffer.gates"],
+      "failClosed": "Public eligibility is false while the canonical source is conflicted, per-gate evidence provenance is unresolved, or privacy, ethics, and consent/waiver determinations are not approved. Candidate-rule satisfaction is reported separately. Synthetic mode additionally requires synthetic: snapshot, offer, and owner keys; protected inputs remain ineligible regardless of asserted authorization fields.",
       "effectiveTimeSemantics": "effectiveAt is mandatory RFC 3339 UTC input and is echoed exactly; the system clock is never read.",
-      "tests": ["manifest/hash validator; tampering/version/time/recommendation/leakage/extra-field fixtures; 3,200-cluster synthetic control"],
+      "tests": ["manifest/hash/schema-parity/trigger-coverage validator; tampering/version/time/recommendation/leakage/extra-field/synthetic-namespace fixtures; metadata-only cluster-count canary that does not evaluate a graph"],
       "testIds": ["real-readiness-source-contract"]
     }
   ],
