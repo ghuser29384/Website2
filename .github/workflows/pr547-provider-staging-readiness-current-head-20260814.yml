@@ -75,7 +75,8 @@ jobs:
             EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET \
             EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
             VERCEL_AUTOMATION_BYPASS_SECRET; do
-            if [[ -n "${!name:-}" && "${#!name}" -lt 32 ]]; then
+            value="${!name:-}"
+            if [[ -n "$value" && "${#value}" -lt 32 ]]; then
               invalid+=("$name:must_be_at_least_32_characters")
             fi
           done
