@@ -47,33 +47,57 @@ export async function loadMpgfPublicGoodsCompactsState(): Promise<MpgfPublicGood
 
 async function safeMutation(
   mutation: Promise<MpgfPublicGoodsCompactMutationResult>,
+  requiredFalseFlags: readonly string[],
 ) {
-  const result = await mutation;
-  return assertMpgfPublicGoodsCompactMutationSafety(
-    result,
+  const result = assertMpgfPublicGoodsCompactMutationSafety(
+    await mutation,
   ) as MpgfPublicGoodsCompactMutationResult;
+
+  if (requiredFalseFlags.some((flag) => result[flag] !== false)) {
+    throw new Error(
+      "The public-goods compact mutation omitted an explicit no-money safety boundary.",
+    );
+  }
+
+  return result;
 }
 
 export function joinMpgfPublicGoodsCompact(
   input: Parameters<typeof joinUncheckedCompact>[0],
 ) {
-  return safeMutation(joinUncheckedCompact(input));
+  return safeMutation(joinUncheckedCompact(input), [
+    "moneyMoved",
+    "paymentMandateCreated",
+    "automaticCollectionEnabled",
+  ]);
 }
 
 export function requestMpgfPublicGoodsCompactExit(
   input: Parameters<typeof requestUncheckedExit>[0],
 ) {
-  return safeMutation(requestUncheckedExit(input));
+  return safeMutation(requestUncheckedExit(input), [
+    "moneyMoved",
+    "paymentMandateChanged",
+    "automaticCollectionEnabled",
+  ]);
 }
 
 export function setMpgfPublicGoodsCompactDelegation(
   input: Parameters<typeof setUncheckedDelegation>[0],
 ) {
-  return safeMutation(setUncheckedDelegation(input));
+  return safeMutation(setUncheckedDelegation(input), [
+    "membershipTransferred",
+    "moneyTransferred",
+    "reputationTransferred",
+  ]);
 }
 
 export function clearMpgfPublicGoodsCompactDelegation(
   input: Parameters<typeof clearUncheckedDelegation>[0],
 ) {
-  return safeMutation(clearUncheckedDelegation(input));
+  return safeMutation(clearUncheckedDelegation(input), [
+    "membershipTransferred",
+    "moneyTransferred",
+    "reputationTransferred",
+  ]);
 }
