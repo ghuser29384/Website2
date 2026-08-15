@@ -473,14 +473,14 @@ jobs:
           cd app
           node ../controller/ops/pr689-uat702/preflight.mjs
 
-      - name: Apply only the reviewed candidate migrations and run rollback regressions on isolated QA
+      - name: Verify applied DAC schema, apply the reviewed ordering repair, and run rollback regressions
         shell: bash
         env:
           QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
         working-directory: app
         run: |
           set -euo pipefail
-          migrations=(
+          reviewed_migrations=(
             supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql
             supabase/migrations/20260806143000_mpgf_pool_publication_materialization.sql
             supabase/migrations/20260806173000_mpgf_dac_pledge_intent_ledger.sql
@@ -490,6 +490,7 @@ jobs:
             supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql
             supabase/migrations/20260815010000_mpgf_pool_lifecycle_event_ordering.sql
           )
+          repair_migration=supabase/migrations/20260815010000_mpgf_pool_lifecycle_event_ordering.sql
           tests=(
             supabase/tests/mpgf_pool_review_freeze.sql
             supabase/tests/mpgf_pool_publication_materialization.sql
@@ -497,19 +498,21 @@ jobs:
             supabase/tests/mpgf_dac_success_lapse.sql
             supabase/tests/mpgf_dac_public_terms_api.sql
           )
-          sha256sum "${migrations[@]}" "${tests[@]}" > ../evidence/reviewed-database-sources.sha256
-          for migration in "${migrations[@]}"; do
-            migration_log="$RUNNER_TEMP/$(basename "$migration").log"
-            test "$(sed -n '/^[[:space:]]*$/d; p; q' "$migration" | tr '[:upper:]' '[:lower:]')" = "begin;"
-            test "$(awk 'NF { line=$0 } END { print line }' "$migration" | tr '[:upper:]' '[:lower:]')" = "commit;"
-            if ! psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$migration" > "$migration_log" 2>&1; then
-              node ../controller/ops/pr689-uat702/sanitize-database-diagnostic.mjs \
-                "$migration_log" ../evidence/database-failure.txt migration "$migration"
-              cat ../evidence/database-failure.txt
-              exit 1
-            fi
-            rm -f "$migration_log"
-          done
+          sha256sum "${reviewed_migrations[@]}" "${tests[@]}" > ../evidence/reviewed-database-sources.sha256
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file ../controller/ops/pr689-uat702/verify-preexisting-dac-schema.sql \
+            > ../evidence/preexisting-dac-schema-verification.txt
+
+          migration_log="$RUNNER_TEMP/$(basename "$repair_migration").log"
+          test "$(sed -n '/^[[:space:]]*$/d; p; q' "$repair_migration" | tr '[:upper:]' '[:lower:]')" = "begin;"
+          test "$(awk 'NF { line=$0 } END { print line }' "$repair_migration" | tr '[:upper:]' '[:lower:]')" = "commit;"
+          if ! psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$repair_migration" > "$migration_log" 2>&1; then
+            node ../controller/ops/pr689-uat702/sanitize-database-diagnostic.mjs \
+              "$migration_log" ../evidence/database-failure.txt migration "$repair_migration"
+            cat ../evidence/database-failure.txt
+            exit 1
+          fi
+          rm -f "$migration_log"
           for regression in "${tests[@]}"; do
             regression_log="$RUNNER_TEMP/$(basename "$regression").log"
             if ! psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$regression" > "$regression_log" 2>&1; then
@@ -520,7 +523,7 @@ jobs:
             fi
             rm -f "$regression_log"
           done
-          printf 'reviewed_migrations=8\nrollback_regressions=5\nresult=passed\n' > ../evidence/database-contract-summary.txt
+          printf 'reviewed_migration_sources=8\npreexisting_candidate_migrations_verified=7\nordering_repair_migrations_applied=1\nrollback_regressions=5\nresult=passed\n' > ../evidence/database-contract-summary.txt
 
       - name: Execute complete protected-Preview UAT with unconditional cleanup
         id: uat
