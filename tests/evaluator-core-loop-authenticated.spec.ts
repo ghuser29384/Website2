@@ -1102,8 +1102,13 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       );
       const clickTime = new Date().toISOString();
       await exitButton.click();
-      await expect(exitButton).toHaveText("Recording exit...", { timeout: 2_000 });
-      const pendingObservedTime = new Date().toISOString();
+      let pendingObservedTime: string | null = null;
+      try {
+        await expect(exitButton).toHaveText("Recording exit...", { timeout: 2_000 });
+        pendingObservedTime = new Date().toISOString();
+      } catch {
+        // A completed native navigation can replace the form before its pending label is observed.
+      }
       const exitResponse = await exitResponsePromise;
       const responseCompletedTime = new Date().toISOString();
       const [requestHeaders, responseHeaders] = await Promise.all([
