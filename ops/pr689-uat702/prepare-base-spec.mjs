@@ -175,6 +175,21 @@ source = source.replace(
   outsiderStatusMarker + '\n  expect(outsiderResponse?.headers()["cache-control"] ?? "").toMatch(/private|no-store/i);',
 );
 
+const reviewerSignOutMarker = '  await reviewer.client.auth.signOut({ scope: "local" });';
+if (!source.includes(reviewerSignOutMarker)) throw new Error("Candidate reviewer sign-out marker drifted.");
+source = source.replace(
+  reviewerSignOutMarker,
+  [
+    "  const { data: reviewerFactors, error: reviewerFactorsError } = await reviewer.client.auth.mfa.listFactors();",
+    '  if (reviewerFactorsError) throw new Error("Synthetic reviewer MFA factor listing failed.");',
+    "  for (const factor of reviewerFactors.all) {",
+    "    const { error: unenrollError } = await reviewer.client.auth.mfa.unenroll({ factorId: factor.id });",
+    '    if (unenrollError) throw new Error("Synthetic reviewer MFA factor cleanup failed.");',
+    "  }",
+    reviewerSignOutMarker,
+  ].join("\n"),
+);
+
 await mkdir("uat702", { recursive: true });
 await writeFile(outputPath, source);
 console.log("base_spec_trace_and_observation_mode=on");
