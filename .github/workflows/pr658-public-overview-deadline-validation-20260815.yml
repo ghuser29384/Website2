@@ -1,0 +1,100 @@
+name: PR 658 public overview deadline validation
+
+on:
+  push:
+    branches:
+      - diag/pr658-pilot-route-browser-20260815
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr658-public-overview-deadline-validation
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: 81b9aa37925c21ad6c814f1dc5f98cfe6f34a117
+  CANDIDATE_BRANCH: fix/public-marketplace-overview-deadline-20260815
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out the exact repair candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 81b9aa37925c21ad6c814f1dc5f98cfe6f34a117
+          fetch-depth: 0
+
+      - name: Prove immutable candidate and clean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          remote_sha="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          test "$remote_sha" = "$EXPECTED_SHA"
+          test "$(git status --porcelain)" = ""
+          git diff --check HEAD^
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused and repository quality gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          node --import tsx --test src/lib/public-marketplace-overview.test.ts
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the complete release browser gate twice
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -uo pipefail
+          mkdir -p validation-evidence
+          set +e
+          npx playwright test \
+            --config=playwright.release.config.ts \
+            --repeat-each=2 \
+            --reporter=line,html \
+            2>&1 | tee validation-evidence/release-browser.log
+          browser_status=${PIPESTATUS[0]}
+          set -e
+          printf '{"expectedSha":"%s","repeatEach":2,"browserStatus":%s}\n' \
+            "$EXPECTED_SHA" "$browser_status" \
+            | tee validation-evidence/result.json
+          exit "$browser_status"
+
+      - name: Upload exact-head validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr658-public-overview-deadline-validation-${{ github.run_id }}
+          path: |
+            validation-evidence
+            playwright-report
+            test-results
+          if-no-files-found: error
+          retention-days: 30
