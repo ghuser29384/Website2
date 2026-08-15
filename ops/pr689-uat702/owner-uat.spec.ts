@@ -785,6 +785,8 @@ test("390 and 320 mobile reachability, focus, overflow ledger, and inherited dis
         const response = await goto(page, route.path);
         expect(response?.status()).toBe(200);
         await viewportAudit(page, route.path, viewport.name);
+        await page.evaluate(() => window.scrollTo(0, 0));
+        await expect(page.locator("h1")).toBeVisible();
         await screenshot(page, `08-${viewport.name}-${route.name}-viewport`, false);
       }
       await goto(page, routes[0].path);
