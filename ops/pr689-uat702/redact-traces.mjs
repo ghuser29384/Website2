@@ -16,11 +16,13 @@ const exactSecrets = [
 ].filter((value) => typeof value === "string" && value.length >= 8);
 
 const jwtPattern = /eyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{8,}/g;
+const base64SessionPattern = /base64-eyJ[A-Za-z0-9+/_=-]+/g;
 const cookiePattern = /(?:sb-[a-z0-9-]+-auth-token(?:\.[0-9]+)?|_vercel_jwt)(?:%3D|=|"\s*:\s*")[^\s";,}]+/gi;
 const cookieObjectPattern = /("name"\s*:\s*"(?:sb-[a-z0-9-]+-auth-token(?:\.[0-9]+)?|_vercel_jwt)"\s*,\s*"value"\s*:\s*")[^"]*(")/gi;
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const jwtTestPattern = /eyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{8,}/;
+const base64SessionTestPattern = /base64-eyJ[A-Za-z0-9+/_=-]+/;
 const cookieTestPattern = /(?:sb-[a-z0-9-]+-auth-token(?:\.[0-9]+)?|_vercel_jwt)(?:%3D|=|"\s*:\s*")[^\s";,}]+/i;
 const cookieObjectTestPattern = /"name"\s*:\s*"(?:sb-[a-z0-9-]+-auth-token(?:\.[0-9]+)?|_vercel_jwt)"\s*,\s*"value"\s*:\s*"(?!\[REDACTED\]")[^"]+"/i;
 
@@ -38,6 +40,7 @@ async function walk(root) {
 function redactText(text) {
   let result = text;
   for (const secret of exactSecrets) result = result.split(secret).join("[REDACTED]");
+  result = result.replace(base64SessionPattern, "[REDACTED_SESSION]");
   result = result.replace(jwtPattern, "[REDACTED_JWT]");
   result = result.replace(cookieObjectPattern, "$1[REDACTED]$2");
   result = result.replace(cookiePattern, "[REDACTED_COOKIE]");
@@ -49,6 +52,7 @@ function redactText(text) {
 function containsSecret(buffer) {
   const text = buffer.toString("utf8");
   return exactSecrets.some((secret) => text.includes(secret))
+    || base64SessionTestPattern.test(text)
     || jwtTestPattern.test(text)
     || cookieTestPattern.test(text)
     || cookieObjectTestPattern.test(text);

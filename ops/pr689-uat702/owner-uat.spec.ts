@@ -307,7 +307,9 @@ async function sessionCookies(session: Session) {
     name,
     value,
     url: BASE_URL,
-    httpOnly: true,
+    // This cookie is injected by the browser harness, so it must remain
+    // browser-manageable for the real client-side sign-out path to clear it.
+    httpOnly: false,
     secure: true,
     sameSite: "Lax" as const,
   }));
