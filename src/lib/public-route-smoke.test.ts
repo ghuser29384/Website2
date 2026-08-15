@@ -55,6 +55,7 @@ test("public navigation exposes professional marketplace routes", () => {
   const siteSource = readRepoFile("src/lib/site.ts");
   const topbarSource = readRepoFile("src/components/layout/site-topbar.tsx");
   const globalCss = readRepoFile("src/app/globals.css");
+  const canonicalVisualCss = readRepoFile("src/app/canonical-visual-system.css");
 
   assert.deepEqual(labels, [
     "Feed",
@@ -105,8 +106,11 @@ test("public navigation exposes professional marketplace routes", () => {
   assert.match(topbarSource, /filterSmartSiteSearchItems/);
   assert.match(topbarSource, /placeholder="Search offers, people, pools, or evidence"/);
   assert.match(topbarSource, /topbar-search-results/);
+  assert.match(topbarSource, /className="topbar-mobile-nav"/);
   assert.match(topbarSource, /showSearch = true/);
   assert.match(globalCss, /\.button-secondary\.button-nav\.is-active/);
+  assert.match(canonicalVisualCss, /\.mt-site-topbar \.topbar-mobile-nav \{[\s\S]*display: block;/);
+  assert.match(canonicalVisualCss, /\.mt-site-topbar \.topbar-links \{\s*display: none;/);
 });
 
 test("offer save surfaces avoid shopping-cart framing", () => {
