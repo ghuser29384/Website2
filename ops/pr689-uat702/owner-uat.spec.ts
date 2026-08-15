@@ -268,6 +268,8 @@ function proposalControl(panel: ReturnType<Page["locator"]>, label: string) {
 
 async function fillCompleteProposal(page: Page, title: string) {
   const panel = proposalPanel(page);
+  const deadline = new Date();
+  deadline.setUTCDate(deadline.getUTCDate() + 30);
   const values: Array<[string, string]> = [
     ["Proposal title", title],
     ["Cause area", "Synthetic isolated QA"],
@@ -288,6 +290,7 @@ async function fillCompleteProposal(page: Page, title: string) {
     ["Verification method", "Exact isolated-QA row and rendered receipt inspection."],
     ["Anti-threat baseline rule", "Only additive synthetic support before the frozen deadline counts."],
     ["Exit rule", "Signed pledge intents expire without payment when the synthetic campaign lapses."],
+    ["Assurance deadline", deadline.toISOString().slice(0, 10)],
     ["Maximum eligible participants", "100"],
     ["Maximum failure bonus per participant dollars", "25.00"],
   ];
