@@ -92,6 +92,60 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
 
+      - name: Bind successful QA Auth session to no-service fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from "node:fs";
+          import { createClient } from "@supabase/supabase-js";
+
+          const email = "direct-upgrade-rendered-creator@qa.invalid";
+          const password = process.env.DIRECT_UPGRADE_RENDERED_QA_PASSWORD;
+          const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+          const publishableKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+          const githubEnv = process.env.GITHUB_ENV;
+          if (!password || !supabaseUrl || !publishableKey || !githubEnv) {
+            throw new Error("Isolated-QA Auth binding inputs are incomplete.");
+          }
+          const client = createClient(supabaseUrl, publishableKey, {
+            auth: {
+              autoRefreshToken: false,
+              detectSessionInUrl: false,
+              persistSession: false,
+            },
+          });
+          const { data, error } = await client.auth.signInWithPassword({
+            email,
+            password,
+          });
+          if (error) {
+            throw new Error(`Isolated-QA sign-in failed: ${error.message}`);
+          }
+          const viewerId = data.user?.id?.trim().toLowerCase();
+          if (
+            !data.session ||
+            !viewerId ||
+            !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+              viewerId,
+            )
+          ) {
+            throw new Error(
+              "Successful isolated-QA sign-in did not return a valid user session UUID.",
+            );
+          }
+          console.log(`::add-mask::${viewerId}`);
+          appendFileSync(
+            githubEnv,
+            `DIRECT_SPENDING_UPGRADE_RENDERED_QA_VIEWER_ID=${viewerId}\n`,
+          );
+          const { error: signOutError } = await client.auth.signOut({ scope: "local" });
+          if (signOutError) {
+            throw new Error(`Isolated-QA binding session cleanup failed: ${signOutError.message}`);
+          }
+          console.log("Bound the authenticated QA user to this run's no-service fixtures.");
+          NODE
+
       - name: Build no-service deterministic Preview fixture
         run: npm run build 2>&1 | tee spending-upgrade-rendered-build.log
 

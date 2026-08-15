@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { qaFixtureIdentities } from "@/lib/direct-donation-upgrade";
+import { DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID } from "@/lib/direct-donation-upgrade-data";
 import {
   buildDirectSpendingUpgradeBaselineHashes,
   buildDirectSpendingUpgradeEvidenceHash,
@@ -14,6 +15,7 @@ import {
   rejectBlockedDirectSpendingUpgradeCategory,
   validateDirectSpendingUpgradeBaseline,
 } from "@/lib/direct-spending-upgrade";
+import { directSpendingUpgradeRenderedQaViewerFixture } from "@/lib/direct-spending-upgrade-data";
 
 const NOW = "2026-08-14T12:00:00.000Z";
 const CREATOR = "10000000-0000-4000-8000-000000000001";
@@ -251,4 +253,63 @@ test("the offer is complete only when both donations and spending evidence pass"
     }),
     false,
   );
+});
+
+test("rendered QA fixtures bind to the authenticated viewer and stay out of production", () => {
+  const keys = [
+    "DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE",
+    "DIRECT_DONATION_UPGRADE_QA_FIXTURES",
+    "DIRECT_SPENDING_UPGRADE_RENDERED_QA_VIEWER_ID",
+    "VERCEL",
+    "VERCEL_ENV",
+    "VERCEL_TARGET_ENV",
+  ] as const;
+  const original = new Map(keys.map((key) => [key, process.env[key]]));
+  const authenticatedViewerId = "a1000000-0000-4000-8000-000000000001";
+
+  try {
+    process.env.DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE = "true";
+    process.env.DIRECT_DONATION_UPGRADE_QA_FIXTURES = "true";
+    process.env.DIRECT_SPENDING_UPGRADE_RENDERED_QA_VIEWER_ID =
+      authenticatedViewerId.toUpperCase();
+    process.env.VERCEL = "1";
+    process.env.VERCEL_ENV = "preview";
+    delete process.env.VERCEL_TARGET_ENV;
+
+    assert.equal(
+      directSpendingUpgradeRenderedQaViewerFixture({
+        viewerId: DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
+        environment: "staging",
+      }),
+      null,
+    );
+
+    const fixture = directSpendingUpgradeRenderedQaViewerFixture({
+      viewerId: authenticatedViewerId,
+      environment: "staging",
+    });
+    assert.ok(fixture);
+    assert.equal(
+      fixture.creatorOffers[0]?.creator_profile_id,
+      authenticatedViewerId,
+    );
+    assert.equal(
+      fixture.viewerObligations[0]?.participant_profile_id,
+      authenticatedViewerId,
+    );
+
+    process.env.VERCEL_TARGET_ENV = "production";
+    assert.equal(
+      directSpendingUpgradeRenderedQaViewerFixture({
+        viewerId: authenticatedViewerId,
+        environment: "staging",
+      }),
+      null,
+    );
+  } finally {
+    for (const [key, value] of original) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 });

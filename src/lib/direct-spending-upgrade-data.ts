@@ -43,7 +43,28 @@ function renderedQaEnabled(input: {
   viewerId: string | null;
   environment: DirectDonationUpgradeEnvironment;
 }) {
-  return directDonationUpgradeRenderedQaNoServiceDataEnabled(input);
+  const boundViewerId = renderedQaBoundViewerId();
+  return (
+    boundViewerId !== null &&
+    input.viewerId?.trim().toLowerCase() === boundViewerId &&
+    directDonationUpgradeRenderedQaNoServiceDataEnabled({
+      viewerId: DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
+      environment: input.environment,
+    })
+  );
+}
+
+function renderedQaBoundViewerId() {
+  const viewerId = process.env
+    .DIRECT_SPENDING_UPGRADE_RENDERED_QA_VIEWER_ID
+    ?.trim()
+    .toLowerCase();
+  return viewerId &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      viewerId,
+    )
+    ? viewerId
+    : null;
 }
 
 function fixturePublicOffer(input: {
@@ -133,11 +154,12 @@ function fixtureOffers() {
 
 function fixturePrivateOffer(
   publicOffer: DirectSpendingUpgradePublicOfferRow,
+  creatorProfileId: string,
 ): DirectSpendingUpgradePrivateOfferRow {
   return {
     id: publicOffer.id,
     baseline_id: "e7100000-0000-4000-8000-000000000071",
-    creator_profile_id: DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
+    creator_profile_id: creatorProfileId,
     environment: "staging",
     status: publicOffer.status,
     privacy_mode: publicOffer.privacy_mode,
@@ -186,7 +208,7 @@ function fixtureObligations(
       ...common,
       id: "e7300000-0000-4000-8000-000000000073",
       candidate_id: null,
-      participant_profile_id: DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
+      participant_profile_id: offer.creator_profile_id,
       participant_role: "creator",
       branch: "matched",
       obligation_kind: "creator_converted_spending",
@@ -217,9 +239,12 @@ export async function loadDirectSpendingUpgradePageData(input: {
   viewerId: string | null;
   environment: DirectDonationUpgradeEnvironment;
 }) {
-  if (renderedQaEnabled(input)) {
+  const renderedQaViewerId = renderedQaEnabled(input)
+    ? renderedQaBoundViewerId()
+    : null;
+  if (renderedQaViewerId) {
     const publicOffers = fixtureOffers();
-    const creator = fixturePrivateOffer(publicOffers[1]);
+    const creator = fixturePrivateOffer(publicOffers[1], renderedQaViewerId);
     return {
       publicOffers,
       creatorOffers: [creator],
@@ -317,7 +342,10 @@ export async function loadDirectSpendingUpgradeDetail(input: {
   viewerId: string | null;
   environment: DirectDonationUpgradeEnvironment;
 }) {
-  if (renderedQaEnabled(input)) {
+  const renderedQaViewerId = renderedQaEnabled(input)
+    ? renderedQaBoundViewerId()
+    : null;
+  if (renderedQaViewerId) {
     const publicOffer = fixtureOffers().find(
       (offer) => offer.id === input.offerId,
     ) ?? null;
@@ -335,9 +363,10 @@ export async function loadDirectSpendingUpgradeDetail(input: {
       };
     }
     const isCreator =
-      input.offerId === DIRECT_SPENDING_UPGRADE_RENDERED_QA_CREATOR_OFFER_ID &&
-      input.viewerId === DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID;
-    const offer = isCreator ? fixturePrivateOffer(publicOffer) : null;
+      input.offerId === DIRECT_SPENDING_UPGRADE_RENDERED_QA_CREATOR_OFFER_ID;
+    const offer = isCreator
+      ? fixturePrivateOffer(publicOffer, renderedQaViewerId)
+      : null;
     const baseline = offer
       ? ({
           id: offer.baseline_id,
@@ -572,9 +601,12 @@ export function directSpendingUpgradeRenderedQaViewerFixture(input: {
   viewerId: string;
   environment: DirectDonationUpgradeEnvironment;
 }) {
-  if (!renderedQaEnabled(input)) return null;
+  const renderedQaViewerId = renderedQaEnabled(input)
+    ? renderedQaBoundViewerId()
+    : null;
+  if (!renderedQaViewerId) return null;
   const publicOffers = fixtureOffers();
-  const creator = fixturePrivateOffer(publicOffers[1]);
+  const creator = fixturePrivateOffer(publicOffers[1], renderedQaViewerId);
   return {
     publicOffers,
     creatorOffers: [creator],

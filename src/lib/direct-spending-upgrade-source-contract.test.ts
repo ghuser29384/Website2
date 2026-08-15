@@ -30,6 +30,9 @@ const envExample = source(".env.example");
 const qaWorkflow = source(
   ".github/workflows/direct-spending-upgrade-qa.yml",
 );
+const renderedQaWorkflow = source(
+  ".github/workflows/direct-spending-upgrade-rendered-qa.yml",
+);
 const createInterface = source(
   "src/components/create/create-interface-frame.tsx",
 );
@@ -54,6 +57,36 @@ test("Spending Upgrade is a separately disabled Donation Upgrade subtype", () =>
   assert.match(
     lifecycleRoute,
     /spendingConfig\.requestedEnabled[\s\S]*?spendingUpgrade: spendingResult[\s\S]*?: response/,
+  );
+});
+
+test("rendered no-service fixtures bind only to the successful QA Auth session", () => {
+  assert.match(
+    renderedQaWorkflow,
+    /direct-upgrade-rendered-creator@qa\.invalid[\s\S]*auth\.signInWithPassword/,
+  );
+  assert.match(
+    renderedQaWorkflow,
+    /data\.user\?\.id\?\.trim\(\)\.toLowerCase\(\)[\s\S]*DIRECT_SPENDING_UPGRADE_RENDERED_QA_VIEWER_ID=\$\{viewerId\}/,
+  );
+  assert.match(
+    renderedQaWorkflow,
+    /auth\.signOut\(\{ scope: "local" \}\)/,
+  );
+  assert.match(renderedQaWorkflow, /test -z "\$\{SUPABASE_SERVICE_ROLE_KEY:-\}"/);
+  assert.match(renderedQaWorkflow, /test -z "\$\{QA_SUPABASE_DB_URL:-\}"/);
+  assert.doesNotMatch(
+    renderedQaWorkflow,
+    /secrets\.(?:SUPABASE_SERVICE_ROLE_KEY|QA_SUPABASE_DB_URL)/,
+  );
+  assert.match(
+    dataSource,
+    /input\.viewerId\?\.trim\(\)\.toLowerCase\(\) === boundViewerId/,
+  );
+  assert.match(dataSource, /creator_profile_id: creatorProfileId/);
+  assert.match(
+    dataSource,
+    /participant_profile_id: offer\.creator_profile_id/,
   );
 });
 
