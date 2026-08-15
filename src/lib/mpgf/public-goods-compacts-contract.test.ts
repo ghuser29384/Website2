@@ -19,6 +19,7 @@ const pageFrame = read("src/components/mpgf/mpgf-page-frame.tsx");
 const pagePrimitives = read("src/components/ui/page-primitives.tsx");
 const hub = read("src/app/mpgf/page.tsx");
 const databaseTypes = read("src/lib/supabase/database.types.ts");
+const canonicalVisualStyles = read("src/app/canonical-visual-system.css");
 
 const tables = [
   "compacts", "compact_memberships", "dormant_authorization_snapshots",
@@ -169,4 +170,9 @@ test("successful Compact mutations refresh durable private state without cached 
   assert.match(component, /fetch\("\/api\/mpgf\/compacts", \{[\s\S]{0,120}cache: "no-store"/);
   assert.match(component, /setState\(await stateRequest\(\)\)/);
   assert.doesNotMatch(component, /router\.refresh\(\)/);
+});
+
+test("the Compact shell contains every mobile section tab", () => {
+  assert.match(canonicalVisualStyles, /\.mpgf-shell \.hub-tabs \{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);[^}]*overflow-x: visible;/);
+  assert.match(canonicalVisualStyles, /\.mpgf-shell \.hub-tabs a \{[^}]*min-width: 0;[^}]*white-space: normal;/);
 });

@@ -1441,6 +1441,17 @@ th,
     font-size: clamp(40px, 13vw, 56px);
   }
 
+  .mpgf-shell .hub-tabs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-x: visible;
+  }
+
+  .mpgf-shell .hub-tabs a {
+    min-width: 0;
+    text-align: center;
+    white-space: normal;
+  }
+
   .hero > .hero-grid .hero-copy {
     min-height: 340px;
     padding: 32px 22px;
