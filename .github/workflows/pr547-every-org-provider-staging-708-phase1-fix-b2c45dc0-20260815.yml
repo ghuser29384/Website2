@@ -1,0 +1,695 @@
+name: PR 547 Issue 708 corrected Every.org Phase 1 bootstrap b2c45dc0
+
+on:
+  push:
+    branches:
+      - ops/pr547-every-org-provider-staging-708-phase1-fix-b2c45dc0-20260815
+    paths:
+      - .github/pr547-every-org-provider-staging-708-phase1-fix-b2c45dc0-20260815.manifest.json
+      - .github/pr547-every-org-phase1-fix-b2c45dc0.authorize
+      - .github/pr547-every-org-phase2-fix-b2c45dc0.authorize
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr547-every-org-provider-staging-708-phase1-fix-b2c45dc0-20260815
+  cancel-in-progress: false
+
+env:
+  EXPECTED_REPOSITORY: ghuser29384/Website2
+  EXPECTED_CANDIDATE_SHA: b2c45dc0110d8841f7cbd7576347936044310c1c
+  EXPECTED_CANDIDATE_TREE: b2cc81a07c361819099e112b89e9906604787462
+  EXPECTED_BASE_SHA: 106f9781cf13f75af31594ed79deef89318a87b7
+  EXPECTED_BASE_BRANCH: integration/direct-donation-upgrade-current-main-20260807
+  EXPECTED_CANDIDATE_BRANCH: fix/every-org-partner-webhook-auth-708-20260815
+  EXPECTED_CONTROLLER_BRANCH: ops/pr547-every-org-provider-staging-708-phase1-fix-b2c45dc0-20260815
+  OBSERVED_MAIN_SHA_AT_BOOTSTRAP: 99247b7a183ed66866429c50f6481fb07fb83461
+  PROVIDER_AUTHORIZATION_CONTRACT_STATUS: unconfirmed
+  PHASE2_DEPLOYMENT_ENABLED: "false"
+  CONTROLLER_WORKFLOW: .github/workflows/pr547-every-org-provider-staging-708-phase1-fix-b2c45dc0-20260815.yml
+  CONTROLLER_CONTRACT_TEST: .github/scripts/pr547-every-org-phase1-controller-contract.test.mjs
+  CONTROLLER_MANIFEST: .github/pr547-every-org-provider-staging-708-phase1-fix-b2c45dc0-20260815.manifest.json
+  PHASE1_TRIGGER: .github/pr547-every-org-phase1-fix-b2c45dc0.authorize
+  PHASE2_TRIGGER: .github/pr547-every-org-phase2-fix-b2c45dc0.authorize
+  VERCEL_ORG_ID: team_ySu6sF3Uho1E1GnJtCQPVEuJ
+  VERCEL_PROJECT_ID: prj_Em3j7Uj7RatX2R1ZYhla3XSHRde7
+  VERCEL_CLI_VERSION: 50.38.1
+  STAGING_ALIAS: moraltrade-pr547-every-org-phase1-b2c45dc0.vercel.app
+  QA_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+
+jobs:
+  control:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      requested_phase: ${{ steps.control.outputs.requested_phase }}
+      phase1_ready: ${{ steps.control.outputs.phase1_ready }}
+      phase2_ready: ${{ steps.control.outputs.phase2_ready }}
+      manifest_ready: ${{ steps.control.outputs.manifest_ready }}
+      public_api_key_detected: ${{ steps.control.outputs.public_api_key_detected }}
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+      EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN: ${{ secrets.EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN }}
+      EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN: ${{ secrets.EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN }}
+      EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET: ${{ secrets.EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET }}
+      EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      BEFORE_SHA: ${{ github.event.before }}
+    steps:
+      - name: Check out the exact controller revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Mask every present credential before inspection
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in \
+            VERCEL_TOKEN \
+            QA_SUPABASE_PUBLISHABLE_KEY \
+            QA_SUPABASE_SERVICE_ROLE_KEY \
+            QA_SUPABASE_DB_URL \
+            EVERY_ORG_STAGING_PUBLIC_API_KEY \
+            EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN \
+            EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN \
+            EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET \
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
+            VERCEL_AUTOMATION_BYPASS_SECRET; do
+            value="${!name:-}"
+            if [[ -n "$value" ]]; then
+              echo "::add-mask::$value"
+            fi
+          done
+
+      - name: Verify corrected Phase 1 source contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test "$CONTROLLER_CONTRACT_TEST"
+
+      - name: Verify immutable source, authorization, and secret presence
+        id: control
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF_NAME" = "$EXPECTED_CONTROLLER_BRANCH"
+          test "$GITHUB_ACTOR" = 'ghuser29384'
+          [[ "$EXPECTED_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_CANDIDATE_TREE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXPECTED_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$OBSERVED_MAIN_SHA_AT_BOOTSTRAP" =~ ^[0-9a-f]{40}$ ]]
+          test "$PROVIDER_AUTHORIZATION_CONTRACT_STATUS" = unconfirmed
+          test "$PHASE2_DEPLOYMENT_ENABLED" = false
+          test "$STAGING_ALIAS" != 'moraltrade.org'
+          test "$STAGING_ALIAS" != 'www.moraltrade.org'
+
+          git fetch --no-tags origin "$EXPECTED_BASE_BRANCH"
+          current_base="$(git rev-parse FETCH_HEAD)"
+          test "$current_base" = "$EXPECTED_BASE_SHA"
+
+          git fetch --no-tags origin "$EXPECTED_CANDIDATE_BRANCH"
+          current_candidate="$(git rev-parse FETCH_HEAD)"
+          test "$current_candidate" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git show -s --format=%T "$current_candidate")" = "$EXPECTED_CANDIDATE_TREE"
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_CANDIDATE_SHA"
+
+          git fetch --no-tags origin main
+          current_main="$(git rev-parse FETCH_HEAD)"
+
+          if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            git diff-tree --no-commit-id --name-only -r HEAD > evidence/changed-paths.txt
+          else
+            git diff --name-only "$BEFORE_SHA" HEAD > evidence/changed-paths.txt
+          fi
+          sort -u -o evidence/changed-paths.txt evidence/changed-paths.txt
+
+          manifest_ready=false
+          if [[ -f "$CONTROLLER_MANIFEST" ]]; then
+            workflow_blob="$(git hash-object "$CONTROLLER_WORKFLOW")"
+            contract_test_blob="$(git hash-object "$CONTROLLER_CONTRACT_TEST")"
+            jq -e \
+              --arg candidate "$EXPECTED_CANDIDATE_SHA" \
+              --arg tree "$EXPECTED_CANDIDATE_TREE" \
+              --arg base "$EXPECTED_BASE_SHA" \
+              --arg base_branch "$EXPECTED_BASE_BRANCH" \
+              --arg candidate_branch "$EXPECTED_CANDIDATE_BRANCH" \
+              --arg branch "$EXPECTED_CONTROLLER_BRANCH" \
+              --arg workflow "$CONTROLLER_WORKFLOW" \
+              --arg workflow_blob "$workflow_blob" \
+              --arg contract_test "$CONTROLLER_CONTRACT_TEST" \
+              --arg contract_test_blob "$contract_test_blob" \
+              --arg provider_contract "$PROVIDER_AUTHORIZATION_CONTRACT_STATUS" \
+              --arg phase1_trigger "$PHASE1_TRIGGER" \
+              --arg phase2_trigger "$PHASE2_TRIGGER" '
+                .schemaVersion == "moral-trade-pr547-every-org-staging-controller-v3"
+                and .candidateSha == $candidate
+                and .candidateTree == $tree
+                and .baseSha == $base
+                and .baseBranch == $base_branch
+                and .candidateBranch == $candidate_branch
+                and .controllerBranch == $branch
+                and .workflowPath == $workflow
+                and .workflowBlobSha == $workflow_blob
+                and .sourceContractTestPath == $contract_test
+                and .sourceContractTestBlobSha == $contract_test_blob
+                and .providerAuthorizationContractStatus == $provider_contract
+                and .phase1AuthorizationPath == $phase1_trigger
+                and .phase2AuthorizationPath == $phase2_trigger
+                and .phase1RequiresProviderIssuedWebhookCredentials == false
+                and .phase2RequiresProviderIssuedWebhookCredentials == true
+                and .phase2DeploymentEnabled == false
+                and (.bootstrapCommit | test("^[0-9a-f]{40}$"))
+              ' "$CONTROLLER_MANIFEST" >/dev/null
+            bootstrap_commit="$(jq -r '.bootstrapCommit' "$CONTROLLER_MANIFEST")"
+            git merge-base --is-ancestor "$bootstrap_commit" HEAD
+            test "$(git rev-parse "$bootstrap_commit:$CONTROLLER_WORKFLOW")" = "$workflow_blob"
+            test "$(git rev-parse "$bootstrap_commit:$CONTROLLER_CONTRACT_TEST")" = "$contract_test_blob"
+            manifest_ready=true
+          fi
+
+          requested_phase=preflight
+          phase1_changed=false
+          phase2_changed=false
+          grep -Fxq "$PHASE1_TRIGGER" evidence/changed-paths.txt && phase1_changed=true || true
+          grep -Fxq "$PHASE2_TRIGGER" evidence/changed-paths.txt && phase2_changed=true || true
+          if [[ "$phase1_changed" == true && "$phase2_changed" == true ]]; then
+            echo 'Both phase authorization files changed in one commit; refusing.' >&2
+            exit 1
+          fi
+
+          expected_phase1="$(cat <<EOF_PHASE1
+          schema=moral-trade-pr547-every-org-staging-authorization-v1
+          phase=phase1_bootstrap
+          candidate=$EXPECTED_CANDIDATE_SHA
+          base=$EXPECTED_BASE_SHA
+          controller_branch=$EXPECTED_CONTROLLER_BRANCH
+          authorization=AUTHORIZE_PR547_EVERY_ORG_PHASE1_FIX_B2C45DC0
+          EOF_PHASE1
+          )"
+          expected_phase2="$(cat <<EOF_PHASE2
+          schema=moral-trade-pr547-every-org-staging-authorization-v1
+          phase=phase2_full_provider
+          candidate=$EXPECTED_CANDIDATE_SHA
+          base=$EXPECTED_BASE_SHA
+          controller_branch=$EXPECTED_CONTROLLER_BRANCH
+          authorization=AUTHORIZE_PR547_EVERY_ORG_PHASE2_FIX_B2C45DC0
+          EOF_PHASE2
+          )"
+
+          if [[ "$phase1_changed" == true ]]; then
+            test "$manifest_ready" = true
+            test "$(wc -l < evidence/changed-paths.txt | tr -d ' ')" = 1
+            test -f "$PHASE1_TRIGGER"
+            test "$(cat "$PHASE1_TRIGGER")" = "$expected_phase1"
+            requested_phase=phase1_bootstrap
+          elif [[ "$phase2_changed" == true ]]; then
+            test "$manifest_ready" = true
+            test "$(wc -l < evidence/changed-paths.txt | tr -d ' ')" = 1
+            test -f "$PHASE1_TRIGGER"
+            test "$(cat "$PHASE1_TRIGGER")" = "$expected_phase1"
+            test -f "$PHASE2_TRIGGER"
+            test "$(cat "$PHASE2_TRIGGER")" = "$expected_phase2"
+            requested_phase=phase2_full_provider
+          fi
+
+          # PHASE1_PREREQUISITES_BEGIN
+          phase1_names=(
+            VERCEL_TOKEN
+            QA_SUPABASE_PUBLISHABLE_KEY
+            QA_SUPABASE_SERVICE_ROLE_KEY
+            EVERY_ORG_STAGING_PUBLIC_API_KEY
+            EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET
+            VERCEL_AUTOMATION_BYPASS_SECRET
+          )
+          # PHASE1_PREREQUISITES_END
+
+          # PHASE2_PREREQUISITES_BEGIN
+          phase2_names=(
+            "${phase1_names[@]}"
+            QA_SUPABASE_DB_URL
+            EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN
+            EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN
+          )
+          # PHASE2_PREREQUISITES_END
+
+          missing_phase1=()
+          missing_phase2=()
+          present_phase1=()
+          present_phase2=()
+          invalid=()
+
+          for name in "${phase1_names[@]}"; do
+            if [[ -n "${!name:-}" ]]; then
+              present_phase1+=("$name")
+            else
+              missing_phase1+=("$name")
+            fi
+          done
+          for name in "${phase2_names[@]}"; do
+            if [[ -n "${!name:-}" ]]; then
+              present_phase2+=("$name")
+            else
+              missing_phase2+=("$name")
+            fi
+          done
+
+          for name in \
+            EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET \
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
+            VERCEL_AUTOMATION_BYPASS_SECRET; do
+            value="${!name:-}"
+            if [[ -n "$value" && "${#value}" -lt 32 ]]; then
+              invalid+=("$name:must_be_at_least_32_characters")
+            fi
+          done
+
+          phase2_credential_names=(
+            EVERY_ORG_STAGING_DONATE_LINK_WEBHOOK_TOKEN
+            EVERY_ORG_STAGING_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN
+            EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET
+            VERCEL_AUTOMATION_BYPASS_SECRET
+          )
+          for ((left_index = 0; left_index < ${#phase2_credential_names[@]}; left_index++)); do
+            left_name="${phase2_credential_names[$left_index]}"
+            left_value="${!left_name:-}"
+            [[ -n "$left_value" ]] || continue
+            for ((right_index = left_index + 1; right_index < ${#phase2_credential_names[@]}; right_index++)); do
+              right_name="${phase2_credential_names[$right_index]}"
+              right_value="${!right_name:-}"
+              if [[ -n "$right_value" && "$left_value" == "$right_value" ]]; then
+                invalid+=("$left_name,$right_name:must_be_distinct")
+              fi
+            done
+          done
+
+          public_api_key_detected=false
+          [[ -n "${EVERY_ORG_STAGING_PUBLIC_API_KEY:-}" ]] && public_api_key_detected=true
+
+          phase1_ready=false
+          phase2_ready=false
+          if [[ "$manifest_ready" == true && ${#missing_phase1[@]} -eq 0 && ${#invalid[@]} -eq 0 ]]; then
+            phase1_ready=true
+          fi
+          if [[ "$manifest_ready" == true \
+             && ${#missing_phase2[@]} -eq 0 \
+             && ${#invalid[@]} -eq 0 \
+             && "$PROVIDER_AUTHORIZATION_CONTRACT_STATUS" == confirmed \
+             && "$PHASE2_DEPLOYMENT_ENABLED" == true ]]; then
+            phase2_ready=true
+          fi
+
+          csv() {
+            local IFS=,
+            printf '%s' "$*"
+          }
+          missing_phase1_csv="$(csv "${missing_phase1[@]:-}")"
+          missing_phase2_csv="$(csv "${missing_phase2[@]:-}")"
+          present_phase1_csv="$(csv "${present_phase1[@]:-}")"
+          present_phase2_csv="$(csv "${present_phase2[@]:-}")"
+          invalid_csv="$(csv "${invalid[@]:-}")"
+          export requested_phase manifest_ready phase1_ready phase2_ready public_api_key_detected
+          export missing_phase1_csv missing_phase2_csv present_phase1_csv present_phase2_csv invalid_csv
+          export current_base current_candidate current_main
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          def items(name: str) -> list[str]:
+              return [item for item in os.environ.get(name, "").split(",") if item]
+
+          payload = {
+              "schemaVersion": "moral-trade-pr547-every-org-staging-preflight-v3",
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "controllerBranch": os.environ["EXPECTED_CONTROLLER_BRANCH"],
+              "controllerCommit": os.environ["GITHUB_SHA"],
+              "candidateSha": os.environ["current_candidate"],
+              "baseSha": os.environ["current_base"],
+              "currentMainSha": os.environ["current_main"],
+              "observedMainShaAtBootstrap": os.environ["OBSERVED_MAIN_SHA_AT_BOOTSTRAP"],
+              "providerAuthorizationContractStatus": os.environ[
+                  "PROVIDER_AUTHORIZATION_CONTRACT_STATUS"
+              ],
+              "phase2DeploymentEnabled": os.environ["PHASE2_DEPLOYMENT_ENABLED"] == "true",
+              "requestedPhase": os.environ["requested_phase"],
+              "manifestReady": os.environ["manifest_ready"] == "true",
+              "phase1Ready": os.environ["phase1_ready"] == "true",
+              "phase2Ready": os.environ["phase2_ready"] == "true",
+              "publicApiKeyDetected": os.environ["public_api_key_detected"] == "true",
+              "presentPhase1": items("present_phase1_csv"),
+              "missingPhase1": items("missing_phase1_csv"),
+              "presentPhase2": items("present_phase2_csv"),
+              "missingPhase2": items("missing_phase2_csv"),
+              "invalidPrerequisites": items("invalid_csv"),
+              "phase1RequiresProviderIssuedWebhookCredentials": False,
+              "phase2RequiresProviderIssuedWebhookCredentials": True,
+              "deploymentAttempted": False,
+              "providerTransactionAttempted": False,
+          }
+          Path("evidence/preflight.json").write_text(
+              json.dumps(payload, indent=2, sort_keys=True) + "\n"
+          )
+          print(json.dumps(payload, sort_keys=True))
+          PY
+
+          {
+            echo "requested_phase=$requested_phase"
+            echo "manifest_ready=$manifest_ready"
+            echo "phase1_ready=$phase1_ready"
+            echo "phase2_ready=$phase2_ready"
+            echo "public_api_key_detected=$public_api_key_detected"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo '## PR #547 corrected Every.org staging controller preflight'
+            echo
+            echo "- Provider authorization contract: $PROVIDER_AUTHORIZATION_CONTRACT_STATUS"
+            echo "- Exact candidate: \`$current_candidate\`"
+            echo "- Exact base: \`$current_base\`"
+            echo "- Current main (observed only): \`$current_main\`"
+            echo "- Requested phase: \`$requested_phase\`"
+            echo "- Manifest ready: \`$manifest_ready\`"
+            echo "- Phase 1 ready: \`$phase1_ready\`"
+            echo "- Phase 2 ready: \`$phase2_ready\`"
+            echo "- Staging public API key detected: \`$public_api_key_detected\`"
+            echo '- Phase 1 provider-issued webhook credentials required: `false`'
+            echo '- Phase 2 provider-issued webhook credentials required: `true`'
+            if ((${#present_phase1[@]})); then
+              echo '- Present Phase 1 prerequisites (names only):'
+              printf '  - `%s`\n' "${present_phase1[@]}"
+            fi
+            if ((${#missing_phase1[@]})); then
+              echo '- Missing Phase 1 prerequisites:'
+              printf '  - `%s`\n' "${missing_phase1[@]}"
+            fi
+            if ((${#missing_phase2[@]})); then
+              echo '- Missing Phase 2 prerequisites:'
+              printf '  - `%s`\n' "${missing_phase2[@]}"
+            fi
+            if ((${#invalid[@]})); then
+              echo '- Invalid prerequisites:'
+              printf '  - `%s`\n' "${invalid[@]}"
+            fi
+            echo
+            echo 'No deployment, alias, checkout, donation, webhook mutation, migration, or production change occurred in preflight.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "$requested_phase" == phase1_bootstrap && "$phase1_ready" != true ]]; then
+            echo 'Phase 1 was explicitly requested but its prerequisites are incomplete; refusing before deployment.' >&2
+            exit 1
+          fi
+          if [[ "$requested_phase" == phase2_full_provider && "$PROVIDER_AUTHORIZATION_CONTRACT_STATUS" != confirmed ]]; then
+            echo 'Phase 2 is blocked because the exact Every.org header contract is unconfirmed.' >&2
+            exit 1
+          fi
+          if [[ "$requested_phase" == phase2_full_provider && "$PHASE2_DEPLOYMENT_ENABLED" != true ]]; then
+            echo 'Phase 2 deployment is disabled in this controller.' >&2
+            exit 1
+          fi
+          if [[ "$requested_phase" == phase2_full_provider && "$phase2_ready" != true ]]; then
+            echo 'Phase 2 was explicitly requested but its prerequisites are incomplete; refusing before deployment.' >&2
+            exit 1
+          fi
+
+      - name: Upload sanitized preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr547-every-org-corrected-controller-preflight-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+  deploy_preview:
+    needs: control
+    if: >-
+      needs.control.outputs.requested_phase == 'phase1_bootstrap' &&
+      needs.control.outputs.phase1_ready == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    # PHASE1_DEPLOY_ENV_BEGIN
+    env:
+      REQUESTED_PHASE: ${{ needs.control.outputs.requested_phase }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      QA_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      QA_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      EVERY_ORG_STAGING_PUBLIC_API_KEY: ${{ secrets.EVERY_ORG_STAGING_PUBLIC_API_KEY }}
+      EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET: ${{ secrets.EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET }}
+      EVERY_ORG_STAGING_PARTNER_METADATA_SECRET: ${{ secrets.EVERY_ORG_STAGING_PARTNER_METADATA_SECRET }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+    # PHASE1_DEPLOY_ENV_END
+    steps:
+      - name: Check out the immutable Donation Upgrade candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.EXPECTED_CANDIDATE_SHA }}
+          fetch-depth: 0
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Revalidate target and mask Phase 1 credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          test "$(git show -s --format=%T HEAD)" = "$EXPECTED_CANDIDATE_TREE"
+          test "$REQUESTED_PHASE" = phase1_bootstrap
+          for name in \
+            VERCEL_TOKEN \
+            QA_SUPABASE_PUBLISHABLE_KEY \
+            QA_SUPABASE_SERVICE_ROLE_KEY \
+            EVERY_ORG_STAGING_PUBLIC_API_KEY \
+            EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET \
+            EVERY_ORG_STAGING_PARTNER_METADATA_SECRET \
+            VERCEL_AUTOMATION_BYPASS_SECRET; do
+            value="${!name:-}"
+            if [[ -n "$value" ]]; then echo "::add-mask::$value"; fi
+          done
+          git fetch --no-tags origin "$EXPECTED_BASE_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_BASE_SHA"
+          git fetch --no-tags origin "$EXPECTED_CANDIDATE_BRANCH"
+          test "$(git rev-parse FETCH_HEAD)" = "$EXPECTED_CANDIDATE_SHA"
+          git diff --check "$EXPECTED_BASE_SHA...$EXPECTED_CANDIDATE_SHA"
+
+      - name: Run exact source and application gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+        run: |
+          set -euo pipefail
+          npm ci
+          node --import tsx --test \
+            src/lib/direct-donation-upgrade.test.ts \
+            src/lib/direct-donation-upgrade-split.test.ts \
+            src/lib/direct-donation-upgrade-source-contract.test.ts \
+            src/lib/direct-donation-upgrade-environment-contract.test.ts \
+            src/lib/every-org-partner-webhook-auth.test.ts \
+            src/lib/trade-donation.test.ts \
+            src/lib/mpgf.test.ts
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+
+      - name: Deploy the exact candidate to a non-production Preview
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .vercel evidence
+          printf '{"orgId":"%s","projectId":"%s"}\n' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+
+          test "$REQUESTED_PHASE" = phase1_bootstrap
+          test "$PROVIDER_AUTHORIZATION_CONTRACT_STATUS" = unconfirmed
+          purpose=every-org-webhook-auth-bootstrap-corrected
+          site_url="https://$STAGING_ALIAS"
+          cron_secret="$(printf '%s' "$VERCEL_TOKEN:$EXPECTED_CANDIDATE_SHA:pr547-provider-staging-phase1-fix" | sha256sum | awk '{print $1}')"
+          echo "::add-mask::$cron_secret"
+
+          # PHASE1_VERCEL_FLAGS_BEGIN
+          flags=(
+            --yes
+            --token "$VERCEL_TOKEN"
+            --meta "moralTradeCandidateSha=$EXPECTED_CANDIDATE_SHA"
+            --meta "moralTradePurpose=$purpose"
+            --env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL"
+            --env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY"
+            --env "SUPABASE_SERVICE_ROLE_KEY=$QA_SUPABASE_SERVICE_ROLE_KEY"
+            --env "NEXT_PUBLIC_SITE_URL=$site_url"
+            --env "SITE_URL=$site_url"
+            --env "EVERY_ORG_ENVIRONMENT=staging"
+            --env "DIRECT_DONATION_UPGRADES_ENABLED=true"
+            --env "DIRECT_DONATION_UPGRADE_MODE=staging"
+            --env "DIRECT_DONATION_UPGRADE_QA_FIXTURES=false"
+            --env "EVERY_ORG_PUBLIC_API_KEY=$EVERY_ORG_STAGING_PUBLIC_API_KEY"
+            --env "EVERY_ORG_WEBHOOK_PATH_SECRET=$EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET"
+            --env "EVERY_ORG_PARTNER_METADATA_SECRET=$EVERY_ORG_STAGING_PARTNER_METADATA_SECRET"
+            --env "CONDITIONAL_PAYMENTS_MODE=disabled"
+            --env "TRADE_DONATION_POOL_ENABLED=false"
+            --env "TRADE_DONATION_POOL_MODE=disabled"
+            --env "CRON_SECRET=$cron_secret"
+            --build-env "NEXT_PUBLIC_SUPABASE_URL=$QA_SUPABASE_URL"
+            --build-env "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$QA_SUPABASE_PUBLISHABLE_KEY"
+            --build-env "NEXT_PUBLIC_SITE_URL=$site_url"
+            --build-env "SITE_URL=$site_url"
+            --build-env "EVERY_ORG_ENVIRONMENT=staging"
+            --build-env "DIRECT_DONATION_UPGRADES_ENABLED=true"
+            --build-env "DIRECT_DONATION_UPGRADE_MODE=staging"
+            --build-env "DIRECT_DONATION_UPGRADE_QA_FIXTURES=false"
+            --build-env "EVERY_ORG_PUBLIC_API_KEY=$EVERY_ORG_STAGING_PUBLIC_API_KEY"
+            --build-env "CONDITIONAL_PAYMENTS_MODE=disabled"
+            --build-env "TRADE_DONATION_POOL_ENABLED=false"
+            --build-env "TRADE_DONATION_POOL_MODE=disabled"
+          )
+          # PHASE1_VERCEL_FLAGS_END
+
+          deployment_url="$(npx --yes "vercel@$VERCEL_CLI_VERSION" deploy "${flags[@]}" | tr -d '\r' | tail -n 1)"
+          [[ "$deployment_url" =~ ^https://[A-Za-z0-9.-]+$ ]]
+          deployment_host="${deployment_url#https://}"
+          printf '%s\n' "$deployment_url" > evidence/deployment-url.txt
+
+          npx --yes "vercel@$VERCEL_CLI_VERSION" inspect "$deployment_url" \
+            --wait --timeout 20m --token "$VERCEL_TOKEN" > evidence/inspect.txt
+
+          detail_path=evidence/deployment-detail.json
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v13/deployments/${deployment_host}?teamId=${VERCEL_ORG_ID}" \
+            > "$detail_path"
+          deployment_id="$(jq -r '.id // .uid // empty' "$detail_path")"
+          test -n "$deployment_id"
+          jq -e \
+            --arg deployment_id "$deployment_id" \
+            --arg deployment_host "$deployment_host" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg expected_sha "$EXPECTED_CANDIDATE_SHA" '
+              ((.id // .uid) == $deployment_id)
+              and (.url == $deployment_host)
+              and ((.projectId // .project.id // "") == $project_id)
+              and ((.readyState // .state // "") == "READY")
+              and ((.target // "preview") != "production")
+              and (.meta.moralTradeCandidateSha == $expected_sha)
+            ' "$detail_path" >/dev/null
+
+          npx --yes "vercel@$VERCEL_CLI_VERSION" alias set "$deployment_url" "$STAGING_ALIAS" \
+            --token "$VERCEL_TOKEN" > evidence/alias-command.txt
+          alias_path=evidence/alias-detail.json
+          curl -fsS \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            "https://api.vercel.com/v4/aliases/${STAGING_ALIAS}?projectId=${VERCEL_PROJECT_ID}&teamId=${VERCEL_ORG_ID}" \
+            > "$alias_path"
+          jq -e \
+            --arg alias "$STAGING_ALIAS" \
+            --arg project_id "$VERCEL_PROJECT_ID" \
+            --arg deployment_id "$deployment_id" '
+              .alias == $alias
+              and .projectId == $project_id
+              and ((.deploymentId // .deployment.id // .deployment.uid // "") == $deployment_id)
+            ' "$alias_path" >/dev/null
+
+          jq -n \
+            --arg phase "$REQUESTED_PHASE" \
+            --arg candidate "$EXPECTED_CANDIDATE_SHA" \
+            --arg provider_contract "$PROVIDER_AUTHORIZATION_CONTRACT_STATUS" \
+            --arg deployment_id "$deployment_id" \
+            --arg deployment_url "$deployment_url" \
+            --arg alias_url "https://$STAGING_ALIAS" \
+            '{
+              phase: $phase,
+              candidateSha: $candidate,
+              providerAuthorizationContractStatus: $provider_contract,
+              inboundWebhookAuthorizationReady: false,
+              providerIssuedWebhookCredentialsInjected: false,
+              deploymentId: $deployment_id,
+              deploymentUrl: $deployment_url,
+              aliasUrl: $alias_url,
+              target: "preview",
+              productionAliasChanged: false,
+              checkoutAttempted: false,
+              donationAttempted: false
+            }' > evidence/deployment.json
+          cat > evidence/webhook-url-template.txt <<'EOF_WEBHOOK'
+          https://moraltrade-pr547-every-org-phase1-b2c45dc0.vercel.app/api/connectors/every-org/<EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET>?x-vercel-protection-bypass=<VERCEL_AUTOMATION_BYPASS_SECRET>
+          EOF_WEBHOOK
+          {
+            echo "deployment_id=$deployment_id"
+            echo "deployment_url=$deployment_url"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Smoke the Preview and the real Every.org nonprofit search
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://$STAGING_ALIAS"
+          bypass="x-vercel-protection-bypass=$VERCEL_AUTOMATION_BYPASS_SECRET"
+          fetch() {
+            local name="$1" path="$2"
+            local join='?'
+            [[ "$path" == *'?'* ]] && join='&'
+            local body="evidence/$name.body"
+            local code
+            code="$(curl --silent --show-error --location \
+              --output "$body" \
+              --write-out '%{http_code}' \
+              "$base$path$join$bypass")"
+            printf '%s %s\n' "$name" "$code" | tee -a evidence/route-status.txt
+          }
+
+          fetch donation-upgrades /donation-upgrades
+          fetch create '/create?structure=conditional-donation'
+          fetch connectors /connectors
+          fetch nonprofit-search '/api/donation-upgrades/nonprofits/search?q=GiveWell'
+          test "$(awk '$1=="donation-upgrades" {print $2}' evidence/route-status.txt)" = 200
+          test "$(awk '$1=="create" {print $2}' evidence/route-status.txt)" = 200
+          test "$(awk '$1=="connectors" {print $2}' evidence/route-status.txt)" = 200
+          test "$(awk '$1=="nonprofit-search" {print $2}' evidence/route-status.txt)" = 200
+          grep -Fq '"results"' evidence/nonprofit-search.body
+          ! grep -Eqi 'Internal Server Error|Application error|Missing SUPABASE_SERVICE_ROLE_KEY' evidence/*.body
+
+          webhook_code="$(curl --silent --show-error --location \
+            --request POST \
+            --header 'content-type: application/json' \
+            --data '{}' \
+            --output evidence/webhook-empty.body \
+            --write-out '%{http_code}' \
+            "$base/api/connectors/every-org/$EVERY_ORG_STAGING_WEBHOOK_PATH_SECRET?$bypass")"
+          test "$webhook_code" = 401
+          jq -e '. == {"ok": false}' evidence/webhook-empty.body >/dev/null
+          printf 'webhook-empty %s\n' "$webhook_code" >> evidence/route-status.txt
+
+          sha256sum evidence/*.body > evidence/response-body-sha256.txt
+          rm -f evidence/*.body evidence/deployment-detail.json evidence/alias-detail.json evidence/inspect.txt evidence/alias-command.txt
+
+      - name: Record the bounded next action
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' 'Stop after bootstrap. Register the exact protected callback URL in Every.org staging only after the Phase 1 evidence is reviewed. Store the separate Webhook Token and Auth Token as Phase 2-only credentials. Do not implement Phase 2 until Every.org confirms the literal request-header contract.' > evidence/next-action.txt
+
+      - name: Upload sanitized deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr547-every-org-provider-staging-${{ env.REQUESTED_PHASE }}-${{ github.run_id }}
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 30
