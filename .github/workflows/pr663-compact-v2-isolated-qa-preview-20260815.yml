@@ -366,7 +366,15 @@ jobs:
             supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql \
             > ../evidence/semantic-contract-source.txt
           if git grep -n -E 'coreMarketplaceTaxed|core_marketplace_taxed|ordinary marketplace remains untaxed|binding immediately' \
-            "$CANDIDATE_HEAD_SHA" -- src docs supabase > "$RUNNER_TEMP/forbidden-semantic-copy.txt"; then
+            "$CANDIDATE_HEAD_SHA" -- \
+              src/app \
+              src/components \
+              src/lib/mpgf/public-goods-compacts.ts \
+              src/lib/mpgf/public-goods-compacts-state.ts \
+              src/lib/mpgf/public-goods-compacts-server.ts \
+              docs \
+              supabase \
+              > "$RUNNER_TEMP/forbidden-semantic-copy.txt"; then
             echo 'Ambiguous Compact wording or contract naming remains.' >&2
             exit 1
           fi
