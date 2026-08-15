@@ -171,6 +171,8 @@ insert into auth.users (
   '6a000000-0000-4000-8000-000000000003','00000000-0000-0000-0000-000000000000',
   'authenticated','authenticated','compact-nonmember@example.test','',now(),'{}','{}','','','','','',false,false,now(),now()
 );
+delete from public.profiles
+where id = '6a000000-0000-4000-8000-000000000002';
 insert into public.profiles (
   id, email, display_name, bio, affiliation, username, account_kind,
   accepts_group_invitations, public_invitation_mentions_enabled
@@ -178,7 +180,16 @@ insert into public.profiles (
   '6a000000-0000-4000-8000-000000000001','compact-a@example.test','Compact A','','','compact-a','individual',true,true
 ), (
   '6a000000-0000-4000-8000-000000000003','compact-nonmember@example.test','Compact Nonmember','','','compact-nonmember','individual',true,true
-);
+)
+on conflict (id) do update
+set email = excluded.email,
+    display_name = excluded.display_name,
+    bio = excluded.bio,
+    affiliation = excluded.affiliation,
+    username = excluded.username,
+    account_kind = excluded.account_kind,
+    accepts_group_invitations = excluded.accepts_group_invitations,
+    public_invitation_mentions_enabled = excluded.public_invitation_mentions_enabled;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub','6a000000-0000-4000-8000-000000000002',true);
