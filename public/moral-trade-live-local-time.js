@@ -4,6 +4,9 @@
   if (window.__MT_LOCAL_DATE_TIME__) return;
   window.__MT_LOCAL_DATE_TIME__ = true;
 
+  const DOCUMENT_HEADING = "Current opportunities and next actions";
+  const REVIEW_BOUNDARY =
+    "Recommendations to review — not agreements, commitments, payments, or verified outcomes.";
   const dateFormatter = new Intl.DateTimeFormat("en-US", {
     weekday: "long",
     month: "long",
@@ -72,12 +75,59 @@
     });
   }
 
+  function refreshTruthBoundary() {
+    const documentHeading = document.getElementById("mt-live-document-heading");
+    if (documentHeading && documentHeading.textContent !== DOCUMENT_HEADING) {
+      documentHeading.textContent = DOCUMENT_HEADING;
+    }
+
+    const boundarySelector = '[data-mt-now-review-boundary="true"]';
+    const readyRoot = document.querySelector(
+      '[data-mt-live-now="adaptive"][data-mt-live-now-state="ready"]',
+    );
+    const existingBoundary = document.querySelector(boundarySelector);
+
+    if (!readyRoot) {
+      if (existingBoundary) existingBoundary.remove();
+      return;
+    }
+
+    if (existingBoundary && !readyRoot.contains(existingBoundary)) {
+      existingBoundary.remove();
+    }
+
+    const toolbar = readyRoot.querySelector(".mt-feed-toolbar");
+    if (!toolbar) return;
+
+    let boundary = readyRoot.querySelector(boundarySelector);
+    if (!boundary) {
+      boundary = document.createElement("div");
+      boundary.setAttribute("data-mt-now-review-boundary", "true");
+      boundary.setAttribute("role", "note");
+      boundary.setAttribute("aria-label", "Recommendation status");
+      Object.assign(boundary.style, {
+        margin: "8px 0 0",
+        padding: "9px 12px",
+        border: "1px solid rgba(17, 17, 17, 0.16)",
+        borderLeft: "3px solid #1648ff",
+        background: "#fffef9",
+        color: "#3d3a35",
+        fontSize: "11px",
+        lineHeight: "1.45",
+      });
+      toolbar.insertAdjacentElement("afterend", boundary);
+    }
+
+    if (boundary.textContent !== REVIEW_BOUNDARY) boundary.textContent = REVIEW_BOUNDARY;
+  }
+
   function scheduleRefresh() {
     if (refreshScheduled) return;
     refreshScheduled = true;
     window.requestAnimationFrame(() => {
       refreshScheduled = false;
       refreshLocalDateAndGreeting();
+      refreshTruthBoundary();
     });
   }
 
