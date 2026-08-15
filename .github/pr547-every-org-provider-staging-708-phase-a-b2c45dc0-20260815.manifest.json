@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "moral-trade-pr547-every-org-staging-controller-v2",
+  "candidateSha": "b2c45dc0110d8841f7cbd7576347936044310c1c",
+  "candidateTree": "b2cc81a07c361819099e112b89e9906604787462",
+  "baseSha": "106f9781cf13f75af31594ed79deef89318a87b7",
+  "baseBranch": "integration/direct-donation-upgrade-current-main-20260807",
+  "candidateBranch": "fix/every-org-partner-webhook-auth-708-20260815",
+  "controllerBranch": "ops/pr547-every-org-provider-staging-708-phase-a-b2c45dc0-20260815",
+  "workflowPath": ".github/workflows/pr547-every-org-provider-staging-708-phase-a-b2c45dc0-20260815.yml",
+  "workflowBlobSha": "280cbe5715acaafcd69d4e02432a488156689a71",
+  "bootstrapCommit": "b25d7f280c413f6242877304fafecd301a5b8d21",
+  "providerAuthorizationContractStatus": "unconfirmed",
+  "phase1AuthorizationPath": ".github/pr547-every-org-phase1-b2c45dc0.authorize",
+  "phase2AuthorizationPath": ".github/pr547-every-org-phase2-b2c45dc0.authorize",
+  "phase2DeploymentEnabled": false
+}
