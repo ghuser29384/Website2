@@ -88,6 +88,10 @@ jobs:
           current_main_ahead="$(git -C app rev-list --count "$CANDIDATE_BASE_SHA..$current_main_sha")"
 
           gh api repos/ghuser29384/Website2/pulls/663 > "$RUNNER_TEMP/pr663.json"
+          if jq -e '.mergeable == null' "$RUNNER_TEMP/pr663.json" > /dev/null; then
+            sleep 2
+            gh api repos/ghuser29384/Website2/pulls/663 > "$RUNNER_TEMP/pr663.json"
+          fi
           gh api repos/ghuser29384/Website2/issues/688 > "$RUNNER_TEMP/issue688.json"
           gh api repos/ghuser29384/Website2/issues/696 > "$RUNNER_TEMP/issue696.json"
           gh api repos/ghuser29384/Website2/issues/712 > "$RUNNER_TEMP/issue712.json"
