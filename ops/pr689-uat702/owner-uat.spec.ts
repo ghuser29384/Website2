@@ -8,6 +8,7 @@ import { expect, test, type Browser, type BrowserContext, type Page } from "@pla
 const BASE_URL = process.env.MPGF_DAC_PRODUCT_BASE_URL ?? "";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const QA_PASSWORD = process.env.MPGF_DAC_PRODUCT_QA_PASSWORD ?? "";
 const BYPASS = process.env.VERCEL_AUTOMATION_BYPASS_SECRET ?? "";
 const PROD_REF = process.env.FORBIDDEN_PROD_REF ?? "";
@@ -43,12 +44,125 @@ const viewportDiagnostics: Array<Record<string, unknown>> = [];
 let traceSequence = 20;
 
 function requireEnvironment() {
-  if (!BASE_URL || !SUPABASE_URL || !SUPABASE_KEY || !QA_PASSWORD || !BYPASS || !PROD_REF) {
+  if (!BASE_URL || !SUPABASE_URL || !SUPABASE_KEY || !SUPABASE_SERVICE_ROLE_KEY || !QA_PASSWORD || !BYPASS || !PROD_REF) {
     throw new Error("Owner UAT environment is incomplete.");
   }
   if (!SUPABASE_URL.includes("hvmxfjjbdcgjjudmthdz") || SUPABASE_URL.includes(PROD_REF)) {
     throw new Error("Owner UAT refused a non-QA Supabase URL.");
   }
+}
+
+async function diagnosePublishFailure(input: {
+  proposalId: string;
+  roundId: string;
+  slug: string;
+  publisherId: string;
+  reason: string;
+}) {
+  const service = createSupabaseClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { autoRefreshToken: false, detectSessionInUrl: false, persistSession: false },
+  });
+  const proposalResult = await service
+    .from("mpgf_pool_proposals")
+    .select([
+      "status",
+      "terms_version",
+      "approved_terms_version",
+      "operative_terms_sha256",
+      "terms_locked_at",
+      "reviewed_by",
+      "reviewed_at",
+      "first_accepted_pledge_at",
+      "title",
+      "summary",
+      "cause_area",
+      "public_goods_destination_type",
+      "public_goods_destination_ref",
+      "public_goods_threshold_amount_cents",
+      "public_goods_threshold_supporters",
+      "public_goods_deadline_at",
+      "public_goods_verification_method",
+      "public_goods_baseline_rule",
+      "public_goods_exit_rule",
+      "public_goods_payout_method",
+      "threshold_visibility",
+      "public_goods_failure_bonus_enabled",
+      "public_goods_failure_bonus_schedule_status",
+      "public_goods_success_premium_provisional",
+    ].join(","))
+    .eq("id", input.proposalId)
+    .single();
+  const roundResult = await service
+    .from("mpgf_public_goods_rounds")
+    .select("id,starts_at,ends_at,match_pool_id,status,supporter_gate")
+    .eq("id", input.roundId)
+    .single();
+  const campaignResult = await service
+    .from("mpgf_public_goods_campaigns")
+    .select("id,round_id,slug,published_terms_version,published_terms_sha256,review_status")
+    .eq("pool_proposal_id", input.proposalId)
+    .maybeSingle();
+
+  const proposal = proposalResult.data;
+  const round = roundResult.data;
+  const diagnostic: Record<string, unknown> = {
+    qaProjectVerified: SUPABASE_URL.includes("hvmxfjjbdcgjjudmthdz") && !SUPABASE_URL.includes(PROD_REF),
+    proposalQueryError: proposalResult.error ? safeMessage(proposalResult.error.message) : null,
+    roundQueryError: roundResult.error ? safeMessage(roundResult.error.message) : null,
+    campaignQueryError: campaignResult.error ? safeMessage(campaignResult.error.message) : null,
+    campaignExistedAfterAction: Boolean(campaignResult.data),
+    proposalPreconditions: proposal ? {
+      status: proposal.status,
+      termsVersionsMatch: proposal.approved_terms_version === proposal.terms_version,
+      frozenHashPresent: Boolean(proposal.operative_terms_sha256),
+      termsLocked: Boolean(proposal.terms_locked_at),
+      reviewed: Boolean(proposal.reviewed_by && proposal.reviewed_at),
+      noAcceptedPledge: !proposal.first_accepted_pledge_at,
+      titlePresent: Boolean(String(proposal.title ?? "").trim()),
+      summaryPresent: Boolean(String(proposal.summary ?? "").trim()),
+      causeAreaPresent: Boolean(String(proposal.cause_area ?? "").trim()),
+      destinationTypePresent: Boolean(proposal.public_goods_destination_type),
+      destinationReferencePresent: Boolean(String(proposal.public_goods_destination_ref ?? "").trim()),
+      thresholdAmountPositive: Number(proposal.public_goods_threshold_amount_cents) > 0,
+      thresholdSupportersPositive: Number(proposal.public_goods_threshold_supporters) > 0,
+      deadlinePresent: Boolean(proposal.public_goods_deadline_at),
+      verificationPresent: Boolean(String(proposal.public_goods_verification_method ?? "").trim()),
+      baselinePresent: Boolean(String(proposal.public_goods_baseline_rule ?? "").trim()),
+      exitPresent: Boolean(String(proposal.public_goods_exit_rule ?? "").trim()),
+      payoutMethod: proposal.public_goods_payout_method,
+      thresholdVisibility: proposal.threshold_visibility,
+      failureBonusEnabled: proposal.public_goods_failure_bonus_enabled,
+      failureBonusScheduleStatus: proposal.public_goods_failure_bonus_schedule_status,
+      successPremiumProvisional: proposal.public_goods_success_premium_provisional,
+    } : null,
+    roundPreconditions: round ? {
+      status: round.status,
+      startsBeforeDeadline: proposal?.public_goods_deadline_at
+        ? Date.parse(round.starts_at) < Date.parse(proposal.public_goods_deadline_at)
+        : false,
+      endsAfterDeadline: proposal?.public_goods_deadline_at
+        ? Date.parse(round.ends_at) >= Date.parse(proposal.public_goods_deadline_at)
+        : false,
+      matchPoolPresent: Boolean(round.match_pool_id),
+      supporterGate: round.supporter_gate,
+    } : null,
+  };
+
+  if (!campaignResult.data && proposal && round) {
+    const directResult = await service.rpc("mpgf_publish_pool_proposal", {
+      p_proposal_id: input.proposalId,
+      p_round_id: input.roundId,
+      p_slug: input.slug,
+      p_publisher_id: input.publisherId,
+      p_reason: input.reason,
+    });
+    diagnostic.directRpcSucceeded = !directResult.error;
+    diagnostic.directRpcError = directResult.error ? safeMessage(directResult.error.message) : null;
+  }
+
+  await mkdir(OUTPUT_DIR, { recursive: true });
+  await writeFile(`${OUTPUT_DIR}/publish-failure-diagnostic.json`, `${JSON.stringify(diagnostic, null, 2)}\n`);
+  return diagnostic;
 }
 
 function safePath(raw: string) {
@@ -519,7 +633,25 @@ test("creator, negative authorization, intended reviewer freeze/reject, and froz
     await expect(freezeRow.locator("dl > div").filter({ hasText: "Terms SHA-256" }).locator("dd")).toHaveText(hashAfter);
     await expect(freezeRow.getByRole("button", { name: "Approve and freeze" })).toHaveCount(0);
     await freezeRow.getByLabel("Public slug").fill(PUBLISHED_SLUG);
+    const proposalId = freezeHref.split("/").at(-1) ?? "";
+    const publicationRoundId = await freezeRow.getByLabel("Publication round").inputValue();
+    const publicationReason = await freezeRow.getByLabel("Publication rationale").inputValue();
+    const publishResponsePromise = page.waitForResponse((candidate) => {
+      const url = new URL(candidate.url());
+      return candidate.request().method() === "POST" && url.pathname === "/mpgf/admin/dac-lifecycle";
+    });
     await freezeRow.getByRole("button", { name: "Publish frozen terms" }).click();
+    const publishResponse = await publishResponsePromise;
+    if (publishResponse.status() >= 500) {
+      const diagnostic = await diagnosePublishFailure({
+        proposalId,
+        roundId: publicationRoundId,
+        slug: PUBLISHED_SLUG,
+        publisherId: reviewer.session.user.id,
+        reason: publicationReason,
+      });
+      throw new Error(`Publish action failed with ${publishResponse.status()}: ${safeMessage(JSON.stringify(diagnostic))}`);
+    }
     freezeRow = rowFor(page, TITLES.freeze);
     await expect(freezeRow.getByRole("link", { name: "View public campaign" })).toBeVisible({ timeout: 30_000 });
     await expect(freezeRow.getByRole("button", { name: "Publish frozen terms" })).toHaveCount(0);
