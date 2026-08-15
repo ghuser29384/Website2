@@ -32,7 +32,7 @@ test.describe("Adaptive homepage", () => {
 
     await expect(page).toHaveURL(/\/$/);
     await expect(page.locator("#mt-live-document-heading")).toHaveText(
-      "Your best match right now",
+      "Current opportunities and next actions",
     );
     await expect(page.getByRole("heading", { level: 1, name: "What needs you now." })).toBeVisible();
 
