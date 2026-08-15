@@ -1,0 +1,203 @@
+name: Pooled settlement authenticated QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa/pooled-settlement-authenticated-e2e-20260814
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pooled-settlement-authenticated-qa
+  cancel-in-progress: false
+
+jobs:
+  source:
+    name: Source contracts and fail-closed preflight
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.preflight.outputs.ready }}
+      unsafe: ${{ steps.preflight.outputs.unsafe }}
+      core_ready: ${{ steps.preflight.outputs.core_ready }}
+      stripe_ready: ${{ steps.preflight.outputs.stripe_ready }}
+      every_org_ready: ${{ steps.preflight.outputs.every_org_ready }}
+    steps:
+      - name: Check out the workflow-only harness branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify exact validated parent, tree, and four-file scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_parent="9c4363e5e6713163df5b7a8b51981af585d2f0a9"
+          expected_tree="84aecf084083b01f4dc93103c45ceae23f9e789c"
+          test "$(git rev-parse HEAD^)" = "$expected_parent"
+          test "$(git rev-parse "${expected_parent}^{tree}")" = "$expected_tree"
+          actual="$(git diff --name-only HEAD^ HEAD | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/pooled-settlement-qa-contract.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.test.mjs' \
+            '.github/workflows/pooled-settlement-authenticated-e2e-20260814.yml' | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Test the QA harness contract
+        run: node --test .github/scripts/pooled-settlement-qa-e2e.test.mjs
+
+      - name: Run pooled-settlement source and unit contracts
+        run: |
+          node --import tsx --test \
+            src/lib/trade-donation-pool.test.ts \
+            src/lib/trade-donation-pool-source-contract.test.ts \
+            src/lib/trade-donation-pool-environment-source-contract.test.ts \
+            src/lib/trade-donation-pool-stripe-environment-source-contract.test.ts \
+            src/lib/trade-donation-pool-provider-resume-source-contract.test.ts \
+            src/lib/moral-trade/pooled-settlement-trigger-privilege-migration.test.ts
+
+      - name: Run repository tests
+        run: npm test
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build with pooled settlement disabled
+        env:
+          TRADE_DONATION_POOL_ENABLED: "false"
+          TRADE_DONATION_POOL_MODE: disabled
+          EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+        run: npm run build
+
+      - name: Classify isolated-QA configuration without fallbacks
+        id: preflight
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+          QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+          QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+          QA_STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+          QA_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+          QA_STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+          QA_EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+          QA_EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+          QA_EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+          POOLED_SETTLEMENT_QA_OUTPUT_DIR: pooled-settlement-qa-preflight
+        run: node .github/scripts/pooled-settlement-qa-e2e.mjs --preflight-only
+
+      - name: Upload sanitized preflight evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-qa-preflight-${{ github.run_id }}
+          path: pooled-settlement-qa-preflight/
+          if-no-files-found: ignore
+          retention-days: 14
+
+  authenticated-e2e:
+    name: Authenticated isolated-QA matrix
+    needs: source
+    if: needs.source.outputs.ready == 'true' && needs.source.outputs.unsafe != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.QA_SUPABASE_PUBLISHABLE_KEY }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      QA_TEST_PASSWORD: ${{ secrets.QA_TEST_PASSWORD }}
+      QA_STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      QA_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      QA_STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      QA_EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      QA_EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      QA_EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.QA_STRIPE_PUBLISHABLE_KEY }}
+      STRIPE_SECRET_KEY: ${{ secrets.QA_STRIPE_SECRET_KEY }}
+      STRIPE_WEBHOOK_SECRET: ${{ secrets.QA_STRIPE_WEBHOOK_SECRET }}
+      EVERY_ORG_WEBHOOK_TOKEN: ${{ secrets.QA_EVERY_ORG_WEBHOOK_TOKEN }}
+      EVERY_ORG_WEBHOOK_PATH_SECRET: ${{ secrets.QA_EVERY_ORG_WEBHOOK_PATH_SECRET }}
+      EVERY_ORG_PARTNER_METADATA_SECRET: ${{ secrets.QA_EVERY_ORG_PARTNER_METADATA_SECRET }}
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3215
+      POOLED_SETTLEMENT_QA_BASE_URL: http://127.0.0.1:3215
+      POOLED_SETTLEMENT_QA_OUTPUT_DIR: pooled-settlement-qa-evidence
+      TRADE_DONATION_POOL_ENABLED: "true"
+      TRADE_DONATION_POOL_MODE: test
+      EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "true"
+      EVERY_ORG_ENVIRONMENT: staging
+      VERCEL_ENV: preview
+    steps:
+      - name: Check out exact harness commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Verify exact validated feature parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "9c4363e5e6713163df5b7a8b51981af585d2f0a9"
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Install Chromium and PostgreSQL client
+        shell: bash
+        run: |
+          npx playwright install --with-deps chromium
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Bind the synthetic operator allowlist
+        shell: bash
+        run: echo "ADMIN_EMAILS=pooled-qa-${GITHUB_RUN_ID}-operator@example.test" >> "$GITHUB_ENV"
+
+      - name: Build exact QA runtime
+        run: npm run build
+
+      - name: Start exact QA runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -p 3215 > /tmp/pooled-settlement-next.log 2>&1 &
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3215/ > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          tail -100 /tmp/pooled-settlement-next.log
+          exit 1
+
+      - name: Execute all 19 authenticated QA scenarios
+        run: node .github/scripts/pooled-settlement-qa-e2e.mjs
+
+      - name: Upload sanitized authenticated evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pooled-settlement-authenticated-qa-${{ github.run_id }}
+          path: pooled-settlement-qa-evidence/
+          if-no-files-found: error
+          retention-days: 14
