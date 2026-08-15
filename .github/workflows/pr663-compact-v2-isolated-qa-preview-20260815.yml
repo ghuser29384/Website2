@@ -864,8 +864,13 @@ jobs:
               forbiddenActions:{merge:false,readyForReview:false,mainMutation:false,productionData:false,persistentMigration:false,activation:false,electorate:false,paymentProvider:false,canonicalAlias:false,productionRelease:false}
             }' > evidence/result-summary.json
 
-          node controller/ops/pr663-uat712/redact-traces.mjs app/test-results evidence \
-            > evidence/final-evidence-secret-scan.txt
+          if [[ "${{ steps.uat.outcome }}" = "success" ]]; then
+            node controller/ops/pr663-uat712/redact-traces.mjs app/test-results evidence \
+              > evidence/final-evidence-secret-scan.txt
+          else
+            ALLOW_NO_TRACE=1 node controller/ops/pr663-uat712/redact-traces.mjs app/test-results evidence \
+              > evidence/final-evidence-secret-scan.txt
+          fi
           if rg -l --fixed-strings "$FORBIDDEN_PROD_REF" evidence app/test-results; then
             echo 'Forbidden production project reference remained in retained evidence.' >&2
             exit 1
