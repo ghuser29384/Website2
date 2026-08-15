@@ -81,7 +81,7 @@ jobs:
           test "$(git -C app rev-parse HEAD)" = "$CANDIDATE_HEAD_SHA"
           test "$(git -C app rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
           test "$(git -C app rev-parse HEAD^1)" = "$CANDIDATE_PRE_REPAIR_SHA"
-          test "$(git -C app rev-parse HEAD^2)" = "$CANDIDATE_BASE_SHA"
+          test "$(git -C app rev-parse HEAD~2)" = "$CANDIDATE_BASE_SHA"
           test "$(git -C app rev-parse origin/main)" = "$CANDIDATE_BASE_SHA"
           test "$(git -C app status --porcelain)" = ""
 
@@ -684,6 +684,7 @@ jobs:
         working-directory: app
         run: |
           set -euo pipefail
+          mkdir -p ../evidence
           git diff --quiet "$CANDIDATE_BASE_SHA" "$CANDIDATE_HEAD_SHA" -- src/lib/site.ts
           git diff --quiet "$CANDIDATE_BASE_SHA" "$CANDIDATE_HEAD_SHA" -- src/components/layout/site-footer.tsx
           if git diff -U0 "$CANDIDATE_BASE_SHA" "$CANDIDATE_HEAD_SHA" -- src/app/globals.css \
