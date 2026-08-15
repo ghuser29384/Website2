@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { IconMark } from "@/components/ui/page-primitives";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
+import { resolvePublicMarketplaceOverview } from "@/lib/public-marketplace-overview";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { VISITOR_PATHS } from "@/lib/visitor-paths";
@@ -46,7 +47,7 @@ function formatOptionalCount(value: number | null) {
 export default async function StartPage() {
   const [viewer, marketplaceOverview] = await Promise.all([
     getViewer(),
-    getMarketplaceOverview(),
+    resolvePublicMarketplaceOverview(getMarketplaceOverview()),
   ]);
   const isAuthenticated = Boolean(viewer);
   const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";

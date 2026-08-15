@@ -5,6 +5,7 @@ import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { StatusBadge } from "@/components/ui/page-primitives";
 import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
+import { resolvePublicMarketplaceOverview } from "@/lib/public-marketplace-overview";
 import { getMoralTradeFundingReadiness } from "@/lib/funding";
 import { buildBreadcrumbJsonLd, buildWebPageJsonLd, getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
@@ -138,7 +139,10 @@ const serviceBoundaries = [
 ] as const;
 
 export default async function StatusPage() {
-  const [viewer, overview] = await Promise.all([getViewer(), getMarketplaceOverview()]);
+  const [viewer, overview] = await Promise.all([
+    getViewer(),
+    resolvePublicMarketplaceOverview(getMarketplaceOverview()),
+  ]);
   const isAuthenticated = Boolean(viewer);
   const fundingReadiness = getMoralTradeFundingReadiness();
   const statusStructuredData = buildWebPageJsonLd({
