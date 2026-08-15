@@ -310,6 +310,109 @@ async function setReviewerGrantActive(active: boolean) {
   expect(stdout.trim()).toBe("1");
 }
 
+async function captureExitDatabaseBoundary(agreementId: string) {
+  if (!/^[0-9a-f-]{36}$/i.test(agreementId)) {
+    throw new Error("Refusing an invalid agreement id in the isolated-QA boundary query.");
+  }
+
+  const database = validatedQaDatabase();
+  const sql = `select json_build_object(
+    'agreement', (
+      select row_to_json(agreement_row)
+      from (
+        select id, status, lifecycle_status, cancelled_at, exit_requested_by, exit_reason
+        from public.agreements
+        where id = '${agreementId}'::uuid
+      ) agreement_row
+    ),
+    'exitRequests', (
+      select coalesce(json_agg(exit_row order by exit_row.created_at, exit_row.id), '[]'::json)
+      from (
+        select id, agreement_id, requested_by, request_type, reason, status, created_at, resolved_at
+        from public.trade_exit_requests
+        where agreement_id = '${agreementId}'::uuid
+      ) exit_row
+    ),
+    'unilateralExitCount', (
+      select count(*)
+      from public.trade_exit_requests
+      where agreement_id = '${agreementId}'::uuid
+        and request_type = 'unilateral_exit'
+    ),
+    'unilateralNotifications', (
+      select coalesce(json_agg(notification_row order by notification_row.created_at, notification_row.id), '[]'::json)
+      from (
+        select id, user_id, notification_type, href, dedupe_key, created_at
+        from public.trade_notifications
+        where notification_type = 'unilateral_exit'
+          and href = '/trade-agreements/${agreementId}'
+      ) notification_row
+    ),
+    'unilateralNotificationCount', (
+      select count(*)
+      from public.trade_notifications
+      where notification_type = 'unilateral_exit'
+        and href = '/trade-agreements/${agreementId}'
+    ),
+    'exitEmailOutbox', (
+      select coalesce(json_agg(outbox_row order by outbox_row.created_at, outbox_row.id), '[]'::json)
+      from (
+        select id, profile_id, recipient_email, subject, status, provider, created_at
+        from public.email_outbox
+        where profile_id = '${IDS.responder}'::uuid
+          and subject = 'Moral Trade: Agreement exited'
+      ) outbox_row
+    ),
+    'exitEmailOutboxCount', (
+      select count(*)
+      from public.email_outbox
+      where profile_id = '${IDS.responder}'::uuid
+        and subject = 'Moral Trade: Agreement exited'
+    ),
+    'performanceBonds', (
+      select count(*)
+      from public.performance_bonds
+      where offer_id = '${IDS.offer}'::uuid
+    ),
+    'externalPaymentReceipts', (
+      select count(*)
+      from public.trade_external_payment_receipts receipt
+      join public.trade_milestone_payouts payout on payout.id = receipt.payout_id
+      join public.trade_agreement_milestones milestone on milestone.id = payout.milestone_id
+      where milestone.agreement_id = '${agreementId}'::uuid
+    )
+  )::text;`;
+  const { stdout } = await execFileAsync(
+    "psql",
+    [
+      "--host",
+      database.hostname,
+      "--port",
+      database.port,
+      "--username",
+      decodeURIComponent(database.username),
+      "--dbname",
+      database.pathname.slice(1),
+      "--no-psqlrc",
+      "--tuples-only",
+      "--no-align",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "--command",
+      sql,
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: qaDatabaseEnvironment(database),
+      maxBuffer: 1024 * 1024,
+    },
+  );
+  const payload = stdout.trim();
+  if (!payload) throw new Error("The isolated-QA exit boundary query returned no JSON.");
+  return JSON.parse(payload) as Record<string, unknown>;
+}
+
 async function expectAal(client: SupabaseClient, expected: "aal1" | "aal2") {
   const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
   expect(error).toBeNull();
@@ -987,9 +1090,62 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       await gotoReady(ownerPage, `/trade-agreements/${agreementId}`);
       const exitForm = formWithButton(ownerPage, "End future obligations");
       await exitForm.locator('textarea[name="reason"]').fill(COPY.exit);
-      await exitForm
-        .getByRole("button", { exact: true, name: "End future obligations" })
-        .click();
+      const exitButton = exitForm.getByRole("button", {
+        exact: true,
+        name: "End future obligations",
+      });
+      const exitPath = `/trade-agreements/${agreementId}`;
+      const exitResponsePromise = ownerPage.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname === exitPath,
+      );
+      const clickTime = new Date().toISOString();
+      await exitButton.click();
+      await expect(exitButton).toHaveText("Recording exit...", { timeout: 2_000 });
+      const pendingObservedTime = new Date().toISOString();
+      const exitResponse = await exitResponsePromise;
+      const responseCompletedTime = new Date().toISOString();
+      const [requestHeaders, responseHeaders] = await Promise.all([
+        exitResponse.request().allHeaders(),
+        exitResponse.allHeaders(),
+      ]);
+      await ownerPage.waitForTimeout(1_500);
+      const browserAfterResponse = await ownerPage.evaluate(() => ({
+        activeElement: document.activeElement
+          ? `${document.activeElement.tagName}${document.activeElement.id ? `#${document.activeElement.id}` : ""}`
+          : null,
+        bodyHasCancelledLifecycle: document.body.innerText.includes("Agreement cancelled"),
+        bodyHasPendingExit: document.body.innerText.includes("Recording exit..."),
+        url: window.location.href,
+      }));
+      const exitDatabaseBoundary = await captureExitDatabaseBoundary(agreementId);
+      summary.exitSettlementTimeline = {
+        browserAfterResponse,
+        clickTime,
+        databaseAfterResponseBeforeCleanup: exitDatabaseBoundary,
+        formFields: {
+          agreement_id: agreementId,
+          reason: COPY.exit,
+          request_type: "unilateral_exit",
+        },
+        pendingObservedTime,
+        request: {
+          actionId: requestHeaders["next-action"] ?? null,
+          method: exitResponse.request().method(),
+          url: exitResponse.request().url(),
+        },
+        response: {
+          completedTime: responseCompletedTime,
+          status: exitResponse.status(),
+          statusText: exitResponse.statusText(),
+          xActionRedirect: responseHeaders["x-action-redirect"] ?? null,
+          xActionRevalidated: responseHeaders["x-action-revalidated"] ?? null,
+        },
+      };
+      qaCheckpoint(
+        `captured unilateral-exit response/database boundary: ${JSON.stringify(summary.exitSettlementTimeline)}`,
+      );
       await expectSuccess(
         ownerPage,
         "Unilateral exit recorded. Future obligations ended under the published rule.",
