@@ -174,7 +174,7 @@ async function gotoOffer(page: Page) {
   expect(response?.ok(), `offer response status ${response?.status()}`).toBe(true);
   await expect(page).toHaveURL(new RegExp(`${OFFER_PATH.replaceAll("/", "\\/")}$`));
   await expect(page).toHaveTitle(new RegExp(`${COPY.offeredCause} for ${COPY.requestedCause}`, "i"));
-  await expect(page.locator("#main-content")).toContainText(COPY.context);
+  await expect(page.getByText(COPY.context, { exact: false })).toBeVisible();
 }
 
 async function expectFrameworkHealthy(page: Page) {
