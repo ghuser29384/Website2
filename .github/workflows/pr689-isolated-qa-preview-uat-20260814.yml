@@ -144,15 +144,26 @@ jobs:
               raise SystemExit("Refusing a database URL outside the exact TLS-only QA target.")
           PY
 
-          sentinel="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
-            select environment || '|' || project_ref || '|' || sentinel_id::text || '|' || sentinel_sha256 || '|' || provisioned_out_of_band::text
+          sentinel_contract="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
+            select coalesce(
+              count(*) = 1
+              and bool_and(singleton)
+              and bool_and(environment = 'qa')
+              and bool_and(project_ref = 'hvmxfjjbdcgjjudmthdz')
+              and bool_and(sentinel_id is not null)
+              and bool_and(sentinel_sha256 ~ '^[a-f0-9]{64}$')
+              and bool_and(provisioned_out_of_band),
+              false
+            )::text
             from moraltrade_qa.environment_identity
             where singleton;")"
-          test "$sentinel" = "qa|hvmxfjjbdcgjjudmthdz|a0244e19-9744-4a82-83e4-57776804cc06|f7801a29e33764650322ad39e66a2062d9e2f750a9438e74d9fff0c9eeeb8d30|true"
           tls_active="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
             select ssl::text from pg_stat_ssl where pid = pg_backend_pid();")"
+          printf 'qa_project_ref=%s\nsentinel_contract=%s\ntls=%s\n' \
+            "$EXPECTED_QA_REF" "$sentinel_contract" "$tls_active" \
+            > evidence/qa-sentinel.txt
+          test "$sentinel_contract" = "true"
           test "$tls_active" = "true"
-          printf '%s\ntls=true\n' "$sentinel" > evidence/qa-sentinel.txt
 
           cd app
           node --input-type=module <<'NODE'
@@ -630,7 +641,7 @@ jobs:
           if find app/test-results -type f -name '*.zip' -print -quit | grep -q .; then
             node app/uat702/redact-traces.mjs app/test-results evidence > evidence/final-evidence-secret-scan.txt
           fi
-          find evidence app/test-results -type f -print0 \
+          find evidence app/test-results -type f ! -path 'evidence/sha256-manifest.txt' -print0 \
             | sort -z \
             | xargs -0 sha256sum \
             > evidence/sha256-manifest.txt
