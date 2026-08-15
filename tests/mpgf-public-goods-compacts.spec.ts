@@ -1,8 +1,9 @@
 import { expect, test } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
 
 const viewports = [
   { name: "desktop", width: 1440, height: 900 },
-  { name: "tablet", width: 834, height: 1112 },
+  { name: "tablet", width: 1024, height: 768 },
   { name: "mobile", width: 390, height: 844 },
 ] as const;
 
@@ -67,8 +68,11 @@ for (const viewport of viewports) {
     expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.viewportWidth + 1);
     expect(errors).toEqual([]);
 
+    await mkdir("test-results", { recursive: true });
+    const screenshotPath = `test-results/mpgf-public-goods-compacts-${viewport.width}x${viewport.height}.png`;
+    await page.screenshot({ path: screenshotPath, fullPage: true });
     await testInfo.attach(`compact-v2-${viewport.name}`, {
-      body: await page.screenshot({ fullPage: true }),
+      path: screenshotPath,
       contentType: "image/png",
     });
   });
