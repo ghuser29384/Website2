@@ -18,8 +18,12 @@ function makeRequest(path: string, headers: Record<string, string> = {}) {
   });
 }
 
-test("root and Walkthrough reach their App Router handlers without cookie authority", async () => {
-  for (const path of ["/?utm_source=invite", "/walkthrough"]) {
+test("activation and unavailable routes reach App Router handlers without cookie authority", async () => {
+  for (const path of [
+    "/?utm_source=invite",
+    "/walkthrough",
+    "/account-state-unavailable",
+  ]) {
     const response = await proxy(makeRequest(path, { cookie: "mt_walkthrough_seen=1" }));
 
     assert.equal(response.status, 200, path);

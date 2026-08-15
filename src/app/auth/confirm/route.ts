@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { ensureAccountRowsForUser, getViewer } from "@/lib/app-data";
 import {
+  ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
   getAccountActivationState,
   getPostAuthActivationDestination,
 } from "@/lib/account-activation";
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      let destination = "/walkthrough";
+      let destination = ACCOUNT_ACTIVATION_UNAVAILABLE_PATH;
       if (data.user) {
         const { profile, profileResult } = await ensureAccountRowsForUser(data.user, supabase);
         destination = getPostAuthActivationDestination(
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
     });
 
     if (!error) {
-      let destination = "/walkthrough";
+      let destination = ACCOUNT_ACTIVATION_UNAVAILABLE_PATH;
       if (data.user) {
         const { profile, profileResult } = await ensureAccountRowsForUser(data.user, supabase);
         destination = getPostAuthActivationDestination(

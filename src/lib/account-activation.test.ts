@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
   getAccountActivationState,
   getCompleteProfileActivationDestination,
   getPostAuthActivationDestination,
@@ -15,43 +16,98 @@ function available(stage: AccountActivationStage): AccountActivationState {
   return { kind: "available", stage };
 }
 
-test("the persisted activation stage exhaustively controls root routing", () => {
-  assert.equal(getRootActivationDestination({ kind: "signed_out" }), "/discover");
-  assert.equal(getRootActivationDestination({ kind: "unavailable" }), "/discover");
-  assert.equal(getRootActivationDestination(available("walkthrough_required")), "/walkthrough");
-  assert.equal(getRootActivationDestination(available("sparks_required")), "/complete-profile");
-  assert.equal(getRootActivationDestination(available("setup_complete")), "/feed");
+test("the exhaustive activation truth table keeps unavailable outside every activation route", () => {
+  const requestedDestination = "/offers?view=live";
+  const cases: Array<{
+    completeProfile: string | null;
+    label: string;
+    postAuth: string;
+    root: string;
+    state: AccountActivationState;
+    walkthrough: string | null;
+  }> = [
+    {
+      completeProfile: "/walkthrough",
+      label: "signed out",
+      postAuth: ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
+      root: "/discover",
+      state: { kind: "signed_out" },
+      walkthrough: null,
+    },
+    {
+      completeProfile: ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
+      label: "unavailable",
+      postAuth: ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
+      root: ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
+      state: { kind: "unavailable" },
+      walkthrough: ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
+    },
+    {
+      completeProfile: "/walkthrough",
+      label: "walkthrough required",
+      postAuth: "/walkthrough",
+      root: "/walkthrough",
+      state: available("walkthrough_required"),
+      walkthrough: null,
+    },
+    {
+      completeProfile: null,
+      label: "sparks required",
+      postAuth: "/complete-profile",
+      root: "/complete-profile",
+      state: available("sparks_required"),
+      walkthrough: "/complete-profile",
+    },
+    {
+      completeProfile: null,
+      label: "setup complete",
+      postAuth: requestedDestination,
+      root: "/feed",
+      state: available("setup_complete"),
+      walkthrough: "/feed",
+    },
+  ];
+
+  for (const entry of cases) {
+    assert.equal(getRootActivationDestination(entry.state), entry.root, `${entry.label}: root`);
+    assert.equal(
+      getWalkthroughActivationDestination(entry.state),
+      entry.walkthrough,
+      `${entry.label}: walkthrough`,
+    );
+    assert.equal(
+      getCompleteProfileActivationDestination(entry.state),
+      entry.completeProfile,
+      `${entry.label}: complete profile`,
+    );
+    assert.equal(
+      getPostAuthActivationDestination(entry.state, requestedDestination),
+      entry.postAuth,
+      `${entry.label}: post auth`,
+    );
+  }
 });
 
-test("completed and sparks-required accounts cannot replay the walkthrough", () => {
+test("direct Walkthrough stays voluntary when signed out but rejects unavailable account state", () => {
   assert.equal(getWalkthroughActivationDestination({ kind: "signed_out" }), null);
-  assert.equal(getWalkthroughActivationDestination({ kind: "unavailable" }), null);
-  assert.equal(getWalkthroughActivationDestination(available("walkthrough_required")), null);
   assert.equal(
-    getWalkthroughActivationDestination(available("sparks_required")),
-    "/complete-profile",
+    getWalkthroughActivationDestination({ kind: "unavailable" }),
+    ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
   );
-  assert.equal(getWalkthroughActivationDestination(available("setup_complete")), "/feed");
 });
 
-test("only persisted sparks-required or complete accounts may open Complete Profile", () => {
+test("Complete Profile rejects unavailable without classifying the account as new", () => {
   assert.equal(
-    getCompleteProfileActivationDestination(available("walkthrough_required")),
-    "/walkthrough",
+    getCompleteProfileActivationDestination({ kind: "unavailable" }),
+    ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
   );
-  assert.equal(getCompleteProfileActivationDestination(available("sparks_required")), null);
-  assert.equal(getCompleteProfileActivationDestination(available("setup_complete")), null);
-  assert.equal(
+  assert.notEqual(
     getCompleteProfileActivationDestination({ kind: "unavailable" }),
     "/walkthrough",
   );
-  assert.equal(
-    getCompleteProfileActivationDestination({ kind: "signed_out" }),
-    "/walkthrough",
-  );
 });
 
-test("safe next parameters never bypass incomplete or unavailable activation", () => {
+test("post-auth next parameters never bypass incomplete or unavailable activation", () => {
   for (const requested of ["/feed", "/dashboard", "/offers?view=live"]) {
     assert.equal(
       getPostAuthActivationDestination(available("walkthrough_required"), requested),
@@ -63,7 +119,11 @@ test("safe next parameters never bypass incomplete or unavailable activation", (
     );
     assert.equal(
       getPostAuthActivationDestination({ kind: "unavailable" }, requested),
-      "/walkthrough",
+      ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
+    );
+    assert.equal(
+      getPostAuthActivationDestination({ kind: "signed_out" }, requested),
+      ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
     );
   }
 

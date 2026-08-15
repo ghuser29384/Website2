@@ -44,6 +44,7 @@ const productRoutes = [
 const credentialGatedRoutes = ["/offsets"];
 
 const accountAndStandaloneRoutes = [
+  "/account-state-unavailable",
   "/complete-profile",
   "/trades/new",
   "/complete-verification.html?record=wild-animal-research&from=calendar",
@@ -204,6 +205,8 @@ async function expectCanonicalSurface(page: Page, route: string, testInfo: TestI
 
   const expectedSurface = finalPathname === "/connectors"
     ? "connectors"
+    : finalPathname === "/account-state-unavailable"
+      ? "account-state-unavailable"
       : finalPathname === "/pledge-swaps"
         ? "pledge-swaps"
         : finalPathname === "/complete-profile"
@@ -414,6 +417,7 @@ test("keeps representative routes usable on mobile", async ({ page }, testInfo) 
     "/about",
     "/offers?view=live",
     "/commitments",
+    "/account-state-unavailable",
     "/connectors",
     "/pledge-swaps",
     "/trades/new",

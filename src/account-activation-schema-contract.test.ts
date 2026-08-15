@@ -5,8 +5,12 @@ import test from "node:test";
 const migrationPath =
   "supabase/migrations/20260814042516_account_activation_stage.sql";
 const migration = readFileSync(migrationPath, "utf8");
+const activationResolver = readFileSync("src/lib/account-activation.ts", "utf8");
 const rootPage = readFileSync("src/app/page.tsx", "utf8");
 const walkthroughPage = readFileSync("src/app/walkthrough/page.tsx", "utf8");
+const completeProfilePage = readFileSync("src/app/complete-profile/page.tsx", "utf8");
+const unavailablePage = readFileSync("src/app/account-state-unavailable/page.tsx", "utf8");
+const privacyControls = readFileSync("src/lib/background-privacy-controls.ts", "utf8");
 const walkthroughAction = readFileSync("src/app/walkthrough/actions.ts", "utf8");
 const completeProfileAction = readFileSync("src/app/complete-profile/actions.ts", "utf8");
 const nextConfig = readFileSync("next.config.ts", "utf8");
@@ -61,6 +65,21 @@ test("App Router owns root and Walkthrough without static or cookie routing auth
   assert.equal(existsSync("public/moral-trade-production.html"), true);
 });
 
+test("unavailable account state terminates at a truthful non-activation surface", () => {
+  assert.match(
+    activationResolver,
+    /ACCOUNT_ACTIVATION_UNAVAILABLE_PATH = "\/account-state-unavailable"/,
+  );
+  assert.match(rootPage, /getRootActivationDestination/);
+  assert.match(walkthroughPage, /getWalkthroughActivationDestination/);
+  assert.match(completeProfilePage, /getCompleteProfileActivationDestination/);
+  assert.match(unavailablePage, /did not classify this[\s\S]*account as new/i);
+  assert.match(unavailablePage, /No activation stage was changed/);
+  assert.match(unavailablePage, /robots:[\s\S]*index: false[\s\S]*follow: false/);
+  assert.doesNotMatch(unavailablePage, /href="\/(?:walkthrough|complete-profile|feed)"/);
+  assert.match(privacyControls, /ACTIVATION_NO_STORE_ROUTES[\s\S]*account-state-unavailable/);
+});
+
 test("Walkthrough persists its transition before Complete Profile routing", () => {
   const rpc = walkthroughAction.indexOf("complete_walkthrough_activation_v1");
   const destination = walkthroughAction.lastIndexOf(
@@ -77,6 +96,14 @@ test("every direct authentication success path consults persisted activation", (
   assert.match(authActions, /signInAction[\s\S]*getPostAuthActivationDestination/);
   assert.match(authCallback, /exchangeCodeForSession[\s\S]*getPostAuthActivationDestination/);
   assert.match(authCallback, /verifyOtp[\s\S]*getPostAuthActivationDestination/);
+  assert.match(
+    authActions,
+    /signInAction[\s\S]*let destination = ACCOUNT_ACTIVATION_UNAVAILABLE_PATH/,
+  );
+  assert.equal(
+    authCallback.match(/let destination = ACCOUNT_ACTIVATION_UNAVAILABLE_PATH/g)?.length,
+    2,
+  );
 });
 
 test("Complete Profile advances only after every required profile write succeeds", () => {

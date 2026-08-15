@@ -218,6 +218,7 @@ export const PRIVATE_NO_STORE_ROUTE_PREFIXES = [
 
 export const ACTIVATION_NO_STORE_ROUTES = new Set([
   "/",
+  "/account-state-unavailable",
   "/walkthrough",
   "/complete-profile",
 ]);

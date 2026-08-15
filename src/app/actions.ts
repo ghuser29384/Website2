@@ -22,6 +22,7 @@ import {
   requireViewer,
 } from "@/lib/app-data";
 import {
+  ACCOUNT_ACTIVATION_UNAVAILABLE_PATH,
   getAccountActivationState,
   getPostAuthActivationDestination,
 } from "@/lib/account-activation";
@@ -3299,7 +3300,7 @@ export async function signInAction(formData: FormData) {
     redirectWithMessage(loginPath, "error", error.message);
   }
 
-  let destination = next;
+  let destination = ACCOUNT_ACTIVATION_UNAVAILABLE_PATH;
   if (data.user) {
     const { profile, profileResult } = await ensureAccountRowsForUser(data.user, supabase);
     const completedDestination = profileNeedsUsername(profile)

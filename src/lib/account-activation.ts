@@ -4,6 +4,8 @@ export const ACCOUNT_ACTIVATION_STAGES = [
   "setup_complete",
 ] as const;
 
+export const ACCOUNT_ACTIVATION_UNAVAILABLE_PATH = "/account-state-unavailable";
+
 export type AccountActivationStage = (typeof ACCOUNT_ACTIVATION_STAGES)[number];
 
 export type AccountActivationState =
@@ -52,8 +54,12 @@ export function getAccountActivationState({
 }
 
 export function getRootActivationDestination(state: AccountActivationState) {
-  if (state.kind !== "available") {
+  if (state.kind === "signed_out") {
     return "/discover";
+  }
+
+  if (state.kind === "unavailable") {
+    return ACCOUNT_ACTIVATION_UNAVAILABLE_PATH;
   }
 
   if (state.stage === "walkthrough_required") {
@@ -68,15 +74,25 @@ export function getRootActivationDestination(state: AccountActivationState) {
 }
 
 export function getWalkthroughActivationDestination(state: AccountActivationState) {
-  if (state.kind !== "available" || state.stage === "walkthrough_required") {
+  if (state.kind === "signed_out") {
     return null;
   }
+
+  if (state.kind === "unavailable") {
+    return ACCOUNT_ACTIVATION_UNAVAILABLE_PATH;
+  }
+
+  if (state.stage === "walkthrough_required") return null;
 
   return state.stage === "sparks_required" ? "/complete-profile" : "/feed";
 }
 
 export function getCompleteProfileActivationDestination(state: AccountActivationState) {
-  if (state.kind !== "available" || state.stage === "walkthrough_required") {
+  if (state.kind === "unavailable") {
+    return ACCOUNT_ACTIVATION_UNAVAILABLE_PATH;
+  }
+
+  if (state.kind === "signed_out" || state.stage === "walkthrough_required") {
     return "/walkthrough";
   }
 
@@ -88,7 +104,7 @@ export function getPostAuthActivationDestination(
   requestedDestination: string,
 ) {
   if (state.kind !== "available") {
-    return "/walkthrough";
+    return ACCOUNT_ACTIVATION_UNAVAILABLE_PATH;
   }
 
   if (state.stage === "walkthrough_required") {
