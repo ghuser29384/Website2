@@ -1,0 +1,309 @@
+name: PR 710 target rendered QA
+
+on:
+  push:
+    branches:
+      - qa/pr710-backed-offer-rendered-20260815
+
+concurrency:
+  group: pr710-target-rendered-qa-${{ github.repository }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  backed-offer-rendered-acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPECTED_BASE_SHA: 79ca382c3bdc325dfc5a28e2cbbafc1b95640386
+      EXPECTED_PR_HEAD_SHA: 71f4db81c9ef78a97fb53b43609219f1e5b22dec
+      EXPECTED_QA_BRANCH: qa/pr710-backed-offer-rendered-20260815
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3212
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_Sai3NlSapbvkmXa3EQrx9A_W9oNEYE8
+      NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
+      PGSSLMODE: require
+      PR710_BASE_URL: http://127.0.0.1:3212
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QA_SUPABASE_SERVICE_ROLE_KEY }}
+
+    steps:
+      - name: Check out the disposable QA descendant
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.sha }}
+
+      - name: Use Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify exact candidate ancestry and app-source identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "$EXPECTED_QA_BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git merge-base "$EXPECTED_BASE_SHA" "$EXPECTED_PR_HEAD_SHA")" = "$EXPECTED_BASE_SHA"
+          test "$(git rev-list --count "$EXPECTED_BASE_SHA..$EXPECTED_PR_HEAD_SHA")" = "1"
+          git merge-base --is-ancestor "$EXPECTED_PR_HEAD_SHA" HEAD
+          git diff --quiet "$EXPECTED_PR_HEAD_SHA" HEAD -- \
+            src public next.config.ts package.json package-lock.json tsconfig.json
+          test "$(git rev-parse "$EXPECTED_PR_HEAD_SHA:src")" = "$(git rev-parse HEAD:src)"
+          {
+            printf 'base=%s\n' "$EXPECTED_BASE_SHA"
+            printf 'pr_head=%s\n' "$EXPECTED_PR_HEAD_SHA"
+            printf 'qa_head=%s\n' "$(git rev-parse HEAD)"
+            printf 'qa_tree=%s\n' "$(git rev-parse HEAD^{tree})"
+            printf 'pr_src_tree=%s\n' "$(git rev-parse "$EXPECTED_PR_HEAD_SHA:src")"
+            printf 'qa_src_tree=%s\n' "$(git rev-parse HEAD:src)"
+          } | tee pr710-exact-identity.txt
+
+      - name: Verify the exact TLS-only isolated-QA target
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in QA_SUPABASE_DB_URL SUPABASE_SERVICE_ROLE_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required isolated-QA secret: $name" >&2
+              exit 1
+            fi
+          done
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          ssl_modes = parse_qs(parsed.query).get("sslmode", ["require"])
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and os.environ["EXPECTED_QA_REF"] in (parsed.username or "")
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == "/postgres"
+              and ssl_modes == ["require"]
+              and bool(parsed.password)
+              and os.environ["NEXT_PUBLIC_SUPABASE_URL"]
+                  == "https://hvmxfjjbdcgjjudmthdz.supabase.co"
+          )
+          if not valid:
+              raise SystemExit(
+                  "Refusing credentials outside the exact TLS-only MoralTrade isolated-QA target."
+              )
+          print('{"qaTarget":"hvmxfjjbdcgjjudmthdz","tls":true,"production":false}')
+          PY
+
+      - name: Install dependencies and PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Remove stale deterministic fixture before testing
+        id: preflight_cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/pr710_backed_offer_cleanup.sql \
+            | tee pr710-preflight-cleanup.log
+          node --input-type=module <<'NODE'
+          import { readFile } from "node:fs/promises";
+          const text = await readFile("pr710-preflight-cleanup.log", "utf8");
+          const payloads = text.match(/\{[^\n]+\}/g) ?? [];
+          if (!payloads.length) throw new Error("Preflight cleanup returned no residue object.");
+          const residue = JSON.parse(payloads.at(-1));
+          const nonzero = Object.entries(residue).filter(([, value]) => Number(value) !== 0);
+          if (nonzero.length) throw new Error(`Preflight cleanup left residue: ${JSON.stringify(residue)}`);
+          console.log(`Verified preflight zero residue: ${JSON.stringify(residue)}`);
+          NODE
+
+      - name: Run focused candidate and QA-harness source gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check "$EXPECTED_BASE_SHA" "$EXPECTED_PR_HEAD_SHA"
+          node --import tsx --test src/offer-record-priority-contract.test.ts \
+            | tee pr710-source-contract.log
+          npx eslint \
+            src/app/layout.tsx \
+            "src/app/offers/[offerId]/layout.tsx" \
+            src/components/offer-credibility-link.tsx \
+            src/offer-record-priority-contract.test.ts \
+            tests/pr710-backed-offer-rendered.spec.ts \
+            playwright.pr710.config.ts \
+            | tee pr710-eslint.log
+
+      - name: Build the exact PR application source
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build | tee pr710-build.log
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Create the ephemeral authenticated offer fixture
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          qa_password="$(openssl rand -base64 48 | tr -d '\n')"
+          echo "::add-mask::$qa_password"
+          export PR710_QA_PASSWORD="$qa_password"
+          printf 'PR710_QA_PASSWORD=%s\n' "$qa_password" >> "$GITHUB_ENV"
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/pr710_backed_offer_fixture.sql \
+            | tee pr710-fixture.log
+
+      - name: Start the exact production build
+        id: server
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run start -- -H 127.0.0.1 -p 3212 > pr710-server.log 2>&1 &
+          echo "$!" > pr710-server.pid
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error http://127.0.0.1:3212/login > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          tail -n 200 pr710-server.log
+          exit 1
+
+      - name: Run authenticated rendered interaction diagnostics
+        id: browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright test \
+            --config playwright.pr710.config.ts \
+            --reporter=line \
+            | tee pr710-browser.log
+
+      - name: Capture the exact zero-dollar boundary
+        if: always() && steps.fixture.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --tuples-only \
+            --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee pr710-zero-dollar.json
+          select json_build_object(
+            'offerId', '82000000-0000-4000-8000-000000000001',
+            'mode', (select mode from public.offers where id = '82000000-0000-4000-8000-000000000001'),
+            'maximumBurden', (select maximum_burden from public.offers where id = '82000000-0000-4000-8000-000000000001'),
+            'performanceBonds', (
+              select count(*) from public.performance_bonds
+              where offer_id = '82000000-0000-4000-8000-000000000001'
+            ),
+            'externalPaymentReceipts', (
+              select count(*)
+              from public.trade_external_payment_receipts receipt
+              join public.trade_milestone_payouts payout on payout.id = receipt.payout_id
+              join public.trade_agreement_milestones milestone on milestone.id = payout.milestone_id
+              join public.agreements agreement on agreement.id = milestone.agreement_id
+              where agreement.offer_id = '82000000-0000-4000-8000-000000000001'
+            )
+          );
+          SQL
+
+      - name: Stop the isolated server
+        if: always()
+        shell: bash
+        run: |
+          if [[ -f pr710-server.pid ]]; then
+            kill "$(cat pr710-server.pid)" 2>/dev/null || true
+          fi
+
+      - name: Remove every deterministic QA fixture and invalidate credentials
+        id: cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/pr710_backed_offer_cleanup.sql \
+            | tee pr710-cleanup.log
+
+      - name: Assert machine-readable zero residue
+        id: zero_residue
+        if: always() && steps.cleanup.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from "node:fs/promises";
+          const text = await readFile("pr710-cleanup.log", "utf8");
+          const payloads = text.match(/\{[^\n]+\}/g) ?? [];
+          if (!payloads.length) throw new Error("Cleanup returned no residue object.");
+          const residue = JSON.parse(payloads.at(-1));
+          const nonzero = Object.entries(residue).filter(([, value]) => Number(value) !== 0);
+          const proof = {
+            fixture: "pr710_backed_offer_rendered",
+            qaProject: "hvmxfjjbdcgjjudmthdz",
+            residue,
+            zeroResidue: nonzero.length === 0,
+          };
+          await writeFile("pr710-zero-residue.json", `${JSON.stringify(proof)}\n`, "utf8");
+          if (nonzero.length) throw new Error(`Cleanup left residue: ${JSON.stringify(residue)}`);
+          console.log(JSON.stringify(proof));
+          NODE
+
+      - name: Assert meaningful keyboard focus after commitment jumps
+        if: always() && steps.browser.outcome == 'success' && steps.zero_residue.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFile, writeFile } from "node:fs/promises";
+          const lines = (await readFile("pr710-rendered-summary.jsonl", "utf8"))
+            .trim()
+            .split("\n")
+            .filter(Boolean)
+            .map((line) => JSON.parse(line));
+          const results = lines.filter(
+            (entry) => entry.kind === "commitment-result" && entry.input === "keyboard",
+          );
+          const verdict = {
+            expectedViewportCount: 3,
+            keyboardFocusMovedEverywhere:
+              results.length === 3 && results.every((entry) => entry.focusWithin === true),
+            results,
+          };
+          await writeFile("pr710-focus-verdict.json", `${JSON.stringify(verdict)}\n`, "utf8");
+          console.log(JSON.stringify(verdict));
+          if (!verdict.keyboardFocusMovedEverywhere) {
+            throw new Error("Commitment fragment did not move keyboard focus to the meaningful target at every viewport.");
+          }
+          NODE
+
+      - name: Upload immutable rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr710-target-rendered-${{ github.run_id }}-${{ github.sha }}
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            pr710-*.json
+            pr710-*.jsonl
+            pr710-*.log
+            pr710-exact-identity.txt
+            test-results
