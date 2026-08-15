@@ -1,5 +1,25 @@
 \set ON_ERROR_STOP on
 
+do $proof$
+declare
+  optional_admin_audit_count bigint := 0;
+begin
+  if to_regclass('public.mpgf_admin_audit_logs') is not null then
+    execute $sql$
+      select count(*)
+      from public.mpgf_admin_audit_logs
+      where actor_user_id = 'cb222222-2222-4222-8222-222222222222'::uuid
+    $sql$
+    into optional_admin_audit_count;
+  end if;
+
+  if optional_admin_audit_count <> 0 then
+    raise exception 'UAT702 optional admin-audit fixture residue remains: %',
+      optional_admin_audit_count;
+  end if;
+end
+$proof$;
+
 with fixed as (
   select
     array[
@@ -54,7 +74,6 @@ select 'fixture_residue=' || (
       'cc333333-3333-4333-8333-333333333333',
       'cd444444-4444-4444-8444-444444444444'
     ))
-  + (select count(*) from public.mpgf_admin_audit_logs where actor_user_id = 'cb222222-2222-4222-8222-222222222222'::uuid)
 ) from fixed;
 
 with fixed as (

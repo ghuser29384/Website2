@@ -58,8 +58,16 @@ where target_type = 'mpgf_pool_proposal'
 delete from public.mpgf_failure_bonus_premium_quotes
 where pool_proposal_id in (select id from uat702_proposals);
 
-delete from public.mpgf_admin_audit_logs
-where actor_user_id = 'cb222222-2222-4222-8222-222222222222'::uuid;
+do $cleanup$
+begin
+  if to_regclass('public.mpgf_admin_audit_logs') is not null then
+    execute $sql$
+      delete from public.mpgf_admin_audit_logs
+      where actor_user_id = 'cb222222-2222-4222-8222-222222222222'::uuid
+    $sql$;
+  end if;
+end
+$cleanup$;
 
 delete from public.mpgf_state_transition_logs
 where actor_user_id in (
