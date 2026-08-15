@@ -1,13 +1,15 @@
 import {
   getDirectDonationUpgradeConfig,
-  secureDirectDonationUpgradeWebhookPathMatches,
   type EveryOrgPartnerWebhookPayload as DirectEveryOrgPartnerWebhookPayload,
 } from "@/lib/direct-donation-upgrade";
 import { handleDirectDonationUpgradeEveryOrgWebhook } from "@/lib/direct-donation-upgrade-webhook";
 import {
+  authenticateEveryOrgPartnerWebhookRequest,
+  resolveEveryOrgSharedConnector,
+} from "@/lib/every-org-partner-webhook-auth";
+import {
   evaluateEveryOrgTradeDonationWebhook,
   getTradeDonationProviderConfig,
-  secureWebhookPathMatches,
   type EveryOrgPartnerWebhookPayload,
   type TradeDonationIntentRow,
   type TradeDonationTermRow,
@@ -32,8 +34,7 @@ async function notifyActivated(input: {
   targetName: string;
   amountCents: number;
   intentId: string;
-}) {
-  const supabase = createServiceClient() as any;
+}, supabase: any) {
   const href = `/trade-agreements/${input.agreementId}`;
   const amount = `$${(input.amountCents / 100).toFixed(2)}`;
   const participantIds = [input.proposerId, input.responderId].filter(Boolean);
@@ -92,17 +93,41 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ secret: string }> },
 ) {
+  const authorization = authenticateEveryOrgPartnerWebhookRequest();
+
+  if (!authorization.authorized) {
+    return Response.json({ ok: false }, { status: 401 });
+  }
+
   const directConfig = getDirectDonationUpgradeConfig();
   const pledgeConfig = getTradeDonationProviderConfig();
   const { secret } = await context.params;
-  const directPathAccepted =
-    directConfig.readyForCheckout &&
-    secureDirectDonationUpgradeWebhookPathMatches(secret, directConfig.webhookPathSecret);
-  const pledgePathAccepted =
-    pledgeConfig.ready && secureWebhookPathMatches(secret, pledgeConfig.webhookPathSecret);
-  if (!directPathAccepted && !pledgePathAccepted) {
+  const connector = resolveEveryOrgSharedConnector(secret, [
+    {
+      mechanism: "direct_donation_upgrade",
+      enabled:
+        directConfig.requestedEnabled && directConfig.mode !== "disabled",
+      ready: directConfig.readyForCheckout,
+      environment: directConfig.environment,
+      webhookPathSecret: directConfig.webhookPathSecret,
+    },
+    {
+      mechanism: "pledge_donation",
+      enabled: pledgeConfig.requestedEnabled,
+      ready: pledgeConfig.ready,
+      environment: pledgeConfig.environment,
+      webhookPathSecret: pledgeConfig.webhookPathSecret,
+    },
+  ]);
+
+  if (!connector.accepted) {
     return Response.json({ ok: false }, { status: 401 });
   }
+
+  const directPathAccepted = connector.mechanisms.includes(
+    "direct_donation_upgrade",
+  );
+  const pledgePathAccepted = connector.mechanisms.includes("pledge_donation");
 
   const rawBody = await request.text();
   if (!rawBody || Buffer.byteLength(rawBody, "utf8") > MAX_WEBHOOK_BYTES) {
@@ -207,7 +232,7 @@ export async function POST(
       targetName: term.target_name,
       amountCents: term.amount_cents,
       intentId: intent.id,
-    });
+    }, supabase);
   }
 
   return Response.json({ ok: true, outcome });

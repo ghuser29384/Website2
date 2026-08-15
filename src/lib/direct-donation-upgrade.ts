@@ -5,6 +5,10 @@ import {
   formatDirectDonationUpgradeUsdValue,
   parseDirectDonationUpgradeUsdValue,
 } from "@/lib/direct-donation-upgrade-split";
+import {
+  EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS,
+  getEveryOrgCredentialConfiguration,
+} from "@/lib/every-org-partner-webhook-auth";
 
 export const DIRECT_DONATION_UPGRADE_PROVIDER = "every_org" as const;
 export const DIRECT_DONATION_UPGRADE_METADATA_SCHEMA =
@@ -43,7 +47,10 @@ export interface DirectDonationUpgradeConfig {
   mode: DirectDonationUpgradeMode;
   environment: DirectDonationUpgradeEnvironment | null;
   publicApiKey: string;
-  webhookToken: string;
+  donateLinkWebhookToken: string;
+  partnerWebhookAuthorizationTokenConfigured: boolean;
+  partnerWebhookAuthorizationContract:
+    typeof EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS;
   webhookPathSecret: string;
   metadataSecret: string;
   qaFixturesEnabled: boolean;
@@ -300,7 +307,9 @@ export function getDirectDonationUpgradeConfig(
       : "disabled";
   const environment = mode === "disabled" ? null : mode;
   const publicApiKey = envText(runtimeEnvironment, "EVERY_ORG_PUBLIC_API_KEY");
-  const webhookToken = envText(runtimeEnvironment, "EVERY_ORG_WEBHOOK_TOKEN");
+  const credentialConfiguration = getEveryOrgCredentialConfiguration(
+    runtimeEnvironment,
+  );
   const webhookPathSecret = envText(
     runtimeEnvironment,
     "EVERY_ORG_WEBHOOK_PATH_SECRET",
@@ -312,6 +321,16 @@ export function getDirectDonationUpgradeConfig(
   const qaFixturesEnabled =
     envText(runtimeEnvironment, "DIRECT_DONATION_UPGRADE_QA_FIXTURES").toLowerCase() ===
     "true";
+  const renderedQaInspectionEnabled =
+    envText(
+      runtimeEnvironment,
+      "DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE",
+    ).toLowerCase() === "true" &&
+    qaFixturesEnabled &&
+    envText(runtimeEnvironment, "VERCEL") === "1" &&
+    envText(runtimeEnvironment, "VERCEL_ENV") === "preview" &&
+    envText(runtimeEnvironment, "VERCEL_TARGET_ENV") !== "production" &&
+    mode === "staging";
   const canonicalProduction = isCanonicalProduction(runtimeEnvironment);
   const vercelProduction = hasVercelProductionSignal(runtimeEnvironment);
   const blockers: string[] = [];
@@ -343,7 +362,7 @@ export function getDirectDonationUpgradeConfig(
   if (!publicApiKey && !(mode === "staging" && qaFixturesEnabled)) {
     blockers.push("EVERY_ORG_PUBLIC_API_KEY is missing.");
   }
-  if (!webhookToken) blockers.push("EVERY_ORG_WEBHOOK_TOKEN is missing.");
+  blockers.push(...credentialConfiguration.blockers);
   if (webhookPathSecret.length < 32) {
     blockers.push("EVERY_ORG_WEBHOOK_PATH_SECRET must be at least 32 characters.");
   }
@@ -360,20 +379,38 @@ export function getDirectDonationUpgradeConfig(
     mode !== "disabled" &&
     environmentBoundaryReady &&
     Boolean(publicApiKey || (mode === "staging" && qaFixturesEnabled));
-  const readyForCommitments = readyForSearch && blockers.length === 0;
+  const providerIndependentConnectorReady =
+    readyForSearch &&
+    credentialConfiguration.donateLinkWebhookTokenConfigured &&
+    credentialConfiguration.unsupportedCredentialEnvironmentNames.length === 0 &&
+    !credentialConfiguration.publicAndPrivateTokensEqual &&
+    webhookPathSecret.length >= 32 &&
+    metadataSecret.length >= 32;
+  const readyForCommitments =
+    providerIndependentConnectorReady &&
+    (credentialConfiguration.partnerWebhookAuthorizationReady ||
+      renderedQaInspectionEnabled);
+  const readyForCheckout =
+    providerIndependentConnectorReady &&
+    credentialConfiguration.partnerWebhookAuthorizationReady;
 
   return {
     requestedEnabled,
     mode,
     environment,
     publicApiKey,
-    webhookToken,
+    donateLinkWebhookToken:
+      credentialConfiguration.donateLinkWebhookToken,
+    partnerWebhookAuthorizationTokenConfigured:
+      credentialConfiguration.partnerWebhookAuthorizationTokenConfigured,
+    partnerWebhookAuthorizationContract:
+      credentialConfiguration.partnerWebhookAuthorizationContract,
     webhookPathSecret,
     metadataSecret,
     qaFixturesEnabled,
     readyForSearch,
     readyForCommitments,
-    readyForCheckout: readyForCommitments,
+    readyForCheckout,
     blockers: [...new Set(blockers)],
   };
 }
@@ -996,7 +1033,10 @@ export function buildDirectDonationUpgradeCheckoutUrl(input: {
     "partner_metadata",
     Buffer.from(JSON.stringify(metadata), "utf8").toString("base64"),
   );
-  url.searchParams.set("webhook_token", input.config.webhookToken);
+  url.searchParams.set(
+    "webhook_token",
+    input.config.donateLinkWebhookToken,
+  );
   url.searchParams.set("share_info", "false");
   url.searchParams.set("method", "card,bank,paypal,venmo,pay");
   url.hash = "donate";

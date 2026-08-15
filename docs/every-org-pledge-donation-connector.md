@@ -24,12 +24,23 @@ A browser return to Moral Trade is never treated as payment proof. Screenshots d
 ```bash
 EVERY_ORG_PLEDGE_DONATIONS_ENABLED=true
 EVERY_ORG_ENVIRONMENT=staging # live is accepted only on the canonical production deployment
-EVERY_ORG_WEBHOOK_TOKEN=<token from the Every.org developer dashboard>
+EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN=<public token included in Donate Links>
+EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN=<private inbound authorization token>
 EVERY_ORG_WEBHOOK_PATH_SECRET=<at least 32 random characters>
 EVERY_ORG_PARTNER_METADATA_SECRET=<at least 32 random characters>
 ```
 
-Generate independent secrets. Do not reuse the Supabase service-role key, Stripe webhook secret, or session secrets. Staging is rejected on the canonical production deployment, and live mode is rejected on previews or local hosts.
+The two tokens are directional and must be different. The Donate Link token is public by design and may appear only as the outbound `webhook_token` query parameter. The Partner Webhook authorization token is private, server-only, and must never enter a URL, partner metadata, client bundle, HTML, log, artifact, snapshot, or error. Generate the path and metadata secrets independently. Do not reuse the Supabase service-role key, Stripe webhook secret, session secrets, or either Every.org token. Staging is rejected on the canonical production deployment, and live mode is rejected on previews or local hosts.
+
+### Fail-closed variable migration
+
+| Removed variable | Explicit replacement | Migration behavior |
+|---|---|---|
+| `EVERY_ORG_WEBHOOK_TOKEN` | `EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN` | The application does not read or alias the old name. An operator must explicitly configure the provider's public Donate Link token under the new name and remove the old variable. |
+| `MPGF_EVERY_ORG_PUBLIC_WEBHOOK_TOKEN` | `EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN` | MPGF Donate Links use the same directionally named public configuration; the old name is rejected. |
+| `MPGF_EVERY_ORG_WEBHOOK_SHARED_SECRET` | none | This guessed local header secret is rejected and must be removed. It must not be copied into the provider authorization-token variable. |
+
+`EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN` must contain only the private Partner Webhook token supplied by Every.org and must be configured independently of the public Donate Link token. Never derive it from, copy it from, or default it to the public token. If an old variable is still configured, or if the public and private values are equal, all affected mechanisms fail closed.
 
 ## Every.org dashboard setup
 
@@ -39,7 +50,9 @@ Register this Partner Webhook URL in the matching Every.org environment:
 https://<moral-trade-host>/api/connectors/every-org/<EVERY_ORG_WEBHOOK_PATH_SECRET>
 ```
 
-The Donate Link includes `EVERY_ORG_WEBHOOK_TOKEN`, causing completed donations from that link to notify the registered partner webhook. The webhook URL secret authenticates the sender at the HTTP boundary; the random partner donation ID, HMAC-signed partner metadata, exact frozen-field checks, and unique charge hash provide additional fail-closed validation.
+The Donate Link includes only `EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN`, causing completed donations from that link to notify the registered Partner Webhook. Every.org's separate private Partner Webhook authorization token is the primary sender-authentication credential. The URL path secret is defense in depth only; a correct path never substitutes for a valid provider-authentication header. The random partner donation ID, HMAC-signed partner metadata, exact frozen-field checks, and unique charge hash remain later validation layers.
+
+Every.org has confirmed that the private token is sent in a request header, but its literal header name and complete value format are not yet documented. Until Every.org supplies that exact contract, the provider authenticator is explicitly `unconfirmed`: every inbound request receives the same generic `401` before body parsing, Supabase client creation, database lookup, RPC, or sensitive logging. No `Authorization` scheme, raw-token header, placeholder, or path-only fallback is accepted.
 
 ## Staging verification
 

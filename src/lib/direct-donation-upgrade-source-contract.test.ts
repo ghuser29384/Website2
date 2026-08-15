@@ -17,6 +17,24 @@ const detailPage = readFileSync(
   "utf8",
 );
 const webhookRoute = readFileSync("src/app/api/connectors/every-org/[secret]/route.ts", "utf8");
+const everyOrgAuthorization = readFileSync(
+  "src/lib/every-org-partner-webhook-auth.ts",
+  "utf8",
+);
+const pledgeConnector = readFileSync("src/lib/trade-donation.ts", "utf8");
+const mpgfDonateLink = readFileSync(
+  "src/app/api/mpgf/every-org/donate-link/route.ts",
+  "utf8",
+);
+const mpgfWebhook = readFileSync(
+  "src/app/api/mpgf/every-org/webhook/route.ts",
+  "utf8",
+);
+const mpgfEveryOrg = readFileSync(
+  "src/lib/mpgf/public-goods-every-org.ts",
+  "utf8",
+);
+const environmentExample = readFileSync(".env.example", "utf8");
 const directWebhook = readFileSync(
   "src/lib/direct-donation-upgrade-webhook.ts",
   "utf8",
@@ -132,6 +150,108 @@ test("webhook verification is the only completion authority and exact replays ar
   assert.match(lifecycleMigration, /outcome', 'already_verified'/);
   assert.match(lifecycleMigration, /altered_replay/);
   assert.match(createPage, /Browser returns, screenshots, and self-attestation do not complete/);
+});
+
+test("Every.org credentials are directional, distinct, and never silently aliased", () => {
+  assert.match(environmentExample, /EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN=/);
+  assert.match(
+    environmentExample,
+    /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN=/,
+  );
+  assert.doesNotMatch(environmentExample, /^EVERY_ORG_WEBHOOK_TOKEN=/m);
+  assert.match(
+    everyOrgAuthorization,
+    /publicAndPrivateTokensEqual[\s\S]*credentialConfigurationValid/,
+  );
+  assert.match(
+    everyOrgAuthorization,
+    /UNSUPPORTED_EVERY_ORG_WEBHOOK_CREDENTIAL_ENV_NAMES/,
+  );
+  assert.match(
+    everyOrgAuthorization,
+    /donateLinkWebhookToken: publicAndPrivateTokensEqual[\s\S]*\? ""/,
+  );
+  assert.doesNotMatch(core, /EVERY_ORG_WEBHOOK_TOKEN|webhookToken:/);
+  assert.doesNotMatch(pledgeConnector, /EVERY_ORG_WEBHOOK_TOKEN|webhookToken:/);
+});
+
+test("only the public token can reach any Donate Link builder", () => {
+  assert.match(core, /input\.config\.donateLinkWebhookToken/);
+  assert.match(pledgeConnector, /input\.config\.donateLinkWebhookToken/);
+  assert.match(mpgfDonateLink, /credentials\.donateLinkWebhookToken/);
+  assert.match(mpgfEveryOrg, /donateLinkWebhookToken\?\.trim\(\)/);
+
+  for (const source of [core, pledgeConnector, mpgfDonateLink, mpgfEveryOrg]) {
+    assert.doesNotMatch(
+      source,
+      /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN/,
+    );
+  }
+
+  assert.match(
+    renderedQaWorkflow,
+    /EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: direct-upgrade-rendered-qa-public-token/,
+  );
+  assert.doesNotMatch(
+    renderedQaWorkflow,
+    /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN|EVERY_ORG_WEBHOOK_TOKEN/,
+  );
+});
+
+test("all Every.org inbound routes fail closed before body or database work while the header contract is unconfirmed", () => {
+  assert.match(
+    everyOrgAuthorization,
+    /EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_CONTRACT_STATUS =[\s\S]*"unconfirmed"/,
+  );
+  assert.match(
+    everyOrgAuthorization,
+    /authenticateEveryOrgPartnerWebhookRequest[\s\S]*authorized: false/,
+  );
+
+  const sharedAuthorization = webhookRoute.indexOf(
+    "authenticateEveryOrgPartnerWebhookRequest()",
+  );
+  const sharedConfigResolution = webhookRoute.indexOf(
+    "getDirectDonationUpgradeConfig()",
+  );
+  const sharedBody = webhookRoute.indexOf("await request.text()");
+  const sharedDirectDispatch = webhookRoute.indexOf(
+    "handleDirectDonationUpgradeEveryOrgWebhook(",
+  );
+  const sharedDatabase = webhookRoute.indexOf(
+    "createServiceClient()",
+  );
+  assert.ok(sharedAuthorization >= 0);
+  assert.ok(sharedConfigResolution > sharedAuthorization);
+  assert.ok(sharedBody > sharedAuthorization);
+  assert.ok(sharedDirectDispatch > sharedBody);
+  assert.ok(sharedDatabase > sharedBody);
+  assert.match(
+    webhookRoute.slice(sharedAuthorization, sharedBody),
+    /Response\.json\(\{ ok: false \}, \{ status: 401 \}\)/,
+  );
+
+  const mpgfAuthorization = mpgfWebhook.indexOf(
+    "authenticateEveryOrgPartnerWebhookRequest()",
+  );
+  const mpgfBody = mpgfWebhook.indexOf("await request.json()");
+  const mpgfPersistence = mpgfWebhook.indexOf(
+    "await persistPartnerWebhookEvent(partnerWebhookEvent)",
+  );
+  assert.ok(mpgfAuthorization >= 0);
+  assert.ok(mpgfBody > mpgfAuthorization);
+  assert.ok(mpgfPersistence > mpgfBody);
+  assert.match(
+    mpgfWebhook.slice(mpgfAuthorization, mpgfBody),
+    /\{ ok: false \}[\s\S]*status: 401/,
+  );
+
+  for (const source of [webhookRoute, mpgfWebhook]) {
+    assert.doesNotMatch(
+      source,
+      /headers\.get\(|Bearer\s|x-mpgf-every-org-webhook-secret|mpgf-every-org-webhook-secret/i,
+    );
+  }
 });
 
 test("every environment-owned mutation carries the exact runtime environment into SQL", () => {

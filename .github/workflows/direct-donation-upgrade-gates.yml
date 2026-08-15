@@ -4,6 +4,7 @@ on:
   pull_request:
     branches:
       - main
+      - integration/direct-donation-upgrade-current-main-20260807
     paths:
       - ".env.example"
       - ".github/workflows/direct-donation-upgrade*.yml"
@@ -13,6 +14,7 @@ on:
       - "src/app/admin/donation-upgrades/**"
       - "src/app/admin/page.tsx"
       - "src/app/api/connectors/every-org/**"
+      - "src/app/api/mpgf/every-org/**"
       - "src/app/api/donation-upgrades/**"
       - "src/app/api/jobs/donation-upgrades/**"
       - "src/app/connectors/page.tsx"
@@ -24,6 +26,8 @@ on:
       - "src/app/trades/new/page.tsx"
       - "src/components/donation-upgrades/**"
       - "src/lib/direct-donation-upgrade*.ts"
+      - "src/lib/every-org-partner-webhook-auth*.ts"
+      - "src/lib/trade-donation*.ts"
       - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
       - "supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql"
       - "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql"
@@ -70,6 +74,9 @@ jobs:
           src/lib/direct-donation-upgrade-split.test.ts
           src/lib/direct-donation-upgrade-environment-contract.test.ts
           src/lib/direct-donation-upgrade-source-contract.test.ts
+          src/lib/every-org-partner-webhook-auth.test.ts
+          src/lib/trade-donation.test.ts
+          src/lib/mpgf.test.ts
           scripts/vercel-project-config.test.mjs
 
       - name: Complete repository tests

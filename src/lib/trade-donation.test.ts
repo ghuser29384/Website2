@@ -15,6 +15,9 @@ import {
 } from "@/lib/trade-donation";
 
 const secret = "metadata-secret-that-is-at-least-thirty-two-characters";
+const donateLinkWebhookToken = "public-pledge-donate-link-token";
+const partnerWebhookAuthorizationToken =
+  "private-pledge-partner-webhook-authorization-token";
 const term: TradeDonationTermRow = {
   id: "11111111-1111-4111-8111-111111111111",
   agreement_id: "22222222-2222-4222-8222-222222222222",
@@ -71,7 +74,9 @@ const config: TradeDonationProviderConfig = {
   requestedEnabled: true,
   ready: true,
   environment: "staging",
-  webhookToken: "webhook-token",
+  donateLinkWebhookToken,
+  partnerWebhookAuthorizationTokenConfigured: true,
+  partnerWebhookAuthorizationContract: "unconfirmed",
   webhookPathSecret: "webhook-path-secret-that-is-long-enough",
   metadataSecret: secret,
   blockers: [],
@@ -137,6 +142,14 @@ test("Every.org URL freezes amount, recipient, partner ID, and signed metadata",
   assert.equal(url.searchParams.get("amount"), "10.00");
   assert.equal(url.searchParams.get("frequency"), "ONCE");
   assert.equal(url.searchParams.get("partner_donation_id"), intent.partner_donation_id);
+  assert.equal(url.searchParams.get("webhook_token"), donateLinkWebhookToken);
+  assert.equal(url.toString().includes(partnerWebhookAuthorizationToken), false);
+  assert.equal(
+    Buffer.from(url.searchParams.get("partner_metadata") ?? "", "base64")
+      .toString("utf8")
+      .includes(partnerWebhookAuthorizationToken),
+    false,
+  );
   assert.equal(url.hash, "#donate");
   assert.equal(url.searchParams.has("email"), false);
 });
@@ -202,37 +215,52 @@ test("curated target registry includes direct AMF routing", () => {
 });
 
 
-test("connector environments fail closed across the production boundary", () => {
-  const names = [
-    "EVERY_ORG_PLEDGE_DONATIONS_ENABLED",
-    "EVERY_ORG_ENVIRONMENT",
-    "EVERY_ORG_WEBHOOK_TOKEN",
-    "EVERY_ORG_WEBHOOK_PATH_SECRET",
-    "EVERY_ORG_PARTNER_METADATA_SECRET",
-    "VERCEL_ENV",
-    "NEXT_PUBLIC_SITE_URL",
-  ] as const;
-  const original = Object.fromEntries(names.map((name) => [name, process.env[name]]));
-  try {
-    process.env.EVERY_ORG_PLEDGE_DONATIONS_ENABLED = "true";
-    process.env.EVERY_ORG_WEBHOOK_TOKEN = "token";
-    process.env.EVERY_ORG_WEBHOOK_PATH_SECRET = "path-secret-that-is-at-least-thirty-two-characters";
-    process.env.EVERY_ORG_PARTNER_METADATA_SECRET = secret;
-    process.env.VERCEL_ENV = "production";
-    process.env.EVERY_ORG_ENVIRONMENT = "staging";
-    assert.equal(getTradeDonationProviderConfig().ready, false);
+test("connector environments and unconfirmed provider authentication fail closed", () => {
+  const base = {
+    EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "true",
+    EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: donateLinkWebhookToken,
+    EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN:
+      partnerWebhookAuthorizationToken,
+    EVERY_ORG_WEBHOOK_PATH_SECRET:
+      "path-secret-that-is-at-least-thirty-two-characters",
+    EVERY_ORG_PARTNER_METADATA_SECRET: secret,
+  };
 
-    process.env.VERCEL_ENV = "preview";
-    process.env.EVERY_ORG_ENVIRONMENT = "live";
-    assert.equal(getTradeDonationProviderConfig().ready, false);
+  const stagingOnProduction = getTradeDonationProviderConfig({
+    ...base,
+    EVERY_ORG_ENVIRONMENT: "staging",
+    VERCEL_ENV: "production",
+    NEXT_PUBLIC_SITE_URL: "https://www.moraltrade.org",
+  });
+  assert.equal(stagingOnProduction.ready, false);
+  assert.match(stagingOnProduction.blockers.join(" "), /cannot activate/);
 
-    process.env.EVERY_ORG_ENVIRONMENT = "staging";
-    assert.equal(getTradeDonationProviderConfig().ready, true);
-  } finally {
-    for (const name of names) {
-      const value = original[name];
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
-    }
-  }
+  const liveOnPreview = getTradeDonationProviderConfig({
+    ...base,
+    EVERY_ORG_ENVIRONMENT: "live",
+    VERCEL_ENV: "preview",
+    NEXT_PUBLIC_SITE_URL: "https://preview.example",
+  });
+  assert.equal(liveOnPreview.ready, false);
+  assert.match(liveOnPreview.blockers.join(" "), /canonical production/);
+
+  const staging = getTradeDonationProviderConfig({
+    ...base,
+    EVERY_ORG_ENVIRONMENT: "staging",
+    VERCEL_ENV: "preview",
+    NEXT_PUBLIC_SITE_URL: "https://preview.example",
+  });
+  assert.equal(staging.ready, false);
+  assert.match(staging.blockers.join(" "), /header contract is unconfirmed/);
+
+  const equal = getTradeDonationProviderConfig({
+    ...base,
+    EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN:
+      partnerWebhookAuthorizationToken,
+    EVERY_ORG_ENVIRONMENT: "staging",
+    VERCEL_ENV: "preview",
+    NEXT_PUBLIC_SITE_URL: "https://preview.example",
+  });
+  assert.equal(equal.donateLinkWebhookToken, "");
+  assert.match(equal.blockers.join(" "), /must be distinct/);
 });

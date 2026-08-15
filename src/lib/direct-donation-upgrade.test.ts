@@ -21,7 +21,9 @@ import {
 } from "@/lib/direct-donation-upgrade";
 
 const metadataSecret = "m".repeat(48);
-const webhookToken = "w".repeat(48);
+const donateLinkWebhookToken = "public-donate-link-token-" + "w".repeat(32);
+const partnerWebhookAuthorizationToken =
+  "private-partner-authorization-token-" + "a".repeat(32);
 const webhookPathSecret = "p".repeat(48);
 
 function configuredRuntime(
@@ -32,7 +34,9 @@ function configuredRuntime(
     DIRECT_DONATION_UPGRADE_MODE: "live",
     DIRECT_DONATION_UPGRADE_QA_FIXTURES: "false",
     EVERY_ORG_PUBLIC_API_KEY: "public-api-key",
-    EVERY_ORG_WEBHOOK_TOKEN: webhookToken,
+    EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: donateLinkWebhookToken,
+    EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN:
+      partnerWebhookAuthorizationToken,
     EVERY_ORG_WEBHOOK_PATH_SECRET: webhookPathSecret,
     EVERY_ORG_PARTNER_METADATA_SECRET: metadataSecret,
     VERCEL: "1",
@@ -81,7 +85,9 @@ const config: DirectDonationUpgradeConfig = {
   mode: "staging",
   environment: "staging",
   publicApiKey: "",
-  webhookToken,
+  donateLinkWebhookToken,
+  partnerWebhookAuthorizationTokenConfigured: true,
+  partnerWebhookAuthorizationContract: "unconfirmed",
   webhookPathSecret,
   metadataSecret,
   qaFixturesEnabled: true,
@@ -91,15 +97,15 @@ const config: DirectDonationUpgradeConfig = {
   blockers: [],
 };
 
-test("live mode is ready only on the exact canonical Vercel production deployment", () => {
+test("live mode preserves search but blocks commitments and checkout while provider authentication is unconfirmed", () => {
   const live = getDirectDonationUpgradeConfig(configuredRuntime());
 
   assert.equal(live.mode, "live");
   assert.equal(live.environment, "live");
   assert.equal(live.readyForSearch, true);
-  assert.equal(live.readyForCommitments, true);
-  assert.equal(live.readyForCheckout, true);
-  assert.deepEqual(live.blockers, []);
+  assert.equal(live.readyForCommitments, false);
+  assert.equal(live.readyForCheckout, false);
+  assert.match(live.blockers.join(" "), /header contract is unconfirmed/);
 });
 
 test("live mode fails closed for duplicate, unknown, Preview, conflicting, or noncanonical production metadata", () => {
@@ -158,7 +164,7 @@ test("live mode fails closed for duplicate, unknown, Preview, conflicting, or no
   }
 });
 
-test("staging remains available for local and Preview QA but is blocked by any Vercel production signal", () => {
+test("staging search remains available while commitments require the bounded rendered-QA inspection mode", () => {
   const stagingBase = {
     DIRECT_DONATION_UPGRADE_MODE: "staging",
     DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true",
@@ -182,8 +188,22 @@ test("staging remains available for local and Preview QA but is blocked by any V
     }),
   );
 
-  assert.equal(local.readyForCommitments, true);
-  assert.equal(preview.readyForCommitments, true);
+  assert.equal(local.readyForSearch, true);
+  assert.equal(preview.readyForSearch, true);
+  assert.equal(local.readyForCommitments, false);
+  assert.equal(preview.readyForCommitments, false);
+
+  const renderedQa = getDirectDonationUpgradeConfig(
+    configuredRuntime({
+      ...stagingBase,
+      DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE: "true",
+      VERCEL_PROJECT_ID: "prj_unknown_preview",
+      VERCEL_ENV: "preview",
+      VERCEL_TARGET_ENV: "preview",
+    }),
+  );
+  assert.equal(renderedQa.readyForCommitments, true);
+  assert.equal(renderedQa.readyForCheckout, false);
 
   for (const runtime of [
     configuredRuntime({
@@ -355,7 +375,35 @@ test("the checkout is direct to the frozen Every.org recipient with exact amount
   assert.equal(url.searchParams.get("frequency"), "ONCE");
   assert.equal(url.searchParams.get("partner_donation_id"), obligation().partner_donation_id);
   assert.ok(url.searchParams.get("partner_metadata"));
+  assert.equal(url.searchParams.get("webhook_token"), donateLinkWebhookToken);
+  assert.equal(url.toString().includes(partnerWebhookAuthorizationToken), false);
+  assert.equal(
+    Buffer.from(url.searchParams.get("partner_metadata") ?? "", "base64")
+      .toString("utf8")
+      .includes(partnerWebhookAuthorizationToken),
+    false,
+  );
   assert.equal(url.hash, "#donate");
+});
+
+test("equal or legacy webhook credentials fail closed without returning the private value to the URL builder", () => {
+  const equal = getDirectDonationUpgradeConfig(
+    configuredRuntime({
+      EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN:
+        partnerWebhookAuthorizationToken,
+    }),
+  );
+  assert.equal(equal.readyForCommitments, false);
+  assert.equal(equal.readyForCheckout, false);
+  assert.equal(equal.donateLinkWebhookToken, "");
+  assert.match(equal.blockers.join(" "), /must be distinct/);
+
+  const legacy = getDirectDonationUpgradeConfig(
+    configuredRuntime({ EVERY_ORG_WEBHOOK_TOKEN: "legacy-value" }),
+  );
+  assert.equal(legacy.readyForCommitments, false);
+  assert.equal(legacy.readyForCheckout, false);
+  assert.match(legacy.blockers.join(" "), /no alias is accepted/);
 });
 
 test("an exact Every.org webhook is valid and separates gross from net", () => {

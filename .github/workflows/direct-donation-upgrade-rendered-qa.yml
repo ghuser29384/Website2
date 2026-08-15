@@ -14,10 +14,14 @@ on:
       - "src/app/trades/new/direct-donation-upgrade-create.tsx"
       - "src/app/trades/new/page.tsx"
       - "src/app/api/donation-upgrades/**"
+      - "src/app/api/connectors/every-org/**"
+      - "src/app/api/mpgf/every-org/**"
       - "src/components/donation-upgrades/**"
       - "src/components/create/create-interface-frame.tsx"
       - "src/lib/create-interface/**"
       - "src/lib/direct-donation-upgrade*.ts"
+      - "src/lib/every-org-partner-webhook-auth*.ts"
+      - "src/lib/trade-donation*.ts"
       - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
       - "supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql"
       - "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql"
@@ -60,7 +64,7 @@ jobs:
       DIRECT_DONATION_UPGRADES_ENABLED: "true"
       DIRECT_DONATION_UPGRADE_MODE: staging
       DIRECT_DONATION_UPGRADE_QA_FIXTURES: "true"
-      EVERY_ORG_WEBHOOK_TOKEN: direct-upgrade-rendered-qa-token
+      EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN: direct-upgrade-rendered-qa-public-token
       EVERY_ORG_WEBHOOK_PATH_SECRET: direct-upgrade-rendered-path-secret-20260801
       EVERY_ORG_PARTNER_METADATA_SECRET: direct-upgrade-rendered-metadata-secret-20260801
       CONDITIONAL_PAYMENTS_MODE: disabled

@@ -4,17 +4,21 @@ on:
   pull_request:
     branches:
       - main
+      - integration/direct-donation-upgrade-current-main-20260807
     paths:
       - ".github/workflows/direct-donation-upgrade-partial-gates.yml"
       - ".github/workflows/direct-donation-upgrade-partial-qa.yml"
       - "src/app/direct-donation-upgrade-actions.ts"
       - "src/app/api/connectors/every-org/**"
+      - "src/app/api/mpgf/every-org/**"
       - "src/app/api/jobs/donation-upgrades/**"
       - "src/app/donation-upgrades/**"
       - "src/app/trades/new/conditional-donation.tsx"
       - "src/app/trades/new/direct-donation-upgrade-create.tsx"
       - "src/components/donation-upgrades/**"
       - "src/lib/direct-donation-upgrade*.ts"
+      - "src/lib/every-org-partner-webhook-auth*.ts"
+      - "src/lib/trade-donation*.ts"
       - "supabase/migrations/*donation_upgrade*.sql"
       - "supabase/migrations/20260813150000_direct_donation_upgrade_partial_redirect_negotiation.sql"
       - "supabase/migrations/20260813151000_direct_donation_upgrade_partial_redirect_lifecycle.sql"
@@ -57,6 +61,9 @@ jobs:
           src/lib/direct-donation-upgrade-split.test.ts
           src/lib/direct-donation-upgrade-environment-contract.test.ts
           src/lib/direct-donation-upgrade-source-contract.test.ts
+          src/lib/every-org-partner-webhook-auth.test.ts
+          src/lib/trade-donation.test.ts
+          src/lib/mpgf.test.ts
 
       - name: Complete repository tests
         id: tests

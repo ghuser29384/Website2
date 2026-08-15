@@ -9,8 +9,11 @@ on:
       - "supabase/migrations/20260801050000_direct_verified_donation_upgrades.sql"
       - "supabase/tests/direct_verified_donation_upgrade.sql"
       - "src/lib/direct-donation-upgrade*.ts"
+      - "src/lib/every-org-partner-webhook-auth*.ts"
+      - "src/lib/trade-donation*.ts"
       - "src/app/direct-donation-upgrade-actions.ts"
       - "src/app/api/connectors/every-org/**"
+      - "src/app/api/mpgf/every-org/**"
       - "src/app/api/jobs/donation-upgrades/**"
   workflow_dispatch:
     inputs:

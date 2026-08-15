@@ -21,7 +21,8 @@ DIRECT_DONATION_UPGRADES_ENABLED=false
 DIRECT_DONATION_UPGRADE_MODE=disabled
 DIRECT_DONATION_UPGRADE_QA_FIXTURES=false
 EVERY_ORG_PUBLIC_API_KEY=
-EVERY_ORG_WEBHOOK_TOKEN=
+EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN=
+EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN=
 EVERY_ORG_WEBHOOK_PATH_SECRET=
 EVERY_ORG_PARTNER_METADATA_SECRET=
 ```
@@ -30,11 +31,13 @@ Permitted modes:
 
 - `disabled`: nonprofit search, publication, matching, and checkout are fail-closed.
 - `staging`: available only outside canonical production. The public API may be replaced by deterministic Homeward Pet and GiveWell fixtures when `DIRECT_DONATION_UPGRADE_QA_FIXTURES=true`.
-- `live`: available only on the canonical production deployment with all Every.org values configured.
+- `live`: available only on the canonical production deployment with all Every.org values configured and the exact Partner Webhook authorization-header contract implemented.
 
 Internal, database, or rendered QA does not substitute for provider staging approval or a real hosted-checkout and authoritative-webhook exercise.
 
-The webhook path and metadata secrets must each contain at least 32 characters.
+The public Donate Link token and private Partner Webhook authorization token must be configured independently and must differ. `EVERY_ORG_WEBHOOK_TOKEN` is unsupported and is never treated as an alias for either value. The webhook path and metadata secrets must each contain at least 32 characters.
+
+Phase A intentionally keeps the Partner Webhook authorization contract in the `unconfirmed` state because Every.org has not yet supplied the literal header name and complete value format. In that state, search fixtures may remain available outside production, but publication and checkout stay fail-closed and every inbound Every.org webhook returns a generic `401` before body parsing or database access. A correct URL path is defense in depth and cannot bypass this gate.
 
 ## Recipient identity
 
@@ -136,9 +139,11 @@ The checkout fixes:
 - partner donation ID;
 - base64 partner metadata containing the obligation, offer, participant, role, branch, terms hash, and HMAC;
 - success and exit URLs;
-- webhook token.
+- the public Donate Link webhook token.
 
-A browser return is not fulfillment. The webhook must match:
+The URL builder receives only `EVERY_ORG_DONATE_LINK_WEBHOOK_TOKEN`; the private `EVERY_ORG_PARTNER_WEBHOOK_AUTHORIZATION_TOKEN` is not present in the runtime config object passed to the builder. The private value must never enter the Donate Link, partner metadata, browser state, HTML, logs, artifacts, snapshots, or errors.
+
+A browser return is not fulfillment. After the exact provider-authentication header succeeds, the webhook must match:
 
 - unique provider charge ID;
 - partner donation ID;
