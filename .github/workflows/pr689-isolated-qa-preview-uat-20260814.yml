@@ -19,8 +19,9 @@ env:
   ADMIN_EMAILS: dac-product-reviewer@qa.invalid
   CANDIDATE_BASE_SHA: 79ca382c3bdc325dfc5a28e2cbbafc1b95640386
   CANDIDATE_PRE_REPAIR_SHA: 5faef28f76ea20097af18a3d5dab6d1c8dfb116c
-  CANDIDATE_HEAD_SHA: b9598f3d5c812df6648fd86ff81d74858ba0bfc1
-  CANDIDATE_TREE_SHA: e78ff76392bcbfbbac0fc76b2a1d1fd5ed95c518
+  CANDIDATE_ORDERING_REPAIR_SHA: b9598f3d5c812df6648fd86ff81d74858ba0bfc1
+  CANDIDATE_HEAD_SHA: 04cf9466be288f92c7569f8c871c711269e40ded
+  CANDIDATE_TREE_SHA: 5652f3777a19b0188f26b62a606afa718eccfe47
   CONTROLLER_BRANCH: ops/pr689-isolated-qa-preview-uat-20260814
   EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
   EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
@@ -80,8 +81,9 @@ jobs:
           test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
           test "$(git -C app rev-parse HEAD)" = "$CANDIDATE_HEAD_SHA"
           test "$(git -C app rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
-          test "$(git -C app rev-parse HEAD^1)" = "$CANDIDATE_PRE_REPAIR_SHA"
-          test "$(git -C app rev-parse HEAD~2)" = "$CANDIDATE_BASE_SHA"
+          test "$(git -C app rev-parse HEAD^1)" = "$CANDIDATE_ORDERING_REPAIR_SHA"
+          test "$(git -C app rev-parse HEAD~2)" = "$CANDIDATE_PRE_REPAIR_SHA"
+          test "$(git -C app rev-parse HEAD~3)" = "$CANDIDATE_BASE_SHA"
           observed_main_sha="$(git -C app rev-parse origin/main)"
           test "$(git -C app merge-base HEAD origin/main)" = "$CANDIDATE_BASE_SHA"
           git -C app merge-base --is-ancestor "$CANDIDATE_BASE_SHA" origin/main
@@ -105,8 +107,9 @@ jobs:
             --arg tree "$CANDIDATE_TREE_SHA" \
             --arg base "$CANDIDATE_BASE_SHA" \
             --arg preRepair "$CANDIDATE_PRE_REPAIR_SHA" \
+            --arg orderingRepair "$CANDIDATE_ORDERING_REPAIR_SHA" \
             --arg observedMain "$observed_main_sha" \
-            '{pr689:{open:true,draft:true,merged:false,head:$head,tree:$tree,base:$base,repairedFrom:$preRepair},repository:{observedMain:$observedMain,candidateBaseIsAncestorOfMain:true},pr640:{open:true,draft:true,merged:false},issues:{"697":"open","702":"open"}}' \
+            '{pr689:{open:true,draft:true,merged:false,head:$head,tree:$tree,base:$base,repairedFrom:$preRepair,orderingRepair:$orderingRepair},repository:{observedMain:$observedMain,candidateBaseIsAncestorOfMain:true},pr640:{open:true,draft:true,merged:false},issues:{"697":"open","702":"open"}}' \
             > evidence/exact-state.json
 
       - name: Install exact application dependencies and browser/database clients
@@ -493,8 +496,12 @@ jobs:
             supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql
             supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql
             supabase/migrations/20260815010000_mpgf_pool_lifecycle_event_ordering.sql
+            supabase/migrations/20260815011000_mpgf_dac_terminal_guard_reconciliation.sql
           )
-          repair_migration=supabase/migrations/20260815010000_mpgf_pool_lifecycle_event_ordering.sql
+          repair_migrations=(
+            supabase/migrations/20260815010000_mpgf_pool_lifecycle_event_ordering.sql
+            supabase/migrations/20260815011000_mpgf_dac_terminal_guard_reconciliation.sql
+          )
           tests=(
             supabase/tests/mpgf_pool_review_freeze.sql
             supabase/tests/mpgf_pool_publication_materialization.sql
@@ -507,16 +514,21 @@ jobs:
             --file ../controller/ops/pr689-uat702/verify-preexisting-dac-schema.sql \
             > ../evidence/preexisting-dac-schema-verification.txt
 
-          migration_log="$RUNNER_TEMP/$(basename "$repair_migration").log"
-          test "$(sed -n '/^[[:space:]]*$/d; p; q' "$repair_migration" | tr '[:upper:]' '[:lower:]')" = "begin;"
-          test "$(awk 'NF { line=$0 } END { print line }' "$repair_migration" | tr '[:upper:]' '[:lower:]')" = "commit;"
-          if ! psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$repair_migration" > "$migration_log" 2>&1; then
-            node ../controller/ops/pr689-uat702/sanitize-database-diagnostic.mjs \
-              "$migration_log" ../evidence/database-failure.txt migration "$repair_migration"
-            cat ../evidence/database-failure.txt
-            exit 1
-          fi
-          rm -f "$migration_log"
+          for repair_migration in "${repair_migrations[@]}"; do
+            migration_log="$RUNNER_TEMP/$(basename "$repair_migration").log"
+            test "$(sed -n '/^[[:space:]]*$/d; p; q' "$repair_migration" | tr '[:upper:]' '[:lower:]')" = "begin;"
+            test "$(awk 'NF { line=$0 } END { print line }' "$repair_migration" | tr '[:upper:]' '[:lower:]')" = "commit;"
+            if ! psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$repair_migration" > "$migration_log" 2>&1; then
+              node ../controller/ops/pr689-uat702/sanitize-database-diagnostic.mjs \
+                "$migration_log" ../evidence/database-failure.txt migration "$repair_migration"
+              cat ../evidence/database-failure.txt
+              exit 1
+            fi
+            rm -f "$migration_log"
+          done
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file ../controller/ops/pr689-uat702/verify-terminal-dac-guard.sql \
+            > ../evidence/terminal-dac-guard-verification.txt
           for regression in "${tests[@]}"; do
             regression_log="$RUNNER_TEMP/$(basename "$regression").log"
             if ! psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 --file "$regression" > "$regression_log" 2>&1; then
@@ -527,7 +539,7 @@ jobs:
             fi
             rm -f "$regression_log"
           done
-          printf 'reviewed_migration_sources=8\npreexisting_candidate_migrations_verified=7\nordering_repair_migrations_applied=1\nrollback_regressions=5\nresult=passed\n' > ../evidence/database-contract-summary.txt
+          printf 'reviewed_migration_sources=9\npreexisting_candidate_migrations_verified=7\ncandidate_repair_migrations_applied=2\nrollback_regressions=5\nresult=passed\n' > ../evidence/database-contract-summary.txt
 
       - name: Execute complete protected-Preview UAT with unconditional cleanup
         id: uat
