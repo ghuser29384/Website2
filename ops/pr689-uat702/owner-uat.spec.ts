@@ -716,6 +716,10 @@ test("creator, negative authorization, intended reviewer freeze/reject, and froz
     await expect(page.getByText("rejected", { exact: true }).first()).toBeVisible();
     await page.getByRole("button", { name: "Log out" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/`);
+    // The static homepage reconstructs itself after fetching integrity-checked
+    // chunks. Let that navigation settle before leaving it, otherwise the test
+    // itself aborts a chunk fetch and manufactures a console error.
+    await expect(page.locator('[data-mt-live-account-avatar="true"]')).toBeVisible({ timeout: 20_000 });
     const remainingAuthCookies = (await page.context().cookies())
       .filter((cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("-auth-token"));
     expect(remainingAuthCookies).toHaveLength(0);
