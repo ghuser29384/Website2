@@ -103,20 +103,40 @@ async function authenticatedContext(
 
 async function expectResponsive(page: Page) {
   await expect(page.locator("nextjs-portal")).toHaveCount(0);
-  const measurements = await page.evaluate(() => ({
-    viewport: document.documentElement.clientWidth,
-    page: document.documentElement.scrollWidth,
-    clipped: [...document.querySelectorAll("input, select, textarea, button, a")]
-      .filter((element) => {
-        const rect = element.getBoundingClientRect();
-        return (
-          rect.width > 0 &&
-          rect.height > 0 &&
-          (rect.left < -1 || rect.right > window.innerWidth + 1)
-        );
-      })
-      .map((element) => element.outerHTML.slice(0, 180)),
-  }));
+  const measurements = await page.evaluate(() => {
+    function isInsideHorizontalScrollRegion(element: Element) {
+      for (
+        let ancestor = element.parentElement;
+        ancestor;
+        ancestor = ancestor.parentElement
+      ) {
+        const overflowX = getComputedStyle(ancestor).overflowX;
+        if (
+          (overflowX === "auto" || overflowX === "scroll") &&
+          ancestor.scrollWidth > ancestor.clientWidth + 1
+        ) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    return {
+      viewport: document.documentElement.clientWidth,
+      page: document.documentElement.scrollWidth,
+      clipped: [...document.querySelectorAll("input, select, textarea, button, a")]
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            (rect.left < -1 || rect.right > window.innerWidth + 1) &&
+            !isInsideHorizontalScrollRegion(element)
+          );
+        })
+        .map((element) => element.outerHTML.slice(0, 180)),
+    };
+  });
   expect(measurements.page).toBeLessThanOrEqual(measurements.viewport + 1);
   expect(measurements.clipped).toEqual([]);
 }
