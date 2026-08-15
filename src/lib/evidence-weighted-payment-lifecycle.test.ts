@@ -284,6 +284,23 @@ test("reviewer nomination uses full navigation when matching nominations remove 
   assert.match(reviewerNominationForm, /<\/FullNavigationActionForm>/);
 });
 
+test("private evidence submission uses full navigation after the server action redirects", () => {
+  const workflow = source(
+    "src/components/core-trade/trade-milestone-workflow.tsx",
+  );
+  const evidenceBundleForm = workflow.match(
+    /function EvidenceBundleForm\([\s\S]*?(?=\nfunction ReviewerNominationForm\()/,
+  )?.[0];
+
+  assert.ok(evidenceBundleForm);
+  assert.match(
+    evidenceBundleForm,
+    /<FullNavigationActionForm\s+action=\{action\}\s+className="panel stack-form"\s+encType="multipart\/form-data"/,
+  );
+  assert.match(evidenceBundleForm, /<\/FullNavigationActionForm>/);
+  assert.doesNotMatch(evidenceBundleForm, /<form\s+action=\{action\}/);
+});
+
 test("agreement confirmation uses full navigation when activation changes the rendered stage", () => {
   const stage = source(
     "src/components/core-trade/trade-agreement-stage-base.tsx",
