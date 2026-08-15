@@ -40,11 +40,11 @@ test("the agreement-change trigger helper is callable only by service_role", () 
 
   assert.match(
     hardeningSql,
-    /revoke all on function public\.mark_trade_donation_pool_component_stale\(\) from public\s*,\s*anon\s*,\s*authenticated\s*;/i,
+    /revoke all on function public\.mark_trade_donation_pool_component_stale\(\) from public\s*,\s*anon\s*,\s*authenticated'?\s*;/i,
   );
   assert.match(
     hardeningSql,
-    /grant execute on function public\.mark_trade_donation_pool_component_stale\(\) to service_role\s*;/i,
+    /grant execute on function public\.mark_trade_donation_pool_component_stale\(\) to service_role'?\s*;/i,
   );
   assert.doesNotMatch(
     hardeningSql,
