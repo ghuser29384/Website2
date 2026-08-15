@@ -1,0 +1,8 @@
+{
+  "runtime": "nodejs24.x",
+  "handler": "index.cjs",
+  "maxDuration": 15,
+  "launcherType": "Nodejs",
+  "shouldAddHelpers": true,
+  "shouldAddSourcemapSupport": false
+}
