@@ -128,6 +128,17 @@ test.describe("Adaptive Feed", () => {
     await expect(page).toHaveURL(/\/login\?returnTo=%2Ffeed$/, { timeout: 30_000 });
   });
 
+  test("keeps the enhanced Feed navigation within an intermediate desktop viewport", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await openHome(page);
+
+    await expect(page.locator("header.topbar nav")).toBeVisible();
+    await expect(page.locator(".top-actions")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+
   test("stacks the adaptive signed-out feed without horizontal overflow on mobile", async ({
     page,
   }) => {

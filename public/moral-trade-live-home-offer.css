@@ -38,6 +38,38 @@
   display: none;
 }
 
+@media (min-width: 821px) and (max-width: 1180px) {
+  .topbar {
+    grid-template-columns: 170px minmax(0, 1fr) 160px;
+    padding-inline: 20px;
+  }
+
+  .topbar .brand {
+    gap: 8px;
+    font-size: 16px;
+  }
+
+  .topbar nav {
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .topbar nav button {
+    padding-inline: 10px;
+    font-size: 14px;
+  }
+
+  .top-actions {
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .top-actions .text-btn {
+    padding-inline: 0;
+    font-size: 13px;
+  }
+}
+
 @media (max-width: 820px) {
   .top-actions {
     gap: 8px;
