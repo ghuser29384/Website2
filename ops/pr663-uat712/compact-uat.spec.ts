@@ -397,15 +397,29 @@ async function viewportAudit(page: Page, label: string) {
     const overflowing = [...document.querySelectorAll<HTMLElement>("body *")]
       .map((element) => {
         const rect = element.getBoundingClientRect();
+        let insideIntentionalScroller = false;
+        for (let current = element.parentElement; current; current = current.parentElement) {
+          const overflowX = getComputedStyle(current).overflowX;
+          if (["auto", "scroll"].includes(overflowX) && current.scrollWidth > current.clientWidth + 1) {
+            insideIntentionalScroller = true;
+            break;
+          }
+        }
         return {
           tag: element.tagName.toLowerCase(),
           className: String(element.className || "").slice(0, 100),
           left: Math.round(rect.left),
           right: Math.round(rect.right),
           width: Math.round(rect.width),
+          insideIntentionalScroller,
         };
       })
-      .filter((item) => item.width > 1 && (item.left < -1 || item.right > window.innerWidth + 1))
+      .filter(
+        (item) =>
+          item.width > 1 &&
+          !item.insideIntentionalScroller &&
+          (item.left < -1 || item.right > window.innerWidth + 1),
+      )
       .slice(0, 20);
     return {
       width: window.innerWidth,
@@ -860,6 +874,11 @@ test("D/E/F/I: unavailable authority, no electorate, and responsive rendered pro
         await expect(page.getByRole("progressbar")).toHaveCount(0);
         await expect(page.getByText(/legal debt, unilateral charge, payment authorization/)).toBeVisible();
         await assertMutationBoundaryOrder(page);
+        const mobileNav = page.locator(".topbar-mobile-nav");
+        await expect(mobileNav.locator(":scope > summary")).toBeVisible();
+        await mobileNav.locator(":scope > summary").click();
+        await expect(mobileNav.locator(".topbar-mobile-nav-panel > a")).toHaveCount(8);
+        await expect(mobileNav.getByRole("link", { name: "Safety" })).toBeVisible();
         await viewportAudit(page, `member-a-${viewport.name}`);
         await screenshot(page, `08-member-a-multi-unavailable-${viewport.name}`);
       } finally {
@@ -900,7 +919,8 @@ test("D/E/F/I: unavailable authority, no electorate, and responsive rendered pro
     ]);
     mark("I", "pass", [
       "1440x900, 1024x768, 390x844, and 320x568 exercised",
-      "single H1, keyboard focus, zero horizontal overflow, zero clipped controls",
+      "single H1, keyboard focus, zero page-level horizontal overflow, and all eight mobile navigation routes visible on expansion",
+      "intentional bounded tab scrollers excluded from page-overflow failures",
       "no framework overlay and truthful no-money boundary above actions",
       "successful-run screenshots and traces retained for every role/state class",
     ]);

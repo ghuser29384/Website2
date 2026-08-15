@@ -17,13 +17,14 @@ permissions:
 
 env:
   CANDIDATE_BASE_SHA: 79ca382c3bdc325dfc5a28e2cbbafc1b95640386
-  CANDIDATE_HEAD_SHA: 1077473cb430b2fa61b9943ecbd443ddd519f9df
-  CANDIDATE_TREE_SHA: 463a330e898f4482fe5a5d4c26830b6a034c9410
-  CANDIDATE_AHEAD_COUNT: "79"
-  COMPACT_QA_RUN_ID: "31868907564"
+  CANDIDATE_HEAD_SHA: 6bd59e0a0583ec2d27b68ae67ee2cf86fd44f1b4
+  CANDIDATE_TREE_SHA: a8eb96e462b0e637c6d18aaaab634dcb8399a50d
+  CANDIDATE_AHEAD_COUNT: "80"
+  CANONICAL_VISUAL_RUN_ID: "31871202020"
+  COMPACT_QA_RUN_ID: "31871202008"
   CONTROLLER_BRANCH: ops/pr663-compact-v2-isolated-qa-preview-20260815
-  EVIDENCE_PAYMENT_RUN_ID: "31868907714"
-  RELEASE_CLASSIFICATION_RUN_ID: "31868906590"
+  EVIDENCE_PAYMENT_RUN_ID: "31871202046"
+  RELEASE_CLASSIFICATION_RUN_ID: "31871200878"
   EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
   EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
   FORBIDDEN_PROD_REF: jnpoxvalyjtdghnperyu
@@ -81,7 +82,7 @@ jobs:
           test "$(git -C app rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
           test "$(git -C app merge-base origin/main HEAD)" = "$CANDIDATE_BASE_SHA"
           test "$(git -C app rev-list --count "$CANDIDATE_BASE_SHA..HEAD")" = "$CANDIDATE_AHEAD_COUNT"
-          test "$(git -C app diff --name-only "$CANDIDATE_BASE_SHA...HEAD" | wc -l | tr -d ' ')" = "40"
+          test "$(git -C app diff --name-only "$CANDIDATE_BASE_SHA...HEAD" | wc -l | tr -d ' ')" = "43"
           test "$(git -C app status --porcelain)" = ""
           current_main_sha="$(git -C app rev-parse origin/main)"
           test "$(git -C app merge-base "$CANDIDATE_BASE_SHA" "$current_main_sha")" = "$CANDIDATE_BASE_SHA"
@@ -109,6 +110,7 @@ jobs:
 
           for binding in \
             "$COMPACT_QA_RUN_ID:MPGF public-goods compacts QA" \
+            "$CANONICAL_VISUAL_RUN_ID:Sitewide canonical visual system" \
             "$EVIDENCE_PAYMENT_RUN_ID:Evidence payment release QA" \
             "$RELEASE_CLASSIFICATION_RUN_ID:Release classification"; do
             run_id="${binding%%:*}"
@@ -131,13 +133,14 @@ jobs:
             --argjson ahead "$CANDIDATE_AHEAD_COUNT" \
             --argjson currentMainAhead "$current_main_ahead" \
             --arg compactRun "$COMPACT_QA_RUN_ID" \
+            --arg canonicalVisualRun "$CANONICAL_VISUAL_RUN_ID" \
             --arg paymentRun "$EVIDENCE_PAYMENT_RUN_ID" \
             --arg classificationRun "$RELEASE_CLASSIFICATION_RUN_ID" \
             '{
-              pr663:{open:true,draft:true,merged:false,mergeable:true,head:$head,tree:$tree,frozenBase:$base,aheadOfFrozenBase:$ahead,changedFiles:40},
+              pr663:{open:true,draft:true,merged:false,mergeable:true,head:$head,tree:$tree,frozenBase:$base,aheadOfFrozenBase:$ahead,changedFiles:43},
               repository:{currentMain:$currentMain,currentMainAheadOfFrozenBase:$currentMainAhead,frozenBaseStillMergeBase:true,uatRebasePerformed:false},
               issues:{"688":"open","696":"closed","712":"open"},
-              exactHeadRuns:{compactQa:$compactRun,evidencePaymentQa:$paymentRun,releaseClassification:$classificationRun,allSuccessful:true},
+              exactHeadRuns:{compactQa:$compactRun,canonicalVisual:$canonicalVisualRun,evidencePaymentQa:$paymentRun,releaseClassification:$classificationRun,allSuccessful:true},
               githubDeploymentsBefore:0
             }' > evidence/exact-state.json
 
