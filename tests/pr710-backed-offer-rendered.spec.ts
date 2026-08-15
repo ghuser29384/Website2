@@ -185,8 +185,12 @@ async function expectOfferIdentityAndContent(page: Page) {
   await expect(page.getByText("Owner profile", { exact: true })).toBeVisible();
   await expect(page.getByText("Interest and saved-offer activity", { exact: true })).toBeVisible();
   await expect(page.getByText("Commentary and recommendations", { exact: true })).toBeVisible();
-  await expect(page.locator("#marketplace-detail-section-heading")).toHaveText("Commitment preview");
-  await expect(page.locator("#marketplace-detail-section-heading")).toBeVisible();
+  await expect(page.getByRole("region", { exact: true, name: "Commitment preview" })).toBeVisible();
+  await expect(
+    page.getByRole("heading", {
+      name: /Evaluator core-loop verification pledge.*Private QA response verification donation/i,
+    }),
+  ).toBeVisible();
   await expect(page.getByRole("heading", { exact: true, name: "Guarantees and limits" })).toBeVisible();
 }
 
@@ -273,8 +277,13 @@ async function commitmentResult(page: Page, input: "keyboard" | "pointer") {
   const target = page.locator("#marketplace-commitment");
   await expect(target).toHaveCount(1);
   await expect(target).toBeInViewport();
+  await expect(target).toHaveAttribute("aria-labelledby", "marketplace-detail-section-heading");
   await expect(target.locator("#marketplace-detail-section-heading")).toHaveText("Commitment preview");
-  await expect(target.locator("#marketplace-detail-section-heading")).toBeVisible();
+  await expect(
+    target.getByRole("heading", {
+      name: /Evaluator core-loop verification pledge.*Private QA response verification donation/i,
+    }),
+  ).toBeVisible();
   await expect(target.getByRole("heading", { exact: true, name: "Guarantees and limits" })).toBeVisible();
   const state = await target.evaluate((element) => ({
     activeElementTag: document.activeElement?.tagName ?? null,
