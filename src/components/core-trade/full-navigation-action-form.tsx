@@ -1,5 +1,10 @@
 "use client";
 
+// Next exposes redirect() publicly, but not the client-side helpers required to
+// recognize and decode the redirect error returned by a directly awaited
+// Server Action. Keep this compatibility boundary centralized. The executable
+// contract in evidence-weighted-payment-lifecycle.test.ts is intentionally
+// coupled to the lockfile and must pass before any Next upgrade is accepted.
 import {
   getRedirectTypeFromError,
   getURLFromRedirectError,

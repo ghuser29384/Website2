@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import test from "node:test";
+import {
+  getRedirectTypeFromError,
+  getURLFromRedirectError,
+} from "next/dist/client/components/redirect";
+import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { redirect } from "next/navigation";
 
 function source(path: string) {
   return readFileSync(resolve(process.cwd(), path), "utf8");
@@ -266,6 +272,21 @@ test("full-navigation actions keep React form semantics and hard-navigate valida
   ]) {
     assert.doesNotMatch(fullNavigationForm, forbidden);
   }
+});
+
+test("the locked Next runtime still exposes the validated redirect parser contract", () => {
+  const target = "/trade-agreements/upgrade-contract?message=ok";
+  let redirectSignal: unknown;
+
+  try {
+    redirect(target);
+  } catch (error) {
+    redirectSignal = error;
+  }
+
+  assert.ok(isRedirectError(redirectSignal));
+  assert.equal(getURLFromRedirectError(redirectSignal), target);
+  assert.equal(getRedirectTypeFromError(redirectSignal), "replace");
 });
 
 test("reviewer nomination uses full navigation when matching nominations remove the form", () => {
