@@ -1,0 +1,123 @@
+name: PR 724 current-main exact-head validation
+
+on:
+  push:
+    branches:
+      - qa/pr724-current-main-validation-20260815
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr724-current-main-exact-head-validation
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: d5406724ec7c16d2e07e4e1819e456069ed117ce
+  CANDIDATE_BRANCH: fix/public-marketplace-overview-deadline-20260815
+  EXPECTED_BASE_SHA: a04d3345fb93f444c74bf5ea6ba795a6934efd20
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+
+    steps:
+      - name: Check out the exact integrated candidate
+        uses: actions/checkout@v4
+        with:
+          ref: d5406724ec7c16d2e07e4e1819e456069ed117ce
+          fetch-depth: 0
+
+      - name: Prove candidate identity, current base, and clean source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          remote_head="$(git ls-remote origin "refs/heads/$CANDIDATE_BRANCH" | awk '{print $1}')"
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          test "$remote_head" = "$EXPECTED_SHA"
+          test "$remote_main" = "$EXPECTED_BASE_SHA"
+          test "$(git status --porcelain)" = ""
+          git merge-base --is-ancestor "$EXPECTED_BASE_SHA" "$EXPECTED_SHA"
+          git diff --check "$EXPECTED_BASE_SHA"..."$EXPECTED_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Run focused and repository quality gates
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: https://www.moraltrade.org
+          SITE_URL: https://www.moraltrade.org
+          VERCEL: '1'
+          VERCEL_ENV: production
+        run: |
+          set -euo pipefail
+          node --import tsx --test \
+            src/lib/action-first-positioning.test.ts \
+            src/lib/public-marketplace-overview.test.ts \
+            src/offers-walkthrough-density.test.ts
+          npm test
+          npm run lint -- --quiet
+          npx tsc --noEmit
+          npm run build
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Stress the redirected Start shell
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -euo pipefail
+          mkdir -p validation-evidence
+          npx playwright test \
+            --config=playwright.release.config.ts \
+            tests/pilot-copy.spec.ts \
+            --repeat-each=40 \
+            --reporter=line \
+            2>&1 | tee validation-evidence/pilot-stress.log
+
+      - name: Run the complete release browser gate twice
+        shell: bash
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3210
+          SITE_URL: http://127.0.0.1:3210
+          PLAYWRIGHT_HTML_OPEN: never
+        run: |
+          set -uo pipefail
+          mkdir -p validation-evidence
+          set +e
+          npx playwright test \
+            --config=playwright.release.config.ts \
+            --repeat-each=2 \
+            --reporter=line,html \
+            2>&1 | tee validation-evidence/release-browser.log
+          browser_status=${PIPESTATUS[0]}
+          set -e
+          printf '{"expectedSha":"%s","expectedBaseSha":"%s","pilotStressRepeatEach":40,"releaseRepeatEach":2,"browserStatus":%s}\n' \
+            "$EXPECTED_SHA" "$EXPECTED_BASE_SHA" "$browser_status" \
+            | tee validation-evidence/result.json
+          exit "$browser_status"
+
+      - name: Upload current-main exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr724-current-main-validation-${{ github.run_id }}
+          path: |
+            validation-evidence
+            playwright-report
+            test-results
+          if-no-files-found: error
+          retention-days: 30
