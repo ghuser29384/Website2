@@ -16,45 +16,127 @@ const renderedQa = readFileSync("tests/offers-density.spec.ts", "utf8");
 const smartQueryQa = readFileSync(".github/workflows/smart-query-qa.yml", "utf8");
 
 test("offers defaults to an open editorial directory instead of stacked dense panels", () => {
-  for (const required of [
-    "--offers-paper: #f7f3eb",
-    ".mt-beta-strip",
-    ".mt-explore-side",
-    "form[data-smart-query-surface=\"offers\"]",
-    ".mt-market-grid",
-    ".mt-pool-link-grid",
-  ]) {
-    assert.ok(densityStyles.includes(required), `missing offers-density contract: ${required}`);
-  }
+  const offersPage = readFileSync("src/app/offers/page.tsx", "utf8");
 
   assert.match(
     densityStyles,
-    /\.mt-market-grid\) \{[\s\S]*?grid-template-columns:\s*1fr;/,
-    "the participant directory must remain a one-column register",
+    /\.scope :global\(\.mt-beta-strip\)\s*\{\s*display:\s*none;\s*\}/,
+    "the route-scoped beta strip must stay out of the compact Offers workspace",
   );
   assert.match(
     densityStyles,
-    /div:nth-of-type\(3\) > p\) \{[\s\S]*?display:\s*none !important;/,
-    "the ranking formula must not dominate the default scan view",
+    /\.workspace \{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-areas:/,
+    "the Offers route must retain its CSS-module workspace",
   );
   assert.match(
-    participantStyles,
-    /\.group \{[\s\S]*?border-radius:\s*0;[\s\S]*?background:\s*transparent;/,
-    "participant groups must use open ruled layout rather than rounded nested cards",
+    densityStyles,
+    /\.directoryForm \{[\s\S]*?grid-area:\s*controls;[\s\S]*?display:\s*grid;/,
+    "search and filtering must remain in the directory control rail",
   );
   assert.match(
-    participantStyles,
-    /\.offer \{[\s\S]*?grid-template-areas:/,
-    "each exact proposal must use the compact editorial row layout",
+    densityStyles,
+    /\.groupList \{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*0\.85rem;/,
+    "participant groups must remain one authoritative compact list",
   );
-  assert.match(participantStyles, /\.actions :global\(\.button\)/);
-  assert.match(participantComponent, /data-participant-offer-group/);
-  assert.match(participantComponent, /data-participant-offer/);
-  assert.match(participantComponent, /data-participant-exact-terms-note/);
+  assert.match(offersPage, /className=\{densityStyles\.workspace\}/);
+  assert.match(offersPage, /className=\{densityStyles\.directoryForm\}/);
+  assert.match(offersPage, /className=\{densityStyles\.groupList\}/);
+  assert.equal(
+    offersPage.match(/data-authoritative-directory="true"/g)?.length,
+    1,
+    "the Offers page must render exactly one authoritative directory",
+  );
 
-  const noteIndex = participantComponent.indexOf("These are the owner&apos;s exact published terms");
+  const authoritativeIndex = offersPage.indexOf('data-authoritative-directory="true"');
+  const unavailableIndex = offersPage.indexOf('data-directory-state="unavailable"', authoritativeIndex);
+  const populatedBranchIndex = offersPage.indexOf(") : livePage.items.length ? (", unavailableIndex);
+  const groupListIndex = offersPage.indexOf("className={densityStyles.groupList}", populatedBranchIndex);
+  const emptyIndex = offersPage.indexOf('data-directory-state="empty"', groupListIndex);
+  assert.ok(
+    authoritativeIndex >= 0 &&
+      unavailableIndex > authoritativeIndex &&
+      populatedBranchIndex > unavailableIndex &&
+      groupListIndex > populatedBranchIndex &&
+      emptyIndex > groupListIndex,
+    "unavailable, populated, and empty states must remain mutually exclusive branches of the authoritative directory",
+  );
+  assert.equal(offersPage.match(/data-directory-state="unavailable"/g)?.length, 1);
+  assert.equal(offersPage.match(/data-directory-state="empty"/g)?.length, 1);
+
+  const groupRule = participantStyles.match(/^\.group\s*\{[^}]*\}/m)?.[0] ?? "";
+  assert.match(groupRule, /border-top:\s*1px solid var\(--offers-ink\);/);
+  assert.match(groupRule, /border-bottom:\s*1px solid var\(--offers-ink\);/);
+  assert.doesNotMatch(groupRule, /border-radius|box-shadow/);
+  assert.match(
+    participantStyles,
+    /\.offer \{[\s\S]*?display:\s*grid;[\s\S]*?gap:\s*0\.4rem;[\s\S]*?padding:\s*0\.58rem 0\.85rem 0\.52rem;[\s\S]*?contain-intrinsic-size:\s*auto 7\.6rem;/,
+    "each proposal must retain compact row geometry",
+  );
+  assert.match(
+    participantStyles,
+    /\.offerHeading \{[\s\S]*?display:\s*grid;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto;/,
+    "each proposal heading must reserve one compact primary-action column",
+  );
+
+  assert.equal(participantComponent.match(/\bdata-participant-offer-group\b/g)?.length, 1);
+  assert.equal(participantComponent.match(/\sdata-participant-offer\s/g)?.length, 1);
+  assert.match(participantComponent, /aria-labelledby=\{offerHeadingId\}/);
+  assert.match(participantComponent, /aria-describedby=\{`\$\{offerDescriptionId\} \$\{truthNoteId\}`\}/);
+
   const offersMapIndex = participantComponent.indexOf("offers.map");
-  assert.ok(noteIndex >= 0 && noteIndex < offersMapIndex, "the repeated truth note must appear once at group level");
+  const truthNoteIndex = participantComponent.indexOf("data-participant-exact-terms-note");
+  const truthCopy = "These are the owner&apos;s exact published terms";
+  assert.ok(offersMapIndex >= 0, "the participant component must render its proposal list");
+  assert.ok(truthNoteIndex > offersMapIndex, "the participant truth note must follow the proposal list");
+  assert.equal(
+    participantComponent.match(/data-participant-exact-terms-note/g)?.length,
+    1,
+    "the participant truth note marker must occur exactly once",
+  );
+  assert.equal(
+    participantComponent.split(truthCopy).length - 1,
+    1,
+    "the participant truth-note copy must occur exactly once",
+  );
+  assert.match(
+    participantComponent,
+    /\}\)\}\s*<\/div>\s*<p className=\{styles\.truthNote\} data-participant-exact-terms-note/,
+    "the participant truth note must sit outside the mapped proposal rows",
+  );
+
+  const proposalTemplate = participantComponent.slice(offersMapIndex, truthNoteIndex);
+  assert.equal(
+    proposalTemplate.match(/data-testid="proposal-primary-action"/g)?.length,
+    1,
+    "each mapped proposal must define exactly one primary action",
+  );
+  assert.equal(
+    proposalTemplate.match(/data-proposal-disclosure/g)?.length,
+    1,
+    "each mapped proposal must define exactly one native disclosure",
+  );
+  assert.match(proposalTemplate, /\{isOwner \? "Manage" : "Respond"\}/);
+
+  const primaryActionIndex = proposalTemplate.indexOf('data-testid="proposal-primary-action"');
+  const disclosureIndex = proposalTemplate.indexOf("<details");
+  const disclosureEndIndex = proposalTemplate.indexOf("</details>", disclosureIndex);
+  assert.ok(
+    primaryActionIndex >= 0 && disclosureIndex > primaryActionIndex && disclosureEndIndex > disclosureIndex,
+    "the single visible primary action must precede one complete native disclosure",
+  );
+  const disclosureSource = proposalTemplate.slice(disclosureIndex, disclosureEndIndex);
+  for (const required of [
+    "<dt>Get</dt>",
+    "<dd>{offer.request_action}</dd>",
+    "<dt>Do</dt>",
+    "<dd>{offer.offer_action}</dd>",
+    "Counteroffer",
+    ">Ask</Link>",
+    'saved ? "Remove saved" : "Save"',
+    "Open full terms",
+  ]) {
+    assert.ok(disclosureSource.includes(required), `missing proposal-disclosure contract: ${required}`);
+  }
 });
 
 test("the advanced challenge-return plane is optional, lazy-loaded, and request-deduplicated", () => {
