@@ -19,9 +19,15 @@ import {
   describeDirectDonationUpgradeRetainedLeg,
   formatDirectDonationUpgradeRedirectPercentage,
 } from "@/lib/direct-donation-upgrade-split";
-import { loadPublicDirectDonationUpgrades } from "@/lib/direct-donation-upgrade-data";
+import {
+  directDonationUpgradeRenderedQaViewerFixture,
+  loadPublicDirectDonationUpgrades,
+} from "@/lib/direct-donation-upgrade-data";
 import { getDirectSpendingUpgradeConfig } from "@/lib/direct-spending-upgrade";
-import { loadDirectSpendingUpgradePageData } from "@/lib/direct-spending-upgrade-data";
+import {
+  directSpendingUpgradeRenderedQaViewerFixture,
+  loadDirectSpendingUpgradePageData,
+} from "@/lib/direct-spending-upgrade-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -50,18 +56,36 @@ export default async function DonationUpgradesPage() {
   const viewer = await getViewer();
   const config = getDirectDonationUpgradeConfig();
   const spendingConfig = getDirectSpendingUpgradeConfig();
+  const viewerId = viewer?.authUser.id ?? null;
+  const donationFixture = config.environment
+    ? directDonationUpgradeRenderedQaViewerFixture({
+        viewerId,
+        environment: config.environment,
+      })
+    : null;
+  const spendingFixture =
+    spendingConfig.requestedEnabled && config.environment && viewerId
+      ? directSpendingUpgradeRenderedQaViewerFixture({
+          viewerId,
+          environment: config.environment,
+        })
+      : null;
   const [offers, spendingData] = await Promise.all([
     config.environment
-      ? loadPublicDirectDonationUpgrades({
-          environment: config.environment,
-          limit: 100,
-        })
+      ? donationFixture
+        ? Promise.resolve(donationFixture.publicOffers)
+        : loadPublicDirectDonationUpgrades({
+            environment: config.environment,
+            limit: 100,
+          })
       : Promise.resolve([]),
     spendingConfig.requestedEnabled && config.environment
-      ? loadDirectSpendingUpgradePageData({
-          viewerId: viewer?.authUser.id ?? null,
-          environment: config.environment,
-        })
+      ? spendingFixture
+        ? Promise.resolve(spendingFixture)
+        : loadDirectSpendingUpgradePageData({
+            viewerId,
+            environment: config.environment,
+          })
       : Promise.resolve({
           publicOffers: [],
           creatorOffers: [],

@@ -137,7 +137,8 @@ jobs:
           console.log(`::add-mask::${viewerId}`);
           appendFileSync(
             githubEnv,
-            `DIRECT_SPENDING_UPGRADE_RENDERED_QA_VIEWER_ID=${viewerId}\n`,
+            `DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID=${viewerId}\n` +
+              `DIRECT_SPENDING_UPGRADE_RENDERED_QA_VIEWER_ID=${viewerId}\n`,
           );
           const { error: signOutError } = await client.auth.signOut({ scope: "local" });
           if (signOutError) {

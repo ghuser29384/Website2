@@ -257,6 +257,7 @@ test("the offer is complete only when both donations and spending evidence pass"
 
 test("rendered QA fixtures bind to the authenticated viewer and stay out of production", () => {
   const keys = [
+    "DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID",
     "DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE",
     "DIRECT_DONATION_UPGRADE_QA_FIXTURES",
     "DIRECT_SPENDING_UPGRADE_RENDERED_QA_VIEWER_ID",
@@ -270,6 +271,8 @@ test("rendered QA fixtures bind to the authenticated viewer and stay out of prod
   try {
     process.env.DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE = "true";
     process.env.DIRECT_DONATION_UPGRADE_QA_FIXTURES = "true";
+    process.env.DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID =
+      authenticatedViewerId.toUpperCase();
     process.env.DIRECT_SPENDING_UPGRADE_RENDERED_QA_VIEWER_ID =
       authenticatedViewerId.toUpperCase();
     process.env.VERCEL = "1";

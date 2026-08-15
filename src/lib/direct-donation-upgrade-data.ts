@@ -26,18 +26,34 @@ export const DIRECT_DONATION_UPGRADE_RENDERED_QA_FULL_REDIRECT_OFFER_ID =
 export const DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID =
   "d1000000-0000-4000-8000-000000000001";
 
+function renderedQaBoundViewerId() {
+  const configured =
+    process.env.DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID;
+  if (configured === undefined) {
+    return DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID;
+  }
+  const viewerId = configured.trim().toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+    viewerId,
+  )
+    ? viewerId
+    : null;
+}
+
 export function directDonationUpgradeRenderedQaNoServiceDataEnabled(input: {
   viewerId: string | null;
   environment: DirectDonationUpgradeEnvironment | null;
 }) {
+  const boundViewerId = renderedQaBoundViewerId();
   return (
+    boundViewerId !== null &&
     process.env.DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE === "true" &&
     process.env.DIRECT_DONATION_UPGRADE_QA_FIXTURES === "true" &&
     process.env.VERCEL === "1" &&
     process.env.VERCEL_ENV === "preview" &&
     process.env.VERCEL_TARGET_ENV !== "production" &&
     input.environment === "staging" &&
-    input.viewerId === DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID
+    input.viewerId?.trim().toLowerCase() === boundViewerId
   );
 }
 
@@ -145,7 +161,10 @@ function renderedQaDetailFixture(input: {
   viewerId: string | null;
   environment: DirectDonationUpgradeEnvironment;
 }) {
-  if (!renderedQaFixtureEnabled(input)) return null;
+  const renderedQaViewerId = renderedQaFixtureEnabled(input)
+    ? renderedQaBoundViewerId()
+    : null;
+  if (!renderedQaViewerId) return null;
 
   if (input.offerId === DIRECT_DONATION_UPGRADE_RENDERED_QA_PROPOSER_OFFER_ID) {
     const offer = renderedQaOffer({
@@ -166,7 +185,7 @@ function renderedQaDetailFixture(input: {
 
   if (input.offerId === DIRECT_DONATION_UPGRADE_RENDERED_QA_CREATOR_OFFER_ID) {
     const offer = renderedQaOffer({
-      creatorProfileId: DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
+      creatorProfileId: renderedQaViewerId,
       id: input.offerId,
       termsHash: "b".repeat(64),
     });
@@ -245,7 +264,7 @@ function renderedQaDetailFixture(input: {
 
   if (input.offerId === DIRECT_DONATION_UPGRADE_RENDERED_QA_REVISION_OFFER_ID) {
     const offer = renderedQaOffer({
-      creatorProfileId: DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
+      creatorProfileId: renderedQaViewerId,
       id: input.offerId,
       redirectBasisPoints: 2_000,
       status: "cancelled",

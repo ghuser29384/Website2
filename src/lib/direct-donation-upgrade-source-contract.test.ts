@@ -49,7 +49,11 @@ test("rendered QA can inspect the commitment form without loading service-role d
   assert.match(createPage, /config\.environment && !renderedQaNoServiceData/);
   assert.match(
     dataLoader,
-    /DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE[\s\S]*DIRECT_DONATION_UPGRADE_QA_FIXTURES[\s\S]*VERCEL_ENV[\s\S]*input\.environment === "staging"[\s\S]*input\.viewerId === DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID/,
+    /DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID[\s\S]*DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID[\s\S]*boundViewerId !== null[\s\S]*DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE[\s\S]*DIRECT_DONATION_UPGRADE_QA_FIXTURES[\s\S]*VERCEL_ENV[\s\S]*input\.environment === "staging"[\s\S]*input\.viewerId\?\.trim\(\)\.toLowerCase\(\) === boundViewerId/,
+  );
+  assert.equal(
+    dataLoader.match(/creatorProfileId: renderedQaViewerId/g)?.length,
+    2,
   );
   assert.match(
     renderedQaWorkflow,

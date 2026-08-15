@@ -71,6 +71,10 @@ test("rendered no-service fixtures bind only to the successful QA Auth session",
   );
   assert.match(
     renderedQaWorkflow,
+    /DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID=\$\{viewerId\}/,
+  );
+  assert.match(
+    renderedQaWorkflow,
     /auth\.signOut\(\{ scope: "local" \}\)/,
   );
   assert.match(renderedQaWorkflow, /test -z "\$\{SUPABASE_SERVICE_ROLE_KEY:-\}"/);
@@ -87,6 +91,14 @@ test("rendered no-service fixtures bind only to the successful QA Auth session",
   assert.match(
     dataSource,
     /participant_profile_id: offer\.creator_profile_id/,
+  );
+  assert.match(
+    directoryPage,
+    /directDonationUpgradeRenderedQaViewerFixture[\s\S]*donationFixture\.publicOffers/,
+  );
+  assert.match(
+    directoryPage,
+    /directSpendingUpgradeRenderedQaViewerFixture[\s\S]*Promise\.resolve\(spendingFixture\)/,
   );
 });
 

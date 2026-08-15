@@ -1,5 +1,4 @@
 import {
-  DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
   directDonationUpgradeRenderedQaNoServiceDataEnabled,
 } from "@/lib/direct-donation-upgrade-data";
 import {
@@ -48,7 +47,7 @@ function renderedQaEnabled(input: {
     boundViewerId !== null &&
     input.viewerId?.trim().toLowerCase() === boundViewerId &&
     directDonationUpgradeRenderedQaNoServiceDataEnabled({
-      viewerId: DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
+      viewerId: boundViewerId,
       environment: input.environment,
     })
   );

@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   directDonationUpgradeRenderedQaNoServiceDataEnabled,
+  directDonationUpgradeRenderedQaViewerFixture,
   DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
 } from "@/lib/direct-donation-upgrade-data";
 
@@ -21,6 +22,7 @@ const createSource = readFileSync(
 );
 
 const QA_ENVIRONMENT_KEYS = [
+  "DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID",
   "DIRECT_DONATION_UPGRADE_RENDERED_QA_NO_SERVICE_ROLE",
   "DIRECT_DONATION_UPGRADE_QA_FIXTURES",
   "VERCEL",
@@ -28,7 +30,9 @@ const QA_ENVIRONMENT_KEYS = [
   "VERCEL_TARGET_ENV",
 ] as const;
 const REQUIRED_QA_ENVIRONMENT_KEYS = QA_ENVIRONMENT_KEYS.filter(
-  (name) => name !== "VERCEL_TARGET_ENV",
+  (name) =>
+    name !== "DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID" &&
+    name !== "VERCEL_TARGET_ENV",
 );
 
 function withQaEnvironment(
@@ -106,6 +110,54 @@ test("the rendered-QA service-data bypass requires every allowlisted condition",
       false,
     );
   });
+
+  const boundViewerId = "a1000000-0000-4000-8000-000000000001";
+  withQaEnvironment(
+    {
+      ...exact,
+      DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID:
+        boundViewerId.toUpperCase(),
+    },
+    () => {
+      assert.equal(
+        directDonationUpgradeRenderedQaNoServiceDataEnabled({
+          viewerId: boundViewerId,
+          environment: "staging",
+        }),
+        true,
+      );
+      assert.equal(
+        directDonationUpgradeRenderedQaViewerFixture({
+          viewerId: boundViewerId,
+          environment: "staging",
+        })?.publicOffers.length,
+        1,
+      );
+      assert.equal(
+        directDonationUpgradeRenderedQaNoServiceDataEnabled({
+          viewerId: DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
+          environment: "staging",
+        }),
+        false,
+      );
+    },
+  );
+
+  withQaEnvironment(
+    {
+      ...exact,
+      DIRECT_DONATION_UPGRADE_RENDERED_QA_BOUND_VIEWER_ID: "not-a-uuid",
+    },
+    () => {
+      assert.equal(
+        directDonationUpgradeRenderedQaNoServiceDataEnabled({
+          viewerId: DIRECT_DONATION_UPGRADE_RENDERED_QA_VIEWER_ID,
+          environment: "staging",
+        }),
+        false,
+      );
+    },
+  );
 });
 
 test("viewer candidates and proposals are inner-scoped through their offer environment", () => {
