@@ -627,11 +627,16 @@ on conflict (idempotency_key) do nothing;
 
 do $$
 declare
+  operator_count integer;
   catalog_count integer;
   live_count integer;
   financial_count integer;
   invalid_money_swap_count integer;
 begin
+  select count(*)
+  into operator_count
+  from moral_trade_offer_bank_operator;
+
   select count(*)
   into catalog_count
   from public.offer_catalog_entries catalog
@@ -660,14 +665,24 @@ begin
     and substring(catalog.offer_code from 2)::integer >= 81
     and substring(catalog.request_code from 2)::integer <= 9;
 
-  if catalog_count <> 979 then
-    raise exception 'Expected 979 catalog rows, found %.', catalog_count;
-  end if;
-  if live_count <> 979 then
-    raise exception 'Expected 979 live catalog offers, found %.', live_count;
-  end if;
-  if financial_count <> 44 then
-    raise exception 'Expected 44 shared-pool financial offers, found %.', financial_count;
+  if operator_count = 0 then
+    if catalog_count <> 0 or live_count <> 0 or financial_count <> 0 then
+      raise exception
+        'Offer-bank seed rows were created without a resolved operator: catalog %, live %, financial %.',
+        catalog_count,
+        live_count,
+        financial_count;
+    end if;
+  else
+    if catalog_count <> 979 then
+      raise exception 'Expected 979 catalog rows, found %.', catalog_count;
+    end if;
+    if live_count <> 979 then
+      raise exception 'Expected 979 live catalog offers, found %.', live_count;
+    end if;
+    if financial_count <> 44 then
+      raise exception 'Expected 44 shared-pool financial offers, found %.', financial_count;
+    end if;
   end if;
   if invalid_money_swap_count <> 0 then
     raise exception 'Donation-for-donation pairings were generated unexpectedly: %.', invalid_money_swap_count;
