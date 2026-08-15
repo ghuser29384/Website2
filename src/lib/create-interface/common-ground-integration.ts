@@ -68,11 +68,12 @@ const COMMON_GROUND_PANEL = `
             </div>
 `;
 
-
 const ASSET_LINKS = `  <link rel="stylesheet" href="/moral-trade-create/common-ground.css" />
+  <link rel="stylesheet" href="/moral-trade-create/ui-repairs.css" />
 `;
 const DEFERRED_SCRIPT = `  <script defer src="/moral-trade-create/participant-picker.js"></script>
   <script defer src="/moral-trade-create/common-ground.js"></script>
+  <script defer src="/moral-trade-create/ui-repairs.js"></script>
 `;
 
 function occurrenceCount(source: string, value: string) {
