@@ -39,7 +39,16 @@ select
   'compact-concurrency-' || person || '@example.test',
   'Compact concurrency ' || person, '', '', 'compactconcurrency' || person,
   'individual', true, true
-from generate_series(1, 100) as person;
+from generate_series(1, 100) as person
+on conflict (id) do update
+set email = excluded.email,
+    display_name = excluded.display_name,
+    bio = excluded.bio,
+    affiliation = excluded.affiliation,
+    username = excluded.username,
+    account_kind = excluded.account_kind,
+    accepts_group_invitations = excluded.accepts_group_invitations,
+    public_invitation_mentions_enabled = excluded.public_invitation_mentions_enabled;
 
 insert into public.moral_trade_policy_snapshots (
   id, subject_kind, subject_key, version_label, status, snapshot_hash,
