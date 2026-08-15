@@ -9,7 +9,7 @@ release gate.
 ## Exact-state boundary
 
 - Authoritative base: `main` at
-  `79ca382c3bdc325dfc5a28e2cbbafc1b95640386`.
+  `cafd13166f5537519d1ae3b8a440d7504df0294b`.
 - Candidate branch: `codex/evaluator-core-loop-authenticated-20260813`.
 - Draft PR: #687, which must remain open, draft, unmerged, and undeployed while
   this bounded proof is reviewed.
@@ -20,12 +20,14 @@ release gate.
   the workflow run that is created only after that document's own commit.
 
 The immediately preceding complete-loop proof ran at
-`abe69acb1fa87204d5cb51354fe46529693d5b29`: workflow run `31817890703`,
-evaluator job `94823848773`, artifact `9225856375`, and artifact SHA-256
-`46250a09536ba7f2b776d5ab5af9575d7145a16dd7ed07f0426095201fab9a03`.
-That artifact proved the entire product loop, zero money, and zero cleanup
-residue. The later reviewer-role/AAL2 hardening is accepted only through the
-newer exact-head run recorded in the live PR body.
+`3e75fa7b62a76d493ef18bd6477b093f01e4826f`: workflow run `31865684640`
+attempt 2, evaluator job `94968519493`, artifact `9242247979`, and artifact
+SHA-256
+`9dc4b3595ecf9ed2123cd7e4143fe16b49da3d500b9453ec59294da6cbc2bd67`.
+That artifact proved the entire product loop, the authorization matrix, zero
+money, and zero cleanup residue. The synchronized candidate based on
+`cafd13166f5537519d1ae3b8a440d7504df0294b` is accepted only through the newer
+exact-head run recorded in the live PR body.
 
 ## Final contract and coverage
 
@@ -111,6 +113,11 @@ Screenshots 1 and 3 explicitly scroll their asserted card/receipt into the
 viewport and assert `toBeInViewport()` before capture, so the human-review
 artifact directly shows the state attributed to each filename.
 
+Screenshot 7 has a small cosmetic top-edge overlap between the green success
+notice and the tan eyebrow text. The stage-critical exit receipt, cancelled
+state, reason, retained-evidence count, and no-payment/custody boundary remain
+fully legible; the overlap does not downgrade the core-loop proof.
+
 ## Durable workflow behavior
 
 - The evaluator is no longer restricted to one PR head branch. It runs for any
@@ -119,10 +126,15 @@ artifact directly shows the state attributed to each filename.
 - The database URL, TLS pooler host, port, database, project ref, publishable
   URL, required secrets, checkout SHA, and same-repository boundary remain
   fail-closed.
-- Every run of the workflow shares one repository-wide concurrency group with
-  `cancel-in-progress: false`. The evaluator also waits for the broader
-  exact-head release job, so neither cross-PR runs nor the two jobs in one run
-  can mutate fixed QA identities concurrently.
+- Every run of the current workflow revision shares one repository-wide
+  concurrency group with `cancel-in-progress: false`. The evaluator also waits
+  for the broader exact-head release job, so the two writers inside one run are
+  sequential.
+- Stale pull-request heads can still execute an older workflow revision whose
+  PR-scoped concurrency group does not join the repository-wide group. That
+  demonstrated cross-revision shared-QA collision is tracked separately and
+  must be operationally drained until every active writer inherits the current
+  workflow revision.
 - The complete evaluator retains its eight-minute Playwright timeout, strong
   locator assertions, clean-console requirement, in-test cleanup, external
   cleanup safety net, and artifact upload on failure.
