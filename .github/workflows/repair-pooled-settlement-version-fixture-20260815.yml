@@ -1,0 +1,140 @@
+name: Repair pooled-settlement QA version fixture 20260815
+
+on:
+  push:
+    branches:
+      - qa/repair-pooled-settlement-version-fixture-20260815
+    paths:
+      - .github/workflows/repair-pooled-settlement-version-fixture-20260815.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-pooled-settlement-version-fixture-20260815
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_BRANCH: qa/pooled-settlement-authenticated-e2e-20260814
+      EXPECTED_OLD_HEAD: a82ad777e4a44240012ed14e2cade4748f569c31
+      FEATURE_HEAD: 9c4363e5e6713163df5b7a8b51981af585d2f0a9
+    steps:
+      - name: Check out exact target branch
+        uses: actions/checkout@v4
+        with:
+          ref: qa/pooled-settlement-authenticated-e2e-20260814
+          fetch-depth: 0
+
+      - name: Verify target identity before repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_OLD_HEAD"
+          test "$(git rev-parse HEAD^)" = "$FEATURE_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$EXPECTED_OLD_HEAD"
+
+      - name: Reuse the bridge-created immutable version
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          harness = ".github/scripts/pooled-settlement-qa-e2e.mjs"
+          replace_once(
+              harness,
+              '''  const termsHash = sha256(`terms:${runId}:${agreement.id}:1`);
+            const version = await insertOne("trade_agreement_versions", {
+              agreement_id: agreement.id,
+              version: 1,
+              proposed_by: counterparty.id,
+              proposed_action: `Synthetic reciprocal action for ${label}`,
+              requested_action: `Fund the ${label} pooled obligation`,
+              duration: "One day",
+              evidence_rule: "Provider-confirmed allocation only.",
+              exit_conditions: "Only before verified funding.",
+              maximum_burden: "Synthetic QA only; no production effect.",
+              privacy_scope: "Participants and operator only",
+              no_trade_baseline: "No reciprocal action without verified settlement.",
+              terms_hash: termsHash,
+              requires_milestone_manifest: false,
+            });
+            createdVersionIds.push(version.id);
+            unwrap(
+              await admin.from("agreements").update({ current_version_id: version.id }).eq("id", agreement.id),
+              `bind agreement version ${agreement.id}`,
+            );
+          ''',
+              '''  const bridgedAgreement = await loadOne("agreements", agreement.id);
+            assert.ok(bridgedAgreement.current_version_id, "Published agreement bridge did not create version 1.");
+            const version = await loadOne("trade_agreement_versions", bridgedAgreement.current_version_id);
+            assert.equal(version.agreement_id, agreement.id);
+            assert.equal(version.version, 1);
+            createdVersionIds.push(version.id);
+          ''',
+          )
+
+          tests = ".github/scripts/pooled-settlement-qa-e2e.test.mjs"
+          replace_once(
+              tests,
+              '''  assert.match(harness, /maximum_burden: "Synthetic QA only; no production effect\\."/);
+            assert.match(harness, /privacy_scope: "Participants and operator only"/);
+          ''',
+              '''  assert.match(harness, /maximum_burden: "Synthetic QA only; no production effect\\."/);
+            assert.match(harness, /privacy_scope: "Participants and operator only"/);
+            assert.match(harness, /const bridgedAgreement = await loadOne\\("agreements", agreement\\.id\\)/);
+            assert.match(harness, /loadOne\\("trade_agreement_versions", bridgedAgreement\\.current_version_id\\)/);
+            assert.doesNotMatch(harness, /terms:\\$\\{runId\\}:\\$\\{agreement\\.id\\}:1/);
+          ''',
+          )
+          PY
+
+      - name: Validate corrected harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check .github/scripts/pooled-settlement-qa-e2e.mjs
+          node --test .github/scripts/pooled-settlement-qa-e2e.test.mjs
+          git diff --check
+          actual="$(git diff --name-only | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/pooled-settlement-qa-e2e.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.test.mjs' | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+
+      - name: Rewrite target as one corrected commit on the validated parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/scripts/pooled-settlement-qa-e2e.mjs \
+            .github/scripts/pooled-settlement-qa-e2e.test.mjs
+          tree="$(git write-tree)"
+          new_commit="$(printf '%s\n' 'Reuse bridge-created agreement version in QA fixtures' | git commit-tree "$tree" -p "$FEATURE_HEAD")"
+          test "$(git rev-parse "${new_commit}^")" = "$FEATURE_HEAD"
+          actual="$(git diff --name-only "$FEATURE_HEAD" "$new_commit" | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/pooled-settlement-qa-contract.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.test.mjs' \
+            '.github/workflows/pooled-settlement-authenticated-e2e-20260814.yml' | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$EXPECTED_OLD_HEAD"
+          git push \
+            --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_OLD_HEAD" \
+            origin "$new_commit:refs/heads/$TARGET_BRANCH"
+          echo "Corrected target head: $new_commit"
