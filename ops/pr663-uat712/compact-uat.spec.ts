@@ -268,6 +268,14 @@ async function trackedContext(
       secure: true,
       sameSite: "Lax" as const,
     },
+    {
+      name: "mt_analytics_opt_out",
+      value: "1",
+      url: BASE_URL,
+      httpOnly: false,
+      secure: true,
+      sameSite: "Lax" as const,
+    },
   ];
   if (session) cookies.push(...(await sessionCookies(session)));
   await context.addCookies(cookies);
@@ -363,16 +371,14 @@ function expectSafeError(result: ApiResult, status: number) {
 }
 
 async function acknowledgeAndJoin(page: Page, compactTitle: string) {
-  const selectButton = page.getByRole("button", { name: `Select ${compactTitle}` });
-  if (await selectButton.count()) {
+  const compactKey = compactTitle.toLowerCase().replaceAll(" ", "-");
+  const card = page.getByTestId(`compact-${compactKey}`);
+  await expect(card.getByRole("heading", { level: 3, name: compactTitle })).toBeVisible();
+  const selectButton = card.getByRole("button", { name: `Select ${compactTitle}` });
+  if (await selectButton.isVisible().catch(() => false)) {
     await selectButton.click();
   } else {
-    await expect(page.getByRole("button", { name: "Selected Compact" })).toBeVisible();
-    await expect(
-      page
-        .getByLabel(compactTitle, { exact: true })
-        .getByRole("heading", { level: 3, name: compactTitle }),
-    ).toBeVisible();
+    await expect(card.getByRole("button", { name: "Selected Compact" })).toBeVisible();
   }
   const fieldset = page.getByRole("group", { name: "Explicit Compact v2 acknowledgements" });
   const boxes = fieldset.getByRole("checkbox");
