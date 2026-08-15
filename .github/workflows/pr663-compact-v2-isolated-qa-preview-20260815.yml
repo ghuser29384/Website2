@@ -204,6 +204,7 @@ jobs:
             > evidence/schema-absence-before.txt
           grep -Fxq 'compact_relations_before=0' evidence/schema-absence-before.txt
           grep -Fxq 'compact_functions_before=0' evidence/schema-absence-before.txt
+          grep -Fxq 'eligibility_dependency_before=0' evidence/schema-absence-before.txt
           grep -Fxq 'synthetic_users_before=0' evidence/schema-absence-before.txt
           grep -Fxq 'synthetic_profiles_before=0' evidence/schema-absence-before.txt
 
@@ -601,7 +602,7 @@ jobs:
           cd app
           node ../controller/ops/pr663-uat712/preflight.mjs
 
-      - name: Apply only the two reviewed Compact migrations and synthetic identities
+      - name: Apply fail-closed dependency, two reviewed Compact migrations, and synthetic identities
         id: fixtures
         shell: bash
         env:
@@ -613,14 +614,29 @@ jobs:
             > "$RUNNER_TEMP/schema-absence-immediate.txt"
           grep -Fxq 'compact_relations_before=0' "$RUNNER_TEMP/schema-absence-immediate.txt"
           grep -Fxq 'compact_functions_before=0' "$RUNNER_TEMP/schema-absence-immediate.txt"
+          grep -Fxq 'eligibility_dependency_before=0' "$RUNNER_TEMP/schema-absence-immediate.txt"
           grep -Fxq 'synthetic_users_before=0' "$RUNNER_TEMP/schema-absence-immediate.txt"
           grep -Fxq 'synthetic_profiles_before=0' "$RUNNER_TEMP/schema-absence-immediate.txt"
           echo "cleanup_authorized=true" >> "$GITHUB_OUTPUT"
+          dependency_log="$RUNNER_TEMP/eligibility-dependency.log"
+          if ! psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file controller/ops/pr663-uat712/eligibility-dependency.sql > "$dependency_log" 2>&1; then
+            node controller/ops/pr663-uat712/sanitize-database-diagnostic.mjs \
+              "$dependency_log" evidence/database-dependency-failure.txt dependency uat712/eligibility-dependency.sql persistent_qa_cleanup_pending=true
+            cat evidence/database-dependency-failure.txt
+            exit 1
+          fi
+          rm -f "$dependency_log"
+          test "$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "select count(*) from public.moral_trade_participant_eligibility_records;")" = "0"
+          test "$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "select relrowsecurity from pg_catalog.pg_class where oid='public.moral_trade_participant_eligibility_records'::regclass;")" = "t"
+          test "$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "select has_table_privilege('anon','public.moral_trade_participant_eligibility_records','select') or has_table_privilege('authenticated','public.moral_trade_participant_eligibility_records','select');")" = "f"
           migrations=(
             app/supabase/migrations/20260813163052_mpgf_public_goods_compacts.sql
             app/supabase/migrations/20260814031500_mpgf_public_goods_compacts_state_hardening.sql
           )
-          sha256sum "${migrations[@]}" controller/ops/pr663-uat712/fixture.sql \
+          sha256sum "${migrations[@]}" \
+            controller/ops/pr663-uat712/eligibility-dependency.sql \
+            controller/ops/pr663-uat712/fixture.sql \
             > evidence/reviewed-database-sources.sha256
           for migration in "${migrations[@]}"; do
             test "$(sed -n '/^[[:space:]]*$/d; p; q' "$migration" | tr '[:upper:]' '[:lower:]')" = "begin;"
@@ -667,7 +683,7 @@ jobs:
             exit 1
           fi
           rm -f "$fixture_log"
-          printf 'compact_relations_applied=18\nfounding_charters=3\nsynthetic_users=3\nactive_compacts=0\n' \
+          printf 'eligibility_dependency_relations=1\neligibility_dependency_rows=0\ncompact_relations_applied=18\nfounding_charters=3\nsynthetic_users=3\nactive_compacts=0\n' \
             > evidence/fixture-summary.txt
 
       - name: Execute signed-in multi-user protected-Preview UAT
@@ -757,6 +773,7 @@ jobs:
           grep -Fxq 'settlement_records_before_cleanup=0' evidence/no-money-before-cleanup.txt
           grep -Fxq 'qualification_records_before_cleanup=0' evidence/no-money-before-cleanup.txt
           grep -Fxq 'readiness_records_before_cleanup=0' evidence/no-money-before-cleanup.txt
+          grep -Fxq 'eligibility_dependency_rows_before_cleanup=0' evidence/no-money-before-cleanup.txt
 
       - name: Unconditionally remove fixtures, sessions, and Compact schema and prove zero residue
         id: cleanup
@@ -790,6 +807,7 @@ jobs:
           grep -Fxq 'electorate_records=0' evidence/zero-residue.txt
           grep -Fxq 'compact_relations=0' evidence/zero-residue.txt
           grep -Fxq 'compact_functions=0' evidence/zero-residue.txt
+          grep -Fxq 'eligibility_dependency_relations=0' evidence/zero-residue.txt
 
       - name: Inspect deployment-scoped runtime logs for the exact UAT window
         id: runtime_logs

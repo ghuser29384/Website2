@@ -77,6 +77,7 @@ with compact_counts as (
     (select count(*) from public.mpgf_public_goods_settled_contribution_snapshots) as settlement_records,
     (select count(*) from public.mpgf_public_goods_funding_qualification_snapshots) as qualification_records,
     (select count(*) from public.mpgf_public_goods_readiness_snapshots) as readiness_records,
+    (select count(*) from public.moral_trade_participant_eligibility_records) as eligibility_dependency_rows,
     (
       select count(*)
       from auth.users
@@ -111,6 +112,8 @@ select 'settlement_records_before_cleanup=' || settlement_records from compact_c
 union all
 select 'qualification_records_before_cleanup=' || qualification_records from compact_counts
 union all
-select 'readiness_records_before_cleanup=' || readiness_records from compact_counts;
+select 'readiness_records_before_cleanup=' || readiness_records from compact_counts
+union all
+select 'eligibility_dependency_rows_before_cleanup=' || eligibility_dependency_rows from compact_counts;
 
 commit;

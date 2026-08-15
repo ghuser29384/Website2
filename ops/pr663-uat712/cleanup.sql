@@ -53,6 +53,7 @@ drop table if exists public.mpgf_public_goods_dormant_authorization_snapshots ca
 drop table if exists public.mpgf_public_goods_compact_idempotency_keys cascade;
 drop table if exists public.mpgf_public_goods_compact_memberships cascade;
 drop table if exists public.mpgf_public_goods_compacts cascade;
+drop table if exists public.moral_trade_participant_eligibility_records cascade;
 
 do $auth_cleanup$
 declare

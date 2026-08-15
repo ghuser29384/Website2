@@ -10,6 +10,7 @@ create temporary table uat712_residue (
 insert into uat712_residue(metric, value)
 values
   ('relation_count', 0),
+  ('eligibility_dependency_count', 0),
   ('function_count', 0),
   ('synthetic_users', 0),
   ('synthetic_profiles', 0),
@@ -46,6 +47,13 @@ set value = (
     ]::text[])
 )
 where metric = 'relation_count';
+
+update uat712_residue
+set value = (
+  select count(*)
+  where pg_catalog.to_regclass('public.moral_trade_participant_eligibility_records') is not null
+)
+where metric = 'eligibility_dependency_count';
 
 update uat712_residue
 set value = (
@@ -201,7 +209,8 @@ with totals as (
     max(value) filter (where metric = 'synthetic_users') as synthetic_users,
     max(value) filter (where metric = 'payment_refs') as payment_refs,
     max(value) filter (where metric = 'relation_count') as relation_count,
-    max(value) filter (where metric = 'function_count') as function_count
+    max(value) filter (where metric = 'function_count') as function_count,
+    max(value) filter (where metric = 'eligibility_dependency_count') as eligibility_dependency_count
   from uat712_residue
 )
 select 'fixture_residue=' || fixture_residue from totals
@@ -216,6 +225,8 @@ select 'electorate_records=0' from totals
 union all
 select 'compact_relations=' || relation_count from totals
 union all
-select 'compact_functions=' || function_count from totals;
+select 'compact_functions=' || function_count from totals
+union all
+select 'eligibility_dependency_relations=' || eligibility_dependency_count from totals;
 
 commit;

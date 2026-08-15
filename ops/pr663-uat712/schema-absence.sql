@@ -52,6 +52,10 @@ counts as (
     ) as function_count,
     (
       select count(*)
+      where pg_catalog.to_regclass('public.moral_trade_participant_eligibility_records') is not null
+    ) as eligibility_dependency_count,
+    (
+      select count(*)
       from auth.users
       where id in (
         '712a0000-0000-4000-8000-000000000001',
@@ -74,6 +78,8 @@ counts as (
 select 'compact_relations_before=' || relation_count from counts
 union all
 select 'compact_functions_before=' || function_count from counts
+union all
+select 'eligibility_dependency_before=' || eligibility_dependency_count from counts
 union all
 select 'synthetic_users_before=' || synthetic_users from counts
 union all
