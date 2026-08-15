@@ -209,7 +209,7 @@ test("the live home workspace has one semantic page heading and its dedicated na
   await waitForResolvedPage(page);
 
   await expect(
-    page.getByRole("heading", { level: 1, name: "Your best match right now" }),
+    page.getByRole("heading", { level: 1, name: "Current opportunities and next actions" }),
   ).toHaveCount(1);
   await expectVisibleCount(page, "main", 1);
   await expectVisibleCount(page, ".mt-site-footer", 0);
