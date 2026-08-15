@@ -1,0 +1,80 @@
+name: Repair PR 658 stale public-route browser assertion
+
+on:
+  push:
+    branches:
+      - ops/pr658-production-release-20260815
+    paths:
+      - .github/workflows/pr658-browser-gate-repair.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pr658-browser-gate-repair
+  cancel-in-progress: false
+
+env:
+  EXPECTED_MAIN_SHA: cafd13166f5537519d1ae3b8a440d7504df0294b
+  FIX_BRANCH: fix/pr658-public-route-heading-gate-20260815
+  TARGET_FILE: tests/public-routes.spec.ts
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out the untouched repair branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FIX_BRANCH }}
+          fetch-depth: 0
+
+      - name: Guard immutable main and branch base
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          remote_fix="$(git ls-remote origin "refs/heads/$FIX_BRANCH" | awk '{print $1}')"
+          test "$remote_main" = "$EXPECTED_MAIN_SHA"
+          test "$remote_fix" = "$EXPECTED_MAIN_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+
+      - name: Replace exactly the stale rendered-heading assertion
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('tests/public-routes.spec.ts')
+          source = path.read_text()
+          old = 'page.getByRole("heading", { level: 1, name: "Your best match right now" })'
+          new = 'page.getByRole("heading", { level: 1, name: "Current opportunities and next actions" })'
+
+          if source.count(old) != 1:
+              raise SystemExit(f'expected exactly one stale assertion; found {source.count(old)}')
+          if new in source:
+              raise SystemExit('replacement assertion already exists before mutation')
+
+          path.write_text(source.replace(old, new, 1))
+          PY
+
+          git diff --check
+          test "$(git diff --name-only | wc -l | tr -d ' ')" = '1'
+          test "$(git diff --name-only)" = "$TARGET_FILE"
+          git diff -- "$TARGET_FILE"
+
+      - name: Commit and push the one-file repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'ghuser29384'
+          git config user.email '262476329+ghuser29384@users.noreply.github.com'
+          git add "$TARGET_FILE"
+          git commit -m 'Align public-route browser assertion with Home truth boundary'
+          candidate_sha="$(git rev-parse HEAD)"
+          git push origin "HEAD:$FIX_BRANCH"
+          printf '%s\n' "$candidate_sha"
