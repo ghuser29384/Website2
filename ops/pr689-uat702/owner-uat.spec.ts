@@ -415,6 +415,10 @@ async function fillCompleteProposal(page: Page, title: string) {
     await control.fill(value);
     await page.keyboard.press("Escape");
   }
+  const payoutMethod = proposalControl(panel, "Payout method");
+  await expect(payoutMethod).toBeVisible();
+  await payoutMethod.selectOption("signed_intent");
+  await expect(payoutMethod).toHaveValue("signed_intent");
   await expect(panel.getByRole("button", { name: "Save draft" })).toBeEnabled();
   await expect(panel.getByRole("button", { name: "Submit proposal" })).toBeEnabled();
   return panel;
