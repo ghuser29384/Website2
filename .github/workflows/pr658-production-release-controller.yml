@@ -1,4 +1,4 @@
-name: PR 658 production release controller
+name: PR 658 browser-gate repair controller
 
 on:
   push:
@@ -8,401 +8,74 @@ on:
       - .github/workflows/pr658-production-release-controller.yml
 
 permissions:
-  actions: write
   contents: write
-  issues: write
-  statuses: write
 
 concurrency:
-  group: pr658-production-release-controller
+  group: pr658-browser-gate-repair
   cancel-in-progress: false
 
 env:
-  CONTROLLER_BRANCH: ops/pr658-production-release-20260815
   EXPECTED_MAIN_SHA: cafd13166f5537519d1ae3b8a440d7504df0294b
-  PRODUCT_PR: '658'
-  RELEASE_WORKFLOW: vercel-release.yml
-  STATUS_CONTEXT: production-release / PR 658
-  EVIDENCE_DIR: /tmp/pr658-production-release
+  FIX_BRANCH: fix/pr658-public-route-heading-gate-20260815
+  TARGET_FILE: tests/public-routes.spec.ts
 
 jobs:
-  dispatch-monitor-and-smoke:
+  repair:
     runs-on: ubuntu-24.04
-    timeout-minutes: 150
+    timeout-minutes: 15
 
     steps:
-      - name: Initialize evidence and pending status
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$EVIDENCE_DIR"
-          gh api "repos/$GITHUB_REPOSITORY/statuses/$EXPECTED_MAIN_SHA" \
-            -f state=pending \
-            -f context="$STATUS_CONTEXT" \
-            -f description='Dispatching the exact gated production release' \
-            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
-
-      - name: Check out the one-shot controller
+      - name: Check out the untouched repair branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ env.FIX_BRANCH }}
           fetch-depth: 0
 
-      - name: Guard merged PR, immutable main, and idle release lane
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Guard immutable main and branch base
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
-          test "$GITHUB_REF" = "refs/heads/$CONTROLLER_BRANCH"
-          test "$(git rev-parse HEAD^)" = "$EXPECTED_MAIN_SHA"
-
           remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
+          remote_fix="$(git ls-remote origin "refs/heads/$FIX_BRANCH" | awk '{print $1}')"
           test "$remote_main" = "$EXPECTED_MAIN_SHA"
-
-          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PRODUCT_PR")"
-          test "$(jq -r .state <<<"$pr_json")" = 'closed'
-          test "$(jq -r .merged <<<"$pr_json")" = 'true'
-          test "$(jq -r .merge_commit_sha <<<"$pr_json")" = "$EXPECTED_MAIN_SHA"
-          printf '%s\n' "$pr_json" > "$EVIDENCE_DIR/pr.json"
-
-          for status in queued in_progress; do
-            count="$(gh api \
-              "repos/$GITHUB_REPOSITORY/actions/workflows/$RELEASE_WORKFLOW/runs?status=$status&per_page=20" \
-              --jq '.total_count')"
-            test "$count" = '0'
-          done
-
-      - name: Dispatch the exact gated production workflow
-        id: dispatch
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh run list \
-            --repo "$GITHUB_REPOSITORY" \
-            --workflow "$RELEASE_WORKFLOW" \
-            --event workflow_dispatch \
-            --limit 100 \
-            --json databaseId \
-            | jq -r '.[].databaseId' \
-            | sort -n > "$EVIDENCE_DIR/release-runs-before.txt"
-
-          gh workflow run "$RELEASE_WORKFLOW" \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f target=production \
-            -f ref=main \
-            -f expected_sha="$EXPECTED_MAIN_SHA" \
-            -f synthetic_auth_fixture_url=''
-
-          release_run_id=''
-          for attempt in $(seq 1 60); do
-            candidates="$(gh run list \
-              --repo "$GITHUB_REPOSITORY" \
-              --workflow "$RELEASE_WORKFLOW" \
-              --event workflow_dispatch \
-              --branch main \
-              --limit 100 \
-              --json databaseId,headSha,createdAt,url)"
-            release_run_id="$(jq -r \
-              --arg sha "$EXPECTED_MAIN_SHA" \
-              --slurpfile before <(jq -Rsc 'split("\n") | map(select(length > 0) | tonumber)' "$EVIDENCE_DIR/release-runs-before.txt") '
-                [ .[]
-                  | select(.headSha == $sha)
-                  | select((.databaseId as $id | ($before[0] | index($id))) == null)
-                ]
-                | sort_by(.createdAt)
-                | last
-                | .databaseId // empty
-              ' <<<"$candidates")"
-            if [[ -n "$release_run_id" ]]; then
-              break
-            fi
-            sleep 5
-          done
-
-          test -n "$release_run_id"
-          printf '%s\n' "$release_run_id" | tee "$EVIDENCE_DIR/release-run-id.txt"
-          echo "release_run_id=$release_run_id" >> "$GITHUB_OUTPUT"
-
-      - name: Monitor release and abort on main drift
-        id: monitor
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_RUN_ID: ${{ steps.dispatch.outputs.release_run_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          while true; do
-            remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-            if [[ "$remote_main" != "$EXPECTED_MAIN_SHA" ]]; then
-              printf 'main drifted to %s; cancelling release %s\n' "$remote_main" "$RELEASE_RUN_ID" \
-                | tee "$EVIDENCE_DIR/main-drift.txt"
-              gh run cancel "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY" || true
-              exit 1
-            fi
-
-            run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID")"
-            printf '%s\n' "$run_json" > "$EVIDENCE_DIR/release-run-latest.json"
-            status="$(jq -r .status <<<"$run_json")"
-            conclusion="$(jq -r '.conclusion // empty' <<<"$run_json")"
-            printf '%s %s\n' "$status" "$conclusion"
-
-            if [[ "$status" == 'completed' ]]; then
-              test "$conclusion" = 'success'
-              break
-            fi
-            sleep 20
-          done
-
-      - name: Capture release jobs and artifact metadata
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_RUN_ID: ${{ steps.dispatch.outputs.release_run_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/jobs?per_page=100" \
-            > "$EVIDENCE_DIR/release-jobs.json"
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/artifacts?per_page=100" \
-            > "$EVIDENCE_DIR/release-artifacts.json"
-          artifact_count="$(jq '[.artifacts[] | select(.name | startswith("gated-vercel-release-production-"))] | length' \
-            "$EVIDENCE_DIR/release-artifacts.json")"
-          test "$artifact_count" = '1'
-
-      - name: Check out the immutable merged production source
-        shell: bash
-        run: |
-          set -euo pipefail
-          git checkout --detach "$EXPECTED_MAIN_SHA"
+          test "$remote_fix" = "$EXPECTED_MAIN_SHA"
           test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
-          test "$(git ls-remote origin refs/heads/main | awk '{print $1}')" = "$EXPECTED_MAIN_SHA"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
-      - name: Install exact dependencies and Chromium
+      - name: Replace exactly the stale rendered-heading assertion
         shell: bash
         run: |
           set -euo pipefail
-          npm ci
-          npx playwright install --with-deps chromium
+          python - <<'PY'
+          from pathlib import Path
 
-      - name: Run post-release production browser smoke
+          path = Path('tests/public-routes.spec.ts')
+          source = path.read_text()
+          old = 'page.getByRole("heading", { level: 1, name: "Your best match right now" })'
+          new = 'page.getByRole("heading", { level: 1, name: "Current opportunities and next actions" })'
+
+          count = source.count(old)
+          if count != 1:
+              raise SystemExit(f'expected exactly one stale assertion; found {count}')
+          if new in source:
+              raise SystemExit('replacement assertion already exists before mutation')
+
+          path.write_text(source.replace(old, new, 1))
+          PY
+
+          git diff --check
+          test "$(git diff --name-only | wc -l | tr -d ' ')" = '1'
+          test "$(git diff --name-only)" = "$TARGET_FILE"
+          git diff -- "$TARGET_FILE"
+
+      - name: Commit and push the one-file repair
         shell: bash
         run: |
           set -euo pipefail
-          cat > /tmp/pr658-production-smoke.mjs <<'EOF'
-          import assert from 'node:assert/strict';
-          import { mkdir, writeFile } from 'node:fs/promises';
-          import { chromium } from '@playwright/test';
-
-          const origin = 'https://www.moraltrade.org';
-          const evidenceRoot = `${process.env.EVIDENCE_DIR}/production-smoke`;
-          await mkdir(evidenceRoot, { recursive: true });
-
-          const readyPayload = {
-            authenticated: true,
-            generatedAt: '2026-08-15T05:00:00.000Z',
-            matchingOpportunityCount: 1,
-            ownedOpportunities: [],
-            ownedOpportunityCount: 0,
-            profile: { causes: ['Global health'], weightedCauses: [], learningEnabled: false },
-            recentChanges: [],
-            recommendations: [{
-              id: 'production-smoke-opportunity',
-              opportunityType: 'offer',
-              href: '/offers/1c6b0e57-bfed-3f29-c51f-6f8c23d1960b',
-              ctaLabel: 'Review proposal',
-              ownerAlias: 'Production smoke participant',
-              offeredCause: 'Global health',
-              requestedCause: 'Climate action',
-              offerAction: 'Fund a reviewed health project.',
-              requestAction: 'Replace one short car trip.',
-              verification: 'Review the stated receipt terms.',
-              duration: 'One month',
-              reason: 'Matches a saved priority',
-              reasonDetails: ['Matches Global health'],
-            }],
-            routePlanner: {
-              status: 'ready',
-              checkedAt: '2026-08-15T05:00:00.000Z',
-              profile: {},
-              needsMoreInput: [],
-              routes: [],
-              comparison: null,
-              candidateCount: 1,
-            },
-            status: 'ready',
-          };
-
-          async function scenario(name, width, height, state) {
-            const browser = await chromium.launch({ headless: true });
-            const context = await browser.newContext({ viewport: { width, height } });
-            await context.addCookies([{
-              name: 'mt_walkthrough_seen',
-              value: '1',
-              domain: 'www.moraltrade.org',
-              path: '/',
-              secure: true,
-              sameSite: 'Lax',
-            }]);
-            const page = await context.newPage();
-            const errors = { console: [], page: [], request: [], http5xx: [] };
-
-            page.on('console', (message) => {
-              if (message.type() === 'error') errors.console.push(message.text());
-            });
-            page.on('pageerror', (error) => errors.page.push(String(error)));
-            page.on('requestfailed', (request) => {
-              const url = new URL(request.url());
-              if (url.hostname === 'www.moraltrade.org' || url.hostname === 'moraltrade.org') {
-                errors.request.push(`${request.method()} ${request.url()} :: ${request.failure()?.errorText ?? 'failed'}`);
-              }
-            });
-            page.on('response', (response) => {
-              const url = new URL(response.url());
-              if ((url.hostname === 'www.moraltrade.org' || url.hostname === 'moraltrade.org') && response.status() >= 500) {
-                errors.http5xx.push(`${response.status()} ${response.url()}`);
-              }
-            });
-
-            if (state === 'ready') {
-              await page.route('**/api/live-now', async (route) => {
-                await route.fulfill({ contentType: 'application/json', body: JSON.stringify(readyPayload) });
-              });
-            }
-
-            const response = await page.goto(`${origin}/`, { waitUntil: 'domcontentloaded', timeout: 60_000 });
-            assert(response, 'Top-level navigation returned no response');
-            assert(response.status() < 500, `Top-level navigation returned ${response.status()}`);
-
-            const expectedState = state === 'ready' ? 'ready' : 'signed_out';
-            await page.locator(`[data-mt-live-now-state="${expectedState}"]`).waitFor({ state: 'visible', timeout: 30_000 });
-            assert.equal(
-              (await page.locator('#mt-live-document-heading').textContent())?.trim(),
-              'Current opportunities and next actions',
-            );
-
-            if (state === 'ready') {
-              assert.equal(await page.locator('[data-mt-live-now-recommendation]').count(), 1);
-              const note = page.getByRole('note', { name: 'Recommendation status' });
-              await note.waitFor({ state: 'visible' });
-              assert.equal(
-                (await note.textContent())?.trim(),
-                'Recommendations to review — not agreements, commitments, payments, or verified outcomes.',
-              );
-              const cta = page.getByRole('link', { name: /Review proposal/ });
-              assert.equal(await cta.getAttribute('href'), '/offers/1c6b0e57-bfed-3f29-c51f-6f8c23d1960b');
-              const why = page.getByRole('button', { name: /Why this match/ });
-              if (await why.count()) {
-                await why.click();
-                await page.getByText('Matches Global health', { exact: true }).waitFor({ state: 'visible' });
-              }
-            } else {
-              assert.equal(await page.locator('[data-mt-live-now-recommendation]').count(), 0);
-              assert.equal(await page.getByRole('note', { name: 'Recommendation status' }).count(), 0);
-              await page.getByRole('heading', {
-                level: 2,
-                name: 'Sign in to see a feed based on your moral priorities.',
-              }).waitFor({ state: 'visible' });
-            }
-
-            const dimensions = await page.evaluate(() => ({
-              innerWidth: window.innerWidth,
-              scrollWidth: document.documentElement.scrollWidth,
-            }));
-            assert(dimensions.scrollWidth <= dimensions.innerWidth + 1, JSON.stringify(dimensions));
-
-            await page.screenshot({ path: `${evidenceRoot}/${name}.png`, fullPage: true });
-            await writeFile(`${evidenceRoot}/${name}.json`, JSON.stringify({
-              name,
-              width,
-              height,
-              state,
-              finalUrl: page.url(),
-              dimensions,
-              errors,
-            }, null, 2));
-
-            assert.deepEqual(errors, { console: [], page: [], request: [], http5xx: [] });
-            await browser.close();
-          }
-
-          await scenario('signed-out-desktop', 1487, 1058, 'signed_out');
-          await scenario('ready-desktop', 1487, 1058, 'ready');
-          await scenario('ready-mobile', 390, 844, 'ready');
-          EOF
-
-          EVIDENCE_DIR="$EVIDENCE_DIR" node /tmp/pr658-production-smoke.mjs \
-            2>&1 | tee "$EVIDENCE_DIR/production-smoke.log"
-
-      - name: Upload post-release controller evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr658-production-release-controller-${{ github.run_id }}
-          path: ${{ env.EVIDENCE_DIR }}
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Publish success comment and exact-main status
-        if: success()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_RUN_ID: ${{ steps.dispatch.outputs.release_run_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          release_artifact_id="$(jq -r '[.artifacts[] | select(.name | startswith("gated-vercel-release-production-"))][0].id' \
-            "$EVIDENCE_DIR/release-artifacts.json")"
-          release_digest="$(jq -r '[.artifacts[] | select(.name | startswith("gated-vercel-release-production-"))][0].digest' \
-            "$EVIDENCE_DIR/release-artifacts.json")"
-          gh pr comment "$PRODUCT_PR" --repo "$GITHUB_REPOSITORY" --body "$(cat <<EOF
-          ## Production release completed
-
-          Exact merged main \`$EXPECTED_MAIN_SHA\` passed the repository's complete gated production release and the post-release Home/Now smoke.
-
-          - Release run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID
-          - Release artifact: https://github.com/$GITHUB_REPOSITORY/actions/runs/$RELEASE_RUN_ID/artifacts/$release_artifact_id
-          - Release artifact digest: \`$release_digest\`
-          - Controller run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
-          - Production smoke: signed-out desktop, deterministic-ready desktop, and deterministic-ready mobile all passed with no same-origin console, page, failed-request, HTTP 5xx, or horizontal-overflow errors.
-
-          Both canonical aliases and the exact production deployment/commit identity were verified by the gated release workflow. No payment, database, authorization, or production-data mutation was performed by PR #658.
-          EOF
-          )"
-
-          gh api "repos/$GITHUB_REPOSITORY/statuses/$EXPECTED_MAIN_SHA" \
-            -f state=success \
-            -f context="$STATUS_CONTEXT" \
-            -f description='Gated production release and post-release smoke passed' \
-            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
-
-      - name: Publish failure status
-        if: failure()
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/statuses/$EXPECTED_MAIN_SHA" \
-            -f state=failure \
-            -f context="$STATUS_CONTEXT" \
-            -f description='Production release or post-release smoke failed' \
-            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
-
-      - name: Retire the one-shot controller branch
-        if: success()
-        shell: bash
-        run: |
-          set -euo pipefail
-          git push origin --delete "$CONTROLLER_BRANCH"
+          git config user.name 'ghuser29384'
+          git config user.email '262476329+ghuser29384@users.noreply.github.com'
+          git add "$TARGET_FILE"
+          git commit -m 'Align public-route browser assertion with Home truth boundary'
+          candidate_sha="$(git rev-parse HEAD)"
+          git push origin "HEAD:$FIX_BRANCH"
+          printf '%s\n' "$candidate_sha"
