@@ -352,9 +352,9 @@ export async function loadMpgfDacCreatorProposal(input: {
       .order("terms_version", { ascending: true }),
     supabase
       .from("mpgf_pool_lifecycle_events")
-      .select("id,proposal_id,terms_version,event_type,actor_user_id,from_status,to_status,terms_sha256,reason,metadata_json,created_at")
+      .select("id,event_sequence,proposal_id,terms_version,event_type,actor_user_id,from_status,to_status,terms_sha256,reason,metadata_json,created_at")
       .eq("proposal_id", input.proposalId)
-      .order("created_at", { ascending: true }),
+      .order("event_sequence", { ascending: true }),
     supabase
       .from("mpgf_public_goods_campaigns")
       .select(publicCampaignColumns)

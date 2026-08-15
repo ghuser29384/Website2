@@ -4,9 +4,14 @@ import test from "node:test";
 
 const migrationPath =
   "supabase/migrations/20260806110000_mpgf_pool_review_freeze.sql";
+const orderingMigrationPath =
+  "supabase/migrations/20260815010000_mpgf_pool_lifecycle_event_ordering.sql";
 const regressionPath = "supabase/tests/mpgf_pool_review_freeze.sql";
+const lifecycleSourcePath = "src/lib/mpgf/dac-lifecycle.ts";
 const migration = readFileSync(migrationPath, "utf8");
+const orderingMigration = readFileSync(orderingMigrationPath, "utf8");
 const regression = readFileSync(regressionPath, "utf8");
+const lifecycleSource = readFileSync(lifecycleSourcePath, "utf8");
 
 function includesAll(source: string, fragments: string[]) {
   for (const fragment of fragments) {
@@ -56,6 +61,21 @@ test("material revisions use a linked successor proposal and a higher terms vers
     "supersedes_proposal_id = p_prior_proposal_id",
     "terms_version = prior_row.terms_version + 1",
     "'revision_submitted'",
+  ]);
+});
+
+test("lifecycle events have a database-assigned order used by regressions and creator reads", () => {
+  includesAll(orderingMigration, [
+    "begin;",
+    "event_sequence bigint generated always as identity",
+    "mpgf_pool_lifecycle_events_event_sequence_idx",
+    "mpgf_pool_lifecycle_events_proposal_sequence_idx",
+    "commit;",
+  ]);
+  includesAll(regression, ["array_agg(event_type order by event_sequence)"]);
+  includesAll(lifecycleSource, [
+    "id,event_sequence,proposal_id",
+    '.order("event_sequence", { ascending: true })',
   ]);
 });
 

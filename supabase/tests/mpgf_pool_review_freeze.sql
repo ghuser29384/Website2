@@ -363,7 +363,7 @@ begin
     raise exception 'Expected exactly one immutable version, found %.', version_count;
   end if;
 
-  select array_agg(event_type order by created_at, id) into event_types
+  select array_agg(event_type order by event_sequence) into event_types
   from public.mpgf_pool_lifecycle_events
   where proposal_id = proposal_row.id;
   if event_types is distinct from array['review_started','terms_approved_and_frozen']::text[] then
