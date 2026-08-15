@@ -32,6 +32,7 @@ const context = await browser.newContext({
 
 const failures = [];
 const observedHosts = new Set();
+let runtimeAttestation;
 context.on("request", (request) => {
   try {
     observedHosts.add(new URL(request.url()).hostname);
@@ -45,6 +46,67 @@ context.on("response", (response) => {
 
 try {
   const page = await context.newPage();
+  const runtimeAttestationResponse = await context.request.get(
+    "/api/uat702/runtime-attestation",
+  );
+  const runtimeAttestationStatus = runtimeAttestationResponse.status();
+  runtimeAttestation = await runtimeAttestationResponse.json().catch(() => null);
+  if (runtimeAttestationStatus !== 200) {
+    await mkdir(evidenceDir, { recursive: true });
+    await writeFile(
+      `${evidenceDir}/deployment-runtime-environment-proof.json`,
+      `${JSON.stringify({
+        protectedControllerAttestation: "failed",
+        httpStatus: runtimeAttestationStatus,
+        runtimeEnvironment:
+          typeof runtimeAttestation?.runtimeEnvironment === "string"
+            ? runtimeAttestation.runtimeEnvironment
+            : null,
+        qaProjectRef:
+          typeof runtimeAttestation?.qaProjectRef === "string"
+            ? runtimeAttestation.qaProjectRef
+            : null,
+        qaPublicUrlExact: runtimeAttestation?.qaPublicUrlExact === true,
+        qaPublishableKeyConfigured:
+          runtimeAttestation?.qaPublishableKeyConfigured === true,
+        qaServiceRoleConfigured: runtimeAttestation?.qaServiceRoleConfigured === true,
+        qaServiceRead: runtimeAttestation?.qaServiceRead === true,
+        paymentModesDisabled: runtimeAttestation?.paymentModesDisabled === true,
+        productionProjectExcluded:
+          runtimeAttestation?.productionProjectPresent === false,
+        nonemptyProviderCredentialKeys: Array.isArray(
+          runtimeAttestation?.nonemptyProviderCredentialKeys,
+        )
+          ? runtimeAttestation.nonemptyProviderCredentialKeys.filter(
+              (key) => typeof key === "string" && /^[A-Z0-9_]+$/.test(key),
+            )
+          : [],
+        secretValuesRetained: false,
+      }, null, 2)}\n`,
+    );
+    throw new Error(
+      `Protected runtime attestation returned ${runtimeAttestationStatus}.`,
+    );
+  }
+  if (
+    runtimeAttestation.schemaVersion !== 1 ||
+    runtimeAttestation.scope !== "controller-only-protected-preview" ||
+    runtimeAttestation.ok !== true ||
+    runtimeAttestation.runtimeEnvironment !== "preview" ||
+    runtimeAttestation.qaProjectRef !== qaRef ||
+    runtimeAttestation.qaPublicUrlExact !== true ||
+    runtimeAttestation.qaPublishableKeyConfigured !== true ||
+    runtimeAttestation.qaServiceRoleConfigured !== true ||
+    runtimeAttestation.qaServiceRead !== true ||
+    runtimeAttestation.paymentModesDisabled !== true ||
+    runtimeAttestation.productionProjectPresent !== false ||
+    runtimeAttestation.secretValuesReturned !== false ||
+    !Array.isArray(runtimeAttestation.nonemptyProviderCredentialKeys) ||
+    runtimeAttestation.nonemptyProviderCredentialKeys.length !== 0
+  ) {
+    throw new Error("The protected runtime QA/payment attestation failed closed.");
+  }
+
   const response = await page.goto("/mpgf/pools/new", { waitUntil: "domcontentloaded" });
   if (!response || response.status() !== 200) {
     throw new Error(`QA service-read route returned ${response?.status() ?? "no response"}.`);
@@ -103,6 +165,22 @@ try {
 
   await mkdir(evidenceDir, { recursive: true });
   await writeFile(
+    `${evidenceDir}/deployment-runtime-environment-proof.json`,
+    `${JSON.stringify({
+      protectedControllerAttestation: "passed",
+      runtimeEnvironment: runtimeAttestation.runtimeEnvironment,
+      qaProjectRef: runtimeAttestation.qaProjectRef,
+      qaPublicUrlExact: runtimeAttestation.qaPublicUrlExact,
+      qaPublishableKeyConfigured: runtimeAttestation.qaPublishableKeyConfigured,
+      qaServiceRoleConfigured: runtimeAttestation.qaServiceRoleConfigured,
+      qaServiceRead: runtimeAttestation.qaServiceRead,
+      paymentModesDisabled: runtimeAttestation.paymentModesDisabled,
+      productionProjectExcluded: !runtimeAttestation.productionProjectPresent,
+      nonemptyProviderCredentialKeys: runtimeAttestation.nonemptyProviderCredentialKeys,
+      secretValuesRetained: false,
+    }, null, 2)}\n`,
+  );
+  await writeFile(
     `${evidenceDir}/pre-mutation-browser-proof.json`,
     `${JSON.stringify({
       deploymentHost,
@@ -110,6 +188,9 @@ try {
       noindex: true,
       serverQaServiceRead: "passed",
       anonymousQaRead: "passed",
+      protectedRuntimeAttestation: "passed",
+      runtimePaymentModesDisabled: true,
+      runtimeProviderCredentialValues: 0,
       clientBundleQaPair: true,
       clientBundleForbiddenProductionRef: false,
       qaProjectRef: qaRef,

@@ -325,6 +325,7 @@ jobs:
           rm -rf .next .vercel/output
           npx --yes "vercel@$VERCEL_CLI_VERSION" build --yes --token="$VERCEL_TOKEN" \
             | tee ../evidence/vercel-build.log
+          node ../controller/ops/pr689-uat702/inject-runtime-attestation.mjs
           STATIC_SOURCE_DIR=public \
           STATIC_BUILD_DIR=.vercel/output/static \
           STATIC_EVIDENCE_DIR=../evidence \
@@ -432,59 +433,6 @@ jobs:
           if (data.readyState !== "READY" || data.target !== null || aliases.length !== 0) throw new Error("Deployment is not READY, Preview-only, and unaliased.");
           if (sha !== process.env.CANDIDATE_HEAD_SHA) throw new Error("Deployment commit metadata does not match the candidate.");
           if (aliases.some((value) => /(^|\.)moraltrade\.org$/i.test(value))) throw new Error("Production alias is forbidden.");
-          const environmentResponse = await fetch(`https://api.vercel.com/v3/env/pull/${deploymentId}?teamId=${process.env.VERCEL_ORG_ID}&source=vercel-cli%3Apull`, {
-            headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
-          });
-          if (!environmentResponse.ok) {
-            const error = await environmentResponse.json().catch(() => ({}));
-            await writeFile("evidence/deployment-runtime-environment-proof.json", `${JSON.stringify({
-              deploymentId,
-              lookupStatus: environmentResponse.status,
-              lookupErrorCode: error?.error?.code ?? error?.code ?? "unknown",
-              secretValuesRetained: false,
-            }, null, 2)}\n`);
-            throw new Error("Deployment-scoped environment proof lookup failed.");
-          }
-          const selectedEnvironment = await environmentResponse.json();
-          const runtimeEnvironment = selectedEnvironment.env ?? {};
-          const buildEnvironment = selectedEnvironment.buildEnv ?? {};
-          const providerCredential = /(STRIPE|EVERY_?ORG|PAYMENT|CUSTODY|SETTLEMENT|RESERVE|PAYOUT|PAYPAL|BRAINTREE|ADYEN|SQUARE).*(SECRET|KEY|TOKEN|ACCOUNT|CREDENTIAL|URL|ID)$/i;
-          const nonemptyProviderKeys = [...new Set([
-            ...Object.entries(runtimeEnvironment),
-            ...Object.entries(buildEnvironment),
-          ].filter(([key, value]) => providerCredential.test(key) && value !== "" && value !== null && value !== undefined).map(([key]) => key))].sort();
-          const expectedModes = {
-            CONDITIONAL_PAYMENTS_MODE: "disabled",
-            TRADE_DONATION_POOL_ENABLED: "false",
-            TRADE_DONATION_POOL_MODE: "disabled",
-            DIRECT_DONATION_UPGRADES_ENABLED: "false",
-            DIRECT_DONATION_UPGRADE_MODE: "disabled",
-            MPGF_REAL_MONEY_ENABLED: "false",
-            MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false",
-            MPGF_TEST_PAYMENT_ENABLED: "false",
-            EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false",
-          };
-          const qaUrl = `https://${process.env.EXPECTED_QA_REF}.supabase.co`;
-          const qaRuntimeBound = runtimeEnvironment.NEXT_PUBLIC_SUPABASE_URL === qaUrl
-            && runtimeEnvironment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY === process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-            && runtimeEnvironment.SUPABASE_SERVICE_ROLE_KEY === process.env.SUPABASE_SERVICE_ROLE_KEY;
-          const qaBuildRecordBound = buildEnvironment.NEXT_PUBLIC_SUPABASE_URL === qaUrl
-            && buildEnvironment.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY === process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-            && buildEnvironment.SUPABASE_SERVICE_ROLE_KEY === process.env.SUPABASE_SERVICE_ROLE_KEY;
-          const paymentModesDisabled = Object.entries(expectedModes).every(([key, value]) => runtimeEnvironment[key] === value && buildEnvironment[key] === value);
-          const productionProjectExcluded = !JSON.stringify(selectedEnvironment).includes(process.env.FORBIDDEN_PROD_REF);
-          await writeFile("evidence/deployment-runtime-environment-proof.json", `${JSON.stringify({
-            deploymentId,
-            qaRuntimeBound,
-            qaBuildRecordBound,
-            productionProjectExcluded,
-            paymentModesDisabled,
-            nonemptyProviderCredentialKeys: nonemptyProviderKeys,
-            providerCredentialValuesRetained: false,
-          }, null, 2)}\n`);
-          if (!qaRuntimeBound || !qaBuildRecordBound || !productionProjectExcluded || !paymentModesDisabled || nonemptyProviderKeys.length) {
-            throw new Error("Deployment-scoped QA/payment environment proof failed.");
-          }
           await writeFile("evidence/deployment-metadata.json", `${JSON.stringify({
             id: data.id,
             url: process.env.DEPLOYMENT_URL,
@@ -494,9 +442,8 @@ jobs:
             aliases,
             candidateSha: sha,
             candidateTree: process.env.CANDIDATE_TREE_SHA,
-            qaProjectRef: process.env.EXPECTED_QA_REF,
-            productionProjectExcluded: true,
-            paymentProviderCredentialsPassed: false,
+            controllerRuntimeAttestation: "/api/uat702/runtime-attestation",
+            applicationSourceTreeUnchanged: true,
           }, null, 2)}\n`);
           NODE
 
