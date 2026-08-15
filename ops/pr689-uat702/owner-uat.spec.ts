@@ -714,10 +714,11 @@ test("creator, negative authorization, intended reviewer freeze/reject, and froz
     await expect(page.getByText("rejected", { exact: true }).first()).toBeVisible();
     await page.getByRole("button", { name: "Log out" }).click();
     await expect(page).toHaveURL(`${BASE_URL}/`);
-    await expect(page.getByRole("link", { name: "Sign in" })).toBeVisible();
     const remainingAuthCookies = (await page.context().cookies())
       .filter((cookie) => cookie.name.startsWith("sb-") && cookie.name.includes("-auth-token"));
     expect(remainingAuthCookies).toHaveLength(0);
+    await goto(page, rejectHref);
+    await expect(page.getByRole("heading", { level: 1, name: "Sign in to view this proposal." })).toBeVisible();
   } finally {
     await closeTracked(tracked);
     await creatorAfter.client.auth.signOut({ scope: "local" });
