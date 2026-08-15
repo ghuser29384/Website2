@@ -52,9 +52,39 @@ test("Start service snapshot renders as distinct non-overlapping rows", async ({
   await expect(stats).toHaveCount(3);
   await expect(followup).toBeVisible();
 
-  const cardRect = await rect(card);
-  const statRects = await Promise.all([0, 1, 2].map((index) => rect(stats.nth(index))));
-  const followupRect = await rect(followup);
+  // React can replace the visible fallback with the resolved segment between separate
+  // boundingBox calls. Capture the card and all descendant geometry synchronously in one browser
+  // task so the assertions describe one user-visible DOM state.
+  const layout = await card.evaluate((element) => {
+    const toRect = (target: Element) => {
+      const box = target.getBoundingClientRect();
+      return {
+        bottom: box.bottom,
+        height: box.height,
+        left: box.left,
+        right: box.right,
+        top: box.top,
+        width: box.width,
+      };
+    };
+    const renderedStats = Array.from(element.querySelectorAll(".growth-progress-stat"));
+    const renderedFollowup = element.querySelector(".hero-followup");
+
+    if (renderedStats.length !== 3 || !renderedFollowup) {
+      return null;
+    }
+
+    return {
+      card: toRect(element),
+      stats: renderedStats.map((stat) => toRect(stat)),
+      followup: toRect(renderedFollowup),
+    };
+  });
+  expect(layout).not.toBeNull();
+
+  const cardRect = layout!.card;
+  const statRects = layout!.stats;
+  const followupRect = layout!.followup;
 
   for (const item of statRects) {
     expect(item.left).toBeGreaterThanOrEqual(cardRect.left - 1);
