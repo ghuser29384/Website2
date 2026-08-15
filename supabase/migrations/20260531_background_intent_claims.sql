@@ -45,24 +45,9 @@ create index if not exists background_intent_claims_preview_idx
 on public.background_intent_claims (preview_safe, claim_type, updated_at desc)
 where status = 'active';
 
-create index if not exists wish_profiles_broad_preview_text_search_idx
-on public.wish_profiles using gin (
-  to_tsvector(
-    'english',
-    coalesce(public_preview, '') || ' ' ||
-    array_to_string(causes, ' ') || ' ' ||
-    coalesce(collective_name, '') || ' ' ||
-    coalesce(participant_kind, '') || ' ' ||
-    case
-      when share_location then coalesce(location_city, '') || ' ' || coalesce(location_region, '')
-      else ''
-    end
-  )
-)
-where is_discoverable = true
-  and share_public_preview = true
-  and background_search_enabled = true
-  and safety_status = 'clear';
+-- PostgreSQL rejects the former wish-profile GIN expression because
+-- array_to_string is STABLE rather than IMMUTABLE. The canonical rebuilt schema
+-- intentionally omits that invalid index as well.
 
 drop trigger if exists background_intent_claims_set_updated_at on public.background_intent_claims;
 create trigger background_intent_claims_set_updated_at

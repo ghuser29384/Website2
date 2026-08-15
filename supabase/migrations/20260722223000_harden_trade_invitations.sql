@@ -119,6 +119,7 @@ create unique index if not exists trade_threads_one_open_pair_uidx
   where status <> 'closed';
 
 alter table public.email_outbox
+  add column if not exists dedupe_key text,
   add column if not exists available_at timestamptz not null default now(),
   add column if not exists locked_at timestamptz,
   add column if not exists lock_token uuid,

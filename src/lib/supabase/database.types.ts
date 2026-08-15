@@ -7823,6 +7823,620 @@ export interface Database {
         };
         Relationships: [];
       };
+      mpgf_public_goods_compacts: {
+        Row: {
+          id: string;
+          public_key: string;
+          cause_key: string;
+          title: string;
+          summary: string;
+          constitution_version: string;
+          is_current: boolean;
+          status: string;
+          obligation_divisor: number;
+          allocation_total_bps: number;
+          funding_qualification_minimum_cents: number;
+          readiness_threshold_members: number;
+          readiness_threshold_scheduled_cents: number;
+          voting_equal_share_bps: number;
+          voting_sqrt_contribution_share_bps: number;
+          delegate_control_cap_bps: number;
+          minimum_term_months: number;
+          exit_notice_days: number;
+          project_selection_rule: string;
+          audit_rule: string;
+          no_project_opt_out_rule: string;
+          opt_in_only: boolean;
+          random_assignment_allowed: boolean;
+          marketplace_checkout_surcharge_enabled: boolean;
+          binding_only_after_activation: boolean;
+          per_project_refusal_allowed_after_activation: boolean;
+          exit_prospective_only_after_activation: boolean;
+          money_moves_on_join: boolean;
+          automatic_collection_enabled: boolean;
+          activation_execution_enabled: boolean;
+          allocation_requires_complete_coverage: boolean;
+          voting_requires_net_settled_contribution: boolean;
+          collection_state: string;
+          activated_at: string | null;
+          constitution_frozen_at: string | null;
+          frozen_constitution_version: string | null;
+          display_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          public_key: string;
+          cause_key: string;
+          title: string;
+          summary: string;
+          constitution_version: string;
+          is_current?: boolean;
+          status?: string;
+          obligation_divisor?: number;
+          allocation_total_bps?: number;
+          funding_qualification_minimum_cents?: number;
+          readiness_threshold_members?: number;
+          readiness_threshold_scheduled_cents?: number;
+          voting_equal_share_bps?: number;
+          voting_sqrt_contribution_share_bps?: number;
+          delegate_control_cap_bps?: number;
+          minimum_term_months?: number;
+          exit_notice_days?: number;
+          project_selection_rule: string;
+          audit_rule: string;
+          no_project_opt_out_rule: string;
+          opt_in_only?: boolean;
+          random_assignment_allowed?: boolean;
+          marketplace_checkout_surcharge_enabled?: boolean;
+          binding_only_after_activation?: boolean;
+          per_project_refusal_allowed_after_activation?: boolean;
+          exit_prospective_only_after_activation?: boolean;
+          money_moves_on_join?: boolean;
+          automatic_collection_enabled?: boolean;
+          activation_execution_enabled?: boolean;
+          allocation_requires_complete_coverage?: boolean;
+          voting_requires_net_settled_contribution?: boolean;
+          collection_state?: string;
+          activated_at?: string | null;
+          constitution_frozen_at?: string | null;
+          frozen_constitution_version?: string | null;
+          display_order: number;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_compacts"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_compact_memberships: {
+        Row: {
+          id: string;
+          compact_id: string;
+          participant_id: string;
+          constitution_version_accepted: string;
+          acknowledgements: Json;
+          status: string;
+          accepted_at: string;
+          activated_at: string | null;
+          revoked_at: string | null;
+          exit_requested_at: string | null;
+          exit_effective_at: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          compact_id: string;
+          participant_id: string;
+          constitution_version_accepted: string;
+          acknowledgements: Json;
+          status?: string;
+          accepted_at?: string;
+          activated_at?: string | null;
+          revoked_at?: string | null;
+          exit_requested_at?: string | null;
+          exit_effective_at?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_compact_memberships"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_dormant_authorization_snapshots: {
+        Row: {
+          id: string;
+          participant_id: string;
+          cycle_key: string;
+          state: string;
+          authorization_scope: string;
+          provider_reference_hash: string | null;
+          authorized_at: string | null;
+          expires_at: string | null;
+          evidence_hash: string;
+          supersedes_id: string | null;
+          frozen_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          cycle_key: string;
+          state: string;
+          authorization_scope?: string;
+          provider_reference_hash?: string | null;
+          authorized_at?: string | null;
+          expires_at?: string | null;
+          evidence_hash: string;
+          supersedes_id?: string | null;
+          frozen_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_dormant_authorization_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_outflow_coverage_snapshots: {
+        Row: {
+          id: string;
+          participant_id: string;
+          cycle_key: string;
+          period_start: string;
+          period_end_exclusive: string;
+          coverage_status: string;
+          coverage_reason: string;
+          source_scope: string;
+          source_coverage_attested: boolean;
+          evidence_hash: string;
+          observed_at: string;
+          supersedes_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          cycle_key: string;
+          period_start: string;
+          period_end_exclusive: string;
+          coverage_status: string;
+          coverage_reason: string;
+          source_scope?: string;
+          source_coverage_attested?: boolean;
+          evidence_hash: string;
+          observed_at?: string;
+          supersedes_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_outflow_coverage_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_outflow_observations: {
+        Row: {
+          id: string;
+          coverage_snapshot_id: string;
+          participant_id: string;
+          source_system: string;
+          source_record_key: string;
+          direction: string;
+          payment_kind: string;
+          settlement_status: string;
+          gross_settled_cents: number;
+          refunded_cents: number;
+          reversed_cents: number;
+          chargeback_cents: number;
+          occurred_at: string;
+          source_event_hash: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          coverage_snapshot_id: string;
+          participant_id: string;
+          source_system: string;
+          source_record_key: string;
+          direction: string;
+          payment_kind: string;
+          settlement_status: string;
+          gross_settled_cents: number;
+          refunded_cents?: number;
+          reversed_cents?: number;
+          chargeback_cents?: number;
+          occurred_at: string;
+          source_event_hash: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_outflow_observations"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_obligation_snapshots: {
+        Row: {
+          id: string;
+          participant_id: string;
+          cycle_key: string;
+          coverage_snapshot_id: string;
+          state: string;
+          eligible_net_settled_outflow_cents: number | null;
+          obligation_cents: number | null;
+          source_observation_count: number;
+          calculation_version: string;
+          snapshot_hash: string;
+          supersedes_id: string | null;
+          frozen_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          cycle_key: string;
+          coverage_snapshot_id: string;
+          state: string;
+          eligible_net_settled_outflow_cents?: number | null;
+          obligation_cents?: number | null;
+          source_observation_count?: number;
+          calculation_version?: string;
+          snapshot_hash: string;
+          supersedes_id?: string | null;
+          frozen_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_obligation_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_allocation_instructions: {
+        Row: {
+          id: string;
+          participant_id: string;
+          cycle_key: string;
+          constitution_version: string;
+          basis_points_total: number;
+          instruction_hash: string;
+          supersedes_id: string | null;
+          submitted_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          cycle_key: string;
+          constitution_version: string;
+          basis_points_total: number;
+          instruction_hash: string;
+          supersedes_id?: string | null;
+          submitted_at?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_allocation_instructions"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_allocation_instruction_lines: {
+        Row: {
+          id: string;
+          instruction_id: string;
+          membership_id: string;
+          compact_id: string;
+          allocation_bps: number;
+          stable_compact_key: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          instruction_id: string;
+          membership_id: string;
+          compact_id: string;
+          allocation_bps: number;
+          stable_compact_key: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_allocation_instruction_lines"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_scheduled_amount_snapshots: {
+        Row: {
+          id: string;
+          obligation_snapshot_id: string;
+          allocation_instruction_id: string;
+          participant_id: string;
+          cycle_key: string;
+          membership_id: string;
+          compact_id: string;
+          allocation_bps: number;
+          scheduled_contribution_cents: number;
+          remainder_numerator: number;
+          largest_remainder_rank: number;
+          snapshot_hash: string;
+          frozen_at: string;
+        };
+        Insert: {
+          id?: string;
+          obligation_snapshot_id: string;
+          allocation_instruction_id: string;
+          participant_id: string;
+          cycle_key: string;
+          membership_id: string;
+          compact_id: string;
+          allocation_bps: number;
+          scheduled_contribution_cents: number;
+          remainder_numerator: number;
+          largest_remainder_rank: number;
+          snapshot_hash: string;
+          frozen_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_scheduled_amount_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_settled_contribution_snapshots: {
+        Row: {
+          id: string;
+          participant_id: string;
+          cycle_key: string;
+          membership_id: string;
+          compact_id: string;
+          gross_settled_cents: number;
+          refunded_cents: number;
+          reversed_cents: number;
+          chargeback_cents: number;
+          net_settled_cents: number;
+          settlement_coverage_status: string;
+          source_event_hash: string;
+          supersedes_id: string | null;
+          frozen_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          cycle_key: string;
+          membership_id: string;
+          compact_id: string;
+          gross_settled_cents: number;
+          refunded_cents?: number;
+          reversed_cents?: number;
+          chargeback_cents?: number;
+          net_settled_cents: number;
+          settlement_coverage_status: string;
+          source_event_hash: string;
+          supersedes_id?: string | null;
+          frozen_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_settled_contribution_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_funding_qualification_snapshots: {
+        Row: {
+          id: string;
+          participant_id: string;
+          cycle_key: string;
+          membership_id: string;
+          compact_id: string;
+          identity_eligibility_record_id: string | null;
+          allocation_instruction_id: string | null;
+          scheduled_amount_snapshot_id: string | null;
+          settled_contribution_snapshot_id: string | null;
+          dormant_authorization_snapshot_id: string | null;
+          identity_qualified: boolean;
+          unique_person_gate_state: string;
+          unique_person_key_hash: string | null;
+          allocation_valid: boolean;
+          scheduled_contribution_cents: number | null;
+          net_settled_contribution_cents: number | null;
+          qualification_state: string;
+          snapshot_hash: string;
+          frozen_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          cycle_key: string;
+          membership_id: string;
+          compact_id: string;
+          identity_eligibility_record_id?: string | null;
+          allocation_instruction_id?: string | null;
+          scheduled_amount_snapshot_id?: string | null;
+          settled_contribution_snapshot_id?: string | null;
+          dormant_authorization_snapshot_id?: string | null;
+          identity_qualified: boolean;
+          unique_person_gate_state?: string;
+          unique_person_key_hash?: string | null;
+          allocation_valid: boolean;
+          scheduled_contribution_cents?: number | null;
+          net_settled_contribution_cents?: number | null;
+          qualification_state: string;
+          snapshot_hash: string;
+          frozen_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_funding_qualification_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_readiness_snapshots: {
+        Row: {
+          id: string;
+          compact_id: string;
+          cycle_key: string;
+          funding_qualified_unique_person_count: number;
+          scheduled_contribution_cents: number;
+          member_threshold_met: boolean;
+          funding_threshold_met: boolean;
+          threshold_ready: boolean;
+          activation_blocked: boolean;
+          blockers: string;
+          source_snapshot_hash: string;
+          supersedes_id: string | null;
+          frozen_at: string;
+        };
+        Insert: {
+          id?: string;
+          compact_id: string;
+          cycle_key: string;
+          funding_qualified_unique_person_count: number;
+          scheduled_contribution_cents: number;
+          member_threshold_met: boolean;
+          funding_threshold_met: boolean;
+          threshold_ready: boolean;
+          activation_blocked?: boolean;
+          blockers: string;
+          source_snapshot_hash: string;
+          supersedes_id?: string | null;
+          frozen_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_readiness_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_voting_snapshots: {
+        Row: {
+          id: string;
+          compact_id: string;
+          cycle_key: string;
+          total_weight_units: number;
+          equal_pool_units: number;
+          sqrt_pool_units: number;
+          qualified_member_count: number;
+          source_snapshot_hash: string;
+          frozen_at: string;
+        };
+        Insert: {
+          id?: string;
+          compact_id: string;
+          cycle_key: string;
+          total_weight_units: number;
+          equal_pool_units: number;
+          sqrt_pool_units: number;
+          qualified_member_count: number;
+          source_snapshot_hash: string;
+          frozen_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_voting_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_voting_weight_snapshots: {
+        Row: {
+          id: string;
+          voting_snapshot_id: string;
+          membership_id: string;
+          compact_id: string;
+          participant_id: string;
+          net_settled_contribution_cents: number;
+          equal_weight_units: number;
+          sqrt_contribution_weight_units: number;
+          total_weight_units: number;
+          frozen_at: string;
+        };
+        Insert: {
+          id?: string;
+          voting_snapshot_id: string;
+          membership_id: string;
+          compact_id: string;
+          participant_id: string;
+          net_settled_contribution_cents: number;
+          equal_weight_units: number;
+          sqrt_contribution_weight_units: number;
+          total_weight_units: number;
+          frozen_at: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_voting_weight_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_delegation_events: {
+        Row: {
+          id: string;
+          voting_snapshot_id: string;
+          compact_id: string;
+          cycle_key: string;
+          delegator_membership_id: string;
+          delegatee_membership_id: string | null;
+          event_kind: string;
+          direct_only: boolean;
+          incoming_weight_redelegated: boolean;
+          controlled_weight_units_after: number | null;
+          supersedes_event_id: string | null;
+          created_by: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          voting_snapshot_id: string;
+          compact_id: string;
+          cycle_key: string;
+          delegator_membership_id: string;
+          delegatee_membership_id?: string | null;
+          event_kind: string;
+          direct_only?: boolean;
+          incoming_weight_redelegated?: boolean;
+          controlled_weight_units_after?: number | null;
+          supersedes_event_id?: string | null;
+          created_by: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_delegation_events"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_delegation_snapshots: {
+        Row: {
+          id: string;
+          voting_snapshot_id: string;
+          compact_id: string;
+          cycle_key: string;
+          source_event_cutoff_at: string;
+          effective_weight_units: number;
+          snapshot_hash: string;
+          frozen_at: string;
+        };
+        Insert: {
+          id?: string;
+          voting_snapshot_id: string;
+          compact_id: string;
+          cycle_key: string;
+          source_event_cutoff_at: string;
+          effective_weight_units: number;
+          snapshot_hash: string;
+          frozen_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_delegation_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_delegation_weight_snapshots: {
+        Row: {
+          id: string;
+          delegation_snapshot_id: string;
+          membership_id: string;
+          compact_id: string;
+          participant_id: string;
+          delegated_to_membership_id: string | null;
+          own_weight_units: number;
+          controlled_weight_units: number;
+          direct_incoming_count: number;
+          frozen_at: string;
+        };
+        Insert: {
+          id?: string;
+          delegation_snapshot_id: string;
+          membership_id: string;
+          compact_id: string;
+          participant_id: string;
+          delegated_to_membership_id?: string | null;
+          own_weight_units: number;
+          controlled_weight_units: number;
+          direct_incoming_count: number;
+          frozen_at: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_delegation_weight_snapshots"]["Insert"]>;
+        Relationships: [];
+      };
+      mpgf_public_goods_compact_idempotency_keys: {
+        Row: {
+          id: string;
+          participant_id: string;
+          action: string;
+          idempotency_key: string;
+          request_hash: string;
+          response_json: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          participant_id: string;
+          action: string;
+          idempotency_key: string;
+          request_hash: string;
+          response_json: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["mpgf_public_goods_compact_idempotency_keys"]["Insert"]>;
+        Relationships: [];
+      };
       mpgf_round_rulebooks: {
         Row: {
           id: string;
@@ -11140,6 +11754,86 @@ export interface Database {
       };
     };
     Functions: {
+      get_mpgf_public_goods_compacts_v2_state: {
+        Args: Record<string, never>;
+        Returns: Json;
+      };
+      join_mpgf_public_goods_compact_v2: {
+        Args: {
+          p_compact_public_key: string;
+          p_constitution_version: string;
+          p_acknowledgements: Json;
+          p_idempotency_key: string;
+        };
+        Returns: Json;
+      };
+      set_mpgf_public_goods_compact_allocation_v2: {
+        Args: {
+          p_allocation_bps: Json;
+          p_idempotency_key: string;
+        };
+        Returns: Json;
+      };
+      request_mpgf_public_goods_compact_exit_v2: {
+        Args: {
+          p_compact_public_key: string;
+          p_idempotency_key: string;
+        };
+        Returns: Json;
+      };
+      set_mpgf_public_goods_compact_delegation_v2: {
+        Args: {
+          p_compact_public_key: string;
+          p_cycle_key: string;
+          p_delegatee_membership_id: string;
+          p_idempotency_key: string;
+        };
+        Returns: Json;
+      };
+      clear_mpgf_public_goods_compact_delegation_v2: {
+        Args: {
+          p_compact_public_key: string;
+          p_cycle_key: string;
+          p_idempotency_key: string;
+        };
+        Returns: Json;
+      };
+      freeze_mpgf_public_goods_financial_cycle_v2: {
+        Args: { p_participant_id: string; p_cycle_key: string };
+        Returns: Json;
+      };
+      freeze_mpgf_public_goods_readiness_v2: {
+        Args: { p_compact_id: string; p_cycle_key: string };
+        Returns: Json;
+      };
+      freeze_mpgf_public_goods_voting_v2: {
+        Args: { p_compact_id: string; p_cycle_key: string };
+        Returns: Json;
+      };
+      freeze_mpgf_public_goods_delegations_v2: {
+        Args: { p_voting_snapshot_id: string };
+        Returns: Json;
+      };
+      mpgf_public_goods_cycle_bounds_v2: {
+        Args: { cycle_key: string };
+        Returns: {
+          period_start: string;
+          period_end_exclusive: string;
+        }[];
+      };
+      mpgf_public_goods_hash_v2: {
+        Args: { value: Json };
+        Returns: string;
+      };
+      mpgf_public_goods_idempotency_replay_v2: {
+        Args: {
+          participant: string;
+          action_name: string;
+          key_value: string;
+          request_hash_value: string;
+        };
+        Returns: Json;
+      };
       normalize_profile_username_v1: {
         Args: { p_username: string };
         Returns: string;

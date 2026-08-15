@@ -55,6 +55,13 @@ const workflow = [
 
 const serviceRoutes = [
   {
+    title: "Voluntary public-goods compacts",
+    detail:
+      "Choose one or more cause-specific Compact v2 constitutions with one uncapped transaction-based obligation, exact allocation, 100-person + $500 readiness, and automatic collection disabled.",
+    href: "/mpgf/compacts",
+    action: "Review founding compacts",
+  },
+  {
     title: "Current round",
     detail:
       "Inspect the public round, project stances, sealed progress rules, contribution terms, and final reporting path.",
@@ -141,6 +148,7 @@ export default async function MpgfPage() {
         <Link href={roundHref}>Current round</Link>
         <Link href="/mpgf/pools">Candidate pools</Link>
         <Link href="/mpgf/governance">Governance</Link>
+        <Link href="/mpgf/compacts">Voluntary compacts</Link>
         <Link href="/mpgf/metrics">Metrics</Link>
       </nav>
 
