@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import {
@@ -26,6 +25,22 @@ async function mutationRequest(path: string, method: "POST" | "PUT" | "DELETE", 
   const response = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const result = (await response.json().catch(() => ({}))) as MutationResponse;
   if (!response.ok || !result.ok) throw new Error(result.error ?? "The Compact request could not be completed.");
+  return result;
+}
+
+async function stateRequest() {
+  const response = await fetch("/api/mpgf/compacts", {
+    cache: "no-store",
+    headers: { "Cache-Control": "no-cache" },
+  });
+  const result = (await response.json().catch(() => null)) as
+    | MpgfPublicGoodsCompactsState
+    | { error?: string }
+    | null;
+  if (!response.ok || !result || !("available" in result) || !result.available) {
+    const message = result && "error" in result ? result.error : null;
+    throw new Error(message ?? "Private Compact state could not be refreshed safely.");
+  }
   return result;
 }
 
@@ -74,8 +89,8 @@ function Readiness({ compact }: { compact: MpgfPublicGoodsCompactState }) {
   );
 }
 
-export function MpgfPublicGoodsCompacts({ state, viewerPresent }: Props) {
-  const router = useRouter();
+export function MpgfPublicGoodsCompacts({ state: initialState, viewerPresent }: Props) {
+  const [state, setState] = useState(initialState);
   const [selectedPublicKey, setSelectedPublicKey] = useState(state.compacts.find((compact) => compact.membership)?.publicKey ?? state.compacts[0]?.publicKey ?? "");
   const [acknowledgements, setAcknowledgements] = useState({ voluntary: false, constitution: false, binding: false, noPayment: false });
   const joined = useMemo(() => state.compacts.filter((compact) => compact.membership && !["revoked", "exited"].includes(compact.membership.status)), [state.compacts]);
@@ -92,7 +107,16 @@ export function MpgfPublicGoodsCompacts({ state, viewerPresent }: Props) {
   async function runAction(action: string, callback: () => Promise<MutationResponse>, success: (result: MutationResponse) => string) {
     setPendingAction(action);
     setStatusMessage("Saving a private Compact instruction. No money is moving.");
-    try { const result = await callback(); setStatusMessage(success(result)); router.refresh(); }
+    try {
+      const result = await callback();
+      const successMessage = success(result);
+      setStatusMessage(successMessage);
+      try {
+        setState(await stateRequest());
+      } catch {
+        setStatusMessage(`${successMessage} Refresh the page to verify the durable private state.`);
+      }
+    }
     catch (error) { setStatusMessage(error instanceof Error ? error.message : "The Compact request could not be completed."); }
     finally { setPendingAction(null); }
   }

@@ -162,3 +162,10 @@ test("the protected Compact surface does not trigger speculative route prefetche
   assert.match(pagePrimitives, /<Link prefetch=\{prefetch\} href="\/">Home<\/Link>/);
   assert.match(pagePrimitives, /<Link prefetch=\{prefetch\} href=\{item\.href\}>/);
 });
+
+test("successful Compact mutations refresh durable private state without cached router props", () => {
+  assert.match(component, /useState\(initialState\)/);
+  assert.match(component, /fetch\("\/api\/mpgf\/compacts", \{[\s\S]{0,120}cache: "no-store"/);
+  assert.match(component, /setState\(await stateRequest\(\)\)/);
+  assert.doesNotMatch(component, /router\.refresh\(\)/);
+});
