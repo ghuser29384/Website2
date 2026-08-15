@@ -427,7 +427,8 @@ test("creator, negative authorization, intended reviewer freeze/reject, and froz
     await expect(page.getByRole("heading", { level: 1, name: TITLES.freeze })).toBeVisible();
     await expect(page.getByText("submitted", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: /approve|freeze|publish/i })).toHaveCount(0);
-    await expect(page.getByText(/No allocation or payout was authorized|No payment/i).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /not money movement/i })).toBeVisible();
+    await expect(page.getByText(/does not create a payment method.*payout/i)).toBeVisible();
 
     await goto(page, "/mpgf/admin/dac-lifecycle");
     await expect(page.getByRole("heading", { name: "Admin access required" })).toBeVisible();
