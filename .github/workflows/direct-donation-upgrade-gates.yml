@@ -151,21 +151,41 @@ jobs:
             src/app/trades/new/direct-donation-upgrade-create.tsx
           ! grep -Fq 'Authorize and publish' src/app/trades/new/direct-donation-upgrade-create.tsx
 
-          git fetch origin main
-          current_main="$(git rev-parse origin/main)"
-          if ! git merge-base --is-ancestor "$current_main" HEAD; then
-            echo "Candidate HEAD does not contain fetched current main ($current_main)." >&2
+          base_branch=main
+          pinned_base=
+          if [[ "$GITHUB_EVENT_NAME" == pull_request && -n "${GITHUB_BASE_REF:-}" ]]; then
+            base_branch="$GITHUB_BASE_REF"
+          fi
+          case "$base_branch" in
+            main) ;;
+            integration/direct-donation-upgrade-current-main-20260807)
+              pinned_base=106f9781cf13f75af31594ed79deef89318a87b7
+              ;;
+            *)
+              echo "Refusing unapproved gate base: $base_branch" >&2
+              exit 1
+              ;;
+          esac
+          git fetch --no-tags origin "$base_branch"
+          verified_base="$(git rev-parse FETCH_HEAD)"
+          if [[ -n "$pinned_base" && "$verified_base" != "$pinned_base" ]]; then
+            echo "Stacked Phase A base drifted from $pinned_base to $verified_base." >&2
             exit 1
           fi
-          base="$(git merge-base origin/main HEAD)"
-          test "$base" = "$current_main"
+          if ! git merge-base --is-ancestor "$verified_base" HEAD; then
+            echo "Candidate HEAD does not contain verified base $base_branch ($verified_base)." >&2
+            exit 1
+          fi
+          base="$(git merge-base "$verified_base" HEAD)"
+          test "$base" = "$verified_base"
           git diff --exit-code "$base"...HEAD -- \
             scripts/vercel-project-config.mjs \
             scripts/vercel-project-config.test.mjs
           git diff --check "$base"...HEAD
           git diff --name-only "$base"...HEAD | sort | tee direct-upgrade-changed-files.txt
           {
-            printf 'fetched_current_main=%s\n' "$current_main"
+            printf 'verified_base_branch=%s\n' "$base_branch"
+            printf 'verified_base=%s\n' "$verified_base"
             printf 'merge_base=%s\n' "$base"
             printf 'head=%s\n' "$(git rev-parse HEAD)"
             printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"

@@ -61,6 +61,14 @@ const renderedQaWorkflow = readFileSync(
   ".github/workflows/direct-donation-upgrade-rendered-qa.yml",
   "utf8",
 );
+const directGateWorkflow = readFileSync(
+  ".github/workflows/direct-donation-upgrade-gates.yml",
+  "utf8",
+);
+const partialGateWorkflow = readFileSync(
+  ".github/workflows/direct-donation-upgrade-partial-gates.yml",
+  "utf8",
+);
 
 test("rendered QA can inspect the commitment form without loading service-role data", () => {
   assert.match(createPage, /directDonationUpgradeRenderedQaNoServiceDataEnabled/);
@@ -251,6 +259,21 @@ test("all Every.org inbound routes fail closed before body or database work whil
       source,
       /headers\.get\(|Bearer\s|x-mpgf-every-org-webhook-secret|mpgf-every-org-webhook-secret/i,
     );
+  }
+});
+
+test("stacked Phase A gates pin the unchanged PR 547 feature base instead of accepting arbitrary stale main", () => {
+  for (const workflow of [directGateWorkflow, partialGateWorkflow]) {
+    assert.match(
+      workflow,
+      /integration\/direct-donation-upgrade-current-main-20260807/,
+    );
+    assert.match(
+      workflow,
+      /pinned_base=106f9781cf13f75af31594ed79deef89318a87b7/,
+    );
+    assert.match(workflow, /Refusing unapproved gate base/);
+    assert.match(workflow, /git merge-base --is-ancestor "\$verified_base" HEAD/);
   }
 });
 
