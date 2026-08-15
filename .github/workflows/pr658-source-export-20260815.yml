@@ -1,0 +1,39 @@
+name: PR 658 exact source export
+
+on:
+  push:
+    branches:
+      - diag/pr658-pilot-route-browser-20260815
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact blocked release candidate
+        uses: actions/checkout@v4
+        with:
+          ref: 75fd512e6cf82e2c51df53e211b854c0263109c3
+          fetch-depth: 1
+
+      - name: Prove exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '75fd512e6cf82e2c51df53e211b854c0263109c3'
+          test "$(git status --porcelain)" = ''
+          tar --exclude=.git -czf /tmp/pr658-exact-source.tar.gz .
+          sha256sum /tmp/pr658-exact-source.tar.gz | tee /tmp/pr658-exact-source.sha256
+
+      - name: Upload exact source
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr658-exact-source-${{ github.run_id }}
+          path: |
+            /tmp/pr658-exact-source.tar.gz
+            /tmp/pr658-exact-source.sha256
+          if-no-files-found: error
+          retention-days: 7
