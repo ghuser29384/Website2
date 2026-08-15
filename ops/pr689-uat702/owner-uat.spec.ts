@@ -237,8 +237,27 @@ async function goto(page: Page, path: string) {
   return response;
 }
 
+function proposalPanel(page: Page) {
+  return page.locator(".mpgf-panel").filter({
+    has: page.locator("h2", { hasText: /^Draft a candidate pool reasoning$/ }),
+  });
+}
+
+function proposalControl(panel: ReturnType<Page["locator"]>, label: string) {
+  if (label === "Maximum failure bonus per participant dollars") {
+    return panel.locator('input[aria-label="Maximum failure bonus per participant dollars"]');
+  }
+
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return panel
+    .locator("label")
+    .filter({ hasText: new RegExp(`^${escaped}$`) })
+    .locator("input, textarea, select")
+    .first();
+}
+
 async function fillCompleteProposal(page: Page, title: string) {
-  const panel = page.locator(".mpgf-panel").filter({ has: page.getByRole("heading", { name: "Draft a candidate pool reasoning" }) });
+  const panel = proposalPanel(page);
   const values: Array<[string, string]> = [
     ["Proposal title", title],
     ["Cause area", "Synthetic isolated QA"],
@@ -262,7 +281,12 @@ async function fillCompleteProposal(page: Page, title: string) {
     ["Maximum eligible participants", "100"],
     ["Maximum failure bonus per participant dollars", "25.00"],
   ];
-  for (const [label, value] of values) await panel.getByLabel(label, { exact: true }).fill(value);
+  for (const [label, value] of values) {
+    const control = proposalControl(panel, label);
+    await expect(control).toBeVisible();
+    await control.fill(value);
+    await page.keyboard.press("Escape");
+  }
   await expect(panel.getByRole("button", { name: "Save draft" })).toBeEnabled();
   await expect(panel.getByRole("button", { name: "Submit proposal" })).toBeEnabled();
   return panel;
@@ -376,7 +400,7 @@ test("creator, negative authorization, intended reviewer freeze/reject, and froz
     response = await goto(page, "/mpgf/pools/new?template=threshold-coalition");
     expect(response?.status()).toBe(200);
     await expect(page.getByRole("heading", { level: 1, name: "Propose a moral public good." })).toBeVisible();
-    const panel = page.locator(".mpgf-panel").filter({ has: page.getByRole("heading", { name: "Draft a candidate pool reasoning" }) });
+    const panel = proposalPanel(page);
     await expect(panel.getByRole("button", { name: "Save draft" })).toBeDisabled();
     await expect(panel.getByRole("button", { name: "Submit proposal" })).toBeDisabled();
     await fillCompleteProposal(page, TITLES.draft);
@@ -384,11 +408,11 @@ test("creator, negative authorization, intended reviewer freeze/reject, and froz
     draftHref = await saveAndGetStatusHref(panel, "Save draft");
     await expect(panel.getByText(/Saved draft/)).toBeVisible();
 
-    await panel.getByLabel("Proposal title", { exact: true }).fill(TITLES.freeze);
+    await proposalControl(panel, "Proposal title").fill(TITLES.freeze);
     freezeHref = await saveAndGetStatusHref(panel, "Submit proposal");
     await expect(panel.getByText(/Submitted .* for MPGF review/)).toBeVisible();
 
-    await panel.getByLabel("Proposal title", { exact: true }).fill(TITLES.reject);
+    await proposalControl(panel, "Proposal title").fill(TITLES.reject);
     rejectHref = await saveAndGetStatusHref(panel, "Submit proposal");
     await screenshot(page, "03-creator-submitted-status-navigation-desktop");
 
