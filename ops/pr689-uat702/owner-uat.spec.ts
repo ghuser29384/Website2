@@ -251,7 +251,7 @@ function proposalControl(panel: ReturnType<Page["locator"]>, label: string) {
   const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return panel
     .locator("label")
-    .filter({ hasText: new RegExp(`^${escaped}$`) })
+    .filter({ hasText: new RegExp(`^${escaped}`) })
     .locator("input, textarea, select")
     .first();
 }
