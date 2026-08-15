@@ -4,6 +4,7 @@ import path from "node:path";
 
 const captureVisuals = process.env.CREATE_ROUTE_CAPTURE === "1";
 const captureDirectory = path.join("test-results", "create-route-visual");
+const existentialRiskPattern = /existential(?:-| )risk/i;
 
 async function openCreate(page: import("@playwright/test").Page) {
   await page.goto("/trades/new");
@@ -15,7 +16,7 @@ async function openCreate(page: import("@playwright/test").Page) {
 }
 
 async function chooseExistentialRiskSkill(create: FrameLocator) {
-  const causeButton = create.getByRole("button", { name: "Existential risk" });
+  const causeButton = create.locator('.cause-choice[data-cause="Existential risk"]');
   await causeButton.click();
   await expect(create.locator("#screenRequest")).toBeVisible();
   await create.locator('[data-request-kind="skill"]').click();
@@ -49,10 +50,10 @@ test.describe("Create route UI regression repairs", () => {
     const suggestionLabels = create.locator(".suggestion-option span:last-child");
     await expect(suggestionLabels).toHaveCount(7);
     const suggestionText = (await suggestionLabels.allTextContents()).join("\n");
-    expect(suggestionText).toMatch(/existential risk/i);
+    expect(suggestionText).toMatch(existentialRiskPattern);
     expect(suggestionText).not.toMatch(/vegetarian|Help grow Moral Trade/i);
     expect(
-      (await suggestionLabels.allTextContents()).every((label) => /existential risk/i.test(label)),
+      (await suggestionLabels.allTextContents()).every((label) => existentialRiskPattern.test(label)),
     ).toBe(true);
 
     const layout = await create.locator("body").evaluate(() => {
@@ -138,8 +139,10 @@ test.describe("Create route UI regression repairs", () => {
 
     const suggestionLabels = create.locator(".suggestion-option span:last-child");
     await expect(suggestionLabels).toHaveCount(7);
+    const suggestionText = (await suggestionLabels.allTextContents()).join("\n");
+    expect(suggestionText).not.toMatch(/vegetarian|Help grow Moral Trade/i);
     expect(
-      (await suggestionLabels.allTextContents()).every((label) => /existential risk/i.test(label)),
+      (await suggestionLabels.allTextContents()).every((label) => existentialRiskPattern.test(label)),
     ).toBe(true);
 
     const mobileState = await create.locator("html").evaluate((element) => {
