@@ -41,6 +41,7 @@ env:
   MPGF_REAL_MONEY_ACCEPTANCE_ENABLED: "false"
   MPGF_TEST_PAYMENT_ENABLED: "false"
   EVERY_ORG_PLEDGE_DONATIONS_ENABLED: "false"
+  PGSSLMODE: require
 
 jobs:
   owner-uat:
