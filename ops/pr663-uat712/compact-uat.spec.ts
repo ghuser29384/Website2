@@ -112,6 +112,12 @@ type ApiResult = {
 };
 
 const observations: Observation[] = [];
+const apiObservations: Array<{
+  method: string;
+  path: string;
+  status: number;
+  cacheControl: string;
+}> = [];
 const viewportDiagnostics: Array<Record<string, unknown>> = [];
 const sectionEvidence = new Map<string, { result: string; evidence: string[] }>();
 let traceSequence = 0;
@@ -300,29 +306,23 @@ async function api(
   body?: Record<string, unknown>,
   rawBody?: string,
 ) {
-  return page.evaluate(
-    async ({ requestPath, requestMethod, requestBody, requestRawBody }) => {
-      const response = await fetch(requestPath, {
-        method: requestMethod,
-        headers: requestMethod === "GET" ? undefined : { "Content-Type": "application/json" },
-        body:
-          requestMethod === "GET"
-            ? undefined
-            : requestRawBody ?? JSON.stringify(requestBody ?? {}),
-      });
-      return {
-        status: response.status,
-        body: (await response.json().catch(() => ({}))) as Record<string, unknown>,
-        cacheControl: response.headers.get("cache-control") ?? "",
-      };
-    },
-    {
-      requestPath: path,
-      requestMethod: method,
-      requestBody: body,
-      requestRawBody: rawBody,
-    },
-  ) as Promise<ApiResult>;
+  const response = await page.context().request.fetch(path, {
+    method,
+    headers: method === "GET" ? undefined : { "Content-Type": "application/json" },
+    data: method === "GET" ? undefined : rawBody ?? JSON.stringify(body ?? {}),
+  });
+  const result = {
+    status: response.status(),
+    body: await response.json().catch(() => ({})) as Record<string, unknown>,
+    cacheControl: response.headers()["cache-control"] ?? "",
+  };
+  apiObservations.push({
+    method,
+    path,
+    status: result.status,
+    cacheControl: result.cacheControl,
+  });
+  return result;
 }
 
 async function state(page: Page) {
@@ -368,7 +368,11 @@ async function acknowledgeAndJoin(page: Page, compactTitle: string) {
     await selectButton.click();
   } else {
     await expect(page.getByRole("button", { name: "Selected Compact" })).toBeVisible();
-    await expect(page.getByRole("heading", { level: 3, name: compactTitle })).toBeVisible();
+    await expect(
+      page
+        .getByLabel(compactTitle, { exact: true })
+        .getByRole("heading", { level: 3, name: compactTitle }),
+    ).toBeVisible();
   }
   const fieldset = page.getByRole("group", { name: "Explicit Compact v2 acknowledgements" });
   const boxes = fieldset.getByRole("checkbox");
@@ -447,22 +451,51 @@ test.afterAll(async () => {
     consoleWarnings: [...new Set(record.consoleWarnings)],
     pageErrors: [...new Set(record.pageErrors)],
   }));
+  const expectedBackgroundPrefetchPaths = new Set([
+    "/",
+    "/mpgf",
+    "/mpgf/compacts",
+    "/mpgf/governance",
+    "/mpgf/technical-spec",
+  ]);
   const unexpected = sanitized.flatMap((record) => [
-    ...record.consoleErrors.map((message) => ({ label: record.label, kind: "console", message })),
+    ...record.consoleErrors
+      // Chromium duplicates HTTP failures as content-free console messages. The
+      // response/request records below retain the actionable URL and status.
+      .filter(
+        (message) =>
+          !/^Failed to load resource: the server responded with a status of \d+ \(\)$/.test(
+            message,
+          ),
+      )
+      .map((message) => ({ label: record.label, kind: "console", message })),
     ...record.consoleWarnings.map((message) => ({ label: record.label, kind: "console-warning", message })),
     ...record.pageErrors.map((message) => ({ label: record.label, kind: "page", message })),
-    ...record.failedRequests.map((entry) => ({
-      label: record.label,
-      kind: "request-failed",
-      message: `${entry.method} ${entry.host}${entry.path}`,
-    })),
+    ...record.failedRequests
+      // Next Link RSC prefetches are cancelled when a traced context closes.
+      // Keep them in browser-observations.json, but do not classify those known
+      // background GETs as product failures.
+      .filter(
+        (entry) =>
+          !(
+            entry.method === "GET" &&
+            entry.host === "protected-preview" &&
+            expectedBackgroundPrefetchPaths.has(entry.path)
+          ),
+      )
+      .map((entry) => ({
+        label: record.label,
+        kind: "request-failed",
+        message: `${entry.method} ${entry.host}${entry.path}`,
+      })),
     ...record.httpErrors
       .filter(
         (entry) =>
           entry.status >= 500 ||
           !(
-            [400, 401].includes(entry.status) &&
-            /^\/api\/mpgf\/compacts(?:\/(?:membership|allocation|delegation))?$/.test(entry.path)
+            ([400, 401].includes(entry.status) &&
+              /^\/api\/mpgf\/compacts(?:\/(?:membership|allocation|delegation))?$/.test(entry.path)) ||
+            (entry.status === 404 && entry.host === "protected-preview" && entry.path === "/")
           ),
       )
       .map((entry) => ({
@@ -478,7 +511,7 @@ test.afterAll(async () => {
   ]);
   await writeFile(
     `${OUTPUT_DIR}/browser-observations.json`,
-    `${JSON.stringify({ observations: sanitized, unexpected, rawPrivateContentRetained: false }, null, 2)}\n`,
+    `${JSON.stringify({ observations: sanitized, apiObservations, unexpected, rawPrivateContentRetained: false }, null, 2)}\n`,
   );
   await writeFile(
     `${OUTPUT_DIR}/viewport-diagnostics.json`,
