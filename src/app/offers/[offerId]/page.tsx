@@ -572,7 +572,7 @@ export default async function OfferPage({ params, searchParams }: OfferPageProps
           </div>
         ) : null}
 
-        <section className="section section-white marketplace-detail-section" id="marketplace-commitment" aria-labelledby="marketplace-detail-section-heading">
+        <section className="section section-white marketplace-detail-section" id="marketplace-commitment" aria-labelledby="marketplace-detail-section-heading" tabIndex={-1}>
           <div className="section-head section-head-compact">
             <p className="eyebrow">Marketplace terms</p>
             <h2 id="marketplace-detail-section-heading">Commitment preview</h2>

@@ -40,6 +40,7 @@ test("offer records expose direct, accessible routes to safeguards and commitmen
   assert.match(source, /Jump to commitment terms/);
   assert.match(routeLayout, /<div className="offer-record-route">\{children\}<\/div>/);
   assert.match(offerPage, /id="marketplace-commitment"/);
+  assert.match(offerPage, /id="marketplace-commitment"[^>]*tabIndex=\{-1\}/);
 });
 
 test("offer-record visual changes stay route-scoped and preserve mobile access to content", async () => {
