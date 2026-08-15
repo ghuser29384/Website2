@@ -551,11 +551,23 @@ jobs:
               psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
                 --file ../controller/ops/pr689-uat702/cleanup-dynamic.sql \
                 > "$RUNNER_TEMP/dynamic-cleanup.log" 2>&1
-              cleanup_status=$((cleanup_status + $?))
+              dynamic_cleanup_status="$?"
+              cleanup_status=$((cleanup_status + dynamic_cleanup_status))
+              if [[ "$dynamic_cleanup_status" != "0" ]]; then
+                node ../controller/ops/pr689-uat702/sanitize-database-diagnostic.mjs \
+                  "$RUNNER_TEMP/dynamic-cleanup.log" ../evidence/final-dynamic-cleanup-failure.txt \
+                  final_dynamic_cleanup uat702/cleanup-dynamic.sql
+              fi
               psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
                 --file supabase/tests/mpgf_dac_product_browser_cleanup.sql \
                 > "$RUNNER_TEMP/fixed-cleanup.log" 2>&1
-              cleanup_status=$((cleanup_status + $?))
+              fixed_cleanup_status="$?"
+              cleanup_status=$((cleanup_status + fixed_cleanup_status))
+              if [[ "$fixed_cleanup_status" != "0" ]]; then
+                node ../controller/ops/pr689-uat702/sanitize-database-diagnostic.mjs \
+                  "$RUNNER_TEMP/fixed-cleanup.log" ../evidence/final-fixed-cleanup-failure.txt \
+                  final_fixed_cleanup supabase/tests/mpgf_dac_product_browser_cleanup.sql
+              fi
             else
               payment_status=0
               printf 'payment_refs_before_cleanup=0\n' > ../evidence/payment-before-cleanup.txt
@@ -564,6 +576,11 @@ jobs:
               --file ../controller/ops/pr689-uat702/runtime-residue-proof.sql \
               > ../evidence/zero-residue.txt 2> "$RUNNER_TEMP/residue-proof.err"
             residue_status="$?"
+            if [[ "$residue_status" != "0" ]]; then
+              node ../controller/ops/pr689-uat702/sanitize-database-diagnostic.mjs \
+                "$RUNNER_TEMP/residue-proof.err" ../evidence/residue-proof-failure.txt \
+                residue_proof uat702/runtime-residue-proof.sql read_only_query=true
+            fi
             grep -Fxq 'fixture_residue=0' ../evidence/zero-residue.txt
             residue_status=$((residue_status + $?))
             grep -Fxq 'payment_refs=0' ../evidence/zero-residue.txt
@@ -605,17 +622,35 @@ jobs:
           cp -R ../controller/ops/pr689-uat702 uat702
           node uat702/prepare-base-spec.mjs
 
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
-            --file uat702/cleanup-dynamic.sql > "$RUNNER_TEMP/pre-dynamic-cleanup.log" 2>&1
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
-            --file supabase/tests/mpgf_dac_product_browser_cleanup.sql > "$RUNNER_TEMP/pre-fixed-cleanup.log" 2>&1
+          if ! psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file uat702/cleanup-dynamic.sql > "$RUNNER_TEMP/pre-dynamic-cleanup.log" 2>&1; then
+            node ../controller/ops/pr689-uat702/sanitize-database-diagnostic.mjs \
+              "$RUNNER_TEMP/pre-dynamic-cleanup.log" ../evidence/pre-dynamic-cleanup-failure.txt \
+              pre_dynamic_cleanup uat702/cleanup-dynamic.sql
+            cat ../evidence/pre-dynamic-cleanup-failure.txt
+            exit 1
+          fi
+          if ! psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_cleanup.sql > "$RUNNER_TEMP/pre-fixed-cleanup.log" 2>&1; then
+            node ../controller/ops/pr689-uat702/sanitize-database-diagnostic.mjs \
+              "$RUNNER_TEMP/pre-fixed-cleanup.log" ../evidence/pre-fixed-cleanup-failure.txt \
+              pre_fixed_cleanup supabase/tests/mpgf_dac_product_browser_cleanup.sql
+            cat ../evidence/pre-fixed-cleanup-failure.txt
+            exit 1
+          fi
 
           qa_password="$(openssl rand -base64 48 | tr -d '\n')"
           echo "::add-mask::$qa_password"
           export MPGF_DAC_PRODUCT_QA_PASSWORD="$qa_password"
           fixtures_started=1
-          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
-            --file supabase/tests/mpgf_dac_product_browser_fixture.sql > "$RUNNER_TEMP/fixture.log" 2>&1
+          if ! psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
+            --file supabase/tests/mpgf_dac_product_browser_fixture.sql > "$RUNNER_TEMP/fixture.log" 2>&1; then
+            node ../controller/ops/pr689-uat702/sanitize-database-diagnostic.mjs \
+              "$RUNNER_TEMP/fixture.log" ../evidence/fixture-failure.txt \
+              fixture supabase/tests/mpgf_dac_product_browser_fixture.sql
+            cat ../evidence/fixture-failure.txt
+            exit 1
+          fi
 
           bypass="$(node --input-type=module <<'NODE'
           const response = await fetch(`https://api.vercel.com/v9/projects/${process.env.VERCEL_PROJECT_ID}?teamId=${process.env.VERCEL_ORG_ID}`, {

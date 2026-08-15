@@ -1,9 +1,10 @@
 import { readFile, writeFile } from "node:fs/promises";
 
-const [inputPath, outputPath, phase, source] = process.argv.slice(2);
+const [inputPath, outputPath, phase, source, boundary = "transaction_rolled_back=true"] = process.argv.slice(2);
 if (!inputPath || !outputPath || !phase || !source) {
-  throw new Error("Usage: sanitize-database-diagnostic.mjs <input> <output> <phase> <source>");
+  throw new Error("Usage: sanitize-database-diagnostic.mjs <input> <output> <phase> <source> [boundary]");
 }
+if (!/^[a-z_]+=(?:true|false)$/.test(boundary)) throw new Error("Diagnostic boundary must be a safe boolean field.");
 
 const exactSecrets = [
   process.env.QA_SUPABASE_DB_URL,
@@ -29,7 +30,7 @@ await writeFile(
   [
     `phase=${phase}`,
     `source=${source}`,
-    "transaction_rolled_back=true",
+    boundary,
     "diagnostic_begin",
     ...(relevant.length ? relevant : diagnostic.split(/\r?\n/).slice(-40)),
     "diagnostic_end",
