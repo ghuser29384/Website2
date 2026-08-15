@@ -38,7 +38,7 @@ export default async function MpgfCompactsPage() {
           <a className="button button-primary" href="#founding-compacts">
             Review founding compacts
           </a>
-          <Link className="button button-secondary" href="/mpgf">
+          <Link prefetch={false} className="button button-secondary" href="/mpgf">
             Back to Public Goods Fund
           </Link>
         </>
@@ -80,9 +80,9 @@ export default async function MpgfCompactsPage() {
       <nav className="hub-tabs" aria-label="Public-goods compact sections">
         <a href="#founding-compacts">Founding compacts</a>
         <a href="#compact-lifecycle">Lifecycle</a>
-        <Link href="/mpgf">MPGF hub</Link>
-        <Link href="/mpgf/governance">Governance</Link>
-        <Link href="/mpgf/technical-spec">Technical spec</Link>
+        <Link prefetch={false} href="/mpgf">MPGF hub</Link>
+        <Link prefetch={false} href="/mpgf/governance">Governance</Link>
+        <Link prefetch={false} href="/mpgf/technical-spec">Technical spec</Link>
       </nav>
 
       <section
@@ -132,10 +132,10 @@ export default async function MpgfCompactsPage() {
           </p>
         </div>
         <div className="section-actions">
-          <Link className="button button-secondary" href="/mpgf/governance">
+          <Link prefetch={false} className="button button-secondary" href="/mpgf/governance">
             Review MPGF governance
           </Link>
-          <Link className="button button-secondary" href="/mpgf/real-money-terms">
+          <Link prefetch={false} className="button button-secondary" href="/mpgf/real-money-terms">
             Review payment boundaries
           </Link>
         </div>

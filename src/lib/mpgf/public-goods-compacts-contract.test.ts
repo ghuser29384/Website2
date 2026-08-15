@@ -14,6 +14,9 @@ const membershipRoute = read("src/app/api/mpgf/compacts/membership/route.ts");
 const allocationRoute = read("src/app/api/mpgf/compacts/allocation/route.ts");
 const delegationRoute = read("src/app/api/mpgf/compacts/delegation/route.ts");
 const component = read("src/components/mpgf/mpgf-public-goods-compacts.tsx");
+const compactPage = read("src/app/mpgf/compacts/page.tsx");
+const pageFrame = read("src/components/mpgf/mpgf-page-frame.tsx");
+const pagePrimitives = read("src/components/ui/page-primitives.tsx");
 const hub = read("src/app/mpgf/page.tsx");
 const databaseTypes = read("src/lib/supabase/database.types.ts");
 
@@ -150,4 +153,12 @@ test("the public Compact route remains in the canonical sitemap", () => {
   assert.match(hub, /transaction-based obligation/);
   assert.match(hub, /100-person \+ \$500 readiness/);
   assert.doesNotMatch(hub, /1% contribution rule|\$10 monthly cap|5,000-member/);
+});
+
+test("the protected Compact surface does not trigger speculative route prefetches", () => {
+  assert.equal(compactPage.match(/<Link\b/g)?.length, compactPage.match(/<Link\s+prefetch=\{false\}/g)?.length);
+  assert.match(pageFrame, /<Breadcrumbs prefetch=\{false\}/);
+  assert.equal(pageFrame.match(/<Link\b/g)?.length, pageFrame.match(/<Link\s+prefetch=\{false\}/g)?.length);
+  assert.match(pagePrimitives, /<Link prefetch=\{prefetch\} href="\/">Home<\/Link>/);
+  assert.match(pagePrimitives, /<Link prefetch=\{prefetch\} href=\{item\.href\}>/);
 });

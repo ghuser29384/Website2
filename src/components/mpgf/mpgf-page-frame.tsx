@@ -51,7 +51,7 @@ export function MpgfPageFrame({
           {...getTopbarActions(viewerPresent)}
           showLogout={viewerPresent}
         />
-        <Breadcrumbs items={[{ href: "/mpgf", label: "Public Goods Fund" }]} />
+        <Breadcrumbs prefetch={false} items={[{ href: "/mpgf", label: "Public Goods Fund" }]} />
 
         <div className="mpgf-hero-grid">
           <section className="mpgf-hero-copy">
@@ -97,10 +97,10 @@ export function MpgfPageFrame({
                 </dl>
               </>
             )}
-            <Link className="inline-link" href="/mpgf/technical-spec">
+            <Link prefetch={false} className="inline-link" href="/mpgf/technical-spec">
               Technical spec
             </Link>
-            <Link className="inline-link" href="/mpgf/compacts">
+            <Link prefetch={false} className="inline-link" href="/mpgf/compacts">
               Voluntary public-goods compacts
             </Link>
           </aside>
