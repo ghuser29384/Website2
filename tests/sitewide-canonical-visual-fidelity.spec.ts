@@ -41,9 +41,13 @@ test("Start service snapshot renders as distinct non-overlapping rows", async ({
   expect(response?.status() ?? 200).toBeLessThan(400);
   await expect(page.getByRole("heading", { level: 1, name: "Choose a real first action." })).toBeVisible();
 
-  const card = page.locator(".growth-progress-card");
+  // The resolved Suspense segment can briefly coexist in hidden transport DOM with the visible
+  // fallback. Target the accessible card so hidden streaming internals do not create a false
+  // strict-mode failure, while two genuinely visible cards still fail this assertion.
+  const card = page.getByRole("complementary", { name: "Current service state" });
   const stats = card.locator(".growth-progress-stat");
   const followup = card.locator(".hero-followup");
+  await expect(card).toHaveCount(1);
   await expect(card).toBeVisible();
   await expect(stats).toHaveCount(3);
   await expect(followup).toBeVisible();
