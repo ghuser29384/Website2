@@ -432,10 +432,19 @@ jobs:
           if (data.readyState !== "READY" || data.target !== null || aliases.length !== 0) throw new Error("Deployment is not READY, Preview-only, and unaliased.");
           if (sha !== process.env.CANDIDATE_HEAD_SHA) throw new Error("Deployment commit metadata does not match the candidate.");
           if (aliases.some((value) => /(^|\.)moraltrade\.org$/i.test(value))) throw new Error("Production alias is forbidden.");
-          const environmentResponse = await fetch(`https://api.vercel.com/v3/env/pull/${deploymentId}?teamId=${process.env.VERCEL_ORG_ID}&source=uat702`, {
+          const environmentResponse = await fetch(`https://api.vercel.com/v3/env/pull/${deploymentId}?teamId=${process.env.VERCEL_ORG_ID}&source=vercel-cli%3Apull`, {
             headers: { Authorization: `Bearer ${process.env.VERCEL_TOKEN}` },
           });
-          if (!environmentResponse.ok) throw new Error("Deployment-scoped environment proof lookup failed.");
+          if (!environmentResponse.ok) {
+            const error = await environmentResponse.json().catch(() => ({}));
+            await writeFile("evidence/deployment-runtime-environment-proof.json", `${JSON.stringify({
+              deploymentId,
+              lookupStatus: environmentResponse.status,
+              lookupErrorCode: error?.error?.code ?? error?.code ?? "unknown",
+              secretValuesRetained: false,
+            }, null, 2)}\n`);
+            throw new Error("Deployment-scoped environment proof lookup failed.");
+          }
           const selectedEnvironment = await environmentResponse.json();
           const runtimeEnvironment = selectedEnvironment.env ?? {};
           const buildEnvironment = selectedEnvironment.buildEnv ?? {};
