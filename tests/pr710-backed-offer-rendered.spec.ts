@@ -35,6 +35,7 @@ const VIEWPORTS = [
 
 type FailureMonitor = {
   console: string[];
+  expectedRscPrefetchAborts: string[];
   page: string[];
   request: string[];
   response: string[];
@@ -121,7 +122,13 @@ async function authenticatedContext(
 }
 
 function monitor(page: Page): FailureMonitor {
-  const failures: FailureMonitor = { console: [], page: [], request: [], response: [] };
+  const failures: FailureMonitor = {
+    console: [],
+    expectedRscPrefetchAborts: [],
+    page: [],
+    request: [],
+    response: [],
+  };
   const expectedOrigin = new URL(BASE_URL).origin;
 
   page.on("console", (message) => {
@@ -129,8 +136,14 @@ function monitor(page: Page): FailureMonitor {
   });
   page.on("pageerror", (error) => failures.page.push(error.message));
   page.on("requestfailed", (request) => {
-    if (new URL(request.url()).origin === expectedOrigin) {
-      failures.request.push(`${request.method()} ${request.url()} ${request.failure()?.errorText ?? "failed"}`);
+    const requestUrl = new URL(request.url());
+    if (requestUrl.origin === expectedOrigin) {
+      const detail = `${request.method()} ${request.url()} ${request.failure()?.errorText ?? "failed"}`;
+      if (request.failure()?.errorText === "net::ERR_ABORTED" && requestUrl.searchParams.has("_rsc")) {
+        failures.expectedRscPrefetchAborts.push(detail);
+      } else {
+        failures.request.push(detail);
+      }
     }
   });
   page.on("response", (response) => {
@@ -143,6 +156,13 @@ function monitor(page: Page): FailureMonitor {
 }
 
 async function expectNoRuntimeFailures(failures: FailureMonitor) {
+  if (failures.expectedRscPrefetchAborts.length) {
+    await record({
+      count: failures.expectedRscPrefetchAborts.length,
+      kind: "expected-rsc-prefetch-aborts",
+      requests: failures.expectedRscPrefetchAborts,
+    });
+  }
   expect(failures.console, "console errors").toEqual([]);
   expect(failures.page, "page errors").toEqual([]);
   expect(failures.request, "same-origin request failures").toEqual([]);
