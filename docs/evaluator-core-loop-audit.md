@@ -1,188 +1,136 @@
 # Evaluator-facing Moral Trade core-loop audit
 
-This ledger covers the bounded execution assignment for issue #660. It is not
+This ledger covers the bounded isolated-QA assignment in issue #660. It is not
 production acceptance and does not authorize a merge, deployment, participant
-communication, public evidence, or money movement.
+communication, public evidence, reputation effects, payment, custody, escrow,
+payout, or money movement. Parent issue #154 remains a separate production
+release gate.
 
 ## Exact-state boundary
 
-- Original pinned base: `ec6f1ecc12df5db74e3e2f8acb87c3f04aedae5b`.
-- The initial drift gate stopped because current `main` had advanced.
-- Issue #660 then authorized branch
-  `codex/evaluator-core-loop-authenticated-20260813` at merge commit
-  `013b9f0fa17438cf3a240e96db759d87b0cbe53c`, whose application tree includes
-  then-current `main` `ec58787fb04211fc74b9419d063b2aa63fab944f`.
-- `main` later advanced by three pooled-settlement privilege-hardening commits.
-  The user explicitly authorized merging exact `origin/main`
-  `04fd14fc9e86b79d82619bea97997da0b7a2deca`; the task branch now contains it
-  through merge commit `5ede5c7b74301c7f098c2704cc7730e87c9e18ee`.
-- `main` then advanced through the production-aligned pooled-trigger migration
-  version at `85279bb2332f83dec7389d54ca3261a5dbd075cd`. The user explicitly
-  authorized merging that exact `origin/main`; the task branch contains it
-  through merge commit `d03493ecf5cd0e996322edc3fb58a12046110859`.
-- `main` next advanced through the fail-closed Reciprocal Trade real-graph
-  readiness package at `79ca382c3bdc325dfc5a28e2cbbafc1b95640386`. The user
-  explicitly authorized merging that exact `origin/main`; the task branch
-  contains it through merge commit
-  `1759712cb81f7c07b797cef14a3ed2d19edc73ee`.
-- Work is performed in an isolated worktree. The noisy iCloud checkout is not
-  modified.
+- Authoritative base: `main` at
+  `79ca382c3bdc325dfc5a28e2cbbafc1b95640386`.
+- Candidate branch: `codex/evaluator-core-loop-authenticated-20260813`.
+- Draft PR: #687, which must remain open, draft, unmerged, and undeployed while
+  this bounded proof is reviewed.
+- Execution target: isolated Supabase QA project `hvmxfjjbdcgjjudmthdz` only.
+- The live draft-PR body is authoritative for the latest exact head, workflow
+  run, job, artifact ID, ZIP digest, local check counts, screenshot inspection,
+  no-money counts, and zero-residue counts. A checked-in document cannot name
+  the workflow run that is created only after that document's own commit.
 
-## Contract inventory
+The immediately preceding complete-loop proof ran at
+`abe69acb1fa87204d5cb51354fe46529693d5b29`: workflow run `31817890703`,
+evaluator job `94823848773`, artifact `9225856375`, and artifact SHA-256
+`46250a09536ba7f2b776d5ab5af9575d7145a16dd7ed07f0426095201fab9a03`.
+That artifact proved the entire product loop, zero money, and zero cleanup
+residue. The later reviewer-role/AAL2 hardening is accepted only through the
+newer exact-head run recorded in the live PR body.
 
-| Stage | Current classification | Authoritative contract | Evidence boundary |
-| --- | --- | --- | --- |
-| Public live discovery | Executable but uncovered | `src/app/offers/page.tsx` selects `offers.status = open`, applies `mode=pledge`, and renders exact live rows | The dedicated authenticated browser spec is written but has not run against isolated QA yet |
-| Exact public terms | Executable but uncovered | `src/app/offers/[offerId]/page.tsx` loads the exact persisted offer and renders its terms | Runtime screenshot pending |
-| Anonymous response gate | Executable but uncovered | The offer page links to `/login?returnTo=/offers/<id>#respond`; signed-out users do not receive a response form | Runtime URL and rendered-state assertion pending |
-| Signed-in member response | Executable but uncovered | `expressInterestAction` requires a viewer, blocks self-response, upserts `(offer_id,user_id)`, and redirects with `Interest recorded.` | Runtime write/success assertion pending |
-| Response privacy | Executable but uncovered | Offer-owner-only `listOfferResponses`; interests RLS limits selection to the respondent or offer owner | Three-role browser/RLS assertion pending |
-| Response bridge and audit | Executable but uncovered | `bridge_core_interest_to_thread` creates a private thread/counterproposal/system message, `response_sent` event, owner notification, and email-outbox row | Domain/event query pending |
-| Atomic acceptance | Executable and source/SQL covered | `accept_marketplace_interest_v1` locks the offer and response, checks actor/binding/state, creates at most one proposed agreement, declines competing responses, and closes the offer | Existing source test passes; live database assertion pending |
-| Acceptance next action | Reproduced and minimally repaired | `acceptInterestAction` receives `agreement.id`; run `31769407634` proved the pre-repair action redirected to the matched source offer | Member and eligible claimed-guest success now redirect to `/trade-agreements/<agreement.id>`; exact-head rerun pending |
-| Claimed-guest acceptance | Executable for eligible legacy records, unavailable for new signed-out writes | `accept_marketplace_guest_interest_v1` is atomic; new public contact writes require sign-in | If member acceptance proves the redirect defect, the same minimal canonical redirect invariant must cover eligible claimed guests |
-| Frozen agreement creation | Executable but uncovered end to end | `bridge_core_agreement_version` creates one immutable version, sets `current_version_id`, retains proposed status, and records private system messages/notifications | Runtime exact ID/hash assertion pending |
-| Canonical participant route | Executable and downstream covered | `/trade-agreements/[agreementId]` requires authentication and `getCoreAgreementForUser` restricts data to proposer/responder | Existing downstream authenticated test covers denial; full-loop assertion pending |
-| Version immutability | Executable but uncovered in this loop | Version RLS is participant-read-only; confirmation RPC rejects a non-current version | Runtime stale-confirmation and direct-update denial pending |
-| Milestone manifest | Executable and downstream covered | Additive milestone RPC validates participant roles and zero-or-positive maximum amount; finalization hashes the ordered manifest into the complete version | Existing evidence tests cover downstream behavior; zero-dollar full-loop assertion pending |
-| Bilateral confirmation | Executable but uncovered in this loop | `confirm_agreement_version_v2` binds `auth.uid()`, current version, complete manifest, and idempotent per-user confirmation; second confirmation activates | Runtime two-role assertion pending |
-| Private evidence bundle | Executable and downstream covered | Performer-only open/add/submit RPCs keep bundle/items private and immutable after submission | Existing evidence tests cover the subsystem; attestation-only full-loop assertion pending |
-| Neutral review | Executable and downstream covered | Both participants must nominate the same eligible non-participant reviewer; review route requires active reviewer role and AAL2; grade uses fixed confidence bands | Full-loop AAL2 browser assertion pending |
-| Reviewer post-decision receipt | Ambiguous pending rendered reproduction | The review action redirects back to `/trade-review/<milestoneId>`, while that route currently treats an assigned initial reviewer as authorized only while the milestone is `under_review`; grading changes that status | The browser spec requires the truthful success receipt. Repair only if the live run reproduces a post-submit denial/dead end |
-| Resulting commitment state | Executable but uncovered in this loop | Confirmation activates the agreement; review persists milestone, bundle, review, and zero-dollar payout-basis rows | Runtime state ledger pending |
-| Exit and immutable receipt | Executable but uncovered in this loop | Unilateral exit records `trade_exit_requests`, cancels future obligations immediately, and leaves prior version/evidence/review rows | Runtime preservation assertion pending |
-| Notifications/system history | Executable but uncovered in this loop | Response, agreement, confirmation, review, and exit paths use database-backed messages or notifications | Runtime counts and canonical href checks pending |
-| Funnel event completeness | Ambiguous | `core_loop_events` records `response_sent`; the enum also names bilateral confirmation and evidence events, while the durable confirmation/evidence tables remain authoritative | Runtime event inventory must be reported literally; no new event write is authorized without a reproduced requirement gap |
-| Non-financial boundary | Executable but uncovered in this loop | Fixture has no performance bond and milestone maximum is exactly zero; evidence is attestation-only; no external-payment action is invoked | Runtime rows and server-log scan pending |
-| Desktop/mobile usability | Executable but uncovered | Dedicated spec uses 1440×1000 and 390×844, checks overflow/framework overlays/console, and captures stage screenshots | Manual artifact inspection pending |
-| Zero-residue cleanup | Harness covered, environment unverified | Playwright `finally` invokes the exact cleanup SQL through a TLS/host/ref-guarded connection; external cleanup is intended as a second idempotent safety net | SQL execution and post-cleanup zero counts pending |
+## Final contract and coverage
 
-## Current deterministic QA fixture
+| Stage | Final status | Executable proof |
+| --- | --- | --- |
+| Anonymous live discovery | Covered | Opens `/offers?mode=pledge&view=live`, scopes the exact QA owner card, asserts the combined terms heading, scrolls that card into the desktop viewport, and captures it |
+| Exact offer and sign-in return | Covered | Opens the persisted QA offer, checks its unique safety disclaimer, exact URL, and encoded `/login` return target |
+| Private response | Covered | A different signed-in participant submits the exact private response, sees the pending receipt, and captures that receipt in the mobile viewport; the outsider cannot see it |
+| Atomic acceptance | Covered | One response becomes accepted, its competitor becomes declined, the offer closes, duplicate acceptance creates no second agreement, and the owner lands on the canonical agreement route |
+| Frozen agreement | Covered | Exactly one version is retained; the terms hash and complete manifest hash are fixed; a stale version and direct mutation fail closed |
+| Bilateral confirmation | Covered | Both participants confirm the same version; one confirmation remains proposed and the second activates the agreement |
+| Private evidence | Covered | The responder submits one private attestation with no file or public URL; the exact bundle and item remain durable |
+| Evidence authorization | Covered | SQL and direct Data API checks prove participant AAL1 access; assigned reviewer AAL1 denial; active assigned reviewer AAL2 access before and after review; active appeal-reviewer AAL2 access; revoked reviewer AAL2 denial; outsider denial; and active administrator AAL2 access |
+| Neutral review | Covered | Both participants select the same eligible independent reviewer; the AAL2 route records one fixed-band review and one zero-dollar payout-basis row |
+| Prospective exit | Covered | One participant ends future obligations under the frozen rule while version, confirmation, evidence, review, and system-message audit rows remain |
+| Rendering and console | Covered | Seven route-specific screenshots cover desktop and mobile; every page checks overflow, framework overlays, document health, and captured console/page errors |
+| No-money boundary | Covered | Maximum amount, payout due, performance-bond rows, and external-payment receipts are all exactly zero; no payment action is invoked |
+| Cleanup | Covered | In-spec `finally` cleanup plus the workflow safety-net remove every exact application, Auth, MFA, private-account, review-role, notification, event, and email-outbox row; machine-readable counts must all be zero |
 
-The fixture uses four synthetic accounts: the three required roles (owner,
-responder, outsider) plus a separate neutral reviewer because the reviewer
-cannot legally be either agreement participant. All IDs are fixed and scoped to
-this test:
+## Minimal repairs demonstrated by the evaluator
 
-- owner: `81000000-0000-4000-8000-000000000001`;
-- responder: `81000000-0000-4000-8000-000000000002`;
-- outsider/competing respondent: `81000000-0000-4000-8000-000000000003`;
-- independent reviewer: `81000000-0000-4000-8000-000000000004`;
-- QA-only offer: `82000000-0000-4000-8000-000000000001`.
+1. Acceptance now redirects to the created canonical agreement instead of the
+   matched source offer.
+2. Next.js actions whose successful state removes their own form use React
+   action semantics and validated full-page redirect handling, avoiding both
+   stale client state and the CSP-blocked manual-submit sentinel.
+3. Route readiness uses exact URL and route-specific visible state rather than
+   `networkidle`; the eight-minute cap and all downstream assertions remain.
+4. Anonymous passive `open` and `dwell` recommendation signals return a
+   non-storing `204`; preference mutations and authenticated-only operations
+   remain protected.
+5. The assigned reviewer keeps read-only private audit access after recording a
+   decision, while the decision form remains actionable only in the proper
+   state.
+6. `can_read_trade_evidence_v1` keeps participant reads identity-bound at AAL1,
+   but both initial and appeal assignment branches additionally require
+   `current_actor_has_trade_role('reviewer')`. That predicate checks an active,
+   non-revoked grant and JWT `aal2`. The administrator branch continues through
+   the same active-AAL2 role helper.
 
-The offer says explicitly that it is synthetic isolated QA, creates no real
-obligation, uses no production data, and has a maximum financial amount of
-zero. The evidence path uses a private synthetic attestation with no file or
-external URL.
+## Deterministic authorization matrix
 
-## Isolated-QA execution evidence
+The rollback-only SQL test creates one private submitted bundle and item, runs
+each RLS query as the `authenticated` Postgres role with explicit JWT claims,
+records a review, exercises the appeal-assignment branch, revokes the reviewer
+grant, asserts the matrix, and rolls the whole transaction back.
 
-Draft PR #687 triggered workflow run `31767787556` on exact candidate
-`440aef5ebaa7dfe321368eee1b0f2713b53f2c11` with base
-`79ca382c3bdc325dfc5a28e2cbbafc1b95640386`. The exact QA target, source/type
-gates, build, fixture creation, and four synthetic Auth identities passed.
+The Playwright test independently uses real isolated-QA Auth sessions and the
+Supabase Data API:
 
-The unmodified browser run stopped at the anonymous directory assertion before
-any response or agreement write. The real QA-backed offer card was present,
-but its accessible level-four heading correctly combined both cause terms as
-`Evaluator core-loop verification Private QA response verification`; the test
-incorrectly searched for the first term as a standalone exact text node. This
-is classified as a broken harness assertion, not a demonstrated product
-defect. Artifact `9207025134` preserves the trace, rendered error context,
-browser log, and machine-readable summary.
+| Actor/session | Bundle rows | Item rows |
+| --- | ---: | ---: |
+| Agreement participant, AAL1 | 1 | 1 |
+| Assigned reviewer, AAL1 | 0 | 0 |
+| Active assigned reviewer, AAL2, before decision | 1 | 1 |
+| Active assigned reviewer, AAL2, after decision | 1 | 1 |
+| Revoked assigned reviewer, still holding AAL2 token | 0 | 0 |
+| Outsider | 0 | 0 |
+| Active administrator, AAL2 | 1 | 1 |
 
-The same failed run independently proved zero financial rows
-(`performanceBonds=0`, `externalPaymentReceipts=0`) and completed cleanup with
-zero residue across offers, interests, agreements, threads, notifications,
-events, review roles, profiles, Auth users/identities/sessions/refresh
-tokens/MFA factors, private accounts, and email outbox rows. The minimal harness
-repair scopes the assertion and full-terms click to the exact
-`QA Core Loop Owner` article and asserts the complete cause-pair heading.
+Only counts and role/AAL labels enter the machine-readable summary; private
+attestation text is not copied into the summary.
 
-Run `31768237517` exercised that correction on exact candidate
-`c4ad1c18587015ffde9866ee26b2e141849fede4`. The directory assertion and exact
-card click passed, exposing the real offer-detail page. The browser then stopped
-before sign-in because the exact QA safety sentence is intentionally rendered
-both in the labeled marketplace terms object and in the offer dossier; the
-test's page-wide exact-text locator therefore violated Playwright strict mode.
-This is a second harness scoping defect, not a product defect. Artifact
-`9207181404` (digest
-`sha256:a8cab2c73697171ca601e9648fc4d0f0998a36901342de8ba9dd07f4729e1133`)
-preserves the trace and rendered error context. Its no-money proof again records
-`performanceBonds=0` and `externalPaymentReceipts=0`, and cleanup again reports
-zero for every enumerated application, Auth, and private row class. The minimal
-repair scopes that exact sentence to the one labeled evaluator terms article.
+## Synthetic fixture and visual evidence
 
-Run `31768631060` exercised the scoped terms assertion on exact candidate
-`9fc0344d32ff42a1cf233be9c5d9b179e7d03da9`. Anonymous directory and offer
-screenshots passed, as did the exact sign-in link `href`. The test then read
-`page.url()` immediately after the Next.js client-side click and observed the
-pre-navigation offer URL. This is a harness synchronization defect: the
-rendered control already carried the required encoded `/login` return path.
-Artifact `9207343761` (digest
-`sha256:1f55ae1d100daad4ef4e56f8898373705137c4724e3c4ccac47bbe271b8c9323`)
-again records zero performance-bond and external-payment-receipt rows and zero
-cleanup residue. The minimal repair adds a web-first URL assertion before
-reading the navigated URL.
+The fixture contains five short-lived QA identities: owner, responder,
+outsider/competing respondent, independent reviewer, and administrator. The
+reviewer and administrator receive only their required active role grants. The
+offer and evidence say explicitly that they are synthetic, isolated, private,
+non-production, and zero-dollar.
 
-Run `31769003080` exercised that synchronization on exact candidate
-`f9d6d9ae8b3a1d855d96d7875ec4c429e0ecbdca`. It proved the anonymous sign-in
-return path and authenticated all four isolated-QA roles, including an AAL2
-reviewer. The first authenticated `gotoReady` then reached its healthy route but
-timed out waiting for global `networkidle`, which is not a valid readiness
-contract for this Next.js page's ongoing requests. No response or agreement was
-written. Artifact `9207482912` (digest
-`sha256:dc814f771642194495826054f1c9efb0e9ee0f7b548a109e60c2daad8793397e`)
-again proves zero financial rows and complete zero-residue cleanup. The helper
-now requires a successful document response and leaves readiness to the
-route-specific web-first assertions already present in the test.
+The artifact contains these viewport screenshots:
 
-Run `31769407634` exercised the corrected readiness contract on exact candidate
-`fcca331f86865aac3bfbd59f84ed7a8fd447a382` and reached the owner acceptance
-gate. It proved anonymous discovery, exact terms, return-path preservation,
-four-role authentication, two private responses, outsider non-disclosure, and
-atomic acceptance. The selected response became `accepted`, the competing
-response became `declined`, the offer became `matched`, and the success receipt
-rendered. The owner nevertheless remained on
-`/offers/82000000-0000-4000-8000-000000000001?message=...` instead of the
-created canonical agreement. This is a reproduced product navigation defect.
-Artifact `9207632571` (digest
-`sha256:6a182bed3ed9de19eb54ffd64482e9c88f1b5177a287d58ce74e591455a7e9fb`)
-again proves zero performance-bond/external-payment-receipt rows and complete
-zero-residue cleanup. The repair changes only successful member and eligible
-claimed-guest destinations to their returned `agreement.id`; the atomic RPCs,
-authorization, frozen terms, privacy, and money behavior are unchanged.
+1. anonymous live-directory proposal card, desktop 1440×1000;
+2. anonymous exact offer, desktop 1440×1000;
+3. responder pending private-response receipt, mobile 390×844;
+4. outsider agreement denial, mobile 390×844;
+5. owner frozen zero-dollar milestone, desktop 1440×1000;
+6. assigned reviewer private evidence and review receipt, desktop 1440×1000;
+7. owner prospective-exit receipt with retained audit state, desktop 1440×1000.
 
-## Pre-runtime verification completed
+Screenshots 1 and 3 explicitly scroll their asserted card/receipt into the
+viewport and assert `toBeInViewport()` before capture, so the human-review
+artifact directly shows the state attributed to each filename.
 
-At the pre-reconciliation candidate base
-`013b9f0fa17438cf3a240e96db759d87b0cbe53c`, with only the
-new uncommitted QA artifacts present:
+## Durable workflow behavior
 
-- tracked-diff and explicit no-index whitespace checks for every new artifact:
-  passed;
-- `npm test`: 894 passed, 0 failed;
-- `npm run lint`: passed with 0 errors and 3 unrelated existing warnings;
-- `npm run lint -- --quiet`: passed;
-- `npx tsc --noEmit --pretty false`: passed;
-- `npm run build`: passed;
-- `npx playwright test tests/evaluator-core-loop-authenticated.spec.ts --list`:
-  one test discovered and compiled;
-- `node --import tsx --test src/lib/marketplace-delta-contract.test.ts`: 7
-  passed, 0 failed.
+- The evaluator is no longer restricted to one PR head branch. It runs for any
+  same-repository pull request that triggers the scoped workflow, or a manual
+  dispatch that supplies the exact QA project confirmation.
+- The database URL, TLS pooler host, port, database, project ref, publishable
+  URL, required secrets, checkout SHA, and same-repository boundary remain
+  fail-closed.
+- Every run of the workflow shares one repository-wide concurrency group with
+  `cancel-in-progress: false`. The evaluator also waits for the broader
+  exact-head release job, so neither cross-PR runs nor the two jobs in one run
+  can mutate fixed QA identities concurrently.
+- The complete evaluator retains its eight-minute Playwright timeout, strong
+  locator assertions, clean-console requirement, in-test cleanup, external
+  cleanup safety net, and artifact upload on failure.
 
-These checks prove only source/build integrity. They do not substitute for the
-required isolated-QA browser, database, authorization, screenshot, no-money,
-and cleanup evidence.
+## Remaining boundaries
 
-These checks must be rerun at the final candidate after the authorized
-current-main merge and any demonstrated repair.
-
-## Authorized protected boundary
-
-The remaining executable proof needs a same-repository, manually approved QA
-run with `QA_SUPABASE_DB_URL` and `QA_SUPABASE_SERVICE_ROLE_KEY` scoped only to
-Supabase project `hvmxfjjbdcgjjudmthdz`. The user explicitly authorized adding
-or minimally extending and running that draft-PR workflow. The workflow must
-retain its exact project-ref, TLS pooler-host, same-repository, cleanup, and
-artifact guards. No production or Vercel credential is needed or authorized.
+Issue #660 may close only after the live PR body points to a successful
+exact-head evaluator artifact that contains the complete authorization matrix,
+seven inspected screenshots, zero-money counts, and machine-readable all-zero
+cleanup. PR #687 remains draft and unmerged. No result here closes parent issue
+#154 or authorizes production acceptance, a deployment, or any money behavior.

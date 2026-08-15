@@ -19,8 +19,9 @@ on:
       - "supabase/migrations/2026072916552*.sql"
       - "supabase/migrations/2026072916553*.sql"
       - "supabase/migrations/20260814050000_trade_evidence_assigned_reviewer_rls.sql"
+      - "supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql"
       - "supabase/tests/evidence_weighted_payment*.sql"
-      - "supabase/tests/evaluator_core_loop_browser_*.sql"
+      - "supabase/tests/evaluator_core_loop_*.sql"
       - "tests/evidence-weighted-payment-authenticated.spec.ts"
       - "tests/evaluator-core-loop-authenticated.spec.ts"
   workflow_dispatch:
@@ -32,8 +33,11 @@ on:
         type: string
 
 concurrency:
-  group: evidence-payment-release-qa-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  # Both jobs mutate deterministic identities in the one isolated-QA project.
+  # Serialize every run of this workflow so another PR cannot invalidate a
+  # still-running session or delete its fixture during cleanup.
+  group: evidence-payment-release-qa-${{ github.repository }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -286,18 +290,19 @@ jobs:
             test-results
 
   evaluator-core-loop-gate:
+    needs: exact-head-release-gate
     if: >-
-      (github.event_name == 'workflow_dispatch' &&
-       github.ref == 'refs/heads/codex/evaluator-core-loop-authenticated-20260813' &&
-       inputs.evaluator_confirm_target == 'hvmxfjjbdcgjjudmthdz') ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository &&
-       github.event.pull_request.head.ref == 'codex/evaluator-core-loop-authenticated-20260813')
+      always() &&
+      needs.exact-head-release-gate.result == 'success' &&
+      ((github.event_name == 'workflow_dispatch' &&
+        inputs.evaluator_confirm_target == 'hvmxfjjbdcgjjudmthdz') ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
       EVALUATOR_CORE_LOOP_BASE_URL: http://127.0.0.1:3211
-      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || '79ca382c3bdc325dfc5a28e2cbbafc1b95640386' }}
+      EXPECTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
       EXPECTED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
@@ -398,7 +403,7 @@ jobs:
             printf 'tree=%s\n' "$(git rev-parse HEAD^{tree})"
           } | tee evaluator-core-loop-exact-head.txt
 
-      - name: Apply exact assigned-reviewer evidence RLS migration to isolated QA once
+      - name: Apply exact private-evidence RLS migrations to isolated QA once
         shell: bash
         run: |
           set -euo pipefail
@@ -431,6 +436,37 @@ jobs:
             printf 'Migration %s (%s) already recorded in isolated QA.\n' \
               "$version" "$name" | tee evaluator-core-loop-migration.log
           fi
+
+          version="20260815010000"
+          name="trade_evidence_reviewer_role_aal2"
+          conflict="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where version = '$version' and coalesce(name, '') <> '$name';" \
+            | tr -d '[:space:]')"
+          test "$conflict" = "0"
+          recorded="$(psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
+            --command "select count(*) from supabase_migrations.schema_migrations where version = '$version' and name = '$name';" \
+            | tr -d '[:space:]')"
+          if [[ "$recorded" = "0" ]]; then
+            psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
+              | tee -a evaluator-core-loop-migration.log
+          begin;
+          \i supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql
+          insert into supabase_migrations.schema_migrations(version, statements, name, created_by)
+          values (
+            '$version',
+            array['Applied from exact repository migration supabase/migrations/20260815010000_trade_evidence_reviewer_role_aal2.sql'],
+            '$name',
+            'github-actions:evaluator-core-loop'
+          );
+          commit;
+          SQL
+          else
+            printf 'Migration %s (%s) already recorded in isolated QA.\n' \
+              "$version" "$name" | tee -a evaluator-core-loop-migration.log
+          fi
+
           psql "$QA_SUPABASE_DB_URL" \
             --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 <<'SQL' \
             | tee -a evaluator-core-loop-migration.log \
@@ -449,6 +485,12 @@ jobs:
               'moral_trade_private.can_read_trade_evidence_v1(uuid,uuid)',
               'execute'
             )
+            and position(
+              'current_actor_has_trade_role(''reviewer'')'
+              in pg_get_functiondef(
+                'moral_trade_private.can_read_trade_evidence_v1(uuid,uuid)'::regprocedure
+              )
+            ) > 0
             and (
               select count(*) = 2
               from pg_policies
@@ -509,7 +551,7 @@ jobs:
             --file supabase/tests/evaluator_core_loop_browser_fixture.sql \
             | tee evaluator-core-loop-fixture.log
 
-      - name: Verify the four synthetic Auth identities
+      - name: Verify the five synthetic Auth identities
         shell: bash
         run: |
           set -euo pipefail
@@ -521,6 +563,7 @@ jobs:
             "evaluator-core-loop-responder@qa.invalid",
             "evaluator-core-loop-outsider@qa.invalid",
             "evaluator-core-loop-reviewer@qa.invalid",
+            "evaluator-core-loop-admin@qa.invalid",
           ];
 
           for (const email of emails) {
@@ -547,6 +590,16 @@ jobs:
 
           console.log(`Verified ${emails.length} isolated-QA synthetic Auth identities.`);
           NODE
+
+      - name: Prove the private-evidence AAL and active-role matrix in SQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" \
+            --no-psqlrc \
+            --set ON_ERROR_STOP=1 \
+            --file supabase/tests/evaluator_core_loop_evidence_authorization.sql \
+            | tee evaluator-core-loop-evidence-authorization.log
 
       - name: Start the exact production build
         shell: bash

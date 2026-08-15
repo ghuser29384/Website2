@@ -29,6 +29,7 @@ const QA_DATABASE_URL = process.env.QA_SUPABASE_DB_URL ?? "";
 const execFileAsync = promisify(execFile);
 
 const IDS = {
+  admin: "81000000-0000-4000-8000-000000000005",
   offer: "82000000-0000-4000-8000-000000000001",
   outsider: "81000000-0000-4000-8000-000000000003",
   owner: "81000000-0000-4000-8000-000000000001",
@@ -37,6 +38,7 @@ const IDS = {
 } as const;
 
 const EMAILS = {
+  admin: "evaluator-core-loop-admin@qa.invalid",
   outsider: "evaluator-core-loop-outsider@qa.invalid",
   owner: "evaluator-core-loop-owner@qa.invalid",
   responder: "evaluator-core-loop-responder@qa.invalid",
@@ -237,9 +239,9 @@ async function screenshot(page: Page, testInfo: TestInfo, name: string) {
   await testInfo.attach(name, { contentType: "image/png", path });
 }
 
-async function cleanupQaFixtures() {
+function validatedQaDatabase() {
   if (!QA_DATABASE_URL) {
-    throw new Error("QA_SUPABASE_DB_URL is required for in-spec zero-residue cleanup.");
+    throw new Error("QA_SUPABASE_DB_URL is required for isolated-QA database checks.");
   }
 
   const database = new URL(QA_DATABASE_URL);
@@ -254,9 +256,86 @@ async function cleanupQaFixtures() {
     Boolean(database.password);
   if (!exactTarget) {
     throw new Error(
-      "Refusing cleanup outside the exact TLS-only MoralTrade isolated-QA database.",
+      "Refusing access outside the exact TLS-only MoralTrade isolated-QA database.",
     );
   }
+  return database;
+}
+
+function qaDatabaseEnvironment(database: URL) {
+  return {
+    ...process.env,
+    PGPASSWORD: decodeURIComponent(database.password),
+    PGSSLMODE: "require",
+  };
+}
+
+async function setReviewerGrantActive(active: boolean) {
+  const database = validatedQaDatabase();
+  const assignment = active
+    ? "active = true, revoked_at = null"
+    : "active = false, revoked_at = now()";
+  const { stdout } = await execFileAsync(
+    "psql",
+    [
+      "--host",
+      database.hostname,
+      "--port",
+      database.port,
+      "--username",
+      decodeURIComponent(database.username),
+      "--dbname",
+      database.pathname.slice(1),
+      "--no-psqlrc",
+      "--tuples-only",
+      "--no-align",
+      "--set",
+      "ON_ERROR_STOP=1",
+      "--command",
+      `with changed as (
+        update public.trade_review_role_grants
+        set ${assignment}
+        where profile_id = '${IDS.reviewer}'::uuid
+          and role = 'reviewer'
+        returning 1
+      ) select count(*) from changed;`,
+    ],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      env: qaDatabaseEnvironment(database),
+      maxBuffer: 1024 * 1024,
+    },
+  );
+  expect(stdout.trim()).toBe("1");
+}
+
+async function expectAal(client: SupabaseClient, expected: "aal1" | "aal2") {
+  const { data, error } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
+  expect(error).toBeNull();
+  expect(data?.currentLevel).toBe(expected);
+}
+
+async function readPrivateEvidence(
+  client: SupabaseClient,
+  milestoneId: string,
+  bundleId: string,
+) {
+  const { data: bundles, error: bundlesError } = await client
+    .from("trade_evidence_bundles")
+    .select("id,status")
+    .eq("milestone_id", milestoneId);
+  const { data: items, error: itemsError } = await client
+    .from("trade_evidence_bundle_items")
+    .select("attestation,evidence_type")
+    .eq("bundle_id", bundleId);
+  expect(bundlesError).toBeNull();
+  expect(itemsError).toBeNull();
+  return { bundles: bundles ?? [], items: items ?? [] };
+}
+
+async function cleanupQaFixtures() {
+  const database = validatedQaDatabase();
 
   const { stdout } = await execFileAsync(
     "psql",
@@ -278,11 +357,7 @@ async function cleanupQaFixtures() {
     {
       cwd: process.cwd(),
       encoding: "utf8",
-      env: {
-        ...process.env,
-        PGPASSWORD: decodeURIComponent(database.password),
-        PGSSLMODE: "require",
-      },
+      env: qaDatabaseEnvironment(database),
       maxBuffer: 1024 * 1024,
     },
   );
@@ -338,6 +413,11 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       qaProject: "hvmxfjjbdcgjjudmthdz",
       transitions: [],
     };
+    const evidenceAuthorization: Record<
+      string,
+      { aal: "aal1" | "aal2"; bundleRows: number; itemRows: number }
+    > = {};
+    summary.evidenceAuthorization = evidenceAuthorization;
     let testFailure: unknown = null;
 
     const anonymous = await browser.newContext({
@@ -360,6 +440,8 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
         /Evaluator core-loop verification\s*↔\s*Private QA response verification/,
       );
       await expectHealthyPage(anonymousPage);
+      await evaluatorOfferCard.scrollIntoViewIfNeeded();
+      await expect(evaluatorOfferCard).toBeInViewport({ ratio: 0.9 });
       await screenshot(anonymousPage, testInfo, "01-anonymous-directory-desktop");
 
       await evaluatorOfferCard
@@ -403,12 +485,25 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       const ownerAuth = await signIn(EMAILS.owner);
       const responderAuth = await signIn(EMAILS.responder);
       const outsiderAuth = await signIn(EMAILS.outsider);
+      const reviewerAal1Auth = await signIn(EMAILS.reviewer);
       const reviewerAuth = await signIn(EMAILS.reviewer);
+      const adminAuth = await signIn(EMAILS.admin);
       const reviewerAal2Session = await elevateWithTotp(
         reviewerAuth.client,
         reviewerAuth.session,
       );
-      qaCheckpoint("signed in three required roles plus an independent AAL2 reviewer");
+      const adminAal2Session = await elevateWithTotp(
+        adminAuth.client,
+        adminAuth.session,
+      );
+      await expectAal(ownerAuth.client, "aal1");
+      await expectAal(reviewerAal1Auth.client, "aal1");
+      await expectAal(reviewerAuth.client, "aal2");
+      await expectAal(adminAuth.client, "aal2");
+      expect(adminAal2Session.user.id).toBe(IDS.admin);
+      qaCheckpoint(
+        "signed in three participant roles plus independent AAL1/AAL2 reviewer sessions and an AAL2 administrator",
+      );
 
       const createContext = async (
         session: Session,
@@ -446,8 +541,14 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
 
       await gotoReady(responderPage, `/offers/${IDS.offer}#respond`);
       await submitResponse(responderPage, COPY.responderResponse);
-      await expect(responderPage.getByText("Your response is pending", { exact: true })).toBeVisible();
+      const pendingResponseReceipt = responderPage.getByText(
+        "Your response is pending",
+        { exact: true },
+      );
+      await expect(pendingResponseReceipt).toBeVisible();
       await expectHealthyPage(responderPage);
+      await pendingResponseReceipt.scrollIntoViewIfNeeded();
+      await expect(pendingResponseReceipt).toBeInViewport({ ratio: 0.9 });
       await screenshot(responderPage, testInfo, "03-responder-private-response-mobile");
 
       await gotoReady(outsiderPage, `/offers/${IDS.offer}#respond`);
@@ -707,37 +808,89 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       await gotoReady(responderPage, `/trade-agreements/${agreementId}`);
       await nominateReviewer(responderPage);
 
-      const { data: reviewerBundles, error: reviewerBundlesError } =
-        await reviewerAuth.client
+      if (!milestone?.id) throw new Error("The accepted agreement has no QA milestone.");
+      const { data: participantBundles, error: participantBundlesError } =
+        await ownerAuth.client
           .from("trade_evidence_bundles")
           .select("id,status")
-          .eq("milestone_id", milestone?.id);
-      expect(reviewerBundlesError).toBeNull();
-      expect(reviewerBundles).toHaveLength(1);
-      expect(reviewerBundles?.[0]?.status).toBe("submitted");
-      const reviewerBundleId = reviewerBundles?.[0]?.id;
-      const { data: reviewerItems, error: reviewerItemsError } = await reviewerAuth.client
-        .from("trade_evidence_bundle_items")
-        .select("attestation,evidence_type")
-        .eq("bundle_id", reviewerBundleId);
-      expect(reviewerItemsError).toBeNull();
-      expect(reviewerItems).toEqual([
+          .eq("milestone_id", milestone.id);
+      expect(participantBundlesError).toBeNull();
+      expect(participantBundles).toHaveLength(1);
+      expect(participantBundles?.[0]?.status).toBe("submitted");
+      const reviewerBundleId = participantBundles?.[0]?.id;
+      if (!reviewerBundleId) throw new Error("The submitted QA evidence bundle has no ID.");
+
+      const participantAal1Access = await readPrivateEvidence(
+        ownerAuth.client,
+        milestone.id,
+        reviewerBundleId,
+      );
+      expect(participantAal1Access.bundles).toHaveLength(1);
+      expect(participantAal1Access.items).toEqual([
         { attestation: COPY.evidence, evidence_type: "attestation" },
       ]);
-      const { data: outsiderBundles, error: outsiderBundlesError } =
-        await outsiderAuth.client
-          .from("trade_evidence_bundles")
-          .select("id")
-          .eq("milestone_id", milestone?.id);
-      expect(outsiderBundlesError).toBeNull();
-      expect(outsiderBundles).toEqual([]);
-      const { data: outsiderItems, error: outsiderItemsError } = await outsiderAuth.client
-        .from("trade_evidence_bundle_items")
-        .select("id")
-        .eq("bundle_id", reviewerBundleId);
-      expect(outsiderItemsError).toBeNull();
-      expect(outsiderItems).toEqual([]);
-      qaCheckpoint("proved assigned-reviewer evidence access and outsider evidence denial");
+      evidenceAuthorization.participantAal1 = {
+        aal: "aal1",
+        bundleRows: participantAal1Access.bundles.length,
+        itemRows: participantAal1Access.items.length,
+      };
+
+      const reviewerAal1Access = await readPrivateEvidence(
+        reviewerAal1Auth.client,
+        milestone.id,
+        reviewerBundleId,
+      );
+      expect(reviewerAal1Access).toEqual({ bundles: [], items: [] });
+      evidenceAuthorization.assignedReviewerAal1 = {
+        aal: "aal1",
+        bundleRows: reviewerAal1Access.bundles.length,
+        itemRows: reviewerAal1Access.items.length,
+      };
+
+      const reviewerAal2BeforeReview = await readPrivateEvidence(
+        reviewerAuth.client,
+        milestone.id,
+        reviewerBundleId,
+      );
+      expect(reviewerAal2BeforeReview.bundles).toHaveLength(1);
+      expect(reviewerAal2BeforeReview.items).toEqual([
+        { attestation: COPY.evidence, evidence_type: "attestation" },
+      ]);
+      evidenceAuthorization.activeAssignedReviewerAal2BeforeReview = {
+        aal: "aal2",
+        bundleRows: reviewerAal2BeforeReview.bundles.length,
+        itemRows: reviewerAal2BeforeReview.items.length,
+      };
+
+      const outsiderAccess = await readPrivateEvidence(
+        outsiderAuth.client,
+        milestone.id,
+        reviewerBundleId,
+      );
+      expect(outsiderAccess).toEqual({ bundles: [], items: [] });
+      evidenceAuthorization.outsider = {
+        aal: "aal1",
+        bundleRows: outsiderAccess.bundles.length,
+        itemRows: outsiderAccess.items.length,
+      };
+
+      const administratorAal2Access = await readPrivateEvidence(
+        adminAuth.client,
+        milestone.id,
+        reviewerBundleId,
+      );
+      expect(administratorAal2Access.bundles).toHaveLength(1);
+      expect(administratorAal2Access.items).toEqual([
+        { attestation: COPY.evidence, evidence_type: "attestation" },
+      ]);
+      evidenceAuthorization.administratorAal2 = {
+        aal: "aal2",
+        bundleRows: administratorAal2Access.bundles.length,
+        itemRows: administratorAal2Access.items.length,
+      };
+      qaCheckpoint(
+        "proved participant AAL1 access, reviewer AAL1 denial, active assigned reviewer AAL2 access, outsider denial, and administrator AAL2 access",
+      );
 
       await gotoReady(reviewerPage, `/trade-review/${milestone?.id}`);
       await expect(
@@ -760,6 +913,38 @@ test.describe("evaluator-facing authenticated Moral Trade core loop", () => {
       );
       await expectHealthyPage(reviewerPage);
       await screenshot(reviewerPage, testInfo, "06-reviewer-private-evidence-desktop");
+
+      const reviewerAal2AfterReview = await readPrivateEvidence(
+        reviewerAuth.client,
+        milestone.id,
+        reviewerBundleId,
+      );
+      expect(reviewerAal2AfterReview.bundles).toHaveLength(1);
+      expect(reviewerAal2AfterReview.items).toEqual([
+        { attestation: COPY.evidence, evidence_type: "attestation" },
+      ]);
+      evidenceAuthorization.activeAssignedReviewerAal2AfterReview = {
+        aal: "aal2",
+        bundleRows: reviewerAal2AfterReview.bundles.length,
+        itemRows: reviewerAal2AfterReview.items.length,
+      };
+
+      await setReviewerGrantActive(false);
+      await expectAal(reviewerAuth.client, "aal2");
+      const revokedReviewerAal2Access = await readPrivateEvidence(
+        reviewerAuth.client,
+        milestone.id,
+        reviewerBundleId,
+      );
+      expect(revokedReviewerAal2Access).toEqual({ bundles: [], items: [] });
+      evidenceAuthorization.revokedAssignedReviewerAal2 = {
+        aal: "aal2",
+        bundleRows: revokedReviewerAal2Access.bundles.length,
+        itemRows: revokedReviewerAal2Access.items.length,
+      };
+      qaCheckpoint(
+        "proved assigned reviewer AAL2 audit access after decision and immediate denial after role revocation",
+      );
 
       const { data: bundles, error: bundlesError } = await ownerAuth.client
         .from("trade_evidence_bundles")
