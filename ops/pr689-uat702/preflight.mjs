@@ -1,5 +1,9 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import { chromium } from "@playwright/test";
+import { createRequire } from "node:module";
+import { join } from "node:path";
+
+const requireFromCandidate = createRequire(join(process.cwd(), "package.json"));
+const { chromium } = requireFromCandidate("@playwright/test");
 
 const deploymentUrl = process.env.MPGF_DAC_PRODUCT_BASE_URL;
 const bypass = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
