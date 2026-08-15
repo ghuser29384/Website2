@@ -588,7 +588,10 @@ async function geometry(page: Page, viewport: { width: number; height: number },
 async function gotoDirectory(page: Page, route = targetRoute) {
   const response = await page.goto(route, { waitUntil: "commit" });
   expect(response?.ok()).toBe(true);
-  await expect(page.locator('form[data-smart-query-surface="offers"]')).toBeVisible();
+  await page.waitForLoadState("domcontentloaded");
+  await expect(
+    page.locator('form[data-smart-query-surface="offers"]'),
+  ).toBeVisible();
 }
 
 let fixtureServer: Server;
