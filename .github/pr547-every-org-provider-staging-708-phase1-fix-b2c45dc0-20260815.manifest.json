@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "moral-trade-pr547-every-org-staging-controller-v3",
+  "candidateSha": "b2c45dc0110d8841f7cbd7576347936044310c1c",
+  "candidateTree": "b2cc81a07c361819099e112b89e9906604787462",
+  "baseSha": "106f9781cf13f75af31594ed79deef89318a87b7",
+  "baseBranch": "integration/direct-donation-upgrade-current-main-20260807",
+  "candidateBranch": "fix/every-org-partner-webhook-auth-708-20260815",
+  "controllerBranch": "ops/pr547-every-org-provider-staging-708-phase1-fix-b2c45dc0-20260815",
+  "workflowPath": ".github/workflows/pr547-every-org-provider-staging-708-phase1-fix-b2c45dc0-20260815.yml",
+  "workflowBlobSha": "75aa68ee9d1287ed8d1a0196f7b3882aed27e11d",
+  "sourceContractTestPath": ".github/scripts/pr547-every-org-phase1-controller-contract.test.mjs",
+  "sourceContractTestBlobSha": "be9fd8a3805d9fcc182846ca0171523acb3048d6",
+  "bootstrapCommit": "a1df78c8d3114ae55b4905f517845bce1916d8f0",
+  "priorControllerBranch": "ops/pr547-every-org-provider-staging-708-phase-a-b2c45dc0-20260815",
+  "priorControllerHead": "87aa4da8acf95040be0a2d73e5e7872579f8e1bd",
+  "observedMainShaAtBootstrap": "99247b7a183ed66866429c50f6481fb07fb83461",
+  "providerAuthorizationContractStatus": "unconfirmed",
+  "phase1AuthorizationPath": ".github/pr547-every-org-phase1-fix-b2c45dc0.authorize",
+  "phase2AuthorizationPath": ".github/pr547-every-org-phase2-fix-b2c45dc0.authorize",
+  "phase1RequiresProviderIssuedWebhookCredentials": false,
+  "phase2RequiresProviderIssuedWebhookCredentials": true,
+  "phase2DeploymentEnabled": false
+}
