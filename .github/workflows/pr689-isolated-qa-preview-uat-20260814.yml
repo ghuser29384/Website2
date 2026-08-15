@@ -230,18 +230,18 @@ jobs:
           ]);
           const providerCredential = /(STRIPE|EVERY_?ORG|PAYMENT|CUSTODY|SETTLEMENT|RESERVE|PAYOUT|PAYPAL|BRAINTREE|ADYEN|SQUARE).*(SECRET|KEY|TOKEN|ACCOUNT|CREDENTIAL|URL|ID)$/i;
           const forbidden = previewKeys.filter((key) => providerCredential.test(key) && !allowedModes.has(key));
-          if (forbidden.length) throw new Error("Applicable Preview environment contains payment/provider credentials.");
           const bypass = Object.entries(project.protectionBypass ?? {}).find(([, value]) => value?.scope === "automation-bypass");
           if (!bypass) throw new Error("Existing protected-automation boundary is unavailable.");
           await writeFile("evidence/vercel-project-environment-audit.json", `${JSON.stringify({
             projectId,
             teamId: team,
             previewEnvironmentKeyCount: previewKeys.length,
-            providerCredentialKeys: [],
+            providerCredentialKeys: forbidden.sort(),
             paymentModesForcedDisabledByController: [...allowedModes].sort(),
             existingAutomationBypassAvailable: true,
             secretValuesRetained: false,
           }, null, 2)}\n`);
+          if (forbidden.length) throw new Error("Applicable Preview environment contains payment/provider credentials.");
           NODE
 
       - name: Revalidate the forbidden original deployment without authentication
