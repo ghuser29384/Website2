@@ -669,18 +669,18 @@ test("creator, negative authorization, intended reviewer freeze/reject, and froz
     await rejectRow.getByRole("button", { name: "Reject proposal" }).click();
     const rejectResponse = await rejectResponsePromise;
     expect(rejectResponse.status()).toBeLessThan(500);
-    const rejectedWithoutReload = await rowFor(page, TITLES.reject).getByText("rejected", { exact: true }).first()
-      .waitFor({ state: "visible", timeout: 5_000 })
+    const removedWithoutReload = await rowFor(page, TITLES.reject)
+      .waitFor({ state: "detached", timeout: 5_000 })
       .then(() => true, () => false);
-    if (!rejectedWithoutReload) {
+    if (!removedWithoutReload) {
       test.info().annotations.push({
         type: "nonblocking_note",
-        description: "DAC rejection persisted but the reviewer row stayed stale until an explicit reload.",
+        description: "DAC rejection persisted but the reviewer queue stayed stale until an explicit reload.",
       });
-      console.log("uat702_nonblocking_note=reviewer_rejection_row_stale_until_reload");
+      console.log("uat702_nonblocking_note=reviewer_rejection_queue_stale_until_reload");
       await page.reload({ waitUntil: "domcontentloaded" });
     }
-    await expect(rowFor(page, TITLES.reject).getByText("rejected", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
+    await expect(rowFor(page, TITLES.reject)).toHaveCount(0, { timeout: 30_000 });
     await screenshot(page, "06-reviewer-freeze-and-reject-desktop");
   } finally {
     await closeTracked(tracked);
