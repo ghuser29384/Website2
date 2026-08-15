@@ -7,7 +7,7 @@ const migration = readFileSync(
   "utf8",
 );
 const hardeningMigration = readFileSync(
-  "supabase/migrations/20260813170151_harden_trade_donation_pool_component_trigger_rpc.sql",
+  "supabase/migrations/20260814024354_harden_trade_donation_pool_component_trigger_rpc.sql",
   "utf8",
 );
 const poolLibrary = readFileSync("src/lib/trade-donation-pool.ts", "utf8");
