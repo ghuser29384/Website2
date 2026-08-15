@@ -293,9 +293,13 @@ async function fillCompleteProposal(page: Page, title: string) {
 }
 
 async function saveAndGetStatusHref(panel: ReturnType<Page["locator"]>, buttonName: "Save draft" | "Submit proposal") {
-  await panel.getByRole("button", { name: buttonName }).click();
   const link = panel.getByRole("link", { name: "View proposal status" });
+  const previousHref = (await link.count()) > 0 ? await link.getAttribute("href") : null;
+  await panel.getByRole("button", { name: buttonName }).click();
   await expect(link).toBeVisible({ timeout: 30_000 });
+  await expect
+    .poll(() => link.getAttribute("href"), { timeout: 30_000 })
+    .not.toBe(previousHref);
   const href = await link.getAttribute("href");
   if (!href || !/^\/mpgf\/pools\/proposals\/[0-9a-f-]{36}$/i.test(href)) {
     throw new Error("Proposal status link was missing or malformed.");
