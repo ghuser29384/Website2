@@ -1,11 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { cache, Suspense, type ReactNode } from "react";
 
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteTopbar } from "@/components/layout/site-topbar";
 import { IconMark } from "@/components/ui/page-primitives";
-import { getMarketplaceOverview, getViewer } from "@/lib/app-data";
-import { resolvePublicMarketplaceOverview } from "@/lib/public-marketplace-overview";
+import {
+  getMarketplaceOverview,
+  getViewer,
+  type MarketplaceOverview,
+} from "@/lib/app-data";
+import {
+  createUnavailableMarketplaceOverview,
+  resolvePublicMarketplaceOverview,
+} from "@/lib/public-marketplace-overview";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { VISITOR_PATHS } from "@/lib/visitor-paths";
@@ -40,17 +48,71 @@ const structuredData = {
   })),
 };
 
+const getStartViewer = cache(() => getViewer());
+const getStartMarketplaceOverview = cache(() =>
+  resolvePublicMarketplaceOverview(getMarketplaceOverview()),
+);
+
 function formatOptionalCount(value: number | null) {
   return value === null ? "—" : new Intl.NumberFormat("en-US").format(value);
 }
 
-export default async function StartPage() {
-  const [viewer, marketplaceOverview] = await Promise.all([
-    getViewer(),
-    resolvePublicMarketplaceOverview(getMarketplaceOverview()),
-  ]);
+function StartTopbarFallback() {
+  return (
+    <SiteTopbar
+      brandHref="/"
+      links={getPrimaryNavLinks(false)}
+      {...getTopbarActions(false)}
+      showLogout={false}
+    />
+  );
+}
+
+async function StartTopbar() {
+  const viewer = await getStartViewer();
   const isAuthenticated = Boolean(viewer);
-  const createHref = isAuthenticated ? "/create" : "/signup?returnTo=/create";
+
+  return (
+    <SiteTopbar
+      brandHref="/"
+      links={getPrimaryNavLinks(isAuthenticated)}
+      {...getTopbarActions(isAuthenticated)}
+      showLogout={isAuthenticated}
+    />
+  );
+}
+
+interface StartCreateLinkProps {
+  children: ReactNode;
+  className: string;
+}
+
+function StartCreateLinkFallback({ children, className }: StartCreateLinkProps) {
+  return (
+    <Link className={className} href="/signup?returnTo=/create">
+      {children}
+    </Link>
+  );
+}
+
+async function StartCreateLink({ children, className }: StartCreateLinkProps) {
+  const viewer = await getStartViewer();
+
+  return (
+    <Link
+      className={className}
+      href={viewer ? "/create" : "/signup?returnTo=/create"}
+    >
+      {children}
+    </Link>
+  );
+}
+
+function StartServiceSnapshotPanel({
+  marketplaceOverview,
+}: {
+  marketplaceOverview: MarketplaceOverview;
+}) {
   const serviceSnapshot = [
     {
       icon: "payment",
@@ -70,18 +132,40 @@ export default async function StartPage() {
   ] as const;
 
   return (
+    <aside className="growth-progress-card panel" aria-label="Current service state">
+      <p className="eyebrow">Available now</p>
+      {serviceSnapshot.map((item) => (
+        <div className="growth-progress-stat" key={item.label}>
+          <IconMark name={item.icon} />
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+        </div>
+      ))}
+      <p className="hero-followup">
+        Donation payment is completed by the external provider. Moral Trade can import or review
+        evidence for a linked workflow, but does not hold the donation or claim escrow.
+      </p>
+    </aside>
+  );
+}
+
+async function StartServiceSnapshot() {
+  const marketplaceOverview = await getStartMarketplaceOverview();
+
+  return <StartServiceSnapshotPanel marketplaceOverview={marketplaceOverview} />;
+}
+
+export default function StartPage() {
+  return (
     <div className="page-shell">
       <script
         dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         type="application/ld+json"
       />
       <header className="hero">
-        <SiteTopbar
-          brandHref="/"
-          links={getPrimaryNavLinks(isAuthenticated)}
-          {...getTopbarActions(isAuthenticated)}
-          showLogout={isAuthenticated}
-        />
+        <Suspense fallback={<StartTopbarFallback />}>
+          <StartTopbar />
+        </Suspense>
 
         <div className="hero-grid">
           <section className="hero-copy">
@@ -96,9 +180,17 @@ export default async function StartPage() {
               <Link className="button button-primary" href="/donate">
                 Make a financial contribution
               </Link>
-              <Link className="button button-secondary" href={createHref}>
-                Create a proposal
-              </Link>
+              <Suspense
+                fallback={
+                  <StartCreateLinkFallback className="button button-secondary">
+                    Create a proposal
+                  </StartCreateLinkFallback>
+                }
+              >
+                <StartCreateLink className="button button-secondary">
+                  Create a proposal
+                </StartCreateLink>
+              </Suspense>
             </div>
             <ul className="hero-signals" aria-label="Current action boundaries">
               <li>Provider-hosted payment</li>
@@ -108,25 +200,23 @@ export default async function StartPage() {
             </ul>
           </section>
 
-          <aside className="growth-progress-card panel" aria-label="Current service state">
-            <p className="eyebrow">Available now</p>
-            {serviceSnapshot.map((item) => (
-              <div className="growth-progress-stat" key={item.label}>
-                <IconMark name={item.icon} />
-                <span>{item.label}</span>
-                <strong>{item.value}</strong>
-              </div>
-            ))}
-            <p className="hero-followup">
-              Donation payment is completed by the external provider. Moral Trade can import or
-              review evidence for a linked workflow, but does not hold the donation or claim escrow.
-            </p>
-          </aside>
+          <Suspense
+            fallback={
+              <StartServiceSnapshotPanel
+                marketplaceOverview={createUnavailableMarketplaceOverview()}
+              />
+            }
+          >
+            <StartServiceSnapshot />
+          </Suspense>
         </div>
       </header>
 
       <main id="main-content" tabIndex={-1}>
-        <section className="growth-start-section section section-white" aria-labelledby="visitor-paths-heading">
+        <section
+          className="growth-start-section section section-white"
+          aria-labelledby="visitor-paths-heading"
+        >
           <div className="section-head section-head-compact">
             <p className="eyebrow">Four live paths</p>
             <h2 id="visitor-paths-heading">Fund, create, pool, or explore</h2>
@@ -199,9 +289,17 @@ export default async function StartPage() {
             <Link className="button button-primary" href="/donate">
               Choose a funding route
             </Link>
-            <Link className="button button-secondary" href={createHref}>
-              Create a trade
-            </Link>
+            <Suspense
+              fallback={
+                <StartCreateLinkFallback className="button button-secondary">
+                  Create a trade
+                </StartCreateLinkFallback>
+              }
+            >
+              <StartCreateLink className="button button-secondary">
+                Create a trade
+              </StartCreateLink>
+            </Suspense>
             <Link className="button button-secondary" href="/status">
               Review service boundaries
             </Link>
