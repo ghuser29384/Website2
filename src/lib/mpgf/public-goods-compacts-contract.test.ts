@@ -78,6 +78,7 @@ test("authenticated RPCs are idempotent, fixed-search-path, and explicitly no-mo
   assert.match(hardening, /already used for a different request/);
   assert.match(hardening, /'moneyMoved', false/);
   assert.match(hardening, /'automaticCollectionEnabled', false/);
+  assert.match(hardening, /'fundingQualified', coalesce\(/);
 });
 
 test("financial-cycle freezing is complete-coverage-only, net-settled, uncapped, and cent exact", () => {

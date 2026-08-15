@@ -1871,10 +1871,13 @@ begin
             when compact_record.status = 'recruiting' and qualification_record.qualification_state = 'scheduled_qualified' then 'scheduled_qualified'
             else 'unqualified'
           end,
-          'fundingQualified', case
-            when compact_record.status = 'active' then qualification_record.qualification_state = 'settled_qualified'
-            else qualification_record.qualification_state = 'scheduled_qualified'
-          end,
+          'fundingQualified', coalesce(
+            case
+              when compact_record.status = 'active' then qualification_record.qualification_state = 'settled_qualified'
+              else qualification_record.qualification_state = 'scheduled_qualified'
+            end,
+            false
+          ),
           'identityQualified', coalesce(qualification_record.identity_qualified, false)
         );
       end if;

@@ -220,8 +220,10 @@ declare
   first_instruction uuid;
   acknowledgement_key text;
   membership_id uuid;
+  membership_state jsonb;
   reaccepted_id uuid;
   exit_response jsonb;
+  state jsonb;
 begin
   begin
     perform public.join_mpgf_public_goods_compact_v2(
@@ -271,6 +273,15 @@ begin
     or (select count(*) from public.mpgf_public_goods_compact_memberships
         where participant_id = auth.uid() and compact_id = '10000000-0000-4000-8000-000000000001') <> 1
   then raise exception 'Acknowledgements or membership were not durably stored exactly once.'; end if;
+
+  state := public.get_mpgf_public_goods_compacts_v2_state();
+  select compact.value->'membership' into membership_state
+  from pg_catalog.jsonb_array_elements(state->'compacts') as compact(value)
+  where compact.value->>'publicKey' = 'future-flourishing';
+  if membership_state->'fundingQualified' is distinct from 'false'::jsonb
+    or membership_state->>'fundingQualificationState' <> 'unqualified'
+  then raise exception 'Missing qualification facts were not projected as explicit false/unqualified state: %', membership_state; end if;
+
   begin
     perform public.join_mpgf_public_goods_compact_v2(
       'animal-welfare', 'mpgf-public-goods-compact/transaction-v2',
