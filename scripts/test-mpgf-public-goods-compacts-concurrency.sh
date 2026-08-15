@@ -160,7 +160,7 @@ insert into public.mpgf_public_goods_funding_qualification_snapshots (
   qualification_state, snapshot_hash
 )
 select membership.participant_id, '2099-01', membership.id, membership.compact_id,
-  eligibility.id, instruction.id, schedule.id, authorization.id, true,
+  eligibility.id, instruction.id, schedule.id, auth_snapshot.id, true,
   'verified_unique_person',
   'sha256:' || public.mpgf_public_goods_hash_v2(jsonb_build_object('person', membership.participant_id)),
   true, 500, 'scheduled_qualified',
@@ -173,8 +173,8 @@ join public.mpgf_public_goods_allocation_instructions as instruction
   on instruction.participant_id = membership.participant_id and instruction.cycle_key = '2099-01'
 join public.mpgf_public_goods_scheduled_amount_snapshots as schedule
   on schedule.membership_id = membership.id and schedule.cycle_key = '2099-01'
-join public.mpgf_public_goods_dormant_authorization_snapshots as authorization
-  on authorization.participant_id = membership.participant_id and authorization.cycle_key = '2099-01'
+join public.mpgf_public_goods_dormant_authorization_snapshots as auth_snapshot
+  on auth_snapshot.participant_id = membership.participant_id and auth_snapshot.cycle_key = '2099-01'
 where profile.email like 'compact-concurrency-%@example.test';
 SQL
 
