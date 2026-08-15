@@ -46,6 +46,9 @@ for (const viewport of viewports) {
       page.getByText(/does not itself create a legal debt, unilateral charge, payment authorization/),
     ).toBeVisible();
     await expect(page.getByText("one aggregate monthly obligation")).toBeVisible();
+    await expect(page.getByText("Readiness unavailable").first()).toBeVisible();
+    await expect(page.getByText("No people or dollar progress is inferred.").first()).toBeVisible();
+    await expect(page.getByRole("progressbar")).toHaveCount(0);
     await expect(page.getByText("Actual settlement governs")).toBeVisible();
     await expect(
       page.getByText("No action on this page moves money, creates a payment mandate, or records a payment receipt."),

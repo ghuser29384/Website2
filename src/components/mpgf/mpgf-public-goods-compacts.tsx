@@ -44,6 +44,20 @@ function CharterTerms({ compact }: { compact: MpgfPublicGoodsCompactState }) {
 
 function Readiness({ compact }: { compact: MpgfPublicGoodsCompactState }) {
   const readiness = compact.readiness;
+  if (!readiness.frozenAt) {
+    return (
+      <div className={styles.progress} data-testid={`readiness-${compact.publicKey}`}>
+        <div className={styles.progressLabel}>
+          <span>Readiness unavailable</span>
+          <span>Activation blocked</span>
+        </div>
+        <p>
+          No authoritative frozen outflow, identity, authorization, and qualification snapshot
+          exists. No people or dollar progress is inferred.
+        </p>
+      </div>
+    );
+  }
   const peopleBps = Math.min(10_000, Math.floor(readiness.fundingQualifiedUniquePersonCount * 10_000 / MPGF_PUBLIC_GOODS_COMPACT_TERMS.readinessThresholdMembers));
   const fundingBps = Math.min(10_000, Math.floor(readiness.scheduledContributionCents * 10_000 / MPGF_PUBLIC_GOODS_COMPACT_TERMS.readinessThresholdScheduledCents));
   const progressBps = Math.min(peopleBps, fundingBps);
