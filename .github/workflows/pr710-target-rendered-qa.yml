@@ -3,7 +3,7 @@ name: PR 710 target rendered QA
 on:
   push:
     branches:
-      - qa/pr710-backed-offer-rendered-20260815
+      - qa/pr710-focus-repair-rendered-20260815
 
 concurrency:
   group: pr710-target-rendered-qa-${{ github.repository }}
@@ -17,9 +17,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      EXPECTED_BASE_SHA: 79ca382c3bdc325dfc5a28e2cbbafc1b95640386
-      EXPECTED_PR_HEAD_SHA: 71f4db81c9ef78a97fb53b43609219f1e5b22dec
-      EXPECTED_QA_BRANCH: qa/pr710-backed-offer-rendered-20260815
+      EXPECTED_BASE_SHA: 75fd512e6cf82e2c51df53e211b854c0263109c3
+      EXPECTED_PR_HEAD_SHA: 8eb9a93c0d398ef3be893c1804688e1f9b9de9ab
+      EXPECTED_QA_BRANCH: qa/pr710-focus-repair-rendered-20260815
       EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
       EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
       NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3212
@@ -50,7 +50,7 @@ jobs:
           test "$GITHUB_REF_NAME" = "$EXPECTED_QA_BRANCH"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test "$(git merge-base "$EXPECTED_BASE_SHA" "$EXPECTED_PR_HEAD_SHA")" = "$EXPECTED_BASE_SHA"
-          test "$(git rev-list --count "$EXPECTED_BASE_SHA..$EXPECTED_PR_HEAD_SHA")" = "1"
+          test "$(git rev-list --count "$EXPECTED_BASE_SHA..$EXPECTED_PR_HEAD_SHA")" = "2"
           git merge-base --is-ancestor "$EXPECTED_PR_HEAD_SHA" HEAD
           git diff --quiet "$EXPECTED_PR_HEAD_SHA" HEAD -- \
             src public next.config.ts package.json package-lock.json tsconfig.json
@@ -137,6 +137,7 @@ jobs:
           npx eslint \
             src/app/layout.tsx \
             "src/app/offers/[offerId]/layout.tsx" \
+            "src/app/offers/[offerId]/page.tsx" \
             src/components/offer-credibility-link.tsx \
             src/offer-record-priority-contract.test.ts \
             tests/pr710-backed-offer-rendered.spec.ts \
@@ -285,12 +286,22 @@ jobs:
             expectedViewportCount: 3,
             keyboardFocusMovedEverywhere:
               results.length === 3 && results.every((entry) => entry.focusWithin === true),
+            keyboardFocusVisibleEverywhere:
+              results.length === 3 && results.every((entry) => entry.focusIndicatorVisible === true),
+            keyboardFocusUnclippedEverywhere:
+              results.length === 3 && results.every((entry) => entry.focusIndicatorUnclipped === true),
             results,
           };
           await writeFile("pr710-focus-verdict.json", `${JSON.stringify(verdict)}\n`, "utf8");
           console.log(JSON.stringify(verdict));
           if (!verdict.keyboardFocusMovedEverywhere) {
             throw new Error("Commitment fragment did not move keyboard focus to the meaningful target at every viewport.");
+          }
+          if (!verdict.keyboardFocusVisibleEverywhere) {
+            throw new Error("Commitment target did not retain a visible keyboard focus indication at every viewport.");
+          }
+          if (!verdict.keyboardFocusUnclippedEverywhere) {
+            throw new Error("Commitment target keyboard focus indication was clipped at one or more viewports.");
           }
           NODE
 

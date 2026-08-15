@@ -305,13 +305,29 @@ async function commitmentResult(page: Page, input: "keyboard" | "pointer") {
     }),
   ).toBeVisible();
   await expect(target.getByRole("heading", { exact: true, name: "Guarantees and limits" })).toBeVisible();
-  const state = await target.evaluate((element) => ({
-    activeElementTag: document.activeElement?.tagName ?? null,
-    activeElementId: (document.activeElement as HTMLElement | null)?.id ?? null,
-    focusWithin: element === document.activeElement || element.contains(document.activeElement),
-    fragment: window.location.hash,
-    targetTabIndex: (element as HTMLElement).tabIndex,
-  }));
+  await page.waitForTimeout(250);
+  const state = await target.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    const focusVisible = element.matches(":focus-visible");
+    const outlineWidth = Number.parseFloat(style.outlineWidth);
+    return {
+      activeElementTag: document.activeElement?.tagName ?? null,
+      activeElementId: (document.activeElement as HTMLElement | null)?.id ?? null,
+      focusIndicatorUnclipped:
+        rect.left >= 0 && rect.right <= window.innerWidth && rect.top >= 0 && rect.top < window.innerHeight,
+      focusIndicatorVisible:
+        focusVisible && style.outlineStyle !== "none" && Number.isFinite(outlineWidth) && outlineWidth > 0,
+      focusVisible,
+      focusWithin: element === document.activeElement || element.contains(document.activeElement),
+      fragment: window.location.hash,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      targetHasExplicitTabIndex: element.hasAttribute("tabindex"),
+      targetTabIndex: (element as HTMLElement).tabIndex,
+      targetTop: rect.top,
+    };
+  });
   await record({ input, kind: "commitment-focus", ...state });
   return state;
 }
