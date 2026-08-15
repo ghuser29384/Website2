@@ -18,8 +18,9 @@ permissions:
 env:
   ADMIN_EMAILS: dac-product-reviewer@qa.invalid
   CANDIDATE_BASE_SHA: 79ca382c3bdc325dfc5a28e2cbbafc1b95640386
-  CANDIDATE_HEAD_SHA: 5faef28f76ea20097af18a3d5dab6d1c8dfb116c
-  CANDIDATE_TREE_SHA: 46783b7e9348ae2fe5a5ca99450b4d30f5bcbef8
+  CANDIDATE_PRE_REPAIR_SHA: 5faef28f76ea20097af18a3d5dab6d1c8dfb116c
+  CANDIDATE_HEAD_SHA: b9598f3d5c812df6648fd86ff81d74858ba0bfc1
+  CANDIDATE_TREE_SHA: e78ff76392bcbfbbac0fc76b2a1d1fd5ed95c518
   CONTROLLER_BRANCH: ops/pr689-isolated-qa-preview-uat-20260814
   EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
   EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
@@ -79,7 +80,8 @@ jobs:
           test "$GITHUB_REF_NAME" = "$CONTROLLER_BRANCH"
           test "$(git -C app rev-parse HEAD)" = "$CANDIDATE_HEAD_SHA"
           test "$(git -C app rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
-          test "$(git -C app rev-parse HEAD^1)" = "$CANDIDATE_BASE_SHA"
+          test "$(git -C app rev-parse HEAD^1)" = "$CANDIDATE_PRE_REPAIR_SHA"
+          test "$(git -C app rev-parse HEAD^2)" = "$CANDIDATE_BASE_SHA"
           test "$(git -C app rev-parse origin/main)" = "$CANDIDATE_BASE_SHA"
           test "$(git -C app status --porcelain)" = ""
 
@@ -99,7 +101,8 @@ jobs:
             --arg head "$CANDIDATE_HEAD_SHA" \
             --arg tree "$CANDIDATE_TREE_SHA" \
             --arg base "$CANDIDATE_BASE_SHA" \
-            '{pr689:{open:true,draft:true,merged:false,head:$head,tree:$tree,base:$base},pr640:{open:true,draft:true,merged:false},issues:{"697":"open","702":"open"}}' \
+            --arg preRepair "$CANDIDATE_PRE_REPAIR_SHA" \
+            '{pr689:{open:true,draft:true,merged:false,head:$head,tree:$tree,base:$base,repairedFrom:$preRepair},pr640:{open:true,draft:true,merged:false},issues:{"697":"open","702":"open"}}' \
             > evidence/exact-state.json
 
       - name: Install exact application dependencies and browser/database clients
@@ -485,6 +488,7 @@ jobs:
             supabase/migrations/20260807100000_mpgf_dac_public_terms_api.sql
             supabase/migrations/20260812073000_mpgf_dac_terminal_event_constraint_reconciliation.sql
             supabase/migrations/20260812074500_mpgf_dac_terminal_schema_reconciliation.sql
+            supabase/migrations/20260815010000_mpgf_pool_lifecycle_event_ordering.sql
           )
           tests=(
             supabase/tests/mpgf_pool_review_freeze.sql
@@ -516,7 +520,7 @@ jobs:
             fi
             rm -f "$regression_log"
           done
-          printf 'reviewed_migrations=7\nrollback_regressions=5\nresult=passed\n' > ../evidence/database-contract-summary.txt
+          printf 'reviewed_migrations=8\nrollback_regressions=5\nresult=passed\n' > ../evidence/database-contract-summary.txt
 
       - name: Execute complete protected-Preview UAT with unconditional cleanup
         id: uat
