@@ -27,16 +27,25 @@ test("the canonical primary-action rule no longer paints the request content pan
 });
 
 test("the repair stylesheet makes the broken states explicit and viewport-aware", () => {
-  assert.match(repairCss, /\.request-primary\s*\{[^}]*background: #fffdf8 !important;/s);
-  assert.match(repairCss, /\.chosen-strip strong\s*\{[^}]*color: #111111 !important;/s);
+  assert.match(
+    repairCss,
+    /\.request-primary\s*\{[\s\S]*?background: #fffdf8 !important;/,
+  );
+  assert.match(
+    repairCss,
+    /\.chosen-strip strong\s*\{[\s\S]*?color: #111111 !important;/,
+  );
   assert.match(repairCss, /\.suggestion-option[\s\S]*color: #111111 !important;/);
   assert.match(repairCss, /\.suggestions\[data-placement="above"\]/);
   assert.match(repairCss, /content: attr\(data-step-label\)/);
-  assert.match(repairCss, /\.cause-choice\.selected::after\s*\{[^}]*content: "✓";/s);
+  assert.match(
+    repairCss,
+    /\.cause-choice\.selected::after\s*\{[\s\S]*?content: "✓";/,
+  );
   assert.match(repairCss, /\.other-cause-submit:disabled/);
 });
 
-test("the repair script scopes suggestions, preserves the step anchor, and bounds the list", () => {
+test("the repair script scopes examples and suggestions, preserves the anchor, and bounds the list", () => {
   for (const cause of [
     "Existential risk",
     "Future flourishing",
@@ -52,6 +61,12 @@ test("the repair script scopes suggestions, preserves the step anchor, and bound
   assert.doesNotMatch(
     repairScript.match(/baseSuggestions\.skill = \[[\s\S]*?\n    \];/)?.[0] ?? "",
     /vegetarian|Help grow Moral Trade/i,
+  );
+  assert.match(repairScript, /function syncRequestCardExamples\(\)/);
+  assert.match(repairScript, /\.request-example/);
+  assert.doesNotMatch(
+    repairScript.match(/function syncRequestCardExamples\(\)[\s\S]*?\n  }/)?.[0] ?? "",
+    /vegetarian|Help grow Moral Trade|GiveDirectly/i,
   );
   assert.match(repairScript, /window\.scrollTo\(\{ top: 0, left: 0, behavior: "auto" \}\)/);
   assert.match(repairScript, /Math\.min\(276, Math\.floor\(available\)\)/);

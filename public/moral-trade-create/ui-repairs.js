@@ -176,6 +176,23 @@
     });
   }
 
+  function syncRequestCardExamples() {
+    const selectedCause = byId("requestCause")?.textContent?.trim();
+    const cause = selectedCause && selectedCause !== "—"
+      ? selectedCause
+      : "the selected cause";
+    const examples = {
+      commitment: `Examples: read one introduction; spend one focused hour learning about ${cause}.`,
+      skill: `Examples: review a relevant document; give one hour of skilled help to a project working on ${cause}.`,
+      fund: `Examples: donate to a relevant organization; fund one concrete expense related to ${cause}.`
+    };
+
+    Object.entries(examples).forEach(([kind, copy]) => {
+      const example = document.querySelector(`[data-request-kind="${kind}"] .request-example`);
+      if (example) example.textContent = copy;
+    });
+  }
+
   function syncProgressLabels() {
     const progress = byId("progress");
     if (!progress) return;
@@ -235,6 +252,7 @@
   patchSuggestionCatalog();
   syncOtherCauseSubmit();
   syncCausePressed();
+  syncRequestCardExamples();
   syncProgressLabels();
   positionSuggestions();
 
@@ -275,6 +293,15 @@
       attributes: true,
       attributeFilter: ["class"],
       childList: true,
+      subtree: true
+    });
+  }
+
+  const requestCause = byId("requestCause");
+  if (requestCause) {
+    new MutationObserver(syncRequestCardExamples).observe(requestCause, {
+      childList: true,
+      characterData: true,
       subtree: true
     });
   }

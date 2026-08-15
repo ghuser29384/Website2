@@ -47,6 +47,14 @@ test.describe("Create route UI regression repairs", () => {
       .poll(() => create.locator("html").evaluate(() => window.scrollY))
       .toBe(0);
 
+    const requestExamples = create.locator(".request-example");
+    await expect(requestExamples).toHaveCount(3);
+    const requestExampleText = (await requestExamples.allTextContents()).join("\n");
+    expect(requestExampleText).not.toMatch(/vegetarian|Help grow Moral Trade|GiveDirectly/i);
+    expect(
+      (await requestExamples.allTextContents()).every((example) => existentialRiskPattern.test(example)),
+    ).toBe(true);
+
     const suggestionLabels = create.locator(".suggestion-option span:last-child");
     await expect(suggestionLabels).toHaveCount(7);
     const suggestionText = (await suggestionLabels.allTextContents()).join("\n");
