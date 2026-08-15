@@ -182,7 +182,11 @@ async function exerciseViewport(
   ).toBeVisible();
   await expect(page.getByText("Freeze private baseline for review", { exact: true })).toBeVisible();
   await expect(page.getByText(/No match means no donation obligation/)).toBeVisible();
-  await expect(page.getByText(/BNPL, a cash advance, payday lending/)).toBeVisible();
+  await expect(
+    page.getByText(
+      /currently available funds, not BNPL,\s*cash advances,\s*payday lending/i,
+    ),
+  ).toBeVisible();
   await expect(page.getByText(/skip a meal/i)).toHaveCount(0);
   await expect(page.getByText(/sacrifice leaderboard/i)).toHaveCount(0);
 
