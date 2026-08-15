@@ -17,13 +17,13 @@ permissions:
 
 env:
   CANDIDATE_BASE_SHA: 79ca382c3bdc325dfc5a28e2cbbafc1b95640386
-  CANDIDATE_HEAD_SHA: a059f990f14ca7c4e4791352427bb9d2195406ef
-  CANDIDATE_TREE_SHA: 8e368c116d9edda2110d4a3e365a5029deddbc3d
-  CANDIDATE_AHEAD_COUNT: "78"
-  COMPACT_QA_RUN_ID: "31868498503"
+  CANDIDATE_HEAD_SHA: 1077473cb430b2fa61b9943ecbd443ddd519f9df
+  CANDIDATE_TREE_SHA: 463a330e898f4482fe5a5d4c26830b6a034c9410
+  CANDIDATE_AHEAD_COUNT: "79"
+  COMPACT_QA_RUN_ID: "31868907564"
   CONTROLLER_BRANCH: ops/pr663-compact-v2-isolated-qa-preview-20260815
-  EVIDENCE_PAYMENT_RUN_ID: "31868498511"
-  RELEASE_CLASSIFICATION_RUN_ID: "31868497404"
+  EVIDENCE_PAYMENT_RUN_ID: "31868907714"
+  RELEASE_CLASSIFICATION_RUN_ID: "31868906590"
   EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
   EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
   FORBIDDEN_PROD_REF: jnpoxvalyjtdghnperyu
@@ -445,6 +445,14 @@ jobs:
           test "$(git rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
           git diff --quiet
 
+      - name: Revalidate PR head after build and before deployment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(gh api repos/ghuser29384/Website2/pulls/663 --jq '.head.sha')" = "$CANDIDATE_HEAD_SHA"
+
       - name: Deploy the prebuilt candidate once as an unaliased Preview
         id: deploy
         shell: bash
@@ -533,8 +541,10 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://hvmxfjjbdcgjjudmthdz.supabase.co
           UAT712_EVIDENCE_DIR: ../evidence
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          test "$(gh api repos/ghuser29384/Website2/pulls/663 --jq '.head.sha')" = "$CANDIDATE_HEAD_SHA"
           deployment_id="$(node --input-type=module <<'NODE'
           const hostname = new URL(process.env.COMPACT_UAT_BASE_URL).hostname;
           const response = await fetch(`https://api.vercel.com/v13/deployments/${encodeURIComponent(hostname)}?teamId=${process.env.VERCEL_ORG_ID}`, {
@@ -610,9 +620,11 @@ jobs:
         id: fixtures
         shell: bash
         env:
+          GH_TOKEN: ${{ github.token }}
           QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
         run: |
           set -euo pipefail
+          test "$(gh api repos/ghuser29384/Website2/pulls/663 --jq '.head.sha')" = "$CANDIDATE_HEAD_SHA"
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 \
             --file controller/ops/pr663-uat712/schema-absence.sql \
             > "$RUNNER_TEMP/schema-absence-immediate.txt"
