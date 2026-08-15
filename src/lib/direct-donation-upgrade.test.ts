@@ -356,6 +356,20 @@ test("the checkout is direct to the frozen Every.org recipient with exact amount
   assert.equal(url.searchParams.get("partner_donation_id"), obligation().partner_donation_id);
   assert.ok(url.searchParams.get("partner_metadata"));
   assert.equal(url.hash, "#donate");
+  assert.throws(() =>
+    buildDirectDonationUpgradeCheckoutUrl({
+      obligation: obligation(),
+      config,
+      returnPath: "https://attacker.invalid/capture",
+    }),
+  );
+  assert.throws(() =>
+    buildDirectDonationUpgradeCheckoutUrl({
+      obligation: obligation(),
+      config,
+      returnPath: "//attacker.invalid/capture",
+    }),
+  );
 });
 
 test("an exact Every.org webhook is valid and separates gross from net", () => {

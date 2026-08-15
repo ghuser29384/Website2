@@ -937,6 +937,8 @@ export function buildDirectDonationUpgradeCheckoutUrl(input: {
   obligation: DirectDonationUpgradeObligationRow;
   config: DirectDonationUpgradeConfig;
   siteUrl?: string;
+  returnPath?: string;
+  description?: string;
 }) {
   if (!input.config.readyForCheckout || !input.config.environment) {
     throw new Error(input.config.blockers[0] ?? "Direct Donation Upgrade checkout is unavailable.");
@@ -953,7 +955,17 @@ export function buildDirectDonationUpgradeCheckoutUrl(input: {
     host,
   );
   const siteUrl = input.siteUrl ?? getSiteUrl();
-  const returnPath = `/donation-upgrades/${input.obligation.offer_id}`;
+  const returnPath =
+    input.returnPath ?? `/donation-upgrades/${input.obligation.offer_id}`;
+  const returnUrl = new URL(returnPath, siteUrl);
+  if (
+    !returnPath.startsWith("/") ||
+    returnPath.startsWith("//") ||
+    returnPath.includes("\\") ||
+    returnUrl.origin !== new URL(siteUrl).origin
+  ) {
+    throw new Error("The Donation Upgrade return path must stay on this site.");
+  }
   const metadata = createDirectDonationUpgradePartnerMetadata({
     obligationId: input.obligation.id,
     offerId: input.obligation.offer_id,
@@ -971,7 +983,8 @@ export function buildDirectDonationUpgradeCheckoutUrl(input: {
   url.searchParams.set("frequency", "ONCE");
   url.searchParams.set(
     "description",
-    "Complete this direct Donation Upgrade obligation. Moral Trade records completion only after the exact Every.org partner webhook.",
+    input.description ??
+      "Complete this direct Donation Upgrade obligation. Moral Trade records completion only after the exact Every.org partner webhook.",
   );
   url.searchParams.set(
     "success_url",

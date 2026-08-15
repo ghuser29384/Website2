@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { isCronRequestAuthorized } from "@/lib/cron";
 import { getDirectDonationUpgradeConfig } from "@/lib/direct-donation-upgrade";
+import { getDirectSpendingUpgradeConfig } from "@/lib/direct-spending-upgrade";
 import { createServiceClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -13,6 +14,7 @@ async function processDonationUpgrades(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const config = getDirectDonationUpgradeConfig();
+  const spendingConfig = getDirectSpendingUpgradeConfig();
   if (!config.readyForCommitments || !config.environment) {
     return NextResponse.json({
       processed: false,
@@ -34,7 +36,37 @@ async function processDonationUpgrades(request: Request) {
     return NextResponse.json({ error: "Lifecycle processing failed." }, { status: 500 });
   }
 
-  return NextResponse.json({ processed: true, environment: config.environment, result: data });
+  let spendingResult: unknown = null;
+  if (spendingConfig.readyForCheckout) {
+    const { data: spendingData, error: spendingError } = await (
+      createServiceClient() as any
+    ).rpc("run_direct_spending_upgrade_lifecycle", {
+      p_now: now,
+      p_expected_environment: config.environment,
+    });
+    if (spendingError) {
+      console.error("[direct-spending-upgrade-lifecycle] transaction failed", {
+        message: spendingError.message,
+        environment: config.environment,
+      });
+      return NextResponse.json(
+        { error: "Spending Upgrade lifecycle processing failed." },
+        { status: 500 },
+      );
+    }
+    spendingResult = spendingData;
+  }
+
+  const response = {
+    processed: true,
+    environment: config.environment,
+    result: data,
+  };
+  return NextResponse.json(
+    spendingConfig.requestedEnabled
+      ? { ...response, spendingUpgrade: spendingResult }
+      : response,
+  );
 }
 
 export async function GET(request: Request) {

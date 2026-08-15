@@ -1,0 +1,193 @@
+name: Spending Upgrade rollback-only isolated QA
+
+on:
+  pull_request:
+    branches:
+      - integration/direct-donation-upgrade-current-main-20260807
+      - main
+    paths:
+      - ".github/workflows/direct-spending-upgrade-qa.yml"
+      - "supabase/migrations/20260814150806_direct_spending_upgrade_subtype.sql"
+      - "supabase/tests/direct_spending_upgrade.sql"
+  workflow_dispatch:
+    inputs:
+      confirm_target:
+        description: Type the exact MoralTrade QA project ref
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: direct-donation-upgrade-stateful-isolated-qa
+  cancel-in-progress: false
+
+jobs:
+  rollback-only-qa:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      EXPECTED_QA_DATABASE: postgres
+      EXPECTED_QA_DATABASE_USER: postgres
+      EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
+      EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
+      EXPECTED_STACK_BASE_SHA: 106f9781cf13f75af31594ed79deef89318a87b7
+      STACK_BASE_BRANCH: integration/direct-donation-upgrade-current-main-20260807
+      QA_SUPABASE_DB_URL: ${{ secrets.QA_SUPABASE_DB_URL }}
+      PGSSLMODE: require
+      MIGRATION: supabase/migrations/20260814150806_direct_spending_upgrade_subtype.sql
+      REGRESSION: supabase/tests/direct_spending_upgrade.sql
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install --yes postgresql-client > /dev/null
+
+      - name: Validate exact target, stacked source, and rollback harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QA_SUPABASE_DB_URL:-}"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            test "${{ inputs.confirm_target }}" = "$EXPECTED_QA_REF"
+          fi
+          python3 - <<'PY'
+          import os
+          from urllib.parse import parse_qs, urlparse
+
+          parsed = urlparse(os.environ["QA_SUPABASE_DB_URL"])
+          expected_ref = os.environ["EXPECTED_QA_REF"]
+          ssl_modes = parse_qs(parsed.query).get("sslmode")
+          tls_required = (
+              ssl_modes == ["require"]
+              or (not ssl_modes and os.environ.get("PGSSLMODE") == "require")
+          )
+          valid = (
+              parsed.scheme in {"postgres", "postgresql"}
+              and parsed.username == f"postgres.{expected_ref}"
+              and parsed.hostname == os.environ["EXPECTED_QA_POOLER_HOST"]
+              and parsed.port == 5432
+              and parsed.path == f"/{os.environ['EXPECTED_QA_DATABASE']}"
+              and tls_required
+              and bool(parsed.password)
+          )
+          if not valid:
+              raise SystemExit("Refusing a database URL outside the exact TLS-only MoralTrade QA target.")
+          PY
+          git fetch --no-tags origin "$STACK_BASE_BRANCH"
+          fetched_base="$(git rev-parse "origin/$STACK_BASE_BRANCH")"
+          test "$fetched_base" = "$EXPECTED_STACK_BASE_SHA"
+          test "$(git merge-base "$fetched_base" HEAD)" = "$fetched_base"
+          test "$(grep -c '^begin;$' "$REGRESSION")" = "1"
+          test "$(grep -c '^rollback;$' "$REGRESSION")" = "1"
+          ! grep -Fq 'commit;' "$REGRESSION"
+          ! grep -Fq 'supabase_migrations.schema_migrations' "$MIGRATION"
+          git diff --check
+          {
+            printf 'stack_base_sha=%s\n' "$fetched_base"
+            printf 'head=%s\n' "$(git rev-parse HEAD)"
+            printf 'migration_blob=%s\n' "$(git hash-object "$MIGRATION")"
+            printf 'regression_blob=%s\n' "$(git hash-object "$REGRESSION")"
+          } | tee spending-upgrade-qa-exact-source.txt
+          sha256sum "$MIGRATION" "$REGRESSION" | tee spending-upgrade-qa-sql-sha256.txt
+
+      - name: Verify TLS QA session and absence of candidate schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --command '\conninfo' \
+            | tee spending-upgrade-qa-conninfo.txt
+          grep -Fq 'SSL connection' spending-upgrade-qa-conninfo.txt
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee spending-upgrade-qa-prestate.txt
+          select current_database() || '|' || current_user;
+          select count(*)
+          from supabase_migrations.schema_migrations
+          where version = '20260814150806';
+          select coalesce(to_regclass('public.direct_spending_upgrade_offers')::text, '');
+          select count(*)
+          from public.profiles
+          where id in (
+            'e1000000-0000-4000-8000-000000000001',
+            'e2000000-0000-4000-8000-000000000002',
+            'e3000000-0000-4000-8000-000000000003',
+            'e4000000-0000-4000-8000-000000000004',
+            'e5000000-0000-4000-8000-000000000005'
+          );
+          SQL
+          mapfile -t rows < spending-upgrade-qa-prestate.txt
+          test "${rows[0]}" = "$EXPECTED_QA_DATABASE|$EXPECTED_QA_DATABASE_USER"
+          test "${rows[1]}" = "0"
+          test -z "${rows[2]}"
+          printf '%s\n' "${rows[3]}" > spending-upgrade-qa-profile-precount.txt
+
+      - name: Compile migration and execute state matrix in one rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --set ON_ERROR_STOP=1 <<SQL \
+            2>&1 | tee spending-upgrade-qa-rollback.log
+          begin;
+          select pg_advisory_xact_lock(
+            hashtextextended('moraltrade:direct-spending-upgrade-rollback-only-qa', 0)
+          );
+          \i $MIGRATION
+          \i $REGRESSION
+          SQL
+          grep -Fq 'direct_spending_upgrade rollback-only QA passed' \
+            spending-upgrade-qa-rollback.log
+          grep -Fq 'ROLLBACK' spending-upgrade-qa-rollback.log
+
+      - name: Prove zero candidate schema, history, and fixture residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="$(cat spending-upgrade-qa-profile-precount.txt)"
+          psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
+            --set ON_ERROR_STOP=1 <<'SQL' | tee spending-upgrade-qa-poststate.txt
+          select count(*)
+          from supabase_migrations.schema_migrations
+          where version = '20260814150806';
+          select coalesce(to_regclass('public.direct_spending_upgrade_offers')::text, '');
+          select count(*)
+          from pg_proc procedure
+          join pg_namespace namespace on namespace.oid = procedure.pronamespace
+          where namespace.nspname = 'public'
+            and procedure.proname like '%direct_spending_upgrade%';
+          select count(*)
+          from public.profiles
+          where id in (
+            'e1000000-0000-4000-8000-000000000001',
+            'e2000000-0000-4000-8000-000000000002',
+            'e3000000-0000-4000-8000-000000000003',
+            'e4000000-0000-4000-8000-000000000004',
+            'e5000000-0000-4000-8000-000000000005'
+          );
+          SQL
+          mapfile -t rows < spending-upgrade-qa-poststate.txt
+          test "${rows[0]}" = "0"
+          test -z "${rows[1]}"
+          test "${rows[2]}" = "0"
+          test "${rows[3]}" = "$before"
+
+      - name: Upload rollback-only evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: direct-spending-upgrade-rollback-only-qa-${{ github.run_id }}
+          path: |
+            spending-upgrade-qa-*.txt
+            spending-upgrade-qa-*.log
+          if-no-files-found: warn
+          retention-days: 30

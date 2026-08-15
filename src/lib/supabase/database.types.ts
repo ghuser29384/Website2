@@ -11058,8 +11058,74 @@ export interface Database {
         Update: SupabaseMoralTradeOperationalUpdate;
         Relationships: [];
       };
+      direct_spending_upgrade_baselines: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      direct_spending_upgrade_offers: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      direct_spending_upgrade_candidates: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      direct_spending_upgrade_proposals: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      direct_spending_upgrade_evidence_records: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      direct_spending_upgrade_review_assignments: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      direct_spending_upgrade_review_decisions: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      direct_spending_upgrade_obligations: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      direct_spending_upgrade_impact_credits: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
+      direct_spending_upgrade_audit_events: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: SupabaseMoralTradeOperationalInsert;
+        Update: SupabaseMoralTradeOperationalUpdate;
+        Relationships: [];
+      };
     };
     Views: {
+      direct_spending_upgrade_public_offers: {
+        Row: SupabaseMoralTradeOperationalRow;
+        Insert: never;
+        Update: never;
+        Relationships: [];
+      };
       public_profile_cards_v1: {
         Row: {
           id: string;
@@ -11140,6 +11206,116 @@ export interface Database {
       };
     };
     Functions: {
+      create_direct_spending_upgrade_offer: {
+        Args: {
+          p_creator_profile_id: string;
+          p_environment: string;
+          p_category: string;
+          p_private_merchant_label: string;
+          p_private_description: string;
+          p_planned_spend_amount_cents: number;
+          p_creator_diversion_amount_cents: number;
+          p_planned_action: string;
+          p_evidence_payload: Json;
+          p_evidence_hash: string;
+          p_evidence_captured_at: string;
+          p_baseline_fingerprint: string;
+          p_matcher_amount_cents: number;
+          p_match_deadline_at: string;
+          p_privacy_mode: string;
+          p_upgraded_recipient: Json;
+          p_upgraded_recipient_hash: string;
+          p_terms_hash: string;
+          p_nonessential_attested: boolean;
+          p_no_material_harm_attested: boolean;
+          p_preexisting_plan_attested: boolean;
+          p_not_already_cancelled_attested: boolean;
+          p_available_funds_attested: boolean;
+          p_not_otherwise_donating_attested: boolean;
+        };
+        Returns: Json;
+      };
+      join_direct_spending_upgrade_offer: {
+        Args: {
+          p_actor_profile_id: string;
+          p_offer_id: string;
+          p_commitment_version: string;
+          p_expected_environment: string;
+        };
+        Returns: Json;
+      };
+      propose_direct_spending_upgrade_terms: {
+        Args: {
+          p_actor_profile_id: string;
+          p_offer_id: string;
+          p_creator_diversion_amount_cents: number;
+          p_matcher_amount_cents: number;
+          p_message: string;
+          p_commitment_version: string;
+          p_expected_environment: string;
+        };
+        Returns: Json;
+      };
+      accept_direct_spending_upgrade_proposal: {
+        Args: {
+          p_actor_profile_id: string;
+          p_proposal_id: string;
+          p_new_terms_hash: string;
+          p_expected_environment: string;
+        };
+        Returns: Json;
+      };
+      submit_direct_spending_upgrade_change_evidence: {
+        Args: {
+          p_actor_profile_id: string;
+          p_offer_id: string;
+          p_private_payload: Json;
+          p_evidence_hash: string;
+          p_captured_at: string;
+          p_idempotency_key: string;
+          p_expected_environment: string;
+        };
+        Returns: Json;
+      };
+      start_direct_spending_upgrade_checkout: {
+        Args: {
+          p_actor_profile_id: string;
+          p_obligation_id: string;
+          p_expected_environment: string;
+        };
+        Returns: Json;
+      };
+      complete_direct_spending_upgrade_obligation: {
+        Args: {
+          p_obligation_id: string;
+          p_valid: boolean;
+          p_failure_code: string;
+          p_failure_message: string;
+          p_provider_charge_id_hash: string;
+          p_provider_payload_hash: string;
+          p_provider_gross_amount_cents: number | null;
+          p_provider_net_amount_cents: number | null;
+          p_provider_currency: string;
+          p_provider_nonprofit_slug: string;
+          p_provider_nonprofit_ein: string;
+          p_provider_donation_date: string | null;
+          p_provider_payment_method: string;
+          p_expected_environment: string;
+        };
+        Returns: Json;
+      };
+      run_direct_spending_upgrade_lifecycle: {
+        Args: { p_now: string; p_expected_environment: string };
+        Returns: Json;
+      };
+      cancel_direct_spending_upgrade_offer: {
+        Args: {
+          p_actor_profile_id: string;
+          p_offer_id: string;
+          p_expected_environment: string;
+        };
+        Returns: Json;
+      };
       normalize_profile_username_v1: {
         Args: { p_username: string };
         Returns: string;

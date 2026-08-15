@@ -14,6 +14,7 @@ import {
   type DirectDonationUpgradeObligationRow,
   type DirectDonationUpgradeOfferRow,
 } from "@/lib/direct-donation-upgrade";
+import { getDirectSpendingUpgradeConfig } from "@/lib/direct-spending-upgrade";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 import { createServiceClient } from "@/lib/supabase/server";
 
@@ -72,6 +73,100 @@ async function loadSnapshot(environment: "staging" | "live" | null) {
   };
 }
 
+async function loadSpendingSnapshot(
+  environment: "staging" | "live" | null,
+  enabled: boolean,
+) {
+  if (!environment || !enabled) {
+    return {
+      offers: [] as any[],
+      baselines: [] as any[],
+      evidence: [] as any[],
+      assignments: [] as any[],
+      obligations: [] as any[],
+      credits: [] as any[],
+      errors: [] as string[],
+    };
+  }
+  const supabase = createServiceClient() as any;
+  const offers = await supabase
+    .from("direct_spending_upgrade_offers")
+    .select(
+      "id, baseline_id, status, creator_diversion_amount_cents, matcher_amount_cents, upgraded_recipient, spending_change_review_status, failure_code, failure_message, created_at",
+    )
+    .eq("environment", environment)
+    .order("created_at", { ascending: false })
+    .limit(100);
+  const offerIds = (offers.data ?? []).map((row: any) => String(row.id));
+  const baselineIds = [
+    ...new Set((offers.data ?? []).map((row: any) => String(row.baseline_id))),
+  ];
+  if (!offerIds.length) {
+    return {
+      offers: [],
+      baselines: [] as any[],
+      evidence: [] as any[],
+      assignments: [] as any[],
+      obligations: [] as any[],
+      credits: [] as any[],
+      errors: offers.error?.message ? [offers.error.message] : [],
+    };
+  }
+  const [baselines, evidence, assignments, obligations, credits] =
+    await Promise.all([
+      supabase
+        .from("direct_spending_upgrade_baselines")
+        .select(
+          "id, category, planned_action, planned_spend_amount_cents, review_status, reviewed_at, failure_code, failure_message, created_at",
+        )
+        .in("id", baselineIds)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabase
+        .from("direct_spending_upgrade_evidence_records")
+        .select("id, offer_id, evidence_kind, status, captured_at, created_at")
+        .in("offer_id", offerIds)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabase
+        .from("direct_spending_upgrade_review_assignments")
+        .select(
+          "id, baseline_id, offer_id, review_scope, reviewer_profile_id, status, authority_version, conflict_attested_at, assigned_at, completed_at",
+        )
+        .in("baseline_id", baselineIds)
+        .order("assigned_at", { ascending: false })
+        .limit(100),
+      supabase
+        .from("direct_spending_upgrade_obligations")
+        .select(
+          "id, offer_id, participant_role, obligation_kind, expected_recipient, expected_amount_cents, status, due_at, provider_gross_amount_cents, provider_net_amount_cents, failure_code, failure_message",
+        )
+        .in("offer_id", offerIds)
+        .order("created_at", { ascending: false })
+        .limit(100),
+      supabase
+        .from("direct_spending_upgrade_impact_credits")
+        .select(
+          "id, offer_id, obligation_id, credit_kind, verified_gross_amount_cents, verified_net_amount_cents, converted_spending_gross_amount_cents, incremental_gross_amount_cents, evidence_decision_id, verified_at",
+        )
+        .in("offer_id", offerIds)
+        .order("verified_at", { ascending: false })
+        .limit(100),
+    ]);
+  const results = [offers, baselines, evidence, assignments, obligations, credits];
+  return {
+    offers: offers.data ?? [],
+    baselines: baselines.data ?? [],
+    evidence: evidence.data ?? [],
+    assignments: assignments.data ?? [],
+    obligations: obligations.data ?? [],
+    credits: credits.data ?? [],
+    errors: results
+      .map((result) => result.error?.message)
+      .filter((message): message is string => Boolean(message)),
+  };
+}
+
 export default async function DonationUpgradeAdminPage() {
   const [viewer, security] = await Promise.all([
     requireViewer("/admin/donation-upgrades"),
@@ -79,7 +174,16 @@ export default async function DonationUpgradeAdminPage() {
   ]);
   const access = evaluateAdminOperatorAccess({ email: viewer.authUser.email, mfaSummary: security });
   const config = getDirectDonationUpgradeConfig();
-  const snapshot = access.allowed ? await loadSnapshot(config.environment) : null;
+  const spendingConfig = getDirectSpendingUpgradeConfig();
+  const [snapshot, spendingSnapshot] = access.allowed
+    ? await Promise.all([
+        loadSnapshot(config.environment),
+        loadSpendingSnapshot(
+          config.environment,
+          spendingConfig.requestedEnabled,
+        ),
+      ])
+    : [null, null];
   const needsReview = snapshot?.offers.filter((offer) => offer.status === "needs_review") ?? [];
   const defaulted = snapshot?.offers.filter((offer) => offer.status === "defaulted") ?? [];
   const openObligations = snapshot?.obligations.filter((obligation) =>
@@ -192,6 +296,106 @@ export default async function DonationUpgradeAdminPage() {
                   </article>
                 ))}
               </div>
+
+              {spendingConfig.requestedEnabled && spendingSnapshot ? (
+                <>
+                  <SectionHeader
+                    eyebrow="Spending subtype · read only"
+                    id="spending-upgrade-review-heading"
+                    title="Inspect coarse review states without claiming reviewer authority."
+                  >
+                    This operator page deliberately exposes no merchant, order,
+                    bill, baseline payload, cancellation payload, fingerprint,
+                    reviewer note, provider partner ID, charge hash, or payload
+                    hash. It has no accept or reject controls. Only an explicitly
+                    assigned scoped reviewer may decide evidence; ordinary admin
+                    access is not described as independent review.
+                  </SectionHeader>
+                  {spendingSnapshot.errors.length ? (
+                    <div className="status-banner status-banner-error">
+                      {spendingSnapshot.errors[0]}
+                    </div>
+                  ) : null}
+                  <div className="pilot-metric-grid">
+                    <article className="panel data-card">
+                      <p className="detail-kicker">Spending offers</p>
+                      <h2>{spendingSnapshot.offers.length}</h2>
+                    </article>
+                    <article className="panel data-card">
+                      <p className="detail-kicker">Baseline review required</p>
+                      <h2>
+                        {spendingSnapshot.baselines.filter((row: any) =>
+                          ["submitted", "review_required", "disputed"].includes(
+                            String(row.review_status),
+                          ),
+                        ).length}
+                      </h2>
+                    </article>
+                    <article className="panel data-card">
+                      <p className="detail-kicker">Spending evidence review required</p>
+                      <h2>
+                        {spendingSnapshot.evidence.filter((row: any) =>
+                          ["submitted", "review_required", "disputed"].includes(
+                            String(row.status),
+                          ),
+                        ).length}
+                      </h2>
+                    </article>
+                    <article className="panel data-card">
+                      <p className="detail-kicker">Scoped assignments</p>
+                      <h2>{spendingSnapshot.assignments.length}</h2>
+                    </article>
+                    <article className="panel data-card">
+                      <p className="detail-kicker">Direct obligations</p>
+                      <h2>{spendingSnapshot.obligations.length}</h2>
+                    </article>
+                    <article className="panel data-card">
+                      <p className="detail-kicker">Separated credits</p>
+                      <h2>{spendingSnapshot.credits.length}</h2>
+                    </article>
+                  </div>
+                  <div className="data-grid">
+                    {spendingSnapshot.offers
+                      .filter((row: any) =>
+                        ["review_required", "needs_review"].includes(
+                          String(row.status),
+                        ),
+                      )
+                      .map((row: any) => {
+                        const baseline = spendingSnapshot.baselines.find(
+                          (candidate: any) => candidate.id === row.baseline_id,
+                        );
+                        return (
+                          <article className="panel data-card" key={`spending:${row.id}`}>
+                            <p className="detail-kicker">
+                              {statusLabel(row.status)} · {statusLabel(baseline?.category)}
+                            </p>
+                            <h3>{row.upgraded_recipient?.name ?? "Frozen Every.org recipient"}</h3>
+                            <p>
+                              Baseline {statusLabel(baseline?.review_status)};
+                              spending change {statusLabel(row.spending_change_review_status)}.
+                            </p>
+                            <Link
+                              className="button button-secondary"
+                              href={`/donation-upgrades/spending/${row.id}`}
+                            >
+                              Open participant-safe detail
+                            </Link>
+                          </article>
+                        );
+                      })}
+                    {!spendingSnapshot.offers.some((row: any) =>
+                      ["review_required", "needs_review"].includes(
+                        String(row.status),
+                      ),
+                    ) ? (
+                      <article className="panel data-card">
+                        <h3>No Spending Upgrade review states in this snapshot</h3>
+                      </article>
+                    ) : null}
+                  </div>
+                </>
+              ) : null}
             </>
           )}
         </section>

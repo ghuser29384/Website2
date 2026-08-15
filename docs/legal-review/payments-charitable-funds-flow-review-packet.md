@@ -95,6 +95,30 @@ Moral Trade must not:
 7. Does matching or conditional language create a donor benefit, quid pro quo, or commercial-co-venture issue?
 8. Must users be told that Moral Trade's impact-credit decision is separate from the receipt and the charity's use of funds?
 
+### Proposed Flow A subtype: Spending Upgrade
+
+The candidate may also present a prospective optional expense as the baseline for a Donation Upgrade. It does not represent that expense as an original charitable donation and does not invent an original nonprofit. Before any match, the candidate stores a private, versioned prospective-spending record. If the baseline is accepted by explicitly scoped evidence-review authority and a counterparty matches, the only funds flows are:
+
+```text
+Creator -> separate Every.org-hosted donation -> same upgraded nonprofit
+Matcher -> separate Every.org-hosted donation -> same upgraded nonprofit
+```
+
+No match creates no donation, checkout, purchase, or impact obligation. Moral Trade does not reimburse or pay the creator. The platform does not receive, combine, split, transfer, or re-donate either participant's funds.
+
+The candidate separates provider-verified donation fulfillment from private review of whether the optional expense was actually cancelled or reduced. Creator “converted spending” credit exists only after both facts pass. A provider-verified matcher donation may remain a factual incremental donation if creator evidence fails, but the whole offer is not displayed as completed.
+
+Counsel and Every.org should additionally determine:
+
+1. whether presenting a donation as conditional on abandoning a prospective optional purchase changes solicitation, donor-benefit, commercial-co-venture, advertising, or provider classification;
+2. whether the matching party's knowledge of the creator's promised cancellation could be treated as consideration or a quid pro quo despite no transfer between participants;
+3. which claims about “converted spending,” additionality, or counterfactual impact are legally supportable when the donation receipt proves only the donation;
+4. which private prospective-purchase and cancellation records may be collected, retained, reviewed, appealed, or deleted;
+5. whether reviewer assignment, conflicts, reason codes, and non-public evidence access require additional contractual, privacy, employment, or consumer-dispute controls; and
+6. whether the enumerated exclusions and anti-deprivation interface rules are sufficient for a bounded candidate, or whether further categories, age restrictions, limits, cooling-off periods, or warnings are required.
+
+This subtype remains disabled and is not approved for production merely because its migration, tests, or Preview UI pass.
+
 ## 5. Flow B: future conditional payments
 
 ### Preferred first native architecture: charge after success

@@ -20,6 +20,8 @@ import {
   formatDirectDonationUpgradeRedirectPercentage,
 } from "@/lib/direct-donation-upgrade-split";
 import { loadPublicDirectDonationUpgrades } from "@/lib/direct-donation-upgrade-data";
+import { getDirectSpendingUpgradeConfig } from "@/lib/direct-spending-upgrade";
+import { loadDirectSpendingUpgradePageData } from "@/lib/direct-spending-upgrade-data";
 import { getAbsoluteUrl } from "@/lib/seo";
 import { getPrimaryNavLinks, getTopbarActions } from "@/lib/site";
 
@@ -47,12 +49,28 @@ function statusLabel(value: unknown) {
 export default async function DonationUpgradesPage() {
   const viewer = await getViewer();
   const config = getDirectDonationUpgradeConfig();
-  const offers = config.environment
-    ? await loadPublicDirectDonationUpgrades({
-        environment: config.environment,
-        limit: 100,
-      })
-    : [];
+  const spendingConfig = getDirectSpendingUpgradeConfig();
+  const [offers, spendingData] = await Promise.all([
+    config.environment
+      ? loadPublicDirectDonationUpgrades({
+          environment: config.environment,
+          limit: 100,
+        })
+      : Promise.resolve([]),
+    spendingConfig.requestedEnabled && config.environment
+      ? loadDirectSpendingUpgradePageData({
+          viewerId: viewer?.authUser.id ?? null,
+          environment: config.environment,
+        })
+      : Promise.resolve({
+          publicOffers: [],
+          creatorOffers: [],
+          viewerCandidates: [],
+          viewerObligations: [],
+          viewerProposals: [],
+        }),
+  ]);
+  const spendingOffers = spendingData.publicOffers;
 
   return (
     <div className="page-shell">
@@ -70,8 +88,16 @@ export default async function DonationUpgradesPage() {
         />
         <PageHero
           eyebrow="Donation Upgrades"
-          title="Move part or all of a planned donation, then add to it."
-          description="Creators choose the exact percentage that moves from the original recipient. A counterparty can accept that split or propose a different percentage and matcher amount. After agreement, each donation leg goes directly through Every.org; Moral Trade holds no funds and records completion only after exact provider confirmation."
+          title={
+            spendingConfig.requestedEnabled
+              ? "Upgrade a planned donation or verified optional spending."
+              : "Move part or all of a planned donation, then add to it."
+          }
+          description={
+            spendingConfig.requestedEnabled
+              ? "Choose the factual baseline subtype first. Planned donations preserve their original recipient and split. Spending Upgrades use a private prospective optional-expense baseline and, only after review and matching, create two separate direct donations to one nonprofit. Moral Trade holds no funds."
+              : "Creators choose the exact percentage that moves from the original recipient. A counterparty can accept that split or propose a different percentage and matcher amount. After agreement, each donation leg goes directly through Every.org; Moral Trade holds no funds and records completion only after exact provider confirmation."
+          }
           actions={
             <>
               <Link
@@ -97,6 +123,14 @@ export default async function DonationUpgradesPage() {
             <strong>The direct Donation Upgrade rail is fail-closed.</strong>{" "}
             {config.blockers[0] ??
               "The Every.org integration is not configured."}
+          </div>
+        ) : null}
+        {spendingConfig.requestedEnabled &&
+        !spendingConfig.readyForCommitments ? (
+          <div className="status-banner status-banner-error" role="status">
+            <strong>The Spending Upgrade subtype is fail-closed.</strong>{" "}
+            {spendingConfig.blockers[0] ??
+              "Its private-baseline boundary is not configured."}
           </div>
         ) : null}
 
@@ -205,7 +239,11 @@ export default async function DonationUpgradesPage() {
             ))}
             {!offers.length ? (
               <article className="panel data-card">
-                <h3>No Donation Upgrades are currently listed</h3>
+                <h3>
+                  {spendingConfig.requestedEnabled
+                    ? "No planned-donation upgrades are currently listed"
+                    : "No Donation Upgrades are currently listed"}
+                </h3>
                 <p>
                   Create the first commitment after the direct Every.org rail
                   is configured.
@@ -215,8 +253,100 @@ export default async function DonationUpgradesPage() {
           </div>
         </section>
 
+        {spendingConfig.requestedEnabled ? (
+          <section
+            className="section section-subtle"
+            aria-labelledby="available-spending-upgrades-heading"
+          >
+            <SectionHeader
+              eyebrow="Spending Upgrade subtype"
+              id="available-spending-upgrades-heading"
+              title="Optional spending can open only after private baseline review."
+            >
+              These cards never publish a merchant, order number, bill, or
+              cancellation record. No-match terms create no donation or
+              purchase obligation. A matched offer creates exactly two direct
+              donations to the same nonprofit.
+            </SectionHeader>
+            <div className="data-grid">
+              {spendingOffers.map((offer) => (
+                <article className="panel data-card" key={`spending:${offer.id}`}>
+                  <div className="profile-card-head">
+                    <div>
+                      <p className="detail-kicker">
+                        Spending subtype · {statusLabel(offer.status)}
+                      </p>
+                      <h3>
+                        Convert {formatDirectDonationUpgradeUsd(
+                          offer.creator_diversion_amount_cents,
+                        )} and add {formatDirectDonationUpgradeUsd(
+                          offer.matcher_amount_cents,
+                        )} for {offer.upgraded_recipient.name}
+                      </h3>
+                    </div>
+                    <span className="badge">
+                      {offer.matcher_count} matcher
+                      {offer.matcher_count === 1 ? "" : "s"}
+                    </span>
+                  </div>
+                  <p>
+                    No match: no donation, checkout, spending, or purchase
+                    obligation. Match: creator and matcher donate separately to
+                    the same recipient.
+                  </p>
+                  <dl className="detail-grid">
+                    <div>
+                      <dt>Allowed category</dt>
+                      <dd>{statusLabel(offer.category)}</dd>
+                    </div>
+                    <div>
+                      <dt>Prospective spend</dt>
+                      <dd>{formatDirectDonationUpgradeUsd(offer.planned_spend_amount_cents)}</dd>
+                    </div>
+                    <div>
+                      <dt>Baseline review</dt>
+                      <dd>{statusLabel(offer.baseline_review_status)}</dd>
+                    </div>
+                    <div>
+                      <dt>Spending-change review</dt>
+                      <dd>{statusLabel(offer.spending_change_review_status)}</dd>
+                    </div>
+                    <div>
+                      <dt>Verified matcher increment</dt>
+                      <dd>{formatDirectDonationUpgradeUsd(offer.incremental_gross_amount_cents)}</dd>
+                    </div>
+                    <div>
+                      <dt>Verified converted spending</dt>
+                      <dd>{formatDirectDonationUpgradeUsd(offer.converted_spending_gross_amount_cents)}</dd>
+                    </div>
+                  </dl>
+                  <Link
+                    className="button button-primary"
+                    href={`/donation-upgrades/spending/${offer.id}`}
+                  >
+                    View exact Spending Upgrade terms
+                  </Link>
+                </article>
+              ))}
+              {!spendingOffers.length ? (
+                <article className="panel data-card">
+                  <h3>No reviewed Spending Upgrades are currently listed</h3>
+                  <p>
+                    New private baselines remain review required and invisible
+                    here until accepted by compatible scoped authority.
+                  </p>
+                </article>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+
         <section
-          className="section section-subtle"
+          className={
+            spendingConfig.requestedEnabled
+              ? "section section-white"
+              : "section section-subtle"
+          }
           aria-labelledby="upgrade-flow-heading"
         >
           <SectionHeader

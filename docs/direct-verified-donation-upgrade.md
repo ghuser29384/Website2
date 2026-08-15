@@ -14,12 +14,32 @@ Donation Upgrade lets a creator publish an existing donation plan and ask anothe
 
 The managed Stripe rail is a separate mechanism. Existing direct commitments cannot be converted to automatic charges without new participant consent.
 
+### Spending Upgrade subtype boundary
+
+`Spending Upgrade` is an additive subtype inside the same Donation Upgrade product family. It is not a new top-level Create mechanism and it does not reinterpret any planned-donation row, recipient, hash, obligation, or impact record.
+
+The create flow first asks which statement was already true:
+
+- the creator already planned to donate the money; or
+- the creator already planned an optional, nonessential expense.
+
+The second answer uses versioned sibling storage because a prospective expense has no original nonprofit. A Spending Upgrade therefore never invents an “original recipient.” Before matching, the creator freezes private prospective evidence, the allowed expense category, intended cancellation or reduction action, exact prospective spend, exact amount that would become a donation, matcher amount, upgraded Every.org recipient, deadline, privacy mode, and subtype-specific terms hash.
+
+An unmatched Spending Upgrade creates no donation obligation, no checkout, no purchase or spending obligation, and no impact credit. The creator is not required to complete the original purchase. After an accepted prospective-baseline review and a match, it creates exactly two direct Every.org donation obligations:
+
+1. the creator donates the amount released from the optional expense directly to the upgraded nonprofit; and
+2. the matcher makes an independent direct donation to that same nonprofit.
+
+Moral Trade does not receive, hold, combine, split, transfer, re-donate, or disburse either donation and does not pay the creator.
+
 ## Environment controls
 
 ```text
 DIRECT_DONATION_UPGRADES_ENABLED=false
 DIRECT_DONATION_UPGRADE_MODE=disabled
 DIRECT_DONATION_UPGRADE_QA_FIXTURES=false
+DIRECT_SPENDING_UPGRADES_ENABLED=false
+DIRECT_SPENDING_UPGRADE_FINGERPRINT_SECRET=
 EVERY_ORG_PUBLIC_API_KEY=
 EVERY_ORG_WEBHOOK_TOKEN=
 EVERY_ORG_WEBHOOK_PATH_SECRET=
@@ -35,6 +55,34 @@ Permitted modes:
 Internal, database, or rendered QA does not substitute for provider staging approval or a real hosted-checkout and authoritative-webhook exercise.
 
 The webhook path and metadata secrets must each contain at least 32 characters.
+
+Enabling the parent direct Donation Upgrade rail does not enable Spending Upgrade. `DIRECT_SPENDING_UPGRADES_ENABLED` defaults to `false`, and new prospective baselines additionally require a private HMAC fingerprint secret of at least 32 characters. The fingerprint supports duplicate-baseline exclusion without placing raw merchant or order details in a unique index. Existing matched obligations may still reconcile through the provider webhook if the fingerprint secret later becomes unavailable.
+
+## Spending Upgrade evidence and additionality
+
+Three facts are intentionally separate:
+
+1. **Donation fulfillment:** only the exact Every.org partner webhook can verify either direct donation.
+2. **Spending cancellation or reduction:** only the private scoped evidence process can decide whether the prospective expense was actually cancelled, reduced, or downgraded.
+3. **Converted-spending credit:** the creator receives one append-only converted-spending credit only after both the creator donation is provider-verified and the spending-change evidence decision is accepted.
+
+A provider-verified creator donation without accepted spending-change evidence remains a real donation, but it is not described or counted as converted spending. The matcher's provider-verified independent donation remains factual incremental giving even if creator evidence is later rejected, disputed, or unavailable. The whole offer cannot be `completed` unless both donations are verified and creator spending-change evidence is accepted.
+
+Prospective-baseline review and post-match spending-change review require an explicit, narrow assignment. The assignment confers evidence-only authority, not donation-verification authority. The creator, matcher, and a counteroffer participant for the same baseline cannot serve as reviewer. Ordinary admin access does not confer this authority and the admin console has no accept or reject controls. If compatible reviewer authority is unavailable, the record stays `review_required` or `unavailable`; the system does not invent automated verification or label an ordinary administrator independent.
+
+Decisions, credits, and audit events are append-only. Accepted decisions, webhook completions, and exact replays are idempotent. Concurrent match and counteroffer-acceptance paths lock the offer and can produce at most one winning matcher and one immutable successor.
+
+### Allowed and excluded spending
+
+The first candidate allows only:
+
+- an optional subscription or automatic renewal;
+- a cancellable optional reservation or service; or
+- a pending optional order, product upgrade, or service upgrade.
+
+Client choices, server validation, and database constraints reject food, meals, nutrition or hydration; medication, medical, mental-health, dental, reproductive-health or disability support; housing, utilities, insurance, essential household goods or transport; required education or work costs; debt, taxes, fines, legal or support obligations; child, elder, dependent or pet care; safety-related spending; substantial harm risk; and any donation financed through BNPL, a cash advance, payday lending, or new credit-card debt.
+
+The interface must not introduce sacrifice leaderboards, streaks, shame prompts, deprivation comparisons, or “skip a meal” framing. It must never publish merchant names, account or order identifiers, bills, baseline evidence, cancellation records, fingerprints, review notes, partner donation IDs, provider charge hashes, or webhook payload hashes.
 
 ## Recipient identity
 
@@ -206,3 +254,12 @@ Before staging or production activation:
 8. the rendered browser gate blocks and records every mutation request, Stripe or Every.org provider request, payment endpoint, Donation Upgrade webhook, and lifecycle-job request;
 9. the always-run residue proof shows zero synthetic offers, proposals, candidates, obligations, credits, notifications, restrictions, credibility events, audit events, mandates, payment attempts, and pooled obligations before cleanup; cleanup then proves the synthetic identity and all listed records are absent;
 10. a real Every.org staging checkout and authenticated partner-webhook verification pass before live mode. Internal fixtures and no-charge rendered QA do not satisfy this provider gate.
+
+The Spending Upgrade subtype adds these candidate-only gates before its separate flag may be enabled:
+
+1. the new migration compiles twice and its state-machine regression runs inside one rollback-only transaction; no QA or production migration is persistently applied by the candidate workflow;
+2. SQL proves unmatched cancellation and expiry produce zero obligations and credits, matching produces exactly two same-recipient direct donations, self-match and counterparty review fail, provider and evidence states are independent, and each credit is minted at most once;
+3. source tests prove the old planned-donation migration, field meanings, hashes, routes, and default-off behavior are unchanged;
+4. public and admin-safe projections are checked for forbidden private fields and ordinary roles retain no direct table or RPC access;
+5. authenticated rendered QA covers the baseline-source question, optional-spending form, exact-cent preview, exclusion copy, public-safe card, participant detail, and review-required accounting at `1440 × 900`, `1024 × 768`, and `390 × 844` without submitting a form or contacting a donation provider; and
+6. live Every.org configuration, real checkout, production migration, merge, and deployment remain outside this candidate.
