@@ -53,7 +53,14 @@ function extractNamedBlock(source, name, fromIndex = 0) {
 }
 
 function fieldNames(block) {
-  return [...block.matchAll(/^\s{10,}([a-z][a-z0-9_]*)(?:\?)?:/gm)]
+  // Supabase formats short Args objects on one line and longer table/Args
+  // objects across indented lines. Normalize only the one-line form so both
+  // layouts are compared without accidentally treating nested multiline
+  // object properties as top-level fields.
+  const normalizedBlock = block.includes("\n")
+    ? block
+    : `          ${block.replaceAll(";", "\n          ")}`;
+  return [...normalizedBlock.matchAll(/^\s{10,}([a-z][a-z0-9_]*)(?:\?)?:/gm)]
     .map((match) => match[1])
     .filter((value, index, values) => values.indexOf(value) === index)
     .sort();
