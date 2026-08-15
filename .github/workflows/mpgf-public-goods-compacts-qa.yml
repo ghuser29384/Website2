@@ -139,10 +139,10 @@ jobs:
             bash scripts/apply-supabase-migrations-in-order.sh \
               mpgf-compacts-clean-qa/post-baseline-migrations \
             2>&1 | tee mpgf-compacts-clean-qa/full-migration-chain.log
-          test "$(rg -c '^skipping_environment_bound_migration=' mpgf-compacts-clean-qa/full-migration-chain.log)" -eq 8
-          rg --fixed-strings --quiet 'applying_migration=20260813163052_mpgf_public_goods_compacts.sql' mpgf-compacts-clean-qa/full-migration-chain.log
-          rg --fixed-strings --quiet 'applying_migration=20260814031500_mpgf_public_goods_compacts_state_hardening.sql' mpgf-compacts-clean-qa/full-migration-chain.log
-          rg --fixed-strings --quiet 'skipped_environment_bound_migration_count=8' mpgf-compacts-clean-qa/full-migration-chain.log
+          test "$(grep -c '^skipping_environment_bound_migration=' mpgf-compacts-clean-qa/full-migration-chain.log)" -eq 8
+          grep --fixed-strings --quiet 'applying_migration=20260813163052_mpgf_public_goods_compacts.sql' mpgf-compacts-clean-qa/full-migration-chain.log
+          grep --fixed-strings --quiet 'applying_migration=20260814031500_mpgf_public_goods_compacts_state_hardening.sql' mpgf-compacts-clean-qa/full-migration-chain.log
+          grep --fixed-strings --quiet 'skipped_environment_bound_migration_count=8' mpgf-compacts-clean-qa/full-migration-chain.log
 
       - name: Generate and compare exact runtime database types
         shell: bash
