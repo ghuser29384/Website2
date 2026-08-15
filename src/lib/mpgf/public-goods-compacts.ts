@@ -23,7 +23,7 @@ export const MPGF_PUBLIC_GOODS_COMPACT_TERMS = {
 export const MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS = {
   optInOnly: true,
   randomAssignmentAllowed: false,
-  coreMarketplaceTaxed: false,
+  marketplaceCheckoutSurchargeEnabled: false,
   bindingOnlyAfterActivation: true,
   perProjectRefusalAllowedAfterActivation: false,
   exitProspectiveOnlyAfterActivation: true,

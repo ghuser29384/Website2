@@ -1,6 +1,8 @@
 # Transaction-based public-goods Compacts v2
 
-Compact v2 is a cause-specific, opt-in constitution. It is not a government jurisdiction: Moral Trade has no taxing authority, nobody is randomly assigned, and the ordinary marketplace is not taxed. One person may join multiple cause-area Compacts, but every joined Compact shares one aggregate monthly obligation.
+Compact v2 is a cause-specific, opt-in constitution. It is not a government jurisdiction: Moral Trade has no taxing authority, nobody is randomly assigned, and Compact v2 adds no platform-wide marketplace tax or checkout surcharge. A voluntarily joined Compact separately calculates one later aggregate monthly obligation from eligible prior-month Moral Trade net-settled outflow. One person may join multiple cause-area Compacts, but every joined Compact shares that one aggregate monthly obligation.
+
+For a Compact that is already active, accepting its frozen constitution is immediately binding only as a platform-governance commitment under that Compact. Joining does not itself create a legal debt, unilateral charge, payment authorization, enforceable liability, settlement, custody relationship, or collection.
 
 The frozen version is `mpgf-public-goods-compact/transaction-v2`. Future Flourishing, Animal Welfare, and Global Health use the same numeric rules:
 

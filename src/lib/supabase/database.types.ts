@@ -7848,7 +7848,7 @@ export interface Database {
           no_project_opt_out_rule: string;
           opt_in_only: boolean;
           random_assignment_allowed: boolean;
-          core_marketplace_taxed: boolean;
+          marketplace_checkout_surcharge_enabled: boolean;
           binding_only_after_activation: boolean;
           per_project_refusal_allowed_after_activation: boolean;
           exit_prospective_only_after_activation: boolean;
@@ -7889,7 +7889,7 @@ export interface Database {
           no_project_opt_out_rule: string;
           opt_in_only?: boolean;
           random_assignment_allowed?: boolean;
-          core_marketplace_taxed?: boolean;
+          marketplace_checkout_surcharge_enabled?: boolean;
           binding_only_after_activation?: boolean;
           per_project_refusal_allowed_after_activation?: boolean;
           exit_prospective_only_after_activation?: boolean;

@@ -97,13 +97,19 @@ export default async function MpgfCompactsPage() {
           </h2>
           <p>
             Moral Trade has no government taxing authority. Users are never randomly assigned,
-            and the ordinary marketplace remains untaxed. A member may choose multiple
-            cause-specific Compacts while all of them share one aggregate monthly obligation.
+            and Compact v2 adds no platform-wide marketplace tax or checkout surcharge. A
+            voluntarily joined Compact separately calculates one later aggregate monthly
+            obligation from eligible prior-month Moral Trade net-settled outflow. A member may
+            choose multiple cause-specific Compacts while all of them share that one aggregate
+            monthly obligation.
           </p>
           <p>
             <strong>Joining after activation:</strong> if a compact is already active, accepting its
-            frozen constitution makes the membership binding immediately. Exit remains
-            prospective under the published minimum-term and notice rules.
+            frozen constitution makes the membership immediately binding only as a
+            platform-governance commitment under the Compact. Joining does not itself create a
+            legal debt, unilateral charge, payment authorization, enforceable liability,
+            settlement, custody relationship, or collection. Exit remains prospective under the
+            published minimum-term and notice rules.
           </p>
         </div>
         <MpgfPublicGoodsCompacts state={state} viewerPresent={Boolean(viewer)} />

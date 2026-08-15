@@ -33,6 +33,18 @@ for (const viewport of viewports) {
     await expect(
       page.getByText("Moral Trade has no government taxing authority").first(),
     ).toBeVisible();
+    await expect(
+      page.getByText(/adds no platform-wide marketplace tax or checkout surcharge/),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/separately calculates one later aggregate monthly obligation/),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/binding only as a platform-governance commitment/),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/does not itself create a legal debt, unilateral charge, payment authorization/),
+    ).toBeVisible();
     await expect(page.getByText("one aggregate monthly obligation")).toBeVisible();
     await expect(page.getByText("Actual settlement governs")).toBeVisible();
     await expect(

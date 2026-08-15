@@ -24,7 +24,7 @@ create table public.mpgf_public_goods_compacts (
   no_project_opt_out_rule text not null check (length(no_project_opt_out_rule) > 20),
   opt_in_only boolean not null default true check (opt_in_only),
   random_assignment_allowed boolean not null default false check (not random_assignment_allowed),
-  core_marketplace_taxed boolean not null default false check (not core_marketplace_taxed),
+  marketplace_checkout_surcharge_enabled boolean not null default false check (not marketplace_checkout_surcharge_enabled),
   binding_only_after_activation boolean not null default true check (binding_only_after_activation),
   per_project_refusal_allowed_after_activation boolean not null default false check (not per_project_refusal_allowed_after_activation),
   exit_prospective_only_after_activation boolean not null default true check (exit_prospective_only_after_activation),

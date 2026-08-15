@@ -46,6 +46,8 @@ test("the frozen v2 constitution is encoded without a cap or self-reported spend
     "allocation_total_bps integer not null default 10000",
   ]) assert.ok(base.includes(invariant), `missing frozen invariant: ${invariant}`);
   assert.match(base, /constitution_version = 'mpgf-public-goods-compact\/transaction-v2'/);
+  assert.match(base, /marketplace_checkout_surcharge_enabled boolean not null default false check \(not marketplace_checkout_surcharge_enabled\)/);
+  assert.doesNotMatch(migration, /core_marketplace_taxed|coreMarketplaceTaxed/);
   assert.doesNotMatch(migration, /declared_eligible|self[-_ ]declared|monthly_contribution_cap/i);
 });
 

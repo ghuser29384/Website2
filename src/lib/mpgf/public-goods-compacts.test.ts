@@ -173,6 +173,7 @@ test("active compact exit is the later of the minimum term and notice period", (
 
 test("constitutional acknowledgements and no-money invariants remain explicit", () => {
   assert.deepEqual(parseMpgfPublicGoodsCompactAcknowledgements({ voluntaryChoice: true, exactConstitution: true, activationAndNoProjectOptOut: true, noPaymentMandate: true }), MPGF_PUBLIC_GOODS_COMPACT_REQUIRED_ACKNOWLEDGEMENTS);
+  assert.equal(MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.marketplaceCheckoutSurchargeEnabled, false);
   assert.equal(MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.moneyMovesOnJoin, false);
   assert.equal(MPGF_PUBLIC_GOODS_COMPACT_INVARIANTS.automaticCollectionEnabled, false);
   assert.equal(new Set(MPGF_PUBLIC_GOODS_COMPACT_FOUNDING_CHARTERS.map((row) => row.causeKey)).size, 3);

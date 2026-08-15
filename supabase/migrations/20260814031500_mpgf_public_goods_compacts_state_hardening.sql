@@ -1943,7 +1943,7 @@ begin
         'invariants', pg_catalog.jsonb_build_object(
           'optInOnly', compact_record.opt_in_only,
           'randomAssignmentAllowed', compact_record.random_assignment_allowed,
-          'coreMarketplaceTaxed', compact_record.core_marketplace_taxed,
+          'marketplaceCheckoutSurchargeEnabled', compact_record.marketplace_checkout_surcharge_enabled,
           'bindingOnlyAfterActivation', compact_record.binding_only_after_activation,
           'perProjectRefusalAllowedAfterActivation', compact_record.per_project_refusal_allowed_after_activation,
           'exitProspectiveOnlyAfterActivation', compact_record.exit_prospective_only_after_activation,
