@@ -17,7 +17,7 @@ const CREATOR_DETAIL_FIXTURE_ID = "e7000000-0000-4000-8000-000000000007";
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 const VIEWPORTS = [
-  { name: "desktop", width: 1440, height: 900 },
+  { name: "desktop", width: 1440, height: 1000 },
   { name: "tablet", width: 1024, height: 768 },
   { name: "mobile", width: 390, height: 844 },
 ] as const;

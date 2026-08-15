@@ -261,5 +261,5 @@ The Spending Upgrade subtype adds these candidate-only gates before its separate
 2. SQL proves unmatched cancellation and expiry produce zero obligations and credits, matching produces exactly two same-recipient direct donations, self-match and counterparty review fail, provider and evidence states are independent, and each credit is minted at most once;
 3. source tests prove the old planned-donation migration, field meanings, hashes, routes, and default-off behavior are unchanged;
 4. public and admin-safe projections are checked for forbidden private fields and ordinary roles retain no direct table or RPC access;
-5. authenticated rendered QA covers the baseline-source question, optional-spending form, exact-cent preview, exclusion copy, public-safe card, participant detail, and review-required accounting at `1440 × 900`, `1024 × 768`, and `390 × 844` without submitting a form or contacting a donation provider; and
+5. authenticated rendered QA covers the baseline-source question, optional-spending form, exact-cent preview, exclusion copy, public-safe card, participant detail, and review-required accounting at `1440 × 1000`, `1024 × 768`, and `390 × 844` without submitting a form or contacting a donation provider; and
 6. live Every.org configuration, real checkout, production migration, merge, and deployment remain outside this candidate.

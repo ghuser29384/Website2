@@ -33,6 +33,9 @@ const qaWorkflow = source(
 const renderedQaWorkflow = source(
   ".github/workflows/direct-spending-upgrade-rendered-qa.yml",
 );
+const renderedQaSpec = source(
+  "tests/direct-spending-upgrade-authenticated.spec.ts",
+);
 const createInterface = source(
   "src/components/create/create-interface-frame.tsx",
 );
@@ -61,6 +64,14 @@ test("Spending Upgrade is a separately disabled Donation Upgrade subtype", () =>
 });
 
 test("rendered no-service fixtures bind only to the successful QA Auth session", () => {
+  assert.match(
+    renderedQaSpec,
+    /const VIEWPORTS = \[\s*\{ name: "desktop", width: 1440, height: 1000 \},\s*\{ name: "tablet", width: 1024, height: 768 \},\s*\{ name: "mobile", width: 390, height: 844 \},\s*\] as const;/,
+  );
+  assert.doesNotMatch(
+    renderedQaSpec,
+    /\{ name: "desktop", width: 1440, height: 900 \}/,
+  );
   assert.match(
     renderedQaWorkflow,
     /direct-upgrade-rendered-creator@qa\.invalid[\s\S]*auth\.signInWithPassword/,
