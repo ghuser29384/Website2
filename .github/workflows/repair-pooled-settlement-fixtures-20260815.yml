@@ -1,0 +1,145 @@
+name: Repair pooled-settlement QA fixtures 20260815
+
+on:
+  push:
+    branches:
+      - qa/repair-pooled-settlement-fixtures-20260815
+    paths:
+      - .github/workflows/repair-pooled-settlement-fixtures-20260815.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repair-pooled-settlement-fixtures-20260815
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_BRANCH: qa/pooled-settlement-authenticated-e2e-20260814
+      EXPECTED_OLD_HEAD: d779bd573c1e65ffe340d9b0be87f4907c5bad33
+      FEATURE_HEAD: 9c4363e5e6713163df5b7a8b51981af585d2f0a9
+    steps:
+      - name: Check out exact target branch
+        uses: actions/checkout@v4
+        with:
+          ref: qa/pooled-settlement-authenticated-e2e-20260814
+          fetch-depth: 0
+
+      - name: Verify target identity before repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_OLD_HEAD"
+          test "$(git rev-parse HEAD^)" = "$FEATURE_HEAD"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$EXPECTED_OLD_HEAD"
+
+      - name: Apply narrow fixture and cleanup corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text()
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one match, found {count}")
+              file.write_text(text.replace(old, new, 1))
+
+          harness = ".github/scripts/pooled-settlement-qa-e2e.mjs"
+          replace_once(
+              harness,
+              '''    verification: "Synthetic QA evidence only",
+              duration: "One day",
+              trust_level: 1,
+          ''',
+              '''    verification: "Synthetic QA evidence only",
+              duration: "One day",
+              no_trade_baseline: "No reciprocal action without verified settlement.",
+              exit_conditions: "Only before verified funding.",
+              maximum_burden: "Synthetic QA only; no production effect.",
+              privacy_scope: "Participants and operator only",
+              trust_level: 1,
+          ''',
+          )
+          replace_once(
+              harness,
+              '''delete from public.agreements where id = any(${agreementIds});
+          delete from public.offers where id = any(${offerIds});
+          commit;
+          ''',
+              '''delete from public.agreements where id = any(${agreementIds});
+          delete from public.offers where id = any(${offerIds});
+          delete from moral_trade_private.person_accounts where profile_id = any(${userIds});
+          commit;
+          ''',
+          )
+          replace_once(
+              harness,
+              '''  if (createdAgreementIds.length || createdObligationIds.length) runCleanupSql();
+          ''',
+              '''  if (createdAgreementIds.length || createdObligationIds.length || createdUserIds.length) runCleanupSql();
+          ''',
+          )
+
+          tests = ".github/scripts/pooled-settlement-qa-e2e.test.mjs"
+          replace_once(
+              tests,
+              '''  assert.match(harness, /where id = any\\(\\$\\{obligationIds\\}\\)/);
+            assert.match(harness, /databaseUrlTargetsProject/);
+          ''',
+              '''  assert.match(harness, /where id = any\\(\\$\\{obligationIds\\}\\)/);
+            assert.match(harness, /no_trade_baseline: "No reciprocal action without verified settlement\\."/);
+            assert.match(harness, /exit_conditions: "Only before verified funding\\."/);
+            assert.match(harness, /maximum_burden: "Synthetic QA only; no production effect\\."/);
+            assert.match(harness, /privacy_scope: "Participants and operator only"/);
+            assert.match(harness, /delete from moral_trade_private\\.person_accounts where profile_id = any\\(\\$\\{userIds\\}\\)/);
+            assert.match(harness, /createdUserIds\\.length\\) runCleanupSql\\(\\)/);
+            assert.match(harness, /databaseUrlTargetsProject/);
+          ''',
+          )
+          PY
+
+      - name: Validate corrected harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check .github/scripts/pooled-settlement-qa-e2e.mjs
+          node --test .github/scripts/pooled-settlement-qa-e2e.test.mjs
+          git diff --check
+          actual="$(git diff --name-only | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/pooled-settlement-qa-e2e.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.test.mjs' | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+
+      - name: Rewrite target as one corrected commit on the validated parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            .github/scripts/pooled-settlement-qa-e2e.mjs \
+            .github/scripts/pooled-settlement-qa-e2e.test.mjs
+          tree="$(git write-tree)"
+          new_commit="$(printf '%s\n' 'Repair QA fixture completeness and synthetic-user cleanup' | git commit-tree "$tree" -p "$FEATURE_HEAD")"
+          test "$(git rev-parse "${new_commit}^")" = "$FEATURE_HEAD"
+          actual="$(git diff --name-only "$FEATURE_HEAD" "$new_commit" | LC_ALL=C sort)"
+          expected="$(printf '%s\n' \
+            '.github/scripts/pooled-settlement-qa-contract.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.mjs' \
+            '.github/scripts/pooled-settlement-qa-e2e.test.mjs' \
+            '.github/workflows/pooled-settlement-authenticated-e2e-20260814.yml' | LC_ALL=C sort)"
+          test "$actual" = "$expected"
+          test "$(git ls-remote origin "refs/heads/$TARGET_BRANCH" | cut -f1)" = "$EXPECTED_OLD_HEAD"
+          git push \
+            --force-with-lease="refs/heads/$TARGET_BRANCH:$EXPECTED_OLD_HEAD" \
+            origin "$new_commit:refs/heads/$TARGET_BRANCH"
+          echo "Corrected target head: $new_commit"
