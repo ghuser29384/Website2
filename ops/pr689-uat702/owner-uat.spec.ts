@@ -34,6 +34,7 @@ type Observation = {
   pageErrors: string[];
   failedRequests: Array<{ method: string; host: string; path: string }>;
   httpErrors: Array<{ status: number; host: string; path: string }>;
+  prefetch404s: Array<{ path: string; nextUrl: string; refererPath: string }>;
   providerRequests: Array<{ method: string; host: string; path: string }>;
 };
 
@@ -81,6 +82,7 @@ function observe(page: Page, label: string) {
     pageErrors: [],
     failedRequests: [],
     httpErrors: [],
+    prefetch404s: [],
     providerRequests: [],
   };
   observations.push(record);
@@ -101,6 +103,14 @@ function observe(page: Page, label: string) {
   page.on("response", (response) => {
     if (response.status() >= 400) {
       record.httpErrors.push({ status: response.status(), host: safeHost(response.url()), path: safePath(response.url()) });
+    }
+    const headers = response.request().headers();
+    if (response.status() === 404 && headers["next-router-prefetch"] === "1") {
+      record.prefetch404s.push({
+        path: safePath(response.url()),
+        nextUrl: headers["next-url"] ?? "",
+        refererPath: headers.referer ? safePath(headers.referer) : "",
+      });
     }
   });
   return record;
@@ -498,7 +508,7 @@ test("creator, negative authorization, intended reviewer freeze/reject, and froz
     await expect(freezeRow.getByText("approved as candidate", { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     const hashLocator = freezeRow.locator("dl > div").filter({ hasText: "Terms SHA-256" }).locator("dd");
     const hashAfter = (await hashLocator.innerText()).trim();
-    expect(hashAfter).toMatch(/^[0-9a-f]{64}$/);
+    expect(hashAfter).toMatch(/^sha256:[0-9a-f]{64}$/);
     const versionAfter = await freezeRow.locator("dl > div").filter({ hasText: "Terms" }).first().locator("dd").innerText();
     expect(versionAfter).toBe(versionBefore);
     await page.reload({ waitUntil: "domcontentloaded" });
@@ -623,8 +633,21 @@ test("390 and 320 mobile reachability, focus, overflow ledger, and inherited dis
       ).catch(() => null);
       await discover.hover();
       const discoverResponse = await prefetched;
-      if (discoverResponse) expect(discoverResponse.status()).toBe(404);
-      else expect((await tracked.context.request.get("/discover")).status()).toBe(404);
+      const directDiscoverStatus = (await tracked.context.request.get("/discover")).status();
+      expect(directDiscoverStatus).toBe(200);
+      viewportDiagnostics.push({
+        route: "/discover",
+        viewport: viewport.name,
+        directStatus: directDiscoverStatus,
+        prefetchStatus: discoverResponse?.status() ?? null,
+        classification:
+          discoverResponse?.status() === 404
+            ? "inherited_prefetch_404_direct_route_healthy"
+            : "reported_discover_prefetch_404_not_reproduced_direct_route_healthy",
+      });
+      console.log(
+        `uat702_discover_${viewport.name}=direct_${directDiscoverStatus}_prefetch_${discoverResponse?.status() ?? "not_observed"}`,
+      );
     } finally {
       await closeTracked(tracked);
     }
