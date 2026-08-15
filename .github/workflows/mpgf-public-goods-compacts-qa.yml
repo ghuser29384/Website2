@@ -129,15 +129,20 @@ jobs:
           rmdir supabase/migrations
           mv "$RUNNER_TEMP/repository-migrations" supabase/migrations
 
-      - name: Apply the historical baseline and every post-baseline migration in order
+      - name: Apply the historical baseline and every production-compatible migration in order
         shell: bash
         run: |
           set -o pipefail
           SUPABASE_MIGRATION_TEST_DB_URL="$LOCAL_SUPABASE_DB_URL" \
           SUPABASE_MIGRATION_BASELINE_SQL=mpgf-compacts-clean-qa/historical-baseline.sql \
+          SUPABASE_MIGRATION_SKIP_BASENAMES=20260811152545_commitments_impact_study_instrumentation_qa_only.sql,20260811152958_commitments_impact_study_instrumentation_child_trigger_fix.sql,20260811161238_commitments_impact_study_instrumentation_review_remediation_core.sql,20260811161445_commitments_impact_study_instrumentation_review_remediation_instance_validator.sql,20260811161708_commitments_impact_study_instrumentation_review_remediation_child_validators.sql,20260811161948_commitments_impact_study_instrumentation_review_remediation_rpcs.sql,20260811162054_commitments_impact_study_instrumentation_review_remediation_privileges.sql,20260811171544_commitments_impact_study_blocked_probe_service_role.sql \
             bash scripts/apply-supabase-migrations-in-order.sh \
               mpgf-compacts-clean-qa/post-baseline-migrations \
             2>&1 | tee mpgf-compacts-clean-qa/full-migration-chain.log
+          test "$(rg -c '^skipping_environment_bound_migration=' mpgf-compacts-clean-qa/full-migration-chain.log)" -eq 8
+          rg --fixed-strings --quiet 'applying_migration=20260813163052_mpgf_public_goods_compacts.sql' mpgf-compacts-clean-qa/full-migration-chain.log
+          rg --fixed-strings --quiet 'applying_migration=20260814031500_mpgf_public_goods_compacts_state_hardening.sql' mpgf-compacts-clean-qa/full-migration-chain.log
+          rg --fixed-strings --quiet 'skipped_environment_bound_migration_count=8' mpgf-compacts-clean-qa/full-migration-chain.log
 
       - name: Generate and compare exact runtime database types
         shell: bash
