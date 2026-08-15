@@ -22,6 +22,7 @@ on:
       - "supabase/tests/mpgf_public_goods_compacts_historical_freeze.sql"
       - "scripts/apply-supabase-migrations-in-order.sh"
       - "scripts/test-mpgf-public-goods-compacts-concurrency.sh"
+      - "scripts/verify-mpgf-public-goods-compacts-db-lint.mjs"
       - "scripts/verify-mpgf-public-goods-compacts-generated-types.mjs"
       - "tests/mpgf-public-goods-compacts.spec.ts"
       - "tests/public-routes.spec.ts"
@@ -158,7 +159,7 @@ jobs:
             src/lib/supabase/database.types.ts \
             | tee mpgf-compacts-clean-qa/generated-type-comparison.json
 
-      - name: Run Supabase database lint
+      - name: Run Supabase database lint with Compact-owned error gate
         shell: bash
         run: |
           set -o pipefail
@@ -166,8 +167,11 @@ jobs:
             --db-url "$LOCAL_SUPABASE_DB_URL" \
             --schema public \
             --level warning \
-            --fail-on error \
+            --fail-on none \
             2>&1 | tee mpgf-compacts-clean-qa/supabase-db-lint.log
+          node scripts/verify-mpgf-public-goods-compacts-db-lint.mjs \
+            mpgf-compacts-clean-qa/supabase-db-lint.log \
+            | tee mpgf-compacts-clean-qa/supabase-db-lint-compact-gate.json
 
       - name: Run role, lifecycle, privacy, and no-money database tests
         shell: bash

@@ -239,7 +239,7 @@ $function$;
 create or replace function public.mpgf_public_goods_cycle_bounds_v2(cycle_key text)
 returns table (period_start timestamptz, period_end_exclusive timestamptz)
 language plpgsql
-immutable
+stable
 strict
 set search_path = ''
 as $function$
