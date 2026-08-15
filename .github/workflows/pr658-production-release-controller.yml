@@ -1,4 +1,4 @@
-name: PR 658 browser-gate repair controller
+name: PR 716 exact full release gates
 
 on:
   push:
@@ -8,74 +8,173 @@ on:
       - .github/workflows/pr658-production-release-controller.yml
 
 permissions:
-  contents: write
+  contents: read
+  pull-requests: read
+  statuses: write
 
 concurrency:
-  group: pr658-browser-gate-repair
+  group: pr716-exact-full-release-gates
   cancel-in-progress: false
 
 env:
   EXPECTED_MAIN_SHA: cafd13166f5537519d1ae3b8a440d7504df0294b
-  FIX_BRANCH: fix/pr658-public-route-heading-gate-20260815
-  TARGET_FILE: tests/public-routes.spec.ts
+  EXPECTED_HEAD_SHA: 7afa03b763b85a27571b9d0c89306e2b101d96f9
+  PRODUCT_PR: '716'
+  STATUS_CONTEXT: QA / PR 716 full release gate
+  EVIDENCE_DIR: /tmp/pr716-full-release-gates
 
 jobs:
-  repair:
+  exact-gates:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 120
 
     steps:
-      - name: Check out the untouched repair branch
+      - name: Initialize evidence and pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$EXPECTED_HEAD_SHA" \
+            -f state=pending \
+            -f context="$STATUS_CONTEXT" \
+            -f description='Running exact full repository and release-browser gates' \
+            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
+
+      - name: Check out the controller
         uses: actions/checkout@v4
         with:
-          ref: ${{ env.FIX_BRANCH }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Guard immutable main and branch base
+      - name: Guard immutable main, PR head, state, topology, and one-file diff
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'ghuser29384/Website2'
+          test "$GITHUB_REF" = 'refs/heads/ops/pr658-production-release-20260815'
+
           remote_main="$(git ls-remote origin refs/heads/main | awk '{print $1}')"
-          remote_fix="$(git ls-remote origin "refs/heads/$FIX_BRANCH" | awk '{print $1}')"
+          remote_head="$(git ls-remote origin refs/heads/fix/pr658-public-route-heading-gate-20260815 | awk '{print $1}')"
           test "$remote_main" = "$EXPECTED_MAIN_SHA"
-          test "$remote_fix" = "$EXPECTED_MAIN_SHA"
-          test "$(git rev-parse HEAD)" = "$EXPECTED_MAIN_SHA"
+          test "$remote_head" = "$EXPECTED_HEAD_SHA"
 
-      - name: Replace exactly the stale rendered-heading assertion
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PRODUCT_PR")"
+          test "$(jq -r .state <<<"$pr_json")" = 'open'
+          test "$(jq -r .draft <<<"$pr_json")" = 'true'
+          test "$(jq -r .merged <<<"$pr_json")" = 'false'
+          test "$(jq -r .base.sha <<<"$pr_json")" = "$EXPECTED_MAIN_SHA"
+          test "$(jq -r .head.sha <<<"$pr_json")" = "$EXPECTED_HEAD_SHA"
+          printf '%s\n' "$pr_json" > "$EVIDENCE_DIR/pr.json"
+
+          git fetch origin main fix/pr658-public-route-heading-gate-20260815
+          test "$(git rev-parse "$EXPECTED_HEAD_SHA^")" = "$EXPECTED_MAIN_SHA"
+          git diff --check "$EXPECTED_MAIN_SHA"..."$EXPECTED_HEAD_SHA"
+          git diff --name-only "$EXPECTED_MAIN_SHA" "$EXPECTED_HEAD_SHA" \
+            | tee "$EVIDENCE_DIR/changed-files.txt"
+          test "$(wc -l < "$EVIDENCE_DIR/changed-files.txt" | tr -d ' ')" = '1'
+          test "$(cat "$EVIDENCE_DIR/changed-files.txt")" = 'tests/public-routes.spec.ts'
+          git diff "$EXPECTED_MAIN_SHA" "$EXPECTED_HEAD_SHA" -- tests/public-routes.spec.ts \
+            > "$EVIDENCE_DIR/exact.diff"
+
+      - name: Check out immutable PR head
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
+          git checkout --detach "$EXPECTED_HEAD_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD_SHA"
 
-          path = Path('tests/public-routes.spec.ts')
-          source = path.read_text()
-          old = 'page.getByRole("heading", { level: 1, name: "Your best match right now" })'
-          new = 'page.getByRole("heading", { level: 1, name: "Current opportunities and next actions" })'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
 
-          count = source.count(old)
-          if count != 1:
-              raise SystemExit(f'expected exactly one stale assertion; found {count}')
-          if new in source:
-              raise SystemExit('replacement assertion already exists before mutation')
-
-          path.write_text(source.replace(old, new, 1))
-          PY
-
-          git diff --check
-          test "$(git diff --name-only | wc -l | tr -d ' ')" = '1'
-          test "$(git diff --name-only)" = "$TARGET_FILE"
-          git diff -- "$TARGET_FILE"
-
-      - name: Commit and push the one-file repair
+      - name: Install exact dependencies
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'ghuser29384'
-          git config user.email '262476329+ghuser29384@users.noreply.github.com'
-          git add "$TARGET_FILE"
-          git commit -m 'Align public-route browser assertion with Home truth boundary'
-          candidate_sha="$(git rev-parse HEAD)"
-          git push origin "HEAD:$FIX_BRANCH"
-          printf '%s\n' "$candidate_sha"
+          npm ci 2>&1 | tee "$EVIDENCE_DIR/npm-ci.log"
+
+      - name: Run complete repository tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm test 2>&1 | tee "$EVIDENCE_DIR/npm-test.log"
+
+      - name: Run ESLint
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run lint -- --quiet 2>&1 | tee "$EVIDENCE_DIR/eslint.log"
+
+      - name: Run standalone TypeScript
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx tsc --noEmit 2>&1 | tee "$EVIDENCE_DIR/typescript.log"
+
+      - name: Run production build
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build 2>&1 | tee "$EVIDENCE_DIR/build.log"
+
+      - name: Install Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx playwright install --with-deps chromium 2>&1 | tee "$EVIDENCE_DIR/playwright-install.log"
+
+      - name: Run complete release browser gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run test:e2e:release -- --reporter=line 2>&1 \
+            | tee "$EVIDENCE_DIR/release-browser.log"
+
+      - name: Record success summary
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg run_id "$GITHUB_RUN_ID" \
+            --arg base_sha "$EXPECTED_MAIN_SHA" \
+            --arg head_sha "$EXPECTED_HEAD_SHA" \
+            '{repository:$repository,runId:$run_id,baseSha:$base_sha,headSha:$head_sha,outcome:"success",commands:["npm ci","npm test","npm run lint -- --quiet","npx tsc --noEmit","npm run build","npx playwright install --with-deps chromium","npm run test:e2e:release -- --reporter=line"]}' \
+            > "$EVIDENCE_DIR/summary.json"
+
+      - name: Upload exact-head evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr716-full-release-gates-${{ github.run_id }}
+          path: ${{ env.EVIDENCE_DIR }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish terminal exact-head status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state=failure
+          description='Exact repository or release-browser gate failed'
+          if [[ "$JOB_STATUS" == 'success' ]]; then
+            state=success
+            description='Full repository and release-browser gates passed'
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$EXPECTED_HEAD_SHA" \
+            -f state="$state" \
+            -f context="$STATUS_CONTEXT" \
+            -f description="$description" \
+            -f target_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" >/dev/null
+          test "$state" = success
