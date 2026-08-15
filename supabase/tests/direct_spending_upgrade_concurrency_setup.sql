@@ -1,3 +1,29 @@
+insert into auth.users (
+  id, instance_id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, confirmation_token, recovery_token,
+  email_change_token_new, email_change_token_current, reauthentication_token,
+  is_sso_user, is_anonymous, created_at, updated_at
+)
+select
+  fixture.id,
+  '00000000-0000-0000-0000-000000000000'::uuid,
+  'authenticated',
+  'authenticated',
+  fixture.email,
+  '',
+  timezone('utc', now()),
+  '{"provider":"email","providers":["email"]}'::jsonb,
+  jsonb_build_object('display_name', fixture.display_name, 'qa_fixture', true),
+  '', '', '', '', '', false, false,
+  timezone('utc', now()),
+  timezone('utc', now())
+from (values
+  ('f0100000-0000-4000-8000-000000000001'::uuid, 'concurrency-creator@example.test', 'Concurrency Creator'),
+  ('f0200000-0000-4000-8000-000000000002'::uuid, 'concurrency-matcher-a@example.test', 'Concurrency Matcher A'),
+  ('f0300000-0000-4000-8000-000000000003'::uuid, 'concurrency-matcher-b@example.test', 'Concurrency Matcher B')
+) as fixture(id, email, display_name)
+on conflict (id) do nothing;
+
 insert into public.profiles (id, email, display_name)
 values
   ('f0100000-0000-4000-8000-000000000001', 'concurrency-creator@example.test', 'Concurrency Creator'),

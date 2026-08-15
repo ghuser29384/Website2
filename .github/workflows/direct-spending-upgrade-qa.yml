@@ -92,7 +92,7 @@ jobs:
           test "$(grep -c '^rollback;$' "$REGRESSION")" = "1"
           ! grep -Fq 'commit;' "$REGRESSION"
           ! grep -Fq 'supabase_migrations.schema_migrations' "$MIGRATION"
-          git diff --check
+          git diff --check "$fetched_base"...HEAD
           {
             printf 'stack_base_sha=%s\n' "$fetched_base"
             printf 'head=%s\n' "$(git rev-parse HEAD)"
@@ -124,12 +124,24 @@ jobs:
             'e4000000-0000-4000-8000-000000000004',
             'e5000000-0000-4000-8000-000000000005'
           );
+          select count(*)
+          from auth.users
+          where id in (
+            'e1000000-0000-4000-8000-000000000001',
+            'e2000000-0000-4000-8000-000000000002',
+            'e3000000-0000-4000-8000-000000000003',
+            'e4000000-0000-4000-8000-000000000004',
+            'e5000000-0000-4000-8000-000000000005'
+          );
           SQL
           mapfile -t rows < spending-upgrade-qa-prestate.txt
           test "${rows[0]}" = "$EXPECTED_QA_DATABASE|$EXPECTED_QA_DATABASE_USER"
           test "${rows[1]}" = "0"
           test -z "${rows[2]}"
+          test "${rows[3]}" = "0"
+          test "${rows[4]}" = "0"
           printf '%s\n' "${rows[3]}" > spending-upgrade-qa-profile-precount.txt
+          printf '%s\n' "${rows[4]}" > spending-upgrade-qa-auth-user-precount.txt
 
       - name: Compile migration and execute state matrix in one rollback
         shell: bash
@@ -153,7 +165,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          before="$(cat spending-upgrade-qa-profile-precount.txt)"
+          profile_before="$(cat spending-upgrade-qa-profile-precount.txt)"
+          auth_before="$(cat spending-upgrade-qa-auth-user-precount.txt)"
           psql "$QA_SUPABASE_DB_URL" --no-psqlrc --tuples-only --no-align \
             --set ON_ERROR_STOP=1 <<'SQL' | tee spending-upgrade-qa-poststate.txt
           select count(*)
@@ -174,12 +187,22 @@ jobs:
             'e4000000-0000-4000-8000-000000000004',
             'e5000000-0000-4000-8000-000000000005'
           );
+          select count(*)
+          from auth.users
+          where id in (
+            'e1000000-0000-4000-8000-000000000001',
+            'e2000000-0000-4000-8000-000000000002',
+            'e3000000-0000-4000-8000-000000000003',
+            'e4000000-0000-4000-8000-000000000004',
+            'e5000000-0000-4000-8000-000000000005'
+          );
           SQL
           mapfile -t rows < spending-upgrade-qa-poststate.txt
           test "${rows[0]}" = "0"
           test -z "${rows[1]}"
           test "${rows[2]}" = "0"
-          test "${rows[3]}" = "$before"
+          test "${rows[3]}" = "$profile_before"
+          test "${rows[4]}" = "$auth_before"
 
       - name: Upload rollback-only evidence
         if: always()

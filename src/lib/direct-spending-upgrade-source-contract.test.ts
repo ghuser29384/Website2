@@ -27,6 +27,9 @@ const webhookRoute = source(
 const lifecycleRoute = source("src/app/api/jobs/donation-upgrades/route.ts");
 const dataSource = source("src/lib/direct-spending-upgrade-data.ts");
 const envExample = source(".env.example");
+const qaWorkflow = source(
+  ".github/workflows/direct-spending-upgrade-qa.yml",
+);
 const createInterface = source(
   "src/components/create/create-interface-frame.tsx",
 );
@@ -367,4 +370,10 @@ test("SQL regression is exactly rollback-only and covers idempotency", () => {
   assert.match(regression, /unassigned reviewer was able/);
   assert.match(regression, /More than one active Spending Upgrade evidence record was accepted/);
   assert.match(regression, /Accepted causal evidence was replaced without an append-only correction/);
+  assert.match(regression, /insert into auth\.users/);
+  assert.equal(
+    qaWorkflow.match(/from auth\.users/g)?.length,
+    2,
+  );
+  assert.match(qaWorkflow, /spending-upgrade-qa-auth-user-precount\.txt/);
 });

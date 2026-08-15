@@ -5,8 +5,29 @@ create schema auth;
 create schema extensions;
 create extension pgcrypto with schema extensions;
 
-create table public.profiles (
+create table auth.users (
   id uuid primary key,
+  instance_id uuid,
+  aud text,
+  role text,
+  email text,
+  encrypted_password text,
+  email_confirmed_at timestamptz,
+  raw_app_meta_data jsonb,
+  raw_user_meta_data jsonb,
+  confirmation_token text,
+  recovery_token text,
+  email_change_token_new text,
+  email_change_token_current text,
+  reauthentication_token text,
+  is_sso_user boolean,
+  is_anonymous boolean,
+  created_at timestamptz,
+  updated_at timestamptz
+);
+
+create table public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
   email text not null default '',
   display_name text,
   bio text not null default '',
