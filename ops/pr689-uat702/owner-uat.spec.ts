@@ -15,6 +15,7 @@ const PROD_REF = process.env.FORBIDDEN_PROD_REF ?? "";
 
 const OUTPUT_DIR = "test-results/uat702-owner";
 const TRACE_DIR = "test-results/uat702-traces";
+const PUBLISHED_ROUND_ID = "qa-dac-product-round-20260807";
 const PUBLISHED_SLUG = "uat702-owner-exact-freeze";
 const TITLES = {
   draft: "UAT702 draft creator flow",
@@ -632,6 +633,7 @@ test("creator, negative authorization, intended reviewer freeze/reject, and froz
     freezeRow = rowFor(page, TITLES.freeze);
     await expect(freezeRow.locator("dl > div").filter({ hasText: "Terms SHA-256" }).locator("dd")).toHaveText(hashAfter);
     await expect(freezeRow.getByRole("button", { name: "Approve and freeze" })).toHaveCount(0);
+    await freezeRow.getByLabel("Publication round").selectOption(PUBLISHED_ROUND_ID);
     await freezeRow.getByLabel("Public slug").fill(PUBLISHED_SLUG);
     const proposalId = freezeHref.split("/").at(-1) ?? "";
     const publicationRoundId = await freezeRow.getByLabel("Publication round").inputValue();
