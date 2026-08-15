@@ -17,13 +17,13 @@ permissions:
 
 env:
   CANDIDATE_BASE_SHA: 79ca382c3bdc325dfc5a28e2cbbafc1b95640386
-  CANDIDATE_HEAD_SHA: a92d370b02f513da4758ae893dc7c3eee1d41904
-  CANDIDATE_TREE_SHA: 21bd7f17222e5bd803c181cd5158021581852718
-  CANDIDATE_AHEAD_COUNT: "76"
-  COMPACT_QA_RUN_ID: "31865841390"
+  CANDIDATE_HEAD_SHA: a059f990f14ca7c4e4791352427bb9d2195406ef
+  CANDIDATE_TREE_SHA: 8e368c116d9edda2110d4a3e365a5029deddbc3d
+  CANDIDATE_AHEAD_COUNT: "78"
+  COMPACT_QA_RUN_ID: "31868498503"
   CONTROLLER_BRANCH: ops/pr663-compact-v2-isolated-qa-preview-20260815
-  EVIDENCE_PAYMENT_RUN_ID: "31865841367"
-  RELEASE_CLASSIFICATION_RUN_ID: "31865839938"
+  EVIDENCE_PAYMENT_RUN_ID: "31868498511"
+  RELEASE_CLASSIFICATION_RUN_ID: "31868497404"
   EXPECTED_QA_POOLER_HOST: aws-0-us-west-1.pooler.supabase.com
   EXPECTED_QA_REF: hvmxfjjbdcgjjudmthdz
   FORBIDDEN_PROD_REF: jnpoxvalyjtdghnperyu
@@ -81,7 +81,7 @@ jobs:
           test "$(git -C app rev-parse HEAD^{tree})" = "$CANDIDATE_TREE_SHA"
           test "$(git -C app merge-base origin/main HEAD)" = "$CANDIDATE_BASE_SHA"
           test "$(git -C app rev-list --count "$CANDIDATE_BASE_SHA..HEAD")" = "$CANDIDATE_AHEAD_COUNT"
-          test "$(git -C app diff --name-only "$CANDIDATE_BASE_SHA...HEAD" | wc -l | tr -d ' ')" = "39"
+          test "$(git -C app diff --name-only "$CANDIDATE_BASE_SHA...HEAD" | wc -l | tr -d ' ')" = "40"
           test "$(git -C app status --porcelain)" = ""
           current_main_sha="$(git -C app rev-parse origin/main)"
           test "$(git -C app merge-base "$CANDIDATE_BASE_SHA" "$current_main_sha")" = "$CANDIDATE_BASE_SHA"
@@ -134,7 +134,7 @@ jobs:
             --arg paymentRun "$EVIDENCE_PAYMENT_RUN_ID" \
             --arg classificationRun "$RELEASE_CLASSIFICATION_RUN_ID" \
             '{
-              pr663:{open:true,draft:true,merged:false,mergeable:true,head:$head,tree:$tree,frozenBase:$base,aheadOfFrozenBase:$ahead,changedFiles:39},
+              pr663:{open:true,draft:true,merged:false,mergeable:true,head:$head,tree:$tree,frozenBase:$base,aheadOfFrozenBase:$ahead,changedFiles:40},
               repository:{currentMain:$currentMain,currentMainAheadOfFrozenBase:$currentMainAhead,frozenBaseStillMergeBase:true,uatRebasePerformed:false},
               issues:{"688":"open","696":"closed","712":"open"},
               exactHeadRuns:{compactQa:$compactRun,evidencePaymentQa:$paymentRun,releaseClassification:$classificationRun,allSuccessful:true},

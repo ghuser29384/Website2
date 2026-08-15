@@ -18,10 +18,13 @@ const exactSecrets = [
 
 const jwtPattern = /eyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{8,}/g;
 const cookiePattern = /(?:sb-[a-z0-9-]+-auth-token(?:\.[0-9]+)?|_vercel_jwt)(?:%3D|=|"\s*:\s*")[^\s";,}]+/gi;
+const structuredCookieValuePattern = /("name"\s*:\s*"(?:sb-[a-z0-9-]+-auth-token(?:\.[0-9]+)?|_vercel_jwt)"\s*,\s*"value"\s*:\s*")[^"]*(")/gi;
+const encodedSupabaseSessionPattern = /base64-[A-Za-z0-9+/_=-]{80,}/g;
 const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
 const uuidPattern = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const jwtTestPattern = /eyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{8,}/;
 const cookieTestPattern = /(?:sb-[a-z0-9-]+-auth-token(?:\.[0-9]+)?|_vercel_jwt)(?:%3D|=|"\s*:\s*")[^\s";,}]+/i;
+const encodedSupabaseSessionTestPattern = /base64-[A-Za-z0-9+/_=-]{80,}/;
 
 async function walk(root) {
   const entries = [];
@@ -37,6 +40,8 @@ async function walk(root) {
 function redactText(text) {
   let result = text;
   for (const secret of exactSecrets) result = result.split(secret).join("[REDACTED]");
+  result = result.replace(structuredCookieValuePattern, "$1[REDACTED_COOKIE]$2");
+  result = result.replace(encodedSupabaseSessionPattern, "[REDACTED_SESSION]");
   result = result.replace(jwtPattern, "[REDACTED_JWT]");
   result = result.replace(cookiePattern, "[REDACTED_COOKIE]");
   result = result.replace(emailPattern, "[REDACTED_FIXTURE_ROLE]");
@@ -46,7 +51,10 @@ function redactText(text) {
 
 function containsSecret(buffer) {
   const text = buffer.toString("utf8");
-  return exactSecrets.some((secret) => text.includes(secret)) || jwtTestPattern.test(text) || cookieTestPattern.test(text);
+  return exactSecrets.some((secret) => text.includes(secret))
+    || jwtTestPattern.test(text)
+    || cookieTestPattern.test(text)
+    || encodedSupabaseSessionTestPattern.test(text);
 }
 
 async function redactTree(root) {

@@ -451,58 +451,20 @@ test.afterAll(async () => {
     consoleWarnings: [...new Set(record.consoleWarnings)],
     pageErrors: [...new Set(record.pageErrors)],
   }));
-  const expectedBackgroundPrefetchPaths = new Set([
-    "/",
-    "/mpgf",
-    "/mpgf/compacts",
-    "/mpgf/governance",
-    "/mpgf/technical-spec",
-  ]);
   const unexpected = sanitized.flatMap((record) => [
-    ...record.consoleErrors
-      // Chromium duplicates HTTP failures as content-free console messages. The
-      // response/request records below retain the actionable URL and status.
-      .filter(
-        (message) =>
-          !/^Failed to load resource: the server responded with a status of \d+ \(\)$/.test(
-            message,
-          ),
-      )
-      .map((message) => ({ label: record.label, kind: "console", message })),
+    ...record.consoleErrors.map((message) => ({ label: record.label, kind: "console", message })),
     ...record.consoleWarnings.map((message) => ({ label: record.label, kind: "console-warning", message })),
     ...record.pageErrors.map((message) => ({ label: record.label, kind: "page", message })),
-    ...record.failedRequests
-      // Next Link RSC prefetches are cancelled when a traced context closes.
-      // Keep them in browser-observations.json, but do not classify those known
-      // background GETs as product failures.
-      .filter(
-        (entry) =>
-          !(
-            entry.method === "GET" &&
-            entry.host === "protected-preview" &&
-            expectedBackgroundPrefetchPaths.has(entry.path)
-          ),
-      )
-      .map((entry) => ({
-        label: record.label,
-        kind: "request-failed",
-        message: `${entry.method} ${entry.host}${entry.path}`,
-      })),
-    ...record.httpErrors
-      .filter(
-        (entry) =>
-          entry.status >= 500 ||
-          !(
-            ([400, 401].includes(entry.status) &&
-              /^\/api\/mpgf\/compacts(?:\/(?:membership|allocation|delegation))?$/.test(entry.path)) ||
-            (entry.status === 404 && entry.host === "protected-preview" && entry.path === "/")
-          ),
-      )
-      .map((entry) => ({
-        label: record.label,
-        kind: "http",
-        message: `${entry.status} ${entry.host}${entry.path}`,
-      })),
+    ...record.failedRequests.map((entry) => ({
+      label: record.label,
+      kind: "request-failed",
+      message: `${entry.method} ${entry.host}${entry.path}`,
+    })),
+    ...record.httpErrors.map((entry) => ({
+      label: record.label,
+      kind: "http",
+      message: `${entry.status} ${entry.host}${entry.path}`,
+    })),
     ...record.providerRequests.map((entry) => ({
       label: record.label,
       kind: "payment-provider-request",
