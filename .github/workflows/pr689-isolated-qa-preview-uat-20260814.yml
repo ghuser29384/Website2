@@ -158,8 +158,17 @@ jobs:
             )::text
             from moraltrade_qa.environment_identity
             where singleton;")"
-          tls_active="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -Atqc "
-            select ssl::text from pg_stat_ssl where pid = pg_backend_pid();")"
+          # The Supabase transaction pooler terminates the runner's TLS session;
+          # pg_stat_ssl therefore describes the pooler-to-Postgres leg. Prove the
+          # client leg from libpq's own connection metadata instead. PGSSLMODE is
+          # also fixed to require at job scope, so psql fails closed without TLS.
+          tls_description="$(psql "$QA_SUPABASE_DB_URL" --no-psqlrc -X -c '\conninfo' 2>&1)"
+          if [[ "$tls_description" == *"SSL connection"* ]]; then
+            tls_active=true
+          else
+            tls_active=false
+          fi
+          unset tls_description
           printf 'qa_project_ref=%s\nsentinel_contract=%s\ntls=%s\n' \
             "$EXPECTED_QA_REF" "$sentinel_contract" "$tls_active" \
             > evidence/qa-sentinel.txt
